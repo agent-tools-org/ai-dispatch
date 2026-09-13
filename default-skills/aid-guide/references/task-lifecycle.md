@@ -42,20 +42,20 @@ a report-only audit or commit-cleaned worktree can still be a real delivery.
 ## Artifact backup
 
 When a project or `aid run --backup` configures a backup target, a task that
-ends in `Done`, `Failed`, or `Stopped` (matching `on = [complete, fail,
-cancelled]`) has its export, diff, and raw log bundled and uploaded. A backup is
-attempted once, after the post-run lifecycle of a task that ran: after
-verification, the verify gate, and result-file persistence, so the bundle carries
-the final status. Tasks ended by `aid stop`, by the background reaper (dead
-worker, idle, timeout, pending or waiting timeout), or by a failure before the
-agent started are not backed up. The resulting URL is stored on the task
-(`aid show` prints `Backup: <url>`; `--json` carries `backup_url`) and a
-milestone event records it. Backup is observational only: a failed attempt,
-including a `[backup]` config error, counts as the task's one attempt and is
-never retried; it adds a milestone event beginning `Backup failed:` plus a stderr
-line while `latest_error` keeps the agent's own error; and neither success nor
-failure alters `TaskStatus`, `VerifyStatus`, `TaskOutcome`, or the exit code.
-See the configuration reference for the `[backup]` keys.
+ends in `Done` or `Failed` (matching `on = ["complete", "fail"]`) has its
+export, diff, and raw log bundled and uploaded. A backup is attempted once,
+after the post-run lifecycle of a task that ran: after verification, the verify
+gate, and result-file persistence, so the bundle carries the final status. Tasks
+ended by `aid stop`, by the background reaper (dead worker, idle, timeout,
+pending or waiting timeout), or by a failure before the agent started are not
+backed up. The resulting URL is stored on the task (`aid show` prints `Backup:
+<url>`; `--json` carries `backup_url`) and a milestone event records it. Backup
+is observational only: a failed attempt, including a `[backup]` config error,
+counts as the task's one attempt and is never retried; it adds a milestone event
+beginning `Backup failed:` plus a stderr line while `latest_error` keeps the
+agent's own error; and neither success nor failure alters `TaskStatus`,
+`VerifyStatus`, `TaskOutcome`, or the exit code. See the configuration reference
+for the `[backup]` keys.
 
 ## Review
 

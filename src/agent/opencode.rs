@@ -7,7 +7,7 @@ use serde_json::json;
 use std::process::Command;
 
 use super::read_only::read_only_prompt;
-use super::truncate::{capped_detail, capped_detail_with, truncate_text};
+use super::truncate::{capped_detail, capped_detail_with};
 use super::RunOpts;
 use crate::rate_limit;
 use crate::types::*;
@@ -122,7 +122,7 @@ pub(crate) fn parse_json_event(
         "tool_call" | "function_call" => {
             let name = v.get("name").and_then(|n| n.as_str()).unwrap_or("unknown");
             let args = v.get("arguments").and_then(|a| a.as_str()).unwrap_or("");
-            (format!("{name}: {}", truncate_text(args, 60)), None)
+            (format!("{name}: {args}"), None)
         }
         "message" => {
             let detail = v
@@ -295,6 +295,5 @@ pub(crate) fn extract_tokens_from_output(output: &str) -> (Option<i64>, Option<f
     }
 }
 
-#[cfg(test)]
-#[path = "opencode_tests.rs"]
-mod tests;
+#[cfg(test)] #[path = "opencode_tests.rs"] mod tests;
+#[cfg(test)] #[path = "opencode_event_tests.rs"] mod event_tests;

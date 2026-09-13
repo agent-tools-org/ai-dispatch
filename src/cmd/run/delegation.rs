@@ -78,5 +78,5 @@ fn enforce_profile_ceiling(store: &Store, parent_id: &str, args: &RunArgs) -> Re
 }
 
 #[cfg(test)]
-#[path = "run_delegation_tests.rs"]
+#[path = "delegation_tests.rs"]
 mod tests;

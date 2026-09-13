@@ -11,10 +11,10 @@ use crate::store::TaskCompletionUpdate;
 
 use super::{clean_output_if_jsonl, fill_empty_output_from_log};
 
-#[path = "run_retry_target.rs"]
+#[path = "retry_target.rs"]
 mod run_retry_target;
 pub(crate) use run_retry_target::{apply_retry_target, retry_target};
-#[path = "run_spawn_fail.rs"]
+#[path = "spawn_fail.rs"]
 mod run_spawn_fail;
 pub(crate) use run_spawn_fail::{fail_task_on_agent_spawn, insert_phase_error_event};
 

@@ -14,7 +14,7 @@ use crate::team;
 use crate::types::*;
 use super::run_validate::{IdConflict, resolve_id_conflict};
 use super::{run, switch_agent, RunArgs};
-#[path = "run_bestof/output_files.rs"]
+#[path = "bestof/output_files.rs"]
 mod output_files;
 use self::output_files::{
     dispatch_artifacts_for_candidate, finalize_winner_artifacts,
@@ -283,9 +283,9 @@ pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<T
 }
 
 #[cfg(test)]
-#[path = "run_bestof/tests.rs"]
+#[path = "bestof/tests.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "run_bestof/additional_tests.rs"]
+#[path = "bestof/additional_tests.rs"]
 mod additional_tests;

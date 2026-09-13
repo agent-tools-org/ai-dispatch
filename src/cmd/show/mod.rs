@@ -10,7 +10,7 @@ use crate::cmd;
 use crate::store::Store;
 use crate::types::{Task, TaskStatus};
 
-#[path = "show_output.rs"]
+#[path = "output.rs"]
 mod show_output;
 
 pub use show_output::{
@@ -24,9 +24,9 @@ pub(crate) use show_output::{
     is_non_output_line, parse_diff_stat, read_tail, worktree_diff, worktree_state_section,
 };
 
-#[path = "show_helpers.rs"]
+#[path = "helpers.rs"]
 mod show_helpers;
-#[path = "show_json.rs"]
+#[path = "json.rs"]
 mod show_json;
 
 pub(crate) use show_helpers::load_task;
@@ -475,13 +475,12 @@ pub fn context_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
 }
 
 #[cfg(test)]
-#[path = "show_tests.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "show_mode_tests.rs"]
+#[path = "mode_tests.rs"]
 mod show_mode_tests;
 
 #[cfg(test)]
-#[path = "show_checklist_tests.rs"]
+#[path = "checklist_tests.rs"]
 mod show_checklist_tests;

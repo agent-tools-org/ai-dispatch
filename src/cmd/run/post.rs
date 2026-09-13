@@ -384,7 +384,7 @@ fn find_rate_limit_line_in_agent_log(content: &str, agent: &crate::types::AgentK
 }
 
 #[cfg(test)]
-#[path = "run_post_tests.rs"]
+#[path = "post_tests.rs"]
 mod tests;
 
 /// Point `args` at a different agent, dropping any pinned model or session when

@@ -99,4 +99,4 @@ fn same_existing_path(left: &Path, right: &Path) -> Result<bool> {
     Ok(left == right)
 }
 
-#[cfg(test)] #[path = "run_dispatch_guard_tests.rs"] mod tests;
+#[cfg(test)] #[path = "dispatch_guard_tests.rs"] mod tests;

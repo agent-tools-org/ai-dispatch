@@ -733,8 +733,8 @@ fn make_failed_task(task_id: &str) -> Task {
     }
 }
 
-#[path = "run_transcript_tests.rs"]
+#[path = "transcript_tests.rs"]
 mod run_transcript_tests;
 
-#[path = "run_async_tests.rs"]
+#[path = "async_tests.rs"]
 mod run_async_tests;

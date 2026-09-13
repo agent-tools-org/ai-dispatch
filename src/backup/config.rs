@@ -4,7 +4,7 @@
 
 use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::cmd::run::RunArgs;
 use crate::store::Store;
@@ -33,6 +33,8 @@ pub struct BackupGlobalConfig {
 #[serde(default)]
 pub struct GdriveGlobalConfig {
     pub folder: Option<String>,
+    /// Explicit `gws` binary; defaults to `gws` on PATH.
+    pub binary: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,6 +91,8 @@ pub(crate) struct BackupSettings {
     pub folder: String,
     pub include: Vec<Artifact>,
     pub on: Vec<Trigger>,
+    /// Target binary override from the global config, if any.
+    pub binary: Option<PathBuf>,
 }
 
 /// Parses `--backup TARGET[:FOLDER]`.
@@ -125,9 +129,9 @@ pub(crate) fn resolve(
     let Some(target) = cli_target.or_else(|| project.and_then(|p| p.target.clone())) else {
         return Ok(None);
     };
-    let global_folder = match target.as_str() {
-        "gdrive" => global.gdrive.folder.clone(),
-        _ => None,
+    let (global_folder, binary) = match target.as_str() {
+        "gdrive" => (global.gdrive.folder.clone(), global.gdrive.binary.clone()),
+        _ => (None, None),
     };
     let folder = cli_folder
         .or_else(|| project.and_then(|p| p.folder.clone()))
@@ -141,17 +145,18 @@ pub(crate) fn resolve(
         Some(values) => values.iter().map(|v| Trigger::parse(v)).collect::<Result<_>>()?,
         None => vec![Trigger::Complete, Trigger::Fail],
     };
-    Ok(Some(BackupSettings { target, folder, include, on }))
+    Ok(Some(BackupSettings { target, folder, include, on, binary }))
 }
 
 /// Resolves settings for a stored task from its persisted dispatch args, the
-/// project config next to its repo, and the global config.
+/// project config next to its repo, and the global config. A task without
+/// persisted args never reached dispatch (setup failed before they were saved),
+/// so its `--backup` / `--no-backup` intent is unknown and it is not backed up.
 pub(crate) fn resolve_for_task(store: &Store, task_id: &str) -> Result<Option<BackupSettings>> {
-    let args = RunArgs::saved_for_task(store, task_id)?;
-    let (cli, no_backup) = match &args {
-        Some(args) => (args.backup.as_deref(), args.no_backup),
-        None => (None, false),
+    let Some(args) = RunArgs::saved_for_task(store, task_id)? else {
+        return Ok(None);
     };
+    let (cli, no_backup) = (args.backup.as_deref(), args.no_backup);
     if no_backup {
         return Ok(None);
     }

@@ -1,5 +1,5 @@
 // Pluggable backup of terminal task artifacts to off-machine targets.
-// Exports: BackupTarget, BackupDest, BackupRef, on_terminal, run_backup_with.
+// Exports: BackupTarget, BackupDest, BackupRef, on_settled, on_terminal, run_backup_with.
 // Deps: Store, task types, and the config/bundle/gdrive submodules.
 
 mod bundle;
@@ -8,6 +8,9 @@ mod gdrive;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+#[path = "lifecycle_tests.rs"]
+mod lifecycle_tests;
 
 use std::path::Path;
 
@@ -40,9 +43,20 @@ pub trait BackupTarget {
     fn upload(&self, bundle: &Path, dest: &BackupDest) -> Result<BackupRef>;
 }
 
-/// The single lifecycle hook: called by `task_lifecycle` after a task has
-/// changed to a terminal status. Never returns an error and never changes
-/// the task's status; every failure becomes a warning event plus a stderr line.
+/// Backs up a task once its post-run lifecycle has settled (final status,
+/// verify status and result file persisted). Reads the status from the store.
+pub(crate) fn on_settled(store: &Store, task_id: &str) {
+    if let Ok(Some(task)) = store.get_task(task_id) {
+        on_terminal(store, task_id, task.status);
+    }
+}
+
+/// The backup hook: called once a task's terminal status is settled, either
+/// from `task_lifecycle` for reaper/stop transitions that nothing follows, or
+/// from the end of the post-run lifecycle. Runs at most once per task: any
+/// earlier attempt, successful or failed, suppresses another. Never returns an
+/// error and never changes the task's status; every failure becomes a warning
+/// event plus a stderr line.
 pub(crate) fn on_terminal(store: &Store, task_id: &str, status: TaskStatus) {
     let Some(trigger) = Trigger::for_status(status) else { return };
     let settings = match config::resolve_for_task(store, task_id) {
@@ -50,22 +64,35 @@ pub(crate) fn on_terminal(store: &Store, task_id: &str, status: TaskStatus) {
         Ok(None) => return,
         Err(err) => return warn(store, task_id, &err),
     };
-    if !settings.on.contains(&trigger) {
+    if !settings.on.contains(&trigger) || already_attempted(store, task_id) {
         return;
     }
-    if matches!(store.backup_url(task_id), Ok(Some(_))) {
-        return;
-    }
-    let Some(target) = target_for(&settings.target) else {
+    let Some(target) = target_for(&settings) else {
         let err = anyhow!("unknown backup target '{}' (available: gdrive)", settings.target);
         return warn(store, task_id, &err);
     };
     run_backup_with(store, task_id, &settings, target.as_ref());
 }
 
-fn target_for(name: &str) -> Option<Box<dyn BackupTarget>> {
-    match name {
-        "gdrive" => Some(Box::new(GdriveTarget::new())),
+/// True once a URL is recorded or any event carries a `backup` marker, so a
+/// failed attempt counts as the task's one attempt.
+pub(crate) fn already_attempted(store: &Store, task_id: &str) -> bool {
+    if matches!(store.backup_url(task_id), Ok(Some(_))) {
+        return true;
+    }
+    store.get_events(task_id).is_ok_and(|events| {
+        events
+            .iter()
+            .any(|event| event.metadata.as_ref().is_some_and(|meta| meta.get("backup").is_some()))
+    })
+}
+
+fn target_for(settings: &BackupSettings) -> Option<Box<dyn BackupTarget>> {
+    match settings.target.as_str() {
+        "gdrive" => Some(Box::new(match &settings.binary {
+            Some(binary) => GdriveTarget::with_binary(binary),
+            None => GdriveTarget::new(),
+        })),
         _ => None,
     }
 }
@@ -116,17 +143,22 @@ fn record_success(store: &Store, task_id: &str, target: &str, backup: &BackupRef
         timestamp: chrono::Local::now(),
         event_kind: EventKind::Milestone,
         detail: format!("Backup uploaded to {target}: {}", backup.url),
-        metadata: Some(serde_json::json!({"backup_url": backup.url, "backup_id": backup.id})),
+        metadata: Some(serde_json::json!({
+            "backup": "uploaded", "backup_url": backup.url, "backup_id": backup.id,
+        })),
     });
 }
 
+/// A backup failure is a milestone, not an error event: `latest_error` must
+/// keep reporting the agent's own failure, and the marker still counts as the
+/// task's one attempt.
 fn warn(store: &Store, task_id: &str, err: &anyhow::Error) {
     let detail = format!("Backup failed: {err:#}");
     eprintln!("[aid] {task_id}: {detail}");
     let _ = store.insert_event(&TaskEvent {
         task_id: TaskId(task_id.to_string()),
         timestamp: chrono::Local::now(),
-        event_kind: EventKind::Error,
+        event_kind: EventKind::Milestone,
         detail,
         metadata: Some(serde_json::json!({"backup": "failed"})),
     });

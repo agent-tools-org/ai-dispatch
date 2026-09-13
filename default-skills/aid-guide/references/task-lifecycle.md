@@ -41,15 +41,22 @@ a report-only audit or commit-cleaned worktree can still be a real delivery.
 
 ## Artifact backup
 
-When a project or `aid run --backup` configures a backup target, the transition
-into `Done`, `Failed`, or `Stopped` (matching `on = [complete, fail, cancelled]`)
-bundles the task's export, diff, and raw log and uploads them before the
-transition returns. The resulting URL is stored on the task (`aid show` prints
+When a project or `aid run --backup` configures a backup target, a task that
+ends in `Done`, `Failed`, or `Stopped` (matching `on = [complete, fail,
+cancelled]`) has its export, diff, and raw log bundled and uploaded once per
+task, at the settled state. For a task whose agent ran, that is the end of the
+post-run lifecycle: after verification, the verify gate, and result-file
+persistence, so the bundle carries the final status. For `aid stop` and reaper
+failures nothing follows the transition, so the upload runs there. A task that
+failed before its dispatch arguments were persisted (worktree setup, guards)
+is never backed up. The resulting URL is stored on the task (`aid show` prints
 `Backup: <url>`; `--json` carries `backup_url`) and a milestone event records it.
-Backup is observational only: a task is backed up at most once, a failed upload
-adds an error-kind event beginning `Backup failed:` plus a stderr line, and
-neither success nor failure alters `TaskStatus`, `VerifyStatus`, `TaskOutcome`,
-or the exit code. See the configuration reference for the `[backup]` keys.
+Backup is observational only: exactly one attempt per task (a failed attempt
+counts and is never retried), a failed upload adds a milestone event beginning
+`Backup failed:` plus a stderr line while `latest_error` keeps the agent's own
+error, and neither success nor failure alters `TaskStatus`, `VerifyStatus`,
+`TaskOutcome`, or the exit code. See the configuration reference for the
+`[backup]` keys.
 
 ## Review
 

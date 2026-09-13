@@ -32,7 +32,7 @@ Common project controls include:
 
 - default team and verification command;
 - setup command and container image;
-- `remote_build = "auto"` or `remote_build = "<box>"` in `.aid/project.toml` (`[project]`), overridden by `aid run --remote-build [BOX]`; batch `[defaults]` and per-task `remote_build` use the same values;
+- `remote_build = "auto"` or `remote_build = "<box>"` in `.aid/project.toml` (`[project]`), overridden by `aid run --remote-build [BOX]`; batch `[defaults]` and per-task `remote_build` use the same values. A project `auto` default is ignored with a warning when `rbox` is not on `PATH` (the build stays local); an explicit `--remote-build` or a project default naming a box still fails without `rbox`;
 - agent and model preferences;
 - budget and duration limits;
 - GitButler mode;

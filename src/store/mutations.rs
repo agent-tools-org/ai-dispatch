@@ -7,7 +7,6 @@ use chrono::Local;
 use rusqlite::{params, OptionalExtension};
 
 use super::schema::row_to_memory;
-use super::status_guard::status_guard_warn_only;
 use super::Store;
 use crate::types::*;
 
@@ -127,7 +126,16 @@ impl Store {
     }
 
     /// Replace a waiting task's row with full task data (called when dispatch begins).
+    /// The only legal move is the waiting row -> the dispatch status; anything else
+    /// is rejected by the status guard and aborts the dispatch.
     pub fn replace_waiting_task(&self, task: &Task) -> Result<()> {
+        let id = task.id.as_str();
+        if !self.guard_current_status(id, &[TaskStatus::Waiting], task.status)? {
+            anyhow::bail!(
+                "Task '{id}' is not waiting; refusing to replace its row with status '{}'",
+                task.status.as_str()
+            );
+        }
         let agent_value = if task.agent == AgentKind::Custom {
             task.custom_agent_name.as_deref().unwrap_or("custom")
         } else {
@@ -493,20 +501,36 @@ impl Store {
         if current.can_transition_to(next) || (allow_rescue && current.can_rescue_to_done(next)) {
             return Ok(true);
         }
-        if status_guard_warn_only() {
-            aid_warn!(
-                "[aid] Allowing illegal status transition for {id} due to AID_STATUS_GUARD=warn: {} -> {}",
-                current.as_str(),
-                next.as_str()
-            );
-            return Ok(true);
-        }
         aid_warn!(
             "[aid] Rejected illegal status transition for {id}: {} -> {}",
             current.as_str(),
             next.as_str()
         );
+        self.record_rejected_transition(id, current, next)?;
         Ok(false)
+    }
+
+    /// Persist a rejected transition on the task's event log so `aid show` records it.
+    fn record_rejected_transition(
+        &self,
+        id: &str,
+        current: TaskStatus,
+        next: TaskStatus,
+    ) -> Result<()> {
+        self.insert_event(&TaskEvent {
+            task_id: TaskId(id.to_string()),
+            timestamp: Local::now(),
+            event_kind: EventKind::Error,
+            detail: format!(
+                "rejected illegal status transition: {} -> {}",
+                current.as_str(),
+                next.as_str()
+            ),
+            metadata: Some(serde_json::json!({
+                "from": current.as_str(),
+                "to": next.as_str(),
+            })),
+        })
     }
 
     fn current_task_status(&self, id: &str) -> Result<Option<TaskStatus>> {
@@ -879,7 +903,7 @@ mod tests {
     }
 
     #[test]
-    fn complete_task_atomic_rejects_illegal_transition_without_event() {
+    fn complete_task_atomic_rejects_illegal_transition_and_records_rejection() {
         let store = Store::open_memory().unwrap();
         insert_task_status(&store, "t-atomic-merged", TaskStatus::Merged);
         let event = TaskEvent {
@@ -907,7 +931,9 @@ mod tests {
             .unwrap();
 
         assert!(!changed);
-        assert_eq!(store.get_events("t-atomic-merged").unwrap().len(), 0);
+        let events = store.get_events("t-atomic-merged").unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].detail, "rejected illegal status transition: merged -> failed");
     }
 
     #[test]

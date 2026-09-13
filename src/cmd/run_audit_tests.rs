@@ -284,3 +284,11 @@ fn show_header_includes_audit_verdict_when_present() {
 
     assert!(summary.contains("Audit: pass (report: /tmp/report.md)"));
 }
+
+#[test]
+fn explicit_remote_build_wins_over_project_default() {
+    let project = ProjectConfig { id: "demo".to_string(), remote_build: Some("auto".to_string()), ..Default::default() };
+    let mut args = RunArgs { remote_build: Some("named-box".to_string()), ..Default::default() };
+    super::run_dispatch_resolve::apply_project_defaults(&mut args, Some(&project));
+    assert_eq!(args.remote_build.as_deref(), Some("named-box"));
+}

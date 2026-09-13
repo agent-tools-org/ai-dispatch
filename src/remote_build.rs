@@ -9,15 +9,35 @@ use crate::store::Store;
 use crate::types::{EventKind, TaskEvent, TaskId};
 
 pub(crate) fn resolve(args: &mut RunArgs) -> Result<()> {
+    resolve_in(args, crate::agent::env::which_exists("rbox"), &mut Command::new("rbox"))
+}
+
+fn resolve_in(args: &mut RunArgs, rbox_present: bool, command: &mut Command) -> Result<()> {
     let Some(requested) = args.remote_build.as_deref() else { return Ok(()) };
     if args.sandbox || args.container.is_some() {
         bail!("--remote-build conflicts with --sandbox and --container: rbox needs host Tailscale");
     }
-    if !crate::agent::env::which_exists("rbox") {
+    if !rbox_present {
         bail!("Remote build requires rbox on PATH; rbox CLI not found");
     }
-    args.remote_build = Some(resolve_with(requested, &mut Command::new("rbox"))?);
+    args.remote_build = Some(resolve_with(requested, command)?);
     Ok(())
+}
+
+/// Project-level default: `auto` degrades to a local build when rbox is absent;
+/// a named box is kept and fails later in `resolve` exactly like an explicit flag.
+pub(crate) fn project_default(value: Option<&str>) -> Option<String> {
+    project_default_with(value, crate::agent::env::which_exists("rbox"))
+}
+
+fn project_default_with(value: Option<&str>, rbox_present: bool) -> Option<String> {
+    match value {
+        Some("auto") if !rbox_present => {
+            aid_warn!("[aid] project remote_build=auto ignored: rbox not on PATH");
+            None
+        }
+        other => other.map(str::to_string),
+    }
 }
 
 fn resolve_with(requested: &str, command: &mut Command) -> Result<String> {

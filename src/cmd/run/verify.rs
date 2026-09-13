@@ -10,7 +10,7 @@ use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus}
 
 use super::RunArgs;
 
-#[path = "run_verify_outcome.rs"]
+#[path = "verify_outcome.rs"]
 mod outcome;
 
 pub(in crate::cmd) fn maybe_cleanup_fast_fail_impl(store: &Store, task_id: &TaskId, task: &Task) {
@@ -296,5 +296,5 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_checklist_miss_impl(
     Box::pin(super::super::run(store.clone(), retry_args)).await.map(Some)
 }
 #[cfg(test)]
-#[path = "run_verify_tests.rs"]
+#[path = "verify_tests.rs"]
 mod tests;

@@ -286,5 +286,5 @@ pub(super) fn fail_claimed_task(
 }
 
 #[cfg(test)]
-#[path = "run_dispatch_effective_dir_tests.rs"]
+#[path = "dispatch_effective_dir_tests.rs"]
 mod effective_dir_tests;

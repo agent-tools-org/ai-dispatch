@@ -5,11 +5,11 @@ use std::collections::HashSet;
 use crate::{agent, project, store::Store, templates, team, toolbox, types::*};
 use crate::cmd::summary::{format_summary_for_injection, CompletionSummary};
 mod prompt_context;
-#[path = "run_output.rs"]
+#[path = "output.rs"]
 mod run_output;
-#[path = "run_verify.rs"]
+#[path = "verify.rs"]
 mod run_verify;
-#[path = "run_scope.rs"]
+#[path = "scope.rs"]
 mod run_scope;
 pub(super) use run_output::{
     ResultDelivery, clean_output_if_jsonl, extract_output_fallback_from_path,
@@ -17,9 +17,9 @@ pub(super) use run_output::{
 };
 pub(super) use run_scope::warn_agent_committed_files_outside_scope;
 pub(super) use run_verify::{maybe_auto_retry_after_checklist_miss_impl, maybe_auto_retry_after_verify_failure_impl, maybe_cleanup_fast_fail_impl, maybe_verify_impl, record_verify_not_run};
-#[path = "run_process.rs"]
+#[path = "process.rs"]
 mod run_process;
-#[path = "run_prompt_helpers.rs"]
+#[path = "prompt_helpers.rs"]
 mod run_prompt_helpers;
 pub(super) use run_process::*;
 pub(super) use run_prompt_helpers::*;
@@ -285,7 +285,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     Ok(PromptBundle { effective_prompt, context_files, prompt_tokens, injected_memory_ids })
 }
 
-#[cfg(test)] #[path = "run_prompt_tests.rs"] mod tests;
+#[cfg(test)] #[path = "prompt_tests.rs"] mod tests;
 
 /// The category that drives toolbox filtering and skill auto-apply: a declared
 /// `--kind` beats the keyword guess.

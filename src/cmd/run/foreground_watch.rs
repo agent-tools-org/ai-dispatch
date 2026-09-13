@@ -235,5 +235,5 @@ impl SignalWaiter {
 }
 
 #[cfg(test)]
-#[path = "run_foreground_watch_tests.rs"]
+#[path = "foreground_watch_tests.rs"]
 mod tests;

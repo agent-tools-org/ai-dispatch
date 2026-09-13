@@ -3,11 +3,11 @@ use crate::paths::AidHomeGuard;
 use crate::types::AgentKind;
 use std::sync::Arc;
 
-#[path = "run_dispatch_resolve_held_tests.rs"]
+#[path = "dispatch_resolve_held_tests.rs"]
 mod held_tests;
-#[path = "run_dispatch_resolve_held_pin_tests.rs"]
+#[path = "dispatch_resolve_held_pin_tests.rs"]
 mod held_pin_tests;
-#[path = "run_dispatch_model_source_tests.rs"]
+#[path = "dispatch_model_source_tests.rs"]
 mod model_source_tests;
 
 /// Write a manual-hold marker for `agent` so `dispatch_blocking_hold` returns `Some`.

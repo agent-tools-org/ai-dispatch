@@ -15,9 +15,9 @@ use crate::usage;
 use super::run_prompt;
 use super::RunArgs;
 
-#[path = "run_dispatch_resolve_held.rs"]
+#[path = "dispatch_resolve_held.rs"]
 mod held;
-#[path = "run_dispatch_model_info.rs"]
+#[path = "dispatch_model_info.rs"]
 mod model_info;
 pub(super) use held::maybe_insert_held_route_event;
 /// Emit the one-time GitButler setup hint as a task milestone event.
@@ -296,4 +296,4 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         substituted_from,
     })
 }
-#[cfg(test)] #[path = "run_dispatch_resolve_tests.rs"] mod tests;
+#[cfg(test)] #[path = "dispatch_resolve_tests.rs"] mod tests;

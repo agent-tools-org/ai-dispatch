@@ -4,16 +4,16 @@
 
 use super::*;
 
-#[path = "run_prompt/tests.rs"]
+#[path = "prompt/tests.rs"]
 mod extracted_tests;
 
-#[path = "run_prompt/skill_tests.rs"]
+#[path = "prompt/skill_tests.rs"]
 mod skill_tests;
 
-#[path = "run_prompt/worktree_paths_tests.rs"]
+#[path = "prompt/worktree_paths_tests.rs"]
 mod worktree_paths_tests;
 
-#[path = "run_prompt/rust_cache_prompt_tests.rs"]
+#[path = "prompt/rust_cache_prompt_tests.rs"]
 mod rust_cache_prompt_tests;
 
 #[test]

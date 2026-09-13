@@ -9,47 +9,47 @@ use crate::store::Store;
 use crate::types::*;
 #[cfg(test)]
 pub(crate) use crate::paths;
-#[path = "run_args.rs"]
+#[path = "args.rs"]
 mod run_args;
-#[path = "run_validate.rs"]
+#[path = "validate.rs"]
 mod run_validate;
-#[path = "run_prompt.rs"]
+#[path = "prompt.rs"]
 mod run_prompt;
-#[path = "run_agent.rs"]
+#[path = "agent.rs"]
 mod run_agent;
-#[path = "run_bestof.rs"]
+#[path = "bestof.rs"]
 mod run_bestof;
-#[path = "run_lifecycle.rs"]
+#[path = "lifecycle.rs"]
 mod run_lifecycle;
-#[path = "run_dirty.rs"]
+#[path = "dirty.rs"]
 mod run_dirty;
-#[path = "run_iterate.rs"]
+#[path = "iterate.rs"]
 mod run_iterate;
-#[path = "run_post.rs"]
+#[path = "post.rs"]
 mod run_post;
-#[path = "run_model_selfheal.rs"]
+#[path = "model_selfheal.rs"]
 mod run_model_selfheal;
-#[path = "run_delivery_recovery.rs"]
+#[path = "delivery_recovery.rs"]
 mod run_delivery_recovery;
-#[path = "run_dispatch_resolve.rs"]
+#[path = "dispatch_resolve.rs"]
 mod run_dispatch_resolve;
-#[path = "run_dispatch_claim.rs"]
+#[path = "dispatch_claim.rs"]
 mod run_dispatch_claim;
-#[path = "run_dispatch_prepare.rs"]
+#[path = "dispatch_prepare.rs"]
 mod run_dispatch_prepare;
-#[path = "run_dispatch_worktree.rs"]
+#[path = "dispatch_worktree.rs"]
 mod run_dispatch_worktree;
-#[path = "run_task_profile.rs"]
+#[path = "task_profile.rs"]
 mod run_task_profile;
-#[path = "run_delegation.rs"]
+#[path = "delegation.rs"]
 mod run_delegation;
-#[path = "run_dispatch_guard.rs"]
+#[path = "dispatch_guard.rs"]
 mod run_dispatch_guard;
-#[path = "run_foreground_watch.rs"]
+#[path = "foreground_watch.rs"]
 mod run_foreground_watch;
-#[path = "run_dispatch_execute.rs"]
+#[path = "dispatch_execute.rs"]
 mod run_dispatch_execute;
-#[path = "run_dispatch.rs"]
+#[path = "dispatch.rs"]
 mod run_dispatch;
 pub(crate) use self::run_agent::run_agent_process_with_cost;
 pub(crate) use self::run_dispatch::run;
@@ -112,21 +112,21 @@ impl Drop for WorkspaceSymlinkGuard {
     }
 }
 
-#[cfg(test)] #[path = "run_tests.rs"] mod tests;
-#[cfg(test)] #[path = "run_dry_run_tests.rs"] mod run_dry_run_tests;
-#[cfg(test)] #[path = "checklist_tests.rs"] mod checklist_tests;
-#[cfg(test)] #[path = "run_lifecycle_tests.rs"] mod run_lifecycle_tests;
-#[cfg(test)] #[path = "run_lifecycle_cleanup_tests.rs"] mod run_lifecycle_cleanup_tests;
-#[cfg(test)] #[path = "run_lifecycle_output_tests.rs"] mod run_lifecycle_output_tests;
-#[cfg(test)] #[path = "run_lifecycle/final_state_tests.rs"] mod run_lifecycle_final_state_tests;
-#[cfg(test)] #[path = "run_lifecycle/missing_report_tests.rs"] mod run_lifecycle_missing_report_tests;
-#[cfg(test)] #[path = "run_lifecycle_verify_gate_tests.rs"] mod run_lifecycle_verify_gate_tests;
-#[cfg(test)] #[path = "run_verify_gate_tests.rs"] mod run_verify_gate_tests;
-#[cfg(test)] #[path = "run_verify_infrastructure_tests.rs"] mod run_verify_infrastructure_tests;
-#[cfg(test)] #[path = "cargo_route_regression_tests.rs"] mod cargo_route_regression_tests;
-#[cfg(test)] #[path = "run_cascade_tests.rs"] mod run_cascade_tests;
-#[cfg(test)] #[path = "run_audit_tests.rs"] mod audit;
-#[cfg(test)] #[path = "run_retry_target_tests.rs"] mod run_retry_target_tests;
+#[cfg(test)] mod tests;
+#[cfg(test)] #[path = "dry_run_tests.rs"] mod run_dry_run_tests;
+#[cfg(test)] mod checklist_tests;
+#[cfg(test)] #[path = "lifecycle_tests.rs"] mod run_lifecycle_tests;
+#[cfg(test)] #[path = "lifecycle_cleanup_tests.rs"] mod run_lifecycle_cleanup_tests;
+#[cfg(test)] #[path = "lifecycle_output_tests.rs"] mod run_lifecycle_output_tests;
+#[cfg(test)] #[path = "lifecycle/final_state_tests.rs"] mod run_lifecycle_final_state_tests;
+#[cfg(test)] #[path = "lifecycle/missing_report_tests.rs"] mod run_lifecycle_missing_report_tests;
+#[cfg(test)] #[path = "lifecycle_verify_gate_tests.rs"] mod run_lifecycle_verify_gate_tests;
+#[cfg(test)] #[path = "verify_gate_tests.rs"] mod run_verify_gate_tests;
+#[cfg(test)] #[path = "verify_infrastructure_tests.rs"] mod run_verify_infrastructure_tests;
+#[cfg(test)] mod cargo_route_regression_tests;
+#[cfg(test)] #[path = "cascade_tests.rs"] mod run_cascade_tests;
+#[cfg(test)] #[path = "audit_tests.rs"] mod audit;
+#[cfg(test)] #[path = "retry_target_tests.rs"] mod run_retry_target_tests;
 
 pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) { run_prompt::inherit_retry_base_branch_impl(repo_dir, task, retry_args); }
 pub(crate) fn retry_target(task: &Task) -> Result<(Option<String>, Option<String>)> { run_prompt::retry_target(task) }

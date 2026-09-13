@@ -5,10 +5,10 @@ use anyhow::Result;
 use std::{path::Path, sync::Arc};
 use crate::{agent, hooks, rate_limit, store::Store, types::*};
 use crate::cmd::{checklist_scan, judge, retry_logic, show};
-#[path = "run_lifecycle/final_state.rs"]
+#[path = "lifecycle/final_state.rs"]
 mod final_state;
 pub(crate) use final_state::capture_final_worktree_state;
-#[path = "run_lifecycle/missing_report.rs"]
+#[path = "lifecycle/missing_report.rs"]
 mod missing_report;
 pub(crate) use missing_report::record_missing_report;
 use super::run_dirty::{DirtyWorktreeAction, post_agent_dirty_worktree_cleanup};

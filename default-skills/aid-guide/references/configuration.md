@@ -37,7 +37,43 @@ Common project controls include:
 - budget and duration limits;
 - GitButler mode;
 - worktree naming prefix;
-- audit and idle-recovery policy.
+- audit and idle-recovery policy;
+- artifact backup (`[backup]`, below).
+
+### Artifact backup
+
+A `[backup]` table in `.aid/project.toml` uploads a bundle of a task's artifacts
+to an off-machine target when the task reaches a terminal state. The first target
+is `gdrive`, which shells out to the Google Workspace CLI (`gws`, install with
+`npm install -g @googleworkspace/cli`, sign in with `gws auth login`); aid never
+holds Drive credentials itself.
+
+```toml
+[backup]
+target = "gdrive"
+folder = "aid-backups/{project}"        # templates: {project} {date} {task_id} {branch}
+include = ["export", "diff", "transcript"]   # default: all three
+on = ["complete", "fail"]               # subset of complete, fail
+```
+
+`[backup.gdrive] folder = "..."` in `~/.aid/config.toml` supplies the default
+folder when the project sets none; the built-in default is `aid-backups/{project}`.
+`[backup.gdrive] binary = "/path/to/gws"` names the `gws` executable when it is
+not on the PATH of the `aid` process that performs the upload (a detached worker
+often lacks the shell's `nvm` directories).
+Folder segments are created under My Drive when missing. `aid run --backup
+TARGET[:FOLDER]` enables or redirects the backup for one task without project
+config, `--no-backup` disables it, and `aid retry` inherits whichever was set.
+The bundle is `<task_id>-<short_sha>.tar.gz` containing `export.md` (the
+Markdown export), `diff.patch` (`aid show --diff`), and `transcript.jsonl` (the
+raw task log) as selected by `include`. The upload runs synchronously and is
+attempted once, after the post-run lifecycle of a task that ran, once the final
+status, verify status and result file are persisted. Tasks ended by `aid stop`, by the background reaper (dead
+worker, idle, timeout, pending or waiting timeout), or by a failure before the
+agent started are not backed up. A missing `gws`, missing sign-in, API failure,
+or invalid `[backup]` value is recorded as a milestone event on the task and
+printed to stderr, counts as the task's one attempt, and never changes the
+task's status, `latest_error`, or exit code.
 
 ### Remote tests for ai-dispatch
 

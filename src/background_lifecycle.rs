@@ -17,11 +17,14 @@ pub(super) async fn run_post_lifecycle(
     agent: &dyn Agent,
     container_name: Option<&str>,
 ) -> Result<()> {
-    let model_source = crate::cmd::run::RunArgs::saved_for_task(store, &spec.task_id)?
+    let saved = crate::cmd::run::RunArgs::saved_for_task(store, &spec.task_id)?;
+    let model_source = saved
+        .as_ref()
         .map(|args| args.model_source)
         .unwrap_or(ModelSource::AidResolved);
     let mut lifecycle_args = run_args_from_spec(spec, model_source);
     lifecycle_args.remote_build = crate::remote_build::saved_box(store, &spec.task_id)?;
+    carry_backup_overrides(&mut lifecycle_args, saved.as_ref());
     let task_id = TaskId(spec.task_id.clone());
     let pre_verify_status = store
         .get_task(&spec.task_id)?
@@ -105,6 +108,15 @@ fn run_args_from_spec(spec: &BackgroundRunSpec, model_source: ModelSource) -> cr
     }
 }
 
+/// The spec has no backup fields; retries derived from these args must keep
+/// the task's `--backup` / `--no-backup` intent, so copy it from the saved args.
+fn carry_backup_overrides(args: &mut crate::cmd::run::RunArgs, saved: Option<&crate::cmd::run::RunArgs>) {
+    if let Some(saved) = saved {
+        args.backup = saved.backup.clone();
+        args.no_backup = saved.no_backup;
+    }
+}
+
 fn prompt_bundle_from_spec(spec: &BackgroundRunSpec) -> crate::cmd::run::PromptBundle {
     crate::cmd::run::PromptBundle {
         effective_prompt: spec.prompt.clone(),
@@ -128,4 +140,25 @@ fn task_lifecycle_paths(
         return Ok((None, None));
     };
     Ok((task.repo_path, task.worktree_path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::carry_backup_overrides;
+    use crate::cmd::run::RunArgs;
+
+    #[test]
+    fn lifecycle_args_carry_saved_backup_overrides() {
+        let saved = RunArgs { backup: Some("gdrive:x".into()), no_backup: false, ..Default::default() };
+        let mut args = RunArgs::default();
+        carry_backup_overrides(&mut args, Some(&saved));
+        assert_eq!(args.backup.as_deref(), Some("gdrive:x"));
+
+        let saved = RunArgs { no_backup: true, ..Default::default() };
+        carry_backup_overrides(&mut args, Some(&saved));
+        assert!(args.no_backup && args.backup.is_none());
+
+        carry_backup_overrides(&mut args, None);
+        assert!(args.no_backup, "absent saved args leave the fields alone");
+    }
 }

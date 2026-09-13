@@ -101,6 +101,8 @@ pub(super) fn build_run_args(
         checklist,
         skills,
         remote_build: extras.remote_build,
+        backup: extras.backup,
+        no_backup: extras.no_backup,
         hooks: extras.hook,
         template: extras.template,
         background: bg,
@@ -161,6 +163,8 @@ mod tests {
             Vec::new(),
             Box::new(RunExtrasArgs {
                 remote_build: None,
+                backup: None,
+                no_backup: false,
                 context_from: Vec::new(),
                 skill: Vec::new(),
                 template: None,

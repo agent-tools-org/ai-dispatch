@@ -1,5 +1,5 @@
 // Task export handlers for markdown/json and ShareGPT JSONL output.
-// Exports: ExportArgs, ExportFormat, run().
+// Exports: ExportArgs, ExportFormat, run(), render_markdown().
 // Deps: show::worktree_diff, export_sharegpt, Store, Task/TaskEvent.
 use anyhow::{anyhow, Context, Result};
 use serde::Serialize;
@@ -32,13 +32,7 @@ pub async fn run(store: Arc<Store>, args: ExportArgs) -> Result<()> {
     if args.sharegpt {
         return export_sharegpt::export_sharegpt(store.as_ref(), &args.task_id, args.output.as_deref());
     }
-    let task = load_task(&store, &args.task_id)?;
-    let events = store.get_events(&args.task_id)?;
-    let output = read_output(&task)?;
-    let diff = worktree_diff(&task, &args.task_id)?
-        .trim_start_matches('\n')
-        .to_string();
-    let timeline = format_event_timeline(&events);
+    let (task, timeline, output, diff) = gather(&store, &args.task_id)?;
     let body = match args.format {
         ExportFormat::Markdown => build_markdown(&task, &timeline, &output, &diff),
         ExportFormat::Json => build_json(&task, &timeline, &output, &diff)?,
@@ -49,6 +43,20 @@ pub async fn run(store: Arc<Store>, args: ExportArgs) -> Result<()> {
         print!("{body}");
     }
     Ok(())
+}
+/// The Markdown export as a string, for callers that bundle it instead of printing.
+pub(crate) fn render_markdown(store: &Store, task_id: &str) -> Result<String> {
+    let (task, timeline, output, diff) = gather(store, task_id)?;
+    Ok(build_markdown(&task, &timeline, &output, &diff))
+}
+fn gather(store: &Store, task_id: &str) -> Result<(Task, Vec<String>, String, String)> {
+    let task = load_task(store, task_id)?;
+    let events = store.get_events(task_id)?;
+    let output = read_output(&task)?;
+    let diff = worktree_diff(&task, task_id)?
+        .trim_start_matches('\n')
+        .to_string();
+    Ok((task, format_event_timeline(&events), output, diff))
 }
 fn build_markdown(task: &Task, timeline: &[String], output: &str, diff: &str) -> String {
     let header = format!(

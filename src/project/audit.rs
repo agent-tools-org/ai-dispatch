@@ -13,6 +13,8 @@ pub(super) struct ProjectFile {
     pub project: ProjectConfig,
     #[serde(default)]
     pub audit: ProjectAuditConfig,
+    #[serde(default)]
+    pub backup: Option<crate::backup::BackupProjectConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

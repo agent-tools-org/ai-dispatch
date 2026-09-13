@@ -21,6 +21,7 @@ const CREATE_TABLES_SQL: &str = "CREATE TABLE IF NOT EXISTS tasks (
     project_id TEXT,
     worktree_path TEXT,
     effective_dir TEXT,
+    backup_url TEXT,
     worktree_branch TEXT, final_head_sha TEXT, final_branch TEXT,
     start_sha TEXT,
     log_path TEXT,
@@ -255,6 +256,7 @@ pub(super) fn migrate(store: &Store) -> Result<()> {
     super::migrations::migrate_observed_model(&conn)?;
     super::migrations::migrate_project_id(&conn)?;
     super::migrations::migrate_effective_dir(&conn)?;
+    super::migrations::migrate_backup_url(&conn)?;
     Ok(())
 }
 

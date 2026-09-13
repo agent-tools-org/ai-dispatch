@@ -157,5 +157,5 @@ fn task_ref(tasks: &[BatchTask], task_idx: usize) -> String {
 }
 
 #[cfg(test)]
-#[path = "batch_analyze_tests.rs"]
+#[path = "analyze_tests.rs"]
 mod tests;

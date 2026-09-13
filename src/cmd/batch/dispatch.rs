@@ -6,7 +6,7 @@ use crate::store::Store;
 use crate::types::Task;
 use anyhow::Result;
 use std::sync::Arc;
-#[path = "batch_dispatch_concurrency.rs"]
+#[path = "dispatch_concurrency.rs"]
 mod batch_dispatch_concurrency;
 use self::batch_dispatch_concurrency::effective_max_active;
 use super::batch_dispatch_support::{

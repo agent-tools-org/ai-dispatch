@@ -18,6 +18,8 @@ mod identity;
 mod profile;
 #[path = "project/team.rs"]
 mod project_team;
+#[path = "project/worktree.rs"]
+mod worktree;
 
 use self::audit::ProjectFile;
 pub use self::edit::{upsert_gitbutler_mode, upsert_gitbutler_prompt_suppressed};
@@ -243,9 +245,12 @@ pub fn detect_project() -> Option<ProjectConfig> {
 
 pub fn detect_project_in(start_dir: &Path) -> Option<ProjectConfig> {
     let git_root = find_git_root_from(start_dir)?;
-    let project_path = project_path_in_repo(&git_root);
+    let mut project_path = project_path_in_repo(&git_root);
     if !project_path.is_file() {
-        return None;
+        if !git_root.join(".git").is_file() {
+            return None;
+        }
+        project_path = project_path_in_repo(&worktree::main_working_tree_of(&git_root)?);
     }
     load_project(&project_path).ok()
 }
@@ -285,3 +290,6 @@ mod tests;
 #[cfg(test)]
 #[path = "project/edit_tests.rs"]
 mod edit_tests;
+#[cfg(test)]
+#[path = "project/discovery_tests.rs"]
+mod discovery_tests;

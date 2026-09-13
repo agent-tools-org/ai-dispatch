@@ -35,6 +35,14 @@ fn official_guide_covers_every_public_command() {
 }
 
 #[test]
+fn official_guide_documents_project_config_discovery_order() {
+    let configuration = include_str!("../default-skills/aid-guide/references/configuration.md");
+    assert!(configuration.contains(
+        "Configuration discovery uses the checkout's own `.aid/project.toml` first; if absent in a linked worktree, it uses the main working tree's `.aid/project.toml`."
+    ));
+}
+
+#[test]
 fn official_guide_documents_prepared_sandbox_scratch() {
     let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
     assert!(dispatch.contains("`_base` for"));

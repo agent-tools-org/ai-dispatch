@@ -1,17 +1,17 @@
-// Backup hook semantics: unknown dispatch intent means no backup, one attempt
+// Backup attempt semantics: unknown dispatch intent means no backup, one attempt
 // per task even after a failure, and a failed backup never displaces the
 // agent's own error. A fake failing `gws` stands in for the real binary.
 
 use super::*;
 use crate::paths::AidHomeGuard;
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, VerifyStatus};
+use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-fn task(id: &str, status: TaskStatus) -> Task {
+pub(super) fn task(id: &str, status: TaskStatus) -> Task {
     Task {
         id: TaskId(id.to_string()),
         agent: AgentKind::Codex,
@@ -64,7 +64,7 @@ fn event(task_id: &str, kind: EventKind, detail: &str) -> TaskEvent {
 
 /// A `gws` that logs every call and always fails, wired in through the global
 /// `[backup.gdrive] binary` key so no PATH manipulation is needed.
-fn failing_gws(home: &Path) -> std::path::PathBuf {
+pub(super) fn failing_gws(home: &Path) -> std::path::PathBuf {
     let log = home.join("gws.log");
     let binary = home.join("gws");
     let script = format!("#!/bin/sh\necho \"$*\" >> '{}'\necho 'not signed in' >&2\nexit 2\n", log.display());
@@ -78,8 +78,17 @@ fn failing_gws(home: &Path) -> std::path::PathBuf {
     log
 }
 
-fn save_args(store: &Store, task_id: &str, args: crate::cmd::run::RunArgs) {
+pub(super) fn save_args(store: &Store, task_id: &str, args: crate::cmd::run::RunArgs) {
     store.update_task_dispatch_args(task_id, &args.dispatch_args_json().unwrap()).unwrap();
+}
+
+/// Forces the stored status (bypassing transition guards) and settles the task.
+pub(super) fn settle(store: &Store, task_id: &str, status: TaskStatus) {
+    store
+        .db()
+        .execute("UPDATE tasks SET status = ?1 WHERE id = ?2", rusqlite::params![status.as_str(), task_id])
+        .unwrap();
+    on_settled(store, task_id);
 }
 
 #[test]
@@ -97,13 +106,13 @@ fn task_without_saved_dispatch_args_is_never_backed_up() {
 
     // Setup failed before dispatch args were persisted: the project default
     // must not win over an unknown `--no-backup`.
-    on_terminal(&store, "t-setup-fail", TaskStatus::Failed);
+    settle(&store, "t-setup-fail", TaskStatus::Failed);
     assert!(store.get_events("t-setup-fail").unwrap().is_empty());
     assert!(!already_attempted(&store, "t-setup-fail"));
 
     // The same task with its args persisted resolves the project target.
     save_args(&store, "t-setup-fail", crate::cmd::run::RunArgs::default());
-    on_terminal(&store, "t-setup-fail", TaskStatus::Failed);
+    settle(&store, "t-setup-fail", TaskStatus::Failed);
     let events = store.get_events("t-setup-fail").unwrap();
     assert!(events.iter().any(|e| e.detail.contains("unknown backup target 'nope'")), "{events:?}");
 }
@@ -118,10 +127,10 @@ fn backup_runs_at_most_once_even_after_a_failed_attempt() {
     let args = crate::cmd::run::RunArgs { backup: Some("gdrive:audits".into()), ..Default::default() };
     save_args(&store, "t-once", args);
 
-    on_terminal(&store, "t-once", TaskStatus::Done);
+    settle(&store, "t-once", TaskStatus::Done);
     assert!(already_attempted(&store, "t-once"));
-    on_terminal(&store, "t-once", TaskStatus::Done);
-    on_terminal(&store, "t-once", TaskStatus::Failed);
+    settle(&store, "t-once", TaskStatus::Done);
+    settle(&store, "t-once", TaskStatus::Failed);
 
     let calls = fs::read_to_string(&log).unwrap();
     assert_eq!(calls.lines().count(), 1, "one gws call for the whole task: {calls}");
@@ -130,7 +139,8 @@ fn backup_runs_at_most_once_even_after_a_failed_attempt() {
     assert_eq!(attempts.len(), 1, "{events:?}");
     assert!(attempts[0].detail.contains("not signed in"), "{}", attempts[0].detail);
     assert!(store.backup_url("t-once").unwrap().is_none());
-    assert_eq!(store.get_task("t-once").unwrap().unwrap().status, TaskStatus::Done);
+    // The last settled status stands; backup never rewrites it.
+    assert_eq!(store.get_task("t-once").unwrap().unwrap().status, TaskStatus::Failed);
 }
 
 #[test]
@@ -143,7 +153,7 @@ fn failed_backup_keeps_the_agent_error_as_latest_error() {
     store.insert_event(&event("t-agent-err", EventKind::Error, "agent exited with code 1")).unwrap();
     save_args(&store, "t-agent-err", crate::cmd::run::RunArgs { backup: Some("gdrive".into()), ..Default::default() });
 
-    on_terminal(&store, "t-agent-err", TaskStatus::Failed);
+    settle(&store, "t-agent-err", TaskStatus::Failed);
 
     assert_eq!(store.latest_error("t-agent-err").as_deref(), Some("agent exited with code 1"));
     let events = store.get_events("t-agent-err").unwrap();

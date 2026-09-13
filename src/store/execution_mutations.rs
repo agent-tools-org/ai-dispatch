@@ -1,8 +1,10 @@
 // Execution-state Store mutations for background reconciliation.
-// Exports active execution failure transitions and the backup_url accessors.
-// Deps: rusqlite params and task status guards.
+// Exports active execution failure transitions, the backup_url accessors, the
+// backup claim and the backup sweep candidate query.
+// Deps: rusqlite params, chrono, and task status guards.
 
 use anyhow::Result;
+use chrono::{DateTime, Local};
 use rusqlite::{params, OptionalExtension};
 
 use super::Store;
@@ -27,6 +29,52 @@ impl Store {
             )
             .optional()?;
         Ok(url.flatten().filter(|url| !url.is_empty()))
+    }
+
+    /// Atomically claims the task's one backup attempt: only the first caller
+    /// across all processes sees `true`. The claim is an empty `backup_url`,
+    /// which `backup_url` reports as absent until the upload records a URL.
+    pub fn claim_backup(&self, id: &str) -> Result<bool> {
+        let rows = self.db().execute(
+            "UPDATE tasks SET backup_url = '' WHERE id = ?1 AND backup_url IS NULL",
+            params![id],
+        )?;
+        Ok(rows > 0)
+    }
+
+    /// Unclaimed terminal tasks with persisted dispatch args that ended at or
+    /// after `oldest` and have been quiet since at least `quiet_since`, oldest
+    /// first. A task ended at `completed_at`, or at its newest event when that
+    /// is unset (reaper and stop paths); quiet means neither its newest event
+    /// nor its completion is later than `quiet_since`.
+    pub fn backup_sweep_candidates(
+        &self,
+        oldest: DateTime<Local>,
+        quiet_since: DateTime<Local>,
+    ) -> Result<Vec<String>> {
+        let conn = self.db();
+        let mut stmt = conn.prepare(
+            "SELECT id FROM (
+                SELECT id, julianday(COALESCE(completed_at, last_ts, created_at)) AS ended,
+                       MAX(julianday(COALESCE(last_ts, created_at)),
+                           julianday(COALESCE(completed_at, created_at))) AS last_seen
+                FROM (
+                    SELECT t.id, t.completed_at, t.created_at,
+                           (SELECT e.timestamp FROM events e WHERE e.task_id = t.id
+                            ORDER BY e.timestamp DESC, e.id DESC LIMIT 1) AS last_ts
+                    FROM tasks t
+                    WHERE t.status IN ('done', 'failed', 'stopped')
+                      AND t.dispatch_args IS NOT NULL AND t.backup_url IS NULL
+                      AND (t.completed_at IS NULL OR julianday(t.completed_at) >= julianday(?1))
+                )
+             )
+             WHERE ended >= julianday(?1) AND ended <= julianday(?2) AND last_seen <= julianday(?2)
+             ORDER BY ended, id",
+        )?;
+        let ids = stmt
+            .query_map(params![oldest.to_rfc3339(), quiet_since.to_rfc3339()], |row| row.get(0))?
+            .collect::<rusqlite::Result<Vec<String>>>()?;
+        Ok(ids)
     }
 
     pub fn fail_completed_verify_gate(&self, id: &str) -> Result<bool> {
@@ -143,6 +191,18 @@ mod backup_url_tests {
         );
         assert!(!store.set_backup_url("t-none", "u").unwrap());
         assert_eq!(store.backup_url("t-none").unwrap(), None);
+    }
+
+    #[test]
+    fn backup_claim_succeeds_once_and_is_not_a_url() {
+        let store = Store::open_memory().unwrap();
+        insert(&store, "t-claim");
+        assert!(store.claim_backup("t-claim").unwrap());
+        assert!(!store.claim_backup("t-claim").unwrap(), "second claim loses");
+        assert_eq!(store.backup_url("t-claim").unwrap(), None);
+        assert!(!store.claim_backup("t-none").unwrap());
+        store.set_backup_url("t-claim", "u").unwrap();
+        assert_eq!(store.backup_url("t-claim").unwrap().as_deref(), Some("u"));
     }
 
     #[test]

@@ -1,6 +1,8 @@
 // Task status intent layer for lifecycle side effects.
 // Exports transition helpers that keep Store mutations pure; every terminal
-// transition funnels through after_transition (failure salvage, then backup).
+// transition funnels through after_transition (failure salvage). Backup runs
+// from settle_now only for transitions nothing follows (stop, reaper); process
+// completions are backed up by the post-run lifecycle once they have settled.
 // Deps: Store, failure salvage, backup, and task status/event payload types.
 
 use anyhow::Result;
@@ -30,7 +32,7 @@ pub(crate) fn mark_skipped(store: &Store, task_id: &str) -> Result<bool> {
 
 pub(crate) fn mark_stopped(store: &Store, task_id: &str) -> Result<bool> {
     let changed = store.update_task_status(task_id, TaskStatus::Stopped)?;
-    after_transition(store, task_id, TaskStatus::Stopped, changed);
+    settle_now(store, task_id, TaskStatus::Stopped, changed);
     Ok(changed)
 }
 
@@ -62,13 +64,13 @@ pub(crate) fn fail_completed_verify_gate(store: &Store, task_id: &TaskId) -> Res
 
 pub(crate) fn fail_if_running(store: &Store, task_id: &str) -> Result<bool> {
     let failed = store.fail_if_running(task_id)?;
-    after_transition(store, task_id, TaskStatus::Failed, failed);
+    settle_now(store, task_id, TaskStatus::Failed, failed);
     Ok(failed)
 }
 
 pub(crate) fn fail_active_execution(store: &Store, task_id: &str) -> Result<bool> {
     let failed = store.fail_active_execution(task_id)?;
-    after_transition(store, task_id, TaskStatus::Failed, failed);
+    settle_now(store, task_id, TaskStatus::Failed, failed);
     Ok(failed)
 }
 
@@ -78,7 +80,7 @@ pub(crate) fn fail_pending_with_reason(
     pending_reason: PendingReason,
 ) -> Result<bool> {
     let failed = store.fail_pending_with_reason(task_id, pending_reason)?;
-    after_transition(store, task_id, TaskStatus::Failed, failed);
+    settle_now(store, task_id, TaskStatus::Failed, failed);
     Ok(failed)
 }
 
@@ -88,7 +90,7 @@ pub(crate) fn fail_waiting_with_reason(
     detail: &str,
 ) -> Result<bool> {
     let failed = store.fail_waiting_with_reason(task_id, detail)?;
-    after_transition(store, task_id, TaskStatus::Failed, failed);
+    settle_now(store, task_id, TaskStatus::Failed, failed);
     Ok(failed)
 }
 
@@ -124,5 +126,14 @@ fn after_transition(store: &Store, task_id: &str, status: TaskStatus, changed: b
     if status == TaskStatus::Failed {
         crate::failure_salvage::salvage_failed_task(store, &TaskId(task_id.to_string()));
     }
-    crate::backup::on_terminal(store, task_id, status);
+}
+
+/// For transitions that end the task right here (stop, reaper): the status is
+/// already settled, so back up now. Process completions skip this and are
+/// backed up by `post_run_lifecycle` after verify and result persistence.
+fn settle_now(store: &Store, task_id: &str, status: TaskStatus, changed: bool) {
+    after_transition(store, task_id, status, changed);
+    if changed {
+        crate::backup::on_terminal(store, task_id, status);
+    }
 }

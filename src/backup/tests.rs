@@ -159,6 +159,7 @@ fn settings() -> BackupSettings {
         folder: "aid-backups/{project}".into(),
         include: vec![Artifact::Export],
         on: vec![Trigger::Complete],
+        binary: None,
     }
 }
 
@@ -195,8 +196,11 @@ fn failed_backup_warns_and_leaves_task_untouched() {
     assert!(url.is_none());
     assert!(store.backup_url("t-bad").unwrap().is_none());
     let events = store.get_events("t-bad").unwrap();
-    let warning = events.iter().find(|e| e.event_kind == EventKind::Error).unwrap();
-    assert!(warning.detail.contains("Backup failed") && warning.detail.contains("network down"));
+    let warning = events.iter().find(|e| e.detail.contains("Backup failed")).unwrap();
+    assert_eq!(warning.event_kind, EventKind::Milestone, "never an error event");
+    assert!(warning.detail.contains("network down"));
+    assert_eq!(warning.metadata.as_ref().unwrap()["backup"], "failed");
+    assert!(events.iter().all(|e| e.event_kind != EventKind::Error));
     assert_eq!(store.get_task("t-bad").unwrap().unwrap().status, TaskStatus::Done);
 }
 
@@ -217,6 +221,9 @@ fn on_terminal_reads_project_config_and_reports_unknown_target() {
     let mut task = task("t-proj");
     task.repo_path = Some(repo.path().display().to_string());
     store.insert_task(&task).unwrap();
+    // Persisted args with neither flag: the project `[backup]` decides.
+    let args = crate::cmd::run::RunArgs::default();
+    store.update_task_dispatch_args("t-proj", &args.dispatch_args_json().unwrap()).unwrap();
 
     on_terminal(&store, "t-proj", TaskStatus::Failed);
     assert!(store.get_events("t-proj").unwrap().is_empty(), "fail is not in `on`");

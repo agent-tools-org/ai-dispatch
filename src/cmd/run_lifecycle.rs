@@ -50,7 +50,35 @@ impl From<DirtyWorktreeAction> for LifecyclePhaseDecision {
     }
 }
 
+/// Runs every post-run phase, then backs the task up exactly once at its
+/// settled state (final status, verify status and result file persisted).
 pub(crate) async fn post_run_lifecycle(
+    mode: LifecycleMode,
+    store: &Arc<Store>,
+    task_id: &TaskId,
+    args: &RunArgs,
+    agent_kind: AgentKind,
+    agent_display_name: &str,
+    effective_dir: Option<&String>,
+    repo_path: Option<&String>,
+    wt_path: Option<&String>,
+    container_name: Option<&str>,
+    runtime_hooks: &[hooks::Hook],
+    prompt_bundle: &run_prompt::PromptBundle,
+    pre_verify_status: TaskStatus,
+    pre_task_dirty_paths: Option<&[String]>,
+) -> Result<Option<TaskId>> {
+    let outcome = run_lifecycle_phases(
+        mode, store, task_id, args, agent_kind, agent_display_name, effective_dir, repo_path,
+        wt_path, container_name, runtime_hooks, prompt_bundle, pre_verify_status,
+        pre_task_dirty_paths,
+    )
+    .await;
+    crate::backup::on_settled(store.as_ref(), task_id.as_str());
+    outcome
+}
+
+async fn run_lifecycle_phases(
     mode: LifecycleMode,
     store: &Arc<Store>,
     task_id: &TaskId,

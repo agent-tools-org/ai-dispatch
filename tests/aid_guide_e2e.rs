@@ -127,6 +127,16 @@ fn official_guide_documents_steering_delivery_contract() {
 }
 
 #[test]
+fn official_guide_documents_buffered_prompt_liveness() {
+    let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
+
+    assert!(operations.contains("Idle partial PTY lines only trigger AWAIT when agent-owned logs are silent"));
+    assert!(operations.contains("idle warning window (180 seconds by default, from the task timeout policy)"));
+    assert!(operations.contains("Subsequent log growth restores RUNNING"));
+    assert!(operations.contains("silent logs still await input"));
+}
+
+#[test]
 fn official_guide_documents_event_fallback_coverage() {
     let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
 

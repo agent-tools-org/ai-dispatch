@@ -70,6 +70,11 @@ aid unstick <task-id>
 ```
 
 - Use `respond` when the task is explicitly awaiting input.
+  Idle partial PTY lines only trigger AWAIT when agent-owned logs are silent
+  for the idle warning window (180 seconds by default, from the task timeout policy).
+  Subsequent log growth restores RUNNING, clears the
+  pending prompt, and records the reason in a task event. Real prompts with
+  silent logs still await input.
 - Use `reply` for a tracked message with acknowledgement behavior.
 - Use `steer` for updated direction during execution.
 - `steer` is refused for the one-shot print-mode `agy` and `grok` CLIs because

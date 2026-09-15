@@ -20,7 +20,11 @@ fn resolve_in(args: &mut RunArgs, rbox_present: bool, command: &mut Command) -> 
     if !rbox_present {
         bail!("Remote build requires rbox on PATH; rbox CLI not found");
     }
-    args.remote_build = Some(resolve_with(requested, command)?);
+    let repo = match args.dir.as_deref() {
+        Some(dir) => std::path::PathBuf::from(dir),
+        None => std::env::current_dir().context("Failed to read the current directory")?,
+    };
+    args.remote_build = Some(resolve_with(requested, &repo, command)?);
     Ok(())
 }
 
@@ -40,10 +44,17 @@ fn project_default_with(value: Option<&str>, rbox_present: bool) -> Option<Strin
     }
 }
 
-fn resolve_with(requested: &str, command: &mut Command) -> Result<String> {
+fn resolve_with(requested: &str, repo: &Path, command: &mut Command) -> Result<String> {
     if requested != "auto" { return Ok(requested.to_string()); }
-    let output = command.args(["pick", "--role", "rust-build"]).output()
-        .context("Failed to run rbox pick --role rust-build")?;
+    pick(command, repo, None)
+}
+
+fn pick(command: &mut Command, start_dir: &Path, exclude: Option<&str>) -> Result<String> {
+    let repo = crate::project::worktree::main_working_tree(start_dir)
+        .unwrap_or_else(|| start_dir.to_path_buf());
+    command.args(["pick", "--role", "rust-build", "--repo"]).arg(repo);
+    if let Some(excluded) = exclude { command.args(["--exclude", excluded]); }
+    let output = command.output().context("Failed to run rbox pick --role rust-build")?;
     if !output.status.success() {
         bail!("Remote build box selection failed: {}", String::from_utf8_lossy(&output.stderr).trim());
     }
@@ -102,21 +113,71 @@ fn configure(cmd: &mut Command, home: &Path, name: &str) -> Result<()> {
     Ok(())
 }
 
+const ADMISSION_REFUSED: i32 = 69;
+
 pub(crate) fn verify(
     store: &Store, task_id: &str, path: &Path, command: Option<&str>,
     target: Option<&str>, container: Option<&str>,
 ) -> Result<crate::verify::VerifyResult> {
+    verify_with(store, task_id, path, command, target, container, &mut Command::new("rbox"))
+}
+
+fn verify_with(
+    store: &Store, task_id: &str, path: &Path, command: Option<&str>,
+    target: Option<&str>, container: Option<&str>, rbox: &mut Command,
+) -> Result<crate::verify::VerifyResult> {
     let Some(name) = saved_box(store, task_id)? else {
         return crate::verify_cargo::run_verify_with_store(store, path, command, target, container);
     };
+    let result = verify_on(task_id, &name, path, command, target, container)?;
+    if result.exit_code != Some(ADMISSION_REFUSED) { return Ok(result); }
+    let refusal = refusal_line(&result.output);
+    let replacement = pick(rbox, path, Some(&name)).map_err(|error| anyhow::anyhow!(
+        "Remote build box {name} refused admission ({refusal}); re-pick failed: {error}"
+    ))?;
+    store.insert_event(&TaskEvent {
+        task_id: TaskId(task_id.to_string()), timestamp: chrono::Local::now(),
+        event_kind: EventKind::Milestone,
+        detail: format!("Remote build box: {name} refused admission (disk); re-picked {replacement}"),
+        metadata: Some(serde_json::json!({"remote_build": replacement, "refused_box": name})),
+    })?;
+    persist_box(store, task_id, &replacement)?;
+    let result = verify_on(task_id, &replacement, path, command, target, container)?;
+    if result.exit_code == Some(ADMISSION_REFUSED) {
+        bail!(
+            "Remote build box {replacement} refused admission after re-pick from {name} ({})",
+            refusal_line(&result.output)
+        );
+    }
+    Ok(result)
+}
+
+fn verify_on(
+    task_id: &str, name: &str, path: &Path, command: Option<&str>,
+    target: Option<&str>, container: Option<&str>,
+) -> Result<crate::verify::VerifyResult> {
     let mut environment = Command::new("cargo");
-    configure(&mut environment, &crate::paths::task_dir(task_id).join("home"), &name)?;
+    configure(&mut environment, &crate::paths::task_dir(task_id).join("home"), name)?;
     let env = environment.get_envs().filter_map(|(key, value)| {
         value.map(|value| (key.to_string_lossy().into_owned(), value.to_string_lossy().into_owned()))
     }).collect::<Vec<_>>();
     crate::verify::run_verify_with_env(
         path, command, target, container, crate::verify::VERIFY_TIMEOUT, &env,
     )
+}
+
+fn refusal_line(output: &str) -> String {
+    output.lines().map(str::trim).rev()
+        .find(|line| line.starts_with("rbox:") && !line.starts_with("rbox: job "))
+        .unwrap_or("exit 69 without an rbox refusal line")
+        .to_string()
+}
+
+fn persist_box(store: &Store, task_id: &str, name: &str) -> Result<()> {
+    let mut args = RunArgs::saved_for_task(store, task_id)?
+        .with_context(|| format!("Task {task_id} has no saved dispatch args to pin the build box in"))?;
+    args.remote_build = Some(name.to_string());
+    store.update_task_dispatch_args(task_id, &args.dispatch_args_json()?)
 }
 
 #[cfg(test)]

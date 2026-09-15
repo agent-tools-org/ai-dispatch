@@ -118,6 +118,7 @@ fn format_report_pass() {
         output: "all good".to_string(),
         command: "cargo check".to_string(),
         infrastructure_failure: false,
+        exit_code: None,
     };
     let report = format_verify_report(&result);
     assert!(report.starts_with("Verify PASS"));
@@ -131,6 +132,7 @@ fn format_report_fail_shows_output() {
         output: "error[E0308]: mismatched types".to_string(),
         command: "cargo check".to_string(),
         infrastructure_failure: false,
+        exit_code: None,
     };
     let report = format_verify_report(&result);
     assert!(report.contains("FAIL"));
@@ -185,6 +187,7 @@ fn record_verify_status_maps_timeout_separately_from_failure() {
             output: "Verification timed out after 1 seconds".to_string(),
             command: "sleep 30".to_string(),
             infrastructure_failure: false,
+        exit_code: None,
         },
     );
     let loaded = store.get_task(task.id.as_str()).unwrap().unwrap();
@@ -200,6 +203,7 @@ fn format_report_timeout_label() {
         output: "still compiling".to_string(),
         command: "cargo test".to_string(),
         infrastructure_failure: false,
+        exit_code: None,
     };
     let report = format_verify_report(&result);
     assert!(report.starts_with("Verify TIMEOUT"));

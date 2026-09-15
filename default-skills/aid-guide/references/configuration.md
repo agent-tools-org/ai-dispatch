@@ -194,7 +194,7 @@ A hold ends in one of three ways, and `aid config agents` names which:
 |---|---|---|
 | `rate-limited (try again at <time>)` | that time passes | codex usage limit, qwen token-plan window |
 | `rate-limited (until a dated <provider> snapshot with headroom …)` | a newer dated aidbar window shows headroom, or `clear-limit` | cursor premium `you're out of usage`; grok 402 `usage balance exhausted` (when aidbar probes grok) |
-| `rate-limited (needs manual clear: aid config clear-limit <agent>)` | a person acts | spent opencode balance, copilot monthly/premium, gemini `IneligibleTier`; grok 402 with no aidbar probe |
+| `rate-limited (needs manual clear: aid config clear-limit <agent>)` | a person acts | spent opencode balance, copilot monthly/premium, gemini `IneligibleTier`, oz `credentials are invalid`; grok 402 with no aidbar probe |
 
 The Windowed class covers refusals that never state a reset time, but whose
 wall is a dated billing window aidbar already probes. A percentage alone
@@ -227,8 +227,11 @@ even when a model was on the dispatched route.
 `aid agent list` and `aid agent quota` report it as `PARTIAL` (still dispatchable
 on clear tiers), not `LIMITED` or `OK`. STATUS now matches dispatch: a snapshot
 that releases a route for `aid run` also clears LIMITED / PARTIAL. A hold only
-a person ends names `aid config clear-limit <agent>`; aid never invents a reset
-time it did not observe.
+a person ends is shown as `needs human: <first line of the stored message> —
+fix, then aid config clear-limit <agent>` on `aid agent list`, the session-start
+hook, and `aid doctor` — never a bare `LIMITED`. Clock and windowed holds still
+print `LIMITED` / `LIMITED (resets HH:MM)`. aid never invents a reset time it
+did not observe.
 
 Use `aid byok` for custom OpenAI-compatible endpoints. Use `aid credential` to
 manage named credential-pool entries; never place secret values in prompts,
@@ -291,6 +294,7 @@ aid changelog
 aid upgrade
 ```
 
-`doctor` is diagnostic. It must not prune unaccepted artifacts. Run cleanup in
+`doctor` is diagnostic. It lists NeedsHuman agent holds with the stored first
+line and unlock command, and must not prune unaccepted artifacts. Run cleanup in
 dry-run mode first. `clean` retains task records and events as custody evidence
 and does not replace `aid gc --task`.

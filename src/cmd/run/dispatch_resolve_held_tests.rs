@@ -59,12 +59,20 @@ fn held_cursor_premium_switches_to_auto_without_changing_agent() {
     assert!(setup.substituted_from.is_none());
 }
 
-/// `--urgency background` keeps a held ungrouped agent. The for_model facade
-/// now answers agent-level holds; the resolve second gate must not undo that.
+/// `--urgency background` keeps a Windowed ungrouped agent. A probe keeps the
+/// Windowed class; without one the 402 is human-cleared and must not bypass.
 #[test]
 fn background_urgency_keeps_held_ungrouped_agent() {
     let dir = tempfile::tempdir().expect("tempdir");
     let _guard = AidHomeGuard::set(dir.path());
+    let cache = dir.path().join("aidbar");
+    std::fs::create_dir_all(&cache).unwrap();
+    let _probe = crate::live_quota::CacheDirGuard::set(&cache);
+    std::fs::write(
+        cache.join("grok.json"),
+        r#"{"ok":true,"snapshot":{"provider":"grok","windows":[{"label":"w","used_percent":100.0,"resets_at":"2026-08-18T00:55:28Z","group":null}],"fetched_at":"2099-01-01T00:00:00Z"}}"#,
+    )
+    .unwrap();
     crate::rate_limit::mark_rate_limited(
         &AgentKind::Grok,
         None,
@@ -87,9 +95,8 @@ fn background_urgency_keeps_held_ungrouped_agent() {
 }
 
 /// `availability_for_model(Droid, None)` reads the standard group, not the
-/// agent marker. Agent-wide holds are caught by `dispatch_blocking_hold`
-/// first; background keep skips that gate on purpose and must still stay
-/// on droid — for_model must not invent a group hold from the agent marker.
+/// agent marker. A clock hold is kept under background urgency; for_model
+/// must not invent a group hold from the agent marker and undo that keep.
 #[test]
 fn background_urgency_keeps_held_droid_agent() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -97,7 +104,10 @@ fn background_urgency_keeps_held_droid_agent() {
     crate::rate_limit::mark_rate_limited(
         &AgentKind::Droid,
         None,
-        "402 payment required: reload your tokens",
+        &format!(
+            "try again at {}.",
+            crate::rate_limit::test_future_recovery_time()
+        ),
     );
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut args = RunArgs {

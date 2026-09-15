@@ -62,7 +62,7 @@ current arguments.
 |---|---|
 | `aid setup` | Configure AID and install bundled resources when needed. |
 | `aid project` | Initialize, inspect, or synchronize project configuration. |
-| `aid agent` | Inspect built-in agent availability and related state. `aid agent config <name> --model` sets a sticky default for `aid run` and `aid batch`. `aid agent quota` shows live used percent and freshness when an aidbar snapshot exists; `STALE` is display-only. `aid agent list --json` quota objects carry `degraded` state plus `used_percent`, `resets_at`, and `source` (`probe` / `marker` / `none`). |
+| `aid agent` | Inspect built-in agent availability and related state. `aid agent config <name> --model` sets a sticky default for `aid run` and `aid batch`. `aid agent quota` shows live used percent and freshness when an aidbar snapshot exists; `STALE` is display-only. `aid agent list --json` quota objects carry `degraded` state plus `used_percent`, `resets_at`, and `source` (`probe` / `marker` / `none`). A NeedsHuman hold on `aid agent list` prints `needs human: <stored first line> — fix, then aid config clear-limit <agent>` rather than a bare `LIMITED`. |
 | `aid config` | Inspect agents, pricing, installed skills, templates, and prompt budgets. |
 | `aid store` | Browse, install, inspect, and update community packages. |
 | `aid tool` | Manage reusable tool definitions. |
@@ -71,7 +71,7 @@ current arguments.
 | `aid container` | Build, list, or stop development containers. |
 | `aid hook` | Install or invoke supported AID hooks; task hook payloads expose additive `outcome` and `verify_status` fields. |
 | `aid mcp` | Start AID's stdio MCP server; task payloads expose additive `outcome` and `verify_status` fields. |
-| `aid doctor` | Report repository/worktree hygiene and leaked operator symlinks; `--apply` repairs only those symlinks without bypassing custody. |
+| `aid doctor` | Report repository/worktree hygiene, leaked operator symlinks, and NeedsHuman agent holds; `--apply` repairs only those symlinks without bypassing custody. |
 | `aid clean` | Remove disposable logs and caches while retaining custody evidence; reclaims a task's fallback cargo target only once the directory it was keyed from is gone, and reports how many it held back. |
 | `aid web` | Serve the embedded dashboard and client API; `--host` selects the bind address and non-loopback binds require `--token`. |
 | `aid upgrade` | Upgrade AID after checking active-task safety. |

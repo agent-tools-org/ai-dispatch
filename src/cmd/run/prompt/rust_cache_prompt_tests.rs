@@ -25,6 +25,8 @@ fn build_prompt_bundle_includes_rust_cache_line_for_rust_project() {
         None,
         &[],
         "task-1",
+        None,
+        None,
     )
     .unwrap();
 
@@ -45,6 +47,8 @@ fn build_prompt_bundle_omits_rust_cache_line_for_non_rust_project() {
         None,
         &[],
         "task-1",
+        None,
+        None,
     )
     .unwrap();
 

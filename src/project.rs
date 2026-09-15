@@ -14,6 +14,9 @@ mod audit;
 mod edit;
 #[path = "project/identity.rs"]
 mod identity;
+mod discovery;
+pub use discovery::detect_project_in;
+pub(crate) use discovery::resolve_project_in;
 #[path = "project/profile.rs"]
 mod profile;
 #[path = "project/team.rs"]
@@ -241,18 +244,6 @@ fn parse_budget_shorthand(value: &str) -> Result<ProjectBudget, String> {
 pub fn detect_project() -> Option<ProjectConfig> {
     let cwd = env::current_dir().ok()?;
     detect_project_in(&cwd)
-}
-
-pub fn detect_project_in(start_dir: &Path) -> Option<ProjectConfig> {
-    let git_root = find_git_root_from(start_dir)?;
-    let mut project_path = project_path_in_repo(&git_root);
-    if !project_path.is_file() {
-        if !git_root.join(".git").is_file() {
-            return None;
-        }
-        project_path = project_path_in_repo(&worktree::main_working_tree_of(&git_root)?);
-    }
-    load_project(&project_path).ok()
 }
 
 pub fn project_path_in_repo(repo_root: &Path) -> PathBuf {

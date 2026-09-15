@@ -37,6 +37,8 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         prepared.workgroup.as_ref(),
         &prepared.requested_skills,
         prepared.task_id.as_str(),
+        prepared.detected_project.as_ref(),
+        prepared.project_root.as_deref(),
     )?;
     crate::remote_build::append_prompt(&mut prompt_bundle.effective_prompt, args.remote_build.as_deref());
     prompt_bundle.prompt_tokens = crate::templates::estimate_tokens(&prompt_bundle.effective_prompt) as i64;

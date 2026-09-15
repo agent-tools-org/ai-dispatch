@@ -21,6 +21,7 @@ use super::{RunArgs, resolve_max_duration_mins, resolve_prompt_input, run_prompt
 
 pub(super) struct PreparedDispatch {
     pub detected_project: Option<ProjectConfig>,
+    pub project_root: Option<PathBuf>,
     pub agent_kind: AgentKind,
     pub agent_display_name: String,
     pub requested_skills: Vec<String>,
@@ -37,6 +38,7 @@ pub(super) struct PreparedDispatch {
 }
 
 struct DispatchContext {
+    project_root: Option<PathBuf>,
     detected_project: Option<ProjectConfig>,
     agent_setup: AgentSetup,
     had_explicit_result_file: bool,
@@ -76,10 +78,7 @@ fn resolve_dispatch_context(store: &Arc<Store>, args: &mut RunArgs) -> Result<Di
         .result_file_required
         .unwrap_or_else(|| args.result_file.is_some());
     args.result_file_required = Some(had_explicit_result_file);
-    let detected_project = match args.dir.as_deref() {
-        Some(dir) => project::detect_project_in(Path::new(dir)),
-        None => project::detect_project(),
-    };
+    let (project_root, detected_project) = project::resolve_project_in(Path::new(args.dir.as_deref().unwrap_or(".")));
     apply_project_defaults(args, detected_project.as_ref());
     crate::command_diagnostics::validate_run_options(args)?;
     validate_egress(args)?;
@@ -92,7 +91,7 @@ fn resolve_dispatch_context(store: &Arc<Store>, args: &mut RunArgs) -> Result<Di
     }
     args.timeout_policy = policy; args.max_duration_mins = Some(policy.max_duration_mins());
     args.env = crate::timeout_policy::env_with_policy(args.env.take(), policy);
-    Ok(DispatchContext { detected_project, agent_setup, had_explicit_result_file })
+    Ok(DispatchContext { project_root, detected_project, agent_setup, had_explicit_result_file })
 }
 
 fn claim_dispatch<W>(
@@ -203,7 +202,13 @@ fn finish_dispatch(
         claimed.task_id.as_str(), &dispatch_args.dispatch_args_json()?,
     )?;
     crate::remote_build::record(store, &claimed.task_id, args)?;
+    let requested_skills = run_prompt::effective_skills(args, context.detected_project.as_ref());
+    if args.skills.is_empty() {
+        for skill in &requested_skills { aid_info!("[aid] Auto-applied skill: {skill}"); }
+    }
     Ok(prepared_dispatch(
+        requested_skills,
+        context.project_root,
         context.detected_project,
         context.agent_setup,
         claimed.task_id,
@@ -247,6 +252,8 @@ fn pending_task(
 }
 
 fn prepared_dispatch(
+    requested_skills: Vec<String>,
+    project_root: Option<PathBuf>,
     detected_project: Option<ProjectConfig>,
     agent_setup: AgentSetup,
     task_id: TaskId,
@@ -256,9 +263,9 @@ fn prepared_dispatch(
     setup: WorktreeSetup,
 ) -> PreparedDispatch {
     PreparedDispatch {
-        detected_project, agent_kind: agent_setup.agent_kind,
+        detected_project, project_root, agent_kind: agent_setup.agent_kind,
         agent_display_name: agent_setup.agent_display_name,
-        requested_skills: agent_setup.requested_skills,
+        requested_skills,
         effective_model: agent_setup.effective_model, budget_active: agent_setup.budget_active,
         agent: agent_setup.agent, task_id, task, log_path, workgroup,
         repo_path: setup.repo_path, wt_path: setup.wt_path, effective_dir: setup.effective_dir,

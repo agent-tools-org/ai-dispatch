@@ -1,10 +1,12 @@
-// Prompt and run helpers for `aid run` — bundle, resolve, context, process runner, store.
+// Prompt assembly and run helpers for `aid run`.
+// Deps: resolved project context, store, skills, team, and execution helpers.
 use anyhow::Result;
 use serde_json;
-use std::collections::HashSet;
 use crate::{agent, project, store::Store, templates, team, toolbox, types::*};
 use crate::cmd::summary::{format_summary_for_injection, CompletionSummary};
 mod prompt_context;
+#[path = "prompt_project.rs"]
+mod prompt_project;
 #[path = "output.rs"]
 mod run_output;
 #[path = "verify.rs"]
@@ -24,14 +26,13 @@ mod run_prompt_helpers;
 pub(super) use run_process::*;
 pub(super) use run_prompt_helpers::*;
 use super::RunArgs;
-
 const VERIFY_RETRY_FEEDBACK: &str =
     "Verification failed. Please fix the compilation/test errors and try again.";
 const PROMPT_TOKEN_LIMIT: usize = 30_000;
 
 pub(crate) struct PromptBundle { pub effective_prompt: String, pub context_files: Vec<String>, pub prompt_tokens: i64, pub injected_memory_ids: Vec<String> }
 
-pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &AgentKind, workgroup: Option<&Workgroup>, requested_skills: &[String], current_task_id: &str) -> Result<PromptBundle> {
+pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &AgentKind, workgroup: Option<&Workgroup>, requested_skills: &[String], current_task_id: &str, detected_project: Option<&project::ProjectConfig>, project_root: Option<&std::path::Path>) -> Result<PromptBundle> {
     let (file_context, context_files) = build_context_flags(agent_kind, &args.context)?;
     let milestones = if let Some(group_id) = args.group.as_deref() {
         store.get_workgroup_milestones(group_id)?
@@ -100,47 +101,15 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     let mut injected_memory_ids = Vec::new();
 
     // Inject relevant memories from past tasks
-    if let Some((memory_block, memory_ids)) = prompt_context::inject_memories(store, &args.prompt, 10)? {
+    if let Some((memory_block, memory_ids)) = prompt_context::inject_memories(store, &args.prompt, 10, project_root.and_then(|root| root.to_str()))? {
         let memory_block = sanitize_injected_text(&memory_block);
         effective_prompt = format!("{memory_block}\n\n{effective_prompt}");
         injected_memory_ids = memory_ids;
     }
 
-    let mut project_topics: HashSet<String> = HashSet::new();
-
-    // Inject project rules + knowledge if a project was detected
-    if let Some(pc) = project::detect_project() {
-        let rules_count = pc.rules.len();
-        if !pc.rules.is_empty() {
-            let rules_block = pc.rules.iter()
-                .map(|r| format!("- {r}"))
-                .collect::<Vec<_>>()
-                .join("\n");
-            effective_prompt = format!("<aid-project-rules>\n{rules_block}\n</aid-project-rules>\n\n{effective_prompt}");
-        }
-        if let Some(state_block) = prompt_context::inject_project_state() {
-            let state_block = sanitize_injected_text(&state_block);
-            effective_prompt = format!("{state_block}\n\n{effective_prompt}");
-            aid_info!("[aid] Injected project state");
-        }
-        let knowledge_entries = prompt_context::detect_project_path()
-            .map(|path| project::read_project_knowledge(std::path::Path::new(&path)))
-            .unwrap_or_default();
-        let total_knowledge = knowledge_entries.len();
-        if total_knowledge > 0 {
-            let relevant = prompt_context::select_relevant_entries(&knowledge_entries, &args.prompt);
-            if !relevant.is_empty() {
-                for entry in &relevant {
-                    project_topics.extend(prompt_context::extract_words(&entry.topic));
-                }
-                let knowledge_block = sanitize_injected_text(&prompt_context::format_knowledge_block(&pc.id, &relevant));
-                effective_prompt = format!("{knowledge_block}\n\n{effective_prompt}");
-            }
-            aid_info!("[aid] Project '{}' detected: {} rule(s), {}/{} knowledge entries", pc.id, rules_count, relevant.len(), total_knowledge);
-        } else if rules_count > 0 {
-            aid_info!("[aid] Project '{}' detected: {} rule(s)", pc.id, rules_count);
-        }
-    }
+    let (mut effective_prompt, project_topics) = prompt_project::inject_project_context(
+        effective_prompt, &args.prompt, detected_project, project_root,
+    );
 
     // Inject team rules + knowledge if --team was specified
     if let Some(ref team_id) = args.team {
@@ -183,10 +152,9 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
 
     // Inject team toolbox tools
     {
-        let project_dir = prompt_context::detect_project_path().map(std::path::PathBuf::from);
         let tools = toolbox::resolve_toolbox(
             args.team.as_deref(),
-            project_dir.as_deref(),
+            project_root,
         );
         let tools = if let Some(ref team_id) = args.team {
             if let Some(tc) = team::resolve_team(team_id)

@@ -3,15 +3,18 @@
 // Deps: store, types, templates, team.
 use anyhow::Result;
 use chrono::Local;
-use serde_json;
 use std::collections::{HashMap, HashSet};
 
-use crate::cmd::show::extract_messages_from_log;
-use crate::cmd::summary::CompletionSummary;
 use crate::store::Store;
 use crate::team::KnowledgeEntry;
 use crate::templates;
 use crate::types::*;
+
+#[path = "prompt_prior.rs"]
+mod prior;
+pub(super) use prior::{collect_sibling_summaries, resolve_context_from};
+#[cfg(test)]
+use prior::{sanitize_injected_content, truncate_context_content};
 
 const STOP_WORDS: &[&str] = &[
     "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
@@ -24,10 +27,10 @@ const STOP_WORDS: &[&str] = &[
     "what", "which", "who", "where",
 ];
 
-pub(super) fn inject_memories(store: &Store, prompt: &str, max_memories: usize) -> Result<Option<(String, Vec<String>)>> {
-    let project_path = detect_project_path();
+pub(super) fn inject_memories(store: &Store, prompt: &str, max_memories: usize, project_path: Option<&str>) -> Result<Option<(String, Vec<String>)>> {
+    let Some(project_path) = project_path else { return Ok(None) };
     let mut always_memories = store.list_memories_by_tier(
-        project_path.as_deref(),
+        Some(project_path),
         &[MemoryTier::Identity, MemoryTier::Critical],
     )?;
     always_memories.sort_by(|a, b| {
@@ -42,7 +45,7 @@ pub(super) fn inject_memories(store: &Store, prompt: &str, max_memories: usize) 
     for query in queries {
         for memory in store.search_memories(
             &query,
-            project_path.as_deref(),
+            Some(project_path),
             max_memories,
             Some(&[MemoryTier::OnDemand]),
         )? {
@@ -99,14 +102,15 @@ fn memory_tier_rank(tier: MemoryTier) -> u8 {
     }
 }
 
-pub(super) fn inject_project_state() -> Option<String> {
-    let state = crate::state::load_state().ok()??;
+pub(super) fn inject_project_state(project: &crate::project::ProjectConfig, root: &std::path::Path) -> Option<String> {
+    let contents = std::fs::read_to_string(root.join(".aid/state.toml")).ok()?;
+    let state: crate::state::ProjectState = toml::from_str(&contents).ok()?;
     let updated = chrono::DateTime::parse_from_rfc3339(&state.last_updated).ok()?;
     let age_days = (chrono::Utc::now() - updated.with_timezone(&chrono::Utc)).num_days();
     if age_days > 7 {
         return None;
     }
-    Some(crate::state::format_state_summary(&state))
+    Some(crate::state::format_state_summary_for_project(&state, &project.id))
 }
 
 pub(super) fn build_memory_queries(prompt: &str, keywords: &HashSet<String>) -> Vec<String> {
@@ -275,131 +279,6 @@ pub fn extract_words(value: &str) -> HashSet<String> {
             }
         })
         .collect()
-}
-
-pub(super) fn detect_project_path() -> Option<String> {
-    std::process::Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
-        .output()
-        .ok()
-        .and_then(|o| if o.status.success() {
-            String::from_utf8(o.stdout).ok().map(|s| s.trim().to_string())
-        } else {
-            None
-        })
-}
-
-fn sanitize_injected_content(content: &str) -> String {
-    let mut result = Vec::new();
-    let mut inside = false;
-    for line in content.lines() {
-        let trimmed = line.trim_start();
-        if trimmed.starts_with("<aid-") && !trimmed.starts_with("</aid-") {
-            inside = true;
-            continue;
-        }
-        if trimmed.starts_with("</aid-") {
-            inside = false;
-            continue;
-        }
-        if !inside {
-            result.push(line);
-        }
-    }
-    result.join("\n")
-}
-
-fn truncate_context_content(content: &str, max_chars: usize) -> String {
-    if content.len() <= max_chars {
-        return content.to_string();
-    }
-    let end = content.floor_char_boundary(max_chars);
-    content[..end].to_string()
-}
-
-/// Resolve --context-from task IDs: read output/diff from completed tasks.
-pub(super) fn resolve_context_from(store: &Store, task_ids: &[String]) -> Result<Option<String>> {
-    let mut blocks = Vec::new();
-    for task_id in task_ids {
-        if let Some(filename) = task_id.strip_prefix("shared:") {
-            let Some(shared_dir) = std::env::var_os("AID_SHARED_DIR") else {
-                aid_warn!("[aid] Warning: shared file '{filename}' not found, skipping");
-                continue;
-            };
-            let path = std::path::Path::new(&shared_dir).join(filename);
-            let Ok(content) = std::fs::read_to_string(&path) else {
-                aid_warn!("[aid] Warning: shared file '{filename}' not found, skipping");
-                continue;
-            };
-            let sanitized = sanitize_injected_content(&content);
-            blocks.push(format!(
-                "[Shared File — {filename}]\n<shared-file name=\"{filename}\">\n{}\n</shared-file>",
-                sanitized.trim()
-            ));
-            continue;
-        }
-        let Some(task) = store.get_task(task_id)? else {
-            aid_warn!("[aid] Warning: --context-from task '{task_id}' not found, skipping");
-            continue;
-        };
-        let mut content = String::new();
-        if let Some(absence) = crate::cmd::show::missing_owned_output_absence(&task) {
-            aid_warn!(
-                "[aid] Warning: --context-from task '{task_id}' has no task-owned output file; not using this task's log as a substitute"
-            );
-            content = absence;
-        } else if let Ok(text) = crate::cmd::show::read_task_output(&task) {
-            content = text;
-        }
-        if content.is_empty()
-            && let Some(ref log_path) = task.log_path
-        {
-            if let Some(text) = extract_messages_from_log(std::path::Path::new(log_path), false, Some(task.agent_display_name())) {
-                content = truncate_context_content(&text, 2_000);
-            } else if let Ok(text) = std::fs::read_to_string(log_path) {
-                let lines: Vec<&str> = text.lines().collect();
-                let start = lines.len().saturating_sub(50);
-                content = lines[start..].join("\n");
-            }
-        }
-        if content.is_empty() {
-            aid_warn!("[aid] Warning: --context-from task '{task_id}' has no output, skipping");
-            continue;
-        }
-        let sanitized = sanitize_injected_content(&content);
-        blocks.push(format!(
-            "[Prior Task Result — {} ({}, {})]\n<prior-task-output task=\"{}\">\n{}\n</prior-task-output>",
-            task_id,
-            task.display_route(),
-            task.status.as_str(),
-            task_id,
-            sanitized.trim()
-        ));
-    }
-    if blocks.is_empty() {
-        return Ok(None);
-    }
-    Ok(Some(blocks.join("\n\n")))
-}
-
-pub(super) fn collect_sibling_summaries(
-    store: &Store,
-    group_id: &str,
-    current_task_id: &str,
-) -> Result<Vec<CompletionSummary>> {
-    let tasks = store.list_tasks_by_group(group_id)?;
-    let mut summaries = Vec::new();
-    for task in &tasks {
-        if task.id.as_str() == current_task_id { continue; }
-        if !task.status.is_terminal() { continue; }
-        if let Some(json) = store.get_completion_summary(task.id.as_str())?
-            && let Ok(summary) = serde_json::from_str::<CompletionSummary>(&json)
-        {
-            summaries.push(summary);
-        }
-    }
-    summaries.truncate(5);
-    Ok(summaries)
 }
 
 #[cfg(test)]

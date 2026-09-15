@@ -114,6 +114,10 @@ fn every_human_ended_refusal_holds_without_an_invented_reset_time() {
             "IneligibleTierError: This client is no longer supported for Gemini Code \
              Assist for individuals",
         ),
+        (
+            AgentKind::Oz,
+            "Error: Your credentials are invalid. Please log in again with `oz login`.",
+        ),
     ] {
         clear_rate_limit(&agent, None);
         mark_rate_limited(&agent, None, message);
@@ -343,6 +347,36 @@ fn cursors_premium_refusal_is_read_off_the_stderr_channel() {
     assert!(is_group_rate_limited(&AgentKind::Cursor, None, "premium"));
     assert!(!is_group_rate_limited(&AgentKind::Cursor, None, "auto"));
     assert!(!is_rate_limited(&AgentKind::Cursor, None));
+}
+
+/// oz's logged-out refusal is CLI stderr, not an assistant envelope. Matching
+/// it here is what holds the route; widening to model prose would not.
+#[test]
+fn oz_invalid_credentials_are_read_off_the_stderr_channel() {
+    let temp = isolated();
+    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+
+    let stderr = "Error: Your credentials are invalid. Please log in again with `oz login`.";
+    let refusal = refusal_on_channel(
+        stderr,
+        AgentKind::Oz,
+        crate::quota_channel::Channel::CliStderr,
+    )
+    .expect("oz credentials refusal must be readable on stderr");
+    mark_rate_limited_for_message(&AgentKind::Oz, None, &refusal);
+
+    let info = get_rate_limit_info(&AgentKind::Oz, None).expect("marker written");
+    assert!(info.needs_human, "logged-out oz must wait for a person");
+    assert!(is_rate_limited(&AgentKind::Oz, None));
+    let end = format_hold_end(&AgentKind::Oz, None, &info);
+    assert!(
+        end.starts_with("needs human: Error: Your credentials are invalid."),
+        "got {end:?}"
+    );
+    assert!(
+        end.contains("fix, then `aid config clear-limit oz`"),
+        "got {end:?}"
+    );
 }
 
 /// The complement: a cursor refusal that names no tier is still an agent-level

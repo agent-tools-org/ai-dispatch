@@ -104,7 +104,8 @@ check_orphans() {
         elif [[ ! -d "${worktree_path}" ]]; then
           orphan_worktrees+="${worktree_path} (missing path)"$'\n'
           m=$((m + 1))
-        elif printf '%s\n' "${merged_names}" | grep -Fqx "${branch_ref}"; then
+        elif ! branch_is_kept "${branch_ref}" "${current_branch}" \
+          && printf '%s\n' "${merged_names}" | grep -Fqx "${branch_ref}"; then
           orphan_worktrees+="${worktree_path} (${branch_ref})"$'\n'
           m=$((m + 1))
         fi

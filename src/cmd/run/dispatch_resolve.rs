@@ -165,6 +165,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
         custom_agent_name = (next_kind == AgentKind::Custom).then_some(next_name);
         substituted_from = Some((original, hold));
     }
+    held::warn_if_degraded(agent_kind, custom_agent_name.as_deref());
     let custom_name = custom_agent_name.as_deref();
     let requested_skills = run_prompt::effective_skills(args);
     if args.skills.is_empty() {

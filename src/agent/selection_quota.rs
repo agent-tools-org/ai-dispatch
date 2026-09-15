@@ -68,7 +68,7 @@ pub(super) fn candidate_quota(kind: AgentKind, custom_name: Option<&str>) -> Can
     quota_from(&availability(&kind, custom_name))
 }
 
-pub(super) fn quota_from(avail: &RouteAvailability) -> CandidateQuota {
+pub(crate) fn quota_from(avail: &RouteAvailability) -> CandidateQuota {
     let tight = avail.probe.as_ref().and_then(|probe| tightest_window(&probe.windows));
     CandidateQuota {
         status: status_label(avail.status).to_string(),
@@ -207,7 +207,7 @@ fn probe_detail(probe: Option<&ProbeEvidence>) -> Option<String> {
     ))
 }
 
-fn tightest_window(windows: &[WindowView]) -> Option<&WindowView> {
+pub(crate) fn tightest_window(windows: &[WindowView]) -> Option<&WindowView> {
     windows
         .iter()
         .max_by(|left, right| {

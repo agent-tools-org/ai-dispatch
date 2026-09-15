@@ -58,31 +58,49 @@ pub fn get_agent_capabilities(
 }
 
 pub(crate) fn build_quota_json(rlk: &AgentKind, custom_name: Option<&str>) -> QuotaJson {
-    if crate::rate_limit::is_rate_limited(rlk, custom_name) {
-        let info = crate::rate_limit::get_rate_limit_info(rlk, custom_name);
-        return QuotaJson {
-            state: "limited".to_string(),
-            recovery_at: info.as_ref().and_then(|value| value.recovery_at.clone()),
-            message: info.as_ref().and_then(|value| value.message.clone()),
-            source: "marker".to_string(),
-            groups: vec![],
-        };
-    }
-    let groups = crate::rate_limit::active_group_holds(rlk, custom_name)
-        .into_iter()
-        .map(|(group, info)| GroupHoldJson {
-            group,
-            recovery_at: info.recovery_at,
-            message: info.message,
-        })
-        .collect::<Vec<_>>();
-    let state = if groups.is_empty() { "ok" } else { "partial" };
+    let avail = crate::route_availability::availability(rlk, custom_name);
+    let quota = crate::agent::selection::quota_from(&avail);
+    let window = avail
+        .probe
+        .as_ref()
+        .and_then(|probe| crate::agent::selection::tightest_window(&probe.windows))
+        .map(|item| item.label.clone())
+        .filter(|label| !label.is_empty());
+    let held = avail.status == crate::route_availability::RouteStatus::Held;
+    let groups = if held {
+        Vec::new()
+    } else {
+        crate::rate_limit::active_group_holds(rlk, custom_name)
+            .into_iter()
+            .map(|(group, info)| GroupHoldJson {
+                group,
+                recovery_at: info.recovery_at,
+                message: info.message,
+            })
+            .collect()
+    };
+    let state = if held {
+        "limited"
+    } else if !groups.is_empty() {
+        "partial"
+    } else if avail.status == crate::route_availability::RouteStatus::Degraded {
+        "degraded"
+    } else {
+        "ok"
+    };
+    let info = held
+        .then(|| crate::rate_limit::get_rate_limit_info(rlk, custom_name))
+        .flatten();
     QuotaJson {
         state: state.to_string(),
-        recovery_at: None,
-        message: None,
-        source: "marker".to_string(),
+        recovery_at: info.as_ref().and_then(|value| value.recovery_at.clone()),
+        message: info.as_ref().and_then(|value| value.message.clone()),
+        source: quota.source,
         groups,
+        used_percent: quota.used_percent,
+        resets_at: quota.resets_at,
+        window,
+        stale: quota.stale,
     }
 }
 
@@ -126,3 +144,7 @@ pub(crate) fn metering_label(shape: crate::types::MeteringShape) -> String {
     }
     .to_string()
 }
+
+#[cfg(test)]
+#[path = "agent_json_helpers_tests.rs"]
+mod quota_probe_tests;

@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-pub(super) fn main_working_tree(start_dir: &Path) -> Option<PathBuf> {
+pub(crate) fn main_working_tree(start_dir: &Path) -> Option<PathBuf> {
     let toplevel = git_toplevel(start_dir)?;
     main_working_tree_of(&toplevel).or(Some(toplevel))
 }
@@ -27,7 +27,7 @@ pub(super) fn git_toplevel(start_dir: &Path) -> Option<PathBuf> {
     }
 }
 
-pub(super) fn main_working_tree_of(repo_dir: &Path) -> Option<PathBuf> {
+pub(crate) fn main_working_tree_of(repo_dir: &Path) -> Option<PathBuf> {
     let output = Command::new("git")
         .args(["-C", &repo_dir.to_string_lossy()])
         .args(["worktree", "list", "--porcelain"])

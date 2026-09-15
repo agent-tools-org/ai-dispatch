@@ -19,7 +19,7 @@ mod profile;
 #[path = "project/team.rs"]
 mod project_team;
 #[path = "project/worktree.rs"]
-mod worktree;
+pub(crate) mod worktree;
 
 use self::audit::ProjectFile;
 pub use self::edit::{upsert_gitbutler_mode, upsert_gitbutler_prompt_suppressed};

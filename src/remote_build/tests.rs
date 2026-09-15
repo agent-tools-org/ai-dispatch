@@ -195,3 +195,25 @@ fn second_refusal_or_failed_repick_is_infrastructure_failure_naming_the_box() {
     assert_eq!(error.to_string(), "Remote build box chosen-box refused admission (rbox: chosen-box 9.9 GiB free; requires 10 GiB); re-pick failed: Remote build box selection failed: none free: all rust builders busy");
     
 }
+
+#[test]
+fn resolve_in_with_worktree_passes_main_tree_to_rbox() {
+    let temp = tempfile::tempdir().expect("temp");
+    let main_dir = temp.path().join("main-repo");
+    std::fs::create_dir(&main_dir).expect("main dir");
+    std::process::Command::new("git").args(["-C", &main_dir.to_string_lossy(), "init"]).status().expect("git init");
+    std::process::Command::new("git").args(["-C", &main_dir.to_string_lossy(), "commit", "--allow-empty", "-m", "initial"]).status().expect("git commit");
+    let wt_dir = temp.path().join("wt-branch");
+    std::process::Command::new("git").args(["-C", &main_dir.to_string_lossy(), "worktree", "add", &wt_dir.to_string_lossy(), "-b", "fix/branch"]).status().expect("git worktree add");
+
+    let rbox = temp.path().join("rbox");
+    let argv = temp.path().join("argv");
+    executable(&rbox, &format!("#!/bin/bash\nprintf '%s\\n' \"$@\" > '{}'\necho chosen-box\n", argv.display()));
+
+    let mut args = crate::cmd::run::RunArgs { remote_build: Some("auto".into()), dir: Some(wt_dir.to_string_lossy().into_owned()), ..Default::default() };
+    resolve_in(&mut args, true, &mut std::process::Command::new(&rbox)).expect("resolve");
+    assert_eq!(args.remote_build.as_deref(), Some("chosen-box"));
+    let argv_contents = std::fs::read_to_string(&argv).expect("argv");
+    assert!(argv_contents.contains(&main_dir.to_string_lossy().into_owned()));
+    assert!(!argv_contents.contains(&wt_dir.to_string_lossy().into_owned()));
+}

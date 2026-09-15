@@ -40,7 +40,7 @@ fn test_agent_json_serialization_roundtrip() {
             recovery_at: Some("2026-08-05T18:27:00+08:00".to_string()),
             message: Some("You have hit your usage limit...".to_string()),
             source: "marker".to_string(),
-            groups: vec![],
+            groups: vec![], used_percent: None, resets_at: None, window: None, stale: false,
         },
         capabilities,
         models: ModelsJson {
@@ -271,7 +271,7 @@ fn quota_json_partial_omitted_from_serialized_ok_output() {
         recovery_at: None,
         message: None,
         source: "marker".to_string(),
-        groups: vec![],
+        groups: vec![], used_percent: None, resets_at: None, window: None, stale: false,
     };
     let json = serde_json::to_string(&q).expect("serialize");
     assert!(!json.contains("groups"), "empty groups must be omitted: {json}");
@@ -289,6 +289,7 @@ fn quota_json_partial_groups_roundtrip() {
             recovery_at: None,
             message: Some("ActionRequiredError: ask admin".to_string()),
         }],
+        used_percent: None, resets_at: None, window: None, stale: false,
     };
     let json = serde_json::to_string(&q).expect("serialize");
     let back: QuotaJson = serde_json::from_str(&json).expect("deserialize");

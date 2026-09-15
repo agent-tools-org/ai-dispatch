@@ -59,6 +59,11 @@ pub fn session_start() -> Result<()> {
 enum QuotaState {
     Ok { used_percent: Option<f64>, stale: bool },
     Partial { used_percent: Option<f64>, stale: bool },
+    Degraded {
+        used_percent: Option<f64>,
+        resets: Option<String>,
+        stale: bool,
+    },
     Limited {
         resets: Option<NaiveDateTime>,
         used_percent: Option<f64>,
@@ -103,6 +108,19 @@ fn quota_state_for(kind: AgentKind, custom: Option<&str>) -> QuotaState {
             stale,
         };
     }
+    if avail.status == crate::route_availability::RouteStatus::Degraded {
+        let resets = avail
+            .probe
+            .as_ref()
+            .and_then(|probe| crate::agent::selection::tightest_window(&probe.windows))
+            .and_then(|window| window.resets_at)
+            .map(|at| at.format("%H:%M").to_string());
+        return QuotaState::Degraded {
+            used_percent,
+            resets,
+            stale,
+        };
+    }
     QuotaState::Ok {
         used_percent,
         stale,
@@ -140,10 +158,10 @@ fn suffix(used_percent: Option<f64>, stale: bool) -> String {
 }
 
 fn render_agents_status_line(entries: &[(String, QuotaState)]) -> Option<String> {
-    let any_hold = entries.iter().any(|(_, state)| {
-        matches!(state, QuotaState::Limited { .. } | QuotaState::Partial { .. })
-    });
-    if !any_hold {
+    let notable = entries
+        .iter()
+        .any(|(_, state)| !matches!(state, QuotaState::Ok { .. }));
+    if !notable {
         return None;
     }
     let parts = entries
@@ -157,6 +175,15 @@ fn render_agents_status_line(entries: &[(String, QuotaState)]) -> Option<String>
                 used_percent,
                 stale,
             } => format!("{name} PARTIAL{}", suffix(*used_percent, *stale)),
+            QuotaState::Degraded {
+                used_percent,
+                resets,
+                stale,
+            } => format!(
+                "{name} DEGRADED{}{}",
+                degraded_suffix(*used_percent, resets.as_deref()),
+                if *stale { " STALE" } else { "" }
+            ),
             QuotaState::Limited {
                 resets: Some(time),
                 used_percent,
@@ -174,6 +201,15 @@ fn render_agents_status_line(entries: &[(String, QuotaState)]) -> Option<String>
         })
         .collect::<Vec<_>>();
     Some(format!("agents: {}", parts.join(" - ")))
+}
+
+fn degraded_suffix(used_percent: Option<f64>, resets: Option<&str>) -> String {
+    match (used_percent, resets) {
+        (Some(used), Some(time)) => format!(" ({used:.0}%, resets {time})"),
+        (Some(used), None) => format!(" ({used:.0}%)"),
+        (None, Some(time)) => format!(" (resets {time})"),
+        (None, None) => String::new(),
+    }
 }
 
 fn render_session_start(project: Option<&ProjectConfig>, team: Option<&TeamConfig>) -> String {

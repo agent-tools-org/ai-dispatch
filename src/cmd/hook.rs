@@ -68,6 +68,7 @@ enum QuotaState {
         resets: Option<NaiveDateTime>,
         used_percent: Option<f64>,
         stale: bool,
+        human: Option<String>,
     },
 }
 
@@ -96,10 +97,14 @@ fn quota_state_for(kind: AgentKind, custom: Option<&str>) -> QuotaState {
             crate::route_availability::HoldEnd::At(at) => Some(at),
             _ => crate::rate_limit::recovery_datetime(&kind, custom),
         };
+        let human = crate::rate_limit::get_rate_limit_info(&kind, custom)
+            .filter(|info| info.needs_human)
+            .map(|info| crate::rate_limit::format_hold_end(&kind, custom, &info));
         return QuotaState::Limited {
             resets,
             used_percent,
             stale,
+            human,
         };
     }
     if !crate::rate_limit::active_group_holds(&kind, custom).is_empty() {
@@ -188,6 +193,7 @@ fn render_agents_status_line(entries: &[(String, QuotaState)]) -> Option<String>
                 resets: Some(time),
                 used_percent,
                 stale,
+                human: _,
             } => format!(
                 "{name} LIMITED (resets {}){}",
                 time.format("%H:%M"),
@@ -197,6 +203,13 @@ fn render_agents_status_line(entries: &[(String, QuotaState)]) -> Option<String>
                 resets: None,
                 used_percent,
                 stale,
+                human: Some(reason),
+            } => format!("{name} {reason}{}", suffix(*used_percent, *stale)),
+            QuotaState::Limited {
+                resets: None,
+                used_percent,
+                stale,
+                human: None,
             } => format!("{name} LIMITED{}", suffix(*used_percent, *stale)),
         })
         .collect::<Vec<_>>();

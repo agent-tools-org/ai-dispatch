@@ -461,9 +461,10 @@ when its `fetched_at` is newer than the marker file's modification time and
 every relevant usage window has headroom. A Windowed hold also requires a
 dated `resets_at` on at least one of those windows. Cursor premium's relevant
 window is the one labelled `Plan`; On-demand is ignored. A `NeedsHuman` hold
-— prepaid or a plan change — is never released by percentages: used-percent
-readings say nothing about a spend or balance hold (opencode refused at $19.37
-of a $20 window). The marker is not deleted, and aidbar errors, missing
+— prepaid, a plan change, or invalid credentials — is never released by
+percentages: used-percent readings say nothing about a spend or balance hold
+(opencode refused at $19.37 of a $20 window; oz logged-out stderr is
+`credentials are invalid`). The marker is not deleted, and aidbar errors, missing
 probes, and unrecognized providers do not release it. `aid advise` continues
 to score and report the marker state rather than this one-round dispatch view.
 

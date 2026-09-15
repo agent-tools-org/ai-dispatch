@@ -117,11 +117,7 @@ pub(super) fn list_agents() -> anyhow::Result<()> {
             continue;
         };
         if any_hold {
-            let status = match row {
-                QuotaRow::Ok { .. } => "",
-                QuotaRow::Limited { .. } => "LIMITED",
-                QuotaRow::Partial { .. } => "PARTIAL",
-            };
+            let status = quota_status_label(*kind, None, row);
             println!(
                 "  {:<10} {:<12} {:<10} {}",
                 kind.as_str(),
@@ -158,11 +154,7 @@ pub(super) fn list_agents() -> anyhow::Result<()> {
     }
     for (config, row) in &custom_rows {
         if any_custom_hold {
-            let status = match row {
-                QuotaRow::Ok { .. } => "",
-                QuotaRow::Limited { .. } => "LIMITED",
-                QuotaRow::Partial { .. } => "PARTIAL",
-            };
+            let status = quota_status_label(AgentKind::Custom, Some(config.id.as_str()), row);
             println!(
                 "  {:<10} {:<12} {:<10} {}",
                 config.id,
@@ -180,6 +172,19 @@ pub(super) fn list_agents() -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+fn quota_status_label(kind: AgentKind, custom: Option<&str>, row: &QuotaRow) -> String {
+    match row {
+        QuotaRow::Ok { .. } => String::new(),
+        QuotaRow::Partial { .. } => "PARTIAL".to_string(),
+        QuotaRow::Limited { .. } => match crate::rate_limit::get_rate_limit_info(&kind, custom) {
+            Some(info) if info.needs_human => {
+                crate::rate_limit::format_hold_end(&kind, custom, &info)
+            }
+            _ => "LIMITED".to_string(),
+        },
+    }
 }
 
 #[cfg(test)]

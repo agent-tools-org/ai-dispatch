@@ -133,6 +133,8 @@ fn human_ended_agent_hold_does_not_invent_reset_time() {
                 detail.contains("aid config clear-limit opencode"),
                 "{detail}"
             );
+            assert!(detail.contains("needs human:"), "{detail}");
+            assert!(detail.contains("Insufficient balance"), "{detail}");
             assert!(!detail.contains("resets"), "{detail}");
             assert!(!detail.contains("~1h"), "{detail}");
         }
@@ -182,7 +184,7 @@ fn custom_agent_human_hold_names_agent_id_in_clear_limit_hint() {
     std::fs::create_dir_all(paths::aid_dir()).ok();
 
     // A message with no reset date causes needs_human = true, so format_hold_end
-    // emits the "held until cleared with `aid config clear-limit <slug>`" line.
+    // emits the "needs human: … — fix, then `aid config clear-limit <slug>`" line.
     mark_rate_limited(
         &AgentKind::Custom,
         Some("auditor"),
@@ -195,6 +197,7 @@ fn custom_agent_human_hold_names_agent_id_in_clear_limit_hint() {
                 detail.contains("clear-limit auditor"),
                 "hint must name the agent id 'auditor', got: {detail}"
             );
+            assert!(detail.contains("needs human:"), "{detail}");
             assert!(
                 !detail.contains("clear-limit custom"),
                 "hint must NOT say 'clear-limit custom', got: {detail}"
@@ -225,4 +228,37 @@ fn show_quota_and_list_agents_cover_held_custom_agent_loop() {
 
     let list_result = list_agents();
     assert!(list_result.is_ok(), "list_agents failed: {:?}", list_result);
+}
+
+#[test]
+fn needs_human_list_status_shows_message_and_unlock() {
+    let temp = isolated();
+    let _guard = AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(paths::aid_dir()).ok();
+
+    let msg = "Error: Your credentials are invalid. Please log in again with `oz login`.";
+    mark_rate_limited(&AgentKind::Oz, None, msg);
+    let row = quota_row(AgentKind::Oz, None);
+    let status = quota_status_label(AgentKind::Oz, None, &row);
+    assert!(
+        status.starts_with("needs human: Error: Your credentials are invalid."),
+        "{status}"
+    );
+    assert!(
+        status.contains("fix, then `aid config clear-limit oz`"),
+        "{status}"
+    );
+
+    let stated = crate::rate_limit::test_future_recovery_time();
+    mark_rate_limited(
+        &AgentKind::Codex,
+        None,
+        &format!("You've hit your usage limit. try again at {stated}."),
+    );
+    let row = quota_row(AgentKind::Codex, None);
+    assert_eq!(
+        quota_status_label(AgentKind::Codex, None, &row),
+        "LIMITED",
+        "clock holds must stay LIMITED on the list"
+    );
 }

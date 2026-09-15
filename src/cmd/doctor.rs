@@ -1,4 +1,4 @@
-// `aid doctor` reports repository hygiene and leaked operator symlinks.
+// `aid doctor` reports repository hygiene, leaked operator symlinks, and NeedsHuman holds.
 // Exports run() plus formatting helpers shared by tests.
 // Deps: crate::repo_root, crate::store::Store, crate::worktree_gc.
 
@@ -23,6 +23,7 @@ pub fn run(store: &Arc<Store>, apply: bool) -> Result<()> {
     let prefixes = managed_branch_prefixes(project::detect_project().as_ref());
     let report = collect_doctor_report(repo_dir, &tracked_paths, &prefixes)?;
     print!("{}", format_report(&report));
+    print!("{}", format_held_agents());
     let symlink_scan = match home_isolation::resolve_real_home() {
         Ok(real_home) => home_isolation::scan_doctor_symlinks(&real_home, &paths::aid_dir()),
         Err(err) => {
@@ -49,6 +50,32 @@ pub fn run(store: &Arc<Store>, apply: bool) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// NeedsHuman holds use the same renderer as `aid agent list` and the
+/// session-start hook. Clock/windowed holds stay off this list.
+pub(crate) fn format_held_agents() -> String {
+    let mut body = String::new();
+    let mut count = 0usize;
+    for (name, _) in crate::rate_limit::rate_limited_agents() {
+        let (kind, custom) = crate::rate_limit::resolve_agent(&name);
+        let Some(info) = crate::rate_limit::get_rate_limit_info(&kind, custom) else {
+            continue;
+        };
+        if !info.needs_human {
+            continue;
+        }
+        count += 1;
+        let _ = writeln!(
+            body,
+            "{name}: {}",
+            crate::rate_limit::format_hold_end(&kind, custom, &info)
+        );
+    }
+    if count == 0 {
+        return String::new();
+    }
+    format!("Held agents ({count})\n{body}")
 }
 
 pub(crate) fn format_report(report: &DoctorReport) -> String {
@@ -125,7 +152,7 @@ fn render_branch_section(
 
 #[cfg(test)]
 mod tests {
-    use super::{format_report, format_symlink_report};
+    use super::{format_held_agents, format_report, format_symlink_report};
     use crate::worktree_gc::{DeletableBranch, DoctorReport, MergeReason, PrunableWorktree};
 
     #[test]
@@ -148,6 +175,38 @@ mod tests {
         assert!(rendered.contains("Deletable branches (1) against main"));
         assert!(rendered.contains("feat/merged"));
         assert!(rendered.contains("merged (git cherry empty)"));
+    }
+
+    #[test]
+    fn doctor_lists_needs_human_hold_reason() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let _guard = crate::paths::AidHomeGuard::set(temp.path());
+        std::fs::create_dir_all(crate::paths::aid_dir()).expect("aid dir");
+        crate::rate_limit::mark_rate_limited(
+            &crate::types::AgentKind::Oz,
+            None,
+            "Error: Your credentials are invalid. Please log in again with `oz login`.",
+        );
+        let stated = crate::rate_limit::test_future_recovery_time();
+        crate::rate_limit::mark_rate_limited(
+            &crate::types::AgentKind::Codex,
+            None,
+            &format!("You've hit your usage limit. try again at {stated}."),
+        );
+        let rendered = format_held_agents();
+        assert!(rendered.contains("Held agents (1)"), "{rendered}");
+        assert!(
+            rendered.contains("needs human: Error: Your credentials are invalid."),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("fix, then `aid config clear-limit oz`"),
+            "{rendered}"
+        );
+        assert!(
+            !rendered.contains("codex"),
+            "clock holds must not appear in the doctor hold list: {rendered}"
+        );
     }
 
     #[cfg(unix)]

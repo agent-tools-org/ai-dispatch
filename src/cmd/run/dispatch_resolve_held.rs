@@ -1,5 +1,5 @@
 // Held-route cascade walking for pre-dispatch agent substitution.
-// Exports: skip_held_to_fallback(), maybe_insert_held_route_event().
+// Exports: background_keeps_hold(), skip_held_to_fallback(), maybe_insert_held_route_event().
 // Deps: agent registry/selection, rate_limit, Store, AgentSetup.
 use anyhow::Result;
 use crate::agent;
@@ -67,6 +67,12 @@ pub(super) fn switch_model_held_route(
     )
     .map(str::to_string);
     Ok(())
+}
+
+/// Background urgency may wait out a clock or Windowed hold. NeedsHuman cannot.
+pub(super) fn background_keeps_hold(kind: AgentKind, custom_name: Option<&str>) -> bool {
+    rate_limit::is_rate_limited(&kind, custom_name)
+        && !rate_limit::get_rate_limit_info(&kind, custom_name).is_some_and(|info| info.needs_human)
 }
 
 // Walk `cascade` (then auto-fallback) to the first non-held alternative. Unrecognised names error; custom agents are valid.

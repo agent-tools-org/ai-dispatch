@@ -69,6 +69,19 @@ fn official_guide_documents_cursor_monthly_hold() {
 }
 
 #[test]
+fn official_guide_documents_needs_human_hold_text() {
+    let configuration = include_str!("../default-skills/aid-guide/references/configuration.md");
+    assert!(configuration.contains("needs human: <first line of the stored message>"));
+    assert!(configuration.contains("fix, then aid config clear-limit <agent>"));
+    assert!(configuration.contains("credentials are invalid"));
+    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
+    assert!(dispatch.contains("invalid credentials"));
+    assert!(dispatch.contains("a NeedsHuman hold still blocks"));
+    let index = include_str!("../default-skills/aid-guide/references/command-index.md");
+    assert!(index.contains("NeedsHuman agent holds"));
+}
+
+#[test]
 fn official_guide_documents_prompt_only_audit_dispatch() {
     let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
 

@@ -73,6 +73,20 @@ fn oz_quota_limit_reached_is_recognized() {
 }
 
 #[test]
+fn oz_invalid_credentials_is_recognized() {
+    // Verbatim oz CLI stderr when logged out. Same channel as the quota line
+    // above — do not treat agent-authored prose that quotes this as a hold.
+    let msg = "Error: Your credentials are invalid. Please log in again with `oz login`.";
+    let (agent, recovery) = match_quota_signature(msg).expect("oz credentials message must match");
+    assert_eq!(agent, AgentKind::Oz);
+    assert_eq!(recovery, QuotaRecovery::NeedsHuman);
+    assert_eq!(
+        match_quota_signature_for_agent(msg, AgentKind::Oz),
+        Some(QuotaRecovery::NeedsHuman)
+    );
+}
+
+#[test]
 fn prose_that_merely_mentions_quota_is_not_a_quota_failure() {
     // Verbatim from docs/design/cli-adapter-audit.md, which an agent read during
     // a task. A bare "quota" needle matched it and locked the agent out for

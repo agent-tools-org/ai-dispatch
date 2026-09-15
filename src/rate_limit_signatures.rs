@@ -80,11 +80,10 @@ pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
     QuotaSignature { agent: AgentKind::Cursor, needle: cursor::NEEDLE, recovery: QuotaRecovery::After(43_200) },
     // codex-cli: "You have hit your usage limit ... try again at <date>."
     QuotaSignature { agent: AgentKind::Codex, needle: "hit your usage limit", recovery: QuotaRecovery::After(300) },
-    // oz (Warp cloud agents), captured 2026-08-05 with exit code 1:
-    // "Error: Quota limit reached."
-    // No reset time is given at all, so the cooldown is a guess; an hour keeps
-    // the agent out of rotation without writing it off for the day.
+    // oz (Warp), captured 2026-08-05 exit 1: "Error: Quota limit reached."
     QuotaSignature { agent: AgentKind::Oz, needle: "quota limit reached", recovery: QuotaRecovery::After(60) },
+    // oz stderr, captured 2026-09-14/15: logged-out runs die in 2-4s with this.
+    QuotaSignature { agent: AgentKind::Oz, needle: "credentials are invalid", recovery: QuotaRecovery::NeedsHuman },
     // agy 1.1.10, captured 2026-08-05 against the gemini group while the claude
     // group was still serving:
     // "Individual quota reached. Please upgrade your subscription to increase

@@ -115,6 +115,9 @@ fn agent_hold_detail(
         return String::new();
     };
     let end = rate_limit::format_hold_end(kind, custom_name, info);
+    if info.needs_human {
+        return end;
+    }
     match info.message.as_deref() {
         Some(msg) if !msg.is_empty() => format!("{end} — {msg}"),
         _ => end,
@@ -130,6 +133,9 @@ fn group_holds_detail(
         .iter()
         .map(|(group, info)| {
             let end = rate_limit::format_hold_end(kind, custom_name, info);
+            if info.needs_human {
+                return format!("{group} {end}");
+            }
             match info.message.as_deref() {
                 Some(msg) if !msg.is_empty() => format!("{group} {end} — {msg}"),
                 _ => format!("{group} {end}"),

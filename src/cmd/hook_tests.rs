@@ -17,6 +17,7 @@ fn limited(resets: Option<chrono::NaiveDateTime>) -> QuotaState {
         resets,
         used_percent: None,
         stale: false,
+        human: None,
     }
 }
 
@@ -51,6 +52,28 @@ fn agent_line_omits_reset_time_when_unknown() {
     assert_eq!(
         render_agents_status_line(&entries).as_deref(),
         Some("agents: codex LIMITED - agy ok")
+    );
+}
+
+#[test]
+fn agent_line_shows_needs_human_reason() {
+    let reason = "needs human: Error: Your credentials are invalid. Please log in again with `oz login`. — fix, then `aid config clear-limit oz`";
+    let entries = vec![
+        entry(
+            "oz",
+            QuotaState::Limited {
+                resets: None,
+                used_percent: None,
+                stale: false,
+                human: Some(reason.to_string()),
+            },
+        ),
+        entry("agy", ok()),
+    ];
+    let expected = format!("agents: oz {reason} - agy ok");
+    assert_eq!(
+        render_agents_status_line(&entries).as_deref(),
+        Some(expected.as_str())
     );
 }
 
@@ -105,6 +128,29 @@ fn agents_status_line_reads_markers_for_installed_fleet() {
 
     std::fs::remove_file(crate::paths::aid_dir().join("rate-limit-codex")).ok();
     assert_eq!(super::agents_status_line(), None);
+}
+
+#[test]
+fn agents_status_line_shows_oz_credentials_hold() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(crate::paths::aid_dir()).expect("create aid dir");
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![
+        crate::types::AgentKind::Oz,
+        crate::types::AgentKind::Antigravity,
+    ]);
+    crate::rate_limit::mark_rate_limited(
+        &crate::types::AgentKind::Oz,
+        None,
+        "Error: Your credentials are invalid. Please log in again with `oz login`.",
+    );
+    let line = super::agents_status_line().expect("line when oz is held");
+    assert!(
+        line.contains("needs human: Error: Your credentials are invalid."),
+        "{line}"
+    );
+    assert!(line.contains("aid config clear-limit oz"), "{line}");
+    assert!(!line.contains("oz LIMITED"), "{line}");
 }
 
 #[test]

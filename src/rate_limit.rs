@@ -665,6 +665,9 @@ pub fn format_hold_end(
     custom_name: Option<&str>,
     info: &RateLimitInfo,
 ) -> String {
+    if info.needs_human {
+        return format_needs_human_hold(agent, custom_name, info.message.as_deref());
+    }
     if let Some(at) = info.recovery_at.as_deref() {
         return format!("resets {at}");
     }
@@ -674,6 +677,27 @@ pub fn format_hold_end(
         custom_name,
         None,
     )
+}
+
+/// Shared NeedsHuman text for `aid agent list`, the session-start hook, and
+/// `aid doctor`. Windowed/After holds do not go through this.
+pub(crate) fn format_needs_human_hold(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    message: Option<&str>,
+) -> String {
+    let slug = marker_slug(agent, custom_name);
+    let first = message
+        .unwrap_or("")
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty());
+    match first {
+        Some(line) => {
+            format!("needs human: {line} — fix, then `aid config clear-limit {slug}`")
+        }
+        None => format!("needs human — fix, then `aid config clear-limit {slug}`"),
+    }
 }
 
 #[cfg(test)]

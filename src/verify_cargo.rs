@@ -65,6 +65,7 @@ pub(crate) fn run_verify_with_store(
         output,
         command: result.command,
         infrastructure_failure: result.infrastructure_failure,
+        exit_code: Some(result.exit_code),
     })
 }
 

@@ -26,6 +26,7 @@ pub struct VerifyResult {
     pub output: String,
     pub command: String,
     pub(crate) infrastructure_failure: bool,
+    pub(crate) exit_code: Option<i32>,
 }
 
 /// Run a verification command in the given worktree directory.
@@ -65,6 +66,7 @@ pub(crate) fn run_verify_with_env(
             output: "Configured verify command was 'skip' and did not run".to_string(),
             command: "skip".to_string(),
             infrastructure_failure: false,
+            exit_code: None,
         });
     }
     let Some((cmd_str, mut cmd)) =
@@ -76,6 +78,7 @@ pub(crate) fn run_verify_with_env(
             output: "No project file detected, skipping verification".to_string(),
             command: "skip".to_string(),
             infrastructure_failure: false,
+            exit_code: None,
         });
     };
 
@@ -122,6 +125,7 @@ fn execute_verify(
         output: combined,
         command: cmd_str,
         infrastructure_failure: false,
+        exit_code: status.as_ref().and_then(|s| s.code()),
     })
 }
 

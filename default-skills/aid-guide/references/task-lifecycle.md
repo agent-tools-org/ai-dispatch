@@ -111,14 +111,23 @@ aid gc --task <task-id>
 GC is allowed only when:
 
 1. the latest decision is `Accepted`;
-2. the worktree still matches the accepted head and manifest;
-3. the worktree has no uncommitted or untracked artifacts;
+2. the manifest still matches acceptance, and a live worktree matches the accepted head;
+3. a live worktree has no uncommitted or untracked artifacts;
 4. the accepted superproject commit exists in durable Git storage;
 5. every recursive submodule commit exists outside worktree-private storage;
 6. every required commit is reachable from a durable branch, remote, or tag.
 
 On success AID stores a durability certificate, then removes only the accepted
 task worktree. It retains the branch/ref required for durability.
+
+If the worktree is absent on disk and unregistered in a successful
+`git worktree list --porcelain`, GC reports that it was already collected.
+Only the live HEAD and cleanliness checks are skipped. Object, ref, and manifest
+proof still run using the repository's common Git directory reached from
+`task.repo_path`; GC compares the manifest and records durability before reclaiming
+fallback target directories. GC never runs repository-wide `git worktree prune`,
+which could destroy another task's worktree-private objects. A failed listing
+refuses collection.
 
 ## Why raw prune is forbidden
 

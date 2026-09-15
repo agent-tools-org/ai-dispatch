@@ -231,6 +231,17 @@ fn official_guide_documents_foreground_worker_attachment() {
     }
 }
 
+#[test]
+fn official_guide_documents_already_collected_gc_proof() {
+    let lifecycle = include_str!("../default-skills/aid-guide/references/task-lifecycle.md");
+    assert!(lifecycle.contains("absent on disk and unregistered in a successful"));
+    assert!(lifecycle.contains("Only the live HEAD and cleanliness checks are skipped"));
+    assert!(lifecycle.contains("Object, ref, and manifest"));
+    assert!(lifecycle.contains("records durability before reclaiming"));
+    assert!(lifecycle.contains("GC never runs repository-wide `git worktree prune`"));
+    assert!(lifecycle.contains("A failed listing\nrefuses collection"));
+}
+
 fn public_commands(help: &str) -> Vec<String> {
     help.lines()
         .skip_while(|line| *line != "Commands:")

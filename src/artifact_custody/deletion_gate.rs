@@ -48,7 +48,6 @@ pub(crate) fn delete_accepted_worktree(store: &Store, task_id: &str) -> Result<(
 
     if is_missing {
         println!("Worktree was already collected");
-        prune_worktrees(repo_path_str)?;
     } else {
         remove_worktree(repo_path_str, worktree)?;
     }
@@ -62,6 +61,11 @@ fn is_worktree_missing(repo: &str, worktree: &Path) -> Result<bool> {
         .args(["-C", repo, "worktree", "list", "--porcelain"])
         .output()
         .context("Failed to run git worktree list")?;
+    anyhow::ensure!(
+        output.status.success(),
+        "git worktree list failed: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     for line in stdout.lines() {
         if let Some(path_str) = line.strip_prefix("worktree ") {
@@ -71,19 +75,6 @@ fn is_worktree_missing(repo: &str, worktree: &Path) -> Result<bool> {
         }
     }
     Ok(true)
-}
-
-fn prune_worktrees(repo: &str) -> Result<()> {
-    let output = std::process::Command::new("git")
-        .args(["-C", repo, "worktree", "prune"])
-        .output()
-        .context("Failed to start git worktree prune")?;
-    anyhow::ensure!(
-        output.status.success(),
-        "git worktree prune failed: {}",
-        String::from_utf8_lossy(&output.stderr).trim()
-    );
-    Ok(())
 }
 
 fn remove_worktree(repo: &str, worktree: &Path) -> Result<()> {
@@ -111,7 +102,7 @@ mod tests {
     use crate::store::{AcceptanceDecision, AcceptanceRecord, Store};
     use rusqlite::params;
     use std::fs;
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
     use std::process::Command;
 
     fn git(dir: &Path, args: &[&str]) -> String {

@@ -21,30 +21,45 @@ pub(super) struct DurableRepository {
     pub durable_git_dir: String,
 }
 
-pub(super) fn verify(worktree: &Path, accepted_head: &str) -> Result<DurabilityCertificate> {
-    ensure_clean(worktree)?;
-    let live_head = git_output(worktree, &["rev-parse", "HEAD"])?;
-    anyhow::ensure!(
-        live_head == accepted_head,
-        "Artifact changed after acceptance: accepted {accepted_head}, current {live_head}"
-    );
-    let common_dir = resolve_common_dir(worktree)?;
+pub(super) fn verify(
+    worktree: &Path,
+    repo_path: &Path,
+    accepted_head: &str,
+    is_missing: bool,
+) -> Result<DurabilityCertificate> {
+    if !is_missing {
+        ensure_clean(worktree)?;
+        let live_head = git_output(worktree, &["rev-parse", "HEAD"])?;
+        anyhow::ensure!(
+            live_head == accepted_head,
+            "Artifact changed after acceptance: accepted {accepted_head}, current {live_head}"
+        );
+    }
+
+    let exec_dir = if is_missing { repo_path } else { worktree };
+    let common_dir = resolve_common_dir(exec_dir)?;
     let mut repositories = Vec::new();
     verify_repository(&common_dir, accepted_head, "", &mut repositories)?;
     Ok(DurabilityCertificate {
         head_sha: accepted_head.to_string(),
-        manifest_digest: manifest_digest(worktree, accepted_head)?,
+        manifest_digest: manifest_digest(exec_dir, accepted_head)?,
         repositories,
     })
 }
 
-pub(super) fn manifest_digest(worktree: &Path, head: &str) -> Result<String> {
-    git_output(worktree, &["rev-parse", &format!("{head}^{{tree}}")])
+pub(super) fn manifest_digest(exec_dir: &Path, head: &str) -> Result<String> {
+    git_output(exec_dir, &["rev-parse", &format!("{head}^{{tree}}")])
 }
 
 fn ensure_clean(worktree: &Path) -> Result<()> {
-    let status = git_output(worktree, &["status", "--porcelain=v1", "--untracked-files=all"])?;
-    anyhow::ensure!(status.is_empty(), "Artifact is dirty after acceptance:\n{status}");
+    let status = git_output(
+        worktree,
+        &["status", "--porcelain=v1", "--untracked-files=all"],
+    )?;
+    anyhow::ensure!(
+        status.is_empty(),
+        "Artifact is dirty after acceptance:\n{status}"
+    );
     Ok(())
 }
 
@@ -83,8 +98,13 @@ fn prove_object_and_ref(git_dir: &Path, commit: &str, logical_path: &str) -> Res
         "No durable object store for submodule '{logical_path}' at {}",
         git_dir.display()
     );
-    run_git_dir(git_dir, &["cat-file", "-e", &format!("{commit}^{{commit}}")])
-        .with_context(|| format!("Commit {commit} for '{logical_path}' exists only in disposable storage"))?;
+    run_git_dir(
+        git_dir,
+        &["cat-file", "-e", &format!("{commit}^{{commit}}")],
+    )
+    .with_context(|| {
+        format!("Commit {commit} for '{logical_path}' exists only in disposable storage")
+    })?;
     let refs = run_git_dir(
         git_dir,
         &["for-each-ref", "--contains", commit, "--format=%(refname)"],
@@ -98,10 +118,7 @@ fn prove_object_and_ref(git_dir: &Path, commit: &str, logical_path: &str) -> Res
 
 fn gitlinks(git_dir: &Path, commit: &str) -> Result<Vec<(String, String)>> {
     let output = run_git_dir(git_dir, &["ls-tree", "-r", commit])?;
-    Ok(output
-        .lines()
-        .filter_map(parse_gitlink)
-        .collect())
+    Ok(output.lines().filter_map(parse_gitlink).collect())
 }
 
 fn parse_gitlink(line: &str) -> Option<(String, String)> {
@@ -179,11 +196,20 @@ mod tests {
         let worktree = temp.path().join("worktree");
         init(&repo);
         commit_file(&repo, "README.md", "base", "base");
-        git(&repo, &["worktree", "add", "-b", "task/one", worktree.to_str().unwrap()]);
+        git(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "task/one",
+                worktree.to_str().unwrap(),
+            ],
+        );
         commit_file(&worktree, "result.txt", "done", "result");
         let head = git(&worktree, &["rev-parse", "HEAD"]);
 
-        let certificate = verify(&worktree, &head).unwrap();
+        let certificate = verify(&worktree, &repo, &head, false).unwrap();
 
         assert_eq!(certificate.head_sha, head);
         assert_eq!(certificate.repositories.len(), 1);
@@ -201,22 +227,44 @@ mod tests {
         commit_file(&repo, "README.md", "base", "base");
         git(
             &repo,
-            &["submodule", "add", child.to_str().unwrap(), "lib/fast-wallet"],
+            &[
+                "submodule",
+                "add",
+                child.to_str().unwrap(),
+                "lib/fast-wallet",
+            ],
         );
         git(&repo, &["commit", "-am", "add submodule"]);
-        git(&repo, &["worktree", "add", "-b", "fix/866", worktree.to_str().unwrap()]);
+        git(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "fix/866",
+                worktree.to_str().unwrap(),
+            ],
+        );
         git(&worktree, &["submodule", "update", "--init"]);
         let child_worktree = worktree.join("lib/fast-wallet");
-        git(&child_worktree, &["config", "user.email", "aid@example.invalid"]);
+        git(
+            &child_worktree,
+            &["config", "user.email", "aid@example.invalid"],
+        );
         git(&child_worktree, &["config", "user.name", "AID Test"]);
         commit_file(&child_worktree, "rpc.rs", "fanout", "fanout");
         git(&worktree, &["add", "lib/fast-wallet"]);
         git(&worktree, &["commit", "-m", "advance gitlink"]);
         let head = git(&worktree, &["rev-parse", "HEAD"]);
 
-        let error = verify(&worktree, &head).unwrap_err().to_string();
+        let error = verify(&worktree, &repo, &head, false)
+            .unwrap_err()
+            .to_string();
 
-        assert!(error.contains("exists only in disposable storage"), "{error}");
+        assert!(
+            error.contains("exists only in disposable storage"),
+            "{error}"
+        );
         assert!(worktree.exists());
     }
 }

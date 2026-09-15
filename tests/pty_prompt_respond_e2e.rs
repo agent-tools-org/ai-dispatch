@@ -15,7 +15,7 @@ use tempfile::TempDir;
 const TASK_ID: &str = "t-pty-respond";
 
 mod common;
-use common::aid_cmd_in;
+use common::{aid_cmd_in, aid_cmd_with_cwd};
 
 #[test]
 fn pty_prompt_response_unblocks_background_agent() {
@@ -57,6 +57,110 @@ fn pty_prompt_response_unblocks_background_agent() {
     let log = std::fs::read_to_string(aid_home.path().join(format!("logs/{TASK_ID}.jsonl")))
         .unwrap_or_default();
     assert!(log.contains("accepted y"));
+}
+
+#[test]
+fn buffered_progress_never_awaits() {
+    if !pty_available() { return; }
+    let aid_home = TempDir::new().unwrap();
+    let script_dir = TempDir::new().unwrap();
+    let agent_path = write_script(script_dir.path(), "buffered-agent", r#"#!/bin/sh
+mkdir -p "$AID_HOME/tasks/t-pty-respond"
+printf "I'll start by exploring the codebase structure..."
+i=0
+while [ "$i" -lt 2 ]; do
+  echo working >> "$AID_HOME/tasks/t-pty-respond/agent.log"
+  sleep 6
+  i=$((i + 1))
+done
+printf '\nfinished\n'
+"#);
+    write_custom_agent(aid_home.path(), "buffered", &agent_path);
+    run_ok(aid_cmd_in(aid_home.path()).args([
+        "run", "buffered", "work in a log", "--bg", "--id", TASK_ID,
+    ]));
+    wait_for_status(aid_home.path(), TASK_ID, "done", Duration::from_secs(20));
+    let conn = Connection::open(aid_home.path().join("aid.db")).unwrap();
+    let awaits: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM events WHERE task_id = ?1 AND json_extract(metadata, '$.awaiting_input') = 1",
+        [TASK_ID], |row| row.get(0),
+    ).unwrap();
+    assert_eq!(awaits, 0, "buffered progress must never advertise AWAIT");
+}
+
+#[test]
+fn idle_prompt_with_silent_log_still_accepts_response() {
+    if !pty_available() { return; }
+    let aid_home = TempDir::new().unwrap();
+    let project = short_warning_project();
+    let script_dir = TempDir::new().unwrap();
+    let agent_path = write_script(script_dir.path(), "silent-prompt-agent", r#"#!/bin/sh
+mkdir -p "$AID_HOME/tasks/t-pty-respond"
+echo ready > "$AID_HOME/tasks/t-pty-respond/agent.log"
+printf 'Select an option'
+read answer
+printf 'accepted %s\n' "$answer"
+"#);
+    write_custom_agent(aid_home.path(), "silentprompt", &agent_path);
+    run_ok(aid_cmd_with_cwd(aid_home.path(), project.path()).args([
+        "run", "silentprompt", "ask for an option", "--bg", "--id", TASK_ID,
+    ]));
+    wait_for_status(aid_home.path(), TASK_ID, "awaiting_input", Duration::from_secs(10));
+    thread::sleep(Duration::from_secs(2));
+    assert_eq!(task_status(aid_home.path(), TASK_ID).as_deref(), Some("awaiting_input"));
+    run_ok(aid_cmd_in(aid_home.path()).args(["respond", TASK_ID, "one"]));
+    wait_for_status(aid_home.path(), TASK_ID, "done", Duration::from_secs(10));
+}
+
+#[test]
+fn buffered_log_growth_leaves_await_without_stdin_response() {
+    if !pty_available() { return; }
+    let aid_home = TempDir::new().unwrap();
+    let project = short_warning_project();
+    let script_dir = TempDir::new().unwrap();
+    let agent_path = write_script(script_dir.path(), "resuming-agent", r#"#!/bin/sh
+mkdir -p "$AID_HOME/tasks/t-pty-respond"
+printf "I'll start by exploring the codebase structure..."
+i=0
+while [ ! -f "$AID_HOME/resume" ] && [ "$i" -lt 150 ]; do sleep 0.1; i=$((i + 1)); done
+echo working >> "$AID_HOME/tasks/t-pty-respond/agent.log"
+i=0
+while [ ! -f "$AID_HOME/finish" ] && [ "$i" -lt 150 ]; do sleep 0.1; i=$((i + 1)); done
+printf '\nfinished\n'
+"#);
+    write_custom_agent(aid_home.path(), "resuming", &agent_path);
+    run_ok(aid_cmd_with_cwd(aid_home.path(), project.path()).args([
+        "run", "resuming", "resume work in a log", "--bg", "--id", TASK_ID,
+    ]));
+    wait_for_status(aid_home.path(), TASK_ID, "awaiting_input", Duration::from_secs(10));
+    std::fs::write(aid_home.path().join("resume"), "").unwrap();
+    wait_for_status(aid_home.path(), TASK_ID, "running", Duration::from_secs(10));
+    thread::sleep(Duration::from_secs(5));
+    assert_eq!(task_status(aid_home.path(), TASK_ID).as_deref(), Some("running"));
+    let conn = Connection::open(aid_home.path().join("aid.db")).unwrap();
+    let recoveries: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM events WHERE task_id = ?1 AND json_extract(metadata, '$.reason') = 'agent_log_growth'",
+        [TASK_ID], |row| row.get(0),
+    ).unwrap();
+    assert_eq!(recoveries, 1);
+    std::fs::write(aid_home.path().join("finish"), "").unwrap();
+    wait_for_status(aid_home.path(), TASK_ID, "done", Duration::from_secs(10));
+}
+
+fn short_warning_project() -> TempDir {
+    let project = TempDir::new().unwrap();
+    run_ok(Command::new("git").current_dir(project.path()).args(["init", "-q"]));
+    std::fs::create_dir(project.path().join(".aid")).unwrap();
+    std::fs::write(
+        project.path().join(".aid/project.toml"),
+        "[project]\nid = \"pty-short-warning\"\nidle_warn_secs = 2\n",
+    ).unwrap();
+    run_ok(Command::new("git").current_dir(project.path()).args(["add", ".aid/project.toml"]));
+    run_ok(Command::new("git").current_dir(project.path()).args([
+        "-c", "user.name=Test", "-c", "user.email=test@example.com",
+        "commit", "-qm", "Set short warning policy",
+    ]));
+    project
 }
 
 fn pty_available() -> bool {

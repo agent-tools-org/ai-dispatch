@@ -14,7 +14,7 @@ usage() {
 Usage: scripts/release.sh [--dry-run] [--skip-hygiene] <version> <notes-file>
 
 Options:
-  --dry-run       Validate and prepare the release without committing or pushing
+  --dry-run       Validate without committing or pushing; hygiene failures still exit non-zero
   --skip-hygiene  Warn about orphan branches/worktrees without failing
 
 Arguments:
@@ -67,19 +67,15 @@ ensure_clean_worktree() {
   [[ -z "${status}" ]] || fail "git worktree must be clean before running release.sh"
 }
 
-# Returns 0 when a branch should be excluded from orphan branch cleanup.
-branch_is_kept() {
-  local branch="$1"
-  local current_branch="$2"
-  [[ "${branch}" == "main" || "${branch}" == "gitbutler/workspace" || "${branch}" == "${current_branch}" || "${branch}" == keep/* ]]
-}
-
 ensure_branch_ready() {
   local branch
   branch="$(git -C "${repo_root}" rev-parse --abbrev-ref HEAD)"
   [[ "${branch}" != "HEAD" ]] || fail "detached HEAD is not supported"
   printf '%s' "${branch}"
 }
+
+# shellcheck source=release-orphans.sh
+source "${repo_root}/scripts/release-orphans.sh"
 
 ensure_tag_absent() {
   local tag="$1"
@@ -131,75 +127,6 @@ prepend_changelog_entry() {
     cat "${changelog_file}"
   } > "${tmp_file}"
   mv "${tmp_file}" "${changelog_file}"
-}
-
-# Prints the orphan hygiene report and suggested cleanup commands to stderr.
-print_orphan_report() {
-  local orphan_worktrees="$1"
-  local orphan_branches="$2"
-  local line
-
-  printf 'orphan hygiene check found cleanup candidates\n' >&2
-  if [[ -n "${orphan_worktrees}" ]]; then
-    printf '\nOrphan worktrees:\n' >&2
-    while IFS= read -r line; do
-      [[ -n "${line}" ]] && printf '  - %s\n' "${line}" >&2
-    done <<< "${orphan_worktrees}"
-  fi
-  if [[ -n "${orphan_branches}" ]]; then
-    printf '\nOrphan branches:\n' >&2
-    while IFS= read -r line; do
-      [[ -n "${line}" ]] && printf '  - %s\n' "${line}" >&2
-    done <<< "${orphan_branches}"
-  fi
-  printf '\nTask artifacts require explicit principal acceptance and custody GC.\n' >&2
-}
-
-# Fails on merged-orphan branches or worktrees unless hygiene checks are skipped.
-check_orphans() {
-  local current_branch merged_output line branch branch_ref worktree_path
-  local orphan_branches="" orphan_worktrees=""
-  current_branch="$(ensure_branch_ready)"
-
-  merged_output="$(git -C "${repo_root}" branch --merged main)"
-
-  while IFS= read -r line; do
-    branch="${line#\* }"
-    branch="${branch#"${branch%%[![:space:]]*}"}"
-    [[ -n "${branch}" ]] || continue
-    branch_is_kept "${branch}" "${current_branch}" && continue
-    orphan_branches+="${branch}"$'\n'
-  done <<< "${merged_output}"
-
-  while IFS= read -r line; do
-    case "${line}" in
-      worktree\ *)
-        worktree_path="${line#worktree }"
-        branch_ref=""
-        ;;
-      branch\ refs/heads/*)
-        branch_ref="${line#branch refs/heads/}"
-        ;;
-      '')
-        [[ "${worktree_path}" == "${repo_root}" ]] && continue
-        if [[ ! -d "${worktree_path}" ]]; then
-          orphan_worktrees+="${worktree_path} (missing path)"$'\n'
-        elif printf '%s\n' "${merged_output}" | grep -Fqx "  ${branch_ref}" \
-          || printf '%s\n' "${merged_output}" | grep -Fqx "* ${branch_ref}"; then
-          orphan_worktrees+="${worktree_path} (${branch_ref})"$'\n'
-        fi
-        ;;
-    esac
-  done < <(git -C "${repo_root}" worktree list --porcelain; printf '\n')
-
-  [[ -z "${orphan_branches}${orphan_worktrees}" ]] && return 0
-
-  print_orphan_report "${orphan_worktrees}" "${orphan_branches}"
-
-  if [[ "${skip_hygiene}" == "true" || "${dry_run}" == "true" ]]; then
-    return 0
-  fi
-  fail "release hygiene check failed"
 }
 
 main() {

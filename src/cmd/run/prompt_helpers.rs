@@ -1,4 +1,5 @@
 // Prompt resolution, context flags, skills, worktree paths, compaction.
+// Deps: RunArgs, explicit project config, agents, templates, and store.
 use anyhow::{Context, Result};
 
 use crate::{
@@ -154,30 +155,8 @@ pub(crate) fn read_context_file(path: &str) -> Result<String> { std::fs::read_to
 
 pub(crate) fn format_context_block(path: &str, content: &str) -> String { format!("### {}\n```rust\n{}\n```", path, content.trim()) }
 
-/// Skills come from the caller, then the project, then nowhere.
-///
-/// The third step used to be `skills::auto_skills`, which chose by **agent kind
-/// alone** and never looked at the task: every implementation CLI was handed
-/// `implementer`, and gemini and agy were handed `researcher`, whatever the
-/// work actually was. A skill injects a substantial block of methodology text
-/// and a persona, so that guess spent the caller's tokens steering the agent
-/// toward something nobody had asked for.
-///
-/// A project that wants the old behaviour declares it once, in
-/// `.aid/project.toml`: `skills = ["implementer"]`.
-pub(crate) fn effective_skills(args: &RunArgs) -> Vec<String> {
-    let project_skills = crate::project::detect_project()
-        .map(|config| config.skills)
-        .unwrap_or_default();
-    effective_skills_with(args, project_skills)
-}
-
-/// The project default is a parameter so a caller — a test above all — can
-/// state it rather than inherit whatever `.aid/project.toml` the developer
-/// happens to have. The test for "omitting `--skill` invents nothing" passed
-/// for months only because this repo's project file failed to deserialize and
-/// `detect_project` discarded the error.
-pub(crate) fn effective_skills_with(args: &RunArgs, project_skills: Vec<String>) -> Vec<String> {
+/// Explicit skills override defaults from the dispatch's resolved project.
+pub(crate) fn effective_skills(args: &RunArgs, project: Option<&crate::project::ProjectConfig>) -> Vec<String> {
     let declared: Vec<String> = args
         .skills
         .iter()
@@ -192,7 +171,7 @@ pub(crate) fn effective_skills_with(args: &RunArgs, project_skills: Vec<String>)
     if args.skills.iter().any(|skill| skill.as_str() == NO_SKILL_SENTINEL) {
         return Vec::new();
     }
-    project_skills
+    project.map(|config| config.skills.clone()).unwrap_or_default()
 }
 
 pub(crate) fn resolve_repo_path(path: &str) -> Result<String> {

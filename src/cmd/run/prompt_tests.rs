@@ -58,6 +58,8 @@ fn audit_report_bundle_omits_implementation_instructions() {
         None,
         &["implementer".to_string()],
         "task-audit",
+        None,
+        None,
     )
     .unwrap();
 
@@ -91,6 +93,8 @@ fn explicit_result_file_write_review_keeps_implementation_instructions() {
         None,
         &["implementer".to_string()],
         "task-review",
+        None,
+        None,
     )
     .unwrap();
 
@@ -128,6 +132,8 @@ fn code_review_then_fix_keeps_implementation_instructions() {
             None,
             &["implementer".to_string()],
             task_id,
+        None,
+        None,
         )
         .unwrap();
 
@@ -159,6 +165,8 @@ fn write_task_mentioning_read_only_audit_keeps_implementation_instructions() {
         None,
         &["implementer".to_string()],
         "task-write",
+        None,
+        None,
     )
     .unwrap();
 

@@ -23,6 +23,14 @@ project instructions and budgets.
 
 Configuration discovery uses the checkout's own `.aid/project.toml` first; if absent in a linked worktree, it uses the main working tree's `.aid/project.toml`.
 
+`aid run --dir PATH` resolves the target Git root and project config once per dispatch.
+Project rules, default skills, state, knowledge, memories, and toolbox lookup use that
+resolved context. Relative paths are resolved from the caller's working directory;
+omitting `--dir` uses the caller's project. Outside Git, no project context or memories
+are injected. A Git repository without `.aid/project.toml` still uses its scoped
+memories and toolbox. State and knowledge come from the resolved checkout's `.aid/`.
+Explicit `--skill` or `--no-skill` overrides that project's default skills.
+
 `[project].id` is the **stable project identity** recorded on every dispatched
 task. Main checkout and linked worktrees resolve to the same id. When no
 `project.toml` exists, aid falls back to a path-based id of the main working

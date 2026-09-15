@@ -37,6 +37,10 @@ fn official_guide_covers_every_public_command() {
 #[test]
 fn official_guide_documents_project_config_discovery_order() {
     let configuration = include_str!("../default-skills/aid-guide/references/configuration.md");
+    for term in ["`aid run --dir PATH`", "once per dispatch", "Outside Git, no project context or memories",
+        "without `.aid/project.toml` still uses its scoped", "`--skill` or `--no-skill`"] {
+        assert!(configuration.contains(term), "missing {term}");
+    }
     assert!(configuration.contains(
         "Configuration discovery uses the checkout's own `.aid/project.toml` first; if absent in a linked worktree, it uses the main working tree's `.aid/project.toml`."
     ));

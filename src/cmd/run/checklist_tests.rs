@@ -83,6 +83,8 @@ fn checklist_items_are_injected_into_prompt_with_required_format() {
         None,
         &[],
         "task-1",
+        None,
+        None,
     )
     .unwrap();
 
@@ -151,6 +153,8 @@ fn empty_checklist_produces_no_prompt_injection() {
         None,
         &[],
         "task-1",
+        None,
+        None,
     )
     .unwrap();
 

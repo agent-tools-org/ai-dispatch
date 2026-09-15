@@ -12,7 +12,6 @@ use crate::rate_limit;
 use crate::store::Store;
 use crate::types::{AgentKind, TaskDifficulty};
 use crate::usage;
-use super::run_prompt;
 use super::RunArgs;
 
 #[path = "dispatch_resolve_held.rs"]
@@ -36,7 +35,6 @@ pub(super) struct AgentSetup {
     pub agent_kind: AgentKind,
     pub custom_agent_name: Option<String>,
     pub agent_display_name: String,
-    pub requested_skills: Vec<String>,
     pub effective_model: Option<String>,
     pub budget_active: bool,
     pub agent: Box<dyn agent::Agent>,
@@ -167,12 +165,6 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
     }
     held::warn_if_degraded(agent_kind, custom_agent_name.as_deref());
     let custom_name = custom_agent_name.as_deref();
-    let requested_skills = run_prompt::effective_skills(args);
-    if args.skills.is_empty() {
-        for skill in &requested_skills {
-            aid_info!("[aid] Auto-applied skill: {skill}");
-        }
-    }
     let cfg = config::load_config()?;
     let budget_status = usage::check_budget_status(store, &cfg)?;
     if budget_status.over_limit {
@@ -290,7 +282,6 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
             .as_deref()
             .unwrap_or_else(|| agent_kind.as_str())
             .to_string(),
-        requested_skills,
         effective_model,
         budget_active,
         agent,

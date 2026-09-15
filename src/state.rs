@@ -147,6 +147,9 @@ pub fn compute_state(store: &Store, repo_path: &str) -> Result<ProjectState> {
     })
 }
 pub fn format_state_summary(state: &ProjectState) -> String {
+    format_state_summary_for_project(state, &project_label())
+}
+pub(crate) fn format_state_summary_for_project(state: &ProjectState, project_id: &str) -> String {
     let recent_total = usize::min(state.health.total_tasks as usize, 50);
     let recent_successes = (state.health.recent_success_rate * recent_total as f64).round() as usize;
     let verify = state.health.last_verify_status.as_deref().unwrap_or("unknown");
@@ -160,7 +163,7 @@ pub fn format_state_summary(state: &ProjectState) -> String {
     let updated = format_relative_time(&state.last_updated);
     format!(
         "[Project State: {}]\nHealth: {:.0}% success ({recent_successes}/{recent_total} recent), verify: {verify}\nBest agents: {best_agents}\nLast task: {task}\nBranch: {branch}, updated {updated}",
-        project_label(),
+        project_id,
         state.health.recent_success_rate * 100.0,
     )
 }

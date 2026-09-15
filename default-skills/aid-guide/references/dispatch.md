@@ -103,7 +103,7 @@ Important controls:
   overrides and existing adapter defaults (Cursor, Qwen, MiMoCode) are labeled
   separately. A healthy default quota group keeps the model
   unset; a held default group pins the first healthy alternative family.
-- `--urgency` declares `background`, `normal`, or `urgent` rate-limit handling.
+- `--urgency` declares `background`, `normal`, or `urgent` rate-limit handling. `background` may wait out a clock or Windowed hold; a NeedsHuman hold still blocks.
 - `--rigor` declares `draft`, `standard`, or `critical` proof level (compiles / path exercised /
   cross-audit). `critical` forces `--verify` and `--audit`; it does **not** restrict which agent
   may run.
@@ -476,10 +476,13 @@ dispatched task, both naming `aid config clear-limit <agent>`. When no usable
 aidbar snapshot can release the marker, that escape hatch is how a topped-up
 account or other changed provider state releases a stale hold.
 
-`--declared-urgency background` still keeps the agent you asked for. The wait
-blocks only on a clock or a dated mapped snapshot; prepaid, plan-change, and
-unmapped holds return immediately and tell you to `aid config clear-limit` or
-pick another agent.
+`--urgency background` keeps the agent you asked for when the hold is a clock
+or Windowed quota — those can clear before a background task runs. A NeedsHuman
+hold (logged-out credentials, prepaid, plan-change) still blocks and substitutes
+or errors exactly as under normal urgency. The wait itself blocks only on a
+clock or a dated mapped snapshot; prepaid, plan-change, and unmapped holds
+return immediately and tell you to `aid config clear-limit` or pick another
+agent.
 
 A dry-run substitution milestone says `would dispatch` and records JSON
 metadata naming both routes and whether the model class was preserved. It does

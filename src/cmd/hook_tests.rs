@@ -1,4 +1,4 @@
-// Session-start hook tests: fleet line is silent unless a hold exists.
+// Session-start hook tests: fleet line is silent unless a hold or Degraded exists.
 
 use super::{QuotaState, render_agents_status_line, render_session_start};
 use crate::project::{ProjectAgents, ProjectBudget, ProjectConfig};
@@ -149,4 +149,45 @@ fn renders_project_and_combined_rule_count() {
 
     assert!(rendered.contains("Project: ai-dispatch (profile: standard, team: dev)"));
     assert!(rendered.contains("Rules: 3 rule(s)"));
+}
+
+fn with_codex_probe(
+    used: f64,
+) -> (
+    tempfile::TempDir,
+    crate::paths::AidHomeGuard,
+    crate::live_quota::CacheDirGuard,
+    crate::agent::DetectAgentsGuard,
+) {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let _ = std::fs::create_dir_all(temp.path().join(".aid"));
+    let home = crate::paths::AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(crate::paths::aid_dir()).expect("create aid dir");
+    let aidbar = temp.path().join("aidbar");
+    std::fs::create_dir_all(&aidbar).expect("cache");
+    let fetched = chrono::Utc::now().to_rfc3339();
+    std::fs::write(
+        aidbar.join("codex.json"),
+        format!(
+            r#"{{"ok":true,"snapshot":{{"provider":"codex","windows":[{{"label":"Weekly","used_percent":{used},"resets_at":"2026-09-19T08:10:00Z"}}],"fetched_at":"{fetched}"}}}}"#
+        ),
+    )
+    .expect("cache");
+    let cache = crate::live_quota::CacheDirGuard::set(&aidbar);
+    let fleet = crate::agent::DetectAgentsGuard::set(vec![crate::types::AgentKind::Codex]);
+    (temp, home, cache, fleet)
+}
+
+#[test]
+fn hook_line_names_degraded_at_96_and_omits_ok() {
+    let _guards = with_codex_probe(96.0);
+    let line = super::agents_status_line().expect("degraded fleet line");
+    assert_eq!(line, "agents: codex DEGRADED (96%, resets 08:10)");
+    assert!(!line.contains(" ok"), "{line}");
+}
+
+#[test]
+fn hook_line_silent_when_probe_is_20_percent() {
+    let _guards = with_codex_probe(20.0);
+    assert_eq!(super::agents_status_line(), None);
 }

@@ -140,7 +140,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
     }
     let mut substituted_from: Option<(String, String)> = None;
     if args.declared_urgency == Some(crate::types::TaskUrgency::Background)
-        && rate_limit::is_rate_limited(&agent_kind, custom_agent_name.as_deref())
+        && held::background_keeps_hold(agent_kind, custom_agent_name.as_deref())
     {
         aid_warn!(
             "[aid] {} is rate-limited; background urgency keeps this agent selected",

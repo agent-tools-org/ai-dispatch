@@ -72,6 +72,7 @@ fn official_guide_documents_needs_human_hold_text() {
     assert!(configuration.contains("credentials are invalid"));
     let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
     assert!(dispatch.contains("invalid credentials"));
+    assert!(dispatch.contains("a NeedsHuman hold still blocks"));
     let index = include_str!("../default-skills/aid-guide/references/command-index.md");
     assert!(index.contains("NeedsHuman agent holds"));
 }

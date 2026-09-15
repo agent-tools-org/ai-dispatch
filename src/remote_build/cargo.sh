@@ -60,6 +60,7 @@ trap 'kill "$heartbeat_pid" 2>/dev/null || :; wait "$heartbeat_pid" 2>/dev/null 
 status=0
 wait "$job_pid" || status=$?
 case "$status" in
+  69) echo "[remote-build] $AID_BUILD_BOX: box refused admission (disk); aid re-picks at verify" >&2 ;;
   75) echo "[remote-build] $AID_BUILD_BOX: box lock not acquired" >&2 ;;
   124) echo "[remote-build] $AID_BUILD_BOX: job still running on the box" >&2 ;;
 esac

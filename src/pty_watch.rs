@@ -23,6 +23,8 @@ use crate::store::Store;
 use crate::types::{AgentKind, CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 use crate::watcher::{self, SyntheticMilestoneTracker};
 
+#[path = "pty_watch_prompt.rs"]
+mod prompt_liveness;
 mod utf8;
 
 const INPUT_POLL_INTERVAL: Duration = Duration::from_millis(500);
@@ -36,6 +38,7 @@ pub(crate) struct MonitorState {
     synthetic_tracker: SyntheticMilestoneTracker,
     prompt_detector: PromptDetector,
     awaiting_input: bool,
+    awaiting_log_sizes: [u64; 3],
     last_progress_time: Instant,
     last_raw_chunk_time: Instant,
     /// Set on the first real PTY byte chunk. Buffered agents never raise
@@ -88,6 +91,7 @@ impl MonitorState {
             synthetic_tracker: SyntheticMilestoneTracker::new(),
             prompt_detector: PromptDetector::default(),
             awaiting_input: false,
+            awaiting_log_sizes: [0; 3],
             last_progress_time: Instant::now(),
             last_raw_chunk_time: Instant::now(),
             received_raw_bytes: false,
@@ -122,14 +126,7 @@ impl MonitorState {
         if !self.streaming
             && let Some(prompt) = self.prompt_detector.push_chunk(&chunk, Instant::now())
         {
-            let awaiting_prompt = extract_awaiting_prompt(&self.full_output, &prompt);
-            mark_awaiting_input(
-                store,
-                task_id,
-                &prompt,
-                &awaiting_prompt,
-                &mut self.awaiting_input,
-            )?;
+            self.mark_prompt(store, task_id, &prompt)?;
         }
         Ok(())
     }
@@ -246,22 +243,6 @@ impl MonitorState {
             })?;
         } else {
             self.pending_inbound_acks = 0;
-        }
-        Ok(())
-    }
-
-    fn handle_timeout(&mut self, store: &Arc<Store>, task_id: &TaskId) -> Result<()> {
-        if !self.streaming
-            && let Some(prompt) = self.prompt_detector.poll_idle(Instant::now())
-        {
-            let awaiting_prompt = extract_awaiting_prompt(&self.full_output, &prompt);
-            mark_awaiting_input(
-                store,
-                task_id,
-                &prompt,
-                &awaiting_prompt,
-                &mut self.awaiting_input,
-            )?;
         }
         Ok(())
     }

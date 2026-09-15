@@ -49,7 +49,9 @@ fn resolve_with(requested: &str, repo: &Path, command: &mut Command) -> Result<S
     pick(command, repo, None)
 }
 
-fn pick(command: &mut Command, repo: &Path, exclude: Option<&str>) -> Result<String> {
+fn pick(command: &mut Command, start_dir: &Path, exclude: Option<&str>) -> Result<String> {
+    let repo = crate::project::worktree::main_working_tree(start_dir)
+        .unwrap_or_else(|| start_dir.to_path_buf());
     command.args(["pick", "--role", "rust-build", "--repo"]).arg(repo);
     if let Some(excluded) = exclude { command.args(["--exclude", excluded]); }
     let output = command.output().context("Failed to run rbox pick --role rust-build")?;

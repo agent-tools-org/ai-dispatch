@@ -17,6 +17,7 @@ mod explicit_model;
 pub(crate) use explicit_model::resolve_explicit_agent_model;
 pub(crate) use selection_advice::{AdviceReport, advise};
 pub(crate) use selection_fallback::{coding_fallback_for, coding_fallback_for_prompt};
+pub(crate) use selection_quota::{quota_from, tightest_window};
 use selection_scoring::{
     BUILTIN_AGENTS, Candidate, CandidateContext, candidate_for, compare_candidates, cost_efficiency,
     custom_category_score, custom_command_installed, custom_strength_bonus, pick_best_candidate,

@@ -121,6 +121,45 @@ pub(super) fn skip_held_to_fallback(
     )
 }
 
+pub(super) fn warn_if_degraded(kind: AgentKind, custom_name: Option<&str>) {
+    if let Some(line) = degraded_dispatch_warning(kind, custom_name) {
+        aid_warn!("{line}");
+    }
+}
+
+pub(super) fn degraded_dispatch_warning(
+    kind: AgentKind,
+    custom_name: Option<&str>,
+) -> Option<String> {
+    let avail = crate::route_availability::availability(&kind, custom_name);
+    if avail.status != crate::route_availability::RouteStatus::Degraded {
+        return None;
+    }
+    let name = custom_name.unwrap_or_else(|| kind.as_str());
+    let window = avail
+        .probe
+        .as_ref()
+        .and_then(|probe| crate::agent::selection::tightest_window(&probe.windows));
+    let detail = match window {
+        Some(item) => {
+            let label = if item.label.is_empty() {
+                "live"
+            } else {
+                item.label.as_str()
+            };
+            let resets = item
+                .resets_at
+                .map(|at| format!(" (resets {})", at.format("%Y-%m-%dT%H:%MZ")))
+                .unwrap_or_default();
+            format!(": {:.0}% of {label} window used{resets}", item.used_percent)
+        }
+        None => String::new(),
+    };
+    Some(format!(
+        "[aid] {name} route degraded{detail} — dispatching anyway"
+    ))
+}
+
 /// Whether a fallback candidate can actually take the work. An agent-level
 /// hold blocks outright; a candidate with a static family table (agy, cursor)
 /// is blocked when every group it can draw on is held — the agent-level

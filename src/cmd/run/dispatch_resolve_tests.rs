@@ -9,6 +9,8 @@ mod held_tests;
 mod held_pin_tests;
 #[path = "dispatch_model_source_tests.rs"]
 mod model_source_tests;
+#[path = "dispatch_resolve_degraded_tests.rs"]
+mod degraded_tests;
 
 /// Write a manual-hold marker for `agent` so `dispatch_blocking_hold` returns `Some`.
 fn write_manual_hold(agent: AgentKind) {

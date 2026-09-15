@@ -199,7 +199,9 @@ dated snapshot that will never arrive. Cursor premium matches the
 115%. The person-only class is prepaid or a plan change: a guessed cooldown
 or a dated spend window would send work back to an account that still cannot
 pay. A bare `429`/`402` with no recognised template is Degraded, not a hold:
-`aid agent quota` prints OK and dispatch is not diverted. An on-disk
+`aid agent list --json` reports `degraded` with `used_percent`, `resets_at`, and
+`source`; the session-start hook prints `DEGRADED`; `aid run` warns and still
+dispatches. Dispatch is not diverted. An on-disk
 `hold: manual` marker is re-read against the current signature table, so a
 Windowed needle written before this class existed still classifies as
 Windowed rather than as a person hold.

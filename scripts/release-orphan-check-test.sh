@@ -8,6 +8,7 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 release_script="${script_dir}/release.sh"
 tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/release-orphan-check.XXXXXX")"
+real_repo="${tmp_dir}/real-repo"
 repo_dir="${tmp_dir}/repo"
 origin_dir="${tmp_dir}/origin.git"
 bin_dir="${tmp_dir}/bin"
@@ -25,14 +26,17 @@ fail() {
   exit 1
 }
 
-mkdir -p "${repo_dir}/scripts" "${repo_dir}/.github/scripts" "${bin_dir}"
+mkdir -p "${real_repo}" "${bin_dir}"
+ln -s "${real_repo}" "${repo_dir}"
+mkdir -p "${repo_dir}/scripts" "${repo_dir}/.github/scripts"
 git init --bare "${origin_dir}" >/dev/null
-git init -b main "${repo_dir}" >/dev/null
+git init -b main "${real_repo}" >/dev/null
 git -C "${repo_dir}" config user.name "Test User"
 git -C "${repo_dir}" config user.email "test@example.com"
 git -C "${repo_dir}" remote add origin "${origin_dir}"
 
 cp "${release_script}" "${repo_dir}/scripts/release.sh"
+cp "${script_dir}/release-orphans.sh" "${repo_dir}/scripts/release-orphans.sh"
 
 cat <<'EOF' > "${repo_dir}/Cargo.toml"
 [package]
@@ -73,7 +77,7 @@ EOF
 chmod +x "${bin_dir}/cargo"
 
 touch "${repo_dir}/Cargo.lock"
-git -C "${repo_dir}" add Cargo.toml Cargo.lock CHANGELOG.md .github/scripts/check-changelog.sh scripts/release.sh
+git -C "${repo_dir}" add Cargo.toml Cargo.lock CHANGELOG.md .github/scripts/check-changelog.sh scripts/release.sh scripts/release-orphans.sh
 git -C "${repo_dir}" commit -m "chore: seed release test repo" >/dev/null
 git -C "${repo_dir}" push -u origin main >/dev/null
 
@@ -104,6 +108,9 @@ grep -q 'merged-branch' "${tmp_dir}/check.stderr" || fail "missing merged orphan
 if grep -q 'live-branch' "${tmp_dir}/check.stderr"; then
   fail "reported live-branch as an orphan"
 fi
+if grep -q 'Orphan worktrees:' "${tmp_dir}/check.stderr"; then
+  fail "reported the main checkout as an orphan worktree"
+fi
 
 rm -f "${repo_dir}/scripts/release-lib.sh"
 
@@ -121,12 +128,14 @@ command -v sqlite3 >/dev/null 2>&1 || fail "sqlite3 is required for worktree tas
 
 wt_dir="${tmp_dir}/orphan-wt"
 git -C "${repo_dir}" worktree add "${wt_dir}" merged-branch >/dev/null
+repo_canon="$(cd -P "${repo_dir}" && pwd -P)"
 wt_listed=""
 while IFS= read -r line; do
   case "${line}" in
     worktree\ *)
       p="${line#worktree }"
-      [[ "${p}" != "${repo_dir}" ]] && wt_listed="${p}"
+      p_canon="$(cd -P "${p}" && pwd -P 2>/dev/null)" || p_canon="${p}"
+      [[ "${p_canon}" != "${repo_canon}" ]] && wt_listed="${p}"
       ;;
   esac
 done < <(git -C "${repo_dir}" worktree list --porcelain)
@@ -179,6 +188,47 @@ old_line="$(grep -n 'aid accept t-old' "${tmp_dir}/ids.stderr" | head -1 | cut -
 
 rm -f "${repo_dir}/scripts/release-lib.sh"
 
+printf '%s\n' 'version=1' 'task_id=t-dead' 'owner_pid=999999999' 'worker_pid=999999998' \
+  > "${wt_listed}/.aid-lock"
+
+held_dir="${tmp_dir}/held-wt"
+git -C "${repo_dir}" branch held-branch >/dev/null
+git -C "${repo_dir}" worktree add "${held_dir}" held-branch >/dev/null
+held_listed=""
+while IFS= read -r line; do
+  case "${line}" in
+    worktree\ *) p="${line#worktree }" ;;
+    branch\ refs/heads/held-branch) held_listed="${p}" ;;
+  esac
+done < <(git -C "${repo_dir}" worktree list --porcelain)
+[[ -n "${held_listed}" ]] || fail "failed to resolve held worktree path"
+printf '%s\n' 'version=1' 'task_id=t-held' "owner_pid=$$" 'worker_pid=' \
+  > "${held_listed}/.aid-lock"
+
+sed '$d' "${repo_dir}/scripts/release.sh" > "${repo_dir}/scripts/release-lib.sh"
+if (
+  HOME="${fake_home}"
+  source "${repo_dir}/scripts/release-lib.sh"
+  check_orphans
+) >"${tmp_dir}/held.stdout" 2>"${tmp_dir}/held.stderr"; then
+  fail "expected check_orphans to fail with dead-pid orphan still present"
+fi
+grep -q 'Held by running tasks (not orphans):' "${tmp_dir}/held.stderr" \
+  || fail "missing held-by-running-tasks heading"
+grep -Fq "${held_listed}" "${tmp_dir}/held.stderr" || fail "missing held worktree path"
+grep -q 't-held' "${tmp_dir}/held.stderr" || fail "missing held task id t-held"
+if awk '/^Orphan worktrees:/,/^Orphan branches:/' "${tmp_dir}/held.stderr" | grep -Fq "${held_listed}"; then
+  fail "held worktree listed as an orphan"
+fi
+if awk '/^Orphan branches:/,0' "${tmp_dir}/held.stderr" | grep -q 'held-branch'; then
+  fail "held-branch counted as an orphan branch"
+fi
+if awk '/^Held by running tasks/,/^$/' "${tmp_dir}/held.stderr" | grep -q 't-dead'; then
+  fail "dead-pid lock listed as held by a running task"
+fi
+grep -Fq "${wt_listed}" "${tmp_dir}/held.stderr" || fail "dead-pid worktree dropped from orphan report"
+rm -f "${repo_dir}/scripts/release-lib.sh"
+
 if HOME="${fake_home}" PATH="${bin_dir}:${PATH}" bash "${repo_dir}/scripts/release.sh" --dry-run 1.0.1 "${notes_file}" \
   >"${tmp_dir}/dry-wt.stdout" 2>"${tmp_dir}/dry-wt.stderr"; then
   fail "expected --dry-run to fail on orphan worktree hygiene"
@@ -186,6 +236,8 @@ fi
 grep -q 'dry-run: would fail: release hygiene check (1 orphan branches, 1 orphan worktrees)' \
   "${tmp_dir}/dry-wt.stderr" || fail "missing dry-run hygiene failure message with worktree: $(tr '\n' '|' < "${tmp_dir}/dry-wt.stderr")"
 grep -q 'aid accept t-new' "${tmp_dir}/dry-wt.stderr" || fail "dry-run report missing mapped aid accept"
+grep -q 'Held by running tasks (not orphans):' "${tmp_dir}/dry-wt.stderr" \
+  || fail "dry-run missing held-by-running-tasks heading"
 if grep -q 'would create tag' "${tmp_dir}/dry-wt.stdout" "${tmp_dir}/dry-wt.stderr"; then
   fail "dry-run printed would-create-tag despite worktree hygiene failure"
 fi

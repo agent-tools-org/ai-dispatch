@@ -3,7 +3,7 @@
 
 use std::time::{Duration, Instant};
 
-pub(crate) const PROMPT_IDLE_TIMEOUT: Duration = Duration::from_secs(2);
+const PROMPT_IDLE_TIMEOUT: Duration = Duration::from_secs(2);
 const MAX_PARTIAL_LEN: usize = 240;
 
 #[derive(Debug, Default)]

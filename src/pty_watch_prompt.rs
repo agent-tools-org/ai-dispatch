@@ -3,7 +3,6 @@
 // Deps: prompt, paths, task_lifecycle, and Store.
 
 use super::{MonitorState, extract_awaiting_prompt, mark_awaiting_input};
-use crate::prompt::PROMPT_IDLE_TIMEOUT;
 use crate::store::Store;
 use crate::types::{EventKind, TaskEvent, TaskId};
 use anyhow::Result;
@@ -45,7 +44,7 @@ impl MonitorState {
             })?;
             return Ok(());
         }
-        if Self::buffered_log_grew_within(task_id.as_str(), PROMPT_IDLE_TIMEOUT) {
+        if Self::buffered_log_grew_within(task_id.as_str(), self.idle_detector.warn_after) {
             return Ok(());
         }
         if let Some(prompt) = self.prompt_detector.poll_idle(Instant::now()) {
@@ -103,12 +102,46 @@ mod tests {
         assert!(store.get_events(id.as_str()).expect("events").is_empty());
 
         std::fs::File::open(path).expect("log").set_modified(
-            SystemTime::now() - Duration::from_secs(10),
+            SystemTime::now() - state.idle_detector.warn_after - Duration::from_secs(10),
         ).expect("age log");
         state.handle_timeout(&store, &id).expect("silent timeout");
         assert_eq!(status(&store, &id), TaskStatus::AwaitingInput);
         let events = store.get_events(id.as_str()).expect("events");
         assert_eq!(events[0].metadata.as_ref().expect("metadata")["awaiting_prompt"], BUFFERED_PROGRESS);
+    }
+
+    #[test]
+    fn measured_model_latency_gaps_do_not_trigger_await() {
+        let (_temp, _home, store, id, mut state) = fixture();
+        partial(&mut state, BUFFERED_PROGRESS);
+        let path = paths::agent_log_path(id.as_str());
+        std::fs::write(&path, "working").expect("log");
+        for gap_secs in [3, 31, 145] {
+            std::fs::File::open(&path).expect("log").set_modified(
+                SystemTime::now() - Duration::from_secs(gap_secs),
+            ).expect("age log");
+            state.handle_timeout(&store, &id).expect("model latency");
+            assert_eq!(status(&store, &id), TaskStatus::Running, "gap: {gap_secs}s");
+        }
+        assert!(store.get_events(id.as_str()).expect("events").is_empty());
+    }
+
+    #[test]
+    fn idle_prompt_uses_warning_window_from_task_policy() {
+        let (_temp, _home, store, id, _) = fixture();
+        let mut policy = crate::timeout_policy::TimeoutPolicy::default();
+        policy.nudge_ladder.warn = Duration::from_secs(10);
+        let mut state = MonitorState::with_policy(false, None, policy);
+        partial(&mut state, BUFFERED_PROGRESS);
+        let path = paths::agent_log_path(id.as_str());
+        std::fs::write(&path, "working").expect("log");
+        for (age, expected) in [(8, TaskStatus::Running), (15, TaskStatus::AwaitingInput)] {
+            std::fs::File::open(&path).expect("log").set_modified(
+                SystemTime::now() - Duration::from_secs(age),
+            ).expect("age log");
+            state.handle_timeout(&store, &id).expect("timeout");
+            assert_eq!(status(&store, &id), expected);
+        }
     }
 
     #[test]
@@ -137,7 +170,7 @@ mod tests {
         let path = paths::agent_log_path(id.as_str());
         std::fs::write(&path, "working").expect("log");
         std::fs::File::open(path).expect("log").set_modified(
-            SystemTime::now() - Duration::from_secs(10),
+            SystemTime::now() - state.idle_detector.warn_after - Duration::from_secs(10),
         ).expect("age log");
         state.handle_timeout(&store, &id).expect("delayed resume");
         assert_eq!(status(&store, &id), TaskStatus::Running);

@@ -64,6 +64,7 @@ else
   case "$status" in
     124) echo "[remote-test] job ${job}: timed out after ${TIMEOUT}s; the job continues on the box" >&2 ;;
     75) echo "[remote-test] job ${job}: box lock not acquired within ${LOCK_TIMEOUT}s" >&2 ;;
+    69) echo "[remote-test] job ${job}: box ${BOX} refused admission (disk); no test ran" >&2 ;;
   esac
 fi
 exit "$status"

@@ -1,3 +1,11 @@
+## v10.47.1 (2026-09-23)
+- Fix premature success from aid wait and aid watch --wait by waiting for worker delivery and verification settlement, including group and implicit task selection.
+- Publish background job specs atomically and retain the settlement barrier through worker error handling; interrupted settlement reports an error instead of provisional success.
+- Preserve shared-checkout artifacts in private-index recovery refs without changing the principal branch or index.
+- Enforce and report budgets using the resolved target project identity across --dir, linked worktrees, batch and retry.
+- Restore strict clippy checks and add default/Web build, test and lint coverage to CI.
+
+
 ## v10.47.0 (2026-09-15)
 - Degraded quota is now named on every dispatch-time surface: the session-start hook line prints `DEGRADED (98%, resets 08:10)` instead of `ok`, `aid agent list --json` carries `degraded`, `probe`, `used_percent`, `resets_at`, `window` and `stale` from the live availability check, and `aid run` prints a one-line warning before launching on a Degraded route. No diversion: the caller keeps the route it named. Before this, three surfaces flattened a 96%-used codex window into `ok` and eighteen dispatches landed on it unseen.
 - Remote build re-pick on disk admission refusal: `rbox pick` now receives the main working tree so warm-target affinity matches the repository, and when the pinned box refuses verify with exit 69 (below the `scheduling.min_free_gib` floor) aid records a milestone, re-picks once excluding that box, persists the new box on the task and re-runs verify. A failed re-pick or a second refusal is an `InfrastructureFailure`, never an agent failure. `scripts/remote-test.sh` and `cargo.sh` map 69 through unchanged.

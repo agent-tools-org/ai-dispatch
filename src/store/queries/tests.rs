@@ -251,6 +251,8 @@ fn aggregates_budget_usage_by_agent_and_window() {
         params!["t-other", "gemini", "other", "done", "/work/project-b", 999_i64, 9.0_f64, &within_window],
     )
     .unwrap();
+    conn.execute("UPDATE tasks SET project_id = 'project-a' WHERE repo_path = '/work/project-a'", []).unwrap();
+    conn.execute("UPDATE tasks SET project_id = 'project-b' WHERE repo_path = '/work/project-b'", []).unwrap();
     drop(conn);
 
     let all_time = store.budget_usage_summary("codex", None).unwrap();

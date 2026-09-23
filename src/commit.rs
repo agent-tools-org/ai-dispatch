@@ -6,6 +6,8 @@ use std::path::Path;
 use std::process::Command;
 
 mod rescue;
+mod checkpoint;
+pub(crate) use checkpoint::preserve_shared_checkout;
 #[allow(unused_imports)]
 pub use rescue::{RescueOutcome, rescue_dirty_worktree, rescue_dirty_worktree_with_baseline};
 #[allow(unused_imports)]

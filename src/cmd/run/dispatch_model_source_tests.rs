@@ -27,7 +27,7 @@ fn aid_selected_default_is_persisted_as_aid_resolved() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args).expect("aid-selected model may degrade");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("aid-selected model may degrade");
 
     assert_eq!(setup.effective_model, None);
     assert_eq!(args.model_source, ModelSource::AidResolved);
@@ -53,7 +53,7 @@ fn explicit_model_remains_user_supplied() {
         ..Default::default()
     };
 
-    resolve_agent_setup(&store, &mut args).expect("served explicit model");
+    resolve_agent_setup(&store, &mut args, None).expect("served explicit model");
 
     assert_eq!(args.model_source, ModelSource::UserSupplied);
 }
@@ -78,7 +78,7 @@ fn substituted_model_is_persisted_as_aid_resolved() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args).expect("healthy replacement is usable");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("healthy replacement is usable");
 
     assert_eq!(setup.effective_model.as_deref(), Some("auto"));
     assert_eq!(args.model_source, ModelSource::AidResolved);
@@ -112,7 +112,7 @@ fn declared_standard_and_premium_reach_cli_default() {
 fn assert_cli_default(store: &Arc<Store>, args: &mut RunArgs) {
     assert_eq!(crate::agent_config::get_default_model(&args.agent_name), None);
     assert_eq!(args.model, None);
-    let setup = resolve_agent_setup(store, args).expect("healthy default dispatch");
+    let setup = resolve_agent_setup(store, args, None).expect("healthy default dispatch");
     assert_eq!(setup.effective_model, None);
     let info = super::super::model_info::model_selection_info(args, setup.effective_model.as_deref(), setup.agent.as_ref());
     assert_eq!(info, format!(

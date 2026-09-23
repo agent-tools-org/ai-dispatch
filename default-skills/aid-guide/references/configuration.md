@@ -50,6 +50,30 @@ Common project controls include:
 - audit and idle-recovery policy;
 - artifact backup (`[backup]`, below).
 
+### Project budget identity
+
+A name-only `[[usage.budget]]` entry in the global configuration is a project
+budget: its `name` must match the target task's `project_id`. Dispatch checks the
+identity resolved for `--dir`, including relative directories and linked worktrees,
+instead of the caller's working directory. Batch tasks and retries pass through the
+same gate. With no `--dir`, normal caller-project discovery still applies. Outside
+Git there is no project budget; configured per-agent budgets still apply.
+
+Usage aggregation, `aid usage` budget rows, and TUI budget gauges use persisted
+`project_id`, not the repository directory's basename. A project without declared
+configuration uses its stable path-based identity, shared with its linked worktrees.
+Historical rows with no `project_id` remain unattributed and are not guessed into a
+project budget. Per-agent budgets still include those rows. Explicit external usage
+counters continue to contribute to the configured budget.
+
+Exhausted cost, token, or task caps reject dispatch before creating the task claim;
+near-limit warnings and automatic budget mode use the same target scope. This is
+a check against recorded usage, not a reservation of future concurrent spend.
+`aid project init` / `aid project sync` still synchronize project budget settings
+into the global configuration; this identity fix does not change synchronization
+or configuration precedence. The model preference `--budget` is separate from
+these enforced usage caps.
+
 ### Artifact backup
 
 A `[backup]` table in `.aid/project.toml` uploads a bundle of a task's artifacts

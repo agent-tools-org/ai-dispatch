@@ -91,7 +91,11 @@ pub(super) fn apply_project_defaults(args: &mut RunArgs, detected_project: Optio
     }
 }
 
-pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Result<AgentSetup> {
+pub(super) fn resolve_agent_setup(
+    store: &Arc<Store>,
+    args: &mut RunArgs,
+    project_id: Option<&str>,
+) -> Result<AgentSetup> {
     let (mut agent_kind, mut custom_agent_name) = if let Some(kind) = AgentKind::parse_str(&args.agent_name) {
         (kind, None)
     } else if agent::registry::custom_agent_exists(&args.agent_name) {
@@ -166,7 +170,7 @@ pub(super) fn resolve_agent_setup(store: &Arc<Store>, args: &mut RunArgs) -> Res
     held::warn_if_degraded(agent_kind, custom_agent_name.as_deref());
     let custom_name = custom_agent_name.as_deref();
     let cfg = config::load_config()?;
-    let budget_status = usage::check_budget_status(store, &cfg)?;
+    let budget_status = usage::check_budget_status_for_project(store, &cfg, project_id)?;
     if budget_status.over_limit {
         if let Some(msg) = budget_status.message {
             anyhow::bail!("Budget limit exceeded:\n{msg}");

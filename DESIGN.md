@@ -1,6 +1,11 @@
 # ai-dispatch — Multi-AI CLI Team Orchestrator
 
-## Current Status (v8.3.0)
+> Historical design and v8-era status snapshot. For the v10.47.0 implementation map,
+> see [the project inventory](docs/project-status-2026-09-22.md); for current priorities,
+> see [the maintained roadmap](docs/roadmap.md). Command details below may be historical;
+> use [the AID guide](default-skills/aid-guide/SKILL.md) for current operating contracts.
+
+## Historical status (v8.3.0)
 
 **Foundation (v1.x–v3.x):** Task dispatch, batch parallel, worktree isolation, retry chains, webhook notifications, prompt templates, TUI multipane with charts, modular architecture, agent benchmark, zombie cleanup, UTF-8 safety, task classifier with capability matrix.
 
@@ -42,7 +47,7 @@
 
 State is stored under `~/.aid` by default, or `AID_HOME` when overridden.
 
-## Roadmap
+## Historical delivery milestones
 
 ### v0.8 delivered
 

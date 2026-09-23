@@ -295,3 +295,6 @@ async fn background_lifecycle_runs_on_fail_hook() {
 
     assert_eq!(std::fs::read_to_string(hook_path).unwrap(), "failed");
 }
+
+#[path = "shared_checkout_tests.rs"]
+mod shared_checkout_tests;

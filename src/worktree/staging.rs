@@ -29,6 +29,17 @@ pub(crate) fn stage_aid_files(
     mode: AidStageMode,
     additional_candidates: &[&str],
 ) -> Result<()> {
+    stage_aid_files_with_index(dir, mode, additional_candidates, None)
+}
+
+/// A private index lets recovery checkpoints preserve files without staging the
+/// operator's checkout. The ordinary staging path continues to use Git's index.
+pub(crate) fn stage_aid_files_with_index(
+    dir: &Path,
+    mode: AidStageMode,
+    additional_candidates: &[&str],
+    index: Option<&Path>,
+) -> Result<()> {
     let add_mode = match mode {
         AidStageMode::All => "-A",
         AidStageMode::Tracked => "-u",
@@ -48,6 +59,9 @@ pub(crate) fn stage_aid_files(
         .arg(dir)
         .args(["add", add_mode, "--", "."])
         .args(&excludes);
+    if let Some(index) = index {
+        add.env("GIT_INDEX_FILE", index);
+    }
     let output = add.output().context("Failed to run git add")?;
     anyhow::ensure!(output.status.success(), "git add failed: {}", String::from_utf8_lossy(&output.stderr));
 

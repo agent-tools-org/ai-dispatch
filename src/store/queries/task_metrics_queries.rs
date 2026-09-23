@@ -60,8 +60,8 @@ impl Store {
         self.budget_usage_summary_for_agent(None, since)
     }
 
-    /// Summarize usage for a project budget by matching the persisted repo_path basename.
-    /// Tasks do not store project ids, so this mirrors project display fallback identity.
+    /// Attribute usage by the persisted project identity, not a checkout name.
+    /// Legacy rows without an identity remain unattributed, as in project views.
     pub fn budget_usage_summary_for_project(
         &self,
         project_name: &str,
@@ -73,15 +73,7 @@ impl Store {
                     COALESCE(SUM(tokens), 0) as total_tokens,
                     COALESCE(SUM(cost_usd), 0.0) as total_cost
              FROM tasks
-             WHERE (
-                repo_path = ?1
-                OR (
-                    repo_path IS NOT NULL
-                    AND length(repo_path) > length(?1)
-                    AND substr(repo_path, length(repo_path) - length(?1) + 1) = ?1
-                    AND substr(repo_path, length(repo_path) - length(?1), 1) = '/'
-                )
-             ) AND (?2 IS NULL OR created_at >= ?2)",
+             WHERE project_id = ?1 AND (?2 IS NULL OR created_at >= ?2)",
             params![project_name, since.map(|value| value.to_rfc3339())],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )?;

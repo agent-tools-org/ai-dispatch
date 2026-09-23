@@ -161,3 +161,31 @@ If GC refuses:
 - missing task ownership: stop and investigate rather than pruning metadata.
 
 The correct outcome of an inconclusive proof is preservation.
+
+
+## Tasks in a shared checkout
+
+For a task without a recorded task worktree, post-run settlement does not stage,
+commit, amend, or clean the principal's checkout. If there are changes eligible
+for preservation, aid writes a recovery commit using a private index and retains
+it at a unique `refs/aid/recovery/<task-id>/<attempt>` ref. The task's milestone
+records `recovery_ref` and `recovery_commit` metadata and prints an inspection hint.
+
+This is a snapshot of the shared checkout, including pre-existing or concurrent
+user edits, not proof of task ownership. The live index and files remain unchanged;
+uncommitted work alone does not trigger a commit-only retry or skip configured
+verification. A failed task remains failed after preservation. If checkpoint
+publication fails, settlement fails visibly and leaves the original work intact.
+
+Inspect the reported ref with `git show <recovery-ref>` and recover individual
+reviewed files with `git show <recovery-ref>:<path>`. Do not blindly cherry-pick it
+as the task's work. Recovery refs are retained; they are not task acceptance and
+are not automatically removed by worktree GC. Git-ignored files, excluded build
+output, and aid bookkeeping are not added to the checkpoint; task reports continue
+through the existing result-file persistence path. Submodule gitlinks do not back
+up dirty files inside submodules. Non-Git directories remain untouched by Git
+settlement. Read-only and audit-report tasks skip this settlement path.
+
+Tasks with a recorded worktree retain the existing worktree rescue/commit and
+explicit acceptance/GC workflow. A mismatch between that path and the settlement
+directory is rejected before rescue.

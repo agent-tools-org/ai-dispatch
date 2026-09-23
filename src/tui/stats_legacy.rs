@@ -4,8 +4,8 @@
 
 use super::app::App;
 use crate::cost;
-use crate::types::{AgentKind, Task, TaskOutcome};
-use chrono::{Duration, Local};
+use crate::types::{AgentKind, TaskOutcome};
+use chrono::Local;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Color, Modifier, Style};
 use ratatui::text::Line;
@@ -133,21 +133,9 @@ fn render_legacy_summary(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) 
 fn budget_usage(app: &App) -> Vec<BudgetUsage> {
     app.config().usage.budgets.iter().filter_map(|budget| {
         let limit = budget.cost_limit_usd?;
-        let used = filter_budget_tasks(&app.tasks, budget.agent.as_deref(), budget.window.as_deref()).into_iter().filter_map(|task| task.cost_usd).sum::<f64>() + budget.external_cost_usd;
+        let used = crate::usage::filter_budget_tasks(&app.tasks, budget).into_iter().filter_map(|task| task.cost_usd).sum::<f64>() + budget.external_cost_usd;
         Some(BudgetUsage { name: budget.name.clone(), used, limit })
     }).collect()
-}
-
-fn filter_budget_tasks<'a>(tasks: &'a [Task], agent: Option<&str>, window: Option<&str>) -> Vec<&'a Task> {
-    let window_start = window.and_then(parse_window).map(|value| Local::now() - value);
-    tasks.iter().filter(|task| agent.map(|name| task.agent_display_name() == name).unwrap_or(false)).filter(|task| window_start.map(|start| task.created_at >= start).unwrap_or(true)).collect()
-}
-
-fn parse_window(value: &str) -> Option<Duration> {
-    let trimmed = value.trim();
-    if let Some(hours) = trimmed.strip_suffix('h') { return hours.parse::<i64>().ok().map(Duration::hours); }
-    if let Some(days) = trimmed.strip_suffix('d') { return days.parse::<i64>().ok().map(Duration::days); }
-    trimmed.strip_suffix('m').and_then(|minutes| minutes.parse::<i64>().ok().map(Duration::minutes))
 }
 
 fn recent_costs(app: &App) -> Vec<u64> {

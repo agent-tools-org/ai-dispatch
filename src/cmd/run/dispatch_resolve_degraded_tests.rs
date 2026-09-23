@@ -42,7 +42,7 @@ fn degraded_route_warns_and_does_not_divert() {
         cascade: vec!["oz".to_string()],
         ..Default::default()
     };
-    let setup = resolve_agent_setup(&store, &mut args).expect("dispatch degraded route");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("dispatch degraded route");
     assert_eq!(setup.agent_kind, AgentKind::Codex);
     assert!(setup.substituted_from.is_none());
     assert_eq!(args.cascade, vec!["oz".to_string()]);
@@ -59,7 +59,7 @@ fn ok_route_at_20_percent_does_not_warn_or_divert() {
         cascade: vec!["oz".to_string()],
         ..Default::default()
     };
-    let setup = resolve_agent_setup(&store, &mut args).expect("dispatch ok route");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("dispatch ok route");
     assert_eq!(setup.agent_kind, AgentKind::Codex);
     assert!(setup.substituted_from.is_none());
 }

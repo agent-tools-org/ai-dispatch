@@ -31,7 +31,7 @@ fn resolve_agent_setup_rejects_disabled_agent() {
         ..Default::default()
     };
 
-    let err = match resolve_agent_setup(&store, &mut args) {
+    let err = match resolve_agent_setup(&store, &mut args, None) {
         Ok(_) => panic!("disabled agent should fail"),
         Err(err) => err.to_string(),
     };
@@ -55,7 +55,7 @@ fn resolve_agent_setup_rejects_unserved_model_for_codex() {
         ..Default::default()
     };
 
-    let result = resolve_agent_setup(&store, &mut args);
+    let result = resolve_agent_setup(&store, &mut args, None);
     // If codex models cache is present on the system, it positively rejects 'auto'.
     // If codex models cache is missing, it falls back to unqueryable -> allow.
     if let Err(err) = result {
@@ -80,7 +80,7 @@ fn held_agent_switches_to_explicit_cascade_before_dispatch() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args).expect("should switch to fallback");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("should switch to fallback");
 
     assert_eq!(setup.agent_kind, AgentKind::Oz, "should have switched to oz");
     assert_eq!(args.agent_name, "oz");
@@ -106,7 +106,7 @@ fn held_agent_walks_cascade_past_also_held_agent() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args).expect("should walk to cursor");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("should walk to cursor");
 
     assert_eq!(setup.agent_kind, AgentKind::Cursor);
     assert_eq!(args.agent_name, "cursor");
@@ -131,7 +131,7 @@ fn held_agent_drops_model_when_switching_to_cascade() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args).expect("should switch to oz");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("should switch to oz");
 
     assert_eq!(setup.agent_kind, AgentKind::Oz);
     assert_eq!(args.model, None, "codex model must not carry over to oz");
@@ -154,7 +154,7 @@ fn held_agent_drops_session_when_switching_to_cascade() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args).expect("should switch to oz");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("should switch to oz");
 
     assert_eq!(setup.agent_kind, AgentKind::Oz);
     assert_eq!(args.session_id, None, "codex session must not carry over to oz");
@@ -182,7 +182,7 @@ fn held_agent_bails_when_cascade_exhausted() {
         ..Default::default()
     };
 
-    match resolve_agent_setup(&store, &mut args) {
+    match resolve_agent_setup(&store, &mut args, None) {
         Err(err) => assert!(err.to_string().contains("held"), "error should mention 'held': {err}"),
         Ok(_) => panic!("all options held must produce an error"),
     }
@@ -201,7 +201,7 @@ fn resolve_agent_setup_allows_auto_model_for_cursor() {
         ..Default::default()
     };
 
-    let res = resolve_agent_setup(&store, &mut args);
+    let res = resolve_agent_setup(&store, &mut args, None);
     assert!(res.is_ok(), "cursor with model 'auto' must be allowed");
 }
 
@@ -222,7 +222,7 @@ fn resolve_agent_setup_drops_unserved_aid_selected_model() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args).expect("stale catalog model is recoverable");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("stale catalog model is recoverable");
 
     assert_eq!(setup.effective_model, None);
 }
@@ -257,7 +257,7 @@ fn custom_agent_in_cascade_is_used_when_primary_held() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args).expect("should switch to custom glm5");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("should switch to custom glm5");
 
     assert_eq!(setup.agent_kind, AgentKind::Custom, "glm5 is a custom agent");
     assert_eq!(args.agent_name, "glm5", "routing name must be glm5, not 'custom'");
@@ -282,7 +282,7 @@ fn unknown_cascade_entry_is_an_error() {
         ..Default::default()
     };
 
-    match resolve_agent_setup(&store, &mut args) {
+    match resolve_agent_setup(&store, &mut args, None) {
         Err(err) => {
             let msg = err.to_string();
             assert!(

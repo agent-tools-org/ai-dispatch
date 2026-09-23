@@ -28,7 +28,17 @@ pub(crate) async fn post_agent_dirty_worktree_cleanup(
         return Ok(DirtyWorktreeAction::Continue);
     }
 
-    let start_sha = store.get_task(task_id.as_str())?.and_then(|t| t.start_sha);
+    let task = store.get_task(task_id.as_str())?
+        .ok_or_else(|| anyhow::anyhow!("Task {task_id} disappeared before settlement"))?;
+    let Some(worktree) = task.worktree_path.as_deref() else {
+        return preserve_shared_checkout(store, task_id, dir);
+    };
+    // Never commit into a different checkout because a stale path reached settlement.
+    anyhow::ensure!(
+        Path::new(worktree).canonicalize()? == Path::new(dir).canonicalize()?,
+        "Task worktree does not match settlement directory: {worktree} vs {dir}"
+    );
+    let start_sha = task.start_sha;
 
     match crate::commit::rescue_dirty_worktree_with_baseline(
         dir,
@@ -215,4 +225,49 @@ fn rescue_files_summary(outcome: &crate::commit::RescueOutcome) -> String {
 /// `.aid-lock` on the way out is not the agent leaving work behind.
 fn worktree_status_lines(dir: &str) -> Result<Vec<String>> {
     Ok(crate::worktree::capture_worktree_snapshot(Path::new(dir))?.agent_status_lines())
+}
+
+/// Shared checkouts remain dirty for the principal to review and commit. A
+/// checkpoint is recovery evidence, not acceptance or an automatic retry request.
+fn preserve_shared_checkout(
+    store: &Store,
+    task_id: &TaskId,
+    dir: &str,
+) -> Result<DirtyWorktreeAction> {
+    match crate::commit::preserve_shared_checkout(Path::new(dir), task_id.as_str()) {
+        Ok(Some(checkpoint)) => {
+            let detail = format!(
+                "Shared checkout preserved at {} ({}). HEAD, index and files were left unchanged; \
+                 this recovery snapshot can include pre-existing user edits. Inspect with git show {}.",
+                checkpoint.reference, checkpoint.commit, checkpoint.reference,
+            );
+            aid_info!("[aid] {detail}");
+            store.insert_event(&TaskEvent {
+                task_id: task_id.clone(),
+                timestamp: chrono::Local::now(),
+                event_kind: EventKind::Milestone,
+                detail,
+                metadata: Some(serde_json::json!({
+                    "recovery_ref": checkpoint.reference,
+                    "recovery_commit": checkpoint.commit,
+                    "shared_checkout": true,
+                })),
+            })?;
+        }
+        Ok(None) => {}
+        Err(error) => {
+            let detail = format!("Shared checkout preservation failed; original files retained: {error:#}");
+            aid_warn!("[aid] {detail}");
+            store.insert_event(&TaskEvent {
+                task_id: task_id.clone(),
+                timestamp: chrono::Local::now(),
+                event_kind: EventKind::Error,
+                detail,
+                metadata: None,
+            })?;
+            crate::task_lifecycle::mark_failed(store, task_id)?;
+            return Ok(DirtyWorktreeAction::Failed);
+        }
+    }
+    Ok(DirtyWorktreeAction::Continue)
 }

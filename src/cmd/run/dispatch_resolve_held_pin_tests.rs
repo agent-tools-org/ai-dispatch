@@ -36,7 +36,7 @@ fn substituted_fallback_is_pinned_to_a_group_that_can_serve() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args).expect("should substitute opencode to agy");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("should substitute opencode to agy");
 
     assert_eq!(setup.agent_kind, AgentKind::Antigravity);
     let model = setup.effective_model.expect("substitution must pin a healthy model");
@@ -91,7 +91,7 @@ fn substituted_aid_resolved_pin_survives_served_list_miss() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args).expect("should substitute opencode to agy");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("should substitute opencode to agy");
 
     assert_eq!(setup.agent_kind, AgentKind::Antigravity);
     let model = setup
@@ -147,7 +147,7 @@ fn substituted_route_keeps_agent_config_model_despite_served_list_miss() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args).expect("should substitute grok to codex");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("should substitute grok to codex");
 
     assert_eq!(setup.agent_kind, AgentKind::Codex);
     assert_eq!(

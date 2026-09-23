@@ -1,10 +1,10 @@
 # aid UX Debt
 
-Systemic UX issues observed via dogfooding. Sorted by severity within category. Fixed items link to the commit that shipped them. Open items belong to the **v9.0 UX overhaul** milestone.
+Historical UX issues observed via dogfooding. The **v9.0 UX overhaul** label is an old planning name, not a future release target. Use the [current roadmap](roadmap.md) for execution order and the [takeover inventory](project-status-2026-09-22.md) for source checks. Items below require re-triage against v10.47.0; in particular, merge/stash conflict attribution already has implementation and regression tests.
 
 ---
 
-## Fixed in v8.94.0 (latest)
+## Fixed in v8.94.0 (historical)
 
 ### GitButler batch merge-back (issue #105)
 
@@ -26,7 +26,7 @@ Systemic UX issues observed via dogfooding. Sorted by severity within category. 
 
 ---
 
-## Fixed in v8.85 (this release cycle)
+## Fixed in v8.85 (historical)
 
 ### Batch / dispatch
 
@@ -48,7 +48,7 @@ Systemic UX issues observed via dogfooding. Sorted by severity within category. 
 
 ---
 
-## Open — v9.0 UX overhaul
+## Previously open — pending current re-triage
 
 ### High severity — state recovery / safety
 

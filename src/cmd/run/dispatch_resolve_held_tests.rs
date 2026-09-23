@@ -25,7 +25,7 @@ fn held_opencode_provider_switches_before_dispatch() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args).expect("should switch to fallback");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("should switch to fallback");
 
     assert_eq!(setup.agent_kind, AgentKind::Codex);
     assert_eq!(args.agent_name, "codex");
@@ -51,7 +51,7 @@ fn held_cursor_premium_switches_to_auto_without_changing_agent() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args).expect("should switch model in cursor");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("should switch model in cursor");
 
     assert_eq!(setup.agent_kind, AgentKind::Cursor);
     assert_eq!(setup.effective_model.as_deref(), Some("auto"));
@@ -87,7 +87,7 @@ fn background_urgency_keeps_held_ungrouped_agent() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args)
+    let setup = resolve_agent_setup(&store, &mut args, None)
         .expect("background must keep the held grok agent");
     assert_eq!(setup.agent_kind, AgentKind::Grok);
     assert_eq!(args.agent_name, "grok");
@@ -118,7 +118,7 @@ fn background_urgency_keeps_held_droid_agent() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args)
+    let setup = resolve_agent_setup(&store, &mut args, None)
         .expect("background must keep the held droid agent");
     assert_eq!(setup.agent_kind, AgentKind::Droid);
     assert_eq!(args.agent_name, "droid");
@@ -145,7 +145,7 @@ fn agent_wide_droid_hold_cascades_away_even_with_a_core_model() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args).expect("should leave held droid");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("should leave held droid");
     assert_eq!(setup.agent_kind, AgentKind::Gemini);
     assert_eq!(args.agent_name, "gemini");
     assert!(setup.substituted_from.is_some());
@@ -195,7 +195,7 @@ fn group_held_fallback_is_skipped_when_cascade_steps_over_held_route() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args).expect("should skip held agy and reach codex");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("should skip held agy and reach codex");
 
     assert_eq!(
         setup.agent_kind,
@@ -237,7 +237,7 @@ fn agent_level_held_fallback_is_skipped_when_cascade_steps_over_held_route() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args).expect("should skip held agy and reach codex");
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("should skip held agy and reach codex");
 
     assert_eq!(
         setup.agent_kind,

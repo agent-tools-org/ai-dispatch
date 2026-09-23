@@ -1,59 +1,140 @@
 # aid Roadmap
 
-This is the maintained execution order for the project. The authoritative item state lives in
-`ai-board` (`ai-board item list --project ai-dispatch`); this document explains sequencing and
-release boundaries.
+Updated 2026-09-23 against local `main` at `ffd07e8e` (tag `v10.47.0`).
+This document owns execution order and acceptance gates; [CHANGELOG](../CHANGELOG.md)
+owns release history. The [takeover inventory](project-status-2026-09-22.md) records
+source evidence and verification limits. Remote release state was not checked.
 
-## Current state
+`ai-board` remains the work-item tracker (`ai-board item list --project ai-dispatch`).
+It was unavailable during this inventory: existing `wi-*` IDs are retained for
+reconciliation, and source implementation status below does not assert board closure.
+New slices need board IDs before implementation; priorities here are proposed execution order.
 
-- Released on origin: **v10.37.0** (2026-08-19).
-- Local `main` contains an unreleased 24-commit integration train for the authenticated fleet API
-  and the macOS/iPadOS AID Command client, including live SSE data and latency acceptance probes.
-- The current working tree completes `wi-4c47`: an agy process that reports a terminal executor
-  error in its private diagnostic log fails even when the CLI exits 0 with partial stdout. Captured
-  quota and network failures are the acceptance fixtures; a recovered tool error remains successful.
-- The Rust web suite, 14-check live API probe, macOS build, iPadOS Simulator build, and macOS Swift
-  test target pass locally. The probe lifecycle correction is tracked and closed as `wi-7b8e`.
-- Cross-repository dispatch routing is completed as `wi-8ffc`: an explicit `--dir` now selects the
-  target project's defaults, identity, agent Cargo cache, worktree seed, and verification cache.
-- Older version labels such as the `v9.0 UX overhaul` epic are historical planning names, not future
-  release numbers. They must be re-triaged before being scheduled.
+## Current baseline
 
-## Next release gate
+- Cargo, the local HEAD tag, and the latest changelog entry agree on **v10.47.0**
+  (changelog date 2026-09-15).
+- The authenticated Web API, SSE, and macOS/iPadOS client are implemented; the
+  v10.38.0 changelog includes the former August integration train.
+- Detached foreground execution, isolated-HOME repair, remote builds, backup,
+  status guards, quota visibility, and custody GC have continued evolving through v10.47.0.
+- Default CI covers Rust build/test/clippy only. It does not enable `web` or validate Swift.
+- The 2026-09-23 custody + budget working-tree candidate has passing default and Web
+  Rust runs remotely. Web required an unchanged rerun after an intermittent background
+  delivery failure. Strict clippy still fails on 15 pre-existing diagnostics; live
+  API/Swift gates remain unverified. See [budget evidence](validation-budget-2026-09-23.md).
 
-The independent review scope, evidence, and reproduction commands are frozen in
-[the 2026-08-23 audit handoff](./audit-handoff-2026-08-23.md).
+## Reconcile the previous queue
 
-1. Review and commit the completed `wi-4c47`, `wi-7b8e`, and `wi-8ffc` working-tree changes.
-2. Re-run the server gates on that exact release-candidate commit:
-   `cargo test --features web --bin aid web::` and `scripts/probe-client-api.sh`.
-3. Re-run both generated client schemes and the Swift test target on the same commit.
-4. Cut the next release only after the Rust API and both client schemes pass from the same commit.
+| Previous item | Source status at this baseline | Disposition |
+| --- | --- | --- |
+| `wi-4c47`: agy terminal errors | Implemented; v10.38.0 changelog and buffered watcher fixtures | Retain regression coverage; reconcile board |
+| `wi-7b8e`: live probe process ownership | Implemented in `scripts/probe-client-api.sh`; v10.38.0 notes | Re-run with current API baseline |
+| `wi-8ffc`: target-project dispatch | Implemented; v10.38.0 notes, further prompt-context fix in v10.47.0 | Protect existing coverage; audit budget path separately |
+| `wi-dc6a`: custody without worktrees | Shared-checkout recovery implemented and remotely tested in working tree | Review and reconcile board; see evidence below |
+| `wi-29bd`: project budget | Target identity enforcement/reporting implemented and remotely tested in working tree; init/sync contract remains | Next budget work is slice 3 below |
+| `wi-e1a0`: merge conflict attribution | Distinct stash-restore result, durable stash identity, regression tests exist | Acceptance recheck; not an unimplemented feature |
+| `wi-5eef`: truthful release dry-run | Recorded in v10.47.0 and covered by release hygiene tests | Remove from implementation queue; keep release gate |
+| #152: module-tree migration | run/show/batch subdirectories landed (v10.46.0) | Continue only remaining clusters |
 
-## Priority queue after the release
+## M0 — Restore a reproducible baseline (P0, next)
 
-1. **Artifact custody without worktrees (`wi-dc6a`, high).** Rescue must never commit task result
-   artifacts onto the principal's active integration branch.
-2. **Project budget enforcement (`wi-29bd`, high).** Decide and document whether the configured cap
-   refuses, warns, or downgrades a dispatch, then make the declared number enforce that contract.
-3. **Merge conflict attribution (`wi-e1a0`, high).** Distinguish merge-level conflicts from stash
-   restoration conflicts and report the recovery action for the actual failing layer.
-4. **Truthful release dry-runs (`wi-5eef`, high).** `release.sh --dry-run` must fail on every
-   inspectable condition that would fail the real release, including orphan hygiene.
+1. Reconcile retained IDs and stale active initiatives in ai-board. Do not carry forward
+   an active status solely because the August roadmap called it active.
+2. Restore the approved rbox test environment and a Python 3.10+ tooling environment.
+   Re-run default and Web-enabled Rust suites on the same candidate SHA.
+3. Add default/Web coverage to CI, with explicit lint policy; make the client API probe
+   use a controlled fixture rather than relying on an operator's task history.
+   Reproduce the intermittent background required-result failure recorded in the budget
+   validation: investigate Done publication before result-file settlement and early wait success.
+4. Establish an approved macOS build runner for XcodeGen, both client schemes, and Swift tests.
+   Record source SHA, toolchain, commands, exit codes, and log locations.
 
-## Longer-horizon programs
+**Exit:** a reproducible result for every required surface, with failures assigned to
+bounded work items. A historical audit or a skipped probe is not a pass.
+Baseline-environment work can proceed alongside the two correctness slices in M1.
 
-- Re-triage the remaining UX-debt epic `wi-5b7e` against current v10 behavior before implementing
-  its old assumptions.
-- Keep the batch lineage work (`wi-f4bf`), content-hash resume (`wi-1479`), and unified resource
-  lifecycle (`wi-7804`) as separate slices with scenario-driven tests.
-- Audit the five long-running H-series initiatives in `active` state. They have not been updated in
-  more than four months and should not be treated as active delivery work until reconfirmed.
+## M1 — Close dispatch and artifact boundaries (P0/P1)
 
-## Process
+| Order | Slice | Acceptance contract |
+| --- | --- | --- |
+| 1 / P0 | Non-worktree artifact custody (`wi-dc6a`) | Rescue preserves recoverable results without committing/amending the principal's active branch or absorbing unrelated staged work. Cover no-HEAD, tagged HEAD, pre-existing dirty files, failure, retry and normal worktree cases. |
+| 2 / P0 | Target-project budget identity (`wi-29bd`) | Dispatch A → B uses B's resolved identity for budget checks; A's cap cannot block B and B's cap cannot be bypassed by cwd. Cover no-config targets, linked worktrees, batch and retry. |
+| 3 / P1 | Project budget source contract (`wi-29bd`) | Specify precedence and whether edits require sync; test cost/token/window limits and cap removal. Keep declared model-budget preference distinct from enforced spend limits. |
+| 4 / P1 | Merge recovery acceptance (`wi-e1a0`) | Branch conflict and stash-restore failure remain distinguishable; recovery identifies the exact retained stash and does not discard local files, including a competing stash. |
 
-- Open every implementation task in `ai-board` and link its commits with the `wi-<id>` identifier.
-- Keep one correctness claim per slice and capture the incident that motivated its regression test.
-- Do not release a commit without creating and pushing its version tag immediately after the branch
-  push.
-- Generate release notes through `scripts/release.sh`; do not use this roadmap as a changelog.
+**Exit:** each slice has a reproducer, regression coverage, guide updates for any public
+contract change, and tests on the reviewed candidate. Infrastructure refusal must remain
+separate from agent failure; terminal task status must not imply permission to GC.
+
+### Working-tree implementation; remote tests passed — 2026-09-23
+
+The non-worktree settlement slice of `wi-dc6a` is implemented: shared-checkout settlement uses a private-index
+recovery ref rather than committing/amending the principal branch. Regression cases
+cover real-index preservation, unborn/tagged HEAD, repeated snapshots, renames,
+publication failure, and task status. All 12 new regressions and both default/Web
+Rust suites pass on the remote builder. [Validation evidence](validation-custody-2026-09-23.md)
+records counts, job IDs, and limitations. Strict clippy has 15 diagnostics in unchanged
+files; clean those up as a separate M0 slice. Live API/Swift gates and board closure
+remain outstanding. The local rbox fleet is configured outside the repository.
+
+The target-project identity slice of `wi-29bd` is also implemented. Budget checks,
+stored usage aggregation and reporting use the target's persisted project identity.
+All 10 new CLI regressions pass; default tests pass and Web tests pass on an unchanged
+rerun. The first Web attempt exposed an intermittent background delivery failure,
+retained as unresolved M0 work. [Budget validation](validation-budget-2026-09-23.md)
+records both attempts. Next budget work is slice 3: project configuration/sync precedence
+and cap removal. Concurrent spend reservation is outside the completed slice.
+
+## M2 — Make client/server delivery routine (P1)
+
+- Decide and document whether release binaries include `web` or ship a separate variant;
+  current release builds use default features. Document the matching client setup path.
+- Preserve authentication, action-conflict responses, SSE reconnect/restart behavior,
+  state/outcome consistency, and latency acceptance across server and Swift client.
+- Require the default suite, Web suite, live API probe, both client builds and Swift tests
+  on one candidate when the release includes client/API changes.
+- Keep dry-run hygiene and exact stash/worktree recovery diagnostics under regression checks.
+
+**Exit:** a clean checkout can build and validate the intended distribution without
+personal task history or undocumented local tooling. No release number is promised here.
+
+## M3 — Reduce remaining maintenance cost (P2)
+
+- Continue #152 with rate-limit, worker/PTY, Store mutation, and lifecycle boundaries.
+  Keep behavior-preserving extraction separate from semantic fixes.
+- Reassess #160 adapter consolidation against real captured protocol fixtures before
+  sharing more parsing or completion logic.
+- Re-triage [historical UX debt](ux-debt.md): batch dependency lineage (`wi-f4bf`),
+  content-hash resume (`wi-1479`), and resource lifecycle (`wi-7804`) remain separate programs.
+  Start each with a current reproduction and a narrow acceptance contract.
+- Audit remaining blanket lint exceptions, stale knowledge references and tracked
+  generated reports; archive useful evidence before deleting artifacts.
+
+**Exit per slice:** fewer duplicated owners/parsers, preserved external behavior, and
+scenario coverage. File movement or a lower line count alone is not completion.
+
+## Verification and release process
+
+Rust compilation/tests run through the configured build box, per [CLAUDE.md](../CLAUDE.md).
+Do not fall back to local compilation on the operator's Mac.
+
+```bash
+# Requires an operator-configured AID_BUILD_BOX and rbox on PATH.
+scripts/remote-test.sh --dry-run -- --locked
+scripts/remote-test.sh -- --locked
+scripts/remote-test.sh -- --locked --features web
+# With Python 3.10+, no remote contact or Cargo compilation:
+python3 scripts/remote-test-test.py
+bash .github/scripts/check-changelog.sh
+```
+
+The live probe requires `AID_BIN` pointing to the reviewed Web-enabled binary and
+`AID_SRC_DB` pointing to a suitable controlled database. Swift schemes are declared in
+[`client/project.yml`](../client/project.yml). These gates require their respective runners;
+the custody slice did not run the live probe or Swift targets.
+
+Use `scripts/release.sh` for version/changelog/release commit/tag/push; run its dry-run
+first and set `AID_RELEASE_TEST_CMD='scripts/remote-test.sh'`. Do not manually bump or
+publish as part of roadmap maintenance. The [August handoff](audit-handoff-2026-08-23.md)
+is historical evidence, not the next release candidate definition.

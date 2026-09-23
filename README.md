@@ -1,6 +1,6 @@
 # ai-dispatch (aid)
 
-![Version](https://img.shields.io/badge/version-8.47.0-blue)
+![Version](https://img.shields.io/badge/version-10.47.0-blue)
 ![Rust](https://img.shields.io/badge/rust-2024-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -8,13 +8,16 @@
 
 Licensed under the [MIT License](LICENSE).
 
-## v8.47.0
+## Project status
 
-- Codex CLI v0.116+ compatibility: auto-detect version and use native `-m` model flag, with fallback to `-c model="..."` for older versions.
-- Parse `file_change` events so streamed file edits are captured correctly.
-- Track `thread.started` events for more reliable Codex session detection.
-- Handle inline error items without dropping surrounding streamed output.
-- TUI: dim completed tasks in board tree view for better visual hierarchy.
+The current source version is **10.47.0**. See the [CHANGELOG](CHANGELOG.md) for
+release details, the [roadmap](docs/roadmap.md) for upcoming work, and the
+[project inventory](docs/project-status-2026-09-22.md) for architecture and verification
+status. The [documentation map](docs/README.md) separates current guidance from historical audits.
+
+The repository also includes an optional authenticated HTTP API/SSE server (`web`
+Cargo feature) and the macOS/iPadOS AID Command client in `client/`. Default builds do
+not enable the Web server; client build targets are defined in `client/project.yml`.
 
 ## Why aid?
 
@@ -30,7 +33,7 @@ Without an orchestrator, a multi-agent CLI workflow breaks down fast:
 
 ### Prerequisites
 
-Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `codex`, `copilot`, `opencode`, `cursor`, `kilo`, `mimocode`, `droid`, `oz`, and `claude`.
+Install Rust (1.85 or later, required for edition 2024) and whichever AI CLIs you want `aid` to orchestrate. `aid` auto-detects supported agents on your `PATH`: `gemini`, `agy`, `qwen`, `codex`, `copilot`, `opencode`, `commandcode`, `cursor`, `kilo`, `mimocode`, `droid`, `oz`, `claude`, and `grok`.
 
 ### Install
 
@@ -56,19 +59,11 @@ This detects installed agents, configures your OpenRouter API key (for `aid quer
 cargo install --path .
 ```
 
-### Setup for Claude Code
+### Agent operating guide
 
-`aid` ships with a recommended Claude Code prompt that enables orchestrator-first workflows. Copy it into your project or global CLAUDE.md:
-
-```bash
-# Project-level (recommended)
-cat claude-prompt.md >> CLAUDE.md
-
-# Or global (applies to all projects)
-cat claude-prompt.md >> ~/.claude/CLAUDE.md
-```
-
-See [claude-prompt.md](claude-prompt.md) for the full recommended prompt with agent selection guide, batch file format, and completion notification pattern.
+The release-managed [AID guide](default-skills/aid-guide/SKILL.md) documents dispatch,
+task operations, collaboration, and configuration. Repository contributors should
+also read [CLAUDE.md](CLAUDE.md) for build and release rules.
 
 If you want an isolated state directory while testing:
 
@@ -1018,7 +1013,7 @@ How the pieces fit together:
 
 - The CLI entrypoint parses commands and routes them to task-oriented handlers such as `run`, `watch`, `show`, `usage`, and `mcp`.
 - The task classifier categorizes prompts into eight task types and estimates complexity, then the capability matrix scores each agent to pick the best fit.
-- The agent registry selects and instantiates adapters for `gemini`, `codex`, `copilot`, `opencode`, `cursor`, `kilo`, `mimocode`, `droid`, `oz`, and `claude`.
+- The agent registry selects and instantiates adapters for `gemini`, `agy`, `qwen`, `codex`, `copilot`, `opencode`, `commandcode`, `cursor`, `kilo`, `mimocode`, `droid`, `oz`, `claude`, and `grok`.
 - The watcher parses streamed or buffered output into milestones, tool activity, usage totals, and completion events.
 - SQLite keeps task history, workgroups, and events queryable for `board`, `show`, `watch`, `usage`, and MCP clients.
 - Artifact files under `~/.aid/` preserve the raw execution trail so the dispatcher can review what actually happened.

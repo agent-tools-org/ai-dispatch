@@ -4,7 +4,6 @@
 use anyhow::Result;
 use chrono::{DateTime, Duration, Local, LocalResult, TimeZone};
 use serde::Serialize;
-use std::path::Path;
 
 use crate::config::{AidConfig, UsageBudget};
 use crate::store::Store;
@@ -190,12 +189,8 @@ pub fn collect_usage_snapshot(
     })
 }
 
-pub fn check_budget_status(store: &Store, config: &AidConfig) -> Result<BudgetStatus> {
-    let project_name = current_budget_project_name();
-    check_budget_status_for_project(store, config, project_name.as_deref())
-}
-
-fn check_budget_status_for_project(
+/// Check the dispatch target identity supplied by the caller; None has no project cap.
+pub(crate) fn check_budget_status_for_project(
     store: &Store,
     config: &AidConfig,
     project_name: Option<&str>,
@@ -294,18 +289,6 @@ fn check_budget_status_for_project(
             Some(messages.join("\n"))
         },
     })
-}
-
-fn current_budget_project_name() -> Option<String> {
-    crate::project::detect_project()
-        .map(|project| project.id)
-        .or_else(|| {
-            crate::repo_root::resolve_git_root_string(".").ok().and_then(|root| {
-                Path::new(&root)
-                    .file_name()
-                    .map(|name| name.to_string_lossy().to_string())
-            })
-        })
 }
 
 fn budget_usage_summary(
@@ -433,15 +416,14 @@ pub(crate) fn filter_budget_tasks<'a>(tasks: &'a [Task], budget: &UsageBudget) -
     tasks
         .iter()
         .filter(|task| {
-            let agent_matches = budget
-                .agent
-                .as_deref()
-                .map(|name| task.agent_display_name() == name)
-                .unwrap_or(true);
+            let scope_matches = match budget.agent.as_deref() {
+                Some(name) => task.agent_display_name() == name,
+                None => task.project_id.as_deref() == Some(budget.name.as_str()),
+            };
             let window_matches = window_start
                 .map(|start| task.created_at >= start)
                 .unwrap_or(true);
-            agent_matches && window_matches
+            scope_matches && window_matches
         })
         .collect()
 }
@@ -539,6 +521,8 @@ mod tests {
     ) -> Task {
         let mut task = make_task(id, agent, tokens, cost_usd);
         task.repo_path = Some(repo_path.to_string());
+        task.project_id = std::path::Path::new(repo_path).file_name()
+            .map(|name| name.to_string_lossy().into_owned());
         task
     }
 

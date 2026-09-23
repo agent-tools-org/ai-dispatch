@@ -10,6 +10,13 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  repository-hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/check-repo-hygiene-test.py
+      - run: python3 scripts/check-repo-hygiene.py
+
   build:
     runs-on: ubuntu-latest
     strategy:

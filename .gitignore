@@ -7,6 +7,7 @@
 .env
 .env.*
 node_modules/
+__pycache__/
 
 # Batch TOML files (ephemeral dispatch files)
 .aid/batches/
@@ -16,6 +17,11 @@ node_modules/
 
 # Generated output dirs
 nanobanana-output/
+/mutants.out/
+/mutants.out.old/
+/output.txt
+/result-*.md
+/target-*/
 
 # Website (moved to separate repo)
 website/
@@ -40,6 +46,3 @@ result_*.md
 client/*.xcodeproj/
 client/DerivedData/
 client/Support/Info-*.plist
-
-# Agent task reports (aid writes these into the worktree)
-result.md

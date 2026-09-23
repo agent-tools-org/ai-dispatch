@@ -10,6 +10,7 @@ for current sequencing and acceptance gates.
 | Authoritative operating commands and contracts | [AID guide](../default-skills/aid-guide/SKILL.md) and its references |
 | Current implementation map | [Project inventory](project-status-2026-09-22.md), [internal architecture](../.aid/knowledge/architecture.md) |
 | Contributor and release rules | [CLAUDE.md](../CLAUDE.md) |
+| Repository hygiene, branch cleanup and history rehearsal | [September cleanup](repository-cleanup-2026-09-23.md), [retained branches](kept-branches.md) |
 | Latest custody test evidence | [2026-09-23 validation](validation-custody-2026-09-23.md) |
 | Latest target-budget test evidence | [2026-09-23 budget validation](validation-budget-2026-09-23.md) |
 | Shipped changes | [CHANGELOG](../CHANGELOG.md) |

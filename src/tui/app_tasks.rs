@@ -43,7 +43,7 @@ impl App {
         let tree_nodes = &self.nodes;
         self.tree_node_count = tree_nodes.len();
         self.tree_selected = App::resolve_tree_selected(
-            &tree_nodes,
+            tree_nodes,
             tree_anchor,
             self.tree_selected,
         );

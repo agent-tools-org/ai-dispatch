@@ -5,7 +5,6 @@ use anyhow::{Result, anyhow};
 use std::path::Path;
 
 use crate::store::Store;
-use crate::types::TaskOutcome;
 
 use super::merge_git::{auto_commit_uncommitted, commits_ahead, resolve_repo_dir};
 use super::{ensure_task_worktree_is_safe, is_merge_candidate, validate_merge_outcome};

@@ -79,7 +79,7 @@ pub(crate) fn has_grouped_quota(agent: AgentKind) -> bool {
 /// The quota group a model belongs to, by family prefix. Returns None when the
 /// agent meters its whole account together, so callers fall back to per-agent
 /// marking unchanged.
-pub(crate) fn model_group<'a>(agent: AgentKind, model: Option<&'a str>) -> Option<&'a str> {
+pub(crate) fn model_group(agent: AgentKind, model: Option<&str>) -> Option<&str> {
     if agent == AgentKind::OpenCode {
         return model.and_then(provider_from_model);
     }
@@ -126,7 +126,7 @@ fn is_droid_core(model: &str) -> bool {
 /// agent, which for cursor meant one premium refusal took `auto` out with it —
 /// `auto` being the one tier that keeps serving once the premium pool is spent.
 /// The refusal itself says so, so it is read here rather than guessed.
-pub(crate) fn group_from_refusal<'a>(agent: AgentKind, message: &'a str) -> Option<&'a str> {
+pub(crate) fn group_from_refusal(agent: AgentKind, message: &str) -> Option<&str> {
     if agent == AgentKind::OpenCode {
         return named_opencode_provider(message);
     }
@@ -157,10 +157,10 @@ pub(crate) fn group_from_refusal<'a>(agent: AgentKind, message: &'a str) -> Opti
 }
 
 /// Read OpenCode's provider attribution from the parsed error envelope.
-pub(crate) fn group_from_refusal_value<'a>(
+pub(crate) fn group_from_refusal_value(
     agent: AgentKind,
-    value: &'a serde_json::Value,
-) -> Option<&'a str> {
+    value: &serde_json::Value,
+) -> Option<&str> {
     if agent != AgentKind::OpenCode {
         return None;
     }

@@ -82,7 +82,7 @@ pub(crate) fn get_agents_list_with_installed(
     
     for kind in AgentKind::ALL_BUILTIN {
         let history = histories.get(kind.as_str()).cloned().flatten();
-        let agent = build_agent_json(*kind, None, &running_tasks, &installed_agents, history)?;
+        let agent = build_agent_json(*kind, None, &running_tasks, installed_agents, history)?;
         agents.push(agent);
     }
     
@@ -92,7 +92,7 @@ pub(crate) fn get_agents_list_with_installed(
             AgentKind::Custom,
             Some(config),
             &running_tasks,
-            &installed_agents,
+            installed_agents,
             history,
         )?;
         agents.push(agent);

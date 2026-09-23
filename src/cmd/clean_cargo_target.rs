@@ -30,10 +30,7 @@ fn cwd_no_longer_exists(cwd: &Path) -> bool {
     if !cwd.is_absolute() {
         return false;
     }
-    match fs::symlink_metadata(cwd) {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
-        _ => false,
-    }
+    matches!(fs::symlink_metadata(cwd), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
 }
 
 pub(crate) fn clean_orphaned_branch_targets(

@@ -78,9 +78,9 @@ pub(crate) async fn run_cargo_outcome(
     let task_id = std::env::var("AID_TASK_ID").ok();
     let start = Instant::now();
     let command = request.display_command(&target);
-    emit_event(&store, &task_id, format!("{command} started"));
+    emit_event(store, &task_id, format!("{command} started"));
     let first = run_one_attempt(
-        &store,
+        store,
         &task_id,
         &cargo_args,
         &command,
@@ -92,7 +92,7 @@ pub(crate) async fn run_cargo_outcome(
     )
     .await?;
     let (attempt, command, note) = maybe_retry_after_permission_block(
-        &store,
+        store,
         &task_id,
         &request,
         &cargo_args,

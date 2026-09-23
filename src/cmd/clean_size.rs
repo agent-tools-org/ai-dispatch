@@ -83,10 +83,11 @@ impl SizeTracker {
     }
 
     fn file_size(&mut self, path: &Path, metadata: &fs::Metadata) -> u64 {
-        self.seen
-            .insert(file_identity(path, metadata))
-            .then_some(allocated_file_size(metadata))
-            .unwrap_or(0)
+        if self.seen.insert(file_identity(path, metadata)) {
+            allocated_file_size(metadata)
+        } else {
+            0
+        }
     }
 }
 

@@ -33,9 +33,9 @@ pub(super) fn render_detail(frame: &mut ratatui::Frame<'_>, app: &App) {
                 Constraint::Min(1),
             ])
             .split(inner);
-        frame.render_widget(task_header(task, &events), detail_chunks[0]);
+        frame.render_widget(task_header(task, events), detail_chunks[0]);
         frame.render_widget(tab_bar(app.detail_tab), detail_chunks[1]);
-        render_detail_content(frame, detail_chunks[2], app, task, &events);
+        render_detail_content(frame, detail_chunks[2], app, task, events);
     } else {
         frame.render_widget(
             Paragraph::new(app.empty_message()),

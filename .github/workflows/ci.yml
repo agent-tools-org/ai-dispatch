@@ -12,11 +12,22 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        features: [default, web]
     steps:
       - uses: actions/checkout@v4
       - run: bash .github/scripts/check-changelog.sh
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release
-      - run: cargo test
-      - run: cargo clippy -- -D warnings
+      - name: Build, test and lint
+        shell: bash
+        run: |
+          args=()
+          if [[ '${{ matrix.features }}' == web ]]; then
+            args+=(--features web)
+          fi
+          cargo build --locked --release "${args[@]}"
+          cargo test --locked --workspace "${args[@]}"
+          cargo clippy --locked "${args[@]}" -- -D warnings

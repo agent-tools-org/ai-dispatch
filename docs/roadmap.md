@@ -1,9 +1,11 @@
 # aid Roadmap
 
-Updated 2026-09-23 against local `main` at `ffd07e8e` (tag `v10.47.0`).
+Updated 2026-09-23 for the v10.47.1 bugfix release candidate.
+The previous released baseline is `ffd07e8e` (v10.47.0); custody and budget
+fixes landed in `d7dc85ef`.
 This document owns execution order and acceptance gates; [CHANGELOG](../CHANGELOG.md)
 owns release history. The [takeover inventory](project-status-2026-09-22.md) records
-source evidence and verification limits. Remote release state was not checked.
+source evidence and verification limits. Release validation is recorded separately from historical audit results.
 
 `ai-board` remains the work-item tracker (`ai-board item list --project ai-dispatch`).
 It was unavailable during this inventory: existing `wi-*` IDs are retained for
@@ -12,17 +14,20 @@ New slices need board IDs before implementation; priorities here are proposed ex
 
 ## Current baseline
 
-- Cargo, the local HEAD tag, and the latest changelog entry agree on **v10.47.0**
-  (changelog date 2026-09-15).
+- The previous release is **v10.47.0** (2026-09-15). The patch candidate includes
+  shared-checkout custody, target-project budgets, and worker-settlement waiting.
 - The authenticated Web API, SSE, and macOS/iPadOS client are implemented; the
   v10.38.0 changelog includes the former August integration train.
 - Detached foreground execution, isolated-HOME repair, remote builds, backup,
   status guards, quota visibility, and custody GC have continued evolving through v10.47.0.
-- Default CI covers Rust build/test/clippy only. It does not enable `web` or validate Swift.
-- The 2026-09-23 custody + budget working-tree candidate has passing default and Web
-  Rust runs remotely. Web required an unchanged rerun after an intermittent background
-  delivery failure. Strict clippy still fails on 15 pre-existing diagnostics; live
-  API/Swift gates remain unverified. See [budget evidence](validation-budget-2026-09-23.md).
+- CI now covers Rust build/test/strict clippy for both default and `web` features.
+  Swift remains a separate validation gate.
+- The patch candidate passes default and Web suites (2,696/2,728 unit tests plus
+  121 integration tests each) and strict clippy for both configurations. The
+  background delivery/wait race has deterministic coverage. See the
+  [bugfix validation](validation-bugfix-2026-09-23.md) for the failed baseline,
+  fixture correction, final gates and remaining limits. Live API/Swift gates
+  remain unverified.
 
 ## Reconcile the previous queue
 
@@ -31,8 +36,8 @@ New slices need board IDs before implementation; priorities here are proposed ex
 | `wi-4c47`: agy terminal errors | Implemented; v10.38.0 changelog and buffered watcher fixtures | Retain regression coverage; reconcile board |
 | `wi-7b8e`: live probe process ownership | Implemented in `scripts/probe-client-api.sh`; v10.38.0 notes | Re-run with current API baseline |
 | `wi-8ffc`: target-project dispatch | Implemented; v10.38.0 notes, further prompt-context fix in v10.47.0 | Protect existing coverage; audit budget path separately |
-| `wi-dc6a`: custody without worktrees | Shared-checkout recovery implemented and remotely tested in working tree | Review and reconcile board; see evidence below |
-| `wi-29bd`: project budget | Target identity enforcement/reporting implemented and remotely tested in working tree; init/sync contract remains | Next budget work is slice 3 below |
+| `wi-dc6a`: custody without worktrees | Shared-checkout recovery committed in `d7dc85ef` and remotely tested | Review and reconcile board; see evidence below |
+| `wi-29bd`: project budget | Target identity enforcement/reporting committed in `d7dc85ef` and remotely tested; init/sync contract remains | Next budget work is slice 3 below |
 | `wi-e1a0`: merge conflict attribution | Distinct stash-restore result, durable stash identity, regression tests exist | Acceptance recheck; not an unimplemented feature |
 | `wi-5eef`: truthful release dry-run | Recorded in v10.47.0 and covered by release hygiene tests | Remove from implementation queue; keep release gate |
 | #152: module-tree migration | run/show/batch subdirectories landed (v10.46.0) | Continue only remaining clusters |
@@ -43,10 +48,9 @@ New slices need board IDs before implementation; priorities here are proposed ex
    an active status solely because the August roadmap called it active.
 2. Restore the approved rbox test environment and a Python 3.10+ tooling environment.
    Re-run default and Web-enabled Rust suites on the same candidate SHA.
-3. Add default/Web coverage to CI, with explicit lint policy; make the client API probe
-   use a controlled fixture rather than relying on an operator's task history.
-   Reproduce the intermittent background required-result failure recorded in the budget
-   validation: investigate Done publication before result-file settlement and early wait success.
+3. Default/Web CI coverage, strict production lint and the background wait race
+   are fixed in this patch. Next make the client API probe use a controlled fixture
+   rather than relying on an operator's task history.
 4. Establish an approved macOS build runner for XcodeGen, both client schemes, and Swift tests.
    Record source SHA, toolchain, commands, exit codes, and log locations.
 
@@ -67,22 +71,22 @@ Baseline-environment work can proceed alongside the two correctness slices in M1
 contract change, and tests on the reviewed candidate. Infrastructure refusal must remain
 separate from agent failure; terminal task status must not imply permission to GC.
 
-### Working-tree implementation; remote tests passed — 2026-09-23
+### Custody and budget implementation committed — 2026-09-23
 
 The non-worktree settlement slice of `wi-dc6a` is implemented: shared-checkout settlement uses a private-index
 recovery ref rather than committing/amending the principal branch. Regression cases
 cover real-index preservation, unborn/tagged HEAD, repeated snapshots, renames,
 publication failure, and task status. All 12 new regressions and both default/Web
 Rust suites pass on the remote builder. [Validation evidence](validation-custody-2026-09-23.md)
-records counts, job IDs, and limitations. Strict clippy has 15 diagnostics in unchanged
-files; clean those up as a separate M0 slice. Live API/Swift gates and board closure
+records counts, job IDs, and limitations. The 15 strict clippy diagnostics are
+resolved by this patch. Live API/Swift gates and board closure
 remain outstanding. The local rbox fleet is configured outside the repository.
 
 The target-project identity slice of `wi-29bd` is also implemented. Budget checks,
 stored usage aggregation and reporting use the target's persisted project identity.
 All 10 new CLI regressions pass; default tests pass and Web tests pass on an unchanged
 rerun. The first Web attempt exposed an intermittent background delivery failure,
-retained as unresolved M0 work. [Budget validation](validation-budget-2026-09-23.md)
+reproduced and fixed by this patch. [Budget validation](validation-budget-2026-09-23.md)
 records both attempts. Next budget work is slice 3: project configuration/sync precedence
 and cap removal. Concurrent spend reservation is outside the completed slice.
 

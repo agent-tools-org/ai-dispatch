@@ -21,6 +21,13 @@ or Qwen `[API Error: ...]`) are recorded as `Failed`. Ambiguous envelopes stay
 `Merged` means code was integrated. Neither `Done` nor `Merged` means that the
 task succeeded or that the principal accepted the result.
 
+`aid wait` and `aid watch --wait` wait for the worker's post-run delivery and verification checks before
+reporting a terminal result, including for group or implicit active-task selection.
+A provisional `Done` cannot bypass a required result-file failure. `--exit-on-await`
+still returns when input is requested; `--timeout` also covers post-run settlement.
+If a worker exits with an unfinished job spec, waiting reports an error instead of
+claiming success from its provisional status.
+
 Verification is a separate axis. A configured verify command starts with
 `VerifyStatus::Pending` and ends as `Passed`, `Failed`, `TimedOut`,
 `InfrastructureFailure`, or `Skipped`. `Unobserved` is reserved for an agent

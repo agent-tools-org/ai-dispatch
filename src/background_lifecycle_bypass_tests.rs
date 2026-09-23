@@ -14,6 +14,28 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[tokio::test]
+async fn worker_keeps_spec_until_error_lifecycle_finishes() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let id = "t-bg-barrier";
+    store.insert_task(&task(id, TaskStatus::Running)).unwrap();
+    let observed = temp.path().join("barrier.txt");
+    let spec = BackgroundRunSpec {
+        agent_name: "missing-test-agent".into(),
+        hooks: vec![format!("on_fail:test -f '{}' && printf present > '{}'",
+            paths::job_path(id).display(), observed.display())],
+        ..spec(id)
+    };
+    super::save_spec(&spec).unwrap();
+    assert!(super::run_task(store.clone(), id).await.is_err());
+    assert_eq!(std::fs::read_to_string(observed).unwrap(), "present");
+    assert!(super::load_spec_if_exists(id).unwrap().is_none());
+    assert_eq!(store.get_task(id).unwrap().unwrap().status, TaskStatus::Failed);
+}
+
+#[tokio::test]
 async fn inner_error_runs_post_lifecycle_once_without_duplicate_callbacks() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());

@@ -23,8 +23,8 @@ current arguments.
 |---|---|
 | `aid errors` | Inspect recent CLI parse errors and pre-task rejections, with correction hints; see [command-errors.md](command-errors.md). |
 | `aid board` | Show the current task board (default: current project only; `--all` shows every project). Includes verification tags when verification has something to report. |
-| `aid watch` | Stream task or group progress; `--wait` waits for verification to settle and exits non-zero when a task did not succeed. |
-| `aid wait` | Block until selected tasks or a group reach a stopping state, including verification completion; returns non-zero when any task did not succeed. |
+| `aid watch` | Stream task or group progress; `--wait` waits for worker delivery and verification checks to settle and exits non-zero when a task did not succeed. |
+| `aid wait` | Block until selected tasks or a group finish worker settlement, including delivery and verification checks; returns non-zero when any task did not succeed. |
 | `aid show` | Inspect task state, outcome, verification, events, context, output, result, transcript, summary, audit, or diff; prints `Backup: <url>` (also `backup_url` in `--json`) once an artifact backup was uploaded; `--diff --branch` widens the diff from the task's own commits to the whole branch. |
 | `aid output` | Print task output directly. |
 | `aid tree` | Show task ancestry and retries. |

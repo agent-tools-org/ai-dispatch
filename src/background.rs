@@ -66,12 +66,15 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
     sanitize::validate_task_id(task_id)?;
     let spec = load_spec(task_id)?;
     let result = run_task_inner(&store, &spec).await;
+    // Keep the completion barrier through error settlement as well.
+    let result = match result {
+        Ok(()) => Ok(()),
+        Err(err) => handle_run_task_inner_error(&store, &spec, err).await,
+    };
     let _ = remove_spec(task_id);
     let _ = crate::input_signal::clear_response(task_id);
     let _ = crate::input_signal::clear_steer(task_id);
-    if let Err(err) = result {
-        return handle_run_task_inner_error(&store, &spec, err).await;
-    }
+    result?;
     if let Some(ref cmd) = spec.on_done {
         let _ = spawn_on_done_command(cmd, task_id, "done");
     }

@@ -3,13 +3,14 @@
 Audited 2026-09-23 against `main` at `b68046e2` (v10.47.1).
 The remote has four retained topic branches and `main`; there are no open PRs
 at the audit snapshot. These topics still contain unique patches and were not deleted.
+Tips below reflect the approved September 23 history rewrite; patch contents are unchanged.
 
 | Branch | Tip | Unique commits vs main | Next review |
 | --- | --- | ---: | --- |
 | `feat/evermemos-plugin` | `205de388b970` | 6 | Decide whether the optional memory plugin is still wanted; 4 non-merge patches, 6 total commits. |
-| `fix/issue-127-sandbox-gitdir` | `be9cb9f472b9` | 2 | Compare sandbox mount regressions with the current worktree implementation. |
-| `fix/issue-134-id-collision` | `9e5169f0d1ff` | 3 | Compare dispatch collision and 8-hex display changes with current behavior. |
-| `fix/worktree-reuse-orphan-137` | `6e38bea52a29` | 2 | Review orphan protection and reset-base races against current reconciliation. |
+| `fix/issue-127-sandbox-gitdir` | `1d68568d9ab2` | 2 | Compare sandbox mount regressions with the current worktree implementation. |
+| `fix/issue-134-id-collision` | `49f26ba6a1e4` | 3 | Compare dispatch collision and 8-hex display changes with current behavior. |
+| `fix/worktree-reuse-orphan-137` | `1a9efec467b7` | 2 | Review orphan protection and reset-base races against current reconciliation. |
 
 The 16 integrated branch tips and their deletion evidence are listed in the
 [cleanup report](repository-cleanup-2026-09-23.md). Deletion used explicit tip

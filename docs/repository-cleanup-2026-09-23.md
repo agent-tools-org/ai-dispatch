@@ -49,24 +49,42 @@ Four branches with unique changes remain; see [retained branches](kept-branches.
 No Rust or Swift runtime code, Cargo dependency, release tag or published artifact
 is changed by this working-tree cleanup. No new release is created.
 
-## History rewrite rehearsal — not applied to origin
+## History rewrite — applied with explicit approval
 
 An isolated mirror removes only `target-local/` and `target-rate-limit/` from
 all history. It keeps empty commits and merge topology and preserves commit
 messages, author and committer data. The pack drops from **365.66 MiB to 12.51 MiB**
 (about **96.6%**); the mirror totals about 13 MiB.
 
-All 2,352 commits were checked through the commit map: parent mappings, metadata,
+After branch cleanup, all 2,342 retained commits were checked through the commit
+map: parent mappings, metadata,
 messages, and every root tree entry outside the two removed paths match. Unchanged
 subtree object IDs prove their contents remain identical. All 339 tag mappings
 were checked and `git fsck --full` passed.
 
-This rehearsal changes 1,519 commit IDs and 180 tag targets. It also strips the
-signatures on 25 signed commits. This is an intentional review boundary: applying
-it requires approval to rewrite shared branches/release tags and coordinate
-existing clones. Published archives/crates are not rebuilt; old commit links and
-tag provenance need the retained mapping. GitHub-side pack/PR-ref retention may
-delay remote disk reclamation even after a successful rewrite.
+The approved rewrite changes 1,509 commit IDs and 180 tag targets and strips the
+signatures on 25 signed commits. Four branch tips and 180 tags were updated in
+one atomic push with explicit old-tip leases. The first attempt hit a GitHub
+`commit_refs` error and changed no refs; the identical retry succeeded. All 344
+remote heads/tags were then verified against the mapping. Main moved from
+`e42d641b1272dd8fed045f44b47d0e4273a4356b` to
+`c39441ffb964944800da0b85dd98bd2544849d9e`, with an identical source tree.
+
+Release and crates.io workflows were temporarily disabled and restored after
+each attempt. All 237 Release records and 1,185 asset records (including asset
+IDs, names, sizes and digests) match the pre-rewrite snapshot. Published
+archives/crates were not rebuilt; old commit links and
+tag provenance need the retained mapping. A fresh mirror clone still includes
+27 GitHub-managed pull-request refs and a 366.13 MiB pack. These retained PR refs
+are outside the rewritten heads/tags; server-side reclamation remains dependent
+on GitHub. A fresh ordinary clone, which does not fetch those PR refs, has a
+12.83 MiB pack and passes `git fsck --full`.
+
+Collaborators should preserve any unpushed work, clone the repository again,
+and reapply only their unpublished changes. Do not merge or push old branch/tag
+history into the rewritten repository: it would restore the discarded blobs.
+The operator's local repository was backed up, synchronized and garbage-collected;
+its object pack is now 12.32 MiB and `git fsck --full` passes.
 
 ## Backup and recovery
 
@@ -77,6 +95,14 @@ Operator-local backup directory: `~/.local/share/ai-dispatch-backups/cleanup-202
 - `branch-delete-candidates.json`, `branch-delete-{dry-run,result}.txt`: deletion manifest and results.
 - `rewrite-preview.git/`: isolated rewritten repository, with filter-repo commit/ref maps.
 - `verify-rewrite.py`, `rewrite-verification.json`: reproducible structural verification.
+- `cleanup-delta.bundle`: cleanup commit on top of the original verified bundle.
+- `rewrite-ready.git/filter-repo/{commit-map,ref-map}`: applied commit/ref mappings.
+- `rewrite-ready-verification.json`: verification of the final 2,342-commit graph.
+- `rewrite-push-plan.json`, `rewrite-push-retry.log`: exact leased updates and successful push.
+- `refs-after-rewrite.txt`, `releases-{before,after}-apply.json`: remote verification evidence.
+- `workflow-states-after-apply.json`: restored publishing workflow states.
+- `git-before-local-gc.tar`, `git-before-local-gc.sha256`: complete local Git metadata
+  backup, including reflogs and objects, before local object pruning.
 
 Keep the bundle off the repository and do not expire it during this maintenance.
 A deleted branch can be recovered from its recorded original tip in the bundle.

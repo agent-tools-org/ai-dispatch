@@ -10,7 +10,7 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
 
-fn task_fixture(
+pub(super) fn task_fixture(
     id: &str,
     prompt: &str,
     resolved_prompt: Option<&str>,
@@ -357,78 +357,6 @@ fn result_text_reads_task_result_file() {
     let text = result_text(&store, "t-result").unwrap();
 
     assert_eq!(text, "structured result\n");
-}
-
-#[test]
-fn audit_text_with_missing_result_md_shows_banner() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    let store = Arc::new(Store::open_memory().unwrap());
-    let mut task = task_fixture(
-        "t-audit-missing",
-        "Cross-audit the parser changes and produce findings.",
-        None,
-        None,
-    );
-    task.status = TaskStatus::Done;
-    task.read_only = true;
-    store.insert_task(&task).unwrap();
-
-    let text = audit_text(&store, "t-audit-missing").unwrap();
-
-    assert!(text.contains("Structured audit result missing"));
-    assert!(text.contains("aid retry t-audit-missing --agent codex"));
-}
-
-#[test]
-fn result_text_for_audit_without_result_md_uses_banner() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    let store = Arc::new(Store::open_memory().unwrap());
-    let mut task = task_fixture(
-        "t-audit-result-missing",
-        "Review the implementation and list findings with severity.",
-        None,
-        None,
-    );
-    task.status = TaskStatus::Done;
-    task.read_only = true;
-    store.insert_task(&task).unwrap();
-
-    let text = result_text(&store, "t-audit-result-missing").unwrap();
-
-    assert!(text.contains("Structured audit result missing"));
-}
-
-/// A result.md salvaged from the log must not silence the banner: that file holds the
-/// tool narration aid rescued, not the audit the caller asked for.
-#[test]
-fn result_text_for_audit_warns_when_result_md_is_a_salvaged_log() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    let store = Arc::new(Store::open_memory().unwrap());
-    let mut task = task_fixture(
-        "t-audit-salvaged",
-        "Review the implementation and list findings with severity.",
-        None,
-        None,
-    );
-    task.status = TaskStatus::Done;
-    task.read_only = true;
-    store.insert_task(&task).unwrap();
-    store
-        .update_delivery_assessment(
-            "t-audit-salvaged",
-            Some(crate::types::DeliveryAssessment::MissingFinalDelivery),
-        )
-        .unwrap();
-    let result_path = crate::paths::task_dir("t-audit-salvaged").join("result.md");
-    std::fs::create_dir_all(result_path.parent().unwrap()).unwrap();
-    std::fs::write(&result_path, "I will run `git diff main..HEAD` to see the changes.\n").unwrap();
-
-    let text = result_text(&store, "t-audit-salvaged").unwrap();
-
-    assert!(text.contains("Structured audit result missing"));
 }
 
 #[test]

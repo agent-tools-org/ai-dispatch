@@ -184,7 +184,7 @@ fn result_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let path = crate::paths::task_dir(task_id).join("result.md");
     let banner = load_task(store, task_id)
         .ok()
-        .and_then(|task| audit_result_missing_banner(&task));
+        .and_then(|task| audit_result_missing_banner(store, &task));
     if !path.exists() {
         return Ok(banner.unwrap_or_else(|| "No result file for this task\n".to_string()));
     }
@@ -218,11 +218,14 @@ fn events_text(store: &Arc<Store>, task_id: &str, full: bool) -> Result<String> 
 /// When an audit-style task ends without producing the structured `result.md`,
 /// surface a clear retry hint instead of letting the caller fall back to the
 /// raw (often truncated) agent output.
-fn audit_result_missing_banner(task: &crate::types::Task) -> Option<String> {
+fn audit_result_missing_banner(store: &Store, task: &crate::types::Task) -> Option<String> {
     if !matches!(task.status, TaskStatus::Done | TaskStatus::Merged) {
         return None;
     }
-    if !crate::cmd::report_mode::prompt_is_audit_report(&task.prompt) {
+    // Only a task that was asked for a result file can be missing one; prompt wording is no evidence.
+    let requested = crate::cmd::run::RunArgs::saved_for_task(store, &task.id.0)
+        .ok().flatten().is_some_and(|args| args.result_file.is_some());
+    if !requested {
         return None;
     }
     // A result.md salvaged from the log is not a delivered report, so the delivery
@@ -328,7 +331,7 @@ pub fn audit_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
         }
     }
 
-    if let Some(banner) = audit_result_missing_banner(&task) {
+    if let Some(banner) = audit_result_missing_banner(store, &task) {
         out.push('\n');
         out.push_str(&banner);
     } else if !task_has_changes(&task) && task.status.is_terminal()
@@ -481,6 +484,9 @@ mod tests;
 #[path = "mode_tests.rs"]
 mod show_mode_tests;
 
+#[cfg(test)]
+#[path = "banner_tests.rs"]
+mod banner_tests;
 #[cfg(test)]
 #[path = "checklist_tests.rs"]
 mod show_checklist_tests;

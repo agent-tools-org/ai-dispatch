@@ -91,7 +91,6 @@ fn audit_noun_phrase_does_not_mask_explicit_audit_term() {
         TaskCategory::Research,
         None,
     ));
-    assert!(prompt_is_audit_report("cross-audit the audit log feature"));
 }
 
 #[test]
@@ -102,7 +101,6 @@ fn audit_log_feature_prompt_does_not_enable_report_mode() {
         TaskCategory::Research,
         None,
     ));
-    assert!(!prompt_is_audit_report("Implement an audit log feature"));
 }
 
 #[test]

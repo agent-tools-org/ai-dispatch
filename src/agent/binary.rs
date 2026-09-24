@@ -1,9 +1,17 @@
-// Host PATH / program resolution for agent dispatch preflight.
-// Exports: ensure_*_available, built_in_binaries, builtin_binary_owner.
+// Host PATH / program resolution: the one "can this route run here" predicate.
+// Exports: route_blocker*, route_inventory, detect_agents, ensure_*_available, built_in_binaries.
 // Deps: AgentKind, env::which_exists.
 use anyhow::Result;
 use crate::types::AgentKind;
 use super::env;
+
+#[path = "binary_route.rs"]
+mod route;
+pub(crate) use route::{RouteBlocker, custom_route_blocker, route_inventory, routable_builtins};
+use route::route_blocker_with;
+pub use route::detect_agents;
+#[cfg(test)]
+pub(crate) use route::DetectAgentsGuard;
 
 pub(crate) fn ensure_agent_binary_available(agent_kind: AgentKind, agent_name: &str) -> Result<()> {
     ensure_agent_binary_available_with(agent_kind, agent_name, env::which_exists)
@@ -17,18 +25,10 @@ pub(crate) fn ensure_agent_binary_available_with<F>(
 where
     F: Fn(&str) -> bool,
 {
-    if built_in_agent_binary_exists(agent_kind, which) {
-        return Ok(());
+    match route_blocker_with(agent_kind, which) {
+        None => Ok(()),
+        Some(blocker) => anyhow::bail!("Agent '{}' not found: {}", agent_name, blocker.detail()),
     }
-    let binary = built_in_binaries(agent_kind)
-        .first()
-        .copied()
-        .unwrap_or(agent_name);
-    anyhow::bail!(
-        "Agent '{}' not found: binary '{}' missing from PATH",
-        agent_name,
-        binary
-    );
 }
 
 /// Refuse dispatch when the resolved program from `build_command` is not runnable.
@@ -47,15 +47,14 @@ where
     if resolved_binary_exists(program, &which) {
         return Ok(());
     }
-    let binary = std::path::Path::new(program)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(program);
-    anyhow::bail!(
-        "Agent '{}' not found: binary '{}' missing from PATH",
-        agent_name,
-        binary
-    );
+    let blocker = route::RouteBlocker::NotInstalled {
+        binary: std::path::Path::new(program)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(program)
+            .to_string(),
+    };
+    anyhow::bail!("Agent '{}' not found: {}", agent_name, blocker.detail());
 }
 
 fn resolved_binary_exists<F>(program: &str, which: &F) -> bool

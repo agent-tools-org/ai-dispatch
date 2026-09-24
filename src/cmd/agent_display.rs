@@ -9,7 +9,7 @@ use std::path::Path;
 
 #[path = "agent_display_quota.rs"]
 mod quota;
-use quota::{quota_row, QuotaRow};
+use quota::{quota_row, QuotaRow, NO_PROBE};
 
 pub(super) fn show_builtin_profile(kind: AgentKind) {
     let Some((_, description, cost, best_for, streaming)) = kind.profile() else {
@@ -79,8 +79,8 @@ pub(super) fn show_quota() -> anyhow::Result<()> {
     use crate::agent::registry;
     crate::live_quota_refresh::refresh_stale_if_enabled();
     println!("{:<12} {:<10} DETAIL", "AGENT", "STATUS");
-    for kind in AgentKind::ALL_BUILTIN {
-        print_quota_row(kind.as_str(), quota_row(*kind, None));
+    for kind in crate::agent::routable_builtins() {
+        print_quota_row(kind.as_str(), quota_row(kind, None));
     }
     for config in registry::list_custom_agents() {
         print_quota_row(&config.id, quota_row(AgentKind::Custom, Some(config.id.as_str())));
@@ -90,6 +90,9 @@ pub(super) fn show_quota() -> anyhow::Result<()> {
 
 fn print_quota_row(name: &str, row: QuotaRow) {
     match row {
+        QuotaRow::Ok { detail } if detail == NO_PROBE => {
+            println!("{name:<12} {:<10} {detail}", "UNKNOWN")
+        }
         QuotaRow::Ok { detail } => println!("{name:<12} {:<10} {detail}", "OK"),
         QuotaRow::Limited { detail } => println!("{name:<12} {:<10} {detail}", "LIMITED"),
         QuotaRow::Partial { detail } => println!("{name:<12} {:<10} {detail}", "PARTIAL"),
@@ -98,9 +101,8 @@ fn print_quota_row(name: &str, row: QuotaRow) {
 
 pub(super) fn list_agents() -> anyhow::Result<()> {
     use crate::agent::registry;
-    let rows: Vec<_> = AgentKind::ALL_BUILTIN
-        .iter()
-        .filter_map(|kind| kind.profile().map(|_| (*kind, quota_row(*kind, None))))
+    let rows: Vec<_> = crate::agent::routable_builtins()
+        .filter_map(|kind| kind.profile().map(|_| (kind, quota_row(kind, None))))
         .collect();
     let any_hold = rows
         .iter()

@@ -102,9 +102,8 @@ pub(super) fn resolve_agent_setup(
         (AgentKind::Custom, Some(args.agent_name.clone()))
     } else {
         let custom = agent::registry::list_custom_agents();
-        let mut available = AgentKind::ALL_BUILTIN
-            .iter()
-            .map(AgentKind::as_str)
+        let mut available = agent::routable_builtins()
+            .map(|kind| kind.as_str())
             .collect::<Vec<_>>()
             .join(", ");
         for ca in &custom {

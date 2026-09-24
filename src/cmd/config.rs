@@ -278,13 +278,5 @@ fn update_pricing_file() -> Result<usize> {
 }
 
 fn command_installed(command: &str) -> bool {
-    let binary = command.split_whitespace().next().unwrap_or_default();
-    if binary.is_empty() {
-        return false;
-    }
-    Command::new("which")
-        .arg(binary)
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
+    crate::agent::custom_route_blocker(command).is_none()
 }

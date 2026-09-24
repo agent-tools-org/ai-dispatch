@@ -28,6 +28,10 @@ pub struct AdviseArgs {
     pub json: bool,
     #[arg(short, long)]
     pub dir: Option<String>,
+    /// The calling session's own model (overrides AID_CALLER_MODEL); used to
+    /// exclude weaker models on the caller's provider pool.
+    #[arg(long)]
+    pub caller_model: Option<String>,
 }
 
 #[cfg(test)]

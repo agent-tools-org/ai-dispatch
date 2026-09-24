@@ -15,6 +15,9 @@ pub(super) enum QuotaRow {
     Partial { detail: String },
 }
 
+/// Detail of an Ok row that no probe observed: rendered as UNKNOWN, never OK.
+pub(super) const NO_PROBE: &str = "(no probe)";
+
 pub(super) fn quota_row(kind: AgentKind, custom_name: Option<&str>) -> QuotaRow {
     if rate_limit::is_rate_limited(&kind, custom_name) {
         let info = rate_limit::get_rate_limit_info(&kind, custom_name);
@@ -26,7 +29,7 @@ pub(super) fn quota_row(kind: AgentKind, custom_name: Option<&str>) -> QuotaRow 
     let groups = rate_limit::active_group_holds(&kind, custom_name);
     if groups.is_empty() {
         return QuotaRow::Ok {
-            detail: probe_detail(kind).unwrap_or_else(|| "(no probe)".to_string()),
+            detail: probe_detail(kind).unwrap_or_else(|| NO_PROBE.to_string()),
         };
     }
     QuotaRow::Partial {

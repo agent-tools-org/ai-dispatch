@@ -240,25 +240,6 @@ pub(crate) fn which_exists(name: &str) -> bool {
     executable_in_paths(name, paths)
 }
 
-pub(crate) fn installed_agents(candidates: &[(&str, AgentKind)]) -> Vec<AgentKind> {
-    let results = std::thread::scope(|scope| {
-        candidates
-            .iter()
-            .map(|(name, kind)| scope.spawn(move || (*kind, which_exists(name))))
-            .collect::<Vec<_>>()
-            .into_iter()
-            .filter_map(|probe| probe.join().ok())
-            .collect::<Vec<_>>()
-    });
-    let mut found = Vec::new();
-    for (kind, available) in results {
-        if available && !found.contains(&kind) {
-            found.push(kind);
-        }
-    }
-    found
-}
-
 fn executable_in_paths<I>(name: &str, paths: I) -> bool
 where
     I: IntoIterator<Item = PathBuf>,

@@ -10,15 +10,7 @@ use crate::cmd::agent_json_types::{GroupHoldJson, QuotaJson};
 use crate::types::AgentKind;
 
 pub fn command_installed(command: &str) -> bool {
-    let binary = command.split_whitespace().next().unwrap_or_default();
-    if binary.is_empty() {
-        return false;
-    }
-    std::process::Command::new("which")
-        .arg(binary)
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
+    crate::agent::custom_route_blocker(command).is_none()
 }
 
 pub fn get_agent_capabilities(
@@ -85,8 +77,10 @@ pub(crate) fn build_quota_json(rlk: &AgentKind, custom_name: Option<&str>) -> Qu
         "partial"
     } else if avail.status == crate::route_availability::RouteStatus::Degraded {
         "degraded"
-    } else {
+    } else if crate::agent::selection::observed_ok(&avail) {
         "ok"
+    } else {
+        "unknown"
     };
     let info = held
         .then(|| crate::rate_limit::get_rate_limit_info(rlk, custom_name))
@@ -105,10 +99,7 @@ pub(crate) fn build_quota_json(rlk: &AgentKind, custom_name: Option<&str>) -> Qu
 }
 
 pub(crate) fn builtin_profile(name: &str) -> Option<AgentKind> {
-    AgentKind::ALL_BUILTIN
-        .iter()
-        .copied()
-        .find(|kind| kind.as_str().eq_ignore_ascii_case(name))
+    crate::agent::routable_builtins().find(|kind| kind.as_str().eq_ignore_ascii_case(name))
 }
 
 pub(crate) fn custom_has_endpoint(config: &CustomAgentConfig) -> bool {

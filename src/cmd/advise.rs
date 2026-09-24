@@ -5,7 +5,7 @@
 use anyhow::Result;
 
 use crate::agent::classifier::TaskCategory;
-use crate::agent::selection::{AdviceReport, advise};
+use crate::agent::selection::{AdviceReport, advise, caller_advice};
 use crate::cli::command_args_advise::AdviseArgs;
 use crate::store::Store;
 use crate::types::DeclaredTaskProfile;
@@ -26,6 +26,7 @@ pub(crate) fn run(store: Option<&Store>, args: AdviseArgs) -> Result<()> {
         args.kind,
         args.team.as_deref(),
         args.top,
+        args.caller_model.as_deref(),
     );
     if args.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
@@ -42,9 +43,13 @@ pub(crate) fn build_report(
     kind: Option<TaskCategory>,
     team: Option<&str>,
     top: usize,
+    caller_model: Option<&str>,
 ) -> AdviceReport {
     let team = team.and_then(crate::team::resolve_team);
-    advise(prompt, declared, kind, team.as_ref(), store, top)
+    let model = crate::session::caller_model(caller_model);
+    let caller = crate::session::current_caller()
+        .and_then(|session| caller_advice(&session.kind, model.as_deref()));
+    advise(prompt, declared, kind, team.as_ref(), store, top, caller)
 }
 
 fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
@@ -76,8 +81,16 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
     } else {
         println!("Recommended: none (no installed agents)");
     }
+    if let Some(caller) = &report.caller {
+        println!(
+            "Caller: {} → {} pool (model {})",
+            caller.session, caller.provider, caller.model.as_deref().unwrap_or("unknown"),
+        );
+    }
     for (index, candidate) in report.candidates.iter().enumerate() {
-        let availability = candidate_mark(candidate.installed, candidate.exclusion_reason.as_deref());
+        let availability = candidate_mark(
+            candidate.exclusion_reason.as_deref().or(candidate.demotion_reason.as_deref()),
+        );
         let item = &candidate.breakdown;
         println!(
             "  {}. {:<10} {:>5.1}  base {:.1}  {:+.1} model  {:+.1} budget  {:+.1} limit  {:+.1} history  {:+.1} complexity  {:+.1} team  {:+.1} headroom{}",
@@ -101,7 +114,7 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
     if !report.custom_candidates.is_empty() {
         println!("Custom agents (separate capability scale):");
         for candidate in &report.custom_candidates {
-            let availability = candidate_mark(candidate.installed, candidate.exclusion_reason.as_deref());
+            let availability = candidate_mark(candidate.exclusion_reason.as_deref());
             let preference = if candidate.team_preferred { "  team preferred" } else { "" };
             println!(
                 "  {:<20} capability {}  +{} strength{}{}",
@@ -126,12 +139,8 @@ fn recommended_quota_suffix(reason: &str) -> String {
         .unwrap_or_default()
 }
 
-fn candidate_mark(installed: bool, exclusion_reason: Option<&str>) -> String {
-    match (installed, exclusion_reason) {
-        (false, _) => " [not installed]".to_string(),
-        (_, Some(reason)) => format!("  [{reason}]"),
-        _ => String::new(),
-    }
+fn candidate_mark(reason: Option<&str>) -> String {
+    reason.map(|reason| format!("  [{reason}]")).unwrap_or_default()
 }
 
 fn cost_label(cost: Option<f64>) -> String {
@@ -163,6 +172,7 @@ mod tests {
             top: 5,
             json: true,
             dir: None,
+            caller_model: None,
         };
         let declared = DeclaredTaskProfile {
             difficulty: args.difficulty,
@@ -170,7 +180,7 @@ mod tests {
             urgency: args.urgency,
             rigor: args.rigor,
         };
-        let report = advise(&args.prompt, declared, None, None, None, args.top);
+        let report = advise(&args.prompt, declared, None, None, None, args.top, None);
         let encoded = serde_json::to_value(&report).expect("serialize advice");
         let decoded: AdviceReport = serde_json::from_value(encoded).expect("parse advice");
         assert_eq!(decoded, report);
@@ -187,6 +197,11 @@ mod tests {
     fn complex_critical_surfaces_alternatives_with_shortfall_reasons() {
         let home = tempfile::tempdir().expect("temp aid home");
         let _guard = crate::paths::AidHomeGuard::set(home.path());
+        // Eligibility now requires an installed binary; pin the fleet.
+        use crate::types::AgentKind;
+        let _fleet = crate::agent::DetectAgentsGuard::set(vec![
+            AgentKind::Codex, AgentKind::Droid, AgentKind::Claude, AgentKind::Cursor,
+        ]);
         let declared = DeclaredTaskProfile {
             difficulty: crate::types::TaskDifficulty::Complex,
             budget: crate::types::TaskBudget::Premium,
@@ -200,6 +215,7 @@ mod tests {
             None,
             None,
             5,
+            None,
         );
         assert!(report.recommended.is_some());
         let eligible = report.candidates.iter().filter(|c| c.eligible).count();

@@ -298,7 +298,7 @@ mod unrated_served_tests {
             urgency: crate::types::TaskUrgency::Normal,
             rigor: crate::types::TaskRigor::Standard,
         };
-        let report = advise("Implement the parser", declared, None, None, None, 20);
+        let report = advise("Implement the parser", declared, None, None, None, 20, None);
         let codex = report.candidates.iter().find(|c| c.agent == "codex").expect("codex");
         assert_eq!(codex.model.as_deref(), Some("gpt-5.6-sol"), "unrated model is not auto-selected");
         assert_eq!(codex.unrated_served_models, vec!["gpt-6-sol".to_string()]);

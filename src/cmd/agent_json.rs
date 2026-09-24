@@ -14,18 +14,18 @@ use crate::cmd::agent_history::get_agent_histories;
 #[path = "agent_json_tests.rs"]
 mod tests;
 #[cfg(test)]
-#[path = "agent_json_evidence_tests.rs"]
-mod evidence_tests;
-#[cfg(test)]
 #[path = "agent_json_models_tests.rs"]
 mod models_tests;
+#[cfg(test)]
+#[path = "agent_json_evidence_tests.rs"]
+mod evidence_tests;
 
 use crate::cmd::agent_json_types::{
     AgentListJson, AgentJson, HistoryJson, ModelsJson,
     AvailableModelJson, LoadJson,
 };
 use crate::cmd::agent_json_helpers::{
-    build_quota_json, builtin_profile, catalog_default_model, command_installed,
+    build_quota_json, builtin_profile, command_installed, resolve_default_model,
     get_agent_capabilities, metering_label, rate_limit_kind,
 };
 
@@ -173,15 +173,7 @@ fn build_agent_json(
     let capabilities = get_agent_capabilities(kind, custom_config);
     
     let models = {
-        let default_model = crate::agent_config::get_default_model(&name)
-            .or_else(|| custom_config.and_then(|c| c.forced_model.clone()))
-            .or_else(|| {
-                if is_custom {
-                    None
-                } else {
-                    catalog_default_model(kind)
-                }
-            });
+        let (default_model, default_source) = resolve_default_model(&name, kind, custom_config);
         let budget_model = if is_custom {
             None
         } else {
@@ -198,12 +190,15 @@ fn build_agent_json(
                     tier: m.tier,
                     input_per_m: m.input_per_m,
                     output_per_m: m.output_per_m,
+                    rated: m.capability.is_some(),
                     capability: m.capability,
+                    source: m.origin.label().to_string(),
                 })
                 .collect()
         };
         ModelsJson {
             default: default_model,
+            default_source: default_source.map(str::to_string),
             budget: budget_model,
             available,
         }

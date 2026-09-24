@@ -104,6 +104,7 @@ mod verify;
 mod verify_cargo;
 mod watcher;
 mod webhook;
+mod shadow;
 #[cfg(feature = "web")]
 mod web;
 mod workgroup;

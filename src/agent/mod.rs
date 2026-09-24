@@ -49,8 +49,6 @@ pub(crate) use binary::{
     ensure_resolved_binary_available, ensure_resolved_binary_available_with,
 };
 pub(crate) use response::extract_response;
-#[cfg(test)]
-pub(crate) use binary::built_in_agent_binary_exists;
 pub use binary::detect_agents;
 pub(crate) use binary::{RouteBlocker, custom_route_blocker, route_inventory, routable_builtins};
 #[cfg(test)]

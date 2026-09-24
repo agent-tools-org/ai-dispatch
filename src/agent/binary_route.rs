@@ -1,8 +1,8 @@
 // Route eligibility on this host: the single predicate advise, agent list and run share.
 // Exports: RouteBlocker, route_blocker, custom_route_blocker, route_inventory, detect_agents.
-// Deps: AgentKind, built_in_binaries, env::which_exists.
+// Deps: AgentKind, built_in_program, program_blocker, env::which_exists.
 
-use super::{built_in_agent_binary_exists, built_in_binaries, resolved_binary_exists};
+use super::{built_in_program, program_blocker};
 use crate::agent::env;
 use crate::types::AgentKind;
 
@@ -50,11 +50,7 @@ pub(crate) fn route_blocker_with<F>(kind: AgentKind, which: F) -> Option<RouteBl
 where
     F: Fn(&str) -> bool,
 {
-    if built_in_agent_binary_exists(kind, which) {
-        return None;
-    }
-    let binary = built_in_binaries(kind).first().copied().unwrap_or("?").to_string();
-    Some(RouteBlocker::NotInstalled { binary })
+    program_blocker(built_in_program(kind)?, &which)
 }
 
 /// The same predicate for a custom agent: the first word of its command.
@@ -66,22 +62,15 @@ pub(crate) fn custom_route_blocker_with<F>(command: &str, which: F) -> Option<Ro
 where
     F: Fn(&str) -> bool,
 {
-    let program = command.split_whitespace().next().unwrap_or_default();
-    if !program.is_empty() && resolved_binary_exists(program, &which) {
-        return None;
-    }
-    let binary = std::path::Path::new(program)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(program)
-        .to_string();
-    Some(RouteBlocker::NotInstalled { binary })
+    program_blocker(command.split_whitespace().next().unwrap_or_default(), &which)
 }
 
 /// The predicate evaluated for every routable built-in, probed in parallel.
 pub(crate) fn route_inventory() -> Vec<(AgentKind, Option<RouteBlocker>)> {
     #[cfg(test)]
     if let Some(list) = DETECT_AGENTS_OVERRIDE.with(|cell| cell.borrow().clone()) {
+        // Pinned inventory never probes the host, not even Cursor's `agent` identity.
+        let _cursor = crate::agent::cursor::CursorBinaryGuard::set("cursor-agent");
         return routable_builtins()
             .map(|kind| {
                 let blocker = if list.contains(&kind) {

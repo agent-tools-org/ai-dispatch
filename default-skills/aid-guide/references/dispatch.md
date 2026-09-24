@@ -219,7 +219,9 @@ marker); it is never reported as dispatchable-by-evidence without one.
 Eligibility uses the same "can this route run" predicate as `aid agent list`
 and the `aid run` preflight: a candidate whose binary is missing from `PATH` is
 `installed: false, eligible: false` with reason
-`not installed: binary '<bin>' missing from PATH`. Every ineligible candidate
+`not installed: binary '<bin>' missing from PATH`. The binary is the one the
+adapter would spawn: Cursor counts an `agent` on `PATH` only when it identifies
+as Cursor, else it needs `cursor-agent`. Every ineligible candidate
 carries `exclusion_reason` (human text, `; `-joined) and `exclusion_codes`
 (one stable code per reason):
 

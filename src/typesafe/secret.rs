@@ -73,9 +73,10 @@ pub(crate) fn post_json(url: &str, key: &str, body: &str, timeout_secs: u64) -> 
 }
 
 /// argv carries no secret and no request body; both arrive through `-K -`.
+/// `-q` must be first: it stops curl reading a `.curlrc` that could redirect or trace the key.
 fn curl_args(url: &str, timeout_secs: u64) -> Vec<String> {
     vec![
-        "-sS".into(), "-K".into(), "-".into(), "-X".into(), "POST".into(),
+        "-q".into(), "-sS".into(), "-K".into(), "-".into(), "-X".into(), "POST".into(),
         "-H".into(), "Content-Type: application/json".into(),
         "--max-time".into(), timeout_secs.to_string(),
         "-w".into(), "\n%{http_code}".into(), url.into(),

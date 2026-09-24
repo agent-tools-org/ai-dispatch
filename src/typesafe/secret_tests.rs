@@ -56,3 +56,9 @@ fn finished_lookup_returns_stdout_and_failure_returns_none() {
     failing.stdout(Stdio::piped());
     assert!(output_within(failing, Duration::from_secs(5)).is_none());
 }
+
+#[test]
+fn curlrc_is_disabled_by_the_first_argument() {
+    let args = curl_args("https://api.typesafe.ai/v1/systemone", 10);
+    assert_eq!(args.first().map(String::as_str), Some("-q"), "curl honours -q only as argv[1]");
+}

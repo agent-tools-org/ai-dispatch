@@ -13,13 +13,19 @@ use crate::cmd::agent_history::get_agent_histories;
 #[cfg(test)]
 #[path = "agent_json_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "agent_json_models_tests.rs"]
+mod models_tests;
+#[cfg(test)]
+#[path = "agent_json_evidence_tests.rs"]
+mod evidence_tests;
 
 use crate::cmd::agent_json_types::{
     AgentListJson, AgentJson, HistoryJson, ModelsJson,
     AvailableModelJson, LoadJson,
 };
 use crate::cmd::agent_json_helpers::{
-    build_quota_json, builtin_profile, catalog_default_model, command_installed,
+    build_quota_json, builtin_profile, command_installed,
     get_agent_capabilities, metering_label, rate_limit_kind,
 };
 
@@ -72,7 +78,8 @@ pub(crate) fn get_agents_list_with_installed(
 ) -> Result<AgentListJson> {
     let running_tasks = store.list_tasks(TaskFilter::Running).unwrap_or_default();
     let custom = crate::agent::registry::list_custom_agents();
-    let history_names: Vec<&str> = AgentKind::ALL_BUILTIN
+    let builtins: Vec<AgentKind> = crate::agent::routable_builtins().collect();
+    let history_names: Vec<&str> = builtins
         .iter()
         .map(|kind| kind.as_str())
         .chain(custom.iter().map(|config| config.id.as_str()))
@@ -80,7 +87,7 @@ pub(crate) fn get_agents_list_with_installed(
     let histories = get_agent_histories(store, &history_names)?;
     let mut agents = Vec::new();
     
-    for kind in AgentKind::ALL_BUILTIN {
+    for kind in &builtins {
         let history = histories.get(kind.as_str()).cloned().flatten();
         let agent = build_agent_json(*kind, None, &running_tasks, installed_agents, history)?;
         agents.push(agent);
@@ -101,6 +108,18 @@ pub(crate) fn get_agents_list_with_installed(
     Ok(AgentListJson {
         generated_at: Local::now().to_rfc3339(),
         agents,
+    })
+}
+
+/// What `aid run <agent>` launches with no flags or declared profile.
+fn default_run_model(
+    name: &str, kind: AgentKind, custom: Option<&crate::agent::custom::CustomAgentConfig>,
+) -> crate::agent::run_model::RunModel {
+    let selection = crate::config::load_config().map(|config| config.selection).unwrap_or_default();
+    crate::agent::run_model::resolve_run_model(&crate::agent::run_model::RunModelInput {
+        agent_name: name, kind, explicit_model: None, force_default: false, custom,
+        budget_mode: selection.budget_mode, declared_budget: None, declared_difficulty: None,
+        smart_routing: selection.smart_routing,
     })
 }
 
@@ -162,18 +181,11 @@ fn build_agent_json(
         custom_config.map(|c| c.id.as_str()),
     );
     
+    let auth = crate::auth_marker::auth_status(kind, custom_config.map(|c| c.id.as_str()));
     let capabilities = get_agent_capabilities(kind, custom_config);
     
     let models = {
-        let default_model = crate::agent_config::get_default_model(&name)
-            .or_else(|| custom_config.and_then(|c| c.forced_model.clone()))
-            .or_else(|| {
-                if is_custom {
-                    None
-                } else {
-                    catalog_default_model(kind)
-                }
-            });
+        let run_model = default_run_model(&name, kind, custom_config);
         let budget_model = if is_custom {
             None
         } else {
@@ -190,12 +202,15 @@ fn build_agent_json(
                     tier: m.tier,
                     input_per_m: m.input_per_m,
                     output_per_m: m.output_per_m,
+                    rated: m.capability.is_some(),
                     capability: m.capability,
+                    source: m.origin.label().to_string(),
                 })
                 .collect()
         };
         ModelsJson {
-            default: default_model,
+            default_source: run_model.model.as_ref().map(|_| run_model.source.as_str().to_string()),
+            default: run_model.model,
             budget: budget_model,
             available,
         }
@@ -223,6 +238,7 @@ fn build_agent_json(
         provider: provider.as_str().to_string(),
         metering: metering_label(metering),
         quota,
+        auth,
         capabilities,
         models,
         history,

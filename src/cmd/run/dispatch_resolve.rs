@@ -5,12 +5,11 @@ use anyhow::Result;
 use std::sync::Arc;
 use crate::agent;
 use crate::agent_config;
-use crate::cmd::config as cmd_config;
 use crate::config;
 use crate::project::ProjectConfig;
 use crate::rate_limit;
 use crate::store::Store;
-use crate::types::{AgentKind, TaskDifficulty};
+use crate::types::AgentKind;
 use crate::usage;
 use super::RunArgs;
 
@@ -18,6 +17,8 @@ use super::RunArgs;
 mod held;
 #[path = "dispatch_model_info.rs"]
 mod model_info;
+#[path = "dispatch_run_model.rs"]
+mod run_model;
 pub(super) use held::maybe_insert_held_route_event;
 /// Emit the one-time GitButler setup hint as a task milestone event.
 pub(super) fn insert_gitbutler_setup_hint(store: &Store, task_id: &crate::types::TaskId) {
@@ -102,9 +103,8 @@ pub(super) fn resolve_agent_setup(
         (AgentKind::Custom, Some(args.agent_name.clone()))
     } else {
         let custom = agent::registry::list_custom_agents();
-        let mut available = AgentKind::ALL_BUILTIN
-            .iter()
-            .map(AgentKind::as_str)
+        let mut available = agent::routable_builtins()
+            .map(|kind| kind.as_str())
             .collect::<Vec<_>>()
             .join(", ");
         for ca in &custom {
@@ -186,50 +186,10 @@ pub(super) fn resolve_agent_setup(
     } else {
         false
     };
-    // Self-heal retries (force_default_model) bypass model selection entirely so
-    // the agent runs on its own current default — the only always-valid choice
-    // after a "model unavailable" failure.
-    let requested_model = if args.force_default_model {
-        None
-    } else {
-        args.model.clone().or_else(|| agent_config::get_default_model(&args.agent_name))
-    };
     let budget_active =
         !args.force_default_model && (args.budget || auto_budget || cfg.selection.budget_mode);
-    let smart_routed = if !args.force_default_model
-        && !budget_active
-        && requested_model.is_none()
-        && cfg.selection.smart_routing && args.declared_budget.is_none()
-        && matches!(
-            args.declared_difficulty,
-            Some(TaskDifficulty::Trivial | TaskDifficulty::Simple)
-        )
-    {
-        if let Some(bm) = cmd_config::budget_model(&agent_kind) {
-            if rate_limit::is_rate_limited(&agent_kind, custom_name) {
-                None
-            } else {
-                aid_info!("[aid] Smart route: declared simple task -> {}", bm);
-                Some(bm.to_string())
-            }
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-    let effective_model = smart_routed.or_else(|| {
-        if budget_active && requested_model.is_none() {
-            if let Some(bm) = cmd_config::budget_model(&agent_kind) {
-                aid_info!("[aid] Budget mode: using model {}", bm);
-                Some(bm.to_string())
-            } else {
-                requested_model.clone()
-            }
-        } else {
-            requested_model.clone()
-        }
-    });
+    let run_model = run_model::resolve(args, agent_kind, custom_name, auto_budget, &cfg.selection);
+    let effective_model = run_model.model.clone().filter(|_| run_model.pinned);
     // Family-metered agents: switch groups, and say so — a silent model swap
     // is the same defect as a CLI substituting a model the caller did not ask for.
     let mut effective_model = match agent::model_group::healthy_model_for(
@@ -278,7 +238,7 @@ pub(super) fn resolve_agent_setup(
         && !held::keep_aid_resolved_pin(substituted_from.as_ref(), model_source) && !agent::model_validation::validate_model_for_agent(agent.as_ref(), model, model_source)? {
         effective_model = None;
     }
-    aid_info!("{}", model_info::model_selection_info(args, effective_model.as_deref(), agent.as_ref()));
+    aid_info!("{}", model_info::model_selection_info(args, &run_model, effective_model.as_deref(), agent.as_ref()));
     Ok(AgentSetup {
         agent_kind,
         custom_agent_name: custom_agent_name.clone(),

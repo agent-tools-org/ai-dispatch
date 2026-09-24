@@ -28,6 +28,7 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
     let (done, running, failed) = count_statuses(tasks);
     let total_tokens: i64 = tasks.iter().filter_map(|t| t.tokens).sum();
     let total_cost: f64 = tasks.iter().filter_map(|t| t.cost_usd).sum();
+    let unknown_cost = cost::unknown_cost_tasks(tasks);
 
     let mut out = String::new();
     out.push_str(&format!(
@@ -36,8 +37,8 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
     ));
     if total_tokens > 0 {
         out.push_str(&format!("Total tokens: {}", format_tokens(total_tokens)));
-        if total_cost > 0.0 {
-            out.push_str(&format!("  Cost: {}", cost::format_cost(Some(total_cost))));
+        if total_cost > 0.0 || unknown_cost > 0 {
+            out.push_str(&format!("  Cost: {}", cost::format_cost_total(total_cost, unknown_cost)));
         }
         out.push('\n');
     }

@@ -6,7 +6,7 @@ use crate::agent::classifier::{self, Complexity};
 use crate::model_catalog::{models_for_agent, AGENT_MODELS};
 use crate::rate_limit;
 use crate::team::TeamConfig;
-use crate::types::{AgentKind, TaskBudget};
+use crate::types::AgentKind;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
@@ -78,7 +78,6 @@ pub(super) struct CandidateContext<'a> {
     pub(super) avg_cost_map: &'a HashMap<AgentKind, f64>,
     pub(super) team_default: Option<AgentKind>,
     pub(super) budget: bool,
-    pub(super) declared_budget: Option<TaskBudget>,
     pub(super) penalize_rate_limit: bool,
 }
 
@@ -96,18 +95,14 @@ pub(crate) struct ScoreBreakdown {
     pub total: f64,
 }
 
-pub(crate) fn model_for_task_budget(
-    kind: AgentKind,
-    budget: TaskBudget,
-) -> Option<&'static str> {
-    crate::model_catalog::model_for_task_budget(kind, budget)
-}
-
+/// Score for `kind` running `model`. An unknown or unrated model scores the
+/// agent-level base with no model capability term.
 pub(super) fn score_breakdown(
     ctx: &CandidateContext<'_>,
     kind: AgentKind,
+    model: Option<&str>,
 ) -> ScoreBreakdown {
-    let (base, model, initial) = initial_score(ctx, kind);
+    let (base, initial) = initial_score(ctx, kind, model);
     let mut s = initial;
     let mut budget_penalty = 0.0;
     // Budget mode favors free models: a paid agent must be clearly stronger to
@@ -152,18 +147,12 @@ pub(super) fn score_breakdown(
     }
 }
 
-fn initial_score(
-    ctx: &CandidateContext<'_>,
-    kind: AgentKind,
-) -> (i32, Option<&'static str>, f64) {
+fn initial_score(ctx: &CandidateContext<'_>, kind: AgentKind, model: Option<&str>) -> (i32, f64) {
     let base = ctx.team
         .and_then(|team| team_override_score(team, kind.as_str(), ctx.profile.category))
         .unwrap_or_else(|| base_score(kind, ctx.profile.category));
-    let model = ctx.declared_budget
-        .and_then(|budget| model_for_task_budget(kind, budget))
-        .or_else(|| super::recommend_model(&kind, &ctx.profile.complexity, ctx.budget));
     let capability = model.and_then(|value| model_capability_score(kind, value));
-    (base, model, model_quality_score(base, capability))
+    (base, model_quality_score(base, capability))
 }
 
 fn history_score_bonus(ctx: &CandidateContext<'_>, kind: AgentKind) -> Option<f64> {
@@ -182,8 +171,10 @@ fn has_team_bonus(ctx: &CandidateContext<'_>, kind: AgentKind) -> bool {
         .any(|agent| agent.eq_ignore_ascii_case(kind.as_str())))
 }
 
+/// Recommendation-hint score: the hint names the catalog tier model it shows.
 pub(super) fn score_for(ctx: &CandidateContext<'_>, kind: AgentKind) -> f64 {
-    score_breakdown(ctx, kind).total
+    let model = super::recommend_model(&kind, &ctx.profile.complexity, ctx.budget);
+    score_breakdown(ctx, kind, model).total
 }
 
 pub(super) fn candidate_for(kind: AgentKind, ctx: &CandidateContext<'_>) -> Candidate {

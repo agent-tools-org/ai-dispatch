@@ -33,6 +33,8 @@ mod run_model_selfheal;
 mod run_delivery_recovery;
 #[path = "dispatch_resolve.rs"]
 mod run_dispatch_resolve;
+#[path = "dispatch_cost_ceiling.rs"]
+mod run_dispatch_cost_ceiling;
 #[path = "dispatch_claim.rs"]
 mod run_dispatch_claim;
 #[path = "dispatch_prepare.rs"]

@@ -1,24 +1,30 @@
+// Pins the shared route predicate used by the dispatch guards and preflight.
+// Deps: binary guards, CursorBinaryGuard.
 use super::{
-    built_in_agent_binary_exists, ensure_agent_binary_available_with,
+    cursor::CursorBinaryGuard, ensure_agent_binary_available_with,
     ensure_resolved_binary_available_with,
 };
 use crate::types::AgentKind;
 
 #[test]
-fn built_in_agent_binary_exists_rejects_missing_kilo_binary() {
-    assert!(!built_in_agent_binary_exists(AgentKind::Kilo, |_| false));
+fn route_guard_rejects_missing_kilo_binary() {
+    assert!(ensure_agent_binary_available_with(AgentKind::Kilo, "kilo", |_| false).is_err());
 }
 
 #[test]
-fn built_in_agent_binary_exists_rejects_missing_mimocode_binary() {
-    assert!(!built_in_agent_binary_exists(AgentKind::MiMoCode, |_| false));
+fn route_guard_rejects_missing_mimocode_binary() {
+    assert!(ensure_agent_binary_available_with(AgentKind::MiMoCode, "mimocode", |_| false).is_err());
 }
 
 #[test]
-fn built_in_agent_binary_exists_accepts_cursor_alias_binary() {
-    assert!(built_in_agent_binary_exists(AgentKind::Cursor, |name| {
-        name == "cursor-agent"
-    }));
+fn route_guard_checks_the_cursor_program_the_adapter_resolved() {
+    let _guard = CursorBinaryGuard::set("cursor-agent");
+    let only_alias = |name: &str| name == "cursor-agent";
+    assert!(ensure_agent_binary_available_with(AgentKind::Cursor, "cursor", only_alias).is_ok());
+    let only_agent = |name: &str| name == "agent";
+    let err = ensure_agent_binary_available_with(AgentKind::Cursor, "cursor", only_agent)
+        .unwrap_err();
+    assert_eq!(err.to_string(), "Agent 'cursor' not found: binary 'cursor-agent' missing from PATH");
 }
 
 #[test]

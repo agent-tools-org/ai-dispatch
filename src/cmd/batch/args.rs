@@ -50,11 +50,6 @@ pub(crate) fn task_to_run_args(
     } else {
         task.skills.clone().unwrap_or_default()
     };
-    let profile_model = crate::agent::selection::resolve_explicit_agent_model(
-        &agent_name,
-        task.model.as_deref(),
-        task.budget,
-    );
     let model_source = if task.model.is_some() {
         ModelSource::UserSupplied
     } else {
@@ -66,7 +61,7 @@ pub(crate) fn task_to_run_args(
         dir: task.dir.clone(),
         output: task.output.clone(),
         result_file: auto_scope_result_file(task, siblings),
-        model: task.model.clone().or(profile_model),
+        model: task.model.clone(),
         model_source,
         declared_difficulty: task.difficulty,
         declared_budget: task.budget,
@@ -178,26 +173,6 @@ fn merged_env(
 mod tests {
     use super::*;
 
-    #[test]
-    fn budget_selected_batch_model_is_aid_resolved() {
-        let home = tempfile::tempdir().expect("temporary aid home");
-        let _guard = crate::paths::AidHomeGuard::set(home.path());
-        let task: batch::BatchTask = toml::from_str(
-            r#"
-            agent = "qwen"
-            prompt = "say hi"
-            budget = "cheap"
-            "#,
-        )
-        .expect("valid batch task");
-        let store = Arc::new(Store::open_memory().expect("in-memory store"));
-
-        let args = task_to_run_args(&task, &[], false, &store, None);
-
-        assert!(args.model.is_some(), "budget should select a model");
-        assert_eq!(args.model_source, ModelSource::AidResolved);
-    }
-
     fn batch_task(toml: &str) -> (tempfile::TempDir, crate::paths::AidHomeGuard, batch::BatchTask) {
         let home = tempfile::tempdir().expect("temporary aid home");
         let guard = crate::paths::AidHomeGuard::set(home.path());
@@ -206,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    fn configured_default_outranks_declared_batch_budget() {
+    fn batch_leaves_model_resolution_to_dispatch() {
         let (_home, _guard, task) = batch_task(
             r#"
             agent = "gemini"
@@ -219,11 +194,10 @@ mod tests {
 
         let args = task_to_run_args(&task, &[], false, &store, None);
 
-        assert_eq!(
-            args.model.as_deref(),
-            Some("pro"),
-            "batch must match run: configured default outranks catalog cheap pick flash-lite"
-        );
+        // Dispatch resolves sticky > catalog with the same resolver `aid run` uses.
+        assert_eq!(args.model, None);
+        assert_eq!(args.declared_budget, Some(crate::types::TaskBudget::Cheap));
+        assert!(args.budget);
         assert_eq!(args.model_source, ModelSource::AidResolved);
     }
 
@@ -244,23 +218,6 @@ mod tests {
 
         assert_eq!(args.model.as_deref(), Some("flash"));
         assert_eq!(args.model_source, ModelSource::UserSupplied);
-    }
-
-    #[test]
-    fn batch_uses_catalog_when_no_default_is_configured() {
-        let (_home, _guard, task) = batch_task(
-            r#"
-            agent = "gemini"
-            prompt = "say hi"
-            budget = "cheap"
-            "#,
-        );
-        let store = Arc::new(Store::open_memory().expect("in-memory store"));
-
-        let args = task_to_run_args(&task, &[], false, &store, None);
-
-        assert_eq!(args.model.as_deref(), Some("flash-lite"));
-        assert_eq!(args.model_source, ModelSource::AidResolved);
     }
 
     #[test]

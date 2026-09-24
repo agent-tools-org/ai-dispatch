@@ -28,6 +28,7 @@ pub(crate) mod egress;
 pub(crate) mod registry;
 pub mod classifier;
 pub(crate) mod selection;
+pub(crate) mod run_model;
 pub(crate) mod stream_completion;
 pub(crate) mod truncate;
 pub(crate) mod response;
@@ -49,8 +50,10 @@ pub(crate) use binary::{
     ensure_resolved_binary_available, ensure_resolved_binary_available_with,
 };
 pub(crate) use response::extract_response;
+pub use binary::detect_agents;
+pub(crate) use binary::{RouteBlocker, custom_route_blocker, route_inventory, routable_builtins};
 #[cfg(test)]
-pub(crate) use binary::built_in_agent_binary_exists;
+pub(crate) use binary::DetectAgentsGuard;
 #[allow(unused_imports)]
 pub use env::{
     agent_has_fs_access, apply_cargo_target_env, apply_codex_home_env, apply_run_env, apply_rust_build_cache_env,
@@ -174,65 +177,6 @@ pub struct RunOpts {
     pub session_id: Option<String>,
     pub env: Option<HashMap<String, String>>,
     pub env_forward: Option<Vec<String>>,
-}
-
-/// Detect which agents are installed on the system
-pub fn detect_agents() -> Vec<AgentKind> {
-    #[cfg(test)]
-    {
-        let maybe = DETECT_AGENTS_OVERRIDE.with(|cell| cell.borrow().clone());
-        if let Some(list) = maybe {
-            return list;
-        }
-    }
-    let candidates = [
-        ("gemini", AgentKind::Gemini),
-        ("agy", AgentKind::Antigravity),
-        ("qwen", AgentKind::Qwen),
-        ("codex", AgentKind::Codex),
-        ("commandcode", AgentKind::CommandCode),
-        ("opencode", AgentKind::OpenCode),
-        ("copilot", AgentKind::Copilot),
-        ("agent", AgentKind::Cursor),
-        ("cursor-agent", AgentKind::Cursor),
-        ("droid", AgentKind::Droid),
-        ("kilo", AgentKind::Kilo),
-        ("mimo", AgentKind::MiMoCode),
-        ("oz", AgentKind::Oz),
-        ("claude", AgentKind::Claude),
-        ("grok", AgentKind::Grok),
-    ];
-    env::installed_agents(&candidates)
-}
-
-#[cfg(test)]
-std::thread_local! {
-    static DETECT_AGENTS_OVERRIDE: std::cell::RefCell<Option<Vec<AgentKind>>> =
-        const { std::cell::RefCell::new(None) };
-}
-
-/// RAII guard that pins `detect_agents()` to a test-supplied list on the
-/// current thread. Restores the previous value on drop so nested scopes
-/// compose correctly.
-#[cfg(test)]
-pub(crate) struct DetectAgentsGuard {
-    previous: Option<Vec<AgentKind>>,
-}
-
-#[cfg(test)]
-impl DetectAgentsGuard {
-    pub fn set(agents: Vec<AgentKind>) -> Self {
-        let previous = DETECT_AGENTS_OVERRIDE.with(|cell| cell.borrow().clone());
-        DETECT_AGENTS_OVERRIDE.with(|cell| *cell.borrow_mut() = Some(agents));
-        Self { previous }
-    }
-}
-
-#[cfg(test)]
-impl Drop for DetectAgentsGuard {
-    fn drop(&mut self) {
-        DETECT_AGENTS_OVERRIDE.with(|cell| *cell.borrow_mut() = self.previous.take());
-    }
 }
 
 pub(crate) fn select_agent_with_reason(

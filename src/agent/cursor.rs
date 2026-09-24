@@ -23,7 +23,7 @@ pub struct CursorAgent;
 /// exactly that, and handing Cursor's flags to it fails instantly with an unrelated
 /// argument error that reads like a Cursor bug. Accept `agent` only when it says it is
 /// Cursor's, and fall back to the unambiguous alias otherwise.
-fn cursor_binary() -> &'static str {
+pub(crate) fn cursor_binary() -> &'static str {
     #[cfg(test)]
     if let Some(binary) = TEST_CURSOR_BINARY.with(|cell| *cell.borrow()) {
         return binary;

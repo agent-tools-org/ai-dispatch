@@ -127,3 +127,61 @@ command = "definitely-not-on-path-goose-bin"
         "missing-binary dispatch must not create a task row"
     );
 }
+
+/// A foreign `agent` on PATH (xAI's Grok Build CLI) and no `cursor-agent`:
+/// advise, detect_agents and run preflight must refuse Cursor with one reason.
+#[test]
+fn foreign_agent_binary_blocks_cursor_in_advise_and_preflight_alike() {
+    let _permit = crate::test_subprocess::acquire();
+    let bin_dir = tempfile::tempdir().unwrap();
+    let agent = bin_dir.path().join("agent");
+    std::fs::write(&agent, "#!/bin/sh\necho 'Grok Build TUI'\nexit 0\n").unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&agent, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let helper = "cmd::run::run_dispatch_prepare::preflight_tests::reports_cursor_route_for_subprocess";
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", helper, "--ignored", "--nocapture"])
+        .env("PATH", bin_dir.path())
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "helper failed: {stdout}{}", String::from_utf8_lossy(&output.stderr));
+    let marker = |key: &str| {
+        stdout.lines().find_map(|line| line.strip_prefix(key)).unwrap_or("<missing>").to_string()
+    };
+    let reason = "binary 'cursor-agent' missing from PATH";
+    assert_eq!(marker("ADVISE_INSTALLED="), "false");
+    assert_eq!(marker("ADVISE_ELIGIBLE="), "false");
+    assert_eq!(marker("ADVISE_REASON="), format!("not installed: {reason}"));
+    assert_eq!(marker("DETECTED="), "false");
+    assert_eq!(marker("PREFLIGHT="), format!("Agent 'cursor' not found: {reason}"));
+}
+
+#[test]
+#[ignore]
+fn reports_cursor_route_for_subprocess() {
+    let temp = tempfile::tempdir().unwrap();
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let declared = crate::types::DeclaredTaskProfile {
+        difficulty: crate::types::TaskDifficulty::Moderate,
+        budget: crate::types::TaskBudget::Standard,
+        urgency: crate::types::TaskUrgency::Normal,
+        rigor: crate::types::TaskRigor::Standard,
+    };
+    let report = crate::agent::selection::advise("refactor the parser", declared, None, None, None, 0, None);
+    let cursor = report.candidates.iter().find(|item| item.agent == "cursor").unwrap();
+    println!("ADVISE_INSTALLED={}", cursor.installed);
+    println!("ADVISE_ELIGIBLE={}", cursor.eligible);
+    let reason = cursor.exclusion_reason.clone().unwrap_or_default();
+    println!("ADVISE_REASON={}", reason.split("; ").next().unwrap_or_default());
+    println!("DETECTED={}", crate::agent::detect_agents().contains(&AgentKind::Cursor));
+    let agent = crate::agent::get_agent(AgentKind::Cursor);
+    let args = RunArgs {
+        agent_name: "cursor".to_string(),
+        prompt: "Implement a focused change with enough context.".to_string(),
+        ..Default::default()
+    };
+    let err = validate_command_preflight_with(agent.as_ref(), &args, None, crate::agent::env::which_exists)
+        .unwrap_err();
+    println!("PREFLIGHT={err}");
+}

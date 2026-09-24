@@ -98,10 +98,20 @@ Important controls:
   preferred tier, aid warns on stderr (agent, declared budget, model actually
   chosen) and still dispatches. Catalog tier `unknown` means unpriced, not
   ineligible — it is selectable as a last resort after the known preferred tiers.
+  `aid run`, `aid batch`, and `aid advise` resolve the model with one function,
+  in this precedence: `--model` (`explicit`), a self-heal retry (`forced_default`,
+  passes nothing and also drops `--model`), the sticky default (`sticky`), a custom
+  agent's `forced_model` (`custom_forced`), simple-task smart routing
+  (`smart_route`), the budget route (`budget_route`: a declared `free`/`cheap`
+  budget, `--budget`, or `selection.budget_mode`), the CLI's own readable default
+  (`cli_config`: codex `config.toml`, qwen settings), else `agent_default` with
+  no model. Only `explicit`, `sticky`, `smart_route`, and `budget_route` are
+  pinned: aid passes the model to the CLI. `cli_config` and `custom_forced` are
+  reported but not passed by aid.
   Every dispatch reports its effective model and source (`--model`, agent config,
-  catalog (declared budget), or `CLI default (no -m)`). Quota/budget routing
-  overrides and existing adapter defaults (Cursor, Qwen, MiMoCode) are labeled
-  separately. A healthy default quota group keeps the model
+  budget route, `CLI config (no -m)`, or `CLI default (no -m)`). Quota/budget
+  routing overrides and existing adapter defaults (Cursor, Qwen, MiMoCode) are
+  labeled separately. A healthy default quota group keeps the model
   unset; a held default group pins the first healthy alternative family.
 - `--urgency` declares `background`, `normal`, or `urgent` rate-limit handling. `background` may wait out a clock or Windowed hold; a NeedsHuman hold still blocks.
 - `--rigor` declares `draft`, `standard`, or `critical` proof level (compiles / path exercised /
@@ -212,11 +222,63 @@ urgency is not `background`. Use `--top 0` for all candidates, `--team` for
 team preferences, and omit `--json` for a concise human-readable breakdown
 (including a headroom term). JSON candidates add a `quota` object (`status`,
 `wall`, `used_percent`, `resets_at`, `freshness_secs`, `stale`, `source`)
-without renaming existing keys. Missing the declared capability floor or
-budget is a ranking penalty, not a hard gate: alternatives still appear with
-an exclusion reason such as `base 6 < floor 8 for complex`. Custom agents are
+without renaming existing keys. `quota.status` is `unknown` when no successful
+probe observed the quota (`source: "none"`, a failed probe, or an expired
+marker); it is never reported as dispatchable-by-evidence without one.
+
+Eligibility uses the same "can this route run" predicate as `aid agent list`
+and the `aid run` preflight: a candidate whose binary is missing from `PATH` is
+`installed: false, eligible: false` with reason
+`not installed: binary '<bin>' missing from PATH`. The binary is the one the
+adapter would spawn: Cursor counts an `agent` on `PATH` only when it identifies
+as Cursor, else it needs `cursor-agent`. Every ineligible candidate
+carries `exclusion_reason` (human text, `; `-joined) and `exclusion_codes`
+(one stable code per reason):
+
+| Code | Reason text |
+|---|---|
+| `not_installed` | `not installed: binary '<bin>' missing from PATH` |
+| `below_floor` | `base 6 < floor 8 for complex` (measured shortfall) |
+| `no_capability_data` | `no capability data for <category>` (no matrix row; base defaults to 1 and is still excluded by the floor) |
+| `no_budget_model` | `no model for budget <budget>` |
+| `auth_failed` | `auth failed (observed <time>)` |
+| `weaker_on_caller_pool` | `weaker model on caller's pool` |
+
+Candidates rank eligible first, then eligible-but-demoted, then ineligible;
+ineligible alternatives still appear with their reasons. The recommendation is
+the first eligible candidate. Each candidate also carries `auth`: `state` is
+`failed` (with `observed_at` and `message`) when a run of that agent ended on a
+recognised not-signed-in refusal within the last hour (grok `Not signed in`,
+claude `Please run /login` / `Not logged in`, oz `credentials are invalid`),
+otherwise `unknown`. A successful run clears it; aid never reports `ok` and
+never marks auth failed from a run or probe that could not start.
+
+Caller pool: advise reads the calling session (`AID_CALLER_KIND`, Claude Code,
+Codex; see `aid board --mine`) and the caller's own model from
+`--caller-model <model>` (wins) or `AID_CALLER_MODEL`. Claude Code maps to the
+`anthropic` pool and Codex to `openai-chatgpt-plan`. The JSON report adds
+`caller` (`session`, `agent`, `provider`, `model`, `capability`). A candidate on
+the same pool whose recommended model has a lower catalog capability than the
+caller's model is excluded as `weaker model on caller's pool`. When either
+capability is unknown, same-pool candidates stay eligible but carry
+`demotion_reason` and rank below every eligible other-pool candidate. This is
+advice only: an explicit `aid run <agent>` is never blocked by it. Custom agents are
 reported separately because their configured capability values are not on the
-built-in score scale. Inferred kind is advisory; pass `--kind` when the
+built-in score scale. A candidate's `model`, `pinned`, and `source` come from
+the same resolver `aid run` uses for that declared profile, so `model` is what
+`aid run` would launch. For a declared `free` or `cheap` budget it is the
+catalog budget model (`source: "budget_route"`, `pinned: true`). A codex
+`model = "gpt-6-sol"` in its config makes the candidate `gpt-6-sol` with
+`pinned: false` and `source: "cli_config"`. With no readable CLI default,
+`model` is `null`, `source` is `agent_default`, and the human output says
+`agent default (unknown)`; advise never names a catalog model it will not
+launch. A candidate whose model is unknown or unrated is scored with the
+agent-level base and no model capability term; the caller-pool comparison
+then treats its capability as unknown. When a candidate's model is older
+than a served-only model of the same family (for example catalog `gpt-5.6-sol`,
+served `gpt-6-sol`), the candidate carries `unrated_served_models` (omitted
+when empty) and the human output adds one `note:` line. Those models stay
+unrated and are not selected. Inferred kind is advisory; pass `--kind` when the
 caller knows the task kind. Advice exits successfully even when every agent
 is rate-limited. Advise does not spawn `aidbar`.
 
@@ -445,20 +507,28 @@ rather than on every dispatch. When the model you asked for is absent from the
 cached list, aid re-probes once before rejecting it, so a model the CLI gained
 since the last probe is accepted rather than refused for a day.
 
-`aid agent list --json` refreshes agy's served-model cache when it is missing
-or stale, then merges newly served agy models into `models.available`. The same
-refresh-and-merge applies to opencode (`opencode models`), so providers such as
-`opencode-go` appear beside the built-in `opencode/*` rows. A
-discovered model without catalog metadata has `null` `input_per_m`,
-`output_per_m`, and `capability`; cost displays report `unknown`. Dispatch-time
-catalog readers use only the bounded 24-hour cache and never initiate this discovery probe.
+`aid agent list --json`, `aid config pricing`, and `aid advise` merge every
+model in the 24-hour served-model cache that has no catalog row into the
+catalog views, for each agent with a served-model probe: codex, grok, cursor,
+qwen, agy, and opencode (so providers such as `opencode-go` appear beside the
+built-in `opencode/*` rows). They read the cache only and never probe; an
+absent or expired cache adds nothing. Each `models.available` row carries
+`rated` and `source` (`catalog`, `served`, or `pricing_override`). A served-only
+row has `rated: false`, `source: "served"`, and `null` `input_per_m`,
+`output_per_m`, and `capability`; cost displays report `unknown`. aid never
+invents ratings for served-only models, and routing never auto-selects one.
+Cost estimation prices a model only from an exact match: its static catalog
+row, an explicit `pricing.json` override, or an exact price-feed id or alias.
+It never uses a substring, vendor-prefix, family, or `-free`-suffix match, and
+never a fixed fallback model: a served-only model gets its price from an
+exact price-feed entry, never from a
+similar-name rate. A task with neither a pinned nor an observed model (for
+example unpinned gemini or codex) costs `unknown`, stored as NULL. Subscription
+agents (Cursor, Copilot) cost 0.0 as included.
 
-Two different things can print as $0.00, and they are not interchangeable. A
-model whose id ends in `-free`, `/free`, or `:free` is treated as
-self-declared free by the provider's naming convention and costs 0.0; a catalog
-row whose tier is `unknown` stores 0.0/0.0 to mean "no figure on record" and
-costs `unknown`, never free. A static catalog row's own price outranks both
-discovery and the name convention.
+A catalog row whose tier is `unknown` stores 0.0/0.0 to mean "no figure on
+record" and costs `unknown`, never free. A static catalog row's own price
+outranks overrides and the feed.
 
 For providers represented by aidbar, a successful cached snapshot can release a
 time-based, transient, or Windowed older marker for this dispatch decision only

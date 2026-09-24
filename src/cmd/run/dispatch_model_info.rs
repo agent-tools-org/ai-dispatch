@@ -1,15 +1,20 @@
 // Final dispatch model attribution after quota routing and served-model validation.
-// Exports: model_selection_info; deps: Agent, RunArgs, agent_config, model_catalog.
+// Exports: model_selection_info; deps: Agent, RunArgs, run_model::RunModel.
 
 use super::RunArgs;
-use crate::agent::model_validation::ModelSource;
-use crate::types::{AgentKind, TaskBudget};
+use crate::agent::run_model::{RunModel, RunModelSource};
+use crate::types::AgentKind;
 
+/// One line naming the launched model and its source. The source comes from
+/// the resolver; a pinned model that later changed was quota/budget routed.
 pub(super) fn model_selection_info(
-    args: &RunArgs, effective_model: Option<&str>, agent: &dyn crate::agent::Agent,
+    args: &RunArgs, run_model: &RunModel, effective_model: Option<&str>,
+    agent: &dyn crate::agent::Agent,
 ) -> String {
     let adapter_default = effective_model.is_none().then(|| agent.default_model()).flatten();
     let custom = agent.kind() == AgentKind::Custom;
+    let cli_config = (run_model.source == RunModelSource::CliConfig)
+        .then_some(run_model.model.as_deref()).flatten();
     let source = match effective_model {
         None if args.force_default_model => match (custom, adapter_default.is_some()) {
             (true, false) => "self-heal retry: custom/delegate default (unknown)",
@@ -20,17 +25,11 @@ pub(super) fn model_selection_info(
         None if custom && adapter_default.is_none() => "custom/delegate default (unknown)",
         None if custom => "custom/delegate default (no caller -m)",
         None if adapter_default.is_some() => "adapter default (no caller -m)",
+        None if cli_config.is_some() => RunModelSource::CliConfig.label(),
         None => "CLI default (no -m)",
-        Some(model) if args.model_source == ModelSource::UserSupplied
-            && args.model.as_deref() == Some(model) => "--model",
-        Some(model) if crate::agent_config::get_default_model(&args.agent_name).as_deref()
-            == Some(model) => "agent config",
-        Some(model) if matches!(args.declared_budget, Some(TaskBudget::Free | TaskBudget::Cheap))
-            && AgentKind::parse_str(&args.agent_name).is_some_and(|kind| {
-                args.declared_budget.and_then(|budget| {
-                    crate::model_catalog::model_for_task_budget(kind, budget)
-                }) == Some(model)
-            }) => "catalog (declared budget)",
+        Some(model) if run_model.pinned && run_model.model.as_deref() == Some(model) => {
+            run_model.source.label()
+        }
         Some(_) => "quota/budget routing",
     };
     let unknown_default = if custom {
@@ -40,16 +39,18 @@ pub(super) fn model_selection_info(
     } else {
         "CLI default (no -m)"
     };
-    format!(
-        "[aid] {} model: {}; source: {source}",
-        args.agent_name,
-        effective_model.or(adapter_default.as_deref()).unwrap_or(unknown_default)
-    )
+    let shown = effective_model.or(adapter_default.as_deref())
+        .or(cli_config.filter(|_| !args.force_default_model));
+    format!("[aid] {} model: {}; source: {source}", args.agent_name, shown.unwrap_or(unknown_default))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn unpinned() -> RunModel {
+        RunModel { model: None, pinned: false, source: RunModelSource::AgentDefault }
+    }
 
     #[test]
     fn self_heal_retry_labels_cli_default_even_with_original_model() {
@@ -59,7 +60,7 @@ mod tests {
             force_default_model: true,
             ..Default::default()
         };
-        assert_eq!(model_selection_info(&args, None, &crate::agent::codex::CodexAgent),
+        assert_eq!(model_selection_info(&args, &unpinned(), None, &crate::agent::codex::CodexAgent),
             "[aid] codex model: CLI default; source: self-heal retry: CLI default");
     }
 
@@ -71,7 +72,7 @@ mod tests {
                 "[agent]\nid = 'byok'\ndisplay_name = 'BYOK'\ncommand = 'wrapper'\ndelegate_to = 'opencode'\n",
             ).expect("custom config"),
         };
-        assert_eq!(model_selection_info(&args, None, &agent),
+        assert_eq!(model_selection_info(&args, &unpinned(), None, &agent),
             "[aid] byok model: unknown (custom/delegate default); source: custom/delegate default (unknown)");
     }
 
@@ -85,7 +86,7 @@ mod tests {
         ).expect("delegate config");
         let agent = crate::agent::registry::resolve_custom_agent("byok").expect("delegate adapter");
         let args = RunArgs { agent_name: "byok".to_string(), ..Default::default() };
-        assert_eq!(model_selection_info(&args, None, agent.as_ref()),
+        assert_eq!(model_selection_info(&args, &unpinned(), None, agent.as_ref()),
             "[aid] byok model: provider/custom-model; source: custom/delegate default (no caller -m)");
     }
 
@@ -97,7 +98,7 @@ mod tests {
             force_default_model: true,
             ..Default::default()
         };
-        assert_eq!(model_selection_info(&args, None, &crate::agent::cursor::CursorAgent),
+        assert_eq!(model_selection_info(&args, &unpinned(), None, &crate::agent::cursor::CursorAgent),
             "[aid] cursor model: composer-2.5; source: self-heal retry: adapter default");
     }
 
@@ -109,7 +110,7 @@ mod tests {
         let args = RunArgs {
             agent_name: "byok".to_string(), force_default_model: true, ..Default::default()
         };
-        assert_eq!(model_selection_info(&args, None, &agent),
+        assert_eq!(model_selection_info(&args, &unpinned(), None, &agent),
             "[aid] byok model: provider/custom-model; source: self-heal retry: custom/delegate default");
     }
 
@@ -123,7 +124,7 @@ mod tests {
         let args = RunArgs {
             agent_name: "byok".to_string(), force_default_model: true, ..Default::default()
         };
-        assert_eq!(model_selection_info(&args, None, &agent),
+        assert_eq!(model_selection_info(&args, &unpinned(), None, &agent),
             "[aid] byok model: unknown (custom/delegate default); source: self-heal retry: custom/delegate default (unknown)");
     }
 
@@ -134,7 +135,7 @@ mod tests {
         let args = RunArgs {
             agent_name: "cursor".to_string(), force_default_model: true, ..Default::default()
         };
-        assert_eq!(model_selection_info(&args, Some("auto"), &crate::agent::cursor::CursorAgent),
+        assert_eq!(model_selection_info(&args, &unpinned(), Some("auto"), &crate::agent::cursor::CursorAgent),
             "[aid] cursor model: auto; source: quota/budget routing");
     }
 
@@ -146,9 +147,19 @@ mod tests {
             r#"{"model":{"name":"configured-qwen"}}"#).expect("qwen settings");
         crate::model_catalog::set_test_qwen_home(Some(home.path().to_path_buf()));
         let args = RunArgs { agent_name: "qwen".to_string(), ..Default::default() };
-        let info = model_selection_info(&args, None, &crate::agent::qwen::QwenAgent);
+        let info = model_selection_info(&args, &unpinned(), None, &crate::agent::qwen::QwenAgent);
         crate::model_catalog::set_test_qwen_home(None);
         assert_eq!(info,
             "[aid] qwen model: configured-qwen; source: adapter default (no caller -m)");
+    }
+
+    #[test]
+    fn unpinned_cli_config_default_is_named_with_its_source() {
+        let args = RunArgs { agent_name: "codex".to_string(), ..Default::default() };
+        let run_model = RunModel {
+            model: Some("gpt-6-sol".to_string()), pinned: false, source: RunModelSource::CliConfig,
+        };
+        assert_eq!(model_selection_info(&args, &run_model, None, &crate::agent::codex::CodexAgent),
+            "[aid] codex model: gpt-6-sol; source: CLI config (no -m)");
     }
 }

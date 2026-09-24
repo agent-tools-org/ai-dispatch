@@ -131,7 +131,9 @@ struct MissionBriefView: View {
                                 text: agent.busy ? "ENG" : "RDY",
                                 color: agent.busy ? theme.run : theme.ink2
                             )
-                            StatusLamp(color: agent.quotaOK ? theme.done : theme.fail, active: agent.quotaOK)
+                            StatusLamp(color: quotaColor(agent.quota), active: agent.quota == .ok)
+                                .help("quota \(agent.quota.rawValue)")
+                                .accessibilityLabel("quota \(agent.quota.rawValue)")
                         }
                     }
                 }
@@ -191,7 +193,7 @@ struct MissionBriefView: View {
                     RarityChevrons(rarity: payload.rarity)
                 }
             }
-            lampRow
+            lampRow(mission)
         }
         .frame(width: 280, alignment: .leading)
     }
@@ -211,18 +213,18 @@ struct MissionBriefView: View {
         }
     }
 
-    private var lampRow: some View {
+    private func lampRow(_ mission: Mission) -> some View {
         HStack(spacing: theme.spacing.sm) {
             ForEach(["LINK", "DRIVE", "SHIELD", "QUOTA", "DOCK"], id: \.self) { label in
                 HStack(spacing: 4) {
-                    StatusLamp(color: lampColor(label), active: true)
+                    StatusLamp(color: lampColor(label, mission: mission), active: true)
                     MonoLabel(text: label, color: theme.ink3)
                 }
             }
         }
     }
 
-    private func lampColor(_ label: String) -> Color {
+    private func lampColor(_ label: String, mission: Mission) -> Color {
         switch label {
         case "LINK":
             switch snapshot.connection {
@@ -231,8 +233,18 @@ struct MissionBriefView: View {
             case .connecting: return theme.ink2
             case .disconnected, .error: return theme.fail
             }
-        case "QUOTA": return theme.stop
+        case "QUOTA":
+            return quotaColor(snapshot.agents.first { $0.id == mission.agent }?.quota ?? .unknown)
         default: return theme.ink2
+        }
+    }
+
+    private func quotaColor(_ state: QuotaState) -> Color {
+        switch state {
+        case .ok: return theme.done
+        case .unknown: return theme.ink3  // absent evidence, never the failure lamp
+        case .degraded, .partial: return theme.stop
+        case .limited: return theme.fail
         }
     }
 

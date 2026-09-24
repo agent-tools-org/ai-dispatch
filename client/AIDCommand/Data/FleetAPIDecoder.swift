@@ -62,7 +62,7 @@ enum FleetAPIDecoder {
             AgentInfo(
                 id: $0.name,
                 busy: $0.busy,
-                quotaOK: ($0.quota?.state ?? "unknown") == "ok",
+                quota: QuotaState(wire: $0.quota?.state),
                 taskCount: measuredTaskCount($0.task_count)
             )
         }

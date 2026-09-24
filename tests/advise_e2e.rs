@@ -59,10 +59,10 @@ fn advise_ranks_actionable_builtins_before_separate_custom_context() {
     let candidates = payload["candidates"].as_array().expect("built-in candidates");
     let recommended = payload["recommended"]["agent"].as_str().expect("recommended agent");
     assert_eq!(candidates[0]["agent"], recommended);
-    // Soft eligibility: floor/budget shortfalls are ranking penalties with reasons, not a hard gate.
-    let with_reason = candidates.iter().find(|item| item["eligible"] == false);
-    if let Some(item) = with_reason {
+    // Ineligible candidates stay listed, each with a reason and a code per reason.
+    for item in candidates.iter().filter(|item| item["eligible"] == false) {
         assert!(item["exclusion_reason"].as_str().is_some_and(|text| !text.is_empty()));
+        assert!(item["exclusion_codes"].as_array().is_some_and(|codes| !codes.is_empty()));
     }
     assert!(candidates.iter().all(|item| item["agent"] != "researcher"));
     assert_eq!(payload["custom_candidates"][0]["agent"], "researcher");
@@ -99,6 +99,31 @@ fn advise_succeeds_when_every_builtin_is_rate_limited() {
     assert!(candidates.iter().all(|item| item["breakdown"]["rate_limit_penalty"] == -10.0));
     assert!(payload["recommended"].is_object());
     assert!(!aid_home.path().join("aid.db").exists());
+}
+
+#[test]
+fn advise_reports_caller_pool_from_session_and_caller_model_flag() {
+    let aid_home = TempDir::new().expect("temp AID_HOME");
+    let output = aid_cmd_in(aid_home.path())
+        .env("AID_CALLER_KIND", "claude-code")
+        .env("AID_CALLER_SESSION", "s-e2e")
+        .env("AID_CALLER_MODEL", "haiku")
+        .args(["advise", "Refactor src/main.rs safely", "--caller-model", "opus"])
+        .args(PROFILE_ARGS)
+        .output()
+        .expect("run advise");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let payload: serde_json::Value = serde_json::from_slice(&output.stdout).expect("advice JSON");
+    assert_eq!(payload["caller"]["provider"], "anthropic");
+    assert_eq!(payload["caller"]["model"], "opus");
+    let candidates = payload["candidates"].as_array().expect("candidates");
+    let claude = candidates.iter().find(|item| item["agent"] == "claude").expect("claude listed");
+    assert!(claude["auth"]["state"] == "unknown");
+    for item in candidates.iter().filter(|item| item["installed"] == false) {
+        assert_eq!(item["eligible"], false);
+        assert!(item["exclusion_codes"].as_array().is_some_and(|codes| codes.iter().any(|c| c == "not_installed")));
+    }
 }
 
 #[test]

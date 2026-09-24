@@ -26,7 +26,7 @@ mod tests;
 
 use config_display::{agent_profile, compute_agent_history, compute_model_history, format_capabilities};
 use crate::model_catalog::AGENT_PROFILES;
-pub(crate) use crate::model_catalog::{budget_model, merged_agent_models};
+pub(crate) use crate::model_catalog::merged_agent_models;
 use crate::model_catalog::PricingResponse;
 
 pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
@@ -278,13 +278,5 @@ fn update_pricing_file() -> Result<usize> {
 }
 
 fn command_installed(command: &str) -> bool {
-    let binary = command.split_whitespace().next().unwrap_or_default();
-    if binary.is_empty() {
-        return false;
-    }
-    Command::new("which")
-        .arg(binary)
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
+    crate::agent::custom_route_blocker(command).is_none()
 }

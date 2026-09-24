@@ -367,7 +367,6 @@ fn team_override_boosts_score() {
         avg_cost_map: &avg_cost_map,
         team_default: None,
         budget: false,
-        declared_budget: None,
         penalize_rate_limit: true,
     };
     let mut overrides = HashMap::new();
@@ -395,7 +394,6 @@ fn team_override_boosts_score() {
         avg_cost_map: &avg_cost_map,
         team_default: None,
         budget: false,
-        declared_budget: None,
         penalize_rate_limit: true,
     };
     let base_score = score_for(&base_context, AgentKind::OpenCode);
@@ -422,7 +420,6 @@ fn team_preferred_agents_boost() {
         avg_cost_map: &avg_cost_map,
         team_default: None,
         budget: false,
-        declared_budget: None,
         penalize_rate_limit: true,
     };
     let team = TeamConfig {
@@ -442,7 +439,6 @@ fn team_preferred_agents_boost() {
         avg_cost_map: &avg_cost_map,
         team_default: None,
         budget: false,
-        declared_budget: None,
         penalize_rate_limit: true,
     };
     let base_score = score_for(&base_context, AgentKind::Kilo);

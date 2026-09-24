@@ -24,6 +24,7 @@ mod backup;
 mod remote_build;
 mod agent_config;
 mod aic;
+mod auth_marker;
 mod background;
 mod batch;
 mod board;

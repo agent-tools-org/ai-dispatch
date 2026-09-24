@@ -1,21 +1,23 @@
 // Custom-agent advice candidates: separate capability scale from built-ins.
-// Exports: custom_candidates(), shortfall().
-// Deps: custom registry, capability helpers, declared profile types.
+// Exports: custom_candidates().
+// Deps: custom registry, route predicate, capability helpers, run_model resolver.
 
 use crate::agent::registry::load_custom_agents;
-use super::super::selection_capabilities::{
-    custom_category_score, custom_command_installed, custom_strength_bonus,
-};
+use super::super::selection_capabilities::{custom_category_score, custom_strength_bonus};
 use super::super::selection_scoring::CandidateContext;
+use crate::agent::run_model::{RunModelInput, resolve_run_model};
 use crate::agent_config;
+use crate::config::SelectionConfig;
 use crate::model_catalog::AGENT_MODELS;
-use crate::types::{AgentKind, DeclaredTaskProfile, TaskBudget, TaskDifficulty};
+use crate::types::{AgentKind, DeclaredTaskProfile, TaskBudget};
 
+use super::gate::Exclusions;
 use super::{CustomAdviceCandidate, ELIGIBILITY_PENALTY, NOT_INSTALLED_PENALTY};
 
 pub(super) fn custom_candidates(
     context: &CandidateContext<'_>,
     declared: DeclaredTaskProfile,
+    selection: &SelectionConfig,
 ) -> Vec<CustomAdviceCandidate> {
     let floor = declared.difficulty.capability_floor();
     let mut candidates: Vec<_> = load_custom_agents().into_values()
@@ -28,14 +30,23 @@ pub(super) fn custom_candidates(
             let team_preferred = context.team.is_some_and(|team| {
                 team.preferred_agents.iter().any(|item| item.eq_ignore_ascii_case(&config.id))
             });
-            let model = config.forced_model.clone();
-            let budget_ok = custom_budget_allows(model.as_deref(), declared.budget);
-            let exclusion_reason = shortfall(total, floor, declared.difficulty, budget_ok, declared.budget);
+            let input = RunModelInput::declared(
+                &config.id, AgentKind::Custom, Some(&config), declared, selection,
+            );
+            let model = resolve_run_model(&input).model;
+            let blocker = crate::agent::custom_route_blocker(&config.command);
+            let mut exclusions = Exclusions::default();
+            if let Some(blocker) = &blocker {
+                exclusions.push(blocker.code(), blocker.reason());
+            }
+            exclusions.floor(Some(total), floor, declared.difficulty, context.profile.category);
+            exclusions.budget(custom_budget_allows(model.as_deref(), declared.budget), declared.budget);
+            let eligible = exclusions.is_empty();
+            let (exclusion_reason, exclusion_codes) = exclusions.into_parts();
             CustomAdviceCandidate {
-                agent: config.id,
-                installed: custom_command_installed(&config.command),
-                eligible: exclusion_reason.is_none(),
-                model, category_capability, strength_bonus, team_preferred, exclusion_reason,
+                agent: config.id, installed: blocker.is_none(), eligible,
+                model, category_capability, strength_bonus, team_preferred,
+                exclusion_reason, exclusion_codes,
             }
         })
         .collect();
@@ -63,17 +74,4 @@ fn custom_budget_allows(model: Option<&str>, budget: TaskBudget) -> bool {
     AGENT_MODELS.iter().any(|item| item.model == model && (
         item.tier == "free" || budget == TaskBudget::Cheap && item.tier == "cheap"
     ))
-}
-
-pub(super) fn shortfall(
-    base: i32, floor: i32, difficulty: TaskDifficulty, budget_ok: bool, budget: TaskBudget,
-) -> Option<String> {
-    let mut parts = Vec::new();
-    if base < floor {
-        parts.push(format!("base {base} < floor {floor} for {}", difficulty.label()));
-    }
-    if !budget_ok {
-        parts.push(format!("no model for budget {}", budget.label()));
-    }
-    if parts.is_empty() { None } else { Some(parts.join("; ")) }
 }

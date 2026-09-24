@@ -216,7 +216,11 @@ without renaming existing keys. Missing the declared capability floor or
 budget is a ranking penalty, not a hard gate: alternatives still appear with
 an exclusion reason such as `base 6 < floor 8 for complex`. Custom agents are
 reported separately because their configured capability values are not on the
-built-in score scale. Inferred kind is advisory; pass `--kind` when the
+built-in score scale. When a candidate's catalog model is older than a
+served-only model of the same family (for example catalog `gpt-5.6-sol`,
+served `gpt-6-sol`), the candidate carries `unrated_served_models` (omitted
+when empty) and the human output adds one `note:` line. Those models stay
+unrated and are not selected. Inferred kind is advisory; pass `--kind` when the
 caller knows the task kind. Advice exits successfully even when every agent
 is rate-limited. Advise does not spawn `aidbar`.
 
@@ -440,13 +444,16 @@ rather than on every dispatch. When the model you asked for is absent from the
 cached list, aid re-probes once before rejecting it, so a model the CLI gained
 since the last probe is accepted rather than refused for a day.
 
-`aid agent list --json` refreshes agy's served-model cache when it is missing
-or stale, then merges newly served agy models into `models.available`. The same
-refresh-and-merge applies to opencode (`opencode models`), so providers such as
-`opencode-go` appear beside the built-in `opencode/*` rows. A
-discovered model without catalog metadata has `null` `input_per_m`,
-`output_per_m`, and `capability`; cost displays report `unknown`. Dispatch-time
-catalog readers use only the bounded 24-hour cache and never initiate this discovery probe.
+`aid agent list --json`, `aid config pricing`, and `aid advise` merge every
+model in the 24-hour served-model cache that has no catalog row into the
+catalog views, for each agent with a served-model probe: codex, grok, cursor,
+qwen, agy, and opencode (so providers such as `opencode-go` appear beside the
+built-in `opencode/*` rows). They read the cache only and never probe; an
+absent or expired cache adds nothing. Each `models.available` row carries
+`rated` and `source` (`catalog`, `served`, or `pricing_override`). A served-only
+row has `rated: false`, `source: "served"`, and `null` `input_per_m`,
+`output_per_m`, and `capability`; cost displays report `unknown`. aid never
+invents ratings for served-only models, and routing never auto-selects one.
 
 Two different things can print as $0.00, and they are not interchangeable. A
 model whose id ends in `-free`, `/free`, or `:free` is treated as

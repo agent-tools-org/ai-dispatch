@@ -62,6 +62,8 @@ pub struct GroupHoldJson {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ModelsJson {
     pub default: Option<String>,
+    /// `"sticky"` | `"forced"` | `"cli_config"` | `"catalog"`; null when no default.
+    pub default_source: Option<String>,
     pub budget: Option<String>,
     pub available: Vec<AvailableModelJson>,
 }
@@ -73,6 +75,10 @@ pub struct AvailableModelJson {
     pub input_per_m: Option<f64>,
     pub output_per_m: Option<f64>,
     pub capability: Option<f64>,
+    /// False when aid has no measured capability for this model.
+    pub rated: bool,
+    /// `"catalog"` | `"served"` (CLI reports it, no catalog row) | `"pricing_override"`.
+    pub source: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

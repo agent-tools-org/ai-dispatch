@@ -15,7 +15,7 @@ mod selection_fallback;
 #[path = "explicit_model.rs"]
 mod explicit_model;
 pub(crate) use explicit_model::resolve_explicit_agent_model;
-pub(crate) use selection_advice::{AdviceReport, advise};
+pub(crate) use selection_advice::{AdviceCandidate, AdviceReport, advise};
 pub(crate) use selection_fallback::{coding_fallback_for, coding_fallback_for_prompt};
 pub(crate) use selection_quota::{quota_from, tightest_window};
 use selection_scoring::{

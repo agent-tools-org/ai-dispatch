@@ -24,7 +24,7 @@ pub(super) async fn run_post_lifecycle(
         .unwrap_or(ModelSource::AidResolved);
     let mut lifecycle_args = run_args_from_spec(spec, model_source);
     lifecycle_args.remote_build = crate::remote_build::saved_box(store, &spec.task_id)?;
-    carry_backup_overrides(&mut lifecycle_args, saved.as_ref());
+    carry_saved_overrides(&mut lifecycle_args, saved.as_ref());
     let task_id = TaskId(spec.task_id.clone());
     let pre_verify_status = store
         .get_task(&spec.task_id)?
@@ -110,10 +110,11 @@ fn run_args_from_spec(spec: &BackgroundRunSpec, model_source: ModelSource) -> cr
 
 /// The spec has no backup fields; retries derived from these args must keep
 /// the task's `--backup` / `--no-backup` intent, so copy it from the saved args.
-fn carry_backup_overrides(args: &mut crate::cmd::run::RunArgs, saved: Option<&crate::cmd::run::RunArgs>) {
+fn carry_saved_overrides(args: &mut crate::cmd::run::RunArgs, saved: Option<&crate::cmd::run::RunArgs>) {
     if let Some(saved) = saved {
         args.backup = saved.backup.clone();
         args.no_backup = saved.no_backup;
+        args.kind = saved.kind;
     }
 }
 
@@ -144,21 +145,30 @@ fn task_lifecycle_paths(
 
 #[cfg(test)]
 mod tests {
-    use super::carry_backup_overrides;
+    use super::carry_saved_overrides;
+    use crate::agent::classifier::TaskCategory;
     use crate::cmd::run::RunArgs;
 
     #[test]
     fn lifecycle_args_carry_saved_backup_overrides() {
         let saved = RunArgs { backup: Some("gdrive:x".into()), no_backup: false, ..Default::default() };
         let mut args = RunArgs::default();
-        carry_backup_overrides(&mut args, Some(&saved));
+        carry_saved_overrides(&mut args, Some(&saved));
         assert_eq!(args.backup.as_deref(), Some("gdrive:x"));
 
         let saved = RunArgs { no_backup: true, ..Default::default() };
-        carry_backup_overrides(&mut args, Some(&saved));
+        carry_saved_overrides(&mut args, Some(&saved));
         assert!(args.no_backup && args.backup.is_none());
 
-        carry_backup_overrides(&mut args, None);
+        carry_saved_overrides(&mut args, None);
         assert!(args.no_backup, "absent saved args leave the fields alone");
+    }
+
+    #[test]
+    fn lifecycle_args_carry_declared_kind() {
+        let saved = RunArgs { kind: Some(TaskCategory::ComplexImpl), ..Default::default() };
+        let mut args = RunArgs::default();
+        carry_saved_overrides(&mut args, Some(&saved));
+        assert_eq!(args.kind, Some(TaskCategory::ComplexImpl));
     }
 }

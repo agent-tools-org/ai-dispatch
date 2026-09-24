@@ -91,7 +91,6 @@ fn audit_noun_phrase_does_not_mask_explicit_audit_term() {
         TaskCategory::Research,
         None,
     ));
-    assert!(prompt_is_audit_report("cross-audit the audit log feature"));
 }
 
 #[test]
@@ -102,7 +101,6 @@ fn audit_log_feature_prompt_does_not_enable_report_mode() {
         TaskCategory::Research,
         None,
     ));
-    assert!(!prompt_is_audit_report("Implement an audit log feature"));
 }
 
 #[test]
@@ -173,7 +171,7 @@ fn adversarial_auditor_prompt_enables_report_instruction_only() {
         TaskCategory::Research,
         None,
     ));
-    assert!(instruction(prompt, false, TaskCategory::Research, None).is_some());
+    assert!(instruction(prompt, false, TaskCategory::Research, None, None).is_some());
     assert!(!skips_dirty_enforcement(prompt, false, TaskCategory::Research));
 }
 
@@ -236,7 +234,7 @@ fn scaffolding_suppression_distinguishes_negated_and_active_write_intent() {
         "Read-only cross-audit. Work ONLY in <path>.",
         "Read-only adversarial audit of commit 3ec12a8, without modifying anything.",
     ] {
-        assert!(suppresses_implementation_scaffolding(prompt, false), "{prompt}");
+        assert!(suppresses_implementation_scaffolding(prompt, false, None), "{prompt}");
     }
 
     for prompt in [
@@ -245,7 +243,7 @@ fn scaffolding_suppression_distinguishes_negated_and_active_write_intent() {
         "make changes to the read-only audit logic",
         "Do a code review of the auth module, then fix the security bug",
     ] {
-        assert!(!suppresses_implementation_scaffolding(prompt, false), "{prompt}");
+        assert!(!suppresses_implementation_scaffolding(prompt, false, None), "{prompt}");
     }
 }
 

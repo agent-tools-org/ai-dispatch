@@ -52,7 +52,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     );
     task_profile.category = effective_category(task_profile.category, args.kind);
     let suppress_implementation_scaffolding = crate::cmd::report_mode::suppresses_implementation_scaffolding(
-        &prompt, args.read_only,
+        &prompt, args.read_only, args.kind,
     );
     let task_category_label = task_profile.category.label();
     let mut effective_prompt = crate::workgroup::compose_prompt(
@@ -230,14 +230,9 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
     if let Some(block) = output_file_instruction(args.output.as_deref(), args.result_file.as_deref()) {
         effective_prompt = format!("{effective_prompt}\n\n{block}");
     }
-    if let Some(block) =
-        crate::cmd::report_mode::instruction(
-            &args.prompt,
-            args.read_only,
-            task_profile.category,
-            args.result_file.as_deref(),
-        )
-    {
+    if let Some(block) = crate::cmd::report_mode::instruction(
+        &args.prompt, args.read_only, task_profile.category, args.result_file.as_deref(), args.kind,
+    ) {
         effective_prompt = format!("{effective_prompt}\n\n{block}");
     }
     if let Some(checklist_block) = crate::cmd::checklist::format_checklist_block(&args.checklist) {

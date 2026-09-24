@@ -256,6 +256,11 @@ Write verbs after the audit phrase also keep implementation scaffolding unless
 they are negated, as in `do not modify` or `without modifying`.
 An explicit `--result-file` controls report formatting and delivery; it does not
 by itself remove implementation methodology or Git staging instructions.
+A declared writable kind (`--kind simple-edit|complex-impl|frontend|testing|refactoring`
+without `--read-only`) is never turned into a report task by prompt wording.
+The kind carries over to `aid retry`, so a brief that discusses audits,
+reviews, or findings stays an implementation task on every attempt. To get a
+report, declare `--kind research|debugging|documentation` or pass `--read-only`.
 
 Unsupported agent and flag combinations are refused before a task row is created,
 with an error that names what to do instead. The same preflight resolves the agent

@@ -83,6 +83,13 @@ pub(crate) fn is_audit_report_task(
 }
 
 pub(crate) fn apply_defaults(args: &mut RunArgs, category: TaskCategory) -> bool {
+    if declared_write_task(args.kind, args.read_only) {
+        // A result file aid auto-set earlier (required=false) is dropped; an explicit one stays.
+        if args.result_file_required == Some(false) {
+            args.result_file = None;
+        }
+        return false;
+    }
     if !is_audit_report_task(&args.prompt, args.read_only, category, args.result_file.as_deref()) {
         return false;
     }
@@ -97,8 +104,10 @@ pub(crate) fn apply_defaults(args: &mut RunArgs, category: TaskCategory) -> bool
 pub(crate) fn suppresses_implementation_scaffolding(
     prompt: &str,
     read_only: bool,
+    declared: Option<TaskCategory>,
 ) -> bool {
     if read_only { return true; }
+    if declared_write_task(declared, read_only) { return false; }
     let normalized = prompt.trim().to_lowercase();
     prompt_matches_read_only_audit_terms(&normalized)
 }
@@ -114,16 +123,24 @@ pub(crate) fn skips_dirty_enforcement(prompt: &str, read_only: bool, category: T
         && prompt_matches_auto_report_terms(&normalized)
 }
 
-pub(crate) fn task_result_file(task_id: &str) -> String {
-    format!("result-{task_id}.md")
+/// A declared implementation kind states the operator's intent; keyword inference must not
+/// turn it into a report-only task (a persisted auto result file would re-trigger it on retry).
+fn declared_write_task(declared: Option<TaskCategory>, read_only: bool) -> bool {
+    !read_only
+        && matches!(
+            declared,
+            Some(
+                TaskCategory::SimpleEdit
+                    | TaskCategory::ComplexImpl
+                    | TaskCategory::Frontend
+                    | TaskCategory::Testing
+                    | TaskCategory::Refactoring
+            )
+        )
 }
 
-/// Cheap prompt-only check used by `aid show` to decide whether to surface
-/// the "audit result missing" banner. Mirrors the explicit-audit branch of
-/// `is_audit_report_task` without requiring a TaskCategory.
-pub(crate) fn prompt_is_audit_report(prompt: &str) -> bool {
-    let normalized = prompt.trim().to_lowercase();
-    prompt_matches_audit_terms(&normalized)
+pub(crate) fn task_result_file(task_id: &str) -> String {
+    format!("result-{task_id}.md")
 }
 
 pub(crate) fn instruction(
@@ -131,8 +148,11 @@ pub(crate) fn instruction(
     read_only: bool,
     category: TaskCategory,
     result_file: Option<&str>,
+    declared: Option<TaskCategory>,
 ) -> Option<&'static str> {
-    if !is_audit_report_task(prompt, read_only, category, result_file) {
+    if declared_write_task(declared, read_only)
+        || !is_audit_report_task(prompt, read_only, category, result_file)
+    {
         return None;
     }
     Some(
@@ -256,3 +276,4 @@ fn strip_audit_noun_phrases(normalized_prompt: &str) -> String {
 }
 
 #[cfg(test)] #[path = "report_mode_tests.rs"] mod tests;
+#[cfg(test)] #[path = "report_mode_declared_tests.rs"] mod declared_tests;

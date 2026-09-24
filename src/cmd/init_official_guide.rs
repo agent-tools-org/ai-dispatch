@@ -38,6 +38,10 @@ const GUIDE_FILES: &[(&str, &str)] = &[
         include_str!("../../default-skills/aid-guide/references/task-operations.md"),
     ),
     (
+        "references/classify.md",
+        include_str!("../../default-skills/aid-guide/references/classify.md"),
+    ),
+    (
         "references/task-lifecycle.md",
         include_str!("../../default-skills/aid-guide/references/task-lifecycle.md"),
     ),

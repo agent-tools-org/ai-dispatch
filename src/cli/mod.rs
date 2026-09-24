@@ -5,6 +5,7 @@ pub(crate) mod command_args_a;
 pub(crate) mod command_args_advise;
 pub(crate) mod command_args_b;
 pub(crate) mod command_args_c;
+pub(crate) mod command_args_classify;
 pub(crate) mod command_args_watch;
 mod extras;
 mod sub_enums;
@@ -96,6 +97,8 @@ pub enum Commands {
     Unstick(command_args_b::UnstickArgs),
     Ask(command_args_b::AskArgs),
     Query(command_args_b::QueryArgs),
+    /// Ask typed questions (noul, choice, score) about a text or file via TypeSafe Jev; prints JSON
+    Classify(command_args_classify::ClassifyArgs),
     Mcp,
     Hook(command_args_b::HookArgs),
     Config(command_args_b::ConfigArgs),

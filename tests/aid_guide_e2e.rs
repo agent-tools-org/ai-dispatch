@@ -96,6 +96,7 @@ fn official_guide_documents_prompt_only_audit_dispatch() {
     assert!(dispatch.contains("`do not modify` or `without modifying`"));
     assert!(dispatch.contains("independent of dirty-worktree enforcement"));
     assert!(dispatch.contains("`--result-file` controls report formatting and delivery"));
+    assert!(dispatch.contains("is never turned into a report task by prompt wording"));
 }
 
 #[test]

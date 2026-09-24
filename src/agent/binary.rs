@@ -1,6 +1,7 @@
 // Host PATH / program resolution: the one "can this route run here" predicate.
-// Exports: route_blocker*, route_inventory, detect_agents, ensure_*_available, built_in_binaries.
-// Deps: AgentKind, env::which_exists.
+// Exports: route_blocker*, route_inventory, detect_agents, ensure_*_available, built_in_program,
+// built_in_binaries.
+// Deps: AgentKind, env::which_exists, cursor::cursor_binary.
 use anyhow::Result;
 use crate::types::AgentKind;
 use super::env;
@@ -44,17 +45,27 @@ pub(crate) fn ensure_resolved_binary_available_with<F>(
 where
     F: Fn(&str) -> bool,
 {
-    if resolved_binary_exists(program, &which) {
-        return Ok(());
+    match program_blocker(program, &which) {
+        None => Ok(()),
+        Some(blocker) => anyhow::bail!("Agent '{}' not found: {}", agent_name, blocker.detail()),
     }
-    let blocker = route::RouteBlocker::NotInstalled {
-        binary: std::path::Path::new(program)
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or(program)
-            .to_string(),
-    };
-    anyhow::bail!("Agent '{}' not found: {}", agent_name, blocker.detail());
+}
+
+/// The one "can this program run here" predicate: route inventory, advise, the
+/// dispatch guards and the command preflight all end here.
+fn program_blocker<F>(program: &str, which: &F) -> Option<route::RouteBlocker>
+where
+    F: Fn(&str) -> bool,
+{
+    if !program.is_empty() && resolved_binary_exists(program, which) {
+        return None;
+    }
+    let binary = std::path::Path::new(program)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(program)
+        .to_string();
+    Some(route::RouteBlocker::NotInstalled { binary })
 }
 
 fn resolved_binary_exists<F>(program: &str, which: &F) -> bool
@@ -68,9 +79,18 @@ where
     which(program)
 }
 
-/// The binaries a built-in adapter may invoke. Single source of truth: the
-/// PATH preflight and the custom-agent guard both read it, so a new agent
-/// cannot be reachable by one and invisible to the other.
+/// The program a built-in adapter spawns on this host: the same resolution its
+/// `build_command` uses, including Cursor's identity check on `agent`.
+pub(crate) fn built_in_program(agent_kind: AgentKind) -> Option<&'static str> {
+    match agent_kind {
+        AgentKind::Custom => None,
+        AgentKind::Cursor => Some(super::cursor::cursor_binary()),
+        _ => built_in_binaries(agent_kind).first().copied(),
+    }
+}
+
+/// Every binary name a built-in adapter may invoke. The custom-agent guard reads
+/// it; eligibility resolves the one program the adapter spawns via `built_in_program`.
 pub(crate) fn built_in_binaries(agent_kind: AgentKind) -> &'static [&'static str] {
     match agent_kind {
         AgentKind::Antigravity => &["agy"],
@@ -107,14 +127,4 @@ pub(crate) fn builtin_binary_owner(command: &str) -> Option<AgentKind> {
         .iter()
         .copied()
         .find(|kind| built_in_binaries(*kind).contains(&name))
-}
-
-pub(crate) fn built_in_agent_binary_exists<F>(agent_kind: AgentKind, which: F) -> bool
-where
-    F: Fn(&str) -> bool,
-{
-    if matches!(agent_kind, AgentKind::Custom) {
-        return true;
-    }
-    built_in_binaries(agent_kind).iter().any(|name| which(name))
 }

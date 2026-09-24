@@ -10,7 +10,7 @@ enum DemoAgents {
         return names.sorted().map { agent in
             let flown = missions.filter { $0.agent == agent && ($0.state == .done || $0.state == .fail) }.count
             let busy = missions.contains { $0.agent == agent && $0.state == .run }
-            return AgentInfo(id: agent, busy: busy, quotaOK: agent != "gemini", taskCount: flown + (busy ? 1 : 0))
+            return AgentInfo(id: agent, busy: busy, quota: agent == "gemini" ? .limited : .ok, taskCount: flown + (busy ? 1 : 0))
         }
     }
 }

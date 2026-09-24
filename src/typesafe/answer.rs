@@ -10,10 +10,11 @@ use std::collections::BTreeMap;
 /// Reasons never echo response content.
 pub(crate) fn validate_response(body: &str, declared: &BTreeMap<String, Declared>) -> Result<Value, String> {
     let response: Value = serde_json::from_str(body).map_err(|_| "body is not JSON".to_string())?;
-    let model = response.get("model").and_then(Value::as_str).ok_or("model is missing")?;
-    if !is_jev_version(model) {
-        return Err("model is not jev-<version>".into());
-    }
+    let model = response
+        .get("model")
+        .and_then(Value::as_str)
+        .filter(|model| is_jev_version(model))
+        .ok_or("model is not jev-<version>")?;
     let answers = response.get("answers").and_then(Value::as_object).ok_or("answers is missing")?;
     if answers.keys().any(|id| !declared.contains_key(id)) {
         return Err("an answer id was not asked".into());

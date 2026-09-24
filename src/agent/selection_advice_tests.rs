@@ -1,10 +1,12 @@
 // Advise eligibility tests: install state, evidence state, auth, and caller pool.
-// Covers: not-installed ineligible, unknown quota/auth, auth_failed, weaker/demoted same pool.
+// Covers: not-installed ineligible, unknown quota/auth, auth_failed, weaker/demoted same pool,
+// and the advised model following the resolved agent default at standard budget.
 // Deps: advise(), DetectAgentsGuard, auth_marker, isolated AID home and aidbar cache.
 
 use super::*;
 use crate::live_quota::CacheDirGuard;
 use crate::paths::AidHomeGuard;
+use crate::agent::run_model::RunModelSource;
 use crate::types::{TaskRigor, TaskUrgency};
 
 fn isolated() -> (tempfile::TempDir, AidHomeGuard, CacheDirGuard) {
@@ -13,6 +15,8 @@ fn isolated() -> (tempfile::TempDir, AidHomeGuard, CacheDirGuard) {
     let cache = temp.path().join("aidbar");
     std::fs::create_dir_all(&cache).expect("cache dir");
     let guard = CacheDirGuard::set(&cache);
+    // No test reads the developer's codex config (a readable CLI default).
+    crate::agent::codex::cli_config::set_test_codex_home(Some(temp.path().join("no-codex")));
     (temp, home, guard)
 }
 
@@ -81,9 +85,10 @@ fn observed_auth_failure_excludes_candidate() {
 fn same_pool_weaker_model_is_excluded_with_known_caller_model() {
     let (_temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Claude, AgentKind::Codex]);
+    crate::agent_config::save_agent_default_model("claude", Some("sonnet")).expect("sticky");
     let report = run(Some(anthropic_caller(Some(99.0))));
     let claude = find(&report, "claude");
-    assert!(claude.model.is_some(), "claude needs a catalog model for the comparison");
+    assert_eq!(claude.model.as_deref(), Some("sonnet"), "a known model makes the comparison real");
     assert!(!claude.eligible);
     assert!(claude.exclusion_reason.as_deref().is_some_and(|r| r.contains("weaker model on caller's pool")));
     assert!(claude.exclusion_codes.contains(&"weaker_on_caller_pool".to_string()));
@@ -109,4 +114,54 @@ fn same_pool_is_demoted_not_excluded_with_unknown_caller_model() {
     assert!(other_eligible.clone().count() > 0);
     assert!(other_eligible.into_iter().all(|index| index < position("claude")));
     assert_ne!(report.recommended.as_ref().map(|r| r.agent.as_str()), Some("claude"));
+}
+
+fn codex_with_cli_default(budget: TaskBudget, cli_model: Option<&str>) -> AdviceCandidate {
+    let (temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
+    let codex_home = temp.path().join("codex");
+    std::fs::create_dir_all(&codex_home).expect("codex home");
+    if let Some(model) = cli_model {
+        std::fs::write(codex_home.join("config.toml"), format!("model = \"{model}\"\n")).expect("config");
+    }
+    crate::agent::codex::cli_config::set_test_codex_home(Some(codex_home));
+    let declared = DeclaredTaskProfile {
+        difficulty: TaskDifficulty::Moderate, budget,
+        urgency: TaskUrgency::Normal, rigor: TaskRigor::Standard,
+    };
+    let report = advise("refactor the scheduler", declared, Some(TaskCategory::Refactoring), None, None, 0, None);
+    crate::agent::codex::cli_config::set_test_codex_home(None);
+    find(&report, "codex").clone()
+}
+
+#[test]
+fn standard_budget_advises_the_codex_cli_configured_default() {
+    let codex = codex_with_cli_default(TaskBudget::Standard, Some("gpt-6-sol"));
+    assert_eq!(codex.model.as_deref(), Some("gpt-6-sol"));
+    assert!(!codex.pinned, "the CLI runs its own default; aid passes no -m");
+    assert_eq!(codex.source, RunModelSource::CliConfig);
+    assert_eq!(codex.breakdown.model_capability, 0.0, "unrated model: agent-level base only");
+    assert!(codex.eligible);
+    assert!(codex.unrated_served_models.is_empty());
+}
+
+#[test]
+fn unreadable_cli_default_is_reported_unknown_not_a_catalog_model() {
+    let codex = codex_with_cli_default(TaskBudget::Standard, None);
+    assert_eq!(codex.model, None);
+    assert!(!codex.pinned);
+    assert_eq!(codex.source, RunModelSource::AgentDefault);
+    assert_eq!(codex.breakdown.model_capability, 0.0);
+    let label = crate::agent::run_model::model_label(None, codex.pinned, codex.source);
+    assert_eq!(label, "agent default (unknown)");
+}
+
+#[test]
+fn cheap_budget_keeps_the_catalog_budget_model() {
+    let codex = codex_with_cli_default(TaskBudget::Cheap, Some("gpt-6-sol"));
+    let catalog = crate::model_catalog::model_for_task_budget(AgentKind::Codex, TaskBudget::Cheap);
+    assert!(catalog.is_some());
+    assert_eq!(codex.model.as_deref(), catalog);
+    assert!(codex.pinned);
+    assert_eq!(codex.source, RunModelSource::BudgetRoute);
 }

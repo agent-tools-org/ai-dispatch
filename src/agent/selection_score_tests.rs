@@ -35,7 +35,6 @@ fn score_ctx<'a>(
         avg_cost_map,
         team_default: None,
         budget: false,
-        declared_budget: None,
         penalize_rate_limit,
     }
 }
@@ -85,6 +84,12 @@ fn declared(urgency: TaskUrgency) -> DeclaredTaskProfile {
     }
 }
 
+/// The breakdown `score_for` sums: scored with the hint's catalog tier model.
+fn hint_breakdown(ctx: &CandidateContext<'_>, kind: AgentKind) -> super::selection_scoring::ScoreBreakdown {
+    let model = super::recommend_model(&kind, &ctx.profile.complexity, ctx.budget);
+    score_breakdown(ctx, kind, model)
+}
+
 #[test]
 fn score_for_is_bit_identical_to_pre_breakdown_value() {
     let temp = TempDir::new().expect("temp dir");
@@ -108,7 +113,7 @@ fn score_for_is_bit_identical_to_pre_breakdown_value() {
     let context = score_ctx(&profile, &history_map, &avg_cost_map, Some(&team), true);
 
     let score = score_for(&context, AgentKind::Codex);
-    let breakdown = score_breakdown(&context, AgentKind::Codex);
+    let breakdown = hint_breakdown(&context, AgentKind::Codex);
 
     // Absolute pin, so an unintended scoring change cannot slip through: floating
     // addition is not associative and a reordered sum can flip a tie silently.
@@ -168,8 +173,8 @@ fn two_free_agents_ten_percent_ranks_three_above_ninety() {
     write_snapshot(&cache, "qwen", 90.0, 60);
     write_snapshot(&cache, "agy", 10.0, 60);
 
-    let qwen = score_breakdown(&ctx, AgentKind::Qwen);
-    let agy = score_breakdown(&ctx, AgentKind::Antigravity);
+    let qwen = hint_breakdown(&ctx, AgentKind::Qwen);
+    let agy = hint_breakdown(&ctx, AgentKind::Antigravity);
     assert_eq!(qwen.headroom_penalty, -3.0);
     assert_eq!(agy.headroom_penalty, 0.0);
     assert_eq!(qwen.total, qwen_base - 3.0);
@@ -186,7 +191,7 @@ fn stale_snapshot_does_not_retune_score() {
     let ctx = score_ctx(&profile, &history, &costs, None, true);
     let baseline = score_for(&ctx, AgentKind::Qwen);
     write_snapshot(&cache, "qwen", 90.0, 20 * 60);
-    let breakdown = score_breakdown(&ctx, AgentKind::Qwen);
+    let breakdown = hint_breakdown(&ctx, AgentKind::Qwen);
     assert_eq!(headroom_penalty(AgentKind::Qwen), 0.0);
     assert_eq!(breakdown.headroom_penalty, 0.0);
     assert_eq!(breakdown.total.to_bits(), baseline.to_bits());
@@ -201,7 +206,7 @@ fn unused_quota_does_not_boost() {
     let ctx = score_ctx(&profile, &history, &costs, None, true);
     let baseline = score_for(&ctx, AgentKind::Qwen);
     write_snapshot(&cache, "qwen", 10.0, 60);
-    let breakdown = score_breakdown(&ctx, AgentKind::Qwen);
+    let breakdown = hint_breakdown(&ctx, AgentKind::Qwen);
     assert_eq!(breakdown.headroom_penalty, 0.0);
     assert_eq!(breakdown.total.to_bits(), baseline.to_bits());
 }
@@ -215,7 +220,7 @@ fn held_uses_rate_limit_penalty_not_headroom() {
     let history = HashMap::new();
     let costs = HashMap::new();
     let ctx = score_ctx(&profile, &history, &costs, None, true);
-    let breakdown = score_breakdown(&ctx, AgentKind::Qwen);
+    let breakdown = hint_breakdown(&ctx, AgentKind::Qwen);
     assert_eq!(breakdown.rate_limit_penalty, -10.0);
     assert_eq!(breakdown.headroom_penalty, 0.0);
 }

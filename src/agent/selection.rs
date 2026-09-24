@@ -14,7 +14,7 @@ mod selection_advice;
 mod selection_fallback;
 #[path = "explicit_model.rs"]
 mod explicit_model;
-pub(crate) use explicit_model::resolve_explicit_agent_model;
+pub(crate) use explicit_model::declared_budget_warning;
 pub(crate) use selection_advice::{AdviceCandidate, AdviceReport, advise, caller_advice};
 pub(crate) use selection_fallback::{coding_fallback_for, coding_fallback_for_prompt};
 pub(crate) use selection_quota::{observed_ok, quota_from, tightest_window};
@@ -90,7 +90,6 @@ pub(crate) fn select_agent_from(
         avg_cost_map: &avg_cost_map,
         team_default,
         budget,
-        declared_budget: None,
         penalize_rate_limit: true,
     };
     let builtin_agents = enabled_builtins(BUILTIN_AGENTS);
@@ -243,7 +242,6 @@ pub(crate) fn budget_ranked_agents(
         avg_cost_map: &avg_cost_map,
         team_default,
         budget: false,
-        declared_budget: None,
         penalize_rate_limit: true,
     };
     let mut candidates: Vec<Candidate> = BUILTIN_AGENTS

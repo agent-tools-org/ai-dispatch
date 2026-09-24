@@ -95,16 +95,16 @@ fn served_only_models_appear_unrated_for_every_probe_agent() {
 }
 
 #[test]
-fn codex_cli_config_default_wins_over_catalog_without_sticky_model() {
+fn codex_default_is_the_resolver_model_and_never_a_catalog_guess() {
     let temp = tempfile::tempdir().expect("tempdir");
     let _home = crate::paths::AidHomeGuard::set(temp.path());
     let codex_home = temp.path().join("codex-home");
     std::fs::create_dir_all(&codex_home).expect("codex home");
     set_test_codex_home(Some(codex_home.clone()));
 
-    let catalog = agent("codex");
-    assert_eq!(catalog.models.default_source.as_deref(), Some("catalog"));
-    assert_eq!(catalog.models.default.as_deref(), Some("gpt-5.6-sol"));
+    let unknown = agent("codex");
+    assert_eq!(unknown.models.default, None, "no readable CLI default: unknown, not a catalog row");
+    assert_eq!(unknown.models.default_source, None);
 
     std::fs::write(codex_home.join("config.toml"), "model = \"gpt-6-sol\"\n").expect("config");
     let configured = agent("codex");

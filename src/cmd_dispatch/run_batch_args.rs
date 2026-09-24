@@ -20,7 +20,6 @@ pub(super) fn build_run_args(
     output: Option<String>,
     result_file: Option<String>,
     model: Option<String>,
-    auto_model: Option<String>,
     worktree: Option<String>,
     group: Option<String>,
     verify: Option<String>,
@@ -78,7 +77,7 @@ pub(super) fn build_run_args(
         dir,
         output,
         result_file,
-        model: model.or(auto_model),
+        model,
         model_source,
         declared_difficulty: difficulty,
         declared_budget,
@@ -137,7 +136,7 @@ mod tests {
     use crate::cli::RunExtrasArgs;
 
     #[test]
-    fn auto_model_is_marked_aid_resolved() {
+    fn no_caller_model_leaves_resolution_to_dispatch() {
         let args = build_run_args(
             "qwen".to_string(),
             "say hi".to_string(),
@@ -148,7 +147,6 @@ mod tests {
             None,
             None,
             None,
-            Some("stale-aid-model".to_string()),
             None,
             None,
             None,
@@ -197,7 +195,7 @@ mod tests {
             false,
         );
 
-        assert_eq!(args.model.as_deref(), Some("stale-aid-model"));
+        assert_eq!(args.model, None, "aid resolves the model at dispatch, not here");
         assert_eq!(args.model_source, ModelSource::AidResolved);
     }
 }

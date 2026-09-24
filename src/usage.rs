@@ -102,7 +102,9 @@ pub struct AgentPeriodStats {
     pub fail_count: usize,
     pub retry_count: usize,
     pub tokens: i64,
+    /// Sum of known costs; `unknown_cost_tasks` ran with a NULL cost.
     pub cost_usd: f64,
+    pub unknown_cost_tasks: usize,
     pub avg_duration_secs: f64,
 }
 
@@ -123,7 +125,8 @@ pub struct AgentTrendStats {
 pub struct TaskSummary {
     pub id: String,
     pub prompt_snippet: String,
-    pub cost_usd: f64,
+    /// `None` when the task's price is unknown.
+    pub cost_usd: Option<f64>,
     pub duration_secs: Option<f64>,
 }
 
@@ -145,6 +148,7 @@ pub(crate) struct AgentUsageRow {
     pub(crate) tasks: usize,
     pub(crate) tokens: i64,
     pub(crate) cost_usd: f64,
+    pub(crate) unknown_cost_tasks: usize,
     pub(crate) success_rate: f64,
     pub(crate) avg_duration_secs: f64,
     pub(crate) retry_count: usize,
@@ -161,6 +165,7 @@ pub(crate) struct BudgetUsageRow {
     pub(crate) tokens: i64,
     pub(crate) token_limit: Option<i64>,
     pub(crate) cost_usd: f64,
+    pub(crate) unknown_cost_tasks: usize,
     pub(crate) cost_limit_usd: Option<f64>,
     pub(crate) resets_at: Option<String>,
     pub(crate) notes: Option<String>,
@@ -359,7 +364,8 @@ fn summarize_agent_period(tasks: &[&Task]) -> AgentPeriodStats {
         .count();
     let retry_count = tasks.iter().filter(|task| task.parent_task_id.is_some()).count();
     let tokens = tasks.iter().map(|task| task.tokens.unwrap_or(0)).sum();
-    let cost_usd = tasks.iter().map(|task| task.cost_usd.unwrap_or(0.0)).sum();
+    let cost_usd = tasks.iter().filter_map(|task| task.cost_usd).sum();
+    let unknown_cost_tasks = crate::cost::unknown_cost_tasks(tasks.iter().copied());
     let durations: Vec<i64> = tasks
         .iter()
         .filter(|task| task.status.is_terminal())
@@ -377,6 +383,7 @@ fn summarize_agent_period(tasks: &[&Task]) -> AgentPeriodStats {
         retry_count,
         tokens,
         cost_usd,
+        unknown_cost_tasks,
         avg_duration_secs,
     }
 }
@@ -471,7 +478,7 @@ mod tests {
 
     use crate::usage_report::{render_agent_analytics, render_usage};
 
-    fn make_task(id: &str, agent: AgentKind, tokens: i64, cost_usd: f64) -> Task {
+    pub(super) fn make_task(id: &str, agent: AgentKind, tokens: i64, cost_usd: f64) -> Task {
         Task {
             id: TaskId(id.to_string()),
             agent,
@@ -762,8 +769,13 @@ mod tests {
         let rendered = render_agent_analytics(&analytics);
         assert!(rendered.contains("Top 5 most expensive tasks"));
     }
+
 }
 
 #[cfg(test)]
 #[path = "usage_window_tests.rs"]
 mod window_tests;
+
+#[cfg(test)]
+#[path = "usage_cost_tests.rs"]
+mod cost_tests;

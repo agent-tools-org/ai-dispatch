@@ -1,36 +1,39 @@
-// Resolves explicit model pricing while preserving priced, included, and unknown states.
-// Exports: resolve_model_pricing().
-// Deps: price feed, built-in pricing, model catalog, provider metering.
+// Resolves a model price from exact matches only: static catalog, override, or price feed.
+// Exports: resolve_model_pricing(), subscription_pricing(), exact_feed_pricing().
+// Deps: price feed, pricing overrides, model catalog, provider metering.
 
-use super::{feed_index, price_feed, pricing_builtin, ModelPricing};
-use crate::model_catalog::{self, AGENT_MODELS};
+use super::{feed_index, override_pricing, price_feed, ModelPricing};
+use crate::model_catalog::AGENT_MODELS;
 use crate::types::{provider_for_cli, AgentKind, MeteringShape};
 
+/// A price exists only as an exact static catalog row, an explicit pricing
+/// override, or an exact price-feed id/alias. Anything else is unknown (`None`):
+/// no substring, prefix, family, or free-name guess fills it in.
 pub(super) fn resolve_model_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
-    // Subscription metering is included regardless of the catalog row.
-    if matches!(provider_for_cli(agent).1, MeteringShape::Subscription) {
-        return Some(ModelPricing {
-            input_per_m: 0.0,
-            output_per_m: 0.0,
-        });
+    if let Some(included) = subscription_pricing(agent) {
+        return Some(included);
     }
-    // A static catalog row's own price is authoritative: discovery, the feed,
-    // and similar-model builtin rates must not bypass or outrank it.
-    if let Some(pricing) = static_catalog_pricing(model, agent) {
-        return Some(pricing);
-    }
-    if model_catalog::is_unpriced_discovered_model(agent, model) {
-        return declared_free_name_pricing(model);
-    }
-    if let Some((feed, index)) = feed_index()
-        && let Some(entry) = price_feed::feed_lookup(&feed, &index, model)
-    {
-        return Some(ModelPricing {
-            input_per_m: entry.input_per_mtok,
-            output_per_m: entry.output_per_mtok,
-        });
-    }
-    pricing_builtin::for_model_lower(&model.to_lowercase())
+    // A static catalog row's own price is authoritative.
+    static_catalog_pricing(model, agent)
+        .or_else(|| override_pricing(model, agent))
+        .or_else(|| exact_feed_pricing(model))
+}
+
+/// Subscription metering is included (zero marginal cost) whatever the model.
+pub(super) fn subscription_pricing(agent: AgentKind) -> Option<ModelPricing> {
+    matches!(provider_for_cli(agent).1, MeteringShape::Subscription).then_some(ModelPricing {
+        input_per_m: 0.0,
+        output_per_m: 0.0,
+    })
+}
+
+pub(super) fn exact_feed_pricing(model: &str) -> Option<ModelPricing> {
+    let (feed, index) = feed_index()?;
+    let entry = price_feed::feed_lookup(&feed, &index, model)?;
+    Some(ModelPricing {
+        input_per_m: entry.input_per_mtok,
+        output_per_m: entry.output_per_mtok,
+    })
 }
 
 fn static_catalog_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
@@ -44,14 +47,6 @@ fn static_catalog_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing>
     Some(ModelPricing {
         input_per_m: row.input_per_m,
         output_per_m: row.output_per_m,
-    })
-}
-
-/// Self-declared free names stay $0.00. Similar-model rates must not fill in.
-fn declared_free_name_pricing(model: &str) -> Option<ModelPricing> {
-    pricing_builtin::is_free_named(model).then_some(ModelPricing {
-        input_per_m: 0.0,
-        output_per_m: 0.0,
     })
 }
 

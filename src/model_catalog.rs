@@ -19,7 +19,6 @@ pub use model_catalog_data::{AGENT_MODELS, AGENT_PROFILES, AgentModel};
 pub(crate) use model_catalog_resolved::{
     load_pricing_overrides, merged_agent_models, models_for_agent, PricingResponse,
 };
-pub(crate) use model_catalog_resolved::{is_unpriced_discovered_model, ModelOrigin};
 #[path = "model_catalog_served.rs"]
 mod model_catalog_served;
 pub(crate) use model_catalog_served::unrated_served_newer_than;

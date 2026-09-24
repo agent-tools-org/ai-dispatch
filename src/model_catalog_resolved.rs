@@ -105,13 +105,6 @@ pub fn models_for_agent(agent: &AgentKind) -> Vec<ResolvedAgentModel> {
     models
 }
 
-pub(crate) fn is_unpriced_discovered_model(agent: AgentKind, model: &str) -> bool {
-    matches!(agent, AgentKind::Antigravity | AgentKind::OpenCode)
-        && !AGENT_MODELS
-            .iter()
-            .any(|known| known.agent == agent && known.model.eq_ignore_ascii_case(model))
-}
-
 #[derive(Debug, Clone, Deserialize)]
 pub struct PricingResponse {
     pub models: Vec<PricingFileModel>,

@@ -78,6 +78,9 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
             duration_label(recommended.est_duration_secs),
             recommended_quota_suffix(&recommended.reason),
         );
+        println!("Model: {}", crate::agent::run_model::model_label(
+            recommended.model.as_deref(), recommended.pinned, recommended.source,
+        ));
     } else {
         println!("Recommended: none (no installed agents)");
     }
@@ -93,7 +96,7 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
         );
         let item = &candidate.breakdown;
         println!(
-            "  {}. {:<10} {:>5.1}  base {:.1}  {:+.1} model  {:+.1} budget  {:+.1} limit  {:+.1} history  {:+.1} complexity  {:+.1} team  {:+.1} headroom{}",
+            "  {}. {:<10} {:>5.1}  base {:.1}  {:+.1} model  {:+.1} budget  {:+.1} limit  {:+.1} history  {:+.1} complexity  {:+.1} team  {:+.1} headroom  model {}{}",
             index + 1,
             candidate.agent,
             candidate.score,
@@ -105,6 +108,9 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
             item.complexity_bonus,
             item.team_bonus,
             item.headroom_penalty,
+            crate::agent::run_model::model_label(
+                candidate.model.as_deref(), candidate.pinned, candidate.source,
+            ),
             availability,
         );
         if let Some(line) = unrated_served_line(candidate) {
@@ -269,40 +275,16 @@ mod recommended_route_tests {
     }
 }
 
-/// One line naming served models newer than the catalog pick; they stay unrated.
+/// One line naming served models newer than the advised model; they stay unrated.
 fn unrated_served_line(candidate: &crate::agent::selection::AdviceCandidate) -> Option<String> {
     let model = candidate.model.as_deref()?;
     (!candidate.unrated_served_models.is_empty()).then(|| format!(
-        "     note: {} also serves newer unrated {} (catalog pick {model}; not auto-selected)",
+        "     note: {} also serves newer unrated {} (advised {model}; not auto-selected)",
         candidate.agent,
         candidate.unrated_served_models.join(", "),
     ))
 }
 
 #[cfg(test)]
-mod unrated_served_tests {
-    use super::*;
-
-    #[test]
-    fn advise_surfaces_newer_unrated_served_codex_model() {
-        let home = tempfile::tempdir().expect("temp aid home");
-        let _guard = crate::paths::AidHomeGuard::set(home.path());
-        crate::paths::ensure_dirs().expect("aid dirs");
-        let now = chrono::Utc::now().timestamp();
-        let cache = serde_json::json!({"codex": {"models": ["gpt-6-sol"], "updated_at_secs": now}});
-        std::fs::write(crate::paths::aid_dir().join("served_models_cache.json"), cache.to_string())
-            .expect("served-model cache");
-        let declared = DeclaredTaskProfile {
-            difficulty: crate::types::TaskDifficulty::Complex,
-            budget: crate::types::TaskBudget::Premium,
-            urgency: crate::types::TaskUrgency::Normal,
-            rigor: crate::types::TaskRigor::Standard,
-        };
-        let report = advise("Implement the parser", declared, None, None, None, 20, None);
-        let codex = report.candidates.iter().find(|c| c.agent == "codex").expect("codex");
-        assert_eq!(codex.model.as_deref(), Some("gpt-5.6-sol"), "unrated model is not auto-selected");
-        assert_eq!(codex.unrated_served_models, vec!["gpt-6-sol".to_string()]);
-        let line = unrated_served_line(codex).expect("human line");
-        assert!(line.contains("gpt-6-sol") && line.contains("gpt-5.6-sol"), "{line}");
-    }
-}
+#[path = "advise_unrated_tests.rs"]
+mod unrated_served_tests;

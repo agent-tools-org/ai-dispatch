@@ -147,8 +147,7 @@ pub fn apply_cargo_target_env(cmd: &mut Command, cargo_target_dir: Option<&str>)
 }
 
 pub fn apply_codex_home_env(cmd: &mut Command) -> anyhow::Result<()> {
-    let codex_home = super::home_isolation::resolve_real_home()?.join(".codex");
-    cmd.env("CODEX_HOME", codex_home);
+    cmd.env("CODEX_HOME", super::codex::cli_config::codex_home()?);
     Ok(())
 }
 

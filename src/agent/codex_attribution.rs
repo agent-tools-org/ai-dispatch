@@ -2,7 +2,6 @@
 // Exports: grade_completion_observation for the shared completion paths.
 // Deps: Codex rollout files, Store task session IDs, and attribution types.
 
-use std::ffi::OsString;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -38,18 +37,8 @@ pub(crate) fn grade_completion_observation(
 fn observed_model_for_task(store: &Store, task_id: &TaskId) -> Option<String> {
     let task = store.get_task(task_id.as_str()).ok().flatten()?;
     let thread_id = task.agent_session_id.as_deref()?;
-    observed_model_for_thread(&codex_home(), thread_id, task.created_at)
-}
-
-fn codex_home() -> PathBuf {
-    resolve_codex_home(std::env::var_os("CODEX_HOME"), std::env::var_os("HOME"))
-}
-
-fn resolve_codex_home(codex_home: Option<OsString>, home: Option<OsString>) -> PathBuf {
-    if let Some(path) = codex_home {
-        return PathBuf::from(path);
-    }
-    PathBuf::from(home.unwrap_or_else(|| OsString::from("."))).join(".codex")
+    let codex_home = crate::agent::codex::cli_config::codex_home().ok()?;
+    observed_model_for_thread(&codex_home, thread_id, task.created_at)
 }
 
 fn observed_model_for_thread(
@@ -128,21 +117,6 @@ mod tests {
             .with_ymd_and_hms(2026, 8, 9, 12, 0, 0)
             .single()
             .expect("valid test date")
-    }
-
-    #[test]
-    fn resolves_codex_home_before_home_default() {
-        assert_eq!(
-            resolve_codex_home(
-                Some(OsString::from("/custom/codex")),
-                Some(OsString::from("/home/user")),
-            ),
-            PathBuf::from("/custom/codex")
-        );
-        assert_eq!(
-            resolve_codex_home(None, Some(OsString::from("/home/user"))),
-            PathBuf::from("/home/user/.codex")
-        );
     }
 
     #[test]

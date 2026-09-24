@@ -29,6 +29,7 @@ pub(super) fn recommendation(
     }
     Some(RecommendedAdvice {
         agent: selected.report.agent.clone(), model: selected.report.model.clone(),
+        pinned: selected.report.pinned, source: selected.report.source,
         score: selected.report.score, est_cost_usd: costs.get(&selected.order.kind).copied(),
         est_duration_secs: durations.get(&selected.order.kind).copied(),
         reason,

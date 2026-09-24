@@ -66,7 +66,8 @@ pub struct GroupHoldJson {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ModelsJson {
     pub default: Option<String>,
-    /// `"sticky"` | `"forced"` | `"cli_config"` | `"catalog"`; null when no default.
+    /// The resolver source of `default` (`sticky`, `custom_forced`, `cli_config`,
+    /// `budget_route`); null when the default is unknown.
     pub default_source: Option<String>,
     pub budget: Option<String>,
     pub available: Vec<AvailableModelJson>,

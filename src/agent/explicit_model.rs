@@ -1,44 +1,26 @@
-// Sticky model resolution for explicit-agent dispatch (`aid run` and `aid batch`).
-// Exports: resolve_explicit_agent_model.
-// Deps: agent_config, model_catalog, AgentKind, TaskBudget.
+// Declared-budget warning for a resolved `aid run` / `aid batch` model.
+// Exports: declared_budget_warning.
+// Deps: model_catalog, run_model::RunModel, AgentKind, TaskBudget.
 
+use crate::agent::run_model::{RunModel, RunModelSource};
 use crate::types::{AgentKind, TaskBudget};
 
-/// Precedence: caller `--model` > `agent_config` default > catalog-by-declared-budget.
-/// Returns `None` when the caller already supplied `--model`, so that value stays in place.
-pub(crate) fn resolve_explicit_agent_model(
+/// Warning when a free/cheap declared budget did not get a budget-preferred
+/// model. Silent for `--model` and self-heal retries: the caller chose.
+pub(crate) fn declared_budget_warning(
     agent_name: &str,
-    caller_model: Option<&str>,
     declared_budget: Option<TaskBudget>,
+    run_model: &RunModel,
 ) -> Option<String> {
-    if caller_model.is_some() {
+    if matches!(run_model.source, RunModelSource::Explicit | RunModelSource::ForcedDefault) {
         return None;
     }
-    let config = crate::agent_config::get_default_model(agent_name);
-    let catalog = catalog_model(agent_name, declared_budget);
-    let selected = config.clone().or(catalog);
-    if let Some(msg) = declared_budget_model_warning(
+    declared_budget_model_warning(
         agent_name,
         declared_budget,
-        selected.as_deref(),
-        config.is_some(),
-    ) {
-        aid_warn!("{msg}");
-    }
-    selected
-}
-
-fn catalog_model(
-    agent_name: &str,
-    declared_budget: Option<TaskBudget>,
-) -> Option<String> {
-    let budget = match declared_budget? {
-        budget @ (TaskBudget::Free | TaskBudget::Cheap) => budget,
-        TaskBudget::Standard | TaskBudget::Premium => return None,
-    };
-    AgentKind::parse_str(agent_name)
-        .and_then(|kind| crate::model_catalog::model_for_task_budget(kind, budget))
-        .map(str::to_string)
+        run_model.model.as_deref(),
+        run_model.source == RunModelSource::Sticky,
+    )
 }
 
 /// Warning text when a free/cheap declared budget is not the model actually chosen.
@@ -79,7 +61,6 @@ fn declared_budget_model_warning(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths::AidHomeGuard;
 
     #[test]
     fn config_override_warning_does_not_claim_no_eligible_model() {
@@ -124,35 +105,5 @@ mod tests {
             ),
             None
         );
-    }
-
-    #[test]
-    fn resolve_skips_catalog_when_caller_supplied_model() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let _guard = AidHomeGuard::set(temp.path());
-        crate::agent_config::save_agent_default_model("gemini", Some("pro")).expect("save");
-        assert_eq!(
-            resolve_explicit_agent_model("gemini", Some("flash"), Some(TaskBudget::Cheap)),
-            None
-        );
-    }
-
-    #[test]
-    fn standard_premium_and_undeclared_defer_to_cli_default() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let _guard = AidHomeGuard::set(temp.path());
-        for budget in [Some(TaskBudget::Standard), Some(TaskBudget::Premium), None] {
-            assert_eq!(resolve_explicit_agent_model("codex", None, budget), None);
-        }
-    }
-
-    #[test]
-    fn cheap_uses_catalog_unless_agent_config_overrides_it() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let _guard = AidHomeGuard::set(temp.path());
-        let resolve = || resolve_explicit_agent_model("gemini", None, Some(TaskBudget::Cheap));
-        assert_eq!(resolve().as_deref(), Some("flash-lite"));
-        crate::agent_config::save_agent_default_model("gemini", Some("pro")).expect("save");
-        assert_eq!(resolve().as_deref(), Some("pro"));
     }
 }

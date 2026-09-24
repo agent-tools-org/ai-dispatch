@@ -56,6 +56,8 @@ pub(crate) struct InferredAdvice {
 pub(crate) struct RecommendedAdvice {
     pub agent: String,
     pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_source: Option<String>,
     pub score: f64,
     pub est_cost_usd: Option<f64>,
     pub est_duration_secs: Option<i64>,

@@ -192,7 +192,6 @@ fn gemini_fallback_pricing(agent: AgentKind) -> Option<ModelPricing> {
     model_pricing("gemini-3-flash-preview", agent)
 }
 
-/// Codex fallback: prefer the static standard-tier model, then the first.
 fn pricing_overrides() -> Arc<HashMap<(AgentKind, String), ModelPricing>> {
     #[cfg(not(test))]
     {

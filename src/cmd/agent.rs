@@ -231,10 +231,7 @@ fn show_custom_agent(name: &str) -> Result<()> {
 }
 
 fn builtin_profile(name: &str) -> Option<AgentKind> {
-    AgentKind::ALL_BUILTIN
-        .iter()
-        .copied()
-        .find(|kind| kind.as_str().eq_ignore_ascii_case(name))
+    crate::cmd::agent_json_helpers::builtin_profile(name)
 }
 
 fn is_builtin(name: &str) -> bool {

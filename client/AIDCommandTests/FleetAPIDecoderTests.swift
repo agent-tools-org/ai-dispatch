@@ -38,6 +38,36 @@ final class FleetAPIDecoderTests: XCTestCase {
         XCTAssertEqual(FleetFormatters.measuredCount(snapshot.agents[0].taskCount), "—")
     }
 
+    func testQuotaOkDecodesAsOk() throws {
+        XCTAssertEqual(try quota(replacing: nil), .ok)
+    }
+
+    func testQuotaUnknownIsItsOwnStateNotFailure() throws {
+        let state = try quota(replacing: #""state": "unknown""#)
+        XCTAssertEqual(state, .unknown)
+        XCTAssertNotEqual(state, .limited)
+        XCTAssertNotEqual(state, .degraded)
+    }
+
+    func testEveryQuotaWireStateDecodes() throws {
+        for state in [QuotaState.ok, .unknown, .degraded, .partial, .limited] {
+            XCTAssertEqual(try quota(replacing: "\"state\": \"\(state.rawValue)\""), state)
+        }
+    }
+
+    func testMissingOrUnrecognisedQuotaStateIsUnknown() throws {
+        XCTAssertEqual(try quota(replacing: #""state": null"#), .unknown)
+        XCTAssertEqual(try quota(replacing: #""state": "exhausted""#), .unknown)
+    }
+
+    private func quota(replacing state: String?) throws -> QuotaState {
+        let json = state.map {
+            Self.fleetFixture.replacingOccurrences(of: #""state": "ok""#, with: $0)
+        } ?? Self.fleetFixture
+        let snapshot = try FleetAPIDecoder.decodeSnapshot(from: Data(json.utf8), connection: .live)
+        return try XCTUnwrap(snapshot.agents.first).quota
+    }
+
     func testMissingWorkgroupRendersDash() throws {
         let json = Self.fleetFixture.replacingOccurrences(
             of: "\"workgroup_id\": \"wg-41ba0dd2\",",

@@ -53,7 +53,7 @@ pub(crate) struct CandidateQuota {
 impl Default for CandidateQuota {
     fn default() -> Self {
         Self {
-            status: "dispatchable".to_string(),
+            status: "unknown".to_string(),
             wall: "none".to_string(),
             used_percent: None,
             resets_at: None,
@@ -70,8 +70,13 @@ pub(super) fn candidate_quota(kind: AgentKind, custom_name: Option<&str>) -> Can
 
 pub(crate) fn quota_from(avail: &RouteAvailability) -> CandidateQuota {
     let tight = avail.probe.as_ref().and_then(|probe| tightest_window(&probe.windows));
+    let status = if avail.status == RouteStatus::Dispatchable && !observed_ok(avail) {
+        "unknown"
+    } else {
+        status_label(avail.status)
+    };
     CandidateQuota {
-        status: status_label(avail.status).to_string(),
+        status: status.to_string(),
         wall: wall_label(avail.wall).to_string(),
         used_percent: tight.map(|window| window.used_percent),
         resets_at: tight.and_then(|window| window.resets_at).map(|at| at.to_rfc3339()),
@@ -79,6 +84,12 @@ pub(crate) fn quota_from(avail: &RouteAvailability) -> CandidateQuota {
         stale: avail.probe.as_ref().is_some_and(|probe| probe.stale),
         source: source_of(avail).to_string(),
     }
+}
+
+/// True only when a successful probe observed the quota. A marker that no
+/// longer holds, a failed probe, or no evidence at all is `unknown`, never ok.
+pub(crate) fn observed_ok(avail: &RouteAvailability) -> bool {
+    avail.probe.as_ref().is_some_and(|probe| probe.ok)
 }
 
 pub(super) struct NoteTarget<'a> {

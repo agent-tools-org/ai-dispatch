@@ -1,13 +1,32 @@
 // Owned model-catalog records, including CLI-discovered models and pricing overrides.
 // Exports resolved catalog queries without adding a second discovery cache.
-// Deps: static model catalog, served-model disk cache, serde.
+// Deps: static model catalog, served-only rows (model_catalog_served), serde.
 
 use anyhow::Result;
 use serde::Deserialize;
 use std::collections::HashMap;
 
+use super::model_catalog_served::{served_only_models, SERVED_PROBE_AGENTS};
 use super::{static_models_for_agent, AgentModel, AGENT_MODELS};
 use crate::types::AgentKind;
+
+/// Where a catalog row came from. Only `Catalog` rows carry a rating.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelOrigin {
+    Catalog,
+    Served,
+    PricingOverride,
+}
+
+impl ModelOrigin {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Catalog => "catalog",
+            Self::Served => "served",
+            Self::PricingOverride => "pricing_override",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct PricingFileModel {
@@ -29,6 +48,7 @@ pub struct ResolvedAgentModel {
     pub tier: String,
     pub description: String,
     pub capability: Option<f64>,
+    pub origin: ModelOrigin,
 }
 
 impl From<&AgentModel> for ResolvedAgentModel {
@@ -41,6 +61,7 @@ impl From<&AgentModel> for ResolvedAgentModel {
             tier: model.tier.to_string(),
             description: model.description.to_string(),
             capability: Some(model.capability),
+            origin: ModelOrigin::Catalog,
         }
     }
 }
@@ -59,6 +80,7 @@ impl ResolvedAgentModel {
             tier,
             description,
             capability: None,
+            origin: ModelOrigin::PricingOverride,
         }
     }
 
@@ -79,41 +101,8 @@ pub fn models_for_agent(agent: &AgentKind) -> Vec<ResolvedAgentModel> {
         .into_iter()
         .map(ResolvedAgentModel::from)
         .collect();
-    models.extend(discovered_models_for(*agent));
+    models.extend(served_only_models(*agent));
     models
-}
-
-fn discovered_models_for(agent: AgentKind) -> Vec<ResolvedAgentModel> {
-    let description = match agent {
-        AgentKind::Antigravity => "Discovered from agy; pricing and capability unknown",
-        AgentKind::OpenCode => "Discovered from opencode; pricing and capability unknown",
-        _ => return Vec::new(),
-    };
-    crate::agent::model_validation::load_from_disk_cache(agent)
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|name| {
-            !AGENT_MODELS
-                .iter()
-                .any(|known| known.agent == agent && known.model.eq_ignore_ascii_case(name))
-        })
-        .map(|model| ResolvedAgentModel {
-            agent,
-            model,
-            input_per_m: None,
-            output_per_m: None,
-            tier: "unknown".to_string(),
-            description: description.to_string(),
-            capability: None,
-        })
-        .collect()
-}
-
-pub(crate) fn is_unpriced_discovered_model(agent: AgentKind, model: &str) -> bool {
-    matches!(agent, AgentKind::Antigravity | AgentKind::OpenCode)
-        && !AGENT_MODELS
-            .iter()
-            .any(|known| known.agent == agent && known.model.eq_ignore_ascii_case(model))
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -138,10 +127,7 @@ pub fn merged_agent_models() -> Result<Vec<ResolvedAgentModel>> {
         indexes.insert((model.agent, model.model.to_lowercase()), merged.len());
         merged.push(ResolvedAgentModel::from(model));
     }
-    for model in discovered_models_for(AgentKind::Antigravity)
-        .into_iter()
-        .chain(discovered_models_for(AgentKind::OpenCode))
-    {
+    for model in SERVED_PROBE_AGENTS.iter().flat_map(|agent| served_only_models(*agent)) {
         indexes.insert((model.agent, model.model.to_lowercase()), merged.len());
         merged.push(model);
     }

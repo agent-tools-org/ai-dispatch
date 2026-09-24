@@ -17,7 +17,6 @@ fn test_agent_json_serialization_roundtrip() {
     let mut capabilities = HashMap::new();
     capabilities.insert("research".to_string(), 9);
     capabilities.insert("simple-edit".to_string(), 2);
-
     let mut by_category = HashMap::new();
     by_category.insert("simple-edit".to_string(), CategoryHistoryJson {
         tasks: 210,
@@ -42,16 +41,17 @@ fn test_agent_json_serialization_roundtrip() {
             source: "marker".to_string(),
             groups: vec![], used_percent: None, resets_at: None, window: None, stale: false,
         },
+        auth: crate::auth_marker::AuthStatus::default(),
         capabilities,
         models: ModelsJson {
-            default: None,
+            default: None, default_source: None,
             budget: Some("gpt-5.4-mini".to_string()),
             available: vec![AvailableModelJson {
                 model: "gpt-5.5".to_string(),
                 tier: "paid".to_string(),
-                input_per_m: Some(1.25),
-                output_per_m: Some(10.0),
+                input_per_m: Some(1.25), output_per_m: Some(10.0),
                 capability: Some(9.6),
+                rated: true, source: "catalog".to_string(),
             }],
         },
         history: Some(HistoryJson {
@@ -213,10 +213,11 @@ fn custom_agent_quota_read_matches_write() {
 }
 
 #[test]
-fn quota_json_ok_when_no_markers() {
+fn quota_json_unknown_when_no_evidence() {
     let (_tmp, _guard, _cache) = isolated_home();
     let q = build_quota_json(&AgentKind::Gemini, None);
-    assert_eq!(q.state, "ok");
+    assert_eq!(q.source, "none");
+    assert_eq!(q.state, "unknown");
     assert!(q.groups.is_empty());
     assert!(q.recovery_at.is_none());
     assert!(q.message.is_none());

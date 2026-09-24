@@ -193,3 +193,14 @@ fn parses_turn_completed_usage_metadata() {
         Some(238440)
     );
 }
+
+#[test]
+fn served_models_probe_reads_models_cache_under_codex_home() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    std::fs::write(temp.path().join("models_cache.json"), r#"{"models":[{"slug":"gpt-6-sol"}]}"#)
+        .expect("models cache");
+    super::cli_config::set_test_codex_home(Some(temp.path().to_path_buf()));
+    let served = CodexAgent.served_models();
+    super::cli_config::set_test_codex_home(None);
+    assert_eq!(served.expect("probe").as_deref(), Some(&["gpt-6-sol".to_string()][..]));
+}

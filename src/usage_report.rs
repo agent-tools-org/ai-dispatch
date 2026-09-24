@@ -31,7 +31,7 @@ pub fn render_usage(snapshot: &UsageSnapshot) -> String {
                 row.name,
                 row.tasks,
                 format_tokens(row.tokens),
-                cost::format_cost(Some(row.cost_usd)),
+                cost::format_cost_total(row.cost_usd, row.unknown_cost_tasks),
                 format!("{:.1}%", row.success_rate),
                 format_duration_secs(row.avg_duration_secs),
                 row.retry_count,
@@ -65,7 +65,7 @@ pub fn render_usage(snapshot: &UsageSnapshot) -> String {
             row.window.as_deref().unwrap_or("-"),
             format_ratio_u32(row.tasks, row.task_limit),
             format_ratio_i64(row.tokens, row.token_limit, format_tokens),
-            format_ratio_f64(row.cost_usd, row.cost_limit_usd),
+            format_ratio_f64(row.cost_usd, row.unknown_cost_tasks, row.cost_limit_usd),
             row.resets_at.as_deref().unwrap_or("-"),
         ));
         if let Some(notes) = row.notes.as_deref() {
@@ -92,7 +92,7 @@ pub fn render_agent_analytics(analytics: &AgentAnalytics) -> String {
     out.push_str(&format!(
         "Tokens: {} | Cost: {} | Avg duration: {}\n",
         format_tokens(analytics.stats.tokens),
-        cost::format_cost(Some(analytics.stats.cost_usd)),
+        cost::format_cost_total(analytics.stats.cost_usd, analytics.stats.unknown_cost_tasks),
         format_duration_secs(analytics.stats.avg_duration_secs)
     ));
     let cost_per_success = analytics
@@ -125,7 +125,7 @@ pub fn render_agent_analytics(analytics: &AgentAnalytics) -> String {
             out.push_str(&format!(
                 "  {} | {} | {} | {}\n",
                 task.id,
-                cost::format_cost(Some(task.cost_usd)),
+                cost::format_cost(task.cost_usd),
                 duration,
                 task.prompt_snippet
             ));
@@ -186,12 +186,14 @@ pub(crate) fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
         };
         let tokens = agent_tasks.iter().filter_map(|task| task.tokens).sum();
         let cost_usd = agent_tasks.iter().filter_map(|task| task.cost_usd).sum();
+        let unknown_cost_tasks = cost::unknown_cost_tasks(agent_tasks.iter().copied());
         let last_task_at = agent_tasks.iter().map(|task| task.created_at).max();
         rows.push(AgentUsageRow {
             name: agent.as_str(),
             tasks: agent_tasks.len(),
             tokens,
             cost_usd,
+            unknown_cost_tasks,
             success_rate,
             avg_duration_secs,
             retry_count,
@@ -226,6 +228,7 @@ pub(crate) fn collect_budget_rows(tasks: &[Task], budgets: &[UsageBudget]) -> Ve
                 tokens: tokens_used,
                 token_limit: budget.token_limit,
                 cost_usd: cost_used,
+                unknown_cost_tasks: cost::unknown_cost_tasks(budget_tasks.iter().copied()),
                 cost_limit_usd: budget.cost_limit_usd,
                 resets_at: budget.resets_at.clone(),
                 notes: budget.notes.clone(),
@@ -237,18 +240,20 @@ pub(crate) fn collect_budget_rows(tasks: &[Task], budgets: &[UsageBudget]) -> Ve
 pub(crate) fn select_top_tasks(tasks: &[&Task]) -> Vec<TaskSummary> {
     let mut top: Vec<&Task> = tasks.to_vec();
     top.sort_by(|a, b| {
-        let a_cost = a.cost_usd.unwrap_or(0.0);
-        let b_cost = b.cost_usd.unwrap_or(0.0);
-        b_cost
-            .partial_cmp(&a_cost)
-            .unwrap_or(Ordering::Equal)
+        // Known costs first, highest first; unknown costs are not ranked as $0.
+        match (a.cost_usd, b.cost_usd) {
+            (Some(a_cost), Some(b_cost)) => b_cost.partial_cmp(&a_cost).unwrap_or(Ordering::Equal),
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            (None, None) => Ordering::Equal,
+        }
     });
     top.truncate(5);
     top.into_iter()
         .map(|task| TaskSummary {
             id: task.id.to_string(),
             prompt_snippet: prompt_snippet(task),
-            cost_usd: task.cost_usd.unwrap_or(0.0),
+            cost_usd: task.cost_usd,
             duration_secs: task.duration_ms.map(|ms| ms as f64 / 1000.0),
         })
         .collect()
@@ -307,14 +312,10 @@ fn format_ratio_i64(current: i64, limit: Option<i64>, formatter: fn(i64) -> Stri
         .unwrap_or_else(|| formatter(current))
 }
 
-fn format_ratio_f64(current: f64, limit: Option<f64>) -> String {
+/// Known spend (plus any unknown-cost tasks) against the limit.
+fn format_ratio_f64(current: f64, unknown: usize, limit: Option<f64>) -> String {
+    let spent = cost::format_cost_total(current, unknown);
     limit
-        .map(|limit| {
-            format!(
-                "{}/{}",
-                cost::format_cost(Some(current)),
-                cost::format_cost(Some(limit))
-            )
-        })
-        .unwrap_or_else(|| cost::format_cost(Some(current)))
+        .map(|limit| format!("{spent}/{}", cost::format_cost(Some(limit))))
+        .unwrap_or(spent)
 }

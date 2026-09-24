@@ -147,8 +147,7 @@ pub fn apply_cargo_target_env(cmd: &mut Command, cargo_target_dir: Option<&str>)
 }
 
 pub fn apply_codex_home_env(cmd: &mut Command) -> anyhow::Result<()> {
-    let codex_home = super::home_isolation::resolve_real_home()?.join(".codex");
-    cmd.env("CODEX_HOME", codex_home);
+    cmd.env("CODEX_HOME", super::codex::cli_config::codex_home()?);
     Ok(())
 }
 
@@ -238,25 +237,6 @@ pub(crate) fn which_exists(name: &str) -> bool {
         .map(|value| std::env::split_paths(&value).collect::<Vec<_>>())
         .unwrap_or_default();
     executable_in_paths(name, paths)
-}
-
-pub(crate) fn installed_agents(candidates: &[(&str, AgentKind)]) -> Vec<AgentKind> {
-    let results = std::thread::scope(|scope| {
-        candidates
-            .iter()
-            .map(|(name, kind)| scope.spawn(move || (*kind, which_exists(name))))
-            .collect::<Vec<_>>()
-            .into_iter()
-            .filter_map(|probe| probe.join().ok())
-            .collect::<Vec<_>>()
-    });
-    let mut found = Vec::new();
-    for (kind, available) in results {
-        if available && !found.contains(&kind) {
-            found.push(kind);
-        }
-    }
-    found
 }
 
 fn executable_in_paths<I>(name: &str, paths: I) -> bool

@@ -1,4 +1,4 @@
-// Declared-profile validation and agent/model resolution for `aid run`.
+// Declared-profile validation and agent resolution for `aid run`.
 // Exports: validate_task_profile(), resolve_run_agent().
 // Deps: selection advice, routing hints, config/team/store, task-profile types.
 
@@ -43,11 +43,11 @@ pub(super) fn validate_task_profile(
 pub(super) fn resolve_run_agent(
     store: &Arc<store::Store>, prompt: &str, dir: &Option<String>, repo: &Option<String>,
     output: &Option<String>, result_file: &Option<String>, model: &Option<String>, budget: bool,
-    _difficulty: Option<TaskDifficulty>, declared_budget: Option<TaskBudget>,
+    _difficulty: Option<TaskDifficulty>, _declared_budget: Option<TaskBudget>,
     _urgency: Option<TaskUrgency>, _rigor: Option<TaskRigor>, egress: TaskEgress,
     _kind: Option<TaskCategory>, no_hint: bool, read_only: bool, sandbox: bool,
     worktree: &Option<String>, team_flag: &Option<String>, agent_name: String,
-) -> Result<(String, Option<String>)> {
+) -> Result<String> {
     if agent::selection::is_removed_auto_agent(&agent_name) {
         anyhow::bail!("{}", agent::selection::AUTO_AGENT_REMOVED_MSG);
     }
@@ -62,27 +62,18 @@ pub(super) fn resolve_run_agent(
     recommend_hint::emit_if_recommended(
         &agent_name, prompt, no_hint, &selection_opts, store, team_config.as_ref(),
     );
-    explicit_agent(agent_name, model, declared_budget, egress)
+    explicit_agent(agent_name, egress)
 }
 
-fn explicit_agent(
-    agent_name: String,
-    model: &Option<String>,
-    declared_budget: Option<TaskBudget>,
-    egress: TaskEgress,
-) -> Result<(String, Option<String>)> {
+/// Egress gates only: the model is resolved at dispatch by `resolve_run_model`.
+fn explicit_agent(agent_name: String, egress: TaskEgress) -> Result<String> {
     if egress.requires_local() {
         agent::egress::require_local_egress(&agent_name)?;
     }
     if egress.requires_private_network() {
         agent::egress::require_private_network_egress(&agent_name)?;
     }
-    let selected_model = agent::selection::resolve_explicit_agent_model(
-        &agent_name,
-        model.as_deref(),
-        declared_budget,
-    );
-    Ok((agent_name, selected_model))
+    Ok(agent_name)
 }
 
 #[cfg(test)]

@@ -25,6 +25,9 @@ pub struct AgentJson {
     pub provider: String,
     pub metering: String,
     pub quota: QuotaJson,
+    /// `failed` (a run hit a not-signed-in refusal within the last hour, with
+    /// `observed_at`) or `unknown` (no evidence). Never `ok`.
+    pub auth: crate::auth_marker::AuthStatus,
     pub capabilities: HashMap<String, i32>,
     pub models: ModelsJson,
     pub history: Option<HistoryJson>,
@@ -33,7 +36,8 @@ pub struct AgentJson {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct QuotaJson {
-    /// `"ok"` | `"partial"` (group hold — agent still dispatchable) | `"limited"` (agent hold) | `"degraded"`
+    /// `"ok"` (a successful probe observed it) | `"unknown"` (no evidence) | `"partial"`
+    /// (group hold — agent still dispatchable) | `"limited"` (agent hold) | `"degraded"`
     pub state: String,
     pub recovery_at: Option<String>,
     pub message: Option<String>,
@@ -62,6 +66,9 @@ pub struct GroupHoldJson {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ModelsJson {
     pub default: Option<String>,
+    /// The resolver source of `default` (`sticky`, `custom_forced`, `cli_config`,
+    /// `budget_route`); null when the default is unknown.
+    pub default_source: Option<String>,
     pub budget: Option<String>,
     pub available: Vec<AvailableModelJson>,
 }
@@ -73,6 +80,10 @@ pub struct AvailableModelJson {
     pub input_per_m: Option<f64>,
     pub output_per_m: Option<f64>,
     pub capability: Option<f64>,
+    /// False when aid has no measured capability for this model.
+    pub rated: bool,
+    /// `"catalog"` | `"served"` (CLI reports it, no catalog row) | `"pricing_override"`.
+    pub source: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

@@ -97,9 +97,6 @@ fn declared_standard_and_premium_reach_cli_default() {
             let mut run_args = RunArgs {
                 agent_name: agent_name.to_string(),
                 prompt: "Refactor validation".to_string(),
-                model: crate::agent::selection::resolve_explicit_agent_model(
-                    agent_name, None, Some(budget),
-                ),
                 declared_difficulty: Some(crate::types::TaskDifficulty::Moderate),
                 declared_budget: Some(budget),
                 ..Default::default()
@@ -112,9 +109,18 @@ fn declared_standard_and_premium_reach_cli_default() {
 fn assert_cli_default(store: &Arc<Store>, args: &mut RunArgs) {
     assert_eq!(crate::agent_config::get_default_model(&args.agent_name), None);
     assert_eq!(args.model, None);
-    let setup = resolve_agent_setup(store, args, None).expect("healthy default dispatch");
+    let codex_home = tempfile::tempdir().expect("empty codex home");
+    crate::agent::codex::cli_config::set_test_codex_home(Some(codex_home.path().to_path_buf()));
+    let setup = resolve_agent_setup(store, args, None);
+    crate::agent::codex::cli_config::set_test_codex_home(None);
+    let setup = setup.expect("healthy default dispatch");
     assert_eq!(setup.effective_model, None);
-    let info = super::super::model_info::model_selection_info(args, setup.effective_model.as_deref(), setup.agent.as_ref());
+    let unpinned = crate::agent::run_model::RunModel {
+        model: None, pinned: false, source: crate::agent::run_model::RunModelSource::AgentDefault,
+    };
+    let info = super::super::model_info::model_selection_info(
+        args, &unpinned, setup.effective_model.as_deref(), setup.agent.as_ref(),
+    );
     assert_eq!(info, format!(
         "[aid] {} model: CLI default (no -m); source: CLI default (no -m)", args.agent_name,
     ));
@@ -160,18 +166,22 @@ fn model_info_names_final_model_and_precedence_source() {
         declared_budget: Some(crate::types::TaskBudget::Cheap),
         ..Default::default()
     };
-    let info = |args: &RunArgs, model: Option<&str>|
-        super::super::model_info::model_selection_info(args, model, &crate::agent::gemini::GeminiAgent);
-    crate::agent_config::save_agent_default_model("gemini", Some("pro")).expect("save");
-    assert_eq!(info(&args, Some("flash")), "[aid] gemini model: flash; source: --model");
+    use crate::agent::run_model::{RunModel, RunModelSource};
+    let resolved = |model: &str, source| RunModel { model: Some(model.to_string()), pinned: true, source };
+    let info = |args: &RunArgs, run_model: &RunModel, model: Option<&str>|
+        super::super::model_info::model_selection_info(args, run_model, model, &crate::agent::gemini::GeminiAgent);
+    let explicit = resolved("flash", RunModelSource::Explicit);
+    assert_eq!(info(&args, &explicit, Some("flash")), "[aid] gemini model: flash; source: --model");
     args.model_source = ModelSource::AidResolved;
-    assert_eq!(info(&args, Some("pro")), "[aid] gemini model: pro; source: agent config");
-    crate::agent_config::save_agent_default_model("gemini", None).expect("clear");
-    assert_eq!(info(&args, Some("flash-lite")),
-        "[aid] gemini model: flash-lite; source: catalog (declared budget)");
-    assert_eq!(info(&args, Some("other-family")),
+    let sticky = resolved("pro", RunModelSource::Sticky);
+    assert_eq!(info(&args, &sticky, Some("pro")), "[aid] gemini model: pro; source: agent config");
+    let budget = resolved("flash-lite", RunModelSource::BudgetRoute);
+    assert_eq!(info(&args, &budget, Some("flash-lite")),
+        "[aid] gemini model: flash-lite; source: budget route");
+    assert_eq!(info(&args, &budget, Some("other-family")),
         "[aid] gemini model: other-family; source: quota/budget routing");
-    assert!(info(&args, None).ends_with("source: CLI default (no -m)"));
+    let unpinned = RunModel { model: None, pinned: false, source: RunModelSource::AgentDefault };
+    assert!(info(&args, &unpinned, None).ends_with("source: CLI default (no -m)"));
 }
 
 #[test]
@@ -193,7 +203,10 @@ fn model_info_reports_existing_adapter_defaults_accurately() {
             .find(|pair| pair[0] == "-m" || pair[0] == "--model")
             .expect("adapter model flag")[1].as_ref();
         assert_eq!(agent.default_model().as_deref(), Some(model));
-        let info = super::super::model_info::model_selection_info(&args, None, agent.as_ref());
+        let unpinned = crate::agent::run_model::RunModel {
+            model: None, pinned: false, source: crate::agent::run_model::RunModelSource::AgentDefault,
+        };
+        let info = super::super::model_info::model_selection_info(&args, &unpinned, None, agent.as_ref());
         assert_eq!(info, format!(
             "[aid] {} model: {model}; source: adapter default (no caller -m)", kind.as_str(),
         ));

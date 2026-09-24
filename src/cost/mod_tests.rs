@@ -1,4 +1,4 @@
-// Unit tests for cost estimation and formatting.
+// Unit tests for cost estimation and formatting: exact-match prices, unknown as None.
 // Deps: super (cost::*)
 
 use super::*;
@@ -10,32 +10,6 @@ fn isolated() -> (TempDir, AidHomeGuard) {
     let guard = AidHomeGuard::set(temp.path());
     clear_feed_for_tests();
     (temp, guard)
-}
-
-#[test]
-fn kilo_and_free_models_zero_cost() {
-    let _guard = isolated();
-    assert_eq!(
-        estimate_cost(
-            100_000,
-            Some("opencode/mimo-v2-flash-free"),
-            AgentKind::OpenCode
-        ),
-        Some(0.0)
-    );
-    assert_eq!(estimate_cost(100_000, None, AgentKind::Kilo), Some(0.0));
-    assert_eq!(estimate_cost(100_000, None, AgentKind::MiMoCode), Some(0.0));
-    // Without an explicit model the zero fallback is honest: nothing has been
-    // named, so nothing is being mis-priced. With a named model the model
-    // itself is priced (or unknown), never blanket-zeroed.
-    assert_eq!(
-        estimate_cost(100_000, Some("kilo/kilo/auto-free"), AgentKind::Kilo),
-        Some(0.0)
-    );
-    assert_eq!(
-        estimate_cost(100_000, Some("mimo/mimo-auto"), AgentKind::MiMoCode),
-        Some(0.0)
-    );
 }
 
 #[test]
@@ -54,25 +28,9 @@ fn subscription_agents_stay_included_not_unknown() {
 }
 
 #[test]
-fn gpt41_cost_estimate() {
+fn unpinned_codex_default_without_observed_model_is_unknown() {
     let _guard = isolated();
-    let cost = estimate_cost(1_000_000, Some("gpt-4.1"), AgentKind::Codex).unwrap();
-    assert!((cost - 3.8).abs() < 0.01);
-}
-
-#[test]
-fn codex_fallback_uses_standard_tier_or_first_catalog_model() {
-    let _guard = isolated();
-    let cost = estimate_cost(1_000_000, None, AgentKind::Codex).unwrap();
-    // Mirrors codex_fallback_pricing: prefer a "standard" tier model, else the first.
-    let models = model_catalog::static_models_for_agent(&AgentKind::Codex);
-    let fallback = models
-        .iter()
-        .find(|m| m.tier == "standard")
-        .or_else(|| models.first())
-        .unwrap();
-    let blended = fallback.input_per_m * 0.7 + fallback.output_per_m * 0.3;
-    assert!((cost - blended).abs() < 0.01);
+    assert_eq!(estimate_cost(1_000_000, None, AgentKind::Codex), None);
 }
 
 #[test]
@@ -128,29 +86,11 @@ fn commandcode_unknown_model_stays_unknown() {
 }
 
 #[test]
-fn commandcode_reuses_known_vendor_pricing_without_zero_fallback() {
-    let _guard = isolated();
-    let cost = estimate_cost(1_000_000, Some("gpt-5.6-sol"), AgentKind::CommandCode).unwrap();
-    assert!((cost - 6.25).abs() < 0.01);
-}
-
-#[test]
 fn format_cost_variants() {
     assert_eq!(format_cost(Some(0.0)), "free");
     assert_eq!(format_cost(Some(0.0038)), "$0.0038");
     assert_eq!(format_cost(Some(1.23)), "$1.23");
     assert_eq!(format_cost(None), "unknown");
-}
-
-#[test]
-fn gpt56_matches_flagship_premium_rates() {
-    let _guard = isolated();
-    let sol = model_pricing("gpt-5.6-sol", AgentKind::Codex).unwrap();
-    assert_eq!(sol.input_per_m, 2.5);
-    assert_eq!(sol.output_per_m, 15.0);
-    let luna = model_pricing("gpt-5.6-luna", AgentKind::Codex).unwrap();
-    assert_eq!(luna.input_per_m, 0.4);
-    assert_eq!(luna.output_per_m, 1.6);
 }
 
 #[test]
@@ -162,68 +102,12 @@ fn format_cost_label_special_cases() {
     assert_eq!(format_cost_label(Some(0.0), AgentKind::MiMoCode), "included");
 }
 
-#[test]
-fn gemini_estimate_fallback_without_explicit_model_matches_gemini_three_flash_blend() {
-    let _guard = isolated();
-    let blended =
-        estimate_cost(1_000_000, None, AgentKind::Gemini).expect("gemini default pricing present");
-    let expected = model_pricing("gemini-3-flash-preview", AgentKind::Gemini).unwrap();
-    let blended_per_m = expected.input_per_m * 0.7 + expected.output_per_m * 0.3;
-    assert!((blended - blended_per_m).abs() < 0.001);
-}
-
-#[test]
-fn gemini_3_preview_model_pricing() {
-    let _guard = isolated();
-    let p = model_pricing("gemini-3.1-pro-preview", AgentKind::Gemini).unwrap();
-    assert_eq!(p.input_per_m, 1.25);
-    assert_eq!(p.output_per_m, 10.0);
-    let p = model_pricing("gemini-3-flash-preview", AgentKind::Gemini).unwrap();
-    assert_eq!(p.input_per_m, 0.30);
-    assert_eq!(p.output_per_m, 2.50);
-    let p = model_pricing("gemini-3-flash-lite-preview", AgentKind::Gemini).unwrap();
-    assert_eq!(p.input_per_m, 0.10);
-    assert_eq!(p.output_per_m, 0.40);
-}
-
-#[test]
-fn new_model_pricing_entries() {
-    let _guard = isolated();
-    let pricing = model_pricing("claude-sonnet-4", AgentKind::Custom).unwrap();
-    assert_eq!(pricing.input_per_m, 3.0);
-    assert_eq!(pricing.output_per_m, 15.0);
-    let pricing = model_pricing("gpt-5", AgentKind::Codex).unwrap();
-    assert_eq!(pricing.input_per_m, 1.25);
-    assert_eq!(pricing.output_per_m, 10.0);
-    let pricing = model_pricing("gpt-4.1", AgentKind::Codex).unwrap();
-    assert_eq!(pricing.input_per_m, 2.0);
-    assert_eq!(pricing.output_per_m, 8.0);
-    let pricing = model_pricing("gpt-5.4", AgentKind::Codex).unwrap();
-    assert_eq!(pricing.input_per_m, 2.5);
-    assert_eq!(pricing.output_per_m, 15.0);
-    let pricing = model_pricing("gpt-5.4-mini", AgentKind::Codex).unwrap();
-    assert_eq!(pricing.input_per_m, 0.4);
-    assert_eq!(pricing.output_per_m, 1.6);
-    let pricing = model_pricing("gpt-5.5", AgentKind::Codex).unwrap();
-    assert_eq!(pricing.input_per_m, 2.5);
-    assert_eq!(pricing.output_per_m, 15.0);
-    let pricing = model_pricing("gpt-5.5-mini", AgentKind::Codex).unwrap();
-    assert_eq!(pricing.input_per_m, 0.4);
-    assert_eq!(pricing.output_per_m, 1.6);
-    let pricing = model_pricing("gpt-5-mini", AgentKind::Codex).unwrap();
-    assert_eq!(pricing.input_per_m, 0.25);
-    assert_eq!(pricing.output_per_m, 2.0);
-    let pricing = model_pricing("o3-mini", AgentKind::Custom).unwrap();
-    assert_eq!(pricing.input_per_m, 1.10);
-    assert_eq!(pricing.output_per_m, 4.40);
-}
-
 /// A model the feed does not carry must resolve to `None` — never `Some(0.0)`
 /// and never "free". That is the whole point of the three-state split.
 #[test]
 fn unknown_model_yields_none_not_zero() {
     let _guard = isolated();
-    // `unknown-model` is absent from both the feed and the built-in matcher.
+    // `unknown-model` is absent from the catalog, overrides, and the feed.
     let cost = estimate_cost(1000, Some("unknown-model"), AgentKind::OpenCode);
     assert_eq!(cost, None);
     assert_eq!(format_cost(cost), "unknown");
@@ -231,39 +115,6 @@ fn unknown_model_yields_none_not_zero() {
     let cost = estimate_cost(1000, Some("nobody/has-this-model"), AgentKind::OpenCode);
     assert_eq!(cost, None);
     assert_eq!(format_cost(cost), "unknown");
-}
-
-/// A model the feed prices resolves to the feed's numbers; a feed miss with a
-/// built-in hit falls back to builtin. Seeded via the test seam with a model id
-/// no other test asserts on, then cleared so nothing leaks into the process.
-#[test]
-fn feed_precedence_and_builtin_fallback() {
-    let _guard = isolated();
-    use crate::cost::price_feed::{Feed, FeedModel};
-    set_feed_for_tests(Feed {
-        built_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-        age_seconds: Some(60),
-        stale: Some(false),
-        count: Some(1),
-        models: vec![FeedModel {
-            id: "gpt-5.9-mini".to_string(),
-            aliases: vec![],
-            input_per_mtok: 0.75,
-            output_per_mtok: 4.5,
-            cached_input_per_mtok: None,
-            context_length: None,
-            source: Some("openrouter".to_string()),
-        }],
-    });
-    // Feed knows gpt-5.9-mini: feed rate (0.75/4.5), not any builtin.
-    let p = model_pricing("gpt-5.9-mini", AgentKind::Codex).unwrap();
-    assert_eq!(p.input_per_m, 0.75);
-    assert_eq!(p.output_per_m, 4.5);
-    // builtin-only model still resolves offline.
-    let p = model_pricing("composer-2", AgentKind::Codex).unwrap();
-    assert_eq!(p.input_per_m, 0.50);
-    assert_eq!(p.output_per_m, 2.50);
-    clear_feed_for_tests();
 }
 
 #[test]
@@ -288,8 +139,92 @@ fn feed_reads_from_isolated_cache_file() {
     std::fs::write(temp.path().join("prices.json"), json).unwrap();
     clear_feed_for_tests();
 
-    let pricing = model_pricing("custom/feed-model-x", AgentKind::Codex).unwrap();
+    let pricing = pricing_resolution::resolve_model_pricing("custom/feed-model-x", AgentKind::Codex).unwrap();
     assert_eq!(pricing.input_per_m, 1.0);
     assert_eq!(pricing.output_per_m, 2.0);
     clear_feed_for_tests();
+}
+
+#[test]
+fn free_named_models_price_only_from_their_catalog_row() {
+    let _guard = isolated();
+    // Catalog rows are exact prices; a `-free` suffix alone prices nothing.
+    assert_eq!(estimate_cost(100_000, Some("opencode/mimo-v2.5-free"), AgentKind::OpenCode), Some(0.0));
+    assert_eq!(estimate_cost(100_000, Some("kilo/kilo-auto/free"), AgentKind::Kilo), Some(0.0));
+    assert_eq!(estimate_cost(100_000, Some("mimo/mimo-auto"), AgentKind::MiMoCode), Some(0.0));
+    assert_eq!(estimate_cost(100_000, Some("opencode/mimo-v2-flash-free"), AgentKind::OpenCode), None);
+}
+
+#[test]
+fn unpinned_agents_without_an_observed_model_are_unknown() {
+    let _guard = isolated();
+    // No fixed fallback model: Gemini, Kilo and MiMoCode stay unknown.
+    for agent in [AgentKind::Gemini, AgentKind::Kilo, AgentKind::MiMoCode, AgentKind::Claude] {
+        assert_eq!(estimate_cost(1_000_000, None, agent), None, "{agent:?}");
+    }
+    assert_eq!(estimate_cost(1_000_000, None, AgentKind::Cursor), Some(0.0), "subscription");
+}
+
+#[test]
+fn uncatalogued_model_absent_from_the_feed_is_unknown() {
+    let _guard = isolated();
+    // The old matcher priced any `gpt-5*` like gpt-5; exact matches only now.
+    for model in ["gpt-5.7-sol", "gpt-4.1", "gpt-5", "claude-sonnet-4", "composer-2"] {
+        assert_eq!(estimate_cost(1_000_000, Some(model), AgentKind::Codex), None, "{model}");
+    }
+    assert_eq!(estimate_cost(1_000_000, Some("gpt-5.6-sol"), AgentKind::CommandCode), None);
+}
+
+#[test]
+fn catalog_rows_price_exactly() {
+    let _guard = isolated();
+    let sol = pricing_resolution::resolve_model_pricing("gpt-5.6-sol", AgentKind::Codex).expect("row");
+    assert_eq!((sol.input_per_m, sol.output_per_m), (2.5, 15.0));
+    let cost = estimate_cost(1_000_000, Some("gemini-3-flash-preview"), AgentKind::Gemini).expect("row");
+    assert!((cost - (0.30 * 0.7 + 2.50 * 0.3)).abs() < 1e-9);
+}
+
+#[test]
+fn exact_feed_match_prices_and_near_miss_does_not() {
+    let _guard = isolated();
+    use crate::cost::price_feed::{Feed, FeedModel};
+    set_feed_for_tests(Feed {
+        built_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        age_seconds: Some(60),
+        stale: Some(false),
+        count: Some(1),
+        models: vec![FeedModel {
+            id: "gpt-5.9-mini".to_string(),
+            aliases: vec!["gpt-5.9-mini-alias".to_string()],
+            input_per_mtok: 0.75,
+            output_per_mtok: 4.5,
+            cached_input_per_mtok: None,
+            context_length: None,
+            source: Some("openrouter".to_string()),
+        }],
+    });
+    let price = |model| pricing_resolution::resolve_model_pricing(model, AgentKind::Codex);
+    let p = price("gpt-5.9-mini").expect("exact feed id");
+    assert_eq!((p.input_per_m, p.output_per_m), (0.75, 4.5));
+    assert!(price("gpt-5.9-mini-alias").is_some(), "feed alias is an exact match");
+    assert!(price("openai/gpt-5.9-mini").is_none(), "no vendor-prefix stripping");
+    assert!(price("gpt-5.9-mini-high").is_none(), "no substring match");
+    clear_feed_for_tests();
+}
+
+#[test]
+fn cost_totals_never_count_unknown_as_zero() {
+    assert_eq!(format_cost_total(1.5, 0), "$1.50");
+    assert_eq!(format_cost_total(1.5, 2), "$1.50 + 2 unknown");
+    assert_eq!(format_cost_total(0.0, 3), "unknown (3 tasks)");
+    assert_eq!(format_cost_total(0.0, 0), "free");
+}
+
+#[test]
+fn has_known_price_matches_estimate_cost() {
+    let _guard = isolated();
+    assert!(has_known_price(Some("gpt-5.6-sol"), AgentKind::Codex));
+    assert!(!has_known_price(Some("no-such-model"), AgentKind::Codex));
+    assert!(!has_known_price(None, AgentKind::Codex));
+    assert!(has_known_price(None, AgentKind::Cursor));
 }

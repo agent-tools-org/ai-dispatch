@@ -16,6 +16,7 @@ pub(crate) async fn dispatch(
     match command {
         Commands::Errors(args) => crate::command_diagnostics::show(&args).map(|()| DispatchOutcome::CommandCompleted),
         Commands::Run(args) => dispatch_run(store, args).await.map(DispatchOutcome::Run),
+        Commands::Classify(args) => std::process::exit(crate::cmd::classify::run(args)),
         command @ (
             Commands::Batch(..)
             | Commands::Advise(..)

@@ -12,6 +12,7 @@ use crate::background;
 use crate::cmd::advise;
 use crate::cmd::agent_json;
 use crate::cmd::ask;
+use crate::cmd::mcp_classify;
 use crate::cmd::mcp_schema;
 use crate::cmd::retry::{self, RetryArgs};
 use crate::cmd::run::{self, RunArgs};
@@ -43,6 +44,7 @@ pub async fn call_tool(store: Arc<Store>, name: &str, arguments: Value) -> Resul
         "aid_ask" => ask_tool(store, arguments).await,
         "aid_agents" => agents_tool(store),
         "aid_advise" => advise_tool(store, arguments),
+        "classify" => mcp_classify::classify_tool(arguments).await,
         _ => Ok(error_payload(format!("Unknown tool '{name}'"))),
     } {
         Ok(payload) => payload,

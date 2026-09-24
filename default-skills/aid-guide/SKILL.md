@@ -90,6 +90,8 @@ already knows, which puts these responsibilities on the caller:
 - For watching, inspecting, responding, steering, stopping, merging, exporting,
   usage, cost, statistics, notifications, and recovery, read
   [references/task-operations.md](references/task-operations.md).
+- For `classify` (typed questions about an artifact via TypeSafe Jev, CLI or
+  MCP), read [references/classify.md](references/classify.md).
 - For principal review, `accept`, `reject`, custody guarantees, and `gc`, always
   read [references/task-lifecycle.md](references/task-lifecycle.md).
 

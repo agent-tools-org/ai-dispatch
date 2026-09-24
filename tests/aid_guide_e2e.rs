@@ -315,3 +315,16 @@ fn official_guide_documents_remote_build_contract() {
     assert!(config.contains("remote_build = \"auto\""));
     assert!(index.contains("--remote-build [BOX]"));
 }
+
+#[test]
+fn official_guide_documents_classify_contract() {
+    let classify = include_str!("../default-skills/aid-guide/references/classify.md");
+    for term in ["security add-generic-password -a \"$USER\" -s typesafe-api-key -U -w",
+        "https://api.typesafe.ai/v1/systemone", "never in argv", "100,000 characters", "--allow-secret-like",
+        "What final verdict does this audit give?", "contain output from an actual test run",
+        "hint", "never a verdict", "numbers, dates, and counting", "| 5 | state refused"] {
+        assert!(classify.contains(term), "missing {term}");
+    }
+    let index = include_str!("../default-skills/aid-guide/references/command-index.md");
+    assert!(index.contains("`aid classify`") && index.contains("MCP `classify` tool"));
+}

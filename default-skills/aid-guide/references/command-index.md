@@ -13,6 +13,7 @@ current arguments.
 | `aid benchmark` | Run the same task through multiple agents and compare results. |
 | `aid ask` | Run a focused research or exploration request with optional files. |
 | `aid query` | Query an LLM directly, optionally using automatic routing. |
+| `aid classify` | Ask TypeSafe Jev typed `noul`/`choice`/`score` questions about a text or JSON state (stdin by default) and print a small validated JSON answer; also the MCP `classify` tool. Exits 2 no key, 3 API error, 4 invalid questions, 5 state refused. Answers over agent output are hints, never a verdict; see [classify.md](classify.md). |
 | `aid build` | Run supported Cargo checks (check/clippy) with compact diagnostics; zero-unit no-target runs fail clearly. |
 | `aid test` | Run Cargo tests with trusted guarantees: zero-match filters fail, executed tests are named, failures stay compact. |
 | `aid experiment` | Run and inspect metric-driven iterative experiments. |
@@ -70,7 +71,7 @@ current arguments.
 | `aid byok` | Manage custom OpenAI-compatible providers through opencode. |
 | `aid container` | Build, list, or stop development containers. |
 | `aid hook` | Install or invoke supported AID hooks; task hook payloads expose additive `outcome` and `verify_status` fields. |
-| `aid mcp` | Start AID's stdio MCP server; task payloads expose additive `outcome` and `verify_status` fields. |
+| `aid mcp` | Start AID's stdio MCP server; task payloads expose additive `outcome` and `verify_status` fields. The `classify` tool takes `state`, `state_json`, `questions`, and `model` and returns the same JSON as `aid classify`. |
 | `aid doctor` | Report repository/worktree hygiene, leaked operator symlinks, and NeedsHuman agent holds; `--apply` repairs only those symlinks without bypassing custody. |
 | `aid clean` | Remove disposable logs and caches while retaining custody evidence; reclaims a task's fallback cargo target only once the directory it was keyed from is gone, and reports how many it held back. |
 | `aid web` | Serve the embedded dashboard and client API; `--host` selects the bind address and non-loopback binds require `--token`. |

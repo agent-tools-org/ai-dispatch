@@ -38,6 +38,11 @@ pub fn tool_definitions() -> Vec<Value> {
             "Read-only routing advice for a declared task profile; dispatches nothing.",
             advise_schema(),
         ),
+        tool(
+            "classify",
+            "Ask TypeSafe Jev typed questions (noul, choice, score) about a text or JSON state; returns small JSON answers. Answers over agent output or logs are hints, never a verdict.",
+            classify_schema(),
+        ),
     ]
 }
 
@@ -151,6 +156,20 @@ fn advise_schema() -> Value {
     })
 }
 
+fn classify_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "state": { "description": "Text to evaluate, or a JSON object/array when state_json is true" },
+            "state_json": { "type": "boolean", "default": false },
+            "questions": { "type": "object", "description": "Native TypeSafe questions map: id -> {type, instructions, criteria}" },
+            "model": { "type": "string", "default": "jev-1.13.0" }
+        },
+        "required": ["state", "questions"],
+        "additionalProperties": false
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::tool_definitions;
@@ -164,7 +183,7 @@ mod tests {
             .collect();
         for expected in [
             "aid_run", "aid_board", "aid_show", "aid_retry", "aid_usage",
-            "aid_get_findings", "aid_ask", "aid_agents", "aid_advise",
+            "aid_get_findings", "aid_ask", "aid_agents", "aid_advise", "classify",
         ] {
             assert!(names.contains(&expected), "missing tool '{expected}'");
         }

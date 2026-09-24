@@ -12,12 +12,12 @@ pub(crate) fn parse() -> crate::cli::Cli {
             if !error.use_stderr() { error.exit(); }
             let code = format!("{:?}", error.kind());
             let hint = parser_hint(&error);
-            history::record("parse", error.exit_code(), vec![Issue::new(
+            history::record("parse", exit_code(&error, std::env::args()), vec![Issue::new(
                 &code, &parser_message(&error), &hint,
             )]);
             let _ = error.print();
             eprintln!("\n[aid] {hint}");
-            std::process::exit(error.exit_code());
+            std::process::exit(exit_code(&error, std::env::args()));
         }
     }
 }
@@ -43,4 +43,24 @@ fn parser_hint(error: &clap::Error) -> String {
         return "For a bug audit, use --kind debugging --read-only --dir <checkout-path>. --audit schedules an additional post-task cross-audit; it is not a task kind.".into();
     }
     "Use aid <command> --help for valid values and combinations; inspect history with aid errors.".into()
+}
+
+/// `aid classify` reserves exit 2 for a missing key, so its usage errors exit 4.
+fn exit_code(error: &clap::Error, args: impl Iterator<Item = String>) -> i32 {
+    let mut words = args.skip(1).filter(|arg| !arg.starts_with('-'));
+    if words.next().as_deref() == Some("classify") { 4 } else { error.exit_code() }
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    #[test]
+    fn classify_usage_errors_exit_4_and_others_keep_clap_codes() {
+        let argv = |line: &str| line.split(' ').map(String::from).collect::<Vec<_>>();
+        let error = crate::cli::Cli::try_parse_from(["aid", "classify", "--bogus"]).err().expect("error");
+        assert_eq!(super::exit_code(&error, argv("aid -q classify --bogus").into_iter()), 4);
+        let other = crate::cli::Cli::try_parse_from(["aid", "board", "--bogus"]).err().expect("error");
+        assert_eq!(super::exit_code(&other, argv("aid board --bogus").into_iter()), 2);
+    }
 }

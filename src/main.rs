@@ -105,6 +105,7 @@ mod verify;
 mod verify_cargo;
 mod watcher;
 mod webhook;
+mod typesafe;
 #[cfg(feature = "web")]
 mod web;
 mod workgroup;
@@ -153,6 +154,8 @@ async fn async_main(cli: Cli) -> Result<()> {
             cmd::advise::run(store.as_ref(), args)?;
             return Ok(());
         }
+        // Needs no store, dirs, or update check; exit codes are part of its contract.
+        Some(Commands::Classify(args)) => std::process::exit(cmd::classify::run(args)),
         other => other,
     };
 

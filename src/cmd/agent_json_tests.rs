@@ -49,8 +49,7 @@ fn test_agent_json_serialization_roundtrip() {
             available: vec![AvailableModelJson {
                 model: "gpt-5.5".to_string(),
                 tier: "paid".to_string(),
-                input_per_m: Some(1.25),
-                output_per_m: Some(10.0),
+                input_per_m: Some(1.25), output_per_m: Some(10.0),
                 capability: Some(9.6),
                 rated: true, source: "catalog".to_string(),
             }],

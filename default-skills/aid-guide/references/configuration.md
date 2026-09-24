@@ -45,6 +45,7 @@ Common project controls include:
 - `remote_build = "auto"` or `remote_build = "<box>"` in `.aid/project.toml` (`[project]`), overridden by `aid run --remote-build [BOX]`; batch `[defaults]` and per-task `remote_build` use the same values. A project `auto` default is ignored with a warning when `rbox` is not on `PATH` (the build stays local); an explicit `--remote-build` or a project default naming a box still fails without `rbox`;
 - agent and model preferences;
 - budget and duration limits;
+- `max_task_cost` (USD, `[project]`): the task is stopped once its known cost exceeds it. A route with no known price (no exact catalog row, pricing override, or price-feed entry for the agent and model) records an unknown cost, so the ceiling cannot fire; dispatch then prints one warning and records one task event: `cost ceiling $X cannot be enforced: no known price for <agent>/<model or agent default>`. Priced routes and projects without the key are unaffected;
 - GitButler mode;
 - worktree naming prefix;
 - audit and idle-recovery policy;

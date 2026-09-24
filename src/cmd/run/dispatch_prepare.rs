@@ -138,6 +138,11 @@ where
     )?;
     insert_task_claiming_id(store, &mut task, &mut task_id, &mut log_path, explicit_id)?;
     maybe_insert_held_route_event(store, &task_id, &context.agent_setup, args.dry_run);
+    let setup = &context.agent_setup;
+    let priced_model = setup.effective_model.clone().or_else(|| setup.agent.default_model());
+    super::run_dispatch_cost_ceiling::warn_unenforceable_cost_ceiling(
+        store, &task_id, args.max_task_cost, setup.agent_kind, &setup.agent_display_name, priced_model.as_deref(),
+    );
     persist_declaration(store, &task_id, args)?;
     Ok(ClaimedDispatch { task_id, task, log_path, workgroup, explicit_repo_path })
 }

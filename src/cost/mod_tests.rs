@@ -219,3 +219,12 @@ fn cost_totals_never_count_unknown_as_zero() {
     assert_eq!(format_cost_total(0.0, 3), "unknown (3 tasks)");
     assert_eq!(format_cost_total(0.0, 0), "free");
 }
+
+#[test]
+fn has_known_price_matches_estimate_cost() {
+    let _guard = isolated();
+    assert!(has_known_price(Some("gpt-5.6-sol"), AgentKind::Codex));
+    assert!(!has_known_price(Some("no-such-model"), AgentKind::Codex));
+    assert!(!has_known_price(None, AgentKind::Codex));
+    assert!(has_known_price(None, AgentKind::Cursor));
+}

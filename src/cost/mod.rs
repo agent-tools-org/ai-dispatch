@@ -49,6 +49,12 @@ pub fn estimate_cost(tokens: i64, model: Option<&str>, agent: AgentKind) -> Opti
     Some(tokens as f64 * blended_per_m / 1_000_000.0)
 }
 
+/// Whether cost tracking can price this route: the same resolution
+/// [`estimate_cost`] uses. `false` means a task on it records an unknown cost.
+pub fn has_known_price(model: Option<&str>, agent: AgentKind) -> bool {
+    resolve_pricing(model, agent).is_some()
+}
+
 /// Format cost for display: "$0.0012", "free", or "unknown".
 pub fn format_cost(cost_usd: Option<f64>) -> String {
     match cost_usd {

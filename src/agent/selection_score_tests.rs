@@ -231,6 +231,7 @@ fn held_background_keeps_zero_penalty_and_note_says_wait() {
         None,
         None,
         0,
+        None,
     );
     let codex = report
         .candidates
@@ -258,6 +259,7 @@ fn advise_notes_distinguish_held_degraded_and_skipped() {
         None,
         None,
         0,
+        None,
     );
     let qwen = report
         .candidates

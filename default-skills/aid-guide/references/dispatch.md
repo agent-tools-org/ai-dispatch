@@ -212,9 +212,45 @@ urgency is not `background`. Use `--top 0` for all candidates, `--team` for
 team preferences, and omit `--json` for a concise human-readable breakdown
 (including a headroom term). JSON candidates add a `quota` object (`status`,
 `wall`, `used_percent`, `resets_at`, `freshness_secs`, `stale`, `source`)
-without renaming existing keys. Missing the declared capability floor or
-budget is a ranking penalty, not a hard gate: alternatives still appear with
-an exclusion reason such as `base 6 < floor 8 for complex`. Custom agents are
+without renaming existing keys. `quota.status` is `unknown` when no successful
+probe observed the quota (`source: "none"`, a failed probe, or an expired
+marker); it is never reported as dispatchable-by-evidence without one.
+
+Eligibility uses the same "can this route run" predicate as `aid agent list`
+and the `aid run` preflight: a candidate whose binary is missing from `PATH` is
+`installed: false, eligible: false` with reason
+`not installed: binary '<bin>' missing from PATH`. Every ineligible candidate
+carries `exclusion_reason` (human text, `; `-joined) and `exclusion_codes`
+(one stable code per reason):
+
+| Code | Reason text |
+|---|---|
+| `not_installed` | `not installed: binary '<bin>' missing from PATH` |
+| `below_floor` | `base 6 < floor 8 for complex` (measured shortfall) |
+| `no_capability_data` | `no capability data for <category>` (no matrix row; base defaults to 1 and is still excluded by the floor) |
+| `no_budget_model` | `no model for budget <budget>` |
+| `auth_failed` | `auth failed (observed <time>)` |
+| `weaker_on_caller_pool` | `weaker model on caller's pool` |
+
+Candidates rank eligible first, then eligible-but-demoted, then ineligible;
+ineligible alternatives still appear with their reasons. The recommendation is
+the first eligible candidate. Each candidate also carries `auth`: `state` is
+`failed` (with `observed_at` and `message`) when a run of that agent ended on a
+recognised not-signed-in refusal within the last hour (grok `Not signed in`,
+claude `Please run /login` / `Not logged in`, oz `credentials are invalid`),
+otherwise `unknown`. A successful run clears it; aid never reports `ok` and
+never marks auth failed from a run or probe that could not start.
+
+Caller pool: advise reads the calling session (`AID_CALLER_KIND`, Claude Code,
+Codex; see `aid board --mine`) and the caller's own model from
+`--caller-model <model>` (wins) or `AID_CALLER_MODEL`. Claude Code maps to the
+`anthropic` pool and Codex to `openai-chatgpt-plan`. The JSON report adds
+`caller` (`session`, `agent`, `provider`, `model`, `capability`). A candidate on
+the same pool whose recommended model has a lower catalog capability than the
+caller's model is excluded as `weaker model on caller's pool`. When either
+capability is unknown, same-pool candidates stay eligible but carry
+`demotion_reason` and rank below every eligible other-pool candidate. This is
+advice only: an explicit `aid run <agent>` is never blocked by it. Custom agents are
 reported separately because their configured capability values are not on the
 built-in score scale. Inferred kind is advisory; pass `--kind` when the
 caller knows the task kind. Advice exits successfully even when every agent

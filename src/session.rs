@@ -1,7 +1,7 @@
-// Caller session detection for aid dispatches and board filtering.
-// Exports current_caller() plus helpers for rendering task ownership.
+// Caller session detection for aid dispatches, board filtering, and advise pools.
+// Exports current_caller(), caller_agent(), caller_model() plus ownership display.
 
-use crate::types::Task;
+use crate::types::{AgentKind, Task};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallerSession {
@@ -32,6 +32,29 @@ pub fn display(task: &Task) -> String {
         (Some(kind), None) => kind.to_string(),
         _ => "-".to_string(),
     }
+}
+
+/// The built-in agent whose provider pool a caller session draws on.
+pub fn caller_agent(kind: &str) -> Option<AgentKind> {
+    match kind.trim().to_ascii_lowercase().as_str() {
+        "claude-code" | "claude" => Some(AgentKind::Claude),
+        "codex" => Some(AgentKind::Codex),
+        _ => None,
+    }
+}
+
+/// The caller's own model: `--caller-model` when given, else `AID_CALLER_MODEL`.
+pub fn caller_model(flag: Option<&str>) -> Option<String> {
+    caller_model_from(flag, std::env::var("AID_CALLER_MODEL").ok().as_deref())
+}
+
+fn caller_model_from(flag: Option<&str>, env: Option<&str>) -> Option<String> {
+    [flag, env]
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .find(|value| !value.is_empty())
+        .map(str::to_string)
 }
 
 fn explicit_caller() -> Option<CallerSession> {
@@ -75,7 +98,21 @@ fn shorten(session_id: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::display;
+    use super::{caller_agent, caller_model_from, display};
+
+    #[test]
+    fn caller_sessions_map_to_their_pool_agent() {
+        assert_eq!(caller_agent("claude-code"), Some(AgentKind::Claude));
+        assert_eq!(caller_agent("codex"), Some(AgentKind::Codex));
+        assert_eq!(caller_agent("iTerm.app"), None);
+    }
+
+    #[test]
+    fn caller_model_flag_wins_over_env_and_blank_is_absent() {
+        assert_eq!(caller_model_from(Some("opus"), Some("sonnet")).as_deref(), Some("opus"));
+        assert_eq!(caller_model_from(None, Some("sonnet")).as_deref(), Some("sonnet"));
+        assert_eq!(caller_model_from(Some(" "), None), None);
+    }
     use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
     use chrono::Local;
 

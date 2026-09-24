@@ -25,6 +25,9 @@ pub struct AgentJson {
     pub provider: String,
     pub metering: String,
     pub quota: QuotaJson,
+    /// `failed` (a run hit a not-signed-in refusal within the last hour, with
+    /// `observed_at`) or `unknown` (no evidence). Never `ok`.
+    pub auth: crate::auth_marker::AuthStatus,
     pub capabilities: HashMap<String, i32>,
     pub models: ModelsJson,
     pub history: Option<HistoryJson>,
@@ -33,7 +36,8 @@ pub struct AgentJson {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct QuotaJson {
-    /// `"ok"` | `"partial"` (group hold — agent still dispatchable) | `"limited"` (agent hold) | `"degraded"`
+    /// `"ok"` (a successful probe observed it) | `"unknown"` (no evidence) | `"partial"`
+    /// (group hold — agent still dispatchable) | `"limited"` (agent hold) | `"degraded"`
     pub state: String,
     pub recovery_at: Option<String>,
     pub message: Option<String>,

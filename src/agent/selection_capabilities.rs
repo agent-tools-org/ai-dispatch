@@ -2,8 +2,6 @@
 // Exports: AGENT_CAPABILITIES, base/custom scores, team overrides, install checks.
 // Deps: classifier categories, custom configs, teams, agent kinds, process lookup.
 
-use std::process::Command;
-
 use crate::agent::classifier::TaskCategory;
 use crate::agent::custom::CustomAgentConfig;
 use crate::team::TeamConfig;
@@ -96,12 +94,17 @@ pub(super) const AGENT_CAPABILITIES: &[(AgentKind, &[(TaskCategory, i32)])] = &[
     ]),
 ];
 
+/// Base score used for ranking; 1 when the matrix has no row for this pair.
 pub(super) fn base_score(agent: AgentKind, category: TaskCategory) -> i32 {
+    capability_row(agent, category).unwrap_or(1)
+}
+
+/// The measured capability, or `None` when the matrix has no data for it.
+pub(super) fn capability_row(agent: AgentKind, category: TaskCategory) -> Option<i32> {
     AGENT_CAPABILITIES.iter()
         .find(|(kind, _)| *kind == agent)
         .and_then(|(_, scores)| scores.iter().find(|(item, _)| *item == category))
         .map(|(_, score)| *score)
-        .unwrap_or(1)
 }
 
 pub(super) fn custom_category_score(config: &CustomAgentConfig, category: TaskCategory) -> i32 {
@@ -133,8 +136,7 @@ pub(super) fn custom_strength_bonus(config: &CustomAgentConfig, category: TaskCa
 }
 
 pub(super) fn custom_command_installed(command: &str) -> bool {
-    Command::new("which").arg(command).output()
-        .map(|output| output.status.success()).unwrap_or(false)
+    crate::agent::custom_route_blocker(command).is_none()
 }
 
 pub(super) fn team_override_score(

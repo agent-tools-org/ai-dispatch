@@ -257,6 +257,7 @@ fn advise_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
         kind,
         args.team.as_deref(),
         args.top,
+        None,
     );
     Ok(serde_json::to_value(&report)?)
 }

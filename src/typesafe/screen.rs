@@ -6,6 +6,7 @@ use serde_json::Value;
 
 pub(crate) const MAX_STATE_CHARS: usize = 100_000;
 const TOKEN_PREFIXES: [&str; 7] = ["sk-", "ghp_", "github_pat_", "xox", "AKIA", "AIza", "ts_"];
+const MIN_TOKEN_BODY: usize = 16;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum StateRefusal {
@@ -93,7 +94,16 @@ pub(crate) fn secret_marker(text: &str) -> Option<&'static str> {
     }
     TOKEN_PREFIXES.into_iter().find(|prefix| {
         text.match_indices(prefix).any(|(start, _)| {
-            text[..start].chars().next_back().is_none_or(|prev| !(prev.is_alphanumeric() || prev == '_'))
+            let word_start = text[..start]
+                .chars()
+                .next_back()
+                .is_none_or(|prev| !(prev.is_alphanumeric() || prev == '_'));
+            // Real tokens carry a long body; a bare prefix in prose (`sk-`, sk-learn) is not one.
+            let body = text[start + prefix.len()..]
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'))
+                .count();
+            word_start && body >= MIN_TOKEN_BODY
         })
     })
 }
@@ -105,10 +115,13 @@ mod tests {
 
     #[test]
     fn token_prefixes_are_caught_at_word_starts_only() {
-        for text in ["key sk-abc", "sk-abc", "(ghp_x)", "\ngithub_pat_1", "xoxb-1", "AKIAXYZ", "=AIzaQ", "ts_live"] {
-            assert!(secret_marker(text).is_some(), "{text:?}");
+        let body = "A1b2C3d4E5f6G7h8";
+        for prefix in ["key sk-", "sk-", "(ghp_", "\ngithub_pat_", "xoxb-", "AKIA", "=AIza", "ts_"] {
+            let text = format!("{prefix}{body}");
+            assert!(secret_marker(&text).is_some(), "{text:?}");
         }
-        for text in ["task-list", "risk-free", "_sk-x", "bats_", "pxoxo", "cuts_it", "plain words"] {
+        for text in ["task-list", "risk-free", "_sk-x", "bats_", "pxoxo", "cuts_it", "plain words",
+                     "the `sk-` rule", "uses sk-learn", "ts_ms field", "AKIA prefix", "ghp_short"] {
             assert_eq!(secret_marker(text), None, "{text:?}");
         }
     }
@@ -126,17 +139,17 @@ mod tests {
         let big = "a".repeat(MAX_STATE_CHARS + 1);
         assert_eq!(screen_text(&big, true), Err(StateRefusal::TooLarge(MAX_STATE_CHARS + 1)));
         assert!(screen_text(&"é".repeat(MAX_STATE_CHARS), false).is_ok(), "limit counts chars, not bytes");
-        assert_eq!(screen_text("token sk-123", false), Err(StateRefusal::SecretLike("sk-")));
-        assert!(screen_text("token sk-123", true).is_ok());
+        assert_eq!(screen_text("token sk-123A1b2C3d4E5f6G7h8", false), Err(StateRefusal::SecretLike("sk-")));
+        assert!(screen_text("token sk-123A1b2C3d4E5f6G7h8", true).is_ok());
     }
 
     #[test]
     fn json_state_is_screened_per_string_and_key() {
         assert_eq!(screen_json(&json!({}), false), Err(StateRefusal::Empty));
         assert_eq!(screen_json(&json!("scalar"), false), Err(StateRefusal::Empty));
-        let escaped = json!({ "log": "line\nsk-hidden" });
+        let escaped = json!({ "log": "line\nsk-hiddenA1b2C3d4E5f6G7h8" });
         assert_eq!(screen_json(&escaped, false), Err(StateRefusal::SecretLike("sk-")));
-        assert!(screen_json(&json!({ "AKIA1": 1 }), false).is_err(), "keys are screened too");
+        assert!(screen_json(&json!({ "AKIA1A1b2C3d4E5f6G7h8": 1 }), false).is_err(), "keys are screened too");
         assert!(screen_json(&escaped, true).is_ok());
         assert!(screen_json(&json!([{ "ok": "clean" }]), false).is_ok());
     }

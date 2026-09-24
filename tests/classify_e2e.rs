@@ -115,7 +115,7 @@ fn missing_key_exits_2_with_setup_command() {
 #[test]
 fn secret_like_state_exits_5_without_sending() {
     let fixture = Fixture::new(200, &verdict_response());
-    let out = fixture.run("fake", &QUESTIONS, "export OPENAI=sk-proj-abc");
+    let out = fixture.run("fake", &QUESTIONS, "export OPENAI=sk-proj-A1b2C3d4E5f6G7h8");
     assert_eq!(out.status.code(), Some(5), "{}", String::from_utf8_lossy(&out.stderr));
     assert_eq!(fixture.calls(), 0);
     assert!(out.stdout.is_empty());

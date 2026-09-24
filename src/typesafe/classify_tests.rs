@@ -34,7 +34,7 @@ fn local_checks_run_before_the_key_is_read() {
     no_questions.questions.clear();
     assert_eq!(classify(&no_questions).unwrap_err().kind, ErrorKind::Invalid);
     assert_eq!(classify(&request(text(" "))).unwrap_err().kind, ErrorKind::Invalid);
-    assert_eq!(classify(&request(text("key sk-live"))).unwrap_err().kind, ErrorKind::Refused);
+    assert_eq!(classify(&request(text("key sk-liveA1b2C3d4E5f6G7h8"))).unwrap_err().kind, ErrorKind::Refused);
     let big = "a".repeat(super::super::screen::MAX_STATE_CHARS + 1);
     assert_eq!(classify(&request(text(&big))).unwrap_err().kind, ErrorKind::Refused);
     let mut bad_model = request(text("fine"));

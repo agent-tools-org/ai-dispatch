@@ -89,7 +89,7 @@ mod tests {
 
     #[tokio::test]
     async fn refusals_come_back_as_error_payloads() {
-        let payload = classify_tool(json!({ "state": "token sk-live", "questions": noul() })).await.expect("payload");
+        let payload = classify_tool(json!({ "state": "token sk-liveA1b2C3d4E5f6G7h8", "questions": noul() })).await.expect("payload");
         assert!(payload["error"].as_str().expect("error").contains("secret-like"));
     }
 }

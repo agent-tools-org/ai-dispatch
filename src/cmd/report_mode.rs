@@ -84,6 +84,10 @@ pub(crate) fn is_audit_report_task(
 
 pub(crate) fn apply_defaults(args: &mut RunArgs, category: TaskCategory) -> bool {
     if declared_write_task(args.kind, args.read_only) {
+        // A result file aid auto-set earlier (required=false) is dropped; an explicit one stays.
+        if args.result_file_required == Some(false) {
+            args.result_file = None;
+        }
         return false;
     }
     if !is_audit_report_task(&args.prompt, args.read_only, category, args.result_file.as_deref()) {

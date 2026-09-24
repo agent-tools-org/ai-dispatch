@@ -67,3 +67,16 @@ fn declared_writable_kind_keeps_implementation_scaffolding() {
     assert!(suppresses_implementation_scaffolding(prompt, false, None), "control");
     assert!(!suppresses_implementation_scaffolding(prompt, false, Some(TaskCategory::ComplexImpl)));
 }
+
+#[test]
+fn retry_drops_auto_result_file_but_keeps_explicit_one() {
+    let mut auto = args(Some(TaskCategory::ComplexImpl), false, Some("result-t-1.md"));
+    auto.result_file_required = Some(false);
+    assert!(!apply_defaults(&mut auto, TaskCategory::ComplexImpl));
+    assert_eq!(auto.result_file, None);
+
+    let mut explicit = args(Some(TaskCategory::ComplexImpl), false, Some("notes.md"));
+    explicit.result_file_required = Some(true);
+    assert!(!apply_defaults(&mut explicit, TaskCategory::ComplexImpl));
+    assert_eq!(explicit.result_file.as_deref(), Some("notes.md"));
+}

@@ -44,7 +44,7 @@ fn test_agent_json_serialization_roundtrip() {
         },
         capabilities,
         models: ModelsJson {
-            default: None,
+            default: None, default_source: None,
             budget: Some("gpt-5.4-mini".to_string()),
             available: vec![AvailableModelJson {
                 model: "gpt-5.5".to_string(),
@@ -52,6 +52,7 @@ fn test_agent_json_serialization_roundtrip() {
                 input_per_m: Some(1.25),
                 output_per_m: Some(10.0),
                 capability: Some(9.6),
+                rated: true, source: "catalog".to_string(),
             }],
         },
         history: Some(HistoryJson {

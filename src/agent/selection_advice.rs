@@ -62,6 +62,9 @@ pub(crate) struct AdviceCandidate {
     pub exclusion_reason: Option<String>,
     #[serde(default)]
     pub quota: CandidateQuota,
+    /// Served, unrated models newer than `model` in its family; never auto-selected.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unrated_served_models: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -213,9 +216,12 @@ fn ranked(
         is_default: context.team_default == Some(kind), priority: priority(kind),
     };
     let quota = selection_quota::candidate_quota(kind, None);
+    let unrated_served_models = model.as_deref()
+        .map(|model| crate::model_catalog::unrated_served_newer_than(kind, model))
+        .unwrap_or_default();
     let report = AdviceCandidate {
         agent: name, installed, eligible, score: breakdown.total, model, breakdown,
-        exclusion_reason, quota,
+        exclusion_reason, quota, unrated_served_models,
     };
     RankedCandidate { report, order }
 }

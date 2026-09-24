@@ -3,6 +3,7 @@
 // Depends on serde_json for metadata-rich completion events.
 
 mod capabilities;
+pub(crate) mod cli_config;
 mod output_classifier;
 mod events;
 mod session;

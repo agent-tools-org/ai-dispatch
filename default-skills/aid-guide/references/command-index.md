@@ -8,7 +8,7 @@ current arguments.
 | Command | Purpose |
 |---|---|
 | `aid run` | `--remote-build [BOX]` runs Cargo builds on rbox (bare/auto picks once; retry reuses box, verify re-picks on disk admission refusal). `--backup TARGET[:FOLDER]` / `--no-backup` override the project's `[backup]` artifact upload (`gdrive` via `gws`); `aid retry` inherits the setting. Dispatch one agent task with optional worktree, verification, retry, audit, context, skills, or background execution; only a successful `TaskOutcome` exits 0 in the foreground. A Degraded route prints a warning at dispatch and is not diverted. |
-| `aid advise` | Preview declared-profile agent/model routing without dispatching or writing task state. JSON candidates include an additive `quota` object (status, wall, used percent, freshness) and `breakdown.headroom_penalty`. |
+| `aid advise` | Preview declared-profile agent/model routing without dispatching or writing task state. JSON candidates include an additive `quota` object (status, wall, used percent, freshness) and `breakdown.headroom_penalty`. `unrated_served_models` lists served, unrated models newer than the candidate's catalog model (omitted when empty). |
 | `aid batch` | Dispatch a dependency-aware TOML task graph. |
 | `aid benchmark` | Run the same task through multiple agents and compare results. |
 | `aid ask` | Run a focused research or exploration request with optional files. |
@@ -62,7 +62,7 @@ current arguments.
 |---|---|
 | `aid setup` | Configure AID and install bundled resources when needed. |
 | `aid project` | Initialize, inspect, or synchronize project configuration. |
-| `aid agent` | Inspect built-in agent availability and related state. `aid agent config <name> --model` sets a sticky default for `aid run` and `aid batch`. `aid agent quota` shows live used percent and freshness when an aidbar snapshot exists; `STALE` is display-only. `aid agent list --json` quota objects carry `degraded` state plus `used_percent`, `resets_at`, and `source` (`probe` / `marker` / `none`). A NeedsHuman hold on `aid agent list` prints `needs human: <stored first line> — fix, then aid config clear-limit <agent>` rather than a bare `LIMITED`. |
+| `aid agent` | Inspect built-in agent availability and related state. `aid agent config <name> --model` sets a sticky default for `aid run` and `aid batch`. `aid agent quota` shows live used percent and freshness when an aidbar snapshot exists; `STALE` is display-only. `aid agent list --json` quota objects carry `degraded` state plus `used_percent`, `resets_at`, and `source` (`probe` / `marker` / `none`). Its `models` object carries `default_source` (`sticky` / `forced` / `cli_config` / `catalog`), and each `models.available` row carries `rated` and `source` (`catalog` / `served` / `pricing_override`); served-only rows are `rated: false` with `null` capability and prices. A NeedsHuman hold on `aid agent list` prints `needs human: <stored first line> — fix, then aid config clear-limit <agent>` rather than a bare `LIMITED`. |
 | `aid config` | Inspect agents, pricing, installed skills, templates, and prompt budgets. |
 | `aid store` | Browse, install, inspect, and update community packages. |
 | `aid tool` | Manage reusable tool definitions. |

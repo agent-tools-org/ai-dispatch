@@ -213,11 +213,15 @@ fn official_guide_documents_declared_profiles_and_advice() {
 fn official_guide_documents_discovered_model_unknowns() {
     let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
 
-    assert!(dispatch.contains("refreshes agy's served-model cache"));
-    assert!(dispatch.contains("refresh-and-merge applies to opencode"));
+    assert!(dispatch.contains("codex, grok, cursor,\nqwen, agy, and opencode"));
+    assert!(dispatch.contains("read the cache only and never probe"));
+    assert!(dispatch.contains("`rated: false`, `source: \"served\"`"));
     assert!(dispatch.contains("`null` `input_per_m`"));
     assert!(dispatch.contains("cost displays report `unknown`"));
-    assert!(dispatch.contains("never initiate this discovery probe"));
+    assert!(dispatch.contains("`unrated_served_models`"));
+    let configuration = include_str!("../default-skills/aid-guide/references/configuration.md");
+    assert!(configuration.contains("`models.default_source`"));
+    assert!(configuration.contains("`cli_config`"));
 }
 
 #[test]

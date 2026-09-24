@@ -3,11 +3,13 @@
 // travels to curl only on stdin, and never enters argv, env, logs, or task state.
 
 use anyhow::{Context, Result, bail};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 const KEYCHAIN_SERVICE: &str = "typesafe-api-key";
 const SECURITY_BIN: &str = "/usr/bin/security";
+const KEYCHAIN_DEADLINE: Duration = Duration::from_secs(3);
 
 /// The key from the login keychain, or None when absent, empty, or not on macOS.
 /// No env fallback: an exported key would be inherited by every dispatched agent.
@@ -16,18 +18,38 @@ pub(crate) fn api_key() -> Option<String> {
         return None;
     }
     let account = std::env::var("USER").ok()?;
-    let output = Command::new(SECURITY_BIN)
+    let mut lookup = Command::new(SECURITY_BIN);
+    lookup
         .args(["find-generic-password", "-a", &account, "-s", KEYCHAIN_SERVICE, "-w"])
         .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    // A keychain access prompt or a locked keychain must not stall the caller.
+    let stdout = output_within(lookup, KEYCHAIN_DEADLINE)?;
     // An item stored from a TTY-less prompt is empty and exits 0; treat it as absent.
-    let key = String::from_utf8(output.stdout).ok()?.trim().to_string();
+    let key = String::from_utf8(stdout).ok()?.trim().to_string();
     (!key.is_empty()).then_some(key)
+}
+
+/// Stdout of a successful run that finishes before `deadline`; otherwise the child is killed.
+fn output_within(mut command: Command, deadline: Duration) -> Option<Vec<u8>> {
+    let mut child = command.spawn().ok()?;
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) if status.success() => break,
+            Ok(Some(_)) | Err(_) => return None,
+            Ok(None) if started.elapsed() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+        }
+    }
+    let mut stdout = Vec::new();
+    child.stdout.take()?.read_to_end(&mut stdout).ok()?;
+    Some(stdout)
 }
 
 /// POST `body` (JSON) to `url` with a bearer key. Returns (HTTP status, response body).

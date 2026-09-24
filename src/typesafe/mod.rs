@@ -1,4 +1,4 @@
-// Shadow classification: record what a System One model would decide, without acting on it.
+// TypeSafe System One access for aid: the key, the authenticated call, and typed questions.
 // Exports: secret (key access and the authenticated call).
 // Deps: curl on PATH; the macOS login keychain for the key.
 

@@ -1,4 +1,4 @@
-// Tests that the TypeSafe key never reaches argv and that the curl config is well formed.
+// Tests: the TypeSafe key never reaches argv, the curl config is well formed, lookups are bounded.
 // Exports: none.
 // Deps: super secret helpers.
 
@@ -36,4 +36,23 @@ fn status_suffix_is_split_from_body() {
     assert_eq!(parse_status_suffix("line1\nline2\n422").unwrap().0, 422);
     assert!(parse_status_suffix("\n000").is_err(), "curl reports 000 when no response arrived");
     assert!(parse_status_suffix("no status").is_err());
+}
+
+#[test]
+fn stalled_lookup_is_killed_at_the_deadline() {
+    let mut sleeper = Command::new("sleep");
+    sleeper.arg("30").stdout(Stdio::piped());
+    let started = Instant::now();
+    assert!(output_within(sleeper, Duration::from_millis(200)).is_none());
+    assert!(started.elapsed() < Duration::from_secs(5), "killed promptly, not after 30 s");
+}
+
+#[test]
+fn finished_lookup_returns_stdout_and_failure_returns_none() {
+    let mut echo = Command::new("printf");
+    echo.arg("value").stdout(Stdio::piped());
+    assert_eq!(output_within(echo, Duration::from_secs(5)).as_deref(), Some(&b"value"[..]));
+    let mut failing = Command::new("false");
+    failing.stdout(Stdio::piped());
+    assert!(output_within(failing, Duration::from_secs(5)).is_none());
 }

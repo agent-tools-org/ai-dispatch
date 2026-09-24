@@ -20,9 +20,12 @@ pub(crate) use model_catalog_resolved::{
     load_pricing_overrides, merged_agent_models, models_for_agent, PricingResponse,
 };
 pub(crate) use model_catalog_resolved::{is_unpriced_discovered_model, ModelOrigin};
+#[path = "model_catalog_default.rs"]
+mod model_catalog_default;
+pub(crate) use model_catalog_default::resolve_default_model;
 #[path = "model_catalog_served.rs"]
 mod model_catalog_served;
-pub(crate) use model_catalog_served::unrated_served_newer_than;
+pub(crate) use model_catalog_served::{is_served_only, unrated_served_newer_than};
 #[cfg(test)]
 pub(crate) use test_support::set_test_qwen_home;
 

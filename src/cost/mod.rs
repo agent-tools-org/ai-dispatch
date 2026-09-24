@@ -163,7 +163,8 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
                 .unwrap_or_else(|| "coder-model".to_string());
             model_pricing(&m, agent)
         }
-        AgentKind::Codex => codex_fallback_pricing(agent),
+        // The CLI default runs unpinned and nothing observed it: unknown.
+        AgentKind::Codex => None,
         AgentKind::CommandCode => None,
         AgentKind::Copilot | AgentKind::Cursor | AgentKind::Kilo | AgentKind::MiMoCode => {
             Some(ModelPricing {
@@ -192,15 +193,6 @@ fn gemini_fallback_pricing(agent: AgentKind) -> Option<ModelPricing> {
 }
 
 /// Codex fallback: prefer the static standard-tier model, then the first.
-fn codex_fallback_pricing(agent: AgentKind) -> Option<ModelPricing> {
-    let models = model_catalog::static_models_for_agent(&agent);
-    let model = models.iter().find(|m| m.tier == "standard").or_else(|| models.first())?;
-    Some(ModelPricing {
-        input_per_m: model.input_per_m,
-        output_per_m: model.output_per_m,
-    })
-}
-
 fn pricing_overrides() -> Arc<HashMap<(AgentKind, String), ModelPricing>> {
     #[cfg(not(test))]
     {
@@ -268,13 +260,11 @@ fn model_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
         return Some(pricing);
     }
     // The feed takes precedence over the built-in matcher when present.
-    if let Some((feed, index)) = feed_index()
-        && let Some(entry) = price_feed::feed_lookup(&feed, &index, model)
-    {
-        return Some(ModelPricing {
-            input_per_m: entry.input_per_mtok,
-            output_per_m: entry.output_per_mtok,
-        });
+    if let Some(pricing) = pricing_resolution::exact_feed_pricing(model) {
+        return Some(pricing);
+    }
+    if model_catalog::is_served_only(agent, model) {
+        return None;
     }
     pricing_builtin::for_model_lower(&model.to_lowercase())
 }

@@ -1,5 +1,6 @@
 // Advise eligibility tests: install state, evidence state, auth, and caller pool.
-// Covers: not-installed ineligible, unknown quota/auth, auth_failed, weaker/demoted same pool.
+// Covers: not-installed ineligible, unknown quota/auth, auth_failed, weaker/demoted same pool,
+// and the advised model following the resolved agent default at standard budget.
 // Deps: advise(), DetectAgentsGuard, auth_marker, isolated AID home and aidbar cache.
 
 use super::*;
@@ -109,4 +110,38 @@ fn same_pool_is_demoted_not_excluded_with_unknown_caller_model() {
     assert!(other_eligible.clone().count() > 0);
     assert!(other_eligible.into_iter().all(|index| index < position("claude")));
     assert_ne!(report.recommended.as_ref().map(|r| r.agent.as_str()), Some("claude"));
+}
+
+fn codex_with_cli_default(budget: TaskBudget) -> AdviceCandidate {
+    let (temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
+    let codex_home = temp.path().join("codex");
+    std::fs::create_dir_all(&codex_home).expect("codex home");
+    std::fs::write(codex_home.join("config.toml"), "model = \"gpt-6-sol\"\n").expect("config");
+    crate::agent::codex::cli_config::set_test_codex_home(Some(codex_home));
+    let declared = DeclaredTaskProfile {
+        difficulty: TaskDifficulty::Moderate, budget,
+        urgency: TaskUrgency::Normal, rigor: TaskRigor::Standard,
+    };
+    let report = advise("refactor the scheduler", declared, Some(TaskCategory::Refactoring), None, None, 0, None);
+    crate::agent::codex::cli_config::set_test_codex_home(None);
+    find(&report, "codex").clone()
+}
+
+#[test]
+fn standard_budget_advises_the_codex_cli_configured_default() {
+    let codex = codex_with_cli_default(TaskBudget::Standard);
+    assert_eq!(codex.model.as_deref(), Some("gpt-6-sol"));
+    assert_eq!(codex.default_source.as_deref(), Some("cli_config"));
+    assert!(codex.eligible, "an unrated default borrows the replaced catalog capability");
+    assert!(codex.unrated_served_models.is_empty());
+}
+
+#[test]
+fn cheap_budget_keeps_the_catalog_budget_model() {
+    let codex = codex_with_cli_default(TaskBudget::Cheap);
+    let catalog = model_for_task_budget(AgentKind::Codex, TaskBudget::Cheap);
+    assert!(catalog.is_some());
+    assert_eq!(codex.model.as_deref(), catalog);
+    assert_eq!(codex.default_source, None);
 }

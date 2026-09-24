@@ -25,7 +25,7 @@ use crate::cmd::agent_json_types::{
     AvailableModelJson, LoadJson,
 };
 use crate::cmd::agent_json_helpers::{
-    build_quota_json, builtin_profile, command_installed, resolve_default_model,
+    build_quota_json, builtin_profile, command_installed,
     get_agent_capabilities, metering_label, rate_limit_kind,
 };
 
@@ -173,7 +173,7 @@ fn build_agent_json(
     let capabilities = get_agent_capabilities(kind, custom_config);
     
     let models = {
-        let (default_model, default_source) = resolve_default_model(&name, kind, custom_config);
+        let (default_model, default_source) = crate::model_catalog::resolve_default_model(&name, kind, custom_config);
         let budget_model = if is_custom {
             None
         } else {

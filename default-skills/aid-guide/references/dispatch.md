@@ -252,8 +252,14 @@ capability is unknown, same-pool candidates stay eligible but carry
 `demotion_reason` and rank below every eligible other-pool candidate. This is
 advice only: an explicit `aid run <agent>` is never blocked by it. Custom agents are
 reported separately because their configured capability values are not on the
-built-in score scale. When a candidate's catalog model is older than a
-served-only model of the same family (for example catalog `gpt-5.6-sol`,
+built-in score scale. A candidate's `model` is the model `aid run` would launch.
+For a declared `free` or `cheap` budget it is the catalog budget model. For
+`standard` and `premium` it is the agent default, with `default_source`
+(`sticky`, `cli_config`, or `catalog`, as in `aid agent list --json`); a
+codex `model = "gpt-6-sol"` in its config makes the candidate `gpt-6-sol` with
+`default_source: "cli_config"`. An unrated default is scored with the
+capability of the catalog model it replaces. When a candidate's model is older
+than a served-only model of the same family (for example catalog `gpt-5.6-sol`,
 served `gpt-6-sol`), the candidate carries `unrated_served_models` (omitted
 when empty) and the human output adds one `note:` line. Those models stay
 unrated and are not selected. Inferred kind is advisory; pass `--kind` when the
@@ -495,6 +501,10 @@ absent or expired cache adds nothing. Each `models.available` row carries
 row has `rated: false`, `source: "served"`, and `null` `input_per_m`,
 `output_per_m`, and `capability`; cost displays report `unknown`. aid never
 invents ratings for served-only models, and routing never auto-selects one.
+Cost estimation prices a served-only model only from an explicit
+`pricing.json` override or an exact price-feed entry, never from a
+similar-name rate. A codex task with neither a pinned nor an observed model
+costs `unknown`.
 
 Two different things can print as $0.00, and they are not interchangeable. A
 model whose id ends in `-free`, `/free`, or `:free` is treated as

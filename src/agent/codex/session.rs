@@ -8,10 +8,10 @@ pub(crate) const RESUME_FALLBACK_DETAIL: &str =
 const ROLLOUT_TIMESTAMP_FORMAT: &str = "%Y-%m-%dT%H-%M-%S";
 
 pub(crate) fn durable_session_rollout_exists(session_id: &str) -> bool {
-    let Ok(real_home) = crate::agent::home_isolation::resolve_real_home() else {
+    let Ok(codex_home) = super::cli_config::codex_home() else {
         return false;
     };
-    session_rollout_exists(&real_home.join(".codex").join("sessions"), session_id)
+    session_rollout_exists(&codex_home.join("sessions"), session_id)
 }
 
 pub(crate) fn resume_fallback_needed(session_id: &str) -> bool {

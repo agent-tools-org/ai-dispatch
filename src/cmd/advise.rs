@@ -269,40 +269,16 @@ mod recommended_route_tests {
     }
 }
 
-/// One line naming served models newer than the catalog pick; they stay unrated.
+/// One line naming served models newer than the advised model; they stay unrated.
 fn unrated_served_line(candidate: &crate::agent::selection::AdviceCandidate) -> Option<String> {
     let model = candidate.model.as_deref()?;
     (!candidate.unrated_served_models.is_empty()).then(|| format!(
-        "     note: {} also serves newer unrated {} (catalog pick {model}; not auto-selected)",
+        "     note: {} also serves newer unrated {} (advised {model}; not auto-selected)",
         candidate.agent,
         candidate.unrated_served_models.join(", "),
     ))
 }
 
 #[cfg(test)]
-mod unrated_served_tests {
-    use super::*;
-
-    #[test]
-    fn advise_surfaces_newer_unrated_served_codex_model() {
-        let home = tempfile::tempdir().expect("temp aid home");
-        let _guard = crate::paths::AidHomeGuard::set(home.path());
-        crate::paths::ensure_dirs().expect("aid dirs");
-        let now = chrono::Utc::now().timestamp();
-        let cache = serde_json::json!({"codex": {"models": ["gpt-6-sol"], "updated_at_secs": now}});
-        std::fs::write(crate::paths::aid_dir().join("served_models_cache.json"), cache.to_string())
-            .expect("served-model cache");
-        let declared = DeclaredTaskProfile {
-            difficulty: crate::types::TaskDifficulty::Complex,
-            budget: crate::types::TaskBudget::Premium,
-            urgency: crate::types::TaskUrgency::Normal,
-            rigor: crate::types::TaskRigor::Standard,
-        };
-        let report = advise("Implement the parser", declared, None, None, None, 20, None);
-        let codex = report.candidates.iter().find(|c| c.agent == "codex").expect("codex");
-        assert_eq!(codex.model.as_deref(), Some("gpt-5.6-sol"), "unrated model is not auto-selected");
-        assert_eq!(codex.unrated_served_models, vec!["gpt-6-sol".to_string()]);
-        let line = unrated_served_line(codex).expect("human line");
-        assert!(line.contains("gpt-6-sol") && line.contains("gpt-5.6-sol"), "{line}");
-    }
-}
+#[path = "advise_unrated_tests.rs"]
+mod unrated_served_tests;

@@ -1,6 +1,6 @@
-// Reads the codex CLI's own configured default model from its config.toml.
-// Exports: configured_model (live lookup) and parse_configured_model (pure).
-// Deps: toml; honours `$CODEX_HOME`, else `~/.codex`.
+// The codex home directory and the codex CLI's configured default model.
+// Exports: codex_home (the one source for launch env and config reads),
+// configured_model, parse_configured_model. Deps: toml, home_isolation.
 
 use std::path::PathBuf;
 
@@ -10,26 +10,28 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
-/// Points `configured_model` at a test directory on the current thread.
+/// Points `codex_home` at a test directory on the current thread.
 #[cfg(test)]
 pub(crate) fn set_test_codex_home(home: Option<PathBuf>) {
     TEST_CODEX_HOME.with(|cell| *cell.borrow_mut() = home);
 }
 
-fn codex_home() -> Option<PathBuf> {
+/// The codex home: a non-empty operator `$CODEX_HOME`, else the real
+/// home's `.codex`. Codex launches and every read of codex state use this.
+pub(crate) fn codex_home() -> anyhow::Result<PathBuf> {
     #[cfg(test)]
     if let Some(home) = TEST_CODEX_HOME.with(|cell| cell.borrow().clone()) {
-        return Some(home);
+        return Ok(home);
     }
     if let Some(home) = std::env::var_os("CODEX_HOME").filter(|value| !value.is_empty()) {
-        return Some(PathBuf::from(home));
+        return Ok(PathBuf::from(home));
     }
-    std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".codex"))
+    Ok(crate::agent::home_isolation::resolve_real_home()?.join(".codex"))
 }
 
 /// Top-level `model` from the codex config; `None` when unset or unreadable.
 pub(crate) fn configured_model() -> Option<String> {
-    let path = codex_home()?.join("config.toml");
+    let path = codex_home().ok()?.join("config.toml");
     parse_configured_model(&std::fs::read_to_string(path).ok()?)
 }
 
@@ -68,5 +70,23 @@ mod tests {
         let model = configured_model();
         set_test_codex_home(None);
         assert_eq!(model.as_deref(), Some("gpt-6-sol"));
+    }
+
+    #[test]
+    fn launch_env_and_config_read_share_codex_home() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(temp.path().join("config.toml"), "model = \"gpt-6-sol\"\n").expect("config");
+        set_test_codex_home(Some(temp.path().to_path_buf()));
+        let mut cmd = std::process::Command::new("codex");
+        let applied = crate::agent::apply_codex_home_env(&mut cmd);
+        let home = codex_home().expect("codex home");
+        let model = configured_model();
+        set_test_codex_home(None);
+        applied.expect("launch env");
+        let launched = cmd.get_envs().find(|(key, _)| *key == "CODEX_HOME")
+            .and_then(|(_, value)| value).map(PathBuf::from);
+        assert_eq!(home, temp.path());
+        assert_eq!(launched.as_deref(), Some(home.as_path()));
+        assert_eq!(model.as_deref(), Some("gpt-6-sol"), "config read from the launched home");
     }
 }

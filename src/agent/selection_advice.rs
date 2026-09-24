@@ -68,7 +68,12 @@ pub(crate) struct AdviceCandidate {
     pub installed: bool,
     pub eligible: bool,
     pub score: f64,
+    /// The model `aid run` would launch at the declared budget.
     pub model: Option<String>,
+    /// `sticky` / `cli_config` / `catalog` when `model` is the agent default
+    /// (standard/premium); absent for free/cheap catalog budget routing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_source: Option<String>,
     pub breakdown: ScoreBreakdown,
     pub exclusion_reason: Option<String>,
     /// Stable codes for `exclusion_reason`, one per reason.
@@ -220,7 +225,8 @@ fn builtin_candidate(
     caller: Option<&CallerAdvice>, kind: AgentKind, blocker: Option<RouteBlocker>,
 ) -> RankedCandidate {
     let breakdown = score_breakdown(context, kind);
-    let model = model_for_task_budget(kind, declared.budget).map(str::to_string);
+    let catalog_model = model_for_task_budget(kind, declared.budget);
+    let (model, default_source) = recommend::run_model(kind, declared.budget, catalog_model);
     let mut exclusions = Exclusions::default();
     if let Some(blocker) = &blocker {
         exclusions.push(blocker.code(), blocker.reason());
@@ -235,7 +241,9 @@ fn builtin_candidate(
         let at = auth.observed_at.as_deref().unwrap_or("unknown time");
         exclusions.push("auth_failed", format!("auth failed (observed {at})"));
     }
-    let capability = model.as_deref().and_then(|name| model_capability_score(kind, name));
+    // An unrated default borrows the capability of the catalog model it replaces.
+    let capability = model.as_deref().and_then(|name| model_capability_score(kind, name))
+        .or_else(|| catalog_model.and_then(|name| model_capability_score(kind, name)));
     let verdict = gate::pool_verdict(caller, kind, capability);
     if verdict == PoolVerdict::Weaker {
         exclusions.push("weaker_on_caller_pool", gate::WEAKER_ON_CALLER_POOL.to_string());
@@ -253,7 +261,7 @@ fn builtin_candidate(
         .unwrap_or_default();
     let report = AdviceCandidate {
         agent: kind.as_str().to_string(), installed: blocker.is_none(), eligible,
-        score: breakdown.total, model, breakdown, exclusion_reason, exclusion_codes,
+        score: breakdown.total, model, default_source, breakdown, exclusion_reason, exclusion_codes,
         demotion_reason, quota: selection_quota::candidate_quota(kind, None), auth,
         unrated_served_models,
     };

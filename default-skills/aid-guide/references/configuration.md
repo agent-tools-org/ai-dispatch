@@ -169,10 +169,12 @@ defaults (Cursor, Qwen, MiMoCode) are labeled separately.
 `aid agent list --json` reports the default as `models.default` with
 `models.default_source`: `sticky` (`aid agent config --model`), `forced` (a
 custom agent's forced model), `cli_config` (the CLI's own configured default:
-codex `model` in `$CODEX_HOME/config.toml` or `~/.codex/config.toml`, qwen
+codex `model` in `config.toml` under the codex home, qwen
 `model.name` in `~/.qwen/settings.json`), or `catalog`; `null` when there is no
 default. That order is the precedence. A `cli_config` default is what the CLI
 runs when aid passes no `-m`, so aid never replaces it with an older catalog row.
+The codex home is `$CODEX_HOME` when set, else `~/.codex`; aid reads the codex
+config from it and launches codex with the same `CODEX_HOME`.
 Register a local custom agent
 with `config add-agent`. Use `clear-limit` only after confirming a provider's
 rate-limit condition has cleared. Each custom agent has its own marker keyed on

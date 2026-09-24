@@ -220,9 +220,12 @@ fn official_guide_documents_discovered_model_unknowns() {
     assert!(dispatch.contains("`null` `input_per_m`"));
     assert!(dispatch.contains("cost displays report `unknown`"));
     assert!(dispatch.contains("`unrated_served_models`"));
+    assert!(dispatch.contains("`default_source: \"cli_config\"`"));
+    assert!(dispatch.contains("exact price-feed entry, never from a\nsimilar-name rate"));
     let configuration = include_str!("../default-skills/aid-guide/references/configuration.md");
     assert!(configuration.contains("`models.default_source`"));
     assert!(configuration.contains("`cli_config`"));
+    assert!(configuration.contains("launches codex with the same `CODEX_HOME`"));
 }
 
 #[test]

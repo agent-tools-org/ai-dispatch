@@ -61,18 +61,9 @@ fn gpt41_cost_estimate() {
 }
 
 #[test]
-fn codex_fallback_uses_standard_tier_or_first_catalog_model() {
+fn unpinned_codex_default_without_observed_model_is_unknown() {
     let _guard = isolated();
-    let cost = estimate_cost(1_000_000, None, AgentKind::Codex).unwrap();
-    // Mirrors codex_fallback_pricing: prefer a "standard" tier model, else the first.
-    let models = model_catalog::static_models_for_agent(&AgentKind::Codex);
-    let fallback = models
-        .iter()
-        .find(|m| m.tier == "standard")
-        .or_else(|| models.first())
-        .unwrap();
-    let blended = fallback.input_per_m * 0.7 + fallback.output_per_m * 0.3;
-    assert!((cost - blended).abs() < 0.01);
+    assert_eq!(estimate_cost(1_000_000, None, AgentKind::Codex), None);
 }
 
 #[test]

@@ -1,7 +1,6 @@
 // Live model price feed (https://llm-prices.agent-tools.org/v1/prices.json),
-// cached under the aid home. Feed prices take precedence over the built-in
-// matcher; the cache is refreshed out of band so the dispatch path never
-// blocks on the network.
+// cached under the aid home. Only exact ids and aliases price a model; the
+// cache is refreshed out of band so the dispatch path never blocks on the network.
 // Exports: Feed, feed_lookup, maybe_refresh
 // Deps: crate::paths, chrono, serde, serde_json, std::process::Command (curl)
 
@@ -71,20 +70,11 @@ impl Feed {
     }
 }
 
-/// Resolve `model` to a priced feed entry. Exact canonical id, then alias, then
-/// the vendor-stripped basename (and its aliases). A model the feed does not
-/// carry is a miss — there is no substring matching or near-match fallback.
+/// Resolve `model` to a priced feed entry by exact canonical id or alias. A
+/// model the feed does not carry is a miss: no basename, substring, or
+/// near-match fallback.
 pub fn feed_lookup<'a>(feed: &'a Feed, index: &HashMap<String, usize>, model: &str) -> Option<&'a FeedModel> {
-    if let Some(&i) = index.get(model) {
-        return feed.models.get(i);
-    }
-    let basename = model.rsplit('/').next().unwrap_or(model);
-    if basename != model
-        && let Some(&i) = index.get(basename)
-    {
-        return feed.models.get(i);
-    }
-    None
+    index.get(model).and_then(|&i| feed.models.get(i))
 }
 
 /// Where the refresh result is written. Cache lives under the aid home so a
@@ -94,7 +84,7 @@ fn cache_path() -> std::path::PathBuf {
 }
 
 /// Read the cached feed, if any. Errors are swallowed: a missing or corrupt
-/// cache is an offline first run, which falls back to the built-in matcher.
+/// cache is an offline first run: only catalog and override prices apply.
 pub fn load_cache() -> Option<Feed> {
     let bytes = fs::read(cache_path()).ok()?;
     serde_json::from_slice(&bytes).ok()
@@ -195,10 +185,10 @@ mod tests {
     }
 
     #[test]
-    fn lookup_strips_vendor_prefix() {
+    fn vendor_prefixed_name_is_not_a_basename_match() {
         let feed = sample_feed();
         let index = feed.index();
-        assert_eq!(feed_lookup(&feed, &index, "mimo/gpt-5.6-sol").unwrap().id, "gpt-5.6-sol");
+        assert!(feed_lookup(&feed, &index, "mimo/gpt-5.6-sol").is_none());
     }
 
     #[test]

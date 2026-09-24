@@ -78,6 +78,9 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
             duration_label(recommended.est_duration_secs),
             recommended_quota_suffix(&recommended.reason),
         );
+        println!("Model: {}", crate::agent::run_model::model_label(
+            recommended.model.as_deref(), recommended.pinned, recommended.source,
+        ));
     } else {
         println!("Recommended: none (no installed agents)");
     }
@@ -93,7 +96,7 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
         );
         let item = &candidate.breakdown;
         println!(
-            "  {}. {:<10} {:>5.1}  base {:.1}  {:+.1} model  {:+.1} budget  {:+.1} limit  {:+.1} history  {:+.1} complexity  {:+.1} team  {:+.1} headroom{}",
+            "  {}. {:<10} {:>5.1}  base {:.1}  {:+.1} model  {:+.1} budget  {:+.1} limit  {:+.1} history  {:+.1} complexity  {:+.1} team  {:+.1} headroom  model {}{}",
             index + 1,
             candidate.agent,
             candidate.score,
@@ -105,6 +108,9 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
             item.complexity_bonus,
             item.team_bonus,
             item.headroom_penalty,
+            crate::agent::run_model::model_label(
+                candidate.model.as_deref(), candidate.pinned, candidate.source,
+            ),
             availability,
         );
         if let Some(line) = unrated_served_line(candidate) {

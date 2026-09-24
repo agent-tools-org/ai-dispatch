@@ -1,4 +1,4 @@
-// Board outcome rendering regressions for inconclusive verification.
+// Board outcome rendering regressions: inconclusive verification, unknown cost totals.
 // Exports: module-scoped tests.
 // Deps: board::render_board, Store, and task outcome types.
 
@@ -152,4 +152,21 @@ fn board_does_not_count_stopped_tasks_as_failed() {
     let output = render_board(&[stopped], &store).unwrap();
 
     assert!(output.contains("1 total | 0 done | 0 running | 0 failed"), "output: {output}");
+}
+
+#[test]
+fn board_total_names_unknown_costs_instead_of_hiding_them() {
+    let temp = TempDir::new().unwrap();
+    let _guard = AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().unwrap();
+    let mut unknown = timed_out_task();
+    unknown.tokens = Some(5_000);
+    let mut priced = timed_out_task();
+    priced.id = TaskId("t-priced".to_string());
+    priced.tokens = Some(1_000);
+    priced.cost_usd = Some(0.25);
+    let all_unknown = render_board(std::slice::from_ref(&unknown), &store).unwrap();
+    assert!(all_unknown.contains("Cost: unknown (1 tasks)"), "{all_unknown}");
+    let partial = render_board(&[unknown, priced], &store).unwrap();
+    assert!(partial.contains("Cost: $0.25 + 1 unknown"), "{partial}");
 }

@@ -11,9 +11,11 @@ use super::selection_capabilities::{capability_row, team_override_score};
 use super::selection_quota::{self, CandidateQuota};
 use super::selection_scoring::{
     Candidate, CandidateContext, ScoreBreakdown, compare_candidates, cost_efficiency,
-    model_capability_score, model_for_task_budget, priority, score_breakdown,
+    model_capability_score, priority, score_breakdown,
 };
 use crate::agent::RouteBlocker;
+use crate::agent::run_model::{RunModel, RunModelInput, RunModelSource, resolve_run_model};
+use crate::config::SelectionConfig;
 use crate::agent_config;
 use crate::auth_marker::AuthStatus;
 use crate::store::Store;
@@ -55,9 +57,10 @@ pub(crate) struct InferredAdvice {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct RecommendedAdvice {
     pub agent: String,
+    /// The model `aid run` launches; `None` = agent default (unknown).
     pub model: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default_source: Option<String>,
+    pub pinned: bool,
+    pub source: RunModelSource,
     pub score: f64,
     pub est_cost_usd: Option<f64>,
     pub est_duration_secs: Option<i64>,
@@ -70,12 +73,11 @@ pub(crate) struct AdviceCandidate {
     pub installed: bool,
     pub eligible: bool,
     pub score: f64,
-    /// The model `aid run` would launch at the declared budget.
+    /// `resolve_run_model` for the declared profile: exactly what `aid run` launches.
     pub model: Option<String>,
-    /// `sticky` / `cli_config` / `catalog` when `model` is the agent default
-    /// (standard/premium); absent for free/cheap catalog budget routing.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default_source: Option<String>,
+    /// Whether `aid run` passes `model` to the CLI.
+    pub pinned: bool,
+    pub source: RunModelSource,
     pub breakdown: ScoreBreakdown,
     pub exclusion_reason: Option<String>,
     /// Stable codes for `exclusion_reason`, one per reason.
@@ -137,10 +139,10 @@ pub(crate) fn advise(
         avg_cost_map: &avg_cost_map,
         team_default,
         budget: declared.budget.uses_budget_mode(),
-        declared_budget: Some(declared.budget),
         penalize_rate_limit: declared.urgency != TaskUrgency::Background,
     };
-    let mut ranked = builtin_candidates(&context, declared, caller.as_ref());
+    let selection = crate::config::load_config().map(|config| config.selection).unwrap_or_default();
+    let mut ranked = builtin_candidates(&context, declared, &selection, caller.as_ref());
     ranked.sort_by(|left, right| {
         rank_tier(left).cmp(&rank_tier(right))
             .then_with(|| ranking_score(right).partial_cmp(&ranking_score(left))
@@ -152,7 +154,7 @@ pub(crate) fn advise(
     );
     let notes = recommend::availability_notes(&ranked, declared.urgency, recommended.as_ref());
     let mut candidates: Vec<_> = ranked.into_iter().map(|item| item.report).collect();
-    let mut custom_candidates = custom::custom_candidates(&context, declared);
+    let mut custom_candidates = custom::custom_candidates(&context, declared, &selection);
     if top > 0 {
         candidates.truncate(top);
         custom_candidates.truncate(top);
@@ -214,21 +216,26 @@ fn history_maps(store: Option<&Store>, kind: TaskCategory) -> HistoryMaps {
 fn builtin_candidates(
     context: &CandidateContext<'_>,
     declared: DeclaredTaskProfile,
+    selection: &SelectionConfig,
     caller: Option<&CallerAdvice>,
 ) -> Vec<RankedCandidate> {
     crate::agent::route_inventory().into_iter()
         .filter(|(kind, _)| !agent_config::is_agent_disabled(kind.as_str()))
-        .map(|(kind, blocker)| builtin_candidate(context, declared, caller, kind, blocker))
+        .map(|(kind, blocker)| {
+            let input = RunModelInput::declared(kind.as_str(), kind, None, declared, selection);
+            builtin_candidate(context, declared, caller, resolve_run_model(&input), (kind, blocker))
+        })
         .collect()
 }
 
+/// Scored and gated on the resolved model: an unknown or unrated model gets
+/// the agent-level base and no model capability term.
 fn builtin_candidate(
-    context: &CandidateContext<'_>, declared: DeclaredTaskProfile,
-    caller: Option<&CallerAdvice>, kind: AgentKind, blocker: Option<RouteBlocker>,
+    context: &CandidateContext<'_>, declared: DeclaredTaskProfile, caller: Option<&CallerAdvice>,
+    run_model: RunModel, (kind, blocker): (AgentKind, Option<RouteBlocker>),
 ) -> RankedCandidate {
-    let breakdown = score_breakdown(context, kind);
-    let catalog_model = model_for_task_budget(kind, declared.budget);
-    let (model, default_source) = recommend::run_model(kind, declared.budget, catalog_model);
+    let RunModel { model, pinned, source } = run_model;
+    let breakdown = score_breakdown(context, kind, model.as_deref());
     let mut exclusions = Exclusions::default();
     if let Some(blocker) = &blocker {
         exclusions.push(blocker.code(), blocker.reason());
@@ -243,9 +250,7 @@ fn builtin_candidate(
         let at = auth.observed_at.as_deref().unwrap_or("unknown time");
         exclusions.push("auth_failed", format!("auth failed (observed {at})"));
     }
-    // An unrated default borrows the capability of the catalog model it replaces.
-    let capability = model.as_deref().and_then(|name| model_capability_score(kind, name))
-        .or_else(|| catalog_model.and_then(|name| model_capability_score(kind, name)));
+    let capability = model.as_deref().and_then(|name| model_capability_score(kind, name));
     let verdict = gate::pool_verdict(caller, kind, capability);
     if verdict == PoolVerdict::Weaker {
         exclusions.push("weaker_on_caller_pool", gate::WEAKER_ON_CALLER_POOL.to_string());
@@ -263,7 +268,7 @@ fn builtin_candidate(
         .unwrap_or_default();
     let report = AdviceCandidate {
         agent: kind.as_str().to_string(), installed: blocker.is_none(), eligible,
-        score: breakdown.total, model, default_source, breakdown, exclusion_reason, exclusion_codes,
+        score: breakdown.total, model, pinned, source, breakdown, exclusion_reason, exclusion_codes,
         demotion_reason, quota: selection_quota::candidate_quota(kind, None), auth,
         unrated_served_models,
     };

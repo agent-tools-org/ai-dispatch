@@ -1,13 +1,13 @@
 // Recommendation pick, quota clause, and availability notes for advise.
-// Exports: recommendation(), availability_notes(), run_model().
-// Deps: ranked advise candidates, selection_quota notes, default-model resolution.
+// Exports: recommendation(), availability_notes().
+// Deps: ranked advise candidates, selection_quota notes.
 
 use std::collections::HashMap;
 
 use super::super::selection_quota::{self, NoteTarget};
 use super::{RankedCandidate, RecommendedAdvice};
 use crate::agent::classifier::TaskCategory;
-use crate::types::{AgentKind, DeclaredTaskProfile, TaskBudget, TaskUrgency};
+use crate::types::{AgentKind, DeclaredTaskProfile, TaskUrgency};
 
 /// First eligible candidate; else the best installed one not excluded as a
 /// weaker model on the caller's pool; else the top of the list.
@@ -29,29 +29,11 @@ pub(super) fn recommendation(
     }
     Some(RecommendedAdvice {
         agent: selected.report.agent.clone(), model: selected.report.model.clone(),
-        default_source: selected.report.default_source.clone(),
+        pinned: selected.report.pinned, source: selected.report.source,
         score: selected.report.score, est_cost_usd: costs.get(&selected.order.kind).copied(),
         est_duration_secs: durations.get(&selected.order.kind).copied(),
         reason,
     })
-}
-
-/// The model `aid run` launches and, for an agent default, its source. Free
-/// and cheap pin the catalog budget model. Standard and premium leave the
-/// agent default unpinned: a sticky or CLI-configured default runs; with
-/// neither, the budget-tier catalog row stands in as the catalog default.
-pub(super) fn run_model(
-    kind: AgentKind, budget: TaskBudget, catalog_model: Option<&str>,
-) -> (Option<String>, Option<String>) {
-    let catalog = catalog_model.map(str::to_string);
-    if budget.uses_budget_mode() {
-        return (catalog, None);
-    }
-    match crate::model_catalog::resolve_default_model(kind.as_str(), kind, None) {
-        (Some(model), Some(source)) if source != "catalog" => (Some(model), Some(source.to_string())),
-        (Some(model), Some(source)) => (catalog.or(Some(model)), Some(source.to_string())),
-        _ => (catalog, None),
-    }
 }
 
 fn quota_pick_clause(ranked: &[RankedCandidate], selected: &RankedCandidate) -> Option<String> {

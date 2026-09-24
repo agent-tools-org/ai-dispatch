@@ -163,16 +163,18 @@ and `premium` leave the model unset so the CLI uses its own default (no `-m`).
 Simple-task smart routing applies only when no budget is declared.
 A healthy default quota group preserves that unset model; a held default group
 pins a model from the first healthy alternative group. Every dispatch reports
-the effective model and source: `--model`, agent config, catalog (declared budget),
-or `CLI default (no -m)`; quota/budget routing overrides and existing adapter
-defaults (Cursor, Qwen, MiMoCode) are labeled separately.
+the effective model and source: `--model`, agent config, budget route,
+`CLI config (no -m)`, or `CLI default (no -m)`; quota/budget routing overrides and
+existing adapter defaults (Cursor, Qwen, MiMoCode) are labeled separately.
 `aid agent list --json` reports the default as `models.default` with
-`models.default_source`: `sticky` (`aid agent config --model`), `forced` (a
-custom agent's forced model), `cli_config` (the CLI's own configured default:
-codex `model` in `config.toml` under the codex home, qwen
-`model.name` in `~/.qwen/settings.json`), or `catalog`; `null` when there is no
-default. That order is the precedence. A `cli_config` default is what the CLI
-runs when aid passes no `-m`, so aid never replaces it with an older catalog row.
+`models.default_source`, resolved exactly as `aid run <agent>` with no flags:
+`sticky` (`aid agent config --model`), `custom_forced` (a custom agent's forced
+model), `budget_route` (`selection.budget_mode`), or `cli_config` (the CLI's own
+configured default: codex `model` in `config.toml` under the codex home, qwen
+`model.name` in `~/.qwen/settings.json`). Both are `null` when aid cannot know
+the default; it never names a catalog row instead. That order is the
+precedence. A `cli_config` default is what the CLI runs when aid passes no
+`-m`, so aid reports it and never replaces it with an older catalog row.
 The codex home is `$CODEX_HOME` when set, else `~/.codex`; aid reads the codex
 config from it and launches codex with the same `CODEX_HOME`.
 Register a local custom agent

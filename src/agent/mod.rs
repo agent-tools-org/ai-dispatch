@@ -28,6 +28,7 @@ pub(crate) mod egress;
 pub(crate) mod registry;
 pub mod classifier;
 pub(crate) mod selection;
+pub(crate) mod run_model;
 pub(crate) mod stream_completion;
 pub(crate) mod truncate;
 pub(crate) mod response;

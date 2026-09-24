@@ -111,6 +111,18 @@ pub(crate) fn get_agents_list_with_installed(
     })
 }
 
+/// What `aid run <agent>` launches with no flags or declared profile.
+fn default_run_model(
+    name: &str, kind: AgentKind, custom: Option<&crate::agent::custom::CustomAgentConfig>,
+) -> crate::agent::run_model::RunModel {
+    let selection = crate::config::load_config().map(|config| config.selection).unwrap_or_default();
+    crate::agent::run_model::resolve_run_model(&crate::agent::run_model::RunModelInput {
+        agent_name: name, kind, explicit_model: None, force_default: false, custom,
+        budget_mode: selection.budget_mode, declared_budget: None, declared_difficulty: None,
+        smart_routing: selection.smart_routing,
+    })
+}
+
 fn build_agent_json(
     kind: AgentKind,
     custom_config: Option<&CustomAgentConfig>,
@@ -173,7 +185,7 @@ fn build_agent_json(
     let capabilities = get_agent_capabilities(kind, custom_config);
     
     let models = {
-        let (default_model, default_source) = crate::model_catalog::resolve_default_model(&name, kind, custom_config);
+        let run_model = default_run_model(&name, kind, custom_config);
         let budget_model = if is_custom {
             None
         } else {
@@ -197,8 +209,8 @@ fn build_agent_json(
                 .collect()
         };
         ModelsJson {
-            default: default_model,
-            default_source: default_source.map(str::to_string),
+            default_source: run_model.model.as_ref().map(|_| run_model.source.as_str().to_string()),
+            default: run_model.model,
             budget: budget_model,
             available,
         }

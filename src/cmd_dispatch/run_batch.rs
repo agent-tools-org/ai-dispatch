@@ -77,7 +77,7 @@ pub(super) async fn run(
             .with_context(|| format!("Failed to read prompt file: {file}"))?,
         _ => String::new(),
     };
-    let (agent_name, auto_model) = resolve_run_agent(
+    let agent_name = resolve_run_agent(
         &store,
         &selection_prompt,
         &dir,
@@ -110,7 +110,6 @@ pub(super) async fn run(
         output,
         result_file,
         model,
-        auto_model,
         worktree,
         group,
         verify,

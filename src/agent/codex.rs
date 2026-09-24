@@ -198,8 +198,8 @@ impl super::Agent for CodexAgent {
     }
 
     fn served_models(&self) -> Result<Option<Vec<String>>> {
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        let cache_path = std::path::Path::new(&home).join(".codex/models_cache.json");
+        let Ok(home) = cli_config::codex_home() else { return Ok(None) };
+        let cache_path = home.join("models_cache.json");
         if let Ok(content) = std::fs::read_to_string(&cache_path) {
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
                 if let Some(arr) = val.get("models").and_then(|m| m.as_array()) {

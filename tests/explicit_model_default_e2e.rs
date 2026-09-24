@@ -1,6 +1,6 @@
 // Explicit run/batch model-default regressions using isolated AID homes.
 // Exercises dry-run dispatch output without launching an external agent.
-// Deps: common subprocess helpers and tempfile; execute only on a remote grok box.
+// Deps: common subprocess helpers and tempfile; CODEX_HOME points at an empty dir.
 
 mod common;
 use common::aid_cmd_in;
@@ -22,7 +22,7 @@ fn run_standard_and_premium_use_cli_default_without_config() {
             ("moderate", "standard"), ("complex", "premium"), ("simple", "standard"),
         ] {
             let home = TempDir::new().expect("isolated home");
-            let output = aid_cmd_in(home.path()).args([
+            let output = aid_cmd_in(home.path()).env("CODEX_HOME", home.path()).args([
                 "run", agent, "Refactor validation", "--no-hint", "--no-skill", "--dry-run",
                 "--difficulty", difficulty, "--budget", budget,
                 "--urgency", "normal", "--rigor", "standard",
@@ -47,7 +47,7 @@ fn batch_standard_and_premium_use_cli_default_without_config() {
         }
     }
     std::fs::write(&batch_path, batch).expect("batch file");
-    let output = aid_cmd_in(home.path()).arg("batch").arg(&batch_path)
+    let output = aid_cmd_in(home.path()).env("CODEX_HOME", home.path()).arg("batch").arg(&batch_path)
         .arg("--dry-run").output().expect("batch preview");
     assert_default_output(output, 4);
 }

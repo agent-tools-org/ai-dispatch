@@ -1,11 +1,13 @@
 // Custom-agent advice candidates: separate capability scale from built-ins.
 // Exports: custom_candidates().
-// Deps: custom registry, route predicate, capability helpers, declared profile types.
+// Deps: custom registry, route predicate, capability helpers, run_model resolver.
 
 use crate::agent::registry::load_custom_agents;
 use super::super::selection_capabilities::{custom_category_score, custom_strength_bonus};
 use super::super::selection_scoring::CandidateContext;
+use crate::agent::run_model::{RunModelInput, resolve_run_model};
 use crate::agent_config;
+use crate::config::SelectionConfig;
 use crate::model_catalog::AGENT_MODELS;
 use crate::types::{AgentKind, DeclaredTaskProfile, TaskBudget};
 
@@ -15,6 +17,7 @@ use super::{CustomAdviceCandidate, ELIGIBILITY_PENALTY, NOT_INSTALLED_PENALTY};
 pub(super) fn custom_candidates(
     context: &CandidateContext<'_>,
     declared: DeclaredTaskProfile,
+    selection: &SelectionConfig,
 ) -> Vec<CustomAdviceCandidate> {
     let floor = declared.difficulty.capability_floor();
     let mut candidates: Vec<_> = load_custom_agents().into_values()
@@ -27,7 +30,10 @@ pub(super) fn custom_candidates(
             let team_preferred = context.team.is_some_and(|team| {
                 team.preferred_agents.iter().any(|item| item.eq_ignore_ascii_case(&config.id))
             });
-            let model = config.forced_model.clone();
+            let input = RunModelInput::declared(
+                &config.id, AgentKind::Custom, Some(&config), declared, selection,
+            );
+            let model = resolve_run_model(&input).model;
             let blocker = crate::agent::custom_route_blocker(&config.command);
             let mut exclusions = Exclusions::default();
             if let Some(blocker) = &blocker {

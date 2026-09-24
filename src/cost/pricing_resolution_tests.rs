@@ -1,4 +1,4 @@
-// Lookup-order tests: static catalog prices, the free-suffix rule, and served-only models.
+// Lookup-order tests: static catalog prices, no free-suffix guess, override and exact feed.
 // Deps: super::resolve_model_pricing, crate::cost::estimate_cost, AGENT_MODELS.
 
 use super::*;
@@ -51,32 +51,13 @@ fn every_static_opencode_row_uses_its_own_catalog_price() {
 }
 
 #[test]
-fn free_suffix_outside_old_allowlist_prices_at_zero() {
+fn free_suffix_is_not_a_price() {
     let _guard = isolated();
-    assert_eq!(
-        estimate_cost(100_000, Some("opencode-go/hy3-free"), AgentKind::OpenCode),
-        Some(0.0)
-    );
-    assert_eq!(
-        estimate_cost(
-            100_000,
-            Some("opencode/laguna-s-2.1-free"),
-            AgentKind::OpenCode
-        ),
-        Some(0.0)
-    );
-}
-
-#[test]
-fn free_in_the_middle_of_a_name_stays_unknown() {
-    let _guard = isolated();
-    let cost = estimate_cost(
-        100_000,
-        Some("opencode/laguna-free-v2"),
-        AgentKind::OpenCode,
-    );
-    assert_eq!(cost, None);
-    assert_eq!(format_cost(cost), "unknown");
+    for model in ["opencode-go/hy3-free", "opencode/laguna-s-2.1-free", "opencode/laguna-free-v2"] {
+        let cost = estimate_cost(100_000, Some(model), AgentKind::OpenCode);
+        assert_eq!(cost, None, "{model}");
+        assert_eq!(format_cost(cost), "unknown");
+    }
 }
 
 fn write_served_codex(models: &[&str]) {
@@ -87,10 +68,9 @@ fn write_served_codex(models: &[&str]) {
 }
 
 #[test]
-fn served_only_model_gets_no_similar_name_price() {
+fn uncatalogued_model_not_in_the_feed_is_unknown_served_or_not() {
     let _guard = isolated();
-    // Unserved, the builtin substring matcher would price it like gpt-5.
-    assert!(resolve_model_pricing("gpt-5.7-sol", AgentKind::Codex).is_some());
+    assert!(resolve_model_pricing("gpt-5.7-sol", AgentKind::Codex).is_none());
     write_served_codex(&["gpt-5.7-sol"]);
     assert!(resolve_model_pricing("gpt-5.7-sol", AgentKind::Codex).is_none());
     let cost = estimate_cost(1_000_000, Some("gpt-5.7-sol"), AgentKind::Codex);

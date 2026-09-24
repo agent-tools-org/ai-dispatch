@@ -3,7 +3,6 @@
 // Deps: model_catalog, store::Store, types::AgentKind, price_feed
 
 mod price_feed;
-mod pricing_builtin;
 mod pricing_resolution;
 
 use crate::model_catalog;
@@ -27,7 +26,7 @@ thread_local! {
     static TEST_PRICING_OVERRIDES: std::cell::RefCell<Option<Arc<HashMap<(AgentKind, String), ModelPricing>>>> = const { std::cell::RefCell::new(None) };
 }
 
-/// Most recent Gemini model from the task DB; unset uses static fallback pricing.
+/// Most recent observed Gemini model from the task DB; unset means unknown cost.
 static GEMINI_DEFAULT_MODEL_CACHE: OnceLock<Option<String>> = OnceLock::new();
 
 /// Populate [`GEMINI_DEFAULT_MODEL_CACHE`] once per process from [`Store::latest_default_model`].
@@ -58,6 +57,23 @@ pub fn format_cost(cost_usd: Option<f64>) -> String {
         Some(c) => format!("${:.2}", c),
         None => "unknown".to_string(),
     }
+}
+
+/// A cost total over tasks: the known sum, and how many tasks ran with an
+/// unknown (NULL) cost. Unknown costs are never counted as $0.
+pub fn format_cost_total(known_sum: f64, unknown_tasks: usize) -> String {
+    match unknown_tasks {
+        0 => format_cost(Some(known_sum)),
+        n if known_sum > 0.0 => format!("{} + {n} unknown", format_cost(Some(known_sum))),
+        n => format!("unknown ({n} tasks)"),
+    }
+}
+
+/// Tasks that used tokens but have no known cost.
+pub fn unknown_cost_tasks<'a>(tasks: impl IntoIterator<Item = &'a crate::types::Task>) -> usize {
+    tasks.into_iter()
+        .filter(|task| task.cost_usd.is_none() && task.tokens.is_some_and(|tokens| tokens > 0))
+        .count()
 }
 
 pub fn format_cost_label(cost_usd: Option<f64>, agent: AgentKind) -> String {
@@ -151,45 +167,22 @@ pub(crate) fn clear_feed_for_tests() {
     });
 }
 
+/// Prices the reported model; with none reported, only a model aid observed
+/// run (Gemini's last recorded default, Qwen's selected model). Else unknown.
 fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing> {
-    if let Some(m) = model {
-        return pricing_resolution::resolve_model_pricing(m, agent);
+    let known = match (model, agent) {
+        (Some(model), _) => Some(model.to_string()),
+        (None, AgentKind::Gemini) => GEMINI_DEFAULT_MODEL_CACHE
+            .get()
+            .and_then(|stored| stored.clone())
+            .filter(|model| !model.is_empty()),
+        (None, AgentKind::Qwen) => crate::model_catalog::get_qwen_selected_model(),
+        (None, _) => None,
+    };
+    match known {
+        Some(model) => pricing_resolution::resolve_model_pricing(&model, agent),
+        None => pricing_resolution::subscription_pricing(agent),
     }
-    match agent {
-        AgentKind::Gemini => gemini_fallback_pricing(agent),
-        AgentKind::Antigravity => None,
-        AgentKind::Qwen => {
-            let m = crate::model_catalog::get_qwen_selected_model()
-                .unwrap_or_else(|| "coder-model".to_string());
-            model_pricing(&m, agent)
-        }
-        // The CLI default runs unpinned and nothing observed it: unknown.
-        AgentKind::Codex => None,
-        AgentKind::CommandCode => None,
-        AgentKind::Copilot | AgentKind::Cursor | AgentKind::Kilo | AgentKind::MiMoCode => {
-            Some(ModelPricing {
-                input_per_m: 0.0,
-                output_per_m: 0.0,
-            })
-        }
-        AgentKind::OpenCode => None,
-        AgentKind::Claude => None,
-        AgentKind::Grok => None,
-        AgentKind::Droid => None,
-        AgentKind::Oz => None,
-        AgentKind::Custom => None,
-    }
-}
-
-fn gemini_fallback_pricing(agent: AgentKind) -> Option<ModelPricing> {
-    let model = GEMINI_DEFAULT_MODEL_CACHE
-        .get()
-        .and_then(|stored| stored.as_deref())
-        .filter(|m| !m.is_empty());
-    if let Some(m) = model {
-        return model_pricing(m, agent);
-    }
-    model_pricing("gemini-3-flash-preview", agent)
 }
 
 fn pricing_overrides() -> Arc<HashMap<(AgentKind, String), ModelPricing>> {
@@ -241,31 +234,9 @@ fn pricing_overrides() -> Arc<HashMap<(AgentKind, String), ModelPricing>> {
     }
 }
 
+/// Explicit pricing override for exactly this agent and model (case-insensitive).
 fn override_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
-    let candidates = [
-        model.to_lowercase(),
-        model.rsplit('/').next().unwrap_or(model).to_lowercase(),
-    ];
-    for candidate in candidates {
-        if let Some(pricing) = pricing_overrides().get(&(agent, candidate)) {
-            return Some(*pricing);
-        }
-    }
-    None
-}
-
-fn model_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
-    if let Some(pricing) = override_pricing(model, agent) {
-        return Some(pricing);
-    }
-    // The feed takes precedence over the built-in matcher when present.
-    if let Some(pricing) = pricing_resolution::exact_feed_pricing(model) {
-        return Some(pricing);
-    }
-    if model_catalog::is_served_only(agent, model) {
-        return None;
-    }
-    pricing_builtin::for_model_lower(&model.to_lowercase())
+    pricing_overrides().get(&(agent, model.to_lowercase())).copied()
 }
 
 #[cfg(test)]

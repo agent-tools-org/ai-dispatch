@@ -1,5 +1,5 @@
 // Served-but-uncatalogued models: rows for every agent with a served-model probe.
-// Exports: SERVED_PROBE_AGENTS, served_only_models, is_served_only, unrated_served_newer_than.
+// Exports: SERVED_PROBE_AGENTS, served_only_models, unrated_served_newer_than.
 // Deps: served-model disk cache, static catalog rows; never invents ratings or prices.
 
 use super::model_catalog_resolved::{ModelOrigin, ResolvedAgentModel};
@@ -44,13 +44,6 @@ pub(crate) fn served_only_models(agent: AgentKind) -> Vec<ResolvedAgentModel> {
             origin: ModelOrigin::Served,
         })
         .collect()
-}
-
-/// The agent's CLI serves `model` and the catalog has no row for it.
-pub(crate) fn is_served_only(agent: AgentKind, model: &str) -> bool {
-    served_only_models(agent)
-        .iter()
-        .any(|row| row.model.eq_ignore_ascii_case(model))
 }
 
 /// Unrated served models of the same family as `model` with a higher version.

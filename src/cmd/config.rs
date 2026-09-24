@@ -26,7 +26,7 @@ mod tests;
 
 use config_display::{agent_profile, compute_agent_history, compute_model_history, format_capabilities};
 use crate::model_catalog::AGENT_PROFILES;
-pub(crate) use crate::model_catalog::{budget_model, merged_agent_models};
+pub(crate) use crate::model_catalog::merged_agent_models;
 use crate::model_catalog::PricingResponse;
 
 pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {

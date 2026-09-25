@@ -25,7 +25,7 @@ fn official_guide_covers_every_public_command() {
         "Set/replace TypeSafe key? [y/N]",
         "Without a TTY",
         "keychain-only on macOS",
-        "`OK` or the error kind",
+        "`OK` or `FAILED: <message>`",
     ] {
         assert!(configuration.contains(term), "setup guide missing {term}");
     }

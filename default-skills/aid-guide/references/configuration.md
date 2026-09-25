@@ -20,7 +20,8 @@ At `Set/replace TypeSafe key? [y/N]`, Enter skips. On macOS, yes opens
 `/usr/bin/security` with inherited terminal I/O for hidden key entry; the setup
 step never captures the key or puts it in arguments, environment, files, or logs.
 After storing, one tiny request through the existing `aid classify` path checks
-the key and prints only `OK` or the error kind. Without a TTY, setup does not
+the key and prints only `OK` or `FAILED: <message>` using the classifier's
+key-free error message (including HTTP status). Without a TTY, setup does not
 spawn the store command; run this yourself in a real terminal:
 
 ```bash

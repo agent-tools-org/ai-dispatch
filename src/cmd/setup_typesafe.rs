@@ -52,7 +52,7 @@ fn run_step(
         match store() {
             Ok(true) => match verify() {
                 Ok(()) => writeln!(output, "  OK")?,
-                Err(error) => writeln!(output, "  {:?}", error.kind)?,
+                Err(error) => writeln!(output, "  FAILED: {}", error.message)?,
             },
             Ok(false) => writeln!(output, "  Keychain store failed")?,
             Err(_) => writeln!(output, "  Could not run /usr/bin/security")?,
@@ -220,12 +220,12 @@ mod tests {
     }
 
     #[test]
-    fn verification_reports_only_error_kind() {
-        for kind in [
-            ErrorKind::NoKey,
-            ErrorKind::Api,
-            ErrorKind::Invalid,
-            ErrorKind::Refused,
+    fn verification_reports_failure_message() {
+        for (kind, message) in [
+            (ErrorKind::NoKey, "no TypeSafe key in the login keychain"),
+            (ErrorKind::Api, "TypeSafe API error: HTTP 401"),
+            (ErrorKind::Invalid, "timeout must be 1-300 seconds"),
+            (ErrorKind::Refused, "state contains secret-like text"),
         ] {
             let mut output = Vec::new();
             run_step(
@@ -235,12 +235,11 @@ mod tests {
                 &mut output,
                 || true,
                 || Ok(true),
-                || Err(ClassifyError::new(kind, "private diagnostic")),
+                || Err(ClassifyError::new(kind, message)),
             )
             .unwrap();
             let text = String::from_utf8(output).unwrap();
-            assert!(text.ends_with(&format!("  {kind:?}\n")));
-            assert!(!text.contains("private diagnostic"));
+            assert!(text.ends_with(&format!("  FAILED: {message}\n")));
         }
     }
 

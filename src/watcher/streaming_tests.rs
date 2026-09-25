@@ -102,6 +102,7 @@ async fn streaming_watch_populates_success_exit_code() {
     insert_running_task(store.as_ref(), &task_id);
     let log_path = temp.path().join("stream.log");
     let mut child = tokio::process::Command::new("sh")
+        .current_dir(temp.path())
         .arg("-c")
         .arg("printf 'done\\n'; exit 0")
         .stdout(Stdio::piped())
@@ -137,6 +138,7 @@ async fn streaming_watch_logs_report_containing_milestone_and_emits_event() {
     let standalone = "[MILESTONE] preliminary work complete";
     let line = r#"{"type":"item.completed","item":{"type":"agent_message","text":"[MILESTONE] implementation complete\n## Report\nThe full report remains available."}}"#;
     let mut child = tokio::process::Command::new("printf")
+        .current_dir(temp.path())
         .args(["%s\n%s\n", standalone, line])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -171,6 +173,7 @@ async fn streaming_watch_fast_fail_preserves_stderr_in_log() {
     insert_running_task(store.as_ref(), &task_id);
     let log_path = temp.path().join("stream.log");
     let mut child = tokio::process::Command::new("sh")
+        .current_dir(temp.path())
         .arg("-c")
         .arg("echo 'No saved session found with ID abc' >&2; exit 1")
         .stdout(Stdio::piped())
@@ -206,6 +209,7 @@ async fn streaming_watch_signal_killed_process_does_not_replay_stderr() {
     insert_running_task(store.as_ref(), &task_id);
     let log_path = temp.path().join("stream.log");
     let mut child = tokio::process::Command::new("sh")
+        .current_dir(temp.path())
         .arg("-c")
         .arg("echo 'stderr that must not be replayed' >&2; exec sleep 30")
         .stdout(Stdio::piped())
@@ -244,6 +248,7 @@ async fn streaming_watch_caps_preserved_stderr() {
     insert_running_task(store.as_ref(), &task_id);
     let log_path = temp.path().join("stream.log");
     let mut child = tokio::process::Command::new("sh")
+        .current_dir(temp.path())
         .arg("-c")
         .arg("yes x | head -c 200000 >&2; exit 1")
         .stdout(Stdio::piped())
@@ -289,6 +294,7 @@ async fn droid_osc_prefixed_completion_line_yields_completion_event() {
     // progress escapes glued to the front of stream-json lines.
     let script = r#"printf '\033]0;\342\233\254 reply pong\007{"type":"text","text":"pong"}\n'; printf '\033]9;4;0;\007{"type":"turn_complete","input_tokens":10,"output_tokens":5}\n'"#;
     let mut child = tokio::process::Command::new("sh")
+        .current_dir(temp.path())
         .arg("-c")
         .arg(script)
         .stdout(Stdio::piped())

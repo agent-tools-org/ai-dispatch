@@ -3,55 +3,29 @@
 // Deps: tempfile, chrono, crate::{state, store, types}.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
-use std::sync::{Mutex, OnceLock};
 
 use chrono::{Duration, Local};
 use tempfile::TempDir;
 
 use crate::state::{
-    compute_state, format_state_summary, load_state, refresh_project_state, save_state,
-    state_path, ContextState, HealthState, PerformanceState, ProjectState,
+    compute_state, format_state_summary_in, load_state_in, refresh_project_state_in,
+    save_state_in, ContextState, HealthState, PerformanceState, ProjectState,
 };
 use crate::store::{Store, TaskCompletionUpdate};
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 
-struct TempCwd {
-    previous: PathBuf,
-}
-
-impl TempCwd {
-    fn enter(path: &Path) -> Self {
-        let previous = std::env::current_dir().unwrap();
-        std::env::set_current_dir(path).unwrap();
-        Self { previous }
-    }
-}
-
-impl Drop for TempCwd {
-    fn drop(&mut self) {
-        std::env::set_current_dir(&self.previous).unwrap();
-    }
-}
-
-fn cwd_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
-}
-
 #[test]
 fn state_path_and_roundtrip_use_project_aid_dir() {
-    let _lock = cwd_lock().lock().unwrap();
     let dir = TempDir::new().unwrap();
     let nested = dir.path().join("repo/src");
     fs::create_dir_all(dir.path().join("repo/.aid")).unwrap();
     fs::create_dir_all(&nested).unwrap();
-    let _cwd = TempCwd::enter(&nested);
     let state = sample_state();
-    assert!(state_path().unwrap().ends_with(".aid/state.toml"));
-    save_state(&state).unwrap();
-    assert_eq!(load_state().unwrap(), Some(state));
+    save_state_in(&state, &nested).unwrap();
+    assert!(dir.path().join("repo/.aid/state.toml").is_file());
+    assert_eq!(load_state_in(&nested).unwrap(), Some(state));
 }
 
 #[test]
@@ -135,11 +109,9 @@ fn compute_state_aggregates_project_metrics() {
 
 #[test]
 fn refresh_project_state_writes_state_after_completion_update() {
-    let _lock = cwd_lock().lock().unwrap();
     let dir = TempDir::new().unwrap();
     fs::create_dir_all(dir.path().join(".aid")).unwrap();
     fs::write(dir.path().join(".aid/project.toml"), "[project]\nid = \"alpha\"\n").unwrap();
-    let _cwd = TempCwd::enter(dir.path());
     let store = Store::open_memory().unwrap();
     let mut task = make_task(
         "t-refresh",
@@ -167,20 +139,18 @@ fn refresh_project_state_writes_state_after_completion_update() {
         })
         .unwrap();
 
-    refresh_project_state(&store, &task.id);
+    refresh_project_state_in(&store, &task.id, dir.path());
 
-    let state = load_state().unwrap().unwrap();
+    let state = load_state_in(dir.path()).unwrap().unwrap();
     assert_eq!(state.context.last_task_id.as_deref(), Some("t-refresh"));
     assert_eq!(state.health.total_tasks, 1);
 }
 
 #[test]
 fn refresh_project_state_skips_tasks_without_repo_path() {
-    let _lock = cwd_lock().lock().unwrap();
     let dir = TempDir::new().unwrap();
     fs::create_dir_all(dir.path().join(".aid")).unwrap();
     fs::write(dir.path().join(".aid/project.toml"), "[project]\nid = \"alpha\"\n").unwrap();
-    let _cwd = TempCwd::enter(dir.path());
     let store = Store::open_memory().unwrap();
     let mut task = make_task(
         "t-no-repo",
@@ -195,19 +165,17 @@ fn refresh_project_state_skips_tasks_without_repo_path() {
     task.repo_path = None;
     store.insert_task(&task).unwrap();
 
-    refresh_project_state(&store, &task.id);
+    refresh_project_state_in(&store, &task.id, dir.path());
 
-    assert_eq!(load_state().unwrap(), None);
+    assert_eq!(load_state_in(dir.path()).unwrap(), None);
 }
 
 #[test]
 fn summary_formats_key_lines() {
-    let _lock = cwd_lock().lock().unwrap();
     let dir = TempDir::new().unwrap();
     fs::create_dir_all(dir.path().join(".aid")).unwrap();
     fs::write(dir.path().join(".aid/project.toml"), "[project]\nid = \"alpha\"\n").unwrap();
-    let _cwd = TempCwd::enter(dir.path());
-    let summary = format_state_summary(&sample_state());
+    let summary = format_state_summary_in(&sample_state(), dir.path());
     assert!(summary.contains("[Project State: alpha]"));
     assert!(summary.contains("Health: 94% success (47/50 recent), verify: passed"));
     assert!(summary.contains("Best agents: codex (92%), gemini (88%)"));

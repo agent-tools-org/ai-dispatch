@@ -1,36 +1,10 @@
 // Tests for persisted result-file output fallback in show helpers.
 // Ensures `result.md` is treated as the primary rendered output when present.
 
-use std::path::{Path, PathBuf};
-
 use crate::cmd::show::read_task_output;
 use crate::paths::AidHomeGuard;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
-
-// Local RAII CWD guard (same pattern as src/state_tests.rs). Not hoisted:
-// state_tests already has its own copy plus a module-local lock.
-// CWD is process-global, so these tests can race other TempCwd users under
-// the default parallel runner. test_subprocess::acquire() does not serialize
-// CWD — it is an 8-slot subprocess semaphore. New ownership tests avoid
-// set_current_dir entirely (see show_output_owned_tests.rs).
-struct TempCwd {
-    previous: PathBuf,
-}
-
-impl TempCwd {
-    fn enter(path: &Path) -> Self {
-        let previous = std::env::current_dir().unwrap();
-        std::env::set_current_dir(path).unwrap();
-        Self { previous }
-    }
-}
-
-impl Drop for TempCwd {
-    fn drop(&mut self) {
-        std::env::set_current_dir(&self.previous).unwrap();
-    }
-}
 
 fn task(id: &str) -> Task {
     Task {
@@ -107,7 +81,7 @@ fn read_task_output_unwraps_persisted_grok_envelope() {
 }
 
 /// Two tasks both declare relative `-o report.md`. Only task A's worktree has the file.
-/// Showing task B must never render A's report — even when CWD is A's worktree.
+/// Showing task B must never render A's report; resolution uses only task-recorded bases.
 #[test]
 fn read_task_output_never_renders_sibling_task_relative_report() {
     let root = tempfile::tempdir().unwrap();
@@ -134,15 +108,13 @@ fn read_task_output_never_renders_sibling_task_relative_report() {
         ..task("t-victim-b")
     };
 
-    // Caller's CWD is task A's worktree — the pre-fix failure mode.
-    let _cwd = TempCwd::enter(&worktree_a);
     let owner = read_task_output(&task_a);
     let victim = read_task_output(&task_b);
 
     assert_eq!(owner.unwrap(), foreign);
     assert!(
         victim.is_err(),
-        "task B has no owned report.md; must not succeed via CWD: {victim:?}"
+        "task B has no owned report.md; must not succeed via a sibling worktree: {victim:?}"
     );
     if let Ok(leaked) = victim {
         assert!(
@@ -159,11 +131,8 @@ fn read_task_output_resolves_relative_report_from_task_worktree() {
     let aid_home = root.path().join("aid-home");
     let _aid_home = AidHomeGuard::set(&aid_home);
     let worktree = root.path().join("wt");
-    let foreign_cwd = root.path().join("cwd");
     std::fs::create_dir_all(&worktree).unwrap();
-    std::fs::create_dir_all(&foreign_cwd).unwrap();
     std::fs::write(worktree.join("report.md"), "owned-by-this-task\n").unwrap();
-    std::fs::write(foreign_cwd.join("report.md"), "cwd-foreign-content\n").unwrap();
 
     let task = Task {
         worktree_path: Some(worktree.display().to_string()), effective_dir: None,
@@ -171,7 +140,6 @@ fn read_task_output_resolves_relative_report_from_task_worktree() {
         ..task("t-rel-owned")
     };
 
-    let _cwd = TempCwd::enter(&foreign_cwd);
     let output = read_task_output(&task);
 
     assert_eq!(output.unwrap(), "owned-by-this-task\n");
@@ -209,7 +177,6 @@ fn output_text_reports_missing_owned_file_then_task_log() {
     };
     store.insert_task(&task_b).unwrap();
 
-    let _cwd = TempCwd::enter(&worktree_a);
     let text = output_text_for_task(&store, "t-victim-output", true).unwrap();
 
     assert!(

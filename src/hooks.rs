@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::io::{self, Write};
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 use crate::paths;
@@ -67,6 +68,18 @@ pub fn run_hooks_with(
     hooks: &[Hook],
     fail_on_error: bool,
 ) -> Result<()> {
+    run_hooks_in(event, task_json, agent, hooks, fail_on_error, None)
+}
+
+/// Like `run_hooks_with`, but runs hook commands in `dir` instead of the process cwd.
+pub(crate) fn run_hooks_in(
+    event: &str,
+    task_json: &Value,
+    agent: Option<&str>,
+    hooks: &[Hook],
+    fail_on_error: bool,
+    dir: Option<&Path>,
+) -> Result<()> {
     let payload = serde_json::to_string(task_json)?;
     let relevant: Vec<&Hook> = hooks
         .iter()
@@ -81,37 +94,45 @@ pub fn run_hooks_with(
         return Ok(());
     }
     for hook in relevant {
-        ensure_trusted_hook(hook)?;
-        aid_info!("[aid] Executing hook via shell: {}", hook.command);
-        let mut cmd = Command::new("sh");
-        cmd.arg("-c").arg(&hook.command);
-        cmd.stdin(Stdio::piped()).stderr(Stdio::piped());
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            cmd.process_group(0);
+        run_hook(hook, &payload, fail_on_error, dir)?;
+    }
+    Ok(())
+}
+
+fn run_hook(hook: &Hook, payload: &str, fail_on_error: bool, dir: Option<&Path>) -> Result<()> {
+    ensure_trusted_hook(hook)?;
+    aid_info!("[aid] Executing hook via shell: {}", hook.command);
+    let mut cmd = Command::new("sh");
+    cmd.arg("-c").arg(&hook.command);
+    if let Some(dir) = dir {
+        cmd.current_dir(dir);
+    }
+    cmd.stdin(Stdio::piped()).stderr(Stdio::piped());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    let mut child = cmd
+        .spawn()
+        .with_context(|| format!("failed to run hook {}", hook.command))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(payload.as_bytes())?;
+    }
+    let output = child.wait_with_output()?;
+    if !output.stderr.is_empty() {
+        aid_warn!(
+            "[aid] Hook {} stderr:\n{}",
+            hook.command,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    if !output.status.success() {
+        let msg = format!("Hook {} exited with {}", hook.command, output.status);
+        if fail_on_error {
+            anyhow::bail!(msg);
         }
-        let mut child = cmd
-            .spawn()
-            .with_context(|| format!("failed to run hook {}", hook.command))?;
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(payload.as_bytes())?;
-        }
-        let output = child.wait_with_output()?;
-        if !output.stderr.is_empty() {
-            aid_warn!(
-                "[aid] Hook {} stderr:\n{}",
-                hook.command,
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-        if !output.status.success() {
-            let msg = format!("Hook {} exited with {}", hook.command, output.status);
-            if fail_on_error {
-                anyhow::bail!(msg);
-            }
-            aid_warn!("[aid] {msg}");
-        }
+        aid_warn!("[aid] {msg}");
     }
     Ok(())
 }
@@ -147,8 +168,10 @@ mod tests {
 
     #[test]
     fn parse_cli_hooks_marks_hooks_trusted() {
-        let hooks = parse_cli_hooks(&["before_run:echo ok".to_string()]).unwrap();
-        assert!(run_hooks_with("before_run", &json!({}), None, &hooks, true).is_ok());
+        let dir = tempfile::tempdir().unwrap();
+        // The hook drains stdin so the payload write never races the shell's exit (EPIPE).
+        let hooks = parse_cli_hooks(&["before_run:cat >/dev/null; echo ok".to_string()]).unwrap();
+        assert!(run_hooks_in("before_run", &json!({}), None, &hooks, true, Some(dir.path())).is_ok());
     }
 
     #[test]

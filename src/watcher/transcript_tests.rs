@@ -72,6 +72,7 @@ async fn watch_buffered_persists_transcript() {
     };
     store.insert_task(&task).unwrap();
     let mut child = tokio::process::Command::new("sh")
+        .current_dir(temp.path())
         .arg("-c")
         .arg("printf '{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"buffered transcript\"}\\n'")
         .stdout(Stdio::piped())
@@ -150,6 +151,8 @@ async fn watch_buffered_clears_rate_limit_on_success() {
     assert!(rate_limit::is_rate_limited(&AgentKind::Gemini, None));
 
     let mut child = tokio::process::Command::new("sh")
+
+        .current_dir(temp.path())
         .arg("-c")
         .arg("printf 'done\\n'")
         .stdout(Stdio::piped())
@@ -250,6 +253,8 @@ async fn watch_buffered_records_quota_refusal_and_fails_task() {
     store.insert_task(&task).unwrap();
 
     let mut child = tokio::process::Command::new("sh")
+
+        .current_dir(temp.path())
         .arg("-c")
         .arg("printf 'Error: Individual quota reached.\\n'")
         .stdout(Stdio::piped())

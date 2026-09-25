@@ -56,11 +56,8 @@ fn resolve_cursor_binary_from_path(
 }
 
 fn identifies_as_cursor(binary: &str) -> bool {
-    super::env_identity::binary_identity_matches(binary, "cursor")
-}
-
-fn help_mentions_cursor(help: &str) -> bool {
-    help.to_ascii_lowercase().contains("cursor")
+    super::env_identity::identity_marker("agent")
+        .is_some_and(|marker| super::env_identity::binary_identity_matches(binary, marker))
 }
 
 #[cfg(test)]
@@ -269,3 +266,7 @@ fn is_error_line(line: &str) -> bool {
 #[cfg(test)]
 #[path = "cursor_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "cursor_identity_tests.rs"]
+mod identity_tests;

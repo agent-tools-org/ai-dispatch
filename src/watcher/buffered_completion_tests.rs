@@ -71,6 +71,7 @@ async fn agy_exit_zero_with_terminal_agent_error_fails_completion() {
     )
     .unwrap();
     let mut child = tokio::process::Command::new("sh")
+        .current_dir(temp.path())
         .arg("-c")
         .arg("printf 'Now let me inspect the remaining call sites:\n'; exit 0")
         .stdout(Stdio::piped())
@@ -119,6 +120,7 @@ async fn agy_exit_zero_with_non_quota_executor_error_fails_completion() {
     )
     .unwrap();
     let mut child = tokio::process::Command::new("sh")
+        .current_dir(temp.path())
         .arg("-c")
         .arg("printf 'Now let me inspect the remaining call sites:\n'; exit 0")
         .stdout(Stdio::piped())
@@ -158,6 +160,7 @@ async fn agy_recovered_tool_error_keeps_successful_completion() {
     )
     .unwrap();
     let mut child = tokio::process::Command::new("sh")
+        .current_dir(temp.path())
         .arg("-c")
         .arg("printf 'Audit complete. Overall verdict: SHIP.\n'; exit 0")
         .stdout(Stdio::piped())

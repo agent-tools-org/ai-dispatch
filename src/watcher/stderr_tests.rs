@@ -50,6 +50,7 @@ async fn stderr_drain_timeout_preserves_output_before_eof() {
     paths::ensure_dirs().unwrap();
     let task_id = TaskId("t-stderr-held-pipe".to_string());
     let mut child = tokio::process::Command::new("sh")
+        .current_dir(temp.path())
         .args(["-c", "printf 'No saved session found with ID abc' >&2; exec sleep 30"])
         .stderr(Stdio::piped())
         .kill_on_drop(true)
@@ -78,6 +79,7 @@ fn stderr_drain_waits_for_file_io_after_child_exit() {
         paths::ensure_dirs().unwrap();
         let task_id = TaskId("t-stderr-blocked-file".to_string());
         let mut child = tokio::process::Command::new("sh")
+            .current_dir(temp.path())
             .args(["-c", "printf 'saved stderr' >&2"])
             .stderr(Stdio::piped())
             .spawn()

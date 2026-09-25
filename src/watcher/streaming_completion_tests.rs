@@ -35,6 +35,7 @@ async fn watch_exit0(agent: &dyn Agent, output: &str, task_id: &str) -> TaskStat
     insert_running_task(store.as_ref(), &task_id);
     let log_path = temp.path().join("stream.log");
     let mut child = tokio::process::Command::new("sh")
+        .current_dir(temp.path())
         .arg("-c")
         .arg("cat; exit 0")
         .stdin(Stdio::piped())

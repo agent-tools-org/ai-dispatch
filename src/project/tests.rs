@@ -1,9 +1,8 @@
 // Tests for project config parsing, profiles, and knowledge loading.
 // Exports: none; loaded by `project.rs` under `#[cfg(test)]`.
-// Deps: super, std::env/fs/path, tempfile.
+// Deps: super, std::fs/path, tempfile.
 
 use super::*;
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
@@ -12,24 +11,6 @@ fn write_project(dir: &Path, contents: &str) -> PathBuf {
     let path = dir.join("project.toml");
     fs::write(&path, contents).unwrap();
     path
-}
-
-struct TempCwd {
-    previous: PathBuf,
-}
-
-impl TempCwd {
-    fn enter(target: &Path) -> Self {
-        let previous = env::current_dir().unwrap();
-        env::set_current_dir(target).unwrap();
-        Self { previous }
-    }
-}
-
-impl Drop for TempCwd {
-    fn drop(&mut self) {
-        env::set_current_dir(&self.previous).unwrap();
-    }
 }
 
 #[test]
@@ -250,8 +231,7 @@ profile = "production"
 #[test]
 fn detect_project_returns_none_outside_git() {
     let dir = TempDir::new().unwrap();
-    let _guard = TempCwd::enter(dir.path());
-    assert!(detect_project().is_none());
+    assert!(detect_project_in(dir.path()).is_none());
 }
 
 #[test]

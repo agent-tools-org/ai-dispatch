@@ -1,3 +1,7 @@
+## v10.48.1 (2026-09-25)
+- Cursor dispatch no longer launches grok's `agent` binary: grok 1.0.40 installs `~/.grok/bin/agent`, whose help mentions `cursor-worker`, and the Cursor identity probe accepted any help text containing "cursor". Every `aid run cursor` then ran grok with Cursor's arguments and failed in 0s on `--force`. The probe now requires "cursor agent", and dispatch and availability share that one marker.
+
+
 ## v10.48.0 (2026-09-25)
 - Add `aid classify` and the MCP `classify` tool: ask typed questions (noul, choice, score) about a text or JSON state through TypeSafe Jev (`jev-1.13.0`) and get validated JSON back; the key is read from the macOS keychain, passed to curl only on stdin, and secret-like or oversized state is refused
 - A declared writable `--kind` (simple-edit, complex-impl, frontend, testing, refactoring) is no longer switched into audit report mode by prompt wording, including on worker re-dispatch and retry; `aid show` flags a missing result only when a result file was requested

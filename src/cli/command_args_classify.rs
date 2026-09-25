@@ -8,6 +8,18 @@ use crate::typesafe::question::{FlagEvent, FlagKind};
 
 #[derive(Args)]
 pub struct ClassifyFlags {
+    /// JSONL items with unique string ids and text or JSON states
+    #[arg(long, value_name = "FILE", requires = "out", conflicts_with_all = ["state", "state_json"])]
+    pub batch: Option<String>,
+    /// Append completed batch results as JSONL
+    #[arg(long, value_name = "FILE", requires = "batch")]
+    pub out: Option<String>,
+    /// Concurrent batch requests (default: 4, maximum: 16)
+    #[arg(long, requires = "batch", value_parser = clap::value_parser!(u8).range(1..=16))]
+    pub jobs: Option<u8>,
+    /// Skip batch ids already recorded with ok:true in --out
+    #[arg(long, requires = "batch")]
+    pub resume: bool,
     /// State file, or - for stdin (default: stdin)
     #[arg(long)]
     pub state: Option<String>,
@@ -129,5 +141,22 @@ mod tests {
     fn grouped_choices_do_not_pair_with_later_options() {
         let args = parse(&["--choice", "a=A?", "--choice", "b=B?", "--options", "x,y", "--options", "p,q"]);
         assert!(questions_from_flags(&args.events).is_err());
+    }
+
+    #[test]
+    fn batch_flags_require_paths_and_bound_concurrency() {
+        let args = parse(&["--batch", "in.jsonl", "--out", "out.jsonl", "--resume", "--jobs", "16", "--noul", "a=A?"]);
+        assert_eq!(args.flags.jobs, Some(16));
+        assert!(args.flags.resume);
+        assert_eq!(parse(&["--batch", "in", "--out", "out"]).flags.jobs, None);
+        for flags in [
+            vec!["--batch", "in"], vec!["--out", "out"], vec!["--resume"], vec!["--jobs", "4"],
+            vec!["--batch", "in", "--out", "out", "--jobs", "0"],
+            vec!["--batch", "in", "--out", "out", "--jobs", "17"],
+            vec!["--batch", "in", "--out", "out", "--state", "file"],
+            vec!["--batch", "in", "--out", "out", "--state-json"],
+        ] {
+            assert!(Cli::try_parse_from(["aid", "classify"].into_iter().chain(flags)).is_err());
+        }
     }
 }

@@ -33,7 +33,7 @@ One HTTPS `POST https://api.typesafe.ai/v1/systemone` carries `state`, `model`
 (exit 5) state over 100,000 characters (it never truncates) and state with a PEM
 block or a token prefix at a word start (`sk-`, `ghp_`, `github_pat_`, `xox`,
 `AKIA`, `AIza`, `ts_`); `--allow-secret-like` sends it anyway. The MCP tool
-always screens. A 429 or 529 is retried once after a short backoff.
+always screens. Single-item mode retries a 429 or 529 once after a short backoff.
 
 ## Command
 
@@ -68,8 +68,63 @@ options or levels, and numbers must be finite and in range.
 | 3 | API or network error (HTTP status and API error type only) |
 | 4 | invalid questions or flags |
 | 5 | state refused (secret-like or too large) |
+| 6 | batch completed with one or more failed items |
 
 Errors are one line on stderr and never include the key.
+
+## Batch mode
+
+Run the same questions over a JSONL file:
+
+```bash
+aid classify --batch items.jsonl --out results.jsonl --jobs 4 --resume \
+  --choice verdict='What final verdict does this audit give?' --options SHIP,FIX,BLOCK
+```
+
+Each input line must be an object with a unique, non-empty string `id` and a
+`state`. String states are text; other JSON values use the same screening as
+`--state-json` (only non-empty objects or arrays pass). All lines and ids are
+validated before any request is sent. Missing/duplicate ids, malformed JSONL,
+invalid questions, model, timeout, or output paths exit 4. Do not use the same
+file for input and output. `--batch` requires `--out` and conflicts with `--state`
+and `--state-json`. `--out`, `--jobs`, and `--resume` require `--batch`.
+
+```jsonl
+{"id":"audit-1","state":"Verdict: SHIP. Tests passed."}
+{"id":"audit-2","state":{"verdict":"FIX","reason":"missing tests"}}
+```
+
+The existing question flags, `--questions`, `--model`, `--timeout`, and
+`--allow-secret-like` apply to every item. Each state is screened independently;
+one refusal or API failure does not stop siblings. The key stays keychain-only
+and is read once for a non-empty pending batch; missing key exits 2. An empty or
+fully resumed batch needs no key. No batch MCP tool is provided.
+
+`--jobs` defaults to 4 and accepts 1-16. Workers use a shared cooldown on every
+HTTP 429/529, doubling from 1 second to a 32-second cap. After throttling, all
+new attempts are paced by that delay for the rest of the batch; requests already
+in flight can finish. Each item gets at most five attempts. Other failures are
+recorded immediately. Single-item retry behavior is unchanged.
+
+Results append to `--out` and flush as each item completes, in completion order;
+stdout stays empty. Successful rows contain `id`, `ok:true`, `answers`, `model`,
+`usage`, and `latency_ms` (including batch pacing/retries). Failed rows contain
+`id`, `ok:false`, `error_kind` (`no_key`, `api`, `invalid`, or `refused`), and a
+sanitized `error`. State and credentials are never copied into result rows.
+
+`--resume` skips input ids with any previous `ok:true` row in `--out`; failed ids
+are retried. Without it, every input item runs and new rows still append. A
+missing output file starts fresh. Malformed resume rows, including a truncated
+final row from an interrupted write, exit 4; repair that row before resuming.
+Use an output file associated with the same input ids and questions: resume
+matches ids only. Only one batch process should write a given output file.
+
+The final stderr summary prints `total / ok / failed / skipped` as named counts
+and a count for every option of each choice question, including zero counts.
+`ok` and option counts cover successes from this invocation; skipped rows are
+not counted again. Exit 0 means no pending items failed (including all-skipped
+batches); exit 6 means some items failed. An output write failure exits 4, stops
+new work as workers finish, and preserves already flushed rows.
 
 ## Examples
 

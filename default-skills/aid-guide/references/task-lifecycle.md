@@ -96,6 +96,16 @@ Acceptance is an explicit principal act. It records the decision, principal,
 accepted head, branch, and artifact manifest. It does not immediately delete
 anything.
 
+If a sibling already collected the shared worktree, acceptance uses the task's
+recorded final commit and branch. The worktree must be absent on disk and
+unregistered in a successful Git worktree listing. Before recording acceptance,
+AID proves that the final commit and every recursive submodule commit exist in
+durable storage and are reachable from a durable ref, using `task.repo_path`.
+The original branch may have been merged and deleted. A missing final commit,
+repository, object, or durable ref refuses acceptance; a sibling's acceptance
+does not substitute for evidence of this task's final commit. A registered but
+missing worktree also refuses acceptance until its custody is resolved.
+
 If the artifact changes after acceptance, review it again and issue a new
 acceptance record. Decisions are append-only; the latest decision governs.
 

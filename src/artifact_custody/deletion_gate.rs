@@ -56,7 +56,7 @@ pub(crate) fn delete_accepted_worktree(store: &Store, task_id: &str) -> Result<(
     Ok(())
 }
 
-fn is_worktree_missing(repo: &str, worktree: &Path) -> Result<bool> {
+pub(super) fn is_worktree_missing(repo: &str, worktree: &Path) -> Result<bool> {
     let output = std::process::Command::new("git")
         .args(["-C", repo, "worktree", "list", "--porcelain"])
         .output()

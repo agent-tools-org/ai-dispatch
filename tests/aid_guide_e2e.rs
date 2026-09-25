@@ -16,6 +16,19 @@ fn official_guide_covers_every_public_command() {
     let skill = std::fs::read_to_string(guide_dir.join("SKILL.md")).unwrap();
     let command_index =
         std::fs::read_to_string(guide_dir.join("references/command-index.md")).unwrap();
+    let configuration =
+        std::fs::read_to_string(guide_dir.join("references/configuration.md")).unwrap();
+    assert!(command_index.contains("TypeSafe (Jev) macOS keychain key"));
+    for term in [
+        "TypeSafe (Jev)",
+        "typesafe-api-key",
+        "Set/replace TypeSafe key? [y/N]",
+        "Without a TTY",
+        "keychain-only on macOS",
+        "`OK` or the error kind",
+    ] {
+        assert!(configuration.contains(term), "setup guide missing {term}");
+    }
     let help = aid_cmd_in(aid_home.path()).arg("--help").output().unwrap();
     assert!(help.status.success());
 

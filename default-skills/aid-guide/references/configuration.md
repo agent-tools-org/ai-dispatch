@@ -14,6 +14,21 @@ aid project state
 skills directory is absent or empty. `aid init` is an internal compatibility
 entry that can reinstall defaults and always refreshes the official guide.
 
+The **TypeSafe (Jev)** step checks whether the login keychain contains
+`typesafe-api-key` for account `$USER`, without reading or displaying the key.
+At `Set/replace TypeSafe key? [y/N]`, Enter skips. On macOS, yes opens
+`/usr/bin/security` with inherited terminal I/O for hidden key entry; the setup
+step never captures the key or puts it in arguments, environment, files, or logs.
+After storing, one tiny request through the existing `aid classify` path checks
+the key and prints only `OK` or the error kind. Without a TTY, setup does not
+spawn the store command; run this yourself in a real terminal:
+
+```bash
+security add-generic-password -a "$USER" -s typesafe-api-key -U -w
+```
+
+TypeSafe keys are keychain-only on macOS; other platforms skip this step.
+
 ## Project configuration
 
 Store project defaults in `.aid/project.toml`. Prefer `aid project init` over

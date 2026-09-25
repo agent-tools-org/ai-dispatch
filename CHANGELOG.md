@@ -1,3 +1,7 @@
+## v10.48.2 (2026-09-25)
+- `aid setup` gains a TypeSafe (Jev) step: it reports whether the login keychain holds `typesafe-api-key` without reading it, and on `y` runs `security add-generic-password -U -w` with the terminal attached so the key is typed at a hidden prompt and never passes through aid's argv, environment, files or logs. Without a TTY it prints the command to run instead. After storing, one small classify call reports `OK` or `FAILED: <reason>`.
+
+
 ## v10.48.1 (2026-09-25)
 - Cursor dispatch no longer launches grok's `agent` binary: grok 1.0.40 installs `~/.grok/bin/agent`, whose help mentions `cursor-worker`, and the Cursor identity probe accepted any help text containing "cursor". Every `aid run cursor` then ran grok with Cursor's arguments and failed in 0s on `--force`. The probe now requires "cursor agent", and dispatch and availability share that one marker.
 

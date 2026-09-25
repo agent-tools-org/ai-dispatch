@@ -119,7 +119,7 @@ fn terminate_child(mut child: std::process::Child) {
 
 pub(crate) fn identity_marker(name: &str) -> Option<&'static str> {
     match name {
-        "agent" => Some("cursor"),
+        "agent" => Some("cursor agent"),
         "claude" => Some("claude code"),
         "oz" => Some("warp"),
         _ => None,

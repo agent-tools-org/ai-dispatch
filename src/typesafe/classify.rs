@@ -69,25 +69,62 @@ pub(crate) struct ClassifyRequest {
 
 /// Validates and screens locally first; the keychain is read only for a request that may be sent.
 pub(crate) fn classify(request: &ClassifyRequest) -> Result<Value, ClassifyError> {
-    let declared = prepare(request)?;
-    let key = resolve_key().ok_or_else(|| {
+    prepare(request)?;
+    let key = required_key()?;
+    execute(request, &key, |post| send_with_retry(post, std::thread::sleep))
+}
+
+fn required_key() -> Result<String, ClassifyError> {
+    resolve_key().ok_or_else(|| {
         ClassifyError::new(
             ErrorKind::NoKey,
             format!("no TypeSafe key in the login keychain; run once in a real terminal: {KEY_SETUP}"),
         )
-    })?;
+    })
+}
+
+/// A batch owns one key in memory; Debug and serialization are deliberately not implemented.
+pub(crate) struct BatchClassifier {
+    key: String,
+}
+
+pub(crate) type Attempt = Result<Value, (ClassifyError, bool)>;
+
+impl BatchClassifier {
+    pub(crate) fn new() -> Result<Self, ClassifyError> {
+        Ok(Self { key: required_key()? })
+    }
+
+    /// One screened attempt; batch scheduling owns the shared retry policy.
+    pub(crate) fn classify(&self, request: &ClassifyRequest) -> Attempt {
+        let mut throttled = false;
+        let result = execute(request, &self.key, |post| {
+            let response = post().map_err(network_error)?;
+            throttled = matches!(response.0, 429 | 529);
+            Ok(response)
+        });
+        result.map_err(|error| (error, throttled))
+    }
+}
+
+fn execute(
+    request: &ClassifyRequest,
+    key: &str,
+    send: impl FnOnce(&mut dyn FnMut() -> anyhow::Result<(u16, String)>) -> Result<(u16, String), ClassifyError>,
+) -> Result<Value, ClassifyError> {
+    let declared = prepare(request)?;
     let state = match &request.state {
         ClassifyState::Text(text) => json!(text),
         ClassifyState::Json(value) => value.clone(),
     };
     let body = json!({ "state": state, "model": request.model, "questions": request.questions }).to_string();
     let started = Instant::now();
-    let post = || secret::post_json(ENDPOINT, &key, &body, request.timeout_secs);
-    let (status, text) = send_with_retry(post, std::thread::sleep)?;
+    let mut post = || secret::post_json(ENDPOINT, key, &body, request.timeout_secs);
+    let (status, text) = send(&mut post)?;
     finish(status, &text, &declared, started.elapsed())
 }
 
-fn prepare(request: &ClassifyRequest) -> Result<BTreeMap<String, Declared>, ClassifyError> {
+pub(crate) fn prepare(request: &ClassifyRequest) -> Result<BTreeMap<String, Declared>, ClassifyError> {
     let invalid = |message: String| ClassifyError::new(ErrorKind::Invalid, message);
     if !is_model_name(&request.model) {
         return Err(invalid("model must be jev-<version> or a jev- alias".into()));
@@ -131,13 +168,16 @@ fn send_with_retry(
     mut post: impl FnMut() -> anyhow::Result<(u16, String)>,
     sleep: impl Fn(Duration),
 ) -> Result<(u16, String), ClassifyError> {
-    let network = |_| ClassifyError::new(ErrorKind::Api, "TypeSafe request failed: no response (network error, timeout, or curl missing)");
-    let first = post().map_err(network)?;
+    let first = post().map_err(network_error)?;
     if !matches!(first.0, 429 | 529) {
         return Ok(first);
     }
     sleep(RETRY_BACKOFF);
-    post().map_err(network)
+    post().map_err(network_error)
+}
+
+fn network_error(_: anyhow::Error) -> ClassifyError {
+    ClassifyError::new(ErrorKind::Api, "TypeSafe request failed: no response (network error, timeout, or curl missing)")
 }
 
 fn finish(

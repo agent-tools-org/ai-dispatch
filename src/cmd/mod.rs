@@ -22,6 +22,7 @@ pub mod board;
 pub mod board_stream;
 pub mod checklist;
 pub mod classify;
+mod classify_batch;
 pub(crate) mod checklist_scan;
 pub mod clean;
 pub(crate) mod clean_size;

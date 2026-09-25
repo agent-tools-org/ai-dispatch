@@ -13,7 +13,7 @@ current arguments.
 | `aid benchmark` | Run the same task through multiple agents and compare results. |
 | `aid ask` | Run a focused research or exploration request with optional files. |
 | `aid query` | Query an LLM directly, optionally using automatic routing. |
-| `aid classify` | Ask TypeSafe Jev typed `noul`/`choice`/`score` questions about a text or JSON state (stdin by default) and print a small validated JSON answer; also the MCP `classify` tool. Exits 2 no key, 3 API error, 4 invalid questions, 5 state refused. Answers over agent output are hints, never a verdict; see [classify.md](classify.md). |
+| `aid classify` | Ask TypeSafe Jev typed `noul`/`choice`/`score` questions about a text or JSON state (stdin by default); also the single-item MCP `classify` tool. `--batch <items.jsonl> --out <results.jsonl> [--jobs N] [--resume]` appends per-item results with shared backoff, 4 workers by default (1-16), resume by successful id, and stderr totals/choice counts. Exits 2 no key, 3 API error, 4 invalid setup/questions, 5 single-state refusal, 6 batch item failures. Answers over agent output are hints, never a verdict; see [classify.md](classify.md). |
 | `aid build` | Run supported Cargo checks (check/clippy) with compact diagnostics; zero-unit no-target runs fail clearly. |
 | `aid test` | Run Cargo tests with trusted guarantees: zero-match filters fail, executed tests are named, failures stay compact. |
 | `aid experiment` | Run and inspect metric-driven iterative experiments. |

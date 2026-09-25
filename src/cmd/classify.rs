@@ -11,6 +11,9 @@ use crate::typesafe::question::{merge_questions, questions_from_flags};
 
 /// Prints the answer JSON on stdout (exit 0) or one line on stderr, returning the exit code.
 pub fn run(args: ClassifyArgs) -> i32 {
+    if args.flags.batch.is_some() {
+        return super::classify_batch::run(&args);
+    }
     let outcome = request_from_args(&args, &mut std::io::stdin()).and_then(|request| classify(&request));
     match outcome {
         Ok(answer) => {
@@ -25,14 +28,19 @@ pub fn run(args: ClassifyArgs) -> i32 {
 }
 
 pub(crate) fn request_from_args(args: &ClassifyArgs, stdin: &mut dyn Read) -> Result<ClassifyRequest, ClassifyError> {
+    let mut request = request_template(args)?;
+    let raw = read_state(args.flags.state.as_deref(), stdin)?;
+    request.state = if args.flags.state_json { ClassifyState::Json(parse_json_state(&raw)?) } else { ClassifyState::Text(raw) };
+    Ok(request)
+}
+
+pub(super) fn request_template(args: &ClassifyArgs) -> Result<ClassifyRequest, ClassifyError> {
     let invalid = |message: String| ClassifyError::new(ErrorKind::Invalid, message);
     let flags = questions_from_flags(&args.events).map_err(invalid)?;
     let file = args.flags.questions.as_deref().map(read_questions_file).transpose()?;
     let questions = merge_questions(file, flags).map_err(invalid)?;
-    let raw = read_state(args.flags.state.as_deref(), stdin)?;
-    let state = if args.flags.state_json { ClassifyState::Json(parse_json_state(&raw)?) } else { ClassifyState::Text(raw) };
     Ok(ClassifyRequest {
-        state,
+        state: ClassifyState::Text("batch template".into()),
         questions,
         model: args.flags.model.clone(),
         timeout_secs: args.flags.timeout,

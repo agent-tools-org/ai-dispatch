@@ -61,7 +61,7 @@ current arguments.
 
 | Command | Purpose |
 |---|---|
-| `aid setup` | Configure AID and install bundled resources when needed. |
+| `aid setup` | Configure AID, optionally set/replace the TypeSafe (Jev) macOS keychain key with hidden terminal input and classify verification (`OK` or `FAILED: <message>`), and install bundled resources when needed. |
 | `aid project` | Initialize, inspect, or synchronize project configuration. |
 | `aid agent` | Inspect built-in agent availability and related state. `aid agent config <name> --model` sets a sticky default for `aid run` and `aid batch`. `aid agent quota` shows live used percent and freshness when an aidbar snapshot exists; `STALE` is display-only. `aid agent list` includes `claude`. `aid agent list --json` quota objects carry `ok` (a successful probe observed it), `unknown` (no evidence), `degraded`, `partial`, or `limited` state plus `used_percent`, `resets_at`, and `source` (`probe` / `marker` / `none`); each agent carries `auth` (`failed` with `observed_at` after a not-signed-in run within the last hour, else `unknown`). Its `models` object carries `default_source` (`sticky` / `custom_forced` / `budget_route` / `cli_config`; `null` with `default` when unknown), and each `models.available` row carries `rated` and `source` (`catalog` / `served` / `pricing_override`); served-only rows are `rated: false` with `null` capability and prices. `aid agent quota` prints `UNKNOWN` for a route no probe observed. A NeedsHuman hold on `aid agent list` prints `needs human: <stored first line> — fix, then aid config clear-limit <agent>` rather than a bare `LIMITED`. |
 | `aid config` | Inspect agents, pricing, installed skills, templates, and prompt budgets. |

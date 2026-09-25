@@ -6,6 +6,9 @@ use anyhow::{Context, Result};
 use std::io::{self, BufRead, Write};
 use std::process::Command;
 
+#[path = "setup_typesafe.rs"]
+mod typesafe;
+
 pub fn run() -> Result<()> {
     println!();
     println!("  aid setup");
@@ -87,6 +90,9 @@ pub fn run() -> Result<()> {
             println!("  Skipped");
         }
     }
+
+    section("TypeSafe (Jev)");
+    typesafe::run()?;
 
     // 2. Detect installed agents
     section("Agents");

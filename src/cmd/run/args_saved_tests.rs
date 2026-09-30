@@ -25,9 +25,8 @@ fn worker_rebuild_keeps_every_saved_field() {
     let mut row = task(id);
     row.agent = AgentKind::Custom;
     row.custom_agent_name = Some("resolved-agent".into());
-    row.effective_dir = Some("/tmp/effective".into());
+    row.effective_dir = Some("/tmp/row-effective".into());
     row.resolved_prompt = Some("resolved prompt".into());
-    row.budget = true;
     store.insert_task(&row).unwrap();
     let json = saved.dispatch_args_json().unwrap();
     assert!(!json.contains("secret-value"), "env values must never be persisted");
@@ -42,9 +41,10 @@ fn worker_rebuild_keeps_every_saved_field() {
     let mut expected = serde_json::to_value(&saved).unwrap();
     for (key, value) in [
         ("agent_name", json!("resolved-agent")),
-        ("dir", json!("/tmp/effective")),
+        ("dir", json!("/tmp/spec")),
         ("prompt", json!("resolved prompt")),
-        ("budget", json!(true)),
+        ("budget", json!(false)),
+        ("on_done", Value::Null),
         ("env", json!({"RUNTIME_ONLY": "from-spec"})),
         ("existing_task_id", Value::Null),
         ("foreground", json!(false)),
@@ -60,7 +60,7 @@ fn worker_rebuild_keeps_every_saved_field() {
 }
 
 #[test]
-fn dispatch_records_resolved_budget_mode_for_the_worker_only() {
+fn dispatch_saves_the_callers_budget_request_not_the_resolved_mode() {
     let home = tempfile::tempdir().unwrap();
     let _guard = crate::paths::AidHomeGuard::set(home.path());
     crate::paths::ensure_dirs().unwrap();
@@ -76,11 +76,44 @@ fn dispatch_records_resolved_budget_mode_for_the_worker_only() {
     };
     let prepared = super::super::run_dispatch_prepare::prepare_dispatch_with(&store, &mut args, |_| true).unwrap();
     let id = prepared.task_id.as_str();
-    let worker = RunArgs::for_worker(&store, &spec(id)).unwrap();
-    assert!(worker.budget, "worker runs in the budget mode dispatch resolved");
-    assert_eq!(worker.agent_name, "budget-test");
-    let saved = RunArgs::saved_for_task(&store, id).unwrap().unwrap();
-    assert!(!saved.budget, "saved args keep the caller's request for retries");
+    assert!(prepared.budget_active, "dispatch resolved budget mode for this run");
+    // Retries read task.budget and the saved args: neither may carry a mode the caller never asked for.
+    assert!(!store.get_task(id).unwrap().unwrap().budget);
+    assert!(!RunArgs::saved_for_task(&store, id).unwrap().unwrap().budget);
+}
+
+#[tokio::test]
+async fn worker_without_a_dispatched_dir_skips_verify() {
+    let home = tempfile::tempdir().unwrap();
+    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    crate::paths::ensure_dirs().unwrap();
+    std::fs::create_dir_all(crate::paths::aid_dir().join("agents")).unwrap();
+    std::fs::write(crate::paths::aid_dir().join("agents/noop-test.toml"),
+        "[agent]\nid = \"noop-test\"\ndisplay_name = \"Noop Test\"\ncommand = \"/bin/sh\"\nprompt_mode = \"arg\"\nfixed_args = [\"-c\", \"true\"]\ninteractive_input = false\n").unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let id = "t-no-dir";
+    let marker = home.path().join("verify-ran");
+    let verify = format!("touch '{}'", marker.display());
+    let mut row = task(id);
+    row.agent = AgentKind::Custom;
+    row.custom_agent_name = Some("noop-test".into());
+    // Dispatch records the caller's cwd on the row even when no dir was given.
+    row.effective_dir = Some(home.path().display().to_string());
+    row.verify = Some(verify.clone());
+    row.verify_status = VerifyStatus::Pending;
+    store.insert_task(&row).unwrap();
+    let saved = RunArgs { agent_name: "noop-test".into(), verify: Some(verify), ..Default::default() };
+    store.update_task_dispatch_args(id, &saved.dispatch_args_json().unwrap()).unwrap();
+    let mut job = spec(id);
+    job.dir = None;
+    save_spec(&job).unwrap();
+    assert_eq!(RunArgs::for_worker(&store, &job).unwrap().dir, None);
+
+    crate::background::run_task(store.clone(), id).await.unwrap();
+
+    let done = store.get_task(id).unwrap().unwrap();
+    assert_eq!(done.status, TaskStatus::Done);
+    assert!(!marker.exists(), "verify must not run without a dispatched working directory");
 }
 
 fn every_field_set() -> RunArgs {
@@ -131,7 +164,7 @@ fn spec(task_id: &str) -> BackgroundRunSpec {
     serde_json::from_value(json!({
         "task_id": task_id, "worker_pid": null, "agent_name": "spec-agent",
         "prompt": "spec prompt", "dir": "/tmp/spec", "output": null, "model": "spec-model",
-        "verify": null, "retry": 0, "group": null, "interactive": true,
+        "budget": false, "verify": null, "retry": 0, "group": null, "interactive": true,
         "env": {"RUNTIME_ONLY": "from-spec"}, "foreground": false
     }))
     .unwrap()

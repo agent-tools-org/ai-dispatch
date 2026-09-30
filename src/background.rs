@@ -82,7 +82,7 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
     let _ = crate::input_signal::clear_response(task_id);
     let _ = crate::input_signal::clear_steer(task_id);
     result?;
-    if let Some(cmd) = args.as_ref().ok().and_then(|args| args.on_done.as_ref()) {
+    if let Some(cmd) = spec.on_done.as_ref() {
         let _ = spawn_on_done_command(cmd, task_id, "done");
     }
     Ok(())
@@ -100,17 +100,15 @@ async fn handle_run_task_inner_error(
     if !recorded_failure {
         return Err(err);
     }
-    let Some(args) = args else {
-        // Without saved args there is no lifecycle to notify on our behalf.
-        if let Some(task) = store.get_task(&spec.task_id)? {
-            crate::notify::notify_completion(&task);
+    if let Some(args) = args {
+        if let Err(lifecycle_err) = run_failed_post_lifecycle(store, spec, args).await {
+            aid_error!("[aid] Background post-run lifecycle failed: {lifecycle_err}");
         }
-        return Err(err);
-    };
-    if let Err(lifecycle_err) = run_failed_post_lifecycle(store, spec, args).await {
-        aid_error!("[aid] Background post-run lifecycle failed: {lifecycle_err}");
+    } else if let Some(task) = store.get_task(&spec.task_id)? {
+        // Without saved args there is no lifecycle to notify on our behalf.
+        crate::notify::notify_completion(&task);
     }
-    if let Some(ref cmd) = args.on_done {
+    if let Some(ref cmd) = spec.on_done {
         let _ = spawn_on_done_command(cmd, &spec.task_id, "failed");
     }
     Err(err)

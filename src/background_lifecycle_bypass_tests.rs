@@ -61,10 +61,10 @@ async fn inner_error_runs_post_lifecycle_once_without_duplicate_callbacks() {
     let args = RunArgs {
         agent_name: "codex".into(),
         hooks: vec![format!("on_fail:printf fail >> '{}'", hook_path.display())],
-        on_done: Some(format!("printf done >> '{}'", done_path.display())),
         ..Default::default()
     };
-    let spec = spec("t-bg-error");
+    let mut spec = spec("t-bg-error");
+    spec.on_done = Some(format!("printf done >> '{}'", done_path.display()));
 
     let _ = handle_run_task_inner_error(&store, &spec, Some(&args), anyhow::anyhow!("setup failed")).await;
     let _ = handle_run_task_inner_error(&store, &spec, Some(&args), anyhow::anyhow!("late duplicate")).await;
@@ -105,7 +105,10 @@ async fn worker_without_saved_args_fails_the_task_and_notifies_once() {
     let store = Arc::new(Store::open_memory().unwrap());
     let id = "t-bg-unsaved";
     store.insert_task(&task(id, TaskStatus::Running)).unwrap();
-    super::save_spec(&spec(id)).unwrap();
+    let done_path = temp.path().join("done.txt");
+    let mut job = spec(id);
+    job.on_done = Some(format!("printf \"$AID_TASK_STATUS\" > '{}'", done_path.display()));
+    super::save_spec(&job).unwrap();
 
     let err = super::run_task(store.clone(), id).await.unwrap_err();
 
@@ -114,6 +117,7 @@ async fn worker_without_saved_args_fails_the_task_and_notifies_once() {
     assert!(super::load_spec_if_exists(id).unwrap().is_none());
     let completions = std::fs::read_to_string(paths::aid_dir().join("completions.jsonl")).unwrap();
     assert_eq!(completions.lines().filter(|line| line.contains(id)).count(), 1);
+    assert_eq!(read_wait(&done_path), "failed", "the job's on_done still reports the failure");
 }
 
 fn start_webhook_counter() -> (String, mpsc::Receiver<usize>) {

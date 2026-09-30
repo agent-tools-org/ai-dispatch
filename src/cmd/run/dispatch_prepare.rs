@@ -80,6 +80,9 @@ fn resolve_dispatch_context(store: &Arc<Store>, args: &mut RunArgs) -> Result<Di
     args.result_file_required = Some(had_explicit_result_file);
     let (project_root, detected_project) = project::resolve_project_in(Path::new(args.dir.as_deref().unwrap_or(".")));
     apply_project_defaults(args, detected_project.as_ref());
+    if args.read_only && let Some(output) = args.output.as_mut() {
+        *output = std::env::current_dir()?.join(&*output).to_string_lossy().into_owned();
+    }
     crate::command_diagnostics::validate_run_options(args)?;
     validate_egress(args)?;
     crate::remote_build::resolve(args)?;

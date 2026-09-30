@@ -31,16 +31,9 @@ pub(super) fn maybe_record_start_sha(
     Ok(())
 }
 
-fn capture_pre_task_dirty_paths(dir: Option<&String>, read_only: bool) -> Option<Vec<String>> {
+fn capture_pre_task_dirty_paths(dir: Option<&String>) -> Option<Vec<String>> {
     let dir = dir?;
     match crate::worktree::capture_worktree_snapshot(Path::new(dir)) {
-        Ok(snapshot) if read_only => match snapshot.read_only_state(Path::new(dir)) {
-            Ok(state) => Some(state),
-            Err(err) => {
-                aid_warn!("[aid] read-only baseline failed in {dir}: {err}");
-                None
-            }
-        },
         Ok(snapshot) => Some(snapshot.status_lines),
         Err(err) => {
             aid_warn!("[aid] rescue: failed to capture pre-task dirty baseline in {dir}: {err}");
@@ -58,8 +51,16 @@ pub(super) fn run_background_task(
     background::check_worker_capacity(store)?;
     let pre_task_dirty_paths = if args.audit_report_mode && !args.read_only {
         None
+    } else if args.read_only {
+        match super::run_dirty::capture_baseline(store, &prepared.task_id, prepared.effective_dir.as_deref()) {
+            Ok(baseline) => baseline,
+            Err(err) => {
+                crate::task_lifecycle::mark_failed(store, &prepared.task_id)?;
+                return Err(err);
+            }
+        }
     } else {
-        capture_pre_task_dirty_paths(prepared.effective_dir.as_ref(), args.read_only)
+        capture_pre_task_dirty_paths(prepared.effective_dir.as_ref())
     };
     let spec = BackgroundRunSpec {
         task_id: prepared.task_id.as_str().to_string(),

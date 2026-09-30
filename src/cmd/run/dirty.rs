@@ -11,6 +11,7 @@ use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
 use super::{RunArgs, retry_target, run};
 #[path = "read_only.rs"]
 mod read_only;
+pub(super) use read_only::capture_baseline;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DirtyWorktreeAction {

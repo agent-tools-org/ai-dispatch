@@ -39,9 +39,9 @@ impl super::Agent for ClaudeAgent {
         ]);
         if opts.read_only {
             let (mode, tools, denied) = if opts.result_file.is_some() {
-                ("dontAsk", "Read,Glob,Grep,Write", "Edit,MultiEdit,NotebookEdit")
+                ("dontAsk", "Read,Glob,Grep,Bash,Write", "Edit,MultiEdit,NotebookEdit")
             } else {
-                ("plan", "Read,Glob,Grep", "Edit,Write,MultiEdit,NotebookEdit")
+                ("plan", "Read,Glob,Grep,Bash", "Edit,Write,MultiEdit,NotebookEdit")
             };
             cmd.args(["--permission-mode", mode, "--tools", tools,
                 "--allowedTools", tools, "--disallowedTools", denied]);

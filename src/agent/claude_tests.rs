@@ -50,7 +50,7 @@ fn build_command_read_only_restricts_tools() {
     };
     let cmd = ClaudeAgent.build_command("inspect", &opts).unwrap();
     let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
-    assert_read_only_flags(&args, "dontAsk", "Read,Glob,Grep,Write", "Edit,MultiEdit,NotebookEdit");
+    assert_read_only_flags(&args, "dontAsk", "Read,Glob,Grep,Bash,Write", "Edit,MultiEdit,NotebookEdit");
     assert!(args[1].contains("EXCEPT the result file"));
 }
 
@@ -71,7 +71,7 @@ fn build_command_read_only_without_result_file_keeps_strict_tools() {
     };
     let cmd = ClaudeAgent.build_command("inspect", &opts).unwrap();
     let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
-    assert_read_only_flags(&args, "plan", "Read,Glob,Grep", "Edit,Write,MultiEdit,NotebookEdit");
+    assert_read_only_flags(&args, "plan", "Read,Glob,Grep,Bash", "Edit,Write,MultiEdit,NotebookEdit");
     assert!(args[1].contains("Do NOT modify, create, or delete any files."));
 }
 
@@ -87,6 +87,7 @@ fn assert_read_only_flags(args: &[String], mode: &str, tools: &str, denied: &str
         ["--allowedTools", tools], ["--disallowedTools", denied]] {
         assert!(args.windows(2).any(|args| args == pair));
     }
+    assert!(tools.split(',').any(|tool| tool == "Bash"));
     assert!(!args.iter().any(|arg| arg == "--dangerously-skip-permissions"));
 }
 

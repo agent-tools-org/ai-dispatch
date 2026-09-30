@@ -144,19 +144,23 @@ Important controls:
 - `--bg` returns the task ID immediately.
 - `--read-only` compares the Git run directory with its dispatch snapshot after
   the agent exits, including content changes to already dirty files, new untracked
-  files, and deletions. Any change outside the designated result file and aid-owned
-  paths makes the task Failed with an error listing paths. Files stay in place;
-  aid does not commit, stash, revert, or automatically retry the violation. The
-  designated task result file and audit report remain writable, including an
-  absolute result path with a relative run directory. An unavailable
-  snapshot fails enforcement rather than silently accepting the task. Ignored
+  files, deletions, and nested repository HEAD changes. Gitlinks also compare their
+  recorded index commit. Without `--dir`, aid captures and uses its current working
+  directory. Any change outside the designated result file, `-o/--output` file,
+  and aid-owned paths makes the task Failed with an error listing paths. Files
+  stay in place; aid does not commit, stash, revert, or automatically retry the
+  violation. Absolute artifact paths work with relative run directories; a
+  symlink artifact does not exempt its destination. Enforcement covers Git run
+  directories only: a non-Git directory proceeds with a warning event naming
+  the reason. Git errors or unavailable Git snapshots fail enforcement. Ignored
   untracked files and paths outside the run directory are outside this check.
-  Claude uses plan mode without a result file. With a result file, it uses
-  `dontAsk` permission mode and exposes only Read, Glob, Grep, and Write from
-  the built-in tool set. Edit, MultiEdit, NotebookEdit, and shell tools are
-  unavailable. Write is
-  not restricted to a single path by this adapter; the snapshot guard enforces
-  the result-file exception. Read-only runs never bypass Claude permissions.
+  Nested repositories compare commits, not their uncommitted files.
+  Claude retains Bash for audit commands, alongside Read, Glob, and Grep. Without
+  a result file it uses plan mode and denies Write, Edit, MultiEdit, and
+  NotebookEdit. With a result file it uses `dontAsk`, allows Write, and denies
+  Edit, MultiEdit, and NotebookEdit. Bash and Write are not restricted to specific
+  paths by this adapter; the post-run guard enforces the artifact exceptions.
+  Read-only runs never bypass Claude permissions.
 - `--remote-build [BOX]` routes Cargo build/check/test/clippy/bench/doc through a PATH shim to rbox while the agent, PTY, isolated HOME, steer/respond, and idle detection stay local. Bare flag or `auto` runs `rbox pick --role rust-build --repo <main-working-tree>` once before launch; an explicit name is used as-is. Missing rbox or no available box fails before launch, preserving selection stderr. CLI overrides project `remote_build`; batch defaults and tasks accept the same key. The chosen box is saved with the task, shown by `aid show`/`--json` and events, reused by `aid retry`, and exported as `AID_BUILD_BOX` to agent and verify, overriding ambient values. Verify receives the same PATH shim, so plain `cargo test` runs remotely too. If the pinned box refuses admission on disk space (exit 69), `aid` re-picks once excluding the old box, persists the new box, and re-runs verify once. A failed re-pick or a second refusal results in an `InfrastructureFailure`. Remote tasks also get a private `.cargo/bin/cargo` shim so login-shell profiles cannot bypass routing by prepending `$HOME/.cargo/bin`; the other Cargo entries link to the real home and `CARGO_HOME`/`RUSTUP_HOME` stay unchanged. Tasks without a box retain the plain `.cargo` symlink. Tasks without remote build omit `remote_build` from `aid show --json`. Expect sync/lock latency; do not bypass the shim. `cargo fmt` and other Cargo commands stay local. This flag conflicts with `--sandbox` and `--container`.
 - `--sandbox` requests sandboxed execution. Before native agent launch, aid creates and probes the Rust target (`_base` for tasks without `-w`) and private temporary directory under isolated HOME, exported as `TMPDIR`; failure aborts with an error naming the directory. Codex roots and Copilot's allowed directories include both scratch paths and writable Git metadata for regular repositories and linked worktrees. An unwritable Git directory is omitted with a task event naming the directory and reason. Capability preflight and `--dry-run` do not create or probe these directories.
 - `--timeout SECS` is a hard wall-clock cap in seconds.

@@ -77,7 +77,7 @@ impl Agent for OpenCodeOverlayAgent {
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         if opts.read_only && self.spec.reported_kind == AgentKind::Custom {
-            aid_warn!("[aid] ⚠OpenCode read-only is prompt-level only, not enforced. Use --worktree for isolation.");
+            aid_warn!("[aid] ⚠OpenCode read-only does not sandbox the agent; aid fails the task if the Git run directory changes.");
         }
         let effective_prompt = if opts.read_only {
             read_only_prompt(prompt, opts)

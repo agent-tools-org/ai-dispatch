@@ -56,6 +56,18 @@ impl Fixture {
         db
     }
 
+    fn foreground(&self, cwd: &Path, agent: &str, extra: &[&str], expected: &str) -> Connection {
+        let output = aid_cmd_in(self.home.path()).current_dir(cwd)
+            .env("PATH", format!("{}:{}", self.bin.path().display(), std::env::var("PATH").unwrap_or_default()))
+            .args(["run", agent, "Inspect the checkout", "--read-only", "--no-audit", "--no-backup", "--id", "t-read-only"])
+            .args(extra).output().unwrap();
+        assert_eq!(output.status.success(), expected == "done", "stdout: {}\nstderr: {}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        let db = Connection::open(self.home.path().join("aid.db")).unwrap();
+        let status: String = db.query_row("SELECT status FROM tasks WHERE id = 't-read-only'", [], |row| row.get(0)).unwrap();
+        assert_eq!(status, expected);
+        db
+    }
+
     fn assert_error_paths(&self, db: &Connection, paths: &[&str]) {
         let detail: String = db.query_row("SELECT detail FROM events WHERE task_id = 't-read-only' AND event_type = 'error' AND detail LIKE 'Read-only violation:%'", [], |row| row.get(0)).unwrap();
         for path in paths { assert!(detail.contains(path), "{detail}"); }
@@ -171,4 +183,115 @@ fn read_only_result_symlink_does_not_exempt_its_destination() {
     let db = f.run(false, "failed", "report.md");
     f.assert_error_paths(&db, &["a.txt"]);
     assert_eq!(std::fs::read_to_string(f.repo.path().join("a.txt")).unwrap(), "altered\n");
+}
+
+#[test]
+fn read_only_without_dir_guards_gemini_cwd() {
+    let f = Fixture::new("echo stray > probe.txt");
+    std::os::unix::fs::symlink(f.bin.path().join("claude"), f.bin.path().join("gemini")).unwrap();
+    let db = f.foreground(f.repo.path(), "gemini", &["-o", "output.md"], "failed");
+    f.assert_error_paths(&db, &["probe.txt"]);
+}
+
+#[test]
+fn read_only_without_dir_guards_repo_subdirectory() {
+    let f = Fixture::new("echo stray > probe.txt");
+    let subdir = f.repo.path().join("subdir");
+    std::fs::create_dir(&subdir).unwrap();
+    let db = f.foreground(&subdir, "claude", &["-o", "output.md"], "failed");
+    f.assert_error_paths(&db, &["probe.txt"]);
+}
+
+#[test]
+fn read_only_non_git_directory_warns_and_proceeds() {
+    let f = Fixture::new("echo report > report.md");
+    let dir = TempDir::new().unwrap();
+    let db = f.foreground(dir.path(), "claude", &["--result-file", "report.md"], "done");
+    let warning: String = db.query_row("SELECT detail FROM events WHERE task_id = 't-read-only' AND detail LIKE 'Warning: read-only enforcement unavailable%'", [], |row| row.get(0)).unwrap();
+    assert!(warning.contains("not a git repository"), "{warning}");
+    assert!(warning.contains(dir.path().to_str().unwrap()), "{warning}");
+    assert!(dir.path().join("report.md").exists());
+}
+
+#[test]
+fn read_only_task_output_file_is_exempt() {
+    let f = Fixture::new("");
+    f.foreground(f.home.path(), "claude", &["--dir", f.repo.path().to_str().unwrap(), "-o", f.repo.path().join("output.md").to_str().unwrap()], "done");
+    assert!(f.repo.path().join("output.md").exists());
+}
+
+#[test]
+fn read_only_output_symlink_does_not_exempt_destination() {
+    let f = Fixture::new("");
+    std::os::unix::fs::symlink("a.txt", f.repo.path().join("output.md")).unwrap();
+    let db = f.foreground(f.repo.path(), "claude", &["-o", "output.md"], "failed");
+    f.assert_error_paths(&db, &["a.txt"]);
+}
+
+fn nested_repository(f: &Fixture, tracked: bool) -> std::path::PathBuf {
+    let nested = f.repo.path().join("nested");
+    std::fs::create_dir(&nested).unwrap();
+    git(&nested, &["init", "-b", "main"]);
+    git(&nested, &["config", "user.name", "Test"]);
+    git(&nested, &["config", "user.email", "test@example.com"]);
+    std::fs::write(nested.join("file.txt"), "initial").unwrap();
+    git(&nested, &["add", "file.txt"]);
+    git(&nested, &["commit", "-m", "initial"]);
+    if tracked {
+        git(f.repo.path(), &["submodule", "add", "./nested", "nested"]);
+        git(f.repo.path(), &["submodule", "absorbgitdirs"]);
+        git(f.repo.path(), &["commit", "-am", "gitlink"]);
+    }
+    nested
+}
+
+#[test]
+fn read_only_unchanged_embedded_repositories_and_gitlinks_pass() {
+    for tracked in [false, true] {
+        let f = Fixture::new("");
+        nested_repository(&f, tracked);
+        f.foreground(f.repo.path(), "claude", &["-o", "output.md"], "done");
+    }
+}
+
+#[test]
+fn read_only_nested_head_changes_fail() {
+    for tracked in [false, true] {
+        let f = Fixture::new("git -C nested commit --allow-empty -m changed");
+        nested_repository(&f, tracked);
+        let db = f.foreground(f.repo.path(), "claude", &["-o", "output.md"], "failed");
+        f.assert_error_paths(&db, &["nested"]);
+    }
+}
+
+#[test]
+fn read_only_git_failure_fails_before_agent_execution() {
+    let f = Fixture::new("echo executed > probe.txt");
+    let wrapper = f.bin.path().join("git");
+    std::fs::write(&wrapper, "#!/bin/sh\nif [ \"$1\" = status ]; then echo 'fatal: permission denied' >&2; exit 128; fi\nexec /usr/bin/git \"$@\"\n").unwrap();
+    std::fs::set_permissions(wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    f.foreground(f.repo.path(), "claude", &["-o", "output.md"], "failed");
+    assert!(!f.repo.path().join("probe.txt").exists());
+}
+
+#[test]
+fn read_only_many_files_are_hashed_in_one_batch_per_snapshot() {
+    let f = Fixture::new("");
+    for index in 0..2000 {
+        std::fs::write(f.repo.path().join(format!("file-{index}.txt")), "unchanged").unwrap();
+    }
+    let counter = f.home.path().join("hashes");
+    let wrapper = f.bin.path().join("git");
+    std::fs::write(&wrapper, format!("#!/bin/sh\nif [ \"$1\" = hash-object ]; then echo hash >> '{}'; fi\nexec /usr/bin/git \"$@\"\n", counter.display())).unwrap();
+    std::fs::set_permissions(wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    f.foreground(f.repo.path(), "claude", &["-o", "output.md"], "done");
+    assert_eq!(std::fs::read_to_string(counter).unwrap().lines().count(), 2);
+}
+
+#[test]
+fn read_only_output_in_caller_cwd_does_not_exempt_same_name_in_run_dir() {
+    let f = Fixture::new("echo stray > output.md");
+    let db = f.foreground(f.home.path(), "claude", &["--dir", f.repo.path().to_str().unwrap(), "-o", "output.md"], "failed");
+    f.assert_error_paths(&db, &["output.md"]);
+    assert!(f.home.path().join("output.md").exists());
 }

@@ -1,17 +1,15 @@
 // Tests for background agent binary preflight behavior.
 // Covers missing built-in agent binaries before command construction.
-// Deps: background run specs and AgentKind parsing.
+// Deps: worker RunArgs and AgentKind parsing.
 
-use super::{ensure_agent_binary_available_with, BackgroundRunSpec};
+use super::ensure_agent_binary_available_with;
+use crate::cmd::run::RunArgs;
 
 #[test]
 fn background_preflight_rejects_missing_kilo_binary() {
-    let spec = BackgroundRunSpec {
-        agent_name: "kilo".to_string(),
-        ..make_spec("t-kilo")
-    };
+    let args = RunArgs { agent_name: "kilo".to_string(), ..Default::default() };
 
-    let err = ensure_agent_binary_available_with(&spec, |_| false).unwrap_err();
+    let err = ensure_agent_binary_available_with(&args, |_| false).unwrap_err();
 
     assert_eq!(
         err.to_string(),
@@ -21,65 +19,11 @@ fn background_preflight_rejects_missing_kilo_binary() {
 
 #[test]
 fn background_preflight_skips_containerized_runs() {
-    let spec = BackgroundRunSpec {
+    let args = RunArgs {
         agent_name: "kilo".to_string(),
         container: Some("ubuntu:latest".to_string()),
-        ..make_spec("t-kilo")
+        ..Default::default()
     };
 
-    ensure_agent_binary_available_with(&spec, |_| false).unwrap();
-}
-
-fn make_spec(task_id: &str) -> BackgroundRunSpec {
-    BackgroundRunSpec {
-        task_id: task_id.to_string(),
-        worker_pid: None,
-        agent_name: "codex".to_string(),
-        prompt: "prompt".to_string(),
-        dir: Some(".".to_string()),
-        output: None,
-        result_file: None,
-        result_file_required: None,
-        model: None,
-        budget: false,
-        session_id: None,
-        verify: None,
-        setup: None,
-        iterate: None,
-        eval: None,
-        eval_feedback_template: None,
-        judge: None,
-        judge_retry: false,
-        max_duration_mins: None,
-        max_duration_secs: None,
-        max_task_cost: None,
-        idle_timeout_secs: None,
-        retry: 0,
-        group: None,
-        skills: vec![],
-        checklist: vec![],
-        hooks: vec![],
-        template: None,
-        worktree: None,
-        base_branch: None,
-        peer_review: None,
-        audit: false,
-        audit_explicit: false,
-        no_audit: false,
-        scope: vec![],
-        interactive: true,
-        on_done: None,
-        cascade: vec![],
-        parent_task_id: None,
-        env: None,
-        env_forward: None,
-        agent_pid: None,
-        sandbox: false,
-        read_only: false,
-        audit_report_mode: false,
-        container: None,
-        link_deps: false,
-        pre_task_dirty_paths: None,
-        foreground: false,
-    }
+    ensure_agent_binary_available_with(&args, |_| false).unwrap();
 }

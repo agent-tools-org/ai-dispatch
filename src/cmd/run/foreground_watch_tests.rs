@@ -118,9 +118,15 @@ interactive_input = false
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut real_task = task("t-watch-real", TaskStatus::Running, None);
     real_task.read_only = true;
+    real_task.agent = crate::types::AgentKind::Custom;
+    real_task.custom_agent_name = Some("watch-test".to_string());
     store
         .insert_task(&real_task)
         .expect("task");
+    let saved = crate::cmd::run::RunArgs {
+        agent_name: "watch-test".to_string(), dir: Some(".".to_string()), read_only: true, ..Default::default()
+    };
+    store.update_task_dispatch_args("t-watch-real", &saved.dispatch_args_json().expect("args")).expect("save args");
     let spec: BackgroundRunSpec = serde_json::from_value(serde_json::json!({
         "task_id": "t-watch-real",
         "worker_pid": null,

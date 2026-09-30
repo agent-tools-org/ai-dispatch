@@ -3,6 +3,8 @@
 
 #[path = "background_process.rs"]
 mod background_process;
+#[path = "background_launch.rs"]
+mod background_launch;
 #[path = "background_lifecycle.rs"]
 mod background_lifecycle;
 #[path = "background_kill.rs"]
@@ -27,7 +29,8 @@ use self::background_process::build_on_done_command;
 use self::background_process::spawn_on_done_command;
 use self::background_reaper::record_worker_failure_skip_notify;
 use self::background_spec::{load_spec, remove_spec};
-use crate::agent::{self, RunOpts};
+use crate::agent;
+use crate::cmd::run::RunArgs;
 use crate::paths;
 use crate::sanitize;
 use crate::store::Store;
@@ -65,17 +68,21 @@ pub fn check_worker_capacity(store: &Store) -> Result<()> {
 pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
     sanitize::validate_task_id(task_id)?;
     let spec = load_spec(task_id)?;
-    let result = run_task_inner(&store, &spec).await;
+    let args = RunArgs::for_worker(&store, &spec);
+    let result = match args.as_ref() {
+        Ok(args) => run_task_inner(&store, &spec, args).await,
+        Err(err) => Err(anyhow::anyhow!("{err:#}")),
+    };
     // Keep the completion barrier through error settlement as well.
     let result = match result {
         Ok(()) => Ok(()),
-        Err(err) => handle_run_task_inner_error(&store, &spec, err).await,
+        Err(err) => handle_run_task_inner_error(&store, &spec, args.as_ref().ok(), err).await,
     };
     let _ = remove_spec(task_id);
     let _ = crate::input_signal::clear_response(task_id);
     let _ = crate::input_signal::clear_steer(task_id);
     result?;
-    if let Some(ref cmd) = spec.on_done {
+    if let Some(cmd) = args.as_ref().ok().and_then(|args| args.on_done.as_ref()) {
         let _ = spawn_on_done_command(cmd, task_id, "done");
     }
     Ok(())
@@ -86,23 +93,32 @@ pub fn check_zombie_tasks(store: &Store) -> Result<Vec<String>> { check_zombie_t
 async fn handle_run_task_inner_error(
     store: &Arc<Store>,
     spec: &BackgroundRunSpec,
+    args: Option<&RunArgs>,
     err: anyhow::Error,
 ) -> Result<()> {
     let recorded_failure = record_worker_failure_skip_notify(store, &spec.task_id, &err)?;
-    if recorded_failure {
-        if let Err(lifecycle_err) = run_failed_post_lifecycle(store, spec).await {
-            aid_error!("[aid] Background post-run lifecycle failed: {lifecycle_err}");
+    if !recorded_failure {
+        return Err(err);
+    }
+    let Some(args) = args else {
+        // Without saved args there is no lifecycle to notify on our behalf.
+        if let Some(task) = store.get_task(&spec.task_id)? {
+            crate::notify::notify_completion(&task);
         }
-        if let Some(ref cmd) = spec.on_done {
-            let _ = spawn_on_done_command(cmd, &spec.task_id, "failed");
-        }
+        return Err(err);
+    };
+    if let Err(lifecycle_err) = run_failed_post_lifecycle(store, spec, args).await {
+        aid_error!("[aid] Background post-run lifecycle failed: {lifecycle_err}");
+    }
+    if let Some(ref cmd) = args.on_done {
+        let _ = spawn_on_done_command(cmd, &spec.task_id, "failed");
     }
     Err(err)
 }
 
-async fn run_failed_post_lifecycle(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<()> {
-    let agent = lifecycle_agent_for_spec(store, spec)?;
-    background_lifecycle::run_post_lifecycle(store, spec, &*agent, None).await
+async fn run_failed_post_lifecycle(store: &Arc<Store>, spec: &BackgroundRunSpec, args: &RunArgs) -> Result<()> {
+    let agent = lifecycle_agent_for_task(store, spec, args)?;
+    background_lifecycle::run_post_lifecycle(store, spec, args, &*agent, None).await
 }
 
 fn resolve_agent_for_spec(agent_name: &str) -> Result<Box<dyn agent::Agent>> {
@@ -115,11 +131,12 @@ fn resolve_agent_for_spec(agent_name: &str) -> Result<Box<dyn agent::Agent>> {
     anyhow::bail!("Unknown agent '{}'", agent_name)
 }
 
-fn lifecycle_agent_for_spec(
+fn lifecycle_agent_for_task(
     store: &Arc<Store>,
     spec: &BackgroundRunSpec,
+    args: &RunArgs,
 ) -> Result<Box<dyn agent::Agent>> {
-    if let Ok(agent) = resolve_agent_for_spec(&spec.agent_name) {
+    if let Ok(agent) = resolve_agent_for_spec(&args.agent_name) {
         return Ok(agent);
     }
     if let Some(task) = store.get_task(&spec.task_id)?
@@ -127,167 +144,74 @@ fn lifecycle_agent_for_spec(
     {
         return Ok(agent::get_agent(task.agent));
     }
-    anyhow::bail!("Unknown agent '{}'", spec.agent_name)
+    anyhow::bail!("Unknown agent '{}'", args.agent_name)
 }
 
-async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec) -> Result<()> {
-    let agent: Box<dyn agent::Agent> = resolve_agent_for_spec(&spec.agent_name)?;
+async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec, args: &RunArgs) -> Result<()> {
+    let agent = resolve_agent_for_spec(&args.agent_name)?;
     crate::rate_limit_wait::wait_for_declared_reset(
         store.as_ref(), &spec.task_id, agent.kind(), agent.rate_limit_name(),
     ).await?;
-    let opts = RunOpts {
-        dir: spec.dir.clone(),
-        output: spec.output.clone(),
-        result_file: spec.result_file.clone(),
-        model: spec.model.clone(),
-        budget: spec.budget,
-        read_only: spec.read_only,
-        sandbox: spec.sandbox,
-        context_files: vec![],
-        session_id: spec.session_id.clone(),
-        env: agent::env_with_agent_log(
-            spec.env.clone(),
-            &spec.task_id,
-            spec.container.is_none() && !spec.sandbox,
-        ),
-        env_forward: spec.env_forward.clone(),
-    };
-    ensure_agent_binary_available(spec)?;
+    ensure_agent_binary_available(args)?;
     let _workspace_symlink = crate::cmd::run::WorkspaceSymlinkGuard::create(
-        agent.kind(),
-        spec.group.as_deref(),
-        spec.dir.as_deref(),
+        agent.kind(), args.group.as_deref(), args.dir.as_deref(),
     )?;
-    let worktree_branch = store.get_task(&spec.task_id)?.and_then(|task| task.worktree_branch);
-    let mut cargo_target_dir = agent::rust_build_cache_target_dir(spec.dir.as_deref(), worktree_branch.as_deref());
-    let uses_durable_codex_home = agent::should_use_durable_codex_home(agent.kind(), spec.sandbox, spec.container.is_some());
-    if uses_durable_codex_home
-        && opts.session_id.as_deref().is_some_and(agent::codex::resume_fallback_needed)
-    {
-        store.insert_event(&agent::codex::resume_fallback_event(&TaskId(spec.task_id.clone())))?;
-    }
     let home_guard = agent::home_isolation::IsolatedHomeGuard::create_with_remote_build(
-        Some(&spec.task_id), crate::remote_build::saved_box(store, &spec.task_id)?.is_some(),
+        Some(&spec.task_id), args.remote_build.is_some(),
     )?;
-    let mut temp_dir = None;
-    let mut writable_roots = Vec::new();
-    if spec.container.is_none() && !spec.sandbox {
-        cargo_target_dir = agent::scratch::prepare_cargo_target(cargo_target_dir.as_deref())?;
-        let temp = agent::scratch::create_temp_dir(home_guard.path())?;
-        let (roots, warnings) = agent::scratch::prepare_launch_roots(
-            agent.kind(), spec.dir.as_deref(), cargo_target_dir.as_deref(), &temp, &TaskId(spec.task_id.clone()),
-        )?;
-        for warning in warnings {
-            store.insert_event(&warning)?;
-        }
-        temp_dir = Some(temp);
-        writable_roots = roots;
-    }
-    let mut std_cmd = agent
-        .build_command_with_context(
-            &spec.prompt,
-            &opts,
-            agent::CommandContext { durable_codex_home: uses_durable_codex_home, writable_roots },
-        )
-        .map_err(|err| anyhow::anyhow!("Failed to build agent command: {err:#}"))?;
-    if spec.container.is_none() && !spec.sandbox {
-        let program = std_cmd.get_program().to_string_lossy();
-        agent::ensure_resolved_binary_available(&spec.agent_name, &program)?;
-    }
-    agent::apply_run_env(&mut std_cmd, &opts, &home_guard);
-    crate::remote_build::configure_task(store, &spec.task_id, &mut std_cmd, home_guard.path())?;
-    if let Some(temp_dir) = temp_dir { std_cmd.env("TMPDIR", temp_dir); }
-    if uses_durable_codex_home {
-        agent::apply_codex_home_env(&mut std_cmd)?;
-    }
-    if let Some(ref dir) = spec.dir {
-        agent::set_git_ceiling(&mut std_cmd, dir);
-    }
-    if let Some(ref group) = spec.group {
-        std_cmd.env("AID_GROUP", group);
-    }
-    std_cmd.env("AID_TASK_ID", &spec.task_id);
-    let depth = crate::cmd::run::task_depth(store, &spec.task_id).unwrap_or(0);
-    std_cmd.env("AID_TASK_DEPTH", depth.to_string());
-    agent::apply_cargo_target_env(&mut std_cmd, cargo_target_dir.as_deref());
-    let container_name = if let Some(image) = spec.container.as_deref() {
-        let project_dir = spec
-            .dir
-            .as_deref()
-            .map(std::path::Path::new)
-            .unwrap_or_else(|| std::path::Path::new("."));
-        let project_id = crate::project::detect_project_in(project_dir)
-            .map(|project| project.id)
-            .unwrap_or_else(|| spec.task_id.clone());
-        Some(crate::container::start_or_reuse(image, project_dir, &project_id)?)
-    } else {
-        None
-    };
-    let std_cmd = if let Some(container_name) = container_name.as_deref() {
-        crate::container::exec_in_container(&std_cmd, container_name)
-    } else if spec.sandbox && crate::sandbox::can_sandbox(agent.kind()) {
-        if !crate::sandbox::is_available() {
-            anyhow::bail!("--sandbox requires container CLI");
-        }
-        crate::sandbox::wrap_command(&std_cmd, &spec.task_id, agent.kind(), spec.read_only)
-    } else {
-        std_cmd
-    };
-    if spec.interactive {
-        crate::pty_runner::run_agent_process_with_control(
-            &*agent,
-            &std_cmd,
-            &TaskId(spec.task_id.clone()),
-            store,
-            &paths::log_path(&spec.task_id),
-            spec.output.as_deref(),
-            spec.model.as_deref(),
-            agent.streaming(),
-            crate::timeout_policy::TimeoutPolicy::from_env(spec.env.as_ref()),
-            spec.max_task_cost,
-            None,
-        )?;
-    } else {
-        let mut tokio_cmd = tokio::process::Command::from(std_cmd);
-        tokio_cmd.stdout(Stdio::piped());
-        tokio_cmd.stderr(Stdio::piped());
-        crate::cmd::run::run_agent_process_with_cost(
-            &*agent,
-            tokio_cmd,
-            &TaskId(spec.task_id.clone()),
-            store,
-            &paths::log_path(&spec.task_id),
-            spec.output.as_deref(),
-            spec.model.as_deref(),
-            agent.streaming(),
-            spec.group.as_deref(),
-            crate::timeout_policy::TimeoutPolicy::from_env(spec.env.as_ref()),
-            spec.max_task_cost,
-        )
-        .await?;
-    }
-    if spec.sandbox {
+    let (std_cmd, container_name) = background_launch::prepare_launch(
+        store, spec, args, agent.as_ref(), &home_guard,
+    )?;
+    run_process(store, spec, args, agent.as_ref(), std_cmd).await?;
+    if args.sandbox {
         crate::sandbox::kill_container(&spec.task_id);
     }
-    background_lifecycle::run_post_lifecycle(store, spec, &*agent, container_name.as_deref()).await?;
+    background_lifecycle::run_post_lifecycle(store, spec, args, &*agent, container_name.as_deref()).await?;
     Ok(())
 }
 
-fn ensure_agent_binary_available(spec: &BackgroundRunSpec) -> Result<()> {
-    ensure_agent_binary_available_with(spec, agent::env::which_exists)
+async fn run_process(
+    store: &Arc<Store>, spec: &BackgroundRunSpec, args: &RunArgs,
+    agent: &dyn agent::Agent, std_cmd: std::process::Command,
+) -> Result<()> {
+    let task_id = TaskId(spec.task_id.clone());
+    let log_path = paths::log_path(&spec.task_id);
+    let timeout_policy = crate::timeout_policy::TimeoutPolicy::from_env(args.env.as_ref());
+    if spec.interactive {
+        crate::pty_runner::run_agent_process_with_control(
+            agent, &std_cmd, &task_id, store, &log_path,
+            args.output.as_deref(), args.model.as_deref(), agent.streaming(),
+            timeout_policy, args.max_task_cost, None,
+        )?;
+        return Ok(());
+    }
+    let mut tokio_cmd = tokio::process::Command::from(std_cmd);
+    tokio_cmd.stdout(Stdio::piped());
+    tokio_cmd.stderr(Stdio::piped());
+    crate::cmd::run::run_agent_process_with_cost(
+        agent, tokio_cmd, &task_id, store, &log_path,
+        args.output.as_deref(), args.model.as_deref(), agent.streaming(),
+        args.group.as_deref(), timeout_policy, args.max_task_cost,
+    )
+    .await?;
+    Ok(())
 }
 
-fn ensure_agent_binary_available_with<F>(spec: &BackgroundRunSpec, which: F) -> Result<()>
+fn ensure_agent_binary_available(args: &RunArgs) -> Result<()> {
+    ensure_agent_binary_available_with(args, agent::env::which_exists)
+}
+
+fn ensure_agent_binary_available_with<F>(args: &RunArgs, which: F) -> Result<()>
 where
     F: Fn(&str) -> bool,
 {
-    if spec.container.is_some() || spec.sandbox {
+    if args.container.is_some() || args.sandbox {
         return Ok(());
     }
-    let Some(kind) = AgentKind::parse_str(&spec.agent_name) else {
+    let Some(kind) = AgentKind::parse_str(&args.agent_name) else {
         return Ok(());
     };
-    agent::ensure_agent_binary_available_with(kind, &spec.agent_name, which)
+    agent::ensure_agent_binary_available_with(kind, &args.agent_name, which)
 }
 
 #[cfg(test)]

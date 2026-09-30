@@ -58,7 +58,7 @@ and treat skipped/failed evidence as unfulfilled. Do not silently lower rigor.
 
 Trigger: `aid merge <task-id> --group <group-id>`, optionally with `--lanes`.
 
-[Merge arguments](../../src/cli/command_args_b.rs) accept both selectors.
+[Merge arguments](../../src/cli/task_control_args.rs) accept both selectors.
 [Merge dispatch](../../src/cmd/merge.rs) prefers the task in ordinary mode, but
 the lanes branch selects the group first and ignores the task ID. Lanes mode
 also drops the `approve` argument when calling `merge_group_lanes`.
@@ -109,7 +109,7 @@ defaults before validating all policy. Reject inconsistent explicit anchors.
 
 ### P2: Quiet watch normalization bypasses declared mode conflicts
 
-[Parser declarations](../../src/cli/command_args_watch.rs) reject wait/stream
+[Parser declarations](../../src/cli/inspect_args.rs) reject wait/stream
 and wait/TUI combinations. [Main normalization](../../src/main.rs) sets
 `wait = true` whenever the global quiet flag is set, after parsing. Therefore
 `aid watch --stream -q` and `aid watch --tui -q` can produce combinations the

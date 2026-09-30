@@ -1,6 +1,6 @@
 // Bounded identity probes for ambiguous agent command names.
-// Exports: identity_marker, binary_identity_matches, first_matching_executable,
-// identity_exists_on_path.
+// Exports: identity_markers, binary_identity_matches, help_identifies,
+// first_matching_executable, identity_exists_on_path.
 // Deps: std process pipes, reader threads, and a fixed probe deadline.
 
 use std::ffi::OsStr;
@@ -39,9 +39,9 @@ pub(crate) fn first_matching_executable(
     None
 }
 
-pub(crate) fn identity_exists_on_path(name: &str, marker: &str) -> bool {
+pub(crate) fn identity_exists_on_path(name: &str, markers: &[&str]) -> bool {
     first_matching_executable(std::env::var_os("PATH").as_deref(), name, |path| {
-        binary_identity_matches(path, marker)
+        binary_identity_matches(path, markers)
     })
     .is_some()
 }
@@ -64,7 +64,7 @@ fn is_executable_file(path: &Path) -> bool {
     }
 }
 
-pub(crate) fn binary_identity_matches(name: &str, marker: &str) -> bool {
+pub(crate) fn binary_identity_matches(name: &str, markers: &[&str]) -> bool {
     let mut command = Command::new(name);
     command.arg("--help").stdout(Stdio::piped()).stderr(Stdio::piped());
     let Ok(mut child) = command.spawn() else {
@@ -83,7 +83,7 @@ pub(crate) fn binary_identity_matches(name: &str, marker: &str) -> bool {
                     String::from_utf8_lossy(&stdout),
                     String::from_utf8_lossy(&stderr)
                 );
-                return status.success() && text.to_ascii_lowercase().contains(marker);
+                return status.success() && help_identifies(&text, markers);
             }
             Ok(None) if Instant::now() >= deadline => {
                 terminate_child(child);
@@ -117,11 +117,20 @@ fn terminate_child(mut child: std::process::Child) {
     });
 }
 
-pub(crate) fn identity_marker(name: &str) -> Option<&'static str> {
+/// True when the help text names the product through any of `markers` (case-insensitive).
+pub(crate) fn help_identifies(help: &str, markers: &[&str]) -> bool {
+    let help = help.to_ascii_lowercase();
+    markers.iter().any(|marker| help.contains(marker))
+}
+
+/// Product names a generic command name must print in `--help` to count as that agent.
+/// `agent` needs Cursor's product name, not a bare "cursor": xAI's Grok Build CLI also
+/// installs `agent` and its help lists a `cursor-worker` subcommand.
+pub(crate) fn identity_markers(name: &str) -> Option<&'static [&'static str]> {
     match name {
-        "agent" => Some("cursor"),
-        "claude" => Some("claude code"),
-        "oz" => Some("warp"),
+        "agent" => Some(&["cursor agent", "cursor-agent"]),
+        "claude" => Some(&["claude code"]),
+        "oz" => Some(&["warp"]),
         _ => None,
     }
 }

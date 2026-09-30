@@ -521,8 +521,9 @@ an absent or expired cache adds nothing. Each `models.available` row carries
 row has `rated: false`, `source: "served"`, and `null` `input_per_m`,
 `output_per_m`, and `capability`; cost displays report `unknown`. aid never
 invents ratings for served-only models, and routing never auto-selects one.
-Cost estimation prices a model only from an exact match: its static catalog
-row, an explicit `pricing.json` override, or an exact price-feed id or alias.
+Cost estimation prices a model only from an exact match, in this order: an
+explicit `pricing.json` override for the agent and model, subscription
+inclusion, its static catalog row, or an exact price-feed id or alias.
 It never uses a substring, vendor-prefix, family, or `-free`-suffix match, and
 never a fixed fallback model: a served-only model gets its price from an
 exact price-feed entry, never from a
@@ -530,9 +531,11 @@ similar-name rate. A task with neither a pinned nor an observed model (for
 example unpinned gemini or codex) costs `unknown`, stored as NULL. Subscription
 agents (Cursor, Copilot) cost 0.0 as included.
 
-A catalog row whose tier is `unknown` stores 0.0/0.0 to mean "no figure on
-record" and costs `unknown`, never free. A static catalog row's own price
-outranks overrides and the feed.
+A catalog row storing 0.0/0.0 is a price only when its tier is `free`; on any
+other tier (droid, oz, grok rows) it means "no figure on record" and costs
+`unknown`, never free, so a `max_task_cost` ceiling on that route warns that it
+cannot be enforced. An override outranks every other source, including
+subscription inclusion and the catalog row.
 
 For providers represented by aidbar, a successful cached snapshot can release a
 time-based, transient, or Windowed older marker for this dispatch decision only

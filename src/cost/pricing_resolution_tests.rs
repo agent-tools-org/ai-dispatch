@@ -135,3 +135,38 @@ fn free_tier_and_subscription_rows_stay_zero() {
     assert_eq!(label("auto", AgentKind::Cursor), "subscription");
     assert_eq!(label("any-copilot-model", AgentKind::Copilot), "subscription");
 }
+
+fn write_overrides(rows: &[(&str, &str, f64, f64)]) {
+    crate::paths::ensure_dirs().unwrap();
+    let models: Vec<_> = rows.iter().map(|(agent, model, input, output)| serde_json::json!({
+        "agent": agent, "model": model, "input_per_m": input, "output_per_m": output,
+        "tier": "premium", "description": "operator price", "updated": "2026-09-30"
+    })).collect();
+    let file = serde_json::json!({ "models": models });
+    std::fs::write(crate::paths::pricing_path(), file.to_string()).unwrap();
+    clear_feed_for_tests();
+}
+
+#[test]
+fn explicit_override_wins_over_catalog_subscription_and_unknown() {
+    let _guard = isolated();
+    write_overrides(&[
+        ("codex", "GPT-5.6-SOL", 1.0, 2.0),
+        ("cursor", "composer-2.5", 5.0, 5.0),
+        ("droid", "claude-opus-5", 10.0, 10.0),
+    ]);
+    let price = |model, agent| {
+        let p = resolve_model_pricing(model, agent).expect("override");
+        (p.input_per_m, p.output_per_m)
+    };
+    assert_eq!(price("gpt-5.6-sol", AgentKind::Codex), (1.0, 2.0), "beats catalog row");
+    assert_eq!(price("composer-2.5", AgentKind::Cursor), (5.0, 5.0), "beats subscription");
+    assert_eq!(price("claude-opus-5", AgentKind::Droid), (10.0, 10.0), "prices a 0/0 row");
+    let cost = estimate_cost(1_000_000, Some("composer-2.5"), AgentKind::Cursor);
+    assert_eq!(format_cost_label(cost, AgentKind::Cursor), "$5.00");
+    assert!(crate::cost::has_known_price(Some("claude-opus-5"), AgentKind::Droid));
+    // Other models of the same agents keep their normal resolution.
+    assert_eq!(estimate_cost(1_000_000, Some("auto"), AgentKind::Cursor), Some(0.0));
+    assert_eq!(estimate_cost(1_000_000, Some("gpt-5.5"), AgentKind::Droid), None);
+    clear_feed_for_tests();
+}

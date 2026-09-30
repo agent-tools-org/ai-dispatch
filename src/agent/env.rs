@@ -230,8 +230,8 @@ pub fn apply_run_env(
 }
 
 pub(crate) fn which_exists(name: &str) -> bool {
-    if let Some(marker) = super::env_identity::identity_marker(name) {
-        return super::env_identity::identity_exists_on_path(name, marker);
+    if let Some(markers) = super::env_identity::identity_markers(name) {
+        return super::env_identity::identity_exists_on_path(name, markers);
     }
     let paths = std::env::var_os("PATH")
         .map(|value| std::env::split_paths(&value).collect::<Vec<_>>())

@@ -238,15 +238,17 @@ fn run_opts() -> RunOpts {
 #[test]
 fn only_accepts_a_bare_agent_binary_that_identifies_as_cursor() {
     // Cursor's own help text names the product; xAI's Grok Build CLI ships a binary with
-    // the same `agent` name and must not be mistaken for it.
-    assert!(super::help_mentions_cursor(
-        "Usage: cursor-agent [OPTIONS]\n  -p, --print  Print response\n"
+    // the same `agent` name, and its help mentions a `cursor-worker` subcommand.
+    let markers = super::super::env_identity::identity_markers("agent").unwrap();
+    let identifies = |help| super::super::env_identity::help_identifies(help, markers);
+    assert!(identifies("Usage: cursor-agent [OPTIONS]\n  -p, --print  Print response\n"));
+    assert!(identifies("Start the Cursor Agent\n\nUsage: agent [options]\n"));
+    assert!(!identifies("Grok Build TUI\n\nUsage: agent [OPTIONS] [PROMPT] [COMMAND]\n"));
+    assert!(!identifies(
+        "Usage: agent [OPTIONS] [PROMPT] [COMMAND]\n  cursor-worker  Register this machine as a \
+         Cursor private worker (via the leader)\n"
     ));
-    assert!(super::help_mentions_cursor("Cursor Agent CLI\n"));
-    assert!(!super::help_mentions_cursor(
-        "Grok Build TUI\n\nUsage: agent [OPTIONS] [PROMPT] [COMMAND]\n"
-    ));
-    assert!(!super::help_mentions_cursor(""));
+    assert!(!identifies(""));
 }
 
 #[test]

@@ -20,14 +20,13 @@ fn isolated() -> (tempfile::TempDir, AidHomeGuard, CacheDirGuard) {
     (temp, home, guard)
 }
 
+fn declared(difficulty: TaskDifficulty, budget: TaskBudget) -> DeclaredTaskProfile {
+    DeclaredTaskProfile { difficulty, budget, urgency: TaskUrgency::Normal, rigor: TaskRigor::Standard }
+}
+
 fn run(caller: Option<CallerAdvice>) -> AdviceReport {
-    let declared = DeclaredTaskProfile {
-        difficulty: TaskDifficulty::Moderate,
-        budget: TaskBudget::Standard,
-        urgency: TaskUrgency::Normal,
-        rigor: TaskRigor::Standard,
-    };
-    advise("refactor the scheduler", declared, Some(TaskCategory::Refactoring), None, None, 0, caller)
+    advise("refactor the scheduler", declared(TaskDifficulty::Moderate, TaskBudget::Standard),
+        Some(TaskCategory::Refactoring), None, None, 0, caller)
 }
 
 fn anthropic_caller(capability: Option<f64>) -> CallerAdvice {
@@ -221,4 +220,58 @@ fn no_installed_routes_or_only_weaker_caller_pool_routes_have_no_recommendation(
     let report = run(Some(caller));
     assert!(find(&report, "codex").exclusion_codes.contains(&"weaker_on_caller_pool".into()));
     assert!(report.recommended.is_none());
+}
+
+#[test]
+fn research_and_frontend_advice_recommend_the_expected_installed_agent() {
+    let (_temp, _home, _cache) = isolated();
+    for (prompt, fleet, expected) in [
+        ("Explain the authentication flow and compare the docs?", [AgentKind::Gemini, AgentKind::Qwen], "gemini"),
+        ("Explain the authentication flow and compare the docs?", [AgentKind::Antigravity, AgentKind::Qwen], "agy"),
+        ("Create a responsive React component layout for the settings UI", [AgentKind::Cursor, AgentKind::Codex], "cursor"),
+    ] {
+        let _fleet = crate::agent::DetectAgentsGuard::set(fleet.to_vec());
+        let report = advise(prompt, declared(TaskDifficulty::Moderate, TaskBudget::Standard), None, None, None, 0, None);
+        assert_eq!(report.recommended.expect("recommendation").agent, expected);
+    }
+}
+
+#[test]
+fn budget_simple_edit_advice_launches_opencode_or_kilo_budget_model() {
+    let (_temp, _home, _cache) = isolated();
+    for (fleet, expected) in [
+        (vec![AgentKind::OpenCode, AgentKind::Kilo, AgentKind::Codex], AgentKind::OpenCode),
+        (vec![AgentKind::Kilo, AgentKind::Codex], AgentKind::Kilo),
+    ] {
+        let _fleet = crate::agent::DetectAgentsGuard::set(fleet);
+        let report = advise("rename src/types.rs field name", declared(TaskDifficulty::Simple, TaskBudget::Free),
+            None, None, None, 0, None);
+        let picked = report.recommended.expect("recommendation");
+        assert_eq!(picked.agent, expected.as_str());
+        assert_eq!(picked.model.as_deref(), crate::model_catalog::model_for_task_budget(expected, TaskBudget::Free));
+        assert!(picked.pinned);
+    }
+}
+
+#[test]
+fn team_override_changes_the_advised_agent() {
+    let (_temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Gemini, AgentKind::OpenCode]);
+    let profile = declared(TaskDifficulty::Simple, TaskBudget::Standard);
+    let prompt = "rename src/types.rs field name to task_name";
+    assert_eq!(advise(prompt, profile, None, None, None, 0, None).recommended.expect("baseline").agent, "opencode");
+    let team: TeamConfig = toml::from_str("id = 'override'\ndisplay_name = 'Override'\npreferred_agents = []\n[overrides.gemini]\nsimple_edit = 10\n").expect("team");
+    let picked = advise(prompt, profile, None, Some(&team), None, 0, None).recommended.expect("override");
+    assert_eq!((picked.agent.as_str(), picked.model.as_deref()), ("gemini", None));
+}
+
+#[test]
+fn advice_skips_disabled_installed_agents() {
+    let (_temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Gemini, AgentKind::Qwen]);
+    crate::agent_config::save_agent_disabled("gemini", true).expect("disable");
+    let report = advise("Explain the authentication flow and compare the docs?",
+        declared(TaskDifficulty::Moderate, TaskBudget::Standard), None, None, None, 0, None);
+    assert_eq!(report.recommended.expect("recommendation").agent, "qwen");
+    assert!(report.candidates.iter().all(|candidate| candidate.agent != "gemini"));
 }

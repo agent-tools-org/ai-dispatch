@@ -11,8 +11,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 pub(super) use super::selection_capabilities::{
-    base_score, custom_category_score, custom_command_installed, custom_strength_bonus,
-    team_override_score,
+    base_score, team_override_score,
 };
 
 pub(super) fn priority(kind: AgentKind) -> i32 {

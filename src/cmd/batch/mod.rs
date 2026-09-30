@@ -113,7 +113,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     if let Some(group) = effective_group {
         if store.get_workgroup(group)?.is_none() {
             anyhow::bail!(
-                "Workgroup '{group}' not found. Create it with: aid group create --name <name> --id {group}"
+                "Workgroup '{group}' not found. Create it with: aid group create <name> --id {group}"
             );
         }
         let source = if args.group.is_some() { "--group flag" } else { "[defaults] group" };
@@ -321,9 +321,9 @@ pub(super) fn finalize_batch(
     println!("Batch: {total} task(s) dispatched");
     let group_id = config.tasks.first().and_then(|t| t.group.as_deref());
     if let Some(gid) = group_id {
-        aid_hint!("[aid] Watch: aid watch --wait --group {gid}");
+        aid_hint!("[aid] Wait: aid wait --group {gid}");
     } else if task_ids.len() == 1 {
-        aid_hint!("[aid] Watch: aid watch --wait {}", task_ids[0]);
+        aid_hint!("[aid] Wait: aid wait {}", task_ids[0]);
     }
     aid_hint!("[aid] TUI:   aid watch --tui");
     if let Some(error) = wait_error {

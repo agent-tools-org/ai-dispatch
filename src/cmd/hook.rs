@@ -33,7 +33,7 @@ You are the dispatcher, and aid does not guess what you already know:
 Commands:
 - Dispatch: aid run <agent> \"<prompt>\" [--worktree <branch>]
 - Compare:  aid advise \"<task>\" --difficulty <d> --budget <b> --urgency <u> --rigor <r>
-- Monitor:  aid watch --tui (dashboard) | aid watch --wait <id> (blocking)
+- Monitor:  aid watch --tui (dashboard) | aid wait <id> (blocking)
 - Review:   aid show <id> --diff | aid board
 - Batch:    aid batch <file> --parallel";
 

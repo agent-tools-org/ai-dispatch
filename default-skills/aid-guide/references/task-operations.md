@@ -11,7 +11,7 @@ aid watch --tui
 aid wait <task-id>
 aid show <task-id> --summary
 aid show <task-id> --events
-aid output <task-id>
+aid show <task-id> --output --full
 aid tree <task-id>
 ```
 
@@ -35,7 +35,7 @@ refresh requests are combined, and a refresh failure keeps the last snapshot
 visible with an error indicator. Task and tree views render only visible rows.
 The multipane view (`m`) loads event histories for its six visible panes.
 
-Use `watch` for a stream and `wait` for automation. `--wait` continues while
+Use `watch` for a stream and `wait` for automation. `aid wait` continues while
 verification is pending and returns non-zero when any selected task does not
 have a successful outcome. Use `show` to inspect context, diff, output, result,
 transcript, audit, event log, agent, model, derived outcome, verification, and
@@ -160,7 +160,7 @@ pipe output is written to the task log rather than held by the watcher.
 - **Interactive stdin, SIGINT/Ctrl-C**: stops the task and records Stopped.
 - **Interactive stdin, SIGTERM/SIGHUP**: preserves the existing stop behavior.
 - **Non-interactive stdin, SIGTERM/SIGHUP**: leaves the task running, prints
-  aid watch --wait <task-id>, and exits with the signal status.
+  aid wait <task-id>, and exits with the signal status.
 - **SIGINT without a TTY**: still stops because it means interrupt, not timeout.
 
 PTY agents (opencode, mimocode, and kilo) continue through pty_runner in the

@@ -1,4 +1,4 @@
-// Rendering helpers for `aid finding` human and JSON output.
+// Rendering helpers for `aid group finding` human and JSON output.
 // Exports: list/get render functions consumed by cmd::finding.
 // Deps: crate::types::Finding, chrono, serde_json.
 

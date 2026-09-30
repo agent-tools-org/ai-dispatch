@@ -1,5 +1,5 @@
 // E2E coverage for PTY prompt detection and file-backed responses.
-// Verifies watch exits on awaiting input and `aid respond` unblocks the agent.
+// Verifies wait exits on awaiting input and `aid respond` unblocks the agent.
 // Deps: compiled `aid` binary, tempfile, rusqlite, and a shell-backed custom agent.
 
 use rusqlite::Connection;
@@ -41,15 +41,14 @@ fn pty_prompt_response_unblocks_background_agent() {
     ]));
     wait_for_status(aid_home.path(), TASK_ID, "awaiting_input", Duration::from_secs(10));
 
-    let watch = run_ok(aid_cmd_in(aid_home.path()).args([
-        "watch",
-        "--quiet",
+    let wait = run_ok(aid_cmd_in(aid_home.path()).args([
+        "wait",
         "--exit-on-await",
         TASK_ID,
     ]));
-    let watch_stdout = String::from_utf8_lossy(&watch.stdout);
-    assert!(watch_stdout.contains(TASK_ID));
-    assert!(watch_stdout.contains("Proceed? (y/n)"));
+    let wait_stdout = String::from_utf8_lossy(&wait.stdout);
+    assert!(wait_stdout.contains(TASK_ID));
+    assert!(wait_stdout.contains("Proceed? (y/n)"));
 
     run_ok(aid_cmd_in(aid_home.path()).args(["respond", TASK_ID, "y"]));
     wait_for_status(aid_home.path(), TASK_ID, "done", Duration::from_secs(10));

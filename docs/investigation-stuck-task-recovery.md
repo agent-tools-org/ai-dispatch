@@ -54,7 +54,7 @@ external `ps` + log-mtime check the operator already did by hand. The
 correct tool for a dead worker, but nothing in `unstick` detects deadness and
 suggests it — the human has to guess which mode to use.
 
-## Root cause B — `aid stop`/`aid kill` never releases `.aid-lock`
+## Root cause B — `aid stop`/`aid stop --force` never releases `.aid-lock`
 
 `terminate()` in `src/cmd/stop.rs:80-125` — the shared body of `stop`/`kill`/
 `stop_retry_tree` — does, in order: kill worker/agent PIDs, kill sandbox

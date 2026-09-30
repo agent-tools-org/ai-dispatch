@@ -31,11 +31,9 @@ pub(crate) async fn dispatch(
             | Commands::Show(..)
             | Commands::Export(..)
             | Commands::Tree(..)
-            | Commands::Output(..)
             | Commands::Usage(..)
             | Commands::Cost(..)
             | Commands::Stats(..)
-            | Commands::Summary(..)
         ) => dispatch_primary(store, command).await.map(|()| DispatchOutcome::CommandCompleted),
         command @ (
             Commands::Retry(..)
@@ -46,7 +44,6 @@ pub(crate) async fn dispatch(
             | Commands::Respond(..)
             | Commands::Reply(..)
             | Commands::Stop(..)
-            | Commands::Kill(..)
             | Commands::Steer(..)
             | Commands::Unstick(..)
             | Commands::Ask(..)
@@ -70,8 +67,6 @@ pub(crate) async fn dispatch(
             Commands::Project(..)
             | Commands::Memory(..)
             | Commands::Kg(..)
-            | Commands::Finding(..)
-            | Commands::Broadcast(..)
             | Commands::Upgrade(..)
             | Commands::Init
             | Commands::Setup
@@ -99,7 +94,7 @@ async fn dispatch_primary(store: Arc<crate::store::Store>, command: Commands) ->
         Commands::Advise(args) => crate::cmd::advise::run(Some(store.as_ref()), args),
         Commands::Batch(command_args_a::BatchArgs { action, file, vars, group, repo_root, parallel, analyze, wait, dry_run, no_prompt, yes, force, max_concurrent, output }) => run_batch::batch(store, action, file, vars, parallel, analyze, wait, dry_run, no_prompt, yes, force, max_concurrent, output, group, repo_root).await,
         Commands::Benchmark(command_args_a::BenchmarkArgs { prompt, agents, dir, verify }) => display::benchmark(store, prompt, agents, dir, verify).await,
-        Commands::Watch(command_args_watch::WatchArgs { task_ids, group, tui, wait, stream, exit_on_await, timeout }) => display::watch(store, task_ids, group, tui, wait, stream, exit_on_await, timeout).await,
+        Commands::Watch(command_args_watch::WatchArgs { task_ids, group, tui, stream, exit_on_await, timeout }) => display::watch(store, task_ids, group, tui, stream, exit_on_await, timeout).await,
         Commands::Wait(command_args_watch::WaitArgs { task_ids, group, exit_on_await, timeout }) => {
             display::wait(store, task_ids, group, exit_on_await, timeout).await
         }
@@ -115,11 +110,9 @@ async fn dispatch_primary(store: Arc<crate::store::Store>, command: Commands) ->
             display::export(store, task_id, format, sharegpt, output).await
         }
         Commands::Tree(command_args_c::TreeArgs { task_id }) => display::tree(store, task_id),
-        Commands::Output(command_args_c::OutputArgs { task_id, full: _, brief }) => display::output(task_id, brief),
         Commands::Usage(command_args_b::UsageArgs { session, agent, team, period, json }) => display::usage(store, session, agent, team, period, json),
         Commands::Cost(command_args_b::CostArgs { group, summary, agent, period }) => display::cost(store, group, summary, agent, period),
         Commands::Stats(command_args_b::StatsArgs { window, agent, insights }) => crate::cmd::stats::run(&store, window, agent, insights),
-        Commands::Summary(command_args_b::SummaryArgs { group }) => display::summary(store, group),
         _ => unreachable!("dispatch_primary received unsupported command"),
     }
 }
@@ -168,7 +161,6 @@ async fn dispatch_secondary(store: Arc<crate::store::Store>, command: Commands) 
         Commands::Stop(command_args_b::StopArgs { task_id, force, retry_tree }) => {
             task_ops::stop(store, task_id, force, retry_tree)
         }
-        Commands::Kill(command_args_b::KillArgs { task_id }) => task_ops::kill(store, task_id),
         Commands::Steer(command_args_b::SteerArgs { task_id, message }) => task_ops::steer(store, task_id, message),
         Commands::Unstick(command_args_b::UnstickArgs { task_id, message, escalate }) => {
             task_ops::unstick(store, task_id, message, escalate)
@@ -204,8 +196,6 @@ async fn dispatch_tertiary(store: Arc<crate::store::Store>, command: Commands) -
         Commands::Project(command_args_c::ProjectArgs { action }) => project_worktree::project(action),
         Commands::Memory(command_args_c::MemoryArgs { action }) => knowledge::memory(store, action),
         Commands::Kg(command_args_c::KgArgs { action }) => knowledge::kg(store, action),
-        Commands::Finding(command_args_c::FindingArgs { action }) => knowledge::finding(store, action),
-        Commands::Broadcast(command_args_c::BroadcastArgs { group, message }) => knowledge::broadcast(store, group, message),
         Commands::Upgrade(command_args_c::UpgradeArgs { force }) => admin_config::upgrade(force),
         Commands::Init => admin_config::init(),
         Commands::Setup => admin_config::setup(),

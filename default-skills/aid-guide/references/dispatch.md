@@ -191,7 +191,7 @@ not demote. A foreground `aid run` exits 0 only for success outcomes; all other
 outcomes use a non-zero exit. Do not read `Done` or `Merged` as success without
 checking the outcome.
 
-When `aid watch --wait` or `aid wait` observes `verify_status = pending`, it
+When `aid wait` observes `verify_status = pending`, it
 continues waiting for verification, bounded by the verification timeout. Once
 the task settles, either command returns non-zero if the outcome is not a
 success outcome.

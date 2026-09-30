@@ -162,8 +162,8 @@ idle_timeout = 120
 
 ```bash
 aid watch t-1234                         # live TUI for one task
-aid watch --wait t-1234                  # block until done (for scripts)
-aid watch --wait --group wg-abc1         # block until group finishes
+aid wait t-1234                  # block until done (for scripts)
+aid wait --group wg-abc1         # block until group finishes
 aid watch --tui                          # full dashboard TUI
 aid watch --exit-on-await t-1234         # exit when task awaits input
 aid watch --timeout 600 t-1234           # timeout after 10 minutes
@@ -258,12 +258,12 @@ principal runs `aid accept <task>` and `aid gc --task <task>`.
 ## Workgroups
 
 ```bash
-aid group create --name "v9 release"           # create workgroup
+aid group create "v9 release"           # create workgroup
 aid group list                                  # list workgroups
 aid group show wg-abc1                          # show group + member tasks
 aid group update wg-abc1 --name "v9.1 release" # rename
 aid group summary wg-abc1                       # milestones, findings, costs
-aid group finding wg-abc1 "Key discovery"       # post a finding
+aid group finding add wg-abc1 "Key discovery"       # post a finding
 aid group broadcast wg-abc1 "Update: ..."       # message all group members
 aid group delete wg-abc1                        # delete group definition
 ```
@@ -292,7 +292,7 @@ Context files specified via `--context` are automatically synced into worktrees 
 aid ask "What is the latest Rust edition?"               # one-shot question
 aid query "key insight" -g wg-abc1 --finding             # search task history
 aid tree t-1234                          # show task tree (parent + children)
-aid output t-1234                        # raw agent output (--full for complete)
+aid show t-1234 --output --full                        # complete agent output
 aid export t-1234                        # export as markdown (default)
 aid export t-1234 --format json -o out.json  # export as JSON
 aid build check                          # compact cargo check/clippy diagnostics

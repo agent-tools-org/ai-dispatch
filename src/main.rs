@@ -172,7 +172,7 @@ async fn async_main(cli: Cli) -> Result<()> {
     let _ = background::check_zombie_tasks(&store);
 
     let outcome = match command {
-        Some(command) => cmd_dispatch::dispatch(store.clone(), normalize_command(command, cli.quiet)).await?,
+        Some(command) => cmd_dispatch::dispatch(store.clone(), command).await?,
         None => cmd_dispatch::dispatch(store.clone(), Commands::Board(Default::default())).await?,
     };
     if let Some(run_status) = outcome.run_exit_status(store.as_ref())? {
@@ -182,17 +182,4 @@ async fn async_main(cli: Cli) -> Result<()> {
         }
     }
     Ok(())
-}
-
-fn normalize_command(command: Commands, quiet: bool) -> Commands {
-    if !quiet {
-        return command;
-    }
-    match command {
-        Commands::Watch(mut args) => {
-            args.wait = true;
-            Commands::Watch(args)
-        }
-        other => other,
-    }
 }

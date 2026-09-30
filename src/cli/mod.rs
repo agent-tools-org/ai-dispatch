@@ -32,6 +32,8 @@ mod respond_reply_flag_tests;
 mod show_flag_tests;
 #[cfg(test)]
 mod watch_wait_flag_tests;
+#[cfg(test)]
+mod removed_path_tests;
 
 use clap::{Parser, Subcommand};
 
@@ -78,8 +80,6 @@ pub enum Commands {
     Usage(command_args_b::UsageArgs),
     Cost(command_args_b::CostArgs),
     Stats(command_args_b::StatsArgs),
-    #[command(hide = true)]
-    Summary(command_args_b::SummaryArgs),
     Retry(command_args_b::RetryArgs),
     Merge(command_args_b::MergeArgs),
     /// Accept a completed task's delivered artifact as its principal.
@@ -91,8 +91,6 @@ pub enum Commands {
     Respond(command_args_b::RespondArgs),
     Reply(command_args_b::ReplyArgs),
     Stop(command_args_b::StopArgs),
-    #[command(hide = true)]
-    Kill(command_args_b::KillArgs),
     Steer(command_args_b::SteerArgs),
     Unstick(command_args_b::UnstickArgs),
     Ask(command_args_b::AskArgs),
@@ -120,10 +118,6 @@ pub enum Commands {
     Memory(command_args_c::MemoryArgs),
     /// Knowledge graph — temporal entity relationships
     Kg(command_args_c::KgArgs),
-    #[command(hide = true)]
-    Finding(command_args_c::FindingArgs),
-    #[command(hide = true)]
-    Broadcast(command_args_c::BroadcastArgs),
     #[command(subcommand)]
     Experiment(ExperimentCommands),
     Upgrade(command_args_c::UpgradeArgs),
@@ -133,7 +127,6 @@ pub enum Commands {
     #[command(hide = true, name = "__run-task")]
     InternalRunTask(command_args_c::InternalRunTaskArgs),
     Tree(command_args_c::TreeArgs),
-    Output(command_args_c::OutputArgs),
     #[cfg(feature = "web")]
     #[command(name = "web")]
     Web(command_args_c::WebArgs),

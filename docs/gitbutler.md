@@ -27,7 +27,7 @@ If `aid batch` detects a GitButler repo and you have no `gitbutler = ...` settin
 
 1. Enable project integration with `gitbutler = "auto"` or `gitbutler = "always"`.
 2. Dispatch parallel worktree tasks with `aid batch tasks.toml --parallel`.
-3. Review task output with `aid watch --quiet --group <wg-id>` or `aid show <task-id> --diff`.
+3. Review task output with `aid wait --group <wg-id>` or `aid show <task-id> --diff`.
 4. Apply the finished branches into the GitButler workspace with `aid merge --lanes --group <wg-id>`.
 5. If you want a normal git merge instead, use `aid merge --group <wg-id>`.
 
@@ -35,7 +35,7 @@ Typical batch flow:
 
 ```bash
 aid batch tasks.toml --parallel
-aid watch --quiet --group wg-abc123
+aid wait --group wg-abc123
 aid merge --lanes --group wg-abc123
 ```
 

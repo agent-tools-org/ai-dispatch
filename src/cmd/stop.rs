@@ -1,4 +1,4 @@
-// Handlers for `aid stop` and `aid kill` — graceful and forced task termination.
+// Handlers for `aid stop` and `aid stop --force` — graceful and forced task termination.
 // Sends signals to worker processes, saves partial output, and updates task status.
 
 use anyhow::{anyhow, bail, Result};

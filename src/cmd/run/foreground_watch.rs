@@ -163,7 +163,7 @@ fn handle_signal(
             let name = signal.name();
             aid_hint!(
                 "\n⚠ Received {name} — aid detached from task {task_id}.\n\
-                 Aid did not send a stop signal. Reattach: aid watch --wait {task_id}"
+                 Aid did not send a stop signal. Reattach: aid wait {task_id}"
             );
             std::process::exit(signal.exit_code());
         }

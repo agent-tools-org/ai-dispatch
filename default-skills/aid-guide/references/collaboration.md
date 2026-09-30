@@ -47,11 +47,11 @@ not treat it as artifact acceptance or cleanup.
 ## Findings
 
 ```bash
-aid group finding add --group <group-id> \
+aid group finding add <group-id> \
   --title "Race in scheduler" \
   --severity high \
   "Workers can claim the same task"
-aid group finding list --group <group-id>
+aid group finding list <group-id>
 ```
 
 Use findings for reviewable evidence with source task, file, line, category,

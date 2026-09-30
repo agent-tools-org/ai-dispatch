@@ -25,13 +25,6 @@ pub enum CredentialAction {
 pub enum ConfigAction {
     /// List configured agents
     Agents,
-    /// Register custom agent
-    AddAgent {
-        name: String,
-        command: String,
-        #[arg(long)]
-        streaming: bool,
-    },
     /// Clear rate-limit marker for an agent (or "all")
     ClearLimit {
         /// Agent name (e.g. codex, gemini) or "all"

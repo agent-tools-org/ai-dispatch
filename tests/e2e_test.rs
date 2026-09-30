@@ -94,9 +94,9 @@ fn notifications_prints_recent_lines() {
 }
 
 #[test]
-fn watch_quiet_works_with_empty_db() {
+fn wait_works_with_empty_db() {
     let (mut cmd, _tmp) = aid_cmd();
-    let output = cmd.args(["watch", "--quiet"]).output().unwrap();
+    let output = cmd.arg("wait").output().unwrap();
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("No running tasks"));

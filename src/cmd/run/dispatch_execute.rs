@@ -152,7 +152,7 @@ pub(super) fn run_background_task(
             &prepared.agent_display_name,
             &args.prompt,
         ));
-        aid_hint!("[aid] Watch: aid watch --wait {}", prepared.task_id);
+        aid_hint!("[aid] Wait: aid wait {}", prepared.task_id);
     }
     Ok(())
 }

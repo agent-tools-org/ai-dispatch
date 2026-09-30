@@ -224,16 +224,16 @@ Workgroup-scoped ephemeral evidence for investigation collaboration. Agents emit
 
 ```bash
 # Manual posting
-aid finding add wg-abc1 "gamma can be zero in tricrypto pool"
+aid group finding add wg-abc1 "gamma can be zero in tricrypto pool"
 
 # Agent auto-capture: any agent output containing [FINDING] is saved
 # Example agent output: "[FINDING] WBTC as input causes all outputs to panic"
 
 # List findings
-aid finding list wg-abc1
+aid group finding list wg-abc1
 
 # Findings also appear in workgroup summaries
-aid summary wg-abc1
+aid group summary wg-abc1
 ```
 
 ### Fast Query (v5.8)
@@ -273,7 +273,7 @@ export AID_GROUP=$(aid group create my-feature -c "Feature implementation contex
 aid run codex "Implement the parser" --dir . --worktree feat/parser
 aid run codex "Add parser tests" --dir . --worktree feat/parser-tests
 aid board          # only shows tasks in this group
-aid watch --quiet  # only watches tasks in this group
+aid wait           # waits for tasks in this group
 aid merge --group  # merges all done tasks in this group
 ```
 
@@ -575,14 +575,14 @@ The board displays `[VFAIL]` next to tasks that completed but failed verificatio
 | --- | --- | --- |
 | `aid run` | Dispatch one task to an agent. Supports `--bg`, `--verify`, `--worktree`, `--on-done`, `--no-skill`, `--retry`, `--context`, and `--skill`. | `aid run codex "Implement retry logic" --dir . --worktree feat/retry --verify auto` |
 | `aid batch` | Dispatch a TOML batch file with DAG dependency scheduling. Auto-creates a workgroup and archives the file to `~/.aid/batches/`. | `aid batch tasks.toml --parallel --wait` |
-| `aid watch` | Follow live progress in text mode, quiet wait mode, or the TUI. | `aid watch --tui`, `aid watch t-1234`, `aid watch --quiet --group wg-a3f1` |
+| `aid wait` | Wait for task completion and worker verification; exit non-zero when a task did not succeed. | `aid wait t-1234`, `aid wait --group wg-a3f1` |
+| `aid watch` | Follow live progress in text mode or the TUI. | `aid watch --tui`, `aid watch t-1234` |
 | `aid board` | List tracked tasks with filters. Auto-detects zombie tasks. Use `--stream` for scrollback-preserving output. | `aid board --today`, `aid board --stream --group wg-a3f1` |
 | `aid show` | Inspect one task's summary, diff, output, raw log, or AI-generated explanation. Diffs show changes vs main branch. | `aid show t-1234 --diff`, `aid show t-1234 --output`, `aid show t-1234 --explain` |
 | `aid usage` | Render task-history usage plus configured budget windows. Supports `--agent`, `--period`, and `--json`. | `aid usage`, `aid usage --agent codex --period 7d --json` |
 | `aid retry` | Re-dispatch a failed task with explicit feedback. | `aid retry t-1234 --feedback "Reproduce the failure before editing."` |
 | `aid respond` | Send interactive input to a running background task. | `aid respond t-1234 "yes"` |
 | `aid benchmark` | Dispatch the same task to multiple agents and compare results. | `aid benchmark "Fix the bug" --agents codex,opencode --dir .` |
-| `aid output` | Show task output directly. | `aid output t-1234` |
 | `aid ask` | Run a quick research or exploration task, optionally with file context. | `aid ask "What changed in src/main.rs?" --files src/main.rs` |
 | `aid mcp` | Start the stdio MCP server so another tool can call `aid` natively. | `aid mcp` |
 | `aid merge` | Mark done task(s) as merged. Supports `--group` for bulk merge, `--approve` for interactive approval via hiboss. | `aid merge t-1234`, `aid merge --group wg-a3f1 --approve` |
@@ -629,14 +629,14 @@ aid run gemini "Analyze src/api/ architecture, list public types and extension p
 aid batch feature-tasks.toml --parallel
 
 # Phase 3: Background watch (push notification, no polling)
-aid watch --quiet --group wg-a3f1   # Bash run_in_background: true
+aid wait --group wg-a3f1   # Bash run_in_background: true
 
 # Phase 4: Review and iterate
 aid show t-1234 --diff
 aid retry t-1234 --feedback "Missing error handling in the timeout path"
 ```
 
-**For AI orchestrators (Claude Code, etc.)**: Use `aid watch --quiet --group <wg-id>` as a background command to get automatic completion callbacks instead of polling `aid board`.
+**For AI orchestrators (Claude Code, etc.)**: Use `aid wait --group <wg-id>` as a background command to get automatic completion callbacks instead of polling `aid board`.
 
 ### Quality Tiers
 
@@ -776,7 +776,7 @@ Dispatch and monitor:
 
 ```bash
 aid batch webhook.toml --parallel
-aid watch --quiet --group <wg-id>   # background, auto-notifies on completion
+aid wait --group <wg-id>   # background, auto-notifies on completion
 ```
 
 Batch dispatches with 2+ tasks auto-create a workgroup. The batch file is archived to `~/.aid/batches/`.

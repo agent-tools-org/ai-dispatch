@@ -1,3 +1,8 @@
+## Unreleased
+- Remove top-level `kill` (use `aid stop <id> --force`), `summary` (use `aid group summary <wg>`), `finding` (use `aid group finding ...`), `broadcast` (use `aid group broadcast <wg> <message>`), and `output` (use `aid show <id> --output --full`).
+- Remove the `config add-agent` stub; register custom agents with `aid agent add <name>`.
+- Remove `watch --wait` and quiet-mode blocking rewrites; use `aid wait` for blocking completion checks. Global `-q`/`--quiet` only reduces output.
+
 ## v10.48.0 (2026-09-25)
 - Add `aid classify` and the MCP `classify` tool: ask typed questions (noul, choice, score) about a text or JSON state through TypeSafe Jev (`jev-1.13.0`) and get validated JSON back; the key is read from the macOS keychain, passed to curl only on stdin, and secret-like or oversized state is refused
 - A declared writable `--kind` (simple-edit, complex-impl, frontend, testing, refactoring) is no longer switched into audit report mode by prompt wording, including on worker re-dispatch and retry; `aid show` flags a missing result only when a result file was requested

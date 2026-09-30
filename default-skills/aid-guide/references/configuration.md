@@ -147,7 +147,7 @@ Artifact deletion is controlled only by explicit acceptance and custody GC.
 ```bash
 aid agent
 aid config agents
-aid config add-agent local-agent ./run-agent --streaming
+aid agent add local-agent
 aid config clear-limit codex
 aid byok --help
 aid credential --help
@@ -179,7 +179,7 @@ precedence. A `cli_config` default is what the CLI runs when aid passes no
 The codex home is `$CODEX_HOME` when set, else `~/.codex`; aid reads the codex
 config from it and launches codex with the same `CODEX_HOME`.
 Register a local custom agent
-with `config add-agent`. Use `clear-limit` only after confirming a provider's
+with `agent add`. Use `clear-limit` only after confirming a provider's
 rate-limit condition has cleared. Each custom agent has its own marker keyed on
 its id (`rate-limit-<id>`), so one custom hitting quota does not hold the
 others; `aid config clear-limit <custom-id>` clears that agent alone.

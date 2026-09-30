@@ -1,5 +1,5 @@
 // aid CLI display-oriented dispatch handlers.
-// Implements benchmark, watch, board, show, output, export, and related wrappers.
+// Implements benchmark, watch, board, show, export, and related wrappers.
 
 use super::resolve_group;
 use crate::cli::AgentCommands;
@@ -23,13 +23,6 @@ pub(super) fn tree(store: Arc<store::Store>, task_id: String) -> Result<()> {
     cmd::tree::run(&store, &task_id)
 }
 
-pub(super) fn output(task_id: String, brief: bool) -> Result<()> {
-    let store = store::Store::open(&crate::paths::db_path())?;
-    let text = cmd::show::output_text_for_task(&store, &task_id, !brief)?;
-    print!("{text}");
-    Ok(())
-}
-
 pub(super) fn usage(
     store: Arc<store::Store>,
     session: bool,
@@ -51,10 +44,6 @@ pub(super) fn cost(
     cmd::cost::run(&store, group, summary, agent, period)
 }
 
-pub(super) fn summary(store: Arc<store::Store>, group: String) -> Result<()> {
-    cmd::summary_cli::run(&store, &group)
-}
-
 pub(super) async fn benchmark(
     store: Arc<store::Store>,
     prompt: String,
@@ -70,7 +59,6 @@ pub(super) async fn watch(
     task_ids: Vec<String>,
     group: Option<String>,
     tui_enabled: bool,
-    wait: bool,
     stream: bool,
     exit_on_await: bool,
     timeout: Option<u64>,
@@ -80,8 +68,6 @@ pub(super) async fn watch(
         tui::run(&store, tui::RunOptions { task_id: task_ids.first().cloned(), group })?;
     } else if stream {
         cmd::watch_stream::run(&store, &task_ids, group.as_deref(), timeout).await?;
-    } else if wait {
-        cmd::wait::run(&store, &task_ids, group.as_deref(), exit_on_await, timeout).await?;
     } else {
         cmd::watch::run(&store, &task_ids, group.as_deref(), exit_on_await, timeout).await?;
     }

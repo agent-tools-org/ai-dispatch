@@ -187,3 +187,15 @@ fn advised_model_group_hold_switches_route_but_other_group_does_not() {
     let recommended = held.recommended.expect("recommendation");
     assert_eq!((&*recommended.agent, recommended.model.as_deref()), ("codex", Some("gpt-6-sol")));
 }
+
+#[test]
+fn claude_stays_listed_but_recommendation_requires_team_preference() {
+    let (_temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Claude, AgentKind::Codex]);
+    let baseline = run(None);
+    assert!(find(&baseline, "claude").installed);
+    assert_eq!(baseline.recommended.expect("recommendation").agent, "codex");
+    let team: TeamConfig = toml::from_str("id = 'preferred'\ndisplay_name = 'Preferred'\npreferred_agents = ['Claude']\n").expect("team");
+    let report = advise("refactor the scheduler", baseline.declared, Some(TaskCategory::Refactoring), Some(&team), None, 0, None);
+    assert_eq!(report.recommended.expect("recommendation").agent, "claude");
+}

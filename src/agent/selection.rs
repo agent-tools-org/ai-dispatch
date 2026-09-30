@@ -24,7 +24,7 @@ use selection_scoring::{
     priority,
 };
 use super::classifier::{self, Complexity, TaskCategory};
-use super::{detect_agents, RunOpts};
+use super::RunOpts;
 use crate::agent_config;
 use crate::rate_limit;
 use crate::store::Store;
@@ -42,15 +42,6 @@ pub(crate) const AUTO_AGENT_REMOVED_MSG: &str =
 
 pub(crate) fn is_removed_auto_agent(name: &str) -> bool {
     name.trim().is_empty() || name.eq_ignore_ascii_case("auto")
-}
-
-pub(crate) fn select_agent_with_reason(
-    prompt: &str, opts: &RunOpts, store: &Store,
-    team: Option<&TeamConfig>,
-) -> (String, String) {
-    let available = detect_agents();
-    let available = enabled_builtins(&available);
-    select_agent_from(prompt, opts, &available, store, team)
 }
 
 pub(crate) fn select_agent_from(

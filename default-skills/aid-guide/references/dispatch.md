@@ -247,7 +247,8 @@ carries `exclusion_reason` (human text, `; `-joined) and `exclusion_codes`
 
 Candidates rank eligible first, then eligible-but-demoted, then ineligible;
 ineligible alternatives still appear with their reasons. The recommendation is
-the first eligible candidate. Each candidate also carries `auth`: `state` is
+the first eligible candidate permitted for recommendation. Claude stays listed but
+requires team preference for recommendation; explicit `aid run claude` remains available. Each candidate also carries `auth`: `state` is
 `failed` (with `observed_at` and `message`) when a run of that agent ended on a
 recognised not-signed-in refusal within the last hour (grok `Not signed in`,
 claude `Please run /login` / `Not logged in`, oz `credentials are invalid`),
@@ -282,6 +283,11 @@ when empty) and the human output adds one `note:` line. Those models stay
 unrated and are not selected. Inferred kind is advisory; pass `--kind` when the
 caller knows the task kind. Advice exits successfully even when every agent
 is rate-limited. Advise does not spawn `aidbar`.
+
+`aid run` hints use this ranker with the declared profile and task kind. Missing
+values default to `moderate` / `standard` / `normal` / `standard` and inferred kind;
+keywords never choose budget. Hints stay silent for prompts under 20 characters,
+`--no-hint`, or a recommendation matching the chosen agent.
 
 `aid run auto` and batch `agent = "auto"` (or an empty agent) are hard errors.
 There is no silent routing shim: declare a task profile, run `aid advise`, then

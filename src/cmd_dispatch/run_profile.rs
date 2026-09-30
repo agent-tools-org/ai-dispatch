@@ -12,7 +12,7 @@ use crate::cmd_dispatch::recommend_hint;
 use crate::store;
 use crate::team;
 use crate::types::{
-    TaskBudget, TaskDifficulty, TaskEgress, TaskRigor, TaskUrgency,
+    DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskEgress, TaskRigor, TaskUrgency,
 };
 
 pub(super) fn validate_task_profile(
@@ -41,27 +41,26 @@ pub(super) fn validate_task_profile(
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn resolve_run_agent(
-    store: &Arc<store::Store>, prompt: &str, dir: &Option<String>, repo: &Option<String>,
-    output: &Option<String>, result_file: &Option<String>, model: &Option<String>, budget: bool,
-    _difficulty: Option<TaskDifficulty>, _declared_budget: Option<TaskBudget>,
-    _urgency: Option<TaskUrgency>, _rigor: Option<TaskRigor>, egress: TaskEgress,
-    _kind: Option<TaskCategory>, no_hint: bool, read_only: bool, sandbox: bool,
-    worktree: &Option<String>, team_flag: &Option<String>, agent_name: String,
+    store: &Arc<store::Store>, prompt: &str, _dir: &Option<String>, _repo: &Option<String>,
+    _output: &Option<String>, _result_file: &Option<String>, _model: &Option<String>, _budget: bool,
+    difficulty: Option<TaskDifficulty>, declared_budget: Option<TaskBudget>,
+    urgency: Option<TaskUrgency>, rigor: Option<TaskRigor>, egress: TaskEgress,
+    kind: Option<TaskCategory>, no_hint: bool, _read_only: bool, _sandbox: bool,
+    _worktree: &Option<String>, team_flag: &Option<String>, agent_name: String,
 ) -> Result<String> {
     if agent::selection::is_removed_auto_agent(&agent_name) {
         anyhow::bail!("{}", agent::selection::AUTO_AGENT_REMOVED_MSG);
     }
-    let selection_opts = agent::RunOpts {
-        dir: dir.clone().or_else(|| repo.clone())
-            .or_else(|| worktree.as_ref().map(|_| ".".to_string())),
-        output: output.clone(), result_file: result_file.clone(), model: model.clone(),
-        budget, read_only, sandbox, context_files: vec![], session_id: None,
-        env: None, env_forward: None,
+    let declared = DeclaredTaskProfile {
+        difficulty: difficulty.unwrap_or_default(), budget: declared_budget.unwrap_or_default(),
+        urgency: urgency.unwrap_or_default(), rigor: rigor.unwrap_or_default(),
     };
     let team_config = team_flag.as_deref().and_then(team::resolve_team);
-    recommend_hint::emit_if_recommended(
-        &agent_name, prompt, no_hint, &selection_opts, store, team_config.as_ref(),
-    );
+    if let Some(hint) = recommend_hint::recommendation_hint(
+        &agent_name, prompt, no_hint, declared, kind, store, team_config.as_ref(),
+    ) {
+        aid_hint!("{hint}");
+    }
     explicit_agent(agent_name, egress)
 }
 

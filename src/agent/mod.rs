@@ -37,7 +37,6 @@ use std::collections::HashMap;
 use std::process::Command;
 
 use crate::prompt_scan::scan_for_injection;
-use crate::store;
 use crate::types::*;
 pub mod home_isolation;
 pub(crate) mod env;
@@ -179,13 +178,6 @@ pub struct RunOpts {
     pub session_id: Option<String>,
     pub env: Option<HashMap<String, String>>,
     pub env_forward: Option<Vec<String>>,
-}
-
-pub(crate) fn select_agent_with_reason(
-    prompt: &str, opts: &RunOpts, store: &store::Store,
-    team: Option<&crate::team::TeamConfig>,
-) -> (String, String) {
-    selection::select_agent_with_reason(prompt, opts, store, team)
 }
 
 /// Get an agent adapter by kind

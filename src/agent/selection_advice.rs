@@ -150,7 +150,7 @@ pub(crate) fn advise(
             .then_with(|| compare_candidates(&left.order, &right.order, context.budget).reverse())
     });
     let recommended = recommend::recommendation(
-        &ranked, &avg_cost_map, &duration_map, inferred.kind, declared,
+        &ranked, &avg_cost_map, &duration_map, inferred.kind, declared, team,
     );
     let notes = recommend::availability_notes(&ranked, declared.urgency, recommended.as_ref());
     let mut candidates: Vec<_> = ranked.into_iter().map(|item| item.report).collect();

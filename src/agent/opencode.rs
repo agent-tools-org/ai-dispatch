@@ -1,18 +1,37 @@
-// OpenCode CLI adapter: builds `opencode run` commands, parses streaming output.
-// OpenCode supports --format json for JSONL event streaming.
+// OpenCode CLI adapter: delegates to OpenCodeOverlayAgent.
+// Preserves served-model probing, route identity, and event parsing.
 
 use anyhow::Result;
 use chrono::Local;
 use serde_json::json;
 use std::process::Command;
 
-use super::read_only::read_only_prompt;
-use super::truncate::{capped_detail, capped_detail_with};
+use super::opencode_overlay::{OpenCodeOverlayAgent, OpenCodeOverlaySpec};
+use super::truncate::capped_detail_with;
 use super::RunOpts;
 use crate::rate_limit;
 use crate::types::*;
 
 pub struct OpenCodeAgent;
+
+pub(crate) fn spec() -> OpenCodeOverlaySpec {
+    OpenCodeOverlaySpec {
+        id: "opencode".to_string(),
+        display_name: "OpenCode".to_string(),
+        reported_kind: AgentKind::OpenCode,
+        binary: "opencode".to_string(),
+        extra_args: Vec::new(),
+        default_model: None,
+        interactive_input: true,
+        rate_limit_kind: AgentKind::OpenCode,
+        allow_external_directories: true,
+        probe_served_models: true,
+    }
+}
+
+pub(crate) fn agent() -> OpenCodeOverlayAgent {
+    OpenCodeOverlayAgent::from_spec(spec())
+}
 
 impl super::Agent for OpenCodeAgent {
     fn kind(&self) -> AgentKind {
@@ -28,66 +47,11 @@ impl super::Agent for OpenCodeAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        if opts.read_only {
-            aid_warn!("[aid] ⚠OpenCode read-only is prompt-level only, not enforced. Use --worktree for isolation.");
-        }
-        let effective_prompt = if opts.read_only {
-            read_only_prompt(prompt, opts)
-        } else {
-            prompt.to_string()
-        };
-        let mut cmd = Command::new("opencode");
-        cmd.arg("run");
-        cmd.args(["--format", "json"]);
-        cmd.arg("--thinking");
-        // Allow file access outside --dir (e.g. workgroup workspace symlinks)
-        cmd.env(
-            "OPENCODE_CONFIG_CONTENT",
-            r#"{"agent":{"build":{"permission":{"external_directory":"allow"}}}}"#,
-        );
-        if let Some(ref session_id) = opts.session_id {
-            cmd.args(["--session", session_id]);
-            cmd.arg("--continue");
-            cmd.arg("--fork");
-        }
-        if opts.budget {
-            cmd.args(["--variant", "minimal"]);
-        }
-        if let Some(ref model) = opts.model {
-            cmd.args(["-m", model]);
-        }
-        if let Some(ref dir) = opts.dir {
-            cmd.args(["--dir", dir]);
-            cmd.current_dir(dir);
-        }
-        for file in &opts.context_files {
-            cmd.args(["-f", file]);
-        }
-        cmd.arg(&effective_prompt);
-        Ok(cmd)
+        agent().build_command(prompt, opts)
     }
 
     fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent> {
-        let now = Local::now();
-
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            return None;
-        }
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
-            return parse_json_event(AgentKind::OpenCode, AgentKind::OpenCode, None, task_id, &v, now);
-        }
-        let (kind, detail) = classify_text_line(trimmed);
-        kind.map(|k| {
-            let (detail, metadata) = capped_detail(detail);
-            TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: k,
-                detail,
-                metadata,
-            }
-        })
+        agent().parse_event(task_id, line)
     }
 
     fn needs_pty(&self) -> bool {
@@ -95,12 +59,7 @@ impl super::Agent for OpenCodeAgent {
     }
 
     fn parse_completion(&self, output: &str) -> CompletionInfo {
-        let (tokens, cost_usd) = extract_tokens_from_output(output);
-        // Real failures emit {"type":"error","error":{...}}; no plaintext heuristics.
-        let mut info = super::stream_completion::status_from_error_type_jsonl(output);
-        info.tokens = tokens;
-        info.cost_usd = cost_usd;
-        info
+        agent().parse_completion(output)
     }
 
     fn served_models(&self) -> Result<Option<Vec<String>>> {

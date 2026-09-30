@@ -43,10 +43,7 @@ fn served_only_rows_are_unrated_and_skip_catalog_rows() {
     assert_eq!(rows.len(), 1, "catalog row gpt-5.6-sol is not repeated");
     let row = &rows[0];
     assert_eq!(row.model, "gpt-6-sol");
-    assert_eq!(
-        (row.capability, row.input_per_m, row.output_per_m),
-        (None, None, None)
-    );
+    assert_eq!(row.capability, None);
     assert_eq!(row.origin, ModelOrigin::Served);
 }
 

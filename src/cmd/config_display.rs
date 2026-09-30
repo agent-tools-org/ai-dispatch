@@ -105,7 +105,7 @@ pub(crate) fn recent_observed_models_line(
     Some(format!("  Recent:    {}\n", parts.join(", ")))
 }
 
-fn render_models_line(
+pub(super) fn render_models_line(
     kind: AgentKind,
     model_history: &HashMap<(AgentKind, String), ModelHistory>,
 ) -> String {
@@ -125,13 +125,16 @@ fn render_models_line(
             ),
             None => String::new(),
         };
+        let price = match cost::resolve_pricing(Some(model.model), kind) {
+            Some(p) => format!("${:.2}/${:.2}/M", p.input_per_m, p.output_per_m),
+            None => "unknown".to_string(),
+        };
         lines.push_str(&format!(
-            "    {:<15} ({}, cap:{:.1}, ${:.2}/${:.2}/M)  {}{}\n",
+            "    {:<15} ({}, cap:{:.1}, {})  {}{}\n",
             model.model,
             model.tier,
             model.capability,
-            model.input_per_m,
-            model.output_per_m,
+            price,
             model.description,
             history_suffix
         ));

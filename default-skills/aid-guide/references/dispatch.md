@@ -534,8 +534,10 @@ built-in `opencode/*` rows). For Codex, a changed source-file stamp refreshes
 the cache from its local model list. Other agents read the cache only and never probe;
 an absent or expired cache adds nothing. Each `models.available` row carries
 `rated` and `source` (`catalog`, `served`, or `pricing_override`). A served-only
-row has `rated: false`, `source: "served"`, and `null` `input_per_m`,
-`output_per_m`, and `capability`; cost displays report `unknown`. aid never
+row has `rated: false`, `source: "served"`, and `null` `capability`. Every
+displayed price (`input_per_m`/`output_per_m` in the JSON, `aid config pricing`,
+the `aid config agents` model lines) is the price cost estimation resolves below;
+with none known the JSON carries `null` and the text prints `unknown`. aid never
 invents ratings for served-only models, and routing never auto-selects one.
 Cost estimation prices a model only from an exact match, in this order: an
 explicit `pricing.json` override for the agent and model, subscription

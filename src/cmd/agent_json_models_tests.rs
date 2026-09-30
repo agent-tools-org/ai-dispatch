@@ -45,6 +45,7 @@ fn served_only_models_appear_unrated_for_every_probe_agent() {
         "grok": ["grok-9-served"],
         "cursor": ["cursor-served-9"],
     }));
+    crate::cost::clear_feed_for_tests();
     let store = crate::store::Store::open_memory().expect("store");
     let list = crate::cmd::agent_json::agents_list_value(&store).expect("agent list");
     let find = |agent: &str, model: &str| {
@@ -60,17 +61,15 @@ fn served_only_models_appear_unrated_for_every_probe_agent() {
             .find(|m| m["model"] == model)
             .cloned()
     };
-    for (agent, model) in [
-        ("codex", "gpt-6-sol"),
-        ("grok", "grok-9-served"),
-        ("cursor", "cursor-served-9"),
+    // No price feed here: served rows are unpriced unless the subscription includes them.
+    for (agent, model, price) in [
+        ("codex", "gpt-6-sol", serde_json::Value::Null),
+        ("grok", "grok-9-served", serde_json::Value::Null),
+        ("cursor", "cursor-served-9", serde_json::json!(0.0)),
     ] {
         let row = find(agent, model).unwrap_or_else(|| panic!("{agent}/{model} missing"));
         assert!(row["capability"].is_null(), "{row}");
-        assert!(
-            row["input_per_m"].is_null() && row["output_per_m"].is_null(),
-            "{row}"
-        );
+        assert_eq!((&row["input_per_m"], &row["output_per_m"]), (&price, &price), "{row}");
         assert_eq!(row["rated"], false, "{row}");
         assert_eq!(row["source"], "served", "{row}");
     }

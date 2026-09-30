@@ -197,14 +197,17 @@ fn build_agent_json(
             let available_models = crate::cmd::config::merged_agent_models()?;
             available_models.into_iter()
                 .filter(|m| m.agent == kind)
-                .map(|m| AvailableModelJson {
-                    model: m.model,
-                    tier: m.tier,
-                    input_per_m: m.input_per_m,
-                    output_per_m: m.output_per_m,
-                    rated: m.capability.is_some(),
-                    capability: m.capability,
-                    source: m.origin.label().to_string(),
+                .map(|m| {
+                    let price = crate::cost::resolve_pricing(Some(&m.model), kind);
+                    AvailableModelJson {
+                        model: m.model,
+                        tier: m.tier,
+                        input_per_m: price.map(|p| p.input_per_m),
+                        output_per_m: price.map(|p| p.output_per_m),
+                        rated: m.capability.is_some(),
+                        capability: m.capability,
+                        source: m.origin.label().to_string(),
+                    }
                 })
                 .collect()
         };

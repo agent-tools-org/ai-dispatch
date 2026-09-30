@@ -58,8 +58,8 @@ fn models_for_agent_merges_cached_agy_model_as_unknown() {
     let discovered = models.iter()
         .find(|model| model.model == "gemini-3.7-flash-high")
         .expect("discovered model");
-    assert_eq!(discovered.input_per_m, None);
-    assert_eq!(discovered.output_per_m, None);
+    crate::cost::clear_feed_for_tests();
+    assert!(!crate::cost::has_known_price(Some(&discovered.model), AgentKind::Antigravity));
     assert_eq!(discovered.capability, None);
 }
 
@@ -86,8 +86,8 @@ fn models_for_agent_merges_cached_opencode_model_as_unknown() {
         .iter()
         .find(|model| model.model == "opencode-go/glm-5.2")
         .expect("discovered model");
-    assert_eq!(discovered.input_per_m, None);
-    assert_eq!(discovered.output_per_m, None);
+    crate::cost::clear_feed_for_tests();
+    assert!(!crate::cost::has_known_price(Some(&discovered.model), AgentKind::OpenCode));
     assert_eq!(discovered.capability, None);
 }
 

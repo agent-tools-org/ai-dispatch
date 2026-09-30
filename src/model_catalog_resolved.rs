@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 use super::model_catalog_served::{served_only_models, SERVED_PROBE_AGENTS};
 use super::{static_models_for_agent, AgentModel, AGENT_MODELS};
@@ -43,8 +43,6 @@ pub struct PricingFileModel {
 pub struct ResolvedAgentModel {
     pub agent: AgentKind,
     pub model: String,
-    pub input_per_m: Option<f64>,
-    pub output_per_m: Option<f64>,
     pub tier: String,
     pub description: String,
     pub capability: Option<f64>,
@@ -56,8 +54,6 @@ impl From<&AgentModel> for ResolvedAgentModel {
         Self {
             agent: model.agent,
             model: model.model.to_string(),
-            input_per_m: Some(model.input_per_m),
-            output_per_m: Some(model.output_per_m),
             tier: model.tier.to_string(),
             description: model.description.to_string(),
             capability: Some(model.capability),
@@ -68,31 +64,15 @@ impl From<&AgentModel> for ResolvedAgentModel {
 
 impl ResolvedAgentModel {
     pub fn from_override(agent: AgentKind, model: PricingFileModel) -> Self {
-        let PricingFileModel {
-            model, input_per_m, output_per_m, tier, description, updated, ..
-        } = model;
-        let _ = updated;
+        let PricingFileModel { model, tier, description, .. } = model;
         Self {
             agent,
             model,
-            input_per_m: Some(input_per_m),
-            output_per_m: Some(output_per_m),
             tier,
             description,
             capability: None,
             origin: ModelOrigin::PricingOverride,
         }
-    }
-
-    pub fn apply_override(&mut self, model: PricingFileModel) {
-        let PricingFileModel {
-            input_per_m, output_per_m, tier, description, updated, ..
-        } = model;
-        let _ = updated;
-        self.input_per_m = Some(input_per_m);
-        self.output_per_m = Some(output_per_m);
-        self.tier = tier;
-        self.description = description;
     }
 }
 
@@ -122,24 +102,21 @@ pub fn load_pricing_overrides() -> Result<Vec<PricingFileModel>> {
 
 pub fn merged_agent_models() -> Result<Vec<ResolvedAgentModel>> {
     let mut merged = Vec::with_capacity(AGENT_MODELS.len());
-    let mut indexes = HashMap::new();
+    let mut listed = HashSet::new();
     for model in AGENT_MODELS {
-        indexes.insert((model.agent, model.model.to_lowercase()), merged.len());
+        listed.insert((model.agent, model.model.to_lowercase()));
         merged.push(ResolvedAgentModel::from(model));
     }
     for model in SERVED_PROBE_AGENTS.iter().flat_map(|agent| served_only_models(*agent)) {
-        indexes.insert((model.agent, model.model.to_lowercase()), merged.len());
+        listed.insert((model.agent, model.model.to_lowercase()));
         merged.push(model);
     }
     for model in load_pricing_overrides()? {
         let Some(agent) = AgentKind::parse_str(&model.agent) else {
             continue;
         };
-        let key = (agent, model.model.to_lowercase());
-        if let Some(index) = indexes.get(&key).copied() {
-            merged[index].apply_override(model);
-        } else {
-            indexes.insert(key, merged.len());
+        // Rows already listed take the override price from cost::resolve_pricing.
+        if listed.insert((agent, model.model.to_lowercase())) {
             merged.push(ResolvedAgentModel::from_override(agent, model));
         }
     }

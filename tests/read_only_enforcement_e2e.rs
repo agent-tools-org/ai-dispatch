@@ -147,3 +147,28 @@ fn read_only_reports_quoted_and_tabbed_paths() {
     let db = f.run(false, "failed", "report.md");
     f.assert_error_paths(&db, &["odd name.txt", "tab\tname.txt"]);
 }
+
+#[test]
+fn read_only_relative_run_directory_allows_absolute_result_path() {
+    let f = Fixture::new("echo report > report.md");
+    let report = f.repo.path().join("report.md");
+    let output = aid_cmd_in(f.home.path())
+        .current_dir(f.repo.path())
+        .env("PATH", format!("{}:{}", f.bin.path().display(), std::env::var("PATH").unwrap_or_default()))
+        .args(["run", "claude", "Inspect the checkout", "--dir", ".", "--read-only", "--no-audit", "--no-backup", "--id", "t-read-only", "--result-file"])
+        .arg(&report).output().unwrap();
+    assert!(output.status.success(), "stdout: {}\nstderr: {}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+    let db = Connection::open(f.home.path().join("aid.db")).unwrap();
+    let status: String = db.query_row("SELECT status FROM tasks WHERE id = 't-read-only'", [], |row| row.get(0)).unwrap();
+    assert_eq!(status, "done");
+    assert_eq!(std::fs::read_to_string(report).unwrap(), "report\n");
+    assert_eq!(git(f.repo.path(), &["rev-parse", "HEAD"]), f.head);
+}
+
+#[test]
+fn read_only_result_symlink_does_not_exempt_its_destination() {
+    let f = Fixture::new("ln -s a.txt report.md\necho altered > report.md");
+    let db = f.run(false, "failed", "report.md");
+    f.assert_error_paths(&db, &["a.txt"]);
+    assert_eq!(std::fs::read_to_string(f.repo.path().join("a.txt")).unwrap(), "altered\n");
+}

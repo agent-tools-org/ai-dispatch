@@ -42,11 +42,18 @@ fn changed_paths(
 ) -> Result<Vec<String>> {
     let before: BTreeSet<_> = baseline.iter().collect();
     let after: BTreeSet<_> = current.iter().collect();
-    let result = result_file.map(|file| Path::new(dir).join(file));
+    let dir = Path::new(dir).canonicalize()?;
+    let result = result_file.map(|file| {
+        let file = dir.join(file);
+        match (file.parent().and_then(|parent| parent.canonicalize().ok()), file.file_name()) {
+            (Some(parent), Some(name)) => parent.join(name),
+            _ => file,
+        }
+    });
     let mut paths = BTreeSet::new();
     for entry in before.symmetric_difference(&after) {
         let (path, _, _, _): (String, String, String, u32) = serde_json::from_str(entry)?;
-        if result.as_ref().is_some_and(|file| file.components().eq(Path::new(dir).join(&path).components())) {
+        if result.as_ref().is_some_and(|file| file.components().eq(dir.join(&path).components())) {
             continue;
         }
         paths.insert(path);

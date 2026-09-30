@@ -147,7 +147,8 @@ Important controls:
   files, and deletions. Any change outside the designated result file and aid-owned
   paths makes the task Failed with an error listing paths. Files stay in place;
   aid does not commit, stash, revert, or automatically retry the violation. The
-  designated task result file and audit report remain writable. An unavailable
+  designated task result file and audit report remain writable, including an
+  absolute result path with a relative run directory. An unavailable
   snapshot fails enforcement rather than silently accepting the task. Ignored
   untracked files and paths outside the run directory are outside this check.
   Claude uses plan mode without a result file. With a result file, it uses

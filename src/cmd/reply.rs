@@ -196,11 +196,13 @@ pub(crate) fn ensure_interactive_input(task: &Task, command: InputCommand) -> Re
         task.agent.as_str()
     };
     bail!(
-        "Task {} uses '{}' in one-shot print mode and cannot consume interactive input; {} for {}",
-        task.id,
+        "Task {id} uses '{}' in one-shot print mode and cannot consume interactive input; {} for {}. \
+         To change direction, run `aid stop {id}` then `aid retry {id} -f \"...\"` \
+         (starts a fresh session for agents without resume)",
         agent_name,
         command.refusal(),
-        command.invocation()
+        command.invocation(),
+        id = task.id,
     )
 }
 

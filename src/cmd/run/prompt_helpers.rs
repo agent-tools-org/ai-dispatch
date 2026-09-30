@@ -88,7 +88,7 @@ pub(crate) fn inject_skill(
         let skill_text = match skills::load_skill(name) {
             Ok(text) => text,
             Err(error) if !required => {
-                aid_warn!("[aid] Auto-applied skill unavailable: {name} ({error})");
+                aid_warn!("[aid] Project default skill unavailable: {name} ({error})");
                 continue;
             }
             Err(error) => return Err(error),
@@ -155,7 +155,8 @@ pub(crate) fn read_context_file(path: &str) -> Result<String> { std::fs::read_to
 
 pub(crate) fn format_context_block(path: &str, content: &str) -> String { format!("### {}\n```rust\n{}\n```", path, content.trim()) }
 
-/// Explicit skills override defaults from the dispatch's resolved project.
+/// Explicit skills override defaults from the dispatch's resolved project;
+/// read-only runs receive no project default.
 pub(crate) fn effective_skills(args: &RunArgs, project: Option<&crate::project::ProjectConfig>) -> Vec<String> {
     let declared: Vec<String> = args
         .skills
@@ -168,7 +169,8 @@ pub(crate) fn effective_skills(args: &RunArgs, project: Option<&crate::project::
     }
     // An explicit "no skills" is a decision, not an omission, so it must not
     // fall through to the project default.
-    if args.skills.iter().any(|skill| skill.as_str() == NO_SKILL_SENTINEL) {
+    // Project defaults are write methodologies; a read-only run gets none.
+    if args.read_only || args.skills.iter().any(|skill| skill.as_str() == NO_SKILL_SENTINEL) {
         return Vec::new();
     }
     project.map(|config| config.skills.clone()).unwrap_or_default()
@@ -194,10 +196,6 @@ pub(crate) fn resolve_dir_in_target(base_dir: &str, dir: Option<&str>, repo_dir:
 type WorktreePaths = (Option<String>, Option<String>, Option<String>, Option<String>, bool);
 pub(crate) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) -> Result<WorktreePaths> {
     if let Some(ref branch) = args.worktree {
-        anyhow::ensure!(
-            !args.read_only,
-            "--read-only cannot be used with --worktree"
-        );
         let repo_dir = match repo_path {
             Some(path) => path.to_string(),
             None => resolve_repo_path(args.dir.as_deref().unwrap_or("."))?,

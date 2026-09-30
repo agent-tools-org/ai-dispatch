@@ -83,6 +83,9 @@ aid unstick <task-id>
 - `respond` is refused for those same one-shot CLIs before aid writes a
   response signal; aid says that no response signal was written. Use it only
   when the selected adapter consumes PTY input.
+- The refusal names the only route for new direction to a one-shot task:
+  `aid stop <id>` then `aid retry <id> -f "..."`, which starts a fresh session
+  for agents without resume.
 - Use `unstick` when progress has stopped and recovery is appropriate.
 
 Do not send repeated polling messages; inspect events first.

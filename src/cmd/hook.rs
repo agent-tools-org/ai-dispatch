@@ -16,7 +16,8 @@ const BASE_TEXT: &str = "[aid] ai-dispatch is installed for multi-agent orchestr
 You are the dispatcher, and aid does not guess what you already know:
 - Declare the profile: --difficulty --budget --urgency --rigor. Undeclared is stored as
   null, not inferred.
-- Declare --skill; aid picks none for you. Declare --kind to narrow the injected toolbox;
+- Declare --skill; aid infers none from the agent or prompt. A project may declare
+  defaults (.aid/project.toml skills) for writable runs; --read-only skips them. Declare --kind to narrow the injected toolbox;
   omit it and every tool is described, because omission is not a decision.
 - A route is <cli>/<provider>/<model>. An exhausted route says nothing about another
   provider reaching a model of the same class. `aid agent list --json` carries both, plus

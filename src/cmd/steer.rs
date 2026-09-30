@@ -102,7 +102,9 @@ mod tests {
             store.insert_task(&task).unwrap();
 
             let err = run(&store, task_id, "pivot").unwrap_err();
-            assert!(err.to_string().contains("no steer message was queued"));
+            let message = err.to_string();
+            assert!(message.contains("no steer message was queued"), "{message}");
+            assert!(message.contains(&format!("`aid stop {task_id}` then `aid retry {task_id} -f")), "{message}");
             assert!(store.list_messages_for_task(task_id).unwrap().is_empty());
             assert!(!crate::paths::steer_signal_path(task_id).exists());
         }

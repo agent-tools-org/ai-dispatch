@@ -21,6 +21,8 @@ pub const DEFAULT_DENYLIST: &[&str] = &[
     ".anthropic",
     ".agents",
     ".agent",
+    ".aid-build-shims",
+    ".aid-tmp",
 ];
 
 pub(crate) use symlinks::{

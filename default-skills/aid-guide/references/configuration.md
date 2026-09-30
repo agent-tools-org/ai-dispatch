@@ -29,7 +29,8 @@ resolved context. Relative paths are resolved from the caller's working director
 omitting `--dir` uses the caller's project. Outside Git, no project context or memories
 are injected. A Git repository without `.aid/project.toml` still uses its scoped
 memories and toolbox. State and knowledge come from the resolved checkout's `.aid/`.
-Explicit `--skill` or `--no-skill` overrides that project's default skills.
+Explicit `--skill` or `--no-skill` overrides that project's default skills, and
+`--read-only` runs skip them.
 
 `[project].id` is the **stable project identity** recorded on every dispatched
 task. Main checkout and linked worktrees resolve to the same id. When no

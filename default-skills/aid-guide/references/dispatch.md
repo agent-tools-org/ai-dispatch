@@ -218,7 +218,8 @@ rate-limit markers, aidbar disk snapshots, team preferences, and task history,
 then runs the production selector without launching an agent or writing the task store.
 Fresh live used-percent ranks remaining headroom (a penalty as the window
 fills; unused quota never boosts). Held routes still take today's −10 when
-urgency is not `background`. Use `--top 0` for all candidates, `--team` for
+urgency is not `background`. Quota penalties and candidate quota use the resolved
+model’s metered group; a hold on another group does not penalize that route. Use `--top 0` for all candidates, `--team` for
 team preferences, and omit `--json` for a concise human-readable breakdown
 (including a headroom term). JSON candidates add a `quota` object (`status`,
 `wall`, `used_percent`, `resets_at`, `freshness_secs`, `stale`, `source`)

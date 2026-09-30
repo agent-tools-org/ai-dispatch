@@ -165,3 +165,25 @@ fn cheap_budget_keeps_the_catalog_budget_model() {
     assert!(codex.pinned);
     assert_eq!(codex.source, RunModelSource::BudgetRoute);
 }
+
+#[test]
+fn advised_model_group_hold_switches_route_but_other_group_does_not() {
+    let (temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Droid, AgentKind::Codex]);
+    crate::agent_config::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
+    crate::agent_config::save_agent_default_model("codex", Some("gpt-6-sol")).expect("model");
+    let baseline = run(None).recommended.expect("recommendation");
+    assert_eq!((&*baseline.agent, baseline.model.as_deref()), ("droid", Some("gpt-5.3-codex")));
+    let hold = "hold: manual\nmessage: quota exhausted\n";
+    std::fs::write(temp.path().join("rate-limit-droid--core"), hold).expect("other hold");
+    let other = run(None);
+    let recommended = other.recommended.expect("recommendation");
+    assert_eq!((recommended.agent, recommended.model), (baseline.agent, baseline.model));
+    assert_ne!(find(&run(None), "droid").quota.status, "held");
+    std::fs::remove_file(temp.path().join("rate-limit-droid--core")).expect("clear other hold");
+    std::fs::write(temp.path().join("rate-limit-droid--standard"), hold).expect("model hold");
+    let held = run(None);
+    assert_eq!(find(&held, "droid").quota.status, "held");
+    let recommended = held.recommended.expect("recommendation");
+    assert_eq!((&*recommended.agent, recommended.model.as_deref()), ("codex", Some("gpt-6-sol")));
+}

@@ -192,7 +192,7 @@ fn stale_snapshot_does_not_retune_score() {
     let baseline = score_for(&ctx, AgentKind::Qwen);
     write_snapshot(&cache, "qwen", 90.0, 20 * 60);
     let breakdown = hint_breakdown(&ctx, AgentKind::Qwen);
-    assert_eq!(headroom_penalty(AgentKind::Qwen), 0.0);
+    assert_eq!(headroom_penalty(AgentKind::Qwen, None), 0.0);
     assert_eq!(breakdown.headroom_penalty, 0.0);
     assert_eq!(breakdown.total.to_bits(), baseline.to_bits());
 }

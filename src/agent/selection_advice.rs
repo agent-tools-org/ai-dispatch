@@ -268,8 +268,9 @@ fn builtin_candidate(
         .unwrap_or_default();
     let report = AdviceCandidate {
         agent: kind.as_str().to_string(), installed: blocker.is_none(), eligible,
+        quota: selection_quota::candidate_quota(kind, None, model.as_deref()),
         score: breakdown.total, model, pinned, source, breakdown, exclusion_reason, exclusion_codes,
-        demotion_reason, quota: selection_quota::candidate_quota(kind, None), auth,
+        demotion_reason, auth,
         unrated_served_models,
     };
     RankedCandidate { report, order, pool_excluded: verdict == PoolVerdict::Weaker }

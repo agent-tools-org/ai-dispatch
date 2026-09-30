@@ -4,7 +4,7 @@
 
 use crate::agent::classifier::{self, Complexity};
 use crate::model_catalog::{models_for_agent, AGENT_MODELS};
-use crate::rate_limit;
+use crate::route_availability::{availability_for_model, RouteStatus};
 use crate::team::TeamConfig;
 use crate::types::AgentKind;
 use std::cmp::Ordering;
@@ -112,7 +112,7 @@ pub(super) fn score_breakdown(
         budget_penalty = -3.0;
     }
     let mut rate_limit_penalty = 0.0;
-    if ctx.penalize_rate_limit && rate_limit::is_rate_limited(&kind, None) {
+    if ctx.penalize_rate_limit && availability_for_model(&kind, None, model).status == RouteStatus::Held {
         s -= 10.0;
         rate_limit_penalty = -10.0;
     }
@@ -132,7 +132,7 @@ pub(super) fn score_breakdown(
         s += 3.0;
         team_bonus = 3.0;
     }
-    let headroom_penalty = super::selection_quota::headroom_penalty(kind);
+    let headroom_penalty = super::selection_quota::headroom_penalty(kind, model);
     if headroom_penalty != 0.0 { s += headroom_penalty; } // 0.0 would change bits
     ScoreBreakdown {
         base: base as f64,

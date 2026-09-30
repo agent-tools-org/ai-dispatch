@@ -2,16 +2,10 @@
 // Exports status counts plus a capture boundary for show, salvage, and prune.
 // Deps: git CLI via std::process, anyhow, std::path.
 
+use super::status::{WorktreeStatusSummary, summarize_status};
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::process::Command;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct WorktreeStatusSummary {
-    pub(crate) modified: usize,
-    pub(crate) staged: usize,
-    pub(crate) untracked: usize,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LiveWorktreeState {
@@ -80,30 +74,6 @@ pub(crate) fn uncommitted_diff_text(dir: &Path) -> Result<String> {
         out.push_str(&staged);
     }
     Ok(out)
-}
-
-fn summarize_status(lines: &[String]) -> WorktreeStatusSummary {
-    let mut summary = WorktreeStatusSummary {
-        modified: 0,
-        staged: 0,
-        untracked: 0,
-    };
-    for line in lines {
-        if line.starts_with("?? ") {
-            summary.untracked += 1;
-            continue;
-        }
-        let mut chars = line.chars();
-        let index = chars.next().unwrap_or(' ');
-        let worktree = chars.next().unwrap_or(' ');
-        if index != ' ' {
-            summary.staged += 1;
-        }
-        if worktree != ' ' {
-            summary.modified += 1;
-        }
-    }
-    summary
 }
 
 fn read_status_lines(dir: &Path) -> Result<Vec<String>> {

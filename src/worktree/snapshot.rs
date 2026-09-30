@@ -2,6 +2,7 @@
 // Exports parsed status entries plus a single capture_worktree_snapshot boundary.
 // Deps: git CLI via std::process, anyhow, std::path.
 
+use super::status::{parse_status_entry, status_line_paths};
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::process::Command;
@@ -51,26 +52,9 @@ impl WorktreeSnapshot {
 /// so judging on that alone would drop `R  src/lib.rs -> result-t-abcd.md` entirely and
 /// hide a real file's disappearance from every dirty check. Both sides have to be aid's
 /// before the line stops counting.
-fn line_is_only_aid_owned(line: &str) -> bool {
+pub(super) fn line_is_only_aid_owned(line: &str) -> bool {
     let paths = status_line_paths(line);
     !paths.is_empty() && paths.iter().all(|path| is_aid_owned_path(path))
-}
-
-/// Every path a porcelain line names: one, or two for a rename.
-fn status_line_paths(line: &str) -> Vec<String> {
-    let Some(rest) = line.strip_prefix("?? ").or_else(|| line.get(3..)) else {
-        return Vec::new();
-    };
-    match rest.split_once(" -> ") {
-        Some((from, to)) => vec![unquote(from), unquote(to)],
-        None => vec![unquote(rest)],
-    }
-}
-
-/// Git quotes paths that need escaping (`?? "odd name.md"`). Strip the wrapper so the
-/// name is judged, not the quote character.
-fn unquote(path: &str) -> String {
-    path.strip_prefix('"').and_then(|p| p.strip_suffix('"')).unwrap_or(path).to_string()
 }
 
 /// Paths aid itself writes into a worktree. Deliberately narrower than
@@ -125,26 +109,6 @@ pub fn capture_worktree_snapshot_with_base(
         status_lines,
         entries,
         empty_diff: read_empty_diff(dir, base_branch),
-    })
-}
-
-pub fn parse_status_entry(line: &str) -> Option<WorktreeStatusEntry> {
-    if let Some(path) = line.strip_prefix("?? ") {
-        return Some(WorktreeStatusEntry {
-            path: path.to_string(),
-            kind: WorktreeStatusKind::Untracked,
-        });
-    }
-    if line.len() < 4 {
-        return None;
-    }
-    let status = &line[..2];
-    if !status.contains('M') {
-        return None;
-    }
-    Some(WorktreeStatusEntry {
-        path: line[3..].to_string(),
-        kind: WorktreeStatusKind::Modified,
     })
 }
 

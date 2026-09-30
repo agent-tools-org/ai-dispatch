@@ -56,6 +56,8 @@ scripts/release.sh 8.75.0 /tmp/aid-release-notes.md
 
 ## Official Guide Maintenance
 
+Guide tests check facts generated from code; new hand-pinned phrases go only into the safety-invariants table.
+
 `default-skills/aid-guide/` is the release-managed, authoritative AID operating
 guide. Any change to a public command, flag, lifecycle transition, safety
 invariant, configuration key, or recommended workflow must update the relevant

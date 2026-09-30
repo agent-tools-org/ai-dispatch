@@ -2,6 +2,11 @@
 
 ## State model
 
+The lifecycle strings are `waiting`, `pending`, `running`, `awaiting_input`,
+`stalled`, `done`, `merged`, `failed`, `skipped`, and `stopped`. Verification
+strings are `pending`, `passed`, `failed`, `skipped`, `timed_out`,
+`infrastructure_failure`, and `unobserved`.
+
 Execution and custody are separate:
 
 ```text

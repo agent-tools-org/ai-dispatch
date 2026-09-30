@@ -31,6 +31,8 @@ impl Fixture {
         let agent = bin.path().join("claude");
         std::fs::write(&agent, format!("#!/bin/sh\ncase \"$1\" in --help|--version) echo 'Claude Code 2.1.285'; exit 0;; esac\n{script}\nprintf '%s\\n' '{{\"type\":\"assistant\",\"message\":{{\"content\":[{{\"type\":\"text\",\"text\":\"Inspection completed.\"}}]}}}}'\nprintf '%s\\n' '{{\"type\":\"result\",\"subtype\":\"success\",\"result\":\"Inspection completed.\"}}'\n")).unwrap();
         std::fs::set_permissions(agent, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::create_dir(home.path().join("agents")).unwrap();
+        std::fs::write(home.path().join("agents/buffered.toml"), format!("[agent]\nid = \"buffered\"\ndisplay_name = \"buffered\"\ncommand = \"{}\"\nprompt_mode = \"arg\"\nstreaming = false\n", bin.path().join("claude").display())).unwrap();
         Self { home, repo, bin, head }
     }
 
@@ -216,7 +218,7 @@ fn read_only_non_git_directory_warns_and_proceeds() {
 #[test]
 fn read_only_task_output_file_is_exempt() {
     let f = Fixture::new("");
-    f.foreground(f.home.path(), "claude", &["--dir", f.repo.path().to_str().unwrap(), "-o", f.repo.path().join("output.md").to_str().unwrap()], "done");
+    f.foreground(f.home.path(), "buffered", &["--dir", f.repo.path().to_str().unwrap(), "-o", f.repo.path().join("output.md").to_str().unwrap()], "done");
     assert!(f.repo.path().join("output.md").exists());
 }
 
@@ -224,7 +226,7 @@ fn read_only_task_output_file_is_exempt() {
 fn read_only_output_symlink_does_not_exempt_destination() {
     let f = Fixture::new("");
     std::os::unix::fs::symlink("a.txt", f.repo.path().join("output.md")).unwrap();
-    let db = f.foreground(f.repo.path(), "claude", &["-o", "output.md"], "failed");
+    let db = f.foreground(f.repo.path(), "buffered", &["-o", "output.md"], "failed");
     f.assert_error_paths(&db, &["a.txt"]);
 }
 
@@ -284,14 +286,14 @@ fn read_only_many_files_are_hashed_in_one_batch_per_snapshot() {
     let wrapper = f.bin.path().join("git");
     std::fs::write(&wrapper, format!("#!/bin/sh\nif [ \"$1\" = hash-object ]; then echo hash >> '{}'; fi\nexec /usr/bin/git \"$@\"\n", counter.display())).unwrap();
     std::fs::set_permissions(wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
-    f.foreground(f.repo.path(), "claude", &["-o", "output.md"], "done");
+    f.foreground(f.repo.path(), "buffered", &["-o", "output.md"], "done");
     assert_eq!(std::fs::read_to_string(counter).unwrap().lines().count(), 2);
 }
 
 #[test]
 fn read_only_output_in_caller_cwd_does_not_exempt_same_name_in_run_dir() {
     let f = Fixture::new("echo stray > output.md");
-    let db = f.foreground(f.home.path(), "claude", &["--dir", f.repo.path().to_str().unwrap(), "-o", "output.md"], "failed");
+    let db = f.foreground(f.home.path(), "buffered", &["--dir", f.repo.path().to_str().unwrap(), "-o", "output.md"], "failed");
     f.assert_error_paths(&db, &["output.md"]);
     assert!(f.home.path().join("output.md").exists());
 }

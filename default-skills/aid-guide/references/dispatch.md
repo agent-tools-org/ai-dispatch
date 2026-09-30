@@ -524,9 +524,12 @@ invents ratings for served-only models, and routing never auto-selects one.
 Cost estimation prices a model only from an exact match, in this order: an
 explicit `pricing.json` override for the agent and model, subscription
 inclusion, its static catalog row, or an exact price-feed id or alias.
-It never uses a substring, vendor-prefix, family, or `-free`-suffix match, and
-never a fixed fallback model: a served-only model gets its price from an
-exact price-feed entry, never from a
+The price feed carries each vendor's own per-token API rate, so it prices only
+the vendor's own CLI (codex, claude, gemini, grok); on a reseller route (droid,
+oz, opencode, and the others) a model without a catalog figure or override
+costs `unknown`. It never uses a substring, vendor-prefix, family, or
+`-free`-suffix match, and never a fixed fallback model: a served-only model
+gets its price from an exact price-feed entry on its vendor's CLI, never from a
 similar-name rate. A task with neither a pinned nor an observed model (for
 example unpinned gemini or codex) costs `unknown`, stored as NULL. Subscription
 agents (Cursor, Copilot) cost 0.0 as included.

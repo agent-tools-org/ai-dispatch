@@ -1,4 +1,4 @@
-// Lookup-order tests: static catalog prices, no free-suffix guess, override and exact feed.
+// Lookup-order tests: static catalog prices, no free-suffix guess, override, vendor-only feed.
 // Deps: super::resolve_model_pricing, crate::cost::estimate_cost, AGENT_MODELS.
 
 use super::*;
@@ -168,5 +168,25 @@ fn explicit_override_wins_over_catalog_subscription_and_unknown() {
     // Other models of the same agents keep their normal resolution.
     assert_eq!(estimate_cost(1_000_000, Some("auto"), AgentKind::Cursor), Some(0.0));
     assert_eq!(estimate_cost(1_000_000, Some("gpt-5.5"), AgentKind::Droid), None);
+    clear_feed_for_tests();
+}
+
+#[test]
+fn vendor_feed_rate_prices_only_the_vendor_cli_not_a_reseller() {
+    let _guard = isolated();
+    crate::paths::ensure_dirs().unwrap();
+    let feed = serde_json::json!({
+        "built_at": chrono::Utc::now().to_rfc3339(), "age_seconds": 1, "stale": false, "count": 1,
+        "models": [{"id": "claude-sonnet-4-6", "input_per_mtok": 3.0, "output_per_mtok": 15.0,
+            "cached_input_per_mtok": null, "context_length": null, "source": null}]
+    });
+    std::fs::write(crate::paths::aid_dir().join("prices.json"), feed.to_string()).unwrap();
+    clear_feed_for_tests();
+    let own = resolve_model_pricing("claude-sonnet-4-6", AgentKind::Claude).expect("vendor feed");
+    assert_eq!((own.input_per_m, own.output_per_m), (3.0, 15.0));
+    for agent in [AgentKind::Droid, AgentKind::Oz, AgentKind::OpenCode] {
+        assert_eq!(estimate_cost(1_000_000, Some("claude-sonnet-4-6"), agent), None, "{agent:?}");
+        assert!(!crate::cost::has_known_price(Some("claude-sonnet-4-6"), agent), "{agent:?}");
+    }
     clear_feed_for_tests();
 }

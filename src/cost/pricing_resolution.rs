@@ -1,5 +1,5 @@
 // Resolves a model price from exact matches only: override, subscription, static catalog, feed.
-// Exports: resolve_model_pricing(), subscription_pricing(), exact_feed_pricing().
+// Exports: resolve_model_pricing(), subscription_pricing().
 // Deps: price feed, pricing overrides, model catalog, provider metering.
 
 use super::{feed_index, override_pricing, price_feed, ModelPricing};
@@ -7,14 +7,14 @@ use crate::model_catalog::AGENT_MODELS;
 use crate::types::{provider_for_cli, AgentKind, MeteringShape};
 
 /// Precedence: an explicit user override, then subscription inclusion, then a
-/// static catalog row with a real figure, then an exact price-feed id/alias.
-/// Anything else is unknown (`None`): no substring, prefix, family, or
+/// static catalog row with a real figure, then an exact price-feed id/alias on
+/// a vendor's own CLI. Anything else is unknown (`None`): no substring, prefix, family, or
 /// free-name guess fills it in.
 pub(super) fn resolve_model_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
     override_pricing(model, agent)
         .or_else(|| subscription_pricing(agent))
         .or_else(|| static_catalog_pricing(model, agent))
-        .or_else(|| exact_feed_pricing(model))
+        .or_else(|| exact_feed_pricing(model, agent))
 }
 
 /// Subscription metering is included (zero marginal cost) whatever the model.
@@ -25,7 +25,17 @@ pub(super) fn subscription_pricing(agent: AgentKind) -> Option<ModelPricing> {
     })
 }
 
-pub(super) fn exact_feed_pricing(model: &str) -> Option<ModelPricing> {
+/// The feed carries each vendor's own per-token API rate, so it prices only
+/// the vendor's own CLI. A reseller (droid, oz, opencode, ...) bills its own
+/// rate; the vendor's figure there would be a guess.
+fn exact_feed_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
+    let vendor_cli = matches!(
+        agent,
+        AgentKind::Codex | AgentKind::Claude | AgentKind::Gemini | AgentKind::Grok
+    );
+    if !vendor_cli {
+        return None;
+    }
     let (feed, index) = feed_index()?;
     let entry = price_feed::feed_lookup(&feed, &index, model)?;
     Some(ModelPricing {

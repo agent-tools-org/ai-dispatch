@@ -25,6 +25,20 @@ fn installed_agy_supersedes_gemini_research_advice() {
 }
 
 #[test]
+fn disabled_installed_agy_does_not_supersede_gemini() {
+    let (_temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Gemini, AgentKind::Antigravity]);
+    crate::agent_config::save_agent_disabled("agy", true).expect("disable");
+    let report = advise("compare the docs", declared(TaskDifficulty::Moderate, TaskBudget::Standard),
+        Some(TaskCategory::Research), None, None, 0, None);
+    let gemini = find(&report, "gemini");
+    assert!(gemini.eligible);
+    assert!(!gemini.exclusion_codes.iter().any(|code| code == "superseded_by_agy"));
+    assert!(report.candidates.iter().all(|candidate| candidate.agent != "agy"));
+    assert_eq!(report.recommended.expect("recommendation").agent, "gemini");
+}
+
+#[test]
 fn superseded_gemini_is_never_a_recommendation_fallback() {
     let (_temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Gemini, AgentKind::Antigravity, AgentKind::Codex]);

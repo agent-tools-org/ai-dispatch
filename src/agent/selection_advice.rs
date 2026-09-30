@@ -219,10 +219,10 @@ fn builtin_candidates(
     selection: &SelectionConfig,
     caller: Option<&CallerAdvice>,
 ) -> Vec<RankedCandidate> {
-    let inventory = crate::agent::route_inventory();
+    let mut inventory = crate::agent::route_inventory();
+    inventory.retain(|(kind, _)| !agent_config::is_agent_disabled(kind.as_str()));
     let agy_installed = inventory.iter().any(|(kind, blocker)| *kind == AgentKind::Antigravity && blocker.is_none());
     inventory.into_iter()
-        .filter(|(kind, _)| !agent_config::is_agent_disabled(kind.as_str()))
         .map(|(kind, blocker)| {
             let input = RunModelInput::declared(kind.as_str(), kind, None, declared, selection);
             builtin_candidate(context, declared, caller, resolve_run_model(&input), (kind, blocker), agy_installed)

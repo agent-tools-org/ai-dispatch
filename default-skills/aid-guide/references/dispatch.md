@@ -249,8 +249,9 @@ Candidates rank eligible first, then eligible-but-demoted, then ineligible;
 ineligible alternatives still appear with their reasons. The recommendation is
 the first eligible installed route permitted for recommendation; fallback routes
 must also be installed, enabled, and outside weaker-caller-pool exclusions. When
-none remain, `recommended` is `null` and the run hint stays silent. Claude stays listed but
-requires team preference for recommendation; explicit `aid run claude` remains available. Each candidate also carries `auth`: `state` is
+none remain, `recommended` is `null` and the run hint stays silent. Claude stays listed and requires team preference for advice. Advice has no
+declared-agent field: explicit `aid run claude` selects Claude for execution
+without changing the hint’s advice profile. Each candidate also carries `auth`: `state` is
 `failed` (with `observed_at` and `message`) when a run of that agent ended on a
 recognised not-signed-in refusal within the last hour (grok `Not signed in`,
 claude `Please run /login` / `Not logged in`, oz `credentials are invalid`),

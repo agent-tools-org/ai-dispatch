@@ -85,5 +85,29 @@ current arguments.
 | `aid cost` | Report estimated costs by group, agent, or period. |
 | `aid stats` | Report outcome-based task success, declared difficulty versus outcomes, models, failures, and usage concentration. |
 
+## Subcommand index
+
+| Family | Commands |
+|---|---|
+| Batch | `aid batch init`, `aid batch retry` |
+| Agents | `aid agent show`, `aid agent config`, `aid agent add`, `aid agent remove`, `aid agent fork` |
+| Hooks | `aid hook session-start` |
+| Configuration | `aid config agents`, `aid config clear-limit`, `aid config pricing`, `aid config skills`, `aid config prompt-budget`, `aid config templates` |
+| Workgroups | `aid group create`, `aid group list`, `aid group show`, `aid group update`, `aid group delete`, `aid group cancel`, `aid group summary`, `aid group finding`, `aid group finding add`, `aid group finding list`, `aid group finding get`, `aid group finding update`, `aid group broadcast` |
+| Containers | `aid container build`, `aid container list`, `aid container stop` |
+| Worktrees | `aid worktree create`, `aid worktree list` |
+| Store | `aid store browse`, `aid store install`, `aid store show`, `aid store update` |
+| Teams | `aid team list`, `aid team show`, `aid team create`, `aid team delete` |
+| Tools | `aid tool list`, `aid tool show`, `aid tool add`, `aid tool remove`, `aid tool test` |
+| Providers | `aid byok apply`, `aid byok remove`, `aid byok probe`, `aid byok example`, `aid byok doc` |
+| Credentials | `aid credential list`, `aid credential add`, `aid credential remove` |
+| Projects | `aid project init`, `aid project show`, `aid project state`, `aid project sync` |
+| Memory | `aid memory add`, `aid memory list`, `aid memory search`, `aid memory update`, `aid memory forget`, `aid memory history` |
+| Knowledge graph | `aid kg add`, `aid kg query`, `aid kg invalidate`, `aid kg timeline`, `aid kg search`, `aid kg stats` |
+| Experiments | `aid experiment run`, `aid experiment status` |
+
+MCP tools: `aid_run`, `aid_board`, `aid_show`, `aid_retry`, `aid_usage`,
+`aid_get_findings`, `aid_ask`, `aid_agents`, `aid_advise`, and `classify`.
+
 Global options include `--quiet`, `--help`, and `--version`. Quiet mode only
 reduces informational output; use `aid wait` for blocking completion checks.

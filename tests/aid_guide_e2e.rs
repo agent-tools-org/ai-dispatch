@@ -16,273 +16,15 @@ fn official_guide_covers_every_public_command() {
     let skill = std::fs::read_to_string(guide_dir.join("SKILL.md")).unwrap();
     let command_index =
         std::fs::read_to_string(guide_dir.join("references/command-index.md")).unwrap();
-    let help = aid_cmd_in(aid_home.path()).arg("--help").output().unwrap();
-    assert!(help.status.success());
-
-    for command in public_commands(&String::from_utf8_lossy(&help.stdout)) {
-        let documented = format!("`aid {command}`");
-        assert!(
-            command_index.contains(&documented),
-            "official guide does not document public command: {command}"
-        );
-    }
+    let missing: Vec<_> = command_paths(aid_home.path(), &[]).into_iter()
+        .filter(|command| !command_index.contains(&format!("`aid {command}`"))).collect();
+    assert!(missing.is_empty(), "official guide missing commands: {missing:?}");
     for reference in skill_references(&skill) {
         assert!(
             guide_dir.join(reference).is_file(),
             "official guide links missing reference: {reference}"
         );
     }
-}
-
-#[test]
-fn official_guide_documents_project_config_discovery_order() {
-    let configuration = include_str!("../default-skills/aid-guide/references/configuration.md");
-    for term in ["`aid run --dir PATH`", "once per dispatch", "Outside Git, no project context or memories",
-        "without `.aid/project.toml` still uses its scoped", "`--skill` or `--no-skill`"] {
-        assert!(configuration.contains(term), "missing {term}");
-    }
-    assert!(configuration.contains(
-        "Configuration discovery uses the checkout's own `.aid/project.toml` first; if absent in a linked worktree, it uses the main working tree's `.aid/project.toml`."
-    ));
-}
-
-#[test]
-fn official_guide_documents_prepared_sandbox_scratch() {
-    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
-    assert!(dispatch.contains("`_base` for"));
-    assert!(dispatch.contains("exported as `TMPDIR`"));
-    assert!(dispatch.contains("regular repositories and linked worktrees"));
-    assert!(dispatch.contains("Copilot's"));
-    assert!(dispatch.contains("Before native agent launch, aid creates and probes"));
-    assert!(dispatch.contains("failure aborts with an error naming the directory"));
-    assert!(dispatch.contains("`--dry-run` do not create or probe these directories"));
-    assert!(dispatch.contains("An unwritable Git directory is omitted with a task event naming the directory and reason"));
-}
-
-#[test]
-fn official_guide_documents_cursor_monthly_hold() {
-    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
-    assert!(dispatch.contains("ActionRequiredError: You've hit your usage limit"));
-    assert!(dispatch.contains("including Auto when Auto refused"));
-    assert!(dispatch.contains("following midnight UTC"));
-    assert!(dispatch.contains("missing or invalid date uses a 30-day hold"));
-}
-
-#[test]
-fn official_guide_documents_needs_human_hold_text() {
-    let configuration = include_str!("../default-skills/aid-guide/references/configuration.md");
-    assert!(configuration.contains("needs human: <first line of the stored message>"));
-    assert!(configuration.contains("fix, then aid config clear-limit <agent>"));
-    assert!(configuration.contains("credentials are invalid"));
-    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
-    assert!(dispatch.contains("invalid credentials"));
-    assert!(dispatch.contains("a NeedsHuman hold still blocks"));
-    let index = include_str!("../default-skills/aid-guide/references/command-index.md");
-    assert!(index.contains("NeedsHuman agent holds"));
-}
-
-#[test]
-fn official_guide_documents_prompt_only_audit_dispatch() {
-    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
-
-    assert!(dispatch.contains("`read-only audit`"));
-    assert!(dispatch.contains("`read-only comparative audit`"));
-    assert!(dispatch.contains("`read-only cross-audit`"));
-    assert!(dispatch.contains("`read-only re-audit`"));
-    assert!(dispatch.contains("still permits writing the task result file"));
-    assert!(dispatch.contains("refused before a task row is created"));
-    assert!(dispatch.contains("`add an audit log`"));
-    assert!(dispatch.contains("`make changes to the read-only audit logic`"));
-    assert!(dispatch.contains("`do not modify` or `without modifying`"));
-    assert!(dispatch.contains("independent of dirty-worktree enforcement"));
-    assert!(dispatch.contains("`--result-file` controls report formatting and delivery"));
-    assert!(dispatch.contains("is never turned into a report task by prompt wording"));
-}
-
-#[test]
-fn official_guide_documents_watcher_safeguards() {
-    let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
-
-    assert!(operations.contains("configured idle, hung-task, cost, and maximum-duration safeguards"));
-    assert!(operations.contains("`--idle-timeout SECS`"));
-    assert!(operations.contains("`--timeout SECS`"));
-    assert!(operations.contains("Repeated activity is not itself a stop condition"));
-    // The guide must not re-acquire the two inaccuracies the removal audit caught:
-    // idle is refreshed by meaningful raw output aid cannot parse, and --timeout
-    // is activity-aware, not a hard cap.
-    assert!(operations.contains("Meaningful text"));
-    assert!(operations.contains("refreshes the liveness clock"));
-    assert!(operations.contains("activity-aware rather than a hard wall-clock cap"));
-}
-
-#[test]
-fn official_guide_documents_grouped_tui_controls() {
-    let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
-
-    assert!(operations.contains("The TUI shows every project grouped by project"));
-    assert!(operations.contains("h/l"));
-    assert!(operations.contains("Space"));
-    assert!(operations.contains("/"));
-    assert!(operations.contains("r"));
-    assert!(operations.contains("CLI keeps its current-project default with --all"));
-    assert!(!operations.contains("The TUI mirrors this default and toggles it with `P`."));
-}
-
-#[test]
-fn official_guide_documents_steering_delivery_contract() {
-    let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
-
-    assert!(operations.contains("`steer` is refused for the one-shot print-mode `agy` and `grok` CLIs"));
-    assert!(operations.contains("aid reports the limitation"));
-    assert!(operations.contains("steer message"));
-    assert!(operations.contains("Codex steering remains supported"));
-    assert!(operations.contains("`respond` is refused for those same one-shot CLIs"));
-    assert!(operations.contains("no response signal was written"));
-}
-
-#[test]
-fn official_guide_documents_buffered_prompt_liveness() {
-    let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
-
-    assert!(operations.contains("Idle partial PTY lines only trigger AWAIT when agent-owned logs are silent"));
-    assert!(operations.contains("idle warning window (180 seconds by default, from the task timeout policy)"));
-    assert!(operations.contains("Subsequent log growth restores RUNNING"));
-    assert!(operations.contains("silent logs still await input"));
-}
-
-#[test]
-fn official_guide_documents_event_fallback_coverage() {
-    let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
-
-    assert!(operations.contains("`aid export --sharegpt` falls back to"));
-    assert!(operations.contains("preserve tool calls, file reads, and file writes"));
-    assert!(operations.contains("only edited or only read files is still represented"));
-}
-
-#[test]
-fn official_guide_documents_task_owned_output() {
-    let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
-
-    assert!(operations.contains("`aid show --output` only renders content proven to belong to that task"));
-    assert!(operations.contains("read from the caller's CWD or from the shared repository root"));
-    assert!(operations.contains("absolute `--dir` from their persisted dispatch args"));
-    assert!(operations.contains("recorded directory stay empty and report absence"));
-}
-
-#[test]
-fn official_guide_documents_retry_worktree_safety() {
-    let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
-
-    assert!(operations.contains("When the recorded linked worktree still exists, retry reuses it"));
-    assert!(operations.contains("original repository checkout as its anchor"));
-    assert!(operations.contains("genuinely checked out in the checkout that dispatched the task"));
-    // Issue: a stalled task's own worktree lease refused its retry. The guide
-    // must document that retry supersedes a non-terminal task's live worker.
-    assert!(operations.contains("supersedes that task's own run"));
-    assert!(operations.contains("stops the still-live worker first"));
-    assert!(operations.contains("If the worker cannot be stopped, the retry is refused"));
-    assert!(operations.contains("genuinely held by a different live task"));
-}
-
-#[test]
-fn official_guide_documents_declared_profiles_and_advice() {
-    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
-    let collaboration = include_str!("../default-skills/aid-guide/references/collaboration.md");
-    let configuration = include_str!("../default-skills/aid-guide/references/configuration.md");
-
-    assert!(dispatch.contains("`aid advise`"));
-    assert!(dispatch.contains("without launching an agent or writing the task store"));
-    assert!(dispatch.contains("--difficulty complex --budget premium --urgency urgent --rigor critical"));
-    assert!(dispatch.contains("`aid run auto`") && dispatch.contains("hard errors"));
-    assert!(dispatch.contains("configured default is sticky like"));
-    assert!(dispatch.contains("`aid run` and `aid batch` share"));
-    assert!(collaboration.contains("declared `difficulty`, `budget`, `urgency`, and `rigor`"));
-    assert!(collaboration.contains("`auto` and empty agent are rejected"));
-    assert!(configuration.contains("`require_task_profile = true`"));
-    assert!(configuration.contains("agent_config.toml"));
-    assert!(configuration.contains("That default is sticky"));
-    for reference in [dispatch, configuration] {
-        assert!(reference.contains("catalog") && reference.contains("declared `free` or `cheap` budget"));
-        assert!(reference.contains("`standard`") && reference.contains("`premium`"));
-        assert!(reference.contains("CLI default (no -m)"));
-        assert!(reference.contains("held default group"));
-        assert!(reference.contains("Simple-task smart routing applies only when no budget is declared"));
-    }
-}
-
-#[test]
-fn official_guide_documents_discovered_model_unknowns() {
-    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
-
-    assert!(dispatch.contains("codex, grok, cursor,\nqwen, agy, and opencode"));
-    assert!(dispatch.contains("read the cache only and never probe"));
-    assert!(dispatch.contains("`rated: false`, `source: \"served\"`"));
-    assert!(dispatch.contains("`null` `capability`"));
-    assert!(dispatch.contains("is the price cost estimation resolves below"));
-    assert!(dispatch.contains("the JSON carries `null` and the text prints `unknown`"));
-    assert!(dispatch.contains("`unrated_served_models`"));
-    assert!(dispatch.contains("`pinned: false` and `source: \"cli_config\"`"));
-    assert!(dispatch.contains("`agent default (unknown)`"));
-    assert!(dispatch.contains("agent-level base and no model capability term"));
-    assert!(dispatch.contains("never a fixed fallback model"));
-    assert!(dispatch.contains("costs `unknown`, stored as NULL"));
-    assert!(!dispatch.contains("self-declared free"), "free-name pricing is gone");
-    let index = include_str!("../default-skills/aid-guide/references/command-index.md");
-    assert!(index.contains("`model`, `pinned`, and `source`"));
-    assert!(dispatch.contains("exact price-feed entry on its vendor's CLI, never from a\nsimilar-name rate"));
-    let configuration = include_str!("../default-skills/aid-guide/references/configuration.md");
-    assert!(configuration.contains("`models.default_source`"));
-    assert!(configuration.contains("`cli_config`"));
-    assert!(configuration.contains("launches codex with the same `CODEX_HOME`"));
-}
-
-#[test]
-fn official_guide_documents_recursive_delegation() {
-    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
-
-    assert!(dispatch.contains("## Recursive delegation"));
-    assert!(dispatch.contains("`AID_TASK_DEPTH`"));
-    assert!(dispatch.contains("dispatch beyond depth `2` is refused"));
-    assert!(dispatch.contains("`--bg` is refused"));
-    assert!(dispatch.contains("may re-enter the same worktree"));
-}
-
-#[test]
-fn official_guide_documents_foreground_worker_attachment() {
-    let operations = include_str!("../default-skills/aid-guide/references/task-operations.md");
-    let lifecycle = include_str!("../default-skills/aid-guide/references/task-lifecycle.md");
-    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
-
-    assert!(operations.contains("Human task surfaces use verification tags"));
-    assert!(operations.contains("dispatch the same detached worker used by"));
-    assert!(operations.contains("double-forked and reparented"));
-    assert!(operations.contains("Interactive stdin, SIGINT/Ctrl-C"));
-    assert!(operations.contains("Non-interactive stdin, SIGTERM/SIGHUP"));
-    assert!(lifecycle.contains("`Unobserved` is reserved"));
-    assert!(dispatch.contains("unobserved because no completion event survived"));
-    for stale_phrase in [
-        "detached milestone",
-        "detached task",
-        "detached marker",
-        "reaper adoption",
-        "adopt detached",
-        "TTY-gated detach",
-        "foreground detach",
-    ] {
-        assert!(!operations.contains(stale_phrase), "stale guide phrase: {stale_phrase}");
-        assert!(!dispatch.contains(stale_phrase), "stale guide phrase: {stale_phrase}");
-    }
-}
-
-#[test]
-fn official_guide_documents_already_collected_gc_proof() {
-    let lifecycle = include_str!("../default-skills/aid-guide/references/task-lifecycle.md");
-    assert!(lifecycle.contains("absent on disk and unregistered in a successful"));
-    assert!(lifecycle.contains("Only the live HEAD and cleanliness checks are skipped"));
-    assert!(lifecycle.contains("Object, ref, and manifest"));
-    assert!(lifecycle.contains("records durability before reclaiming"));
-    assert!(lifecycle.contains("GC never runs repository-wide `git worktree prune`"));
-    assert!(lifecycle.contains("A failed listing\nrefuses collection"));
 }
 
 fn public_commands(help: &str) -> Vec<String> {
@@ -305,27 +47,53 @@ fn skill_references(skill: &str) -> Vec<&str> {
         .collect()
 }
 
-#[test]
-fn official_guide_documents_remote_build_contract() {
-    let dispatch = include_str!("../default-skills/aid-guide/references/dispatch.md");
-    let config = include_str!("../default-skills/aid-guide/references/configuration.md");
-    let index = include_str!("../default-skills/aid-guide/references/command-index.md");
-    for term in ["--remote-build [BOX]", "rbox pick --role rust-build", "AID_BUILD_BOX", "cargo fmt", "untracked", "3600", "900", "60 seconds", "aid retry", "same relative subdirectory", "Verify receives the same PATH shim", "omit `remote_build`", "private `.cargo/bin/cargo` shim", "Tasks without a box retain the plain `.cargo` symlink"] {
-        assert!(dispatch.contains(term), "missing {term}");
+fn command_paths(home: &std::path::Path, path: &[String]) -> Vec<String> {
+    let help = aid_cmd_in(home).args(path).arg("--help").output().unwrap();
+    assert!(help.status.success(), "help failed for aid {}", path.join(" "));
+    let mut paths = Vec::new();
+    for command in public_commands(&String::from_utf8_lossy(&help.stdout)) {
+        let mut child = path.to_vec();
+        child.push(command);
+        paths.push(child.join(" "));
+        paths.extend(command_paths(home, &child));
     }
-    assert!(config.contains("remote_build = \"auto\""));
-    assert!(index.contains("--remote-build [BOX]"));
+    paths
 }
 
+// Pin only refusal, never, and fail-closed contracts that guide agent actions.
+const INVARIANTS: &[(&str /* reference file */, &str /* phrase */)] = &[
+    ("dispatch.md", "failure aborts with an error naming the directory"),
+    ("dispatch.md", "a NeedsHuman hold still blocks"),
+    ("dispatch.md", "refused before a task row is created"),
+    ("dispatch.md", "is never turned into a report task by prompt wording"),
+    ("task-operations.md", "Repeated activity is not itself a stop condition"),
+    ("task-operations.md", "`steer` is refused for the one-shot print-mode `agy` and `grok` CLIs"),
+    ("task-operations.md", "`respond` is refused for those same one-shot CLIs"),
+    ("task-operations.md", "no response signal was written"),
+    ("task-operations.md", "`aid show --output` only renders content proven to belong to that task"),
+    ("task-operations.md", "recorded directory stay empty and report absence"),
+    ("task-operations.md", "If the worker cannot be stopped, the retry is refused"),
+    ("dispatch.md", "without launching an agent or writing the task store"),
+    ("dispatch.md", "`aid run auto` and batch `agent = \"auto\"` (or an empty agent) are hard errors"),
+    ("collaboration.md", "`auto` and empty agent are rejected"),
+    ("dispatch.md", "read the cache only and never probe"),
+    ("dispatch.md", "never a fixed fallback model"),
+    ("dispatch.md", "exact price-feed entry on its vendor's CLI, never from a\nsimilar-name rate"),
+    ("dispatch.md", "dispatch beyond depth `2` is refused"),
+    ("dispatch.md", "`--bg` is refused"),
+    ("task-lifecycle.md", "records durability before reclaiming"),
+    ("task-lifecycle.md", "GC never runs repository-wide `git worktree prune`"),
+    ("task-lifecycle.md", "A failed listing\nrefuses collection"),
+    ("classify.md", "never in argv"),
+    ("classify.md", "never a verdict"),
+];
+
 #[test]
-fn official_guide_documents_classify_contract() {
-    let classify = include_str!("../default-skills/aid-guide/references/classify.md");
-    for term in ["security add-generic-password -a \"$USER\" -s typesafe-api-key -U -w",
-        "https://api.typesafe.ai/v1/systemone", "never in argv", "100,000 characters", "--allow-secret-like",
-        "What final verdict does this audit give?", "contain output from an actual test run",
-        "hint", "never a verdict", "numbers, dates, and counting", "| 5 | state refused"] {
-        assert!(classify.contains(term), "missing {term}");
+fn official_guide_preserves_safety_invariants() {
+    for &(reference, phrase) in INVARIANTS {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("default-skills/aid-guide/references").join(reference);
+        let content = std::fs::read_to_string(path).unwrap();
+        assert!(content.contains(phrase), "missing safety invariant in {reference}: {phrase}");
     }
-    let index = include_str!("../default-skills/aid-guide/references/command-index.md");
-    assert!(index.contains("`aid classify`") && index.contains("MCP `classify` tool"));
 }

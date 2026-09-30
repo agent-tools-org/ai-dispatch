@@ -80,3 +80,7 @@ fn reject_symlink(path: &Path) -> Result<()> {
     );
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "init_official_guide_tests.rs"]
+mod tests;

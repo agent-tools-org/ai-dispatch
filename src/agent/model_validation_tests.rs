@@ -241,7 +241,7 @@ fn validate_model_refreshes_cache_on_missing_model() {
     let _home = crate::paths::AidHomeGuard::set(temp.path());
     clear_served_models_cache();
 
-    save_to_disk_cache(AgentKind::Antigravity, &["gemini-3.7-flash-high".to_string()]);
+    save_to_disk_cache(AgentKind::Antigravity, &["gemini-3.7-flash-high".to_string()], None);
 
     let mock = MockQueryableAgent::new(
         AgentKind::Antigravity,

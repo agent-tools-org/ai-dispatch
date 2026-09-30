@@ -5,7 +5,7 @@
 use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 use std::process::Command;
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 
@@ -16,26 +16,27 @@ use super::Agent;
 pub(crate) struct ServedModelsCacheEntry {
     pub models: Vec<String>,
     pub updated_at_secs: u64,
+    #[serde(default)]
+    pub fingerprint: Option<String>,
 }
 
 #[derive(Clone, Debug)]
 struct CachedServedModels {
     models: Option<Vec<String>>,
     from_live_probe: bool,
+    fingerprint: Option<String>,
 }
 
-static SERVED_CACHE: OnceLock<Mutex<HashMap<AgentKind, CachedServedModels>>> = OnceLock::new();
-
-#[cfg(test)]
-thread_local! {
-    static TEST_OVERRIDE: std::cell::RefCell<HashMap<AgentKind, Option<Vec<String>>>> =
-        std::cell::RefCell::new(HashMap::new());
-}
+#[cfg(not(test))]
+static SERVED_CACHE: std::sync::OnceLock<Mutex<HashMap<AgentKind, CachedServedModels>>> = std::sync::OnceLock::new();
 
 pub(crate) const DEFAULT_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const SERVED_MODELS_CACHE_TTL: Duration = Duration::from_secs(24 * 3600);
 
 fn cache() -> &'static Mutex<HashMap<AgentKind, CachedServedModels>> {
+    #[cfg(test)]
+    return cache_tests::cache();
+    #[cfg(not(test))]
     SERVED_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -48,13 +49,25 @@ fn now_secs() -> u64 {
 }
 
 pub(crate) fn load_from_disk_cache(kind: AgentKind) -> Option<Vec<String>> {
-    let path = cache_file_path();
-    let content = std::fs::read_to_string(&path).ok()?;
-    let map: HashMap<String, ServedModelsCacheEntry> = serde_json::from_str(&content).ok()?;
-    let entry = map.get(kind.as_str())?;
+    if kind == AgentKind::Custom {
+        return load_disk_entry(kind, None).map(|entry| entry.models);
+    }
+    let agent = super::get_agent(kind);
+    let fingerprint = agent.served_models_fingerprint();
+    if fingerprint.is_some() {
+        return get_served_models_cached(agent.as_ref());
+    }
+    load_disk_entry(kind, None).map(|entry| entry.models)
+}
+
+fn load_disk_entry(kind: AgentKind, fingerprint: Option<&str>) -> Option<ServedModelsCacheEntry> {
+    let content = std::fs::read_to_string(cache_file_path()).ok()?;
+    let mut map: HashMap<String, ServedModelsCacheEntry> = serde_json::from_str(&content).ok()?;
+    let entry = map.remove(kind.as_str())?;
     let age = now_secs().saturating_sub(entry.updated_at_secs);
-    if age <= SERVED_MODELS_CACHE_TTL.as_secs() {
-        Some(entry.models.clone())
+    if age <= SERVED_MODELS_CACHE_TTL.as_secs()
+        && fingerprint.is_none_or(|fp| entry.fingerprint.as_deref() == Some(fp)) {
+        Some(entry)
     } else {
         None
     }
@@ -73,7 +86,7 @@ fn atomic_write_cache_file(path: &std::path::Path, content: &str) {
     }
 }
 
-fn save_to_disk_cache(kind: AgentKind, models: &[String]) {
+fn save_to_disk_cache(kind: AgentKind, models: &[String], fingerprint: Option<String>) {
     let path = cache_file_path();
     let mut map: HashMap<String, ServedModelsCacheEntry> = std::fs::read_to_string(&path)
         .ok()
@@ -84,6 +97,7 @@ fn save_to_disk_cache(kind: AgentKind, models: &[String]) {
         ServedModelsCacheEntry {
             models: models.to_vec(),
             updated_at_secs: now_secs(),
+            fingerprint,
         },
     );
     if let Ok(json) = serde_json::to_string_pretty(&map) {
@@ -111,28 +125,6 @@ pub(crate) fn clear_served_models_cache_for_agent(kind: AgentKind) {
                 }
             }
         }
-    }
-}
-
-#[cfg(test)]
-pub(crate) struct MockServedModelsGuard;
-
-#[cfg(test)]
-impl MockServedModelsGuard {
-    pub fn set(kind: AgentKind, models: Option<Vec<String>>) -> Self {
-        TEST_OVERRIDE.with(|cell| {
-            cell.borrow_mut().insert(kind, models);
-        });
-        Self
-    }
-}
-
-#[cfg(test)]
-impl Drop for MockServedModelsGuard {
-    fn drop(&mut self) {
-        TEST_OVERRIDE.with(|cell| {
-            cell.borrow_mut().clear();
-        });
     }
 }
 
@@ -209,6 +201,7 @@ pub(crate) fn validate_model_for_agent(
 
 pub(crate) fn refresh_served_models_cached(agent: &dyn Agent) -> Option<Vec<String>> {
     let kind = agent.kind();
+    let fingerprint = agent.served_models_fingerprint();
     let result = agent.served_models().ok().flatten();
     if let Ok(mut guard) = cache().lock() {
         guard.insert(
@@ -216,11 +209,12 @@ pub(crate) fn refresh_served_models_cached(agent: &dyn Agent) -> Option<Vec<Stri
             CachedServedModels {
                 models: result.clone(),
                 from_live_probe: true,
+                fingerprint: fingerprint.clone(),
             },
         );
     }
     if let Some(ref models) = result {
-        save_to_disk_cache(kind, models);
+        save_to_disk_cache(kind, models, fingerprint);
     } else {
         clear_served_models_cache_for_agent(kind);
     }
@@ -234,26 +228,25 @@ pub(crate) fn get_served_models_cached(agent: &dyn Agent) -> Option<Vec<String>>
 pub(crate) fn get_served_models_cached_with_status(agent: &dyn Agent) -> (Option<Vec<String>>, bool) {
     let kind = agent.kind();
     #[cfg(test)]
-    {
-        let thread_mock = TEST_OVERRIDE.with(|cell| cell.borrow().get(&kind).cloned());
-        if let Some(res) = thread_mock {
-            return (res, true);
-        }
-    }
+    if let Some(res) = cache_tests::mock_models(kind) { return (res, true); }
 
+    let fingerprint = agent.served_models_fingerprint();
     if let Ok(guard) = cache().lock() {
-        if let Some(cached) = guard.get(&kind) {
+        if let Some(cached) = guard.get(&kind).filter(|entry|
+            fingerprint.as_ref().is_none_or(|fp| entry.fingerprint.as_ref() == Some(fp))) {
             return (cached.models.clone(), cached.from_live_probe);
         }
     }
 
-    if let Some(disk_models) = load_from_disk_cache(kind) {
+    if let Some(entry) = load_disk_entry(kind, fingerprint.as_deref()) {
+        let disk_models = entry.models;
         if let Ok(mut guard) = cache().lock() {
             guard.insert(
                 kind,
                 CachedServedModels {
                     models: Some(disk_models.clone()),
                     from_live_probe: false,
+                    fingerprint: entry.fingerprint,
                 },
             );
         }
@@ -294,3 +287,9 @@ pub(crate) fn run_cmd_with_timeout(mut cmd: Command, timeout: Duration) -> Optio
 #[cfg(test)]
 #[path = "model_validation_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "model_validation_cache_tests.rs"]
+mod cache_tests;
+#[cfg(test)]
+pub(crate) use cache_tests::MockServedModelsGuard;

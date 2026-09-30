@@ -505,14 +505,18 @@ model.
 The served list is cached on disk for 24 hours, so a slow CLI is asked once
 rather than on every dispatch. When the model you asked for is absent from the
 cached list, aid re-probes once before rejecting it, so a model the CLI gained
-since the last probe is accepted rather than refused for a day.
+since the last probe is accepted rather than refused for a day. Codex cache
+entries also track the modification time and size of `$CODEX_HOME/models_cache.json`;
+when Codex refreshes that file, aid refreshes its disk and in-process model
+lists on the next lookup, including in a long-running `aid mcp` process.
 
 `aid agent list --json`, `aid config pricing`, and `aid advise` merge every
 model in the 24-hour served-model cache that has no catalog row into the
 catalog views, for each agent with a served-model probe: codex, grok, cursor,
 qwen, agy, and opencode (so providers such as `opencode-go` appear beside the
-built-in `opencode/*` rows). They read the cache only and never probe; an
-absent or expired cache adds nothing. Each `models.available` row carries
+built-in `opencode/*` rows). For Codex, a changed source-file stamp refreshes
+the cache from its local model list. Other agents read the cache only and never probe;
+an absent or expired cache adds nothing. Each `models.available` row carries
 `rated` and `source` (`catalog`, `served`, or `pricing_override`). A served-only
 row has `rated: false`, `source: "served"`, and `null` `input_per_m`,
 `output_per_m`, and `capability`; cost displays report `unknown`. aid never

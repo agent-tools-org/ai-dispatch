@@ -197,6 +197,13 @@ impl super::Agent for CodexAgent {
         }
     }
 
+    fn served_models_fingerprint(&self) -> Option<String> {
+        let path = cli_config::codex_home().ok()?.join("models_cache.json");
+        let metadata = std::fs::metadata(path).ok()?;
+        let modified = metadata.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?;
+        Some(format!("{}:{}", modified.as_nanos(), metadata.len()))
+    }
+
     fn served_models(&self) -> Result<Option<Vec<String>>> {
         let Ok(home) = cli_config::codex_home() else { return Ok(None) };
         let cache_path = home.join("models_cache.json");

@@ -123,6 +123,8 @@ pub trait Agent: Send + Sync {
         false
     }
 
+    fn served_models_fingerprint(&self) -> Option<String> { None }
+
     /// Query served models from CLI or local config.
     /// Returns Ok(Some(list)) if positively known, or Ok(None) if unqueryable.
     fn served_models(&self) -> Result<Option<Vec<String>>> {

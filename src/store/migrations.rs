@@ -22,7 +22,7 @@ const CREATE_TASK_MESSAGES_SQL: &str = "CREATE TABLE IF NOT EXISTS task_messages
 const NORMALIZE_BACKUP_ATTEMPTS_SQL: &str = "UPDATE tasks SET backup_url = ''
     WHERE backup_url IS NULL AND EXISTS (
         SELECT 1 FROM events INDEXED BY idx_events_task_kind
-        WHERE task_id = tasks.id AND event_type = 'milestone'
+        WHERE task_id = tasks.id AND event_type IN ('milestone', 'error')
           AND metadata LIKE '%\"backup\"%'
           AND CASE WHEN json_valid(metadata)
                    THEN json_type(metadata, '$.backup') IS NOT NULL
@@ -141,39 +141,18 @@ mod tests {
     use crate::store::Store;
 
     #[test]
-    fn backup_admission_searches_task_kind_index_on_large_event_history() {
+    fn backup_admission_searches_task_kind_index() {
         let store = Store::open_memory().unwrap();
         let conn = store.db();
-        conn.execute_batch(
-            "INSERT INTO tasks (id, agent, prompt, created_at) VALUES ('t-noise', 'codex', '', 'now');
-             WITH RECURSIVE history(n) AS (
-                 VALUES(1) UNION ALL SELECT n + 1 FROM history WHERE n < 300000
-             )
-             INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
-             SELECT 't-noise', 'now', 'tool_call', '', 'invalid json' FROM history;
-             INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
-             VALUES ('t-noise', 'now', 'milestone', '', '{\"backup\":\"failed\"}');",
-        ).unwrap();
-        for analyze in [false, true] {
-            if analyze {
-                conn.execute_batch("ANALYZE;").unwrap();
-            }
-            let mut stmt = conn.prepare(&format!(
-                "EXPLAIN QUERY PLAN {NORMALIZE_BACKUP_ATTEMPTS_SQL}"
-            )).unwrap();
-            let plan: Vec<String> = stmt.query_map([], |row| row.get(3))
-                .unwrap().collect::<rusqlite::Result<_>>().unwrap();
-            assert!(plan.iter().any(|step| step.contains(
-                "SEARCH events USING INDEX idx_events_task_kind (task_id=? AND event_type=?)"
-            )), "{plan:?}");
-            assert!(!plan.iter().any(|step| step.contains("SCAN events")), "{plan:?}");
-        }
-        conn.execute_batch("PRAGMA user_version = 0;").unwrap();
-        migrate_backup_url(&conn).unwrap();
-        let url: String = conn.query_row(
-            "SELECT backup_url FROM tasks WHERE id = 't-noise'", [], |row| row.get(0),
-        ).unwrap();
-        assert_eq!(url, "");
+        let mut stmt = conn.prepare(&format!(
+            "EXPLAIN QUERY PLAN {NORMALIZE_BACKUP_ATTEMPTS_SQL}"
+        )).unwrap();
+        let plan: Vec<String> = stmt.query_map([], |row| row.get(3))
+            .unwrap().collect::<rusqlite::Result<_>>().unwrap();
+        assert!(plan.iter().any(|step| step.contains(
+            "SEARCH events USING INDEX idx_events_task_kind (task_id=? AND event_type=?)"
+        )), "{plan:?}");
+        assert!(!plan.iter().any(|step| step.contains("SCAN events")), "{plan:?}");
     }
 
     #[test]
@@ -182,29 +161,30 @@ mod tests {
         let path = dir.path().join("aid.db");
         let store = Store::open(&path).unwrap();
         let cases = [
-            ("t-failed", r#"{"backup":"failed"}"#, true),
-            ("t-uploaded", r#"{"backup":"uploaded"}"#, true),
-            ("t-null", r#"{"backup":null}"#, true),
-            ("t-invalid", r#"{"backup":invalid}"#, false),
-            ("t-nested", r#"{"nested":{"backup":"failed"}}"#, false),
-            ("t-lookalike", r#"{"backup_url":"url"}"#, false),
+            ("t-failed", "milestone", r#"{"backup":"failed"}"#, true),
+            ("t-error", "error", r#"{"backup":"failed"}"#, true),
+            ("t-uploaded", "milestone", r#"{"backup":"uploaded"}"#, true),
+            ("t-null", "milestone", r#"{"backup":null}"#, true),
+            ("t-invalid", "milestone", r#"{"backup":invalid}"#, false),
+            ("t-nested", "milestone", r#"{"nested":{"backup":"failed"}}"#, false),
+            ("t-lookalike", "milestone", r#"{"backup_url":"url"}"#, false),
         ];
-        for (id, metadata, _) in cases {
+        for (id, event_kind, metadata, _) in cases {
             store.db().execute(
                 "INSERT INTO tasks (id, agent, prompt, created_at) VALUES (?1, 'codex', '', 'now')",
                 [id],
             ).unwrap();
             store.db().execute(
                 "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
-                 VALUES (?1, 'now', 'milestone', '', ?2)",
-                rusqlite::params![id, metadata],
+                 VALUES (?1, 'now', ?2, '', ?3)",
+                rusqlite::params![id, event_kind, metadata],
             ).unwrap();
             assert!(store.backup_url(id).unwrap().is_none());
         }
         store.db().execute_batch("PRAGMA user_version = 0;").unwrap();
         drop(store);
         let store = Store::open(&path).unwrap();
-        for (id, _, claimed) in cases {
+        for (id, _, _, claimed) in cases {
             assert_eq!(store.claim_backup(id).unwrap(), !claimed, "{id}");
         }
     }

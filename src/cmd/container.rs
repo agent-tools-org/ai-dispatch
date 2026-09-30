@@ -2,7 +2,7 @@
 // Exports small wrappers around the shared container lifecycle helpers.
 // Deps: crate::container, anyhow.
 
-use crate::cli_actions::ContainerAction;
+use crate::cli::ContainerAction;
 use anyhow::Result;
 
 pub fn run_container_command(action: ContainerAction) -> Result<()> {

@@ -6,7 +6,7 @@ use anyhow::Result;
 
 use crate::agent::classifier::TaskCategory;
 use crate::agent::selection::{AdviceReport, advise, caller_advice};
-use crate::cli::command_args_advise::AdviseArgs;
+use crate::cli::advise_args::AdviseArgs;
 use crate::store::Store;
 use crate::types::DeclaredTaskProfile;
 

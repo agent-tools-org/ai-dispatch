@@ -6,7 +6,7 @@ use anyhow::{bail, Result};
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::cli::command_args_b::{BuildArgs, BuildCommandArg};
+use crate::cli::cargo_args::{BuildArgs, BuildCommandArg};
 use crate::store::Store;
 
 #[path = "build_diag.rs"]

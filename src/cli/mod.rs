@@ -1,14 +1,18 @@
 // aid CLI definitions.
 // Exports parser structs and subcommands; depends on clap derive and cli helper modules.
 
-pub(crate) mod command_args_a;
-pub(crate) mod command_args_advise;
-pub(crate) mod command_args_b;
-pub(crate) mod command_args_c;
-pub(crate) mod command_args_classify;
-pub(crate) mod command_args_watch;
+pub(crate) mod admin_args;
+pub(crate) mod advise_args;
+pub(crate) mod agent_provider_args;
+pub(crate) mod cargo_args;
+pub(crate) mod classify_args;
 mod extras;
-mod sub_enums;
+pub(crate) mod group_args;
+pub(crate) mod inspect_args;
+pub(crate) mod knowledge_args;
+pub(crate) mod project_args;
+pub(crate) mod run_args;
+pub(crate) mod task_control_args;
 
 #[cfg(test)]
 mod tests;
@@ -38,10 +42,14 @@ mod removed_path_tests;
 use clap::{Parser, Subcommand};
 
 pub(crate) use extras::RunExtrasArgs;
-pub use sub_enums::{
-    AgentCommands, BatchAction, ByokCommands, ExperimentCommands, FindingCommands, HookAction,
-    KgCommands, MemoryCommands, StoreCommands,
+pub use admin_args::{ConfigAction, ContainerAction, HookAction, StoreCommands};
+pub use agent_provider_args::{
+    AgentCommands, ByokCommands, CredentialAction, TeamAction, ToolAction,
 };
+pub use group_args::{FindingCommands, GroupAction};
+pub use knowledge_args::{KgCommands, MemoryCommands};
+pub use project_args::{ExperimentCommands, ProjectAction, WorktreeAction};
+pub use run_args::BatchAction;
 
 #[derive(Parser)]
 #[command(
@@ -60,74 +68,74 @@ pub struct Cli {
 #[derive(Subcommand)]
 #[allow(clippy::large_enum_variant)]
 pub enum Commands {
-    Run(command_args_a::RunArgs),
+    Run(run_args::RunArgs),
     /// Inspect recent CLI errors, including requests rejected before task creation
     Errors(crate::command_diagnostics::ErrorsArgs),
     /// Show agent routing advice without dispatching
-    Advise(command_args_advise::AdviseArgs),
-    Batch(command_args_a::BatchArgs),
-    Benchmark(command_args_a::BenchmarkArgs),
-    Watch(command_args_watch::WatchArgs),
-    Wait(command_args_watch::WaitArgs),
-    Board(command_args_a::BoardArgs),
+    Advise(advise_args::AdviseArgs),
+    Batch(run_args::BatchArgs),
+    Benchmark(run_args::BenchmarkArgs),
+    Watch(inspect_args::WatchArgs),
+    Wait(inspect_args::WaitArgs),
+    Board(inspect_args::BoardArgs),
     /// Print recent notifications
     Notifications,
-    Changelog(command_args_a::ChangelogArgs),
-    Agent(command_args_a::AgentArgs),
-    Clean(command_args_a::CleanArgs),
-    Show(command_args_a::ShowArgs),
-    Export(command_args_b::ExportArgs),
-    Usage(command_args_b::UsageArgs),
-    Cost(command_args_b::CostArgs),
-    Stats(command_args_b::StatsArgs),
-    Retry(command_args_b::RetryArgs),
-    Merge(command_args_b::MergeArgs),
+    Changelog(inspect_args::ChangelogArgs),
+    Agent(agent_provider_args::AgentArgs),
+    Clean(project_args::CleanArgs),
+    Show(inspect_args::ShowArgs),
+    Export(inspect_args::ExportArgs),
+    Usage(inspect_args::UsageArgs),
+    Cost(inspect_args::CostArgs),
+    Stats(inspect_args::StatsArgs),
+    Retry(task_control_args::RetryArgs),
+    Merge(task_control_args::MergeArgs),
     /// Accept a completed task's delivered artifact as its principal.
-    Accept(command_args_b::ArtifactDecisionArgs),
+    Accept(task_control_args::ArtifactDecisionArgs),
     /// Reject a completed task while preserving every artifact.
-    Reject(command_args_b::ArtifactDecisionArgs),
+    Reject(task_control_args::ArtifactDecisionArgs),
     /// Delete accepted artifacts after recursive durability proof.
-    Gc(command_args_b::ArtifactGcArgs),
-    Respond(command_args_b::RespondArgs),
-    Reply(command_args_b::ReplyArgs),
-    Stop(command_args_b::StopArgs),
-    Steer(command_args_b::SteerArgs),
-    Unstick(command_args_b::UnstickArgs),
-    Ask(command_args_b::AskArgs),
-    Query(command_args_b::QueryArgs),
+    Gc(task_control_args::ArtifactGcArgs),
+    Respond(task_control_args::RespondArgs),
+    Reply(task_control_args::ReplyArgs),
+    Stop(task_control_args::StopArgs),
+    Steer(task_control_args::SteerArgs),
+    Unstick(task_control_args::UnstickArgs),
+    Ask(knowledge_args::AskArgs),
+    Query(knowledge_args::QueryArgs),
     /// Ask typed questions (noul, choice, score) about a text or file via TypeSafe Jev; prints JSON
-    Classify(command_args_classify::ClassifyArgs),
+    Classify(classify_args::ClassifyArgs),
     Mcp,
-    Hook(command_args_b::HookArgs),
-    Config(command_args_b::ConfigArgs),
-    Group(command_args_b::GroupArgs),
-    Container(command_args_b::ContainerArgs),
+    Hook(admin_args::HookArgs),
+    Config(admin_args::ConfigArgs),
+    Group(group_args::GroupArgs),
+    Container(admin_args::ContainerArgs),
     /// Run cargo build/check and parse/deduplicate JSON compiler errors
-    Build(command_args_b::BuildArgs),
+    Build(cargo_args::BuildArgs),
     /// Run cargo test with trusted guarantees (zero-match is an error)
-    Test(command_args_b::TestArgs),
-    Worktree(command_args_c::WorktreeArgs),
-    Store(command_args_c::StoreArgs),
-    Team(command_args_c::TeamArgs),
-    Tool(command_args_c::ToolArgs),
-    Doctor(command_args_c::DoctorArgs),
+    Test(cargo_args::TestArgs),
+    Worktree(project_args::WorktreeArgs),
+    Store(admin_args::StoreArgs),
+    Team(agent_provider_args::TeamArgs),
+    Tool(agent_provider_args::ToolArgs),
+    Doctor(admin_args::DoctorArgs),
     /// Manage BYOK providers (custom OpenAI-compatible endpoints) via opencode
-    Byok(command_args_c::ByokArgs),
-    Credential(command_args_c::CredentialArgs),
-    Project(command_args_c::ProjectArgs),
-    Memory(command_args_c::MemoryArgs),
+    Byok(agent_provider_args::ByokArgs),
+    Credential(agent_provider_args::CredentialArgs),
+    Project(project_args::ProjectArgs),
+    Memory(knowledge_args::MemoryArgs),
     /// Knowledge graph — temporal entity relationships
-    Kg(command_args_c::KgArgs),
+    Kg(knowledge_args::KgArgs),
     #[command(subcommand)]
     Experiment(ExperimentCommands),
-    Upgrade(command_args_c::UpgradeArgs),
+    Upgrade(admin_args::UpgradeArgs),
     #[command(hide = true)]
     Init,
     Setup,
     #[command(hide = true, name = "__run-task")]
-    InternalRunTask(command_args_c::InternalRunTaskArgs),
-    Tree(command_args_c::TreeArgs),
+    InternalRunTask(project_args::InternalRunTaskArgs),
+    Tree(inspect_args::TreeArgs),
     #[cfg(feature = "web")]
     #[command(name = "web")]
-    Web(command_args_c::WebArgs),
+    Web(admin_args::WebArgs),
 }

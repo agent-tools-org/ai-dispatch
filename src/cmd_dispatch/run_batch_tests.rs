@@ -7,7 +7,7 @@ use crate::agent::classifier::TaskCategory;
 use crate::types::{TaskBudget, TaskDifficulty, TaskEgress, TaskRigor, TaskUrgency};
 use clap::Parser;
 
-fn cli_args(flags: &[&str]) -> command_args_a::RunArgs {
+fn cli_args(flags: &[&str]) -> run_args::RunArgs {
     let cli = Cli::try_parse_from(["aid", "run", "qwen", "say hi"].into_iter()
         .chain(flags.iter().copied())).expect("parse run flags");
     let Some(Commands::Run(args)) = cli.command else { panic!("run command") };

@@ -5,7 +5,7 @@
 use anyhow::{bail, Result};
 use std::fs;
 
-use crate::cli_actions::TeamAction;
+use crate::cli::TeamAction;
 use crate::sanitize;
 use crate::team;
 use crate::toolbox;

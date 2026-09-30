@@ -1,10 +1,10 @@
-// aid CLI argument structs, part A.
-// Exports clap Args types for top-level commands from run through show.
+// aid CLI arguments for dispatching work: run, batch and benchmark.
+// Exports RunArgs, NO_HINT_FLAG, BatchArgs, BatchAction, BenchmarkArgs; depends on clap derive.
 
-use crate::cli::{AgentCommands, BatchAction, RunExtrasArgs};
 use crate::agent::classifier::TaskCategory;
+use crate::cli::RunExtrasArgs;
 use crate::types::{TaskBudget, TaskDifficulty, TaskEgress, TaskRigor, TaskUrgency};
-use clap::{ArgGroup, Args};
+use clap::{Args, Subcommand};
 
 pub(crate) const NO_HINT_FLAG: &str = "no-hint";
 
@@ -176,6 +176,23 @@ pub struct BatchArgs {
     pub output: Option<String>,
 }
 
+#[derive(Subcommand)]
+pub enum BatchAction {
+    /// Generate a template batch TOML file
+    Init,
+    /// Re-dispatch failed tasks from an existing batch workgroup
+    Retry {
+        /// Workgroup ID to retry failed tasks from
+        group_id: String,
+        /// Agent override for all retried tasks
+        #[arg(long)]
+        agent: Option<String>,
+        /// Include tasks still stuck in WAIT status
+        #[arg(long)]
+        include_waiting: bool,
+    },
+}
+
 #[derive(Args)]
 pub struct BenchmarkArgs {
     pub prompt: String,
@@ -185,116 +202,4 @@ pub struct BenchmarkArgs {
     pub dir: Option<String>,
     #[arg(long, num_args = 0..=1, default_missing_value = "auto")]
     pub verify: Option<String>,
-}
-
-#[derive(Args, Default)]
-pub struct BoardArgs {
-    #[arg(long)]
-    pub running: bool,
-    #[arg(long)]
-    pub today: bool,
-    #[arg(long)]
-    pub mine: bool,
-    #[arg(long)]
-    pub group: Option<String>,
-    /// Show tasks from every project (default: current project only).
-    /// Without this flag the board filters to the current project identity
-    /// (or the explicit unattributed bucket when none is resolved).
-    #[arg(long)]
-    pub all: bool,
-    /// Maximum number of tasks to display (default: 50 without filters, unlimited with --group/--running/--today)
-    #[arg(short, long)]
-    pub limit: Option<usize>,
-    /// Bypass anti-polling cooldown
-    #[arg(long)]
-    pub force: bool,
-    #[arg(short, long)]
-    pub stream: bool,
-    #[arg(long)]
-    pub json: bool,
-}
-
-#[derive(Args)]
-pub struct ChangelogArgs {
-    #[arg(long, conflicts_with_all = ["all","count"])]
-    pub version: Option<String>,
-    #[arg(long, conflicts_with = "version")]
-    pub all: bool,
-    #[arg(long, default_value = "5", conflicts_with = "version")]
-    pub count: usize,
-    #[arg(long)]
-    pub git: bool,
-}
-
-#[derive(Args)]
-#[command(after_help = r#"Examples:
-  aid agent list
-  aid agent show aider
-  aid agent add my-agent
-  aid agent remove my-agent"#)]
-pub struct AgentArgs {
-    #[command(subcommand)]
-    pub action: AgentCommands,
-}
-
-#[derive(Args)]
-pub struct CleanArgs {
-    #[arg(long, value_name = "DAYS", default_value = "7", help = "Remove records older than this many days")]
-    pub older_than: u64,
-    #[arg(long)]
-    pub worktrees: bool,
-    #[arg(long)]
-    pub dry_run: bool,
-}
-
-#[derive(Args)]
-#[command(group(
-    ArgGroup::new("show_mode")
-        .args(["events", "result", "json", "context", "explain", "summary", "diff", "output", "transcript", "log"])
-        .multiple(false)
-))]
-#[command(after_help = r#"Examples:
-  aid show t-1234              # Events timeline
-  aid show t-1234 --diff       # What this task changed (start_sha..HEAD)
-  aid show t-1234 --diff --branch # Every change on the task's branch
-  aid show t-1234 --events     # Events only
-  aid show t-1234 --output     # Task output (truncated)
-  aid show t-1234 --output --full # Complete output
-  aid show t-1234 --transcript # Raw complete agent transcript
-  aid show t-1234 --context    # Resolved prompt
-  aid show t-1234 --explain    # AI explanation"#)]
-pub struct ShowArgs {
-    pub task_id: String,
-    #[arg(long)]
-    pub events: bool,
-    #[arg(long, help = "Show the full resolved prompt sent to the agent")]
-    pub context: bool,
-    #[arg(long)]
-    pub diff: bool,
-    #[arg(long)]
-    pub summary: bool,
-    #[arg(long, requires = "diff")]
-    pub file: Option<String>,
-    #[arg(long, requires = "diff", help = "With --diff: every change on the task's branch, not just this task's own commits")]
-    pub branch: bool,
-    #[arg(long)]
-    pub output: bool,
-    #[arg(long)]
-    pub transcript: bool,
-    #[arg(long)]
-    pub result: bool,
-    #[arg(long)]
-    pub full: bool,
-    #[arg(long, conflicts_with = "full")]
-    pub brief: bool,
-    #[arg(long)]
-    pub explain: bool,
-    #[arg(long)]
-    pub log: bool,
-    #[arg(long)]
-    pub json: bool,
-    #[arg(long)]
-    pub agent: Option<String>,
-    #[arg(short, long)]
-    pub model: Option<String>,
 }

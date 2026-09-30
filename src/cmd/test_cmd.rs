@@ -11,7 +11,7 @@ use super::build::build_diag::render_digest;
 use super::build::build_process::{self, CargoRunOutcome};
 use super::build::{resolve_target, BuildRequest};
 use super::test_parse::{evaluate_test_run, parse_libtest_lines};
-use crate::cli::command_args_b::TestArgs;
+use crate::cli::cargo_args::TestArgs;
 use crate::store::Store;
 use crate::types::{EventKind, TaskEvent, TaskId};
 

@@ -2,8 +2,8 @@
 // Covers top-level command parsing; depends on clap Parser and cli module exports.
 
 use super::{BatchAction, Cli, Commands, ExperimentCommands, HookAction};
-use super::{command_args_a, command_args_b, command_args_watch};
-use crate::cli_actions::{ContainerAction, GroupAction};
+use super::{admin_args, group_args, inspect_args, run_args};
+use crate::cli::{ContainerAction, GroupAction};
 use clap::Parser;
 
 #[test]
@@ -16,7 +16,7 @@ fn bare_aid_parses_without_subcommand() {
 fn run_best_of_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "run", "auto", "add tests", "--best-of", "3"]).unwrap();
     match cli.command {
-        Some(Commands::Run(command_args_a::RunArgs { best_of, .. })) => {
+        Some(Commands::Run(run_args::RunArgs { best_of, .. })) => {
             assert_eq!(best_of, Some(3))
         }
         _ => panic!("expected Run command"),
@@ -27,7 +27,7 @@ fn run_best_of_flag_parses() {
 fn run_parent_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "run", "codex", "do stuff", "--parent", "t-abc123"]).unwrap();
     match cli.command {
-        Some(Commands::Run(command_args_a::RunArgs { parent, .. })) => {
+        Some(Commands::Run(run_args::RunArgs { parent, .. })) => {
             assert_eq!(parent, Some("t-abc123".to_string()))
         }
         _ => panic!("expected Run"),
@@ -38,7 +38,7 @@ fn run_parent_flag_parses() {
 fn run_peer_review_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--peer-review", "gemini"]).unwrap();
     match cli.command {
-        Some(Commands::Run(command_args_a::RunArgs { peer_review, .. })) => {
+        Some(Commands::Run(run_args::RunArgs { peer_review, .. })) => {
             assert_eq!(peer_review, Some("gemini".to_string()))
         }
         _ => panic!("expected Run"),
@@ -49,7 +49,7 @@ fn run_peer_review_flag_parses() {
 fn run_timeout_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--timeout", "300"]).unwrap();
     match cli.command {
-        Some(Commands::Run(command_args_a::RunArgs { timeout, .. })) => assert_eq!(timeout, Some(300)),
+        Some(Commands::Run(run_args::RunArgs { timeout, .. })) => assert_eq!(timeout, Some(300)),
         _ => panic!("expected Run"),
     }
 }
@@ -58,7 +58,7 @@ fn run_timeout_flag_parses() {
 fn run_audit_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--audit"]).unwrap();
     match cli.command {
-        Some(Commands::Run(command_args_a::RunArgs { audit, .. })) => assert!(audit),
+        Some(Commands::Run(run_args::RunArgs { audit, .. })) => assert!(audit),
         _ => panic!("expected Run"),
     }
 }
@@ -67,7 +67,7 @@ fn run_audit_flag_parses() {
 fn run_idle_timeout_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--idle-timeout", "240"]).unwrap();
     match cli.command {
-        Some(Commands::Run(command_args_a::RunArgs { idle_timeout, .. })) => {
+        Some(Commands::Run(run_args::RunArgs { idle_timeout, .. })) => {
             assert_eq!(idle_timeout, Some(240))
         }
         _ => panic!("expected Run"),
@@ -78,7 +78,7 @@ fn run_idle_timeout_flag_parses() {
 fn run_no_link_deps_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--no-link-deps"]).unwrap();
     match cli.command {
-        Some(Commands::Run(command_args_a::RunArgs { no_link_deps, .. })) => {
+        Some(Commands::Run(run_args::RunArgs { no_link_deps, .. })) => {
             assert!(no_link_deps)
         }
         _ => panic!("expected Run"),
@@ -89,7 +89,7 @@ fn run_no_link_deps_flag_parses() {
 fn run_sandbox_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--sandbox"]).unwrap();
     match cli.command {
-        Some(Commands::Run(command_args_a::RunArgs { sandbox, .. })) => assert!(sandbox),
+        Some(Commands::Run(run_args::RunArgs { sandbox, .. })) => assert!(sandbox),
         _ => panic!("expected Run"),
     }
 }
@@ -98,7 +98,7 @@ fn run_sandbox_flag_parses() {
 fn run_container_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--container", "dev:latest"]).unwrap();
     match cli.command {
-        Some(Commands::Run(command_args_a::RunArgs { container, .. })) => {
+        Some(Commands::Run(run_args::RunArgs { container, .. })) => {
             assert_eq!(container, Some("dev:latest".to_string()))
         }
         _ => panic!("expected Run"),
@@ -109,7 +109,7 @@ fn run_container_flag_parses() {
 fn run_result_file_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "run", "codex", "task", "--result-file", "/tmp/result.md"]).unwrap();
     match cli.command {
-        Some(Commands::Run(command_args_a::RunArgs { result_file, .. })) => {
+        Some(Commands::Run(run_args::RunArgs { result_file, .. })) => {
             assert_eq!(result_file, Some("/tmp/result.md".to_string()))
         }
         _ => panic!("expected Run"),
@@ -120,7 +120,7 @@ fn run_result_file_flag_parses() {
 fn run_prompt_file_flag_parses_without_positional_prompt() {
     let cli = Cli::try_parse_from(["aid", "run", "codex", "--prompt-file", "/tmp/prompt.md"]).unwrap();
     match cli.command {
-        Some(Commands::Run(command_args_a::RunArgs { prompt, prompt_file, .. })) => {
+        Some(Commands::Run(run_args::RunArgs { prompt, prompt_file, .. })) => {
             assert!(prompt.is_none());
             assert_eq!(prompt_file, Some("/tmp/prompt.md".to_string()));
         }
@@ -144,7 +144,7 @@ fn run_iterate_flags_parse() {
     ])
     .unwrap();
     match cli.command {
-        Some(Commands::Run(command_args_a::RunArgs {
+        Some(Commands::Run(run_args::RunArgs {
             iterate,
             eval,
             eval_feedback_template,
@@ -165,7 +165,7 @@ fn run_iterate_flags_parse() {
 fn watch_timeout_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "watch", "--timeout", "60", "--group", "wg-a"]).unwrap();
     match cli.command {
-        Some(Commands::Watch(command_args_watch::WatchArgs { timeout, group, stream, .. })) => {
+        Some(Commands::Watch(inspect_args::WatchArgs { timeout, group, stream, .. })) => {
             assert!(!stream);
             assert_eq!(timeout, Some(60));
             assert_eq!(group, Some("wg-a".to_string()));
@@ -178,7 +178,7 @@ fn watch_timeout_flag_parses() {
 fn watch_stream_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "watch", "--stream", "--group", "wg-a"]).unwrap();
     match cli.command {
-        Some(Commands::Watch(command_args_watch::WatchArgs { group, stream, .. })) => {
+        Some(Commands::Watch(inspect_args::WatchArgs { group, stream, .. })) => {
             assert!(stream);
             assert_eq!(group, Some("wg-a".to_string()));
         }
@@ -224,7 +224,7 @@ fn experiment_run_parses() {
 fn hook_session_start_parses() {
     let cli = Cli::try_parse_from(["aid", "hook", "session-start"]).unwrap();
     match cli.command {
-        Some(Commands::Hook(command_args_b::HookArgs { action: HookAction::SessionStart })) => {}
+        Some(Commands::Hook(admin_args::HookArgs { action: HookAction::SessionStart })) => {}
         _ => panic!("expected Hook SessionStart"),
     }
 }
@@ -233,7 +233,7 @@ fn hook_session_start_parses() {
 fn container_subcommand_parses() {
     let cli = Cli::try_parse_from(["aid", "container", "stop", "aid-dev-demo"]).unwrap();
     match cli.command {
-        Some(Commands::Container(command_args_b::ContainerArgs {
+        Some(Commands::Container(admin_args::ContainerArgs {
             action: ContainerAction::Stop { name },
         })) => assert_eq!(name, "aid-dev-demo"),
         _ => panic!("expected Container stop"),
@@ -244,7 +244,7 @@ fn container_subcommand_parses() {
 fn group_cancel_subcommand_parses() {
     let cli = Cli::try_parse_from(["aid", "group", "cancel", "wg-a"]).unwrap();
     match cli.command {
-        Some(Commands::Group(command_args_b::GroupArgs {
+        Some(Commands::Group(group_args::GroupArgs {
             action: GroupAction::Cancel { group_id },
         })) => assert_eq!(group_id, "wg-a"),
         _ => panic!("expected Group cancel"),
@@ -265,7 +265,7 @@ fn batch_dispatch_file_parses() {
     ])
     .unwrap();
     match cli.command {
-        Some(Commands::Batch(command_args_a::BatchArgs { action, file, vars, parallel, analyze, force, .. })) => {
+        Some(Commands::Batch(run_args::BatchArgs { action, file, vars, parallel, analyze, force, .. })) => {
             assert!(action.is_none());
             assert_eq!(file, Some("tasks.toml".to_string()));
             assert_eq!(vars, vec!["project=demo".to_string()]);
@@ -290,7 +290,7 @@ fn batch_retry_parses() {
     ])
     .unwrap();
     match cli.command {
-        Some(Commands::Batch(command_args_a::BatchArgs {
+        Some(Commands::Batch(run_args::BatchArgs {
             action: Some(BatchAction::Retry { group_id, agent, include_waiting }),
             file,
             vars,
@@ -310,7 +310,7 @@ fn batch_retry_parses() {
 fn batch_no_prompt_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "batch", "tasks.toml", "--no-prompt"]).unwrap();
     match cli.command {
-        Some(Commands::Batch(command_args_a::BatchArgs { no_prompt, yes, .. })) => {
+        Some(Commands::Batch(run_args::BatchArgs { no_prompt, yes, .. })) => {
             assert!(no_prompt);
             assert!(!yes);
         }
@@ -322,7 +322,7 @@ fn batch_no_prompt_flag_parses() {
 fn batch_yes_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "batch", "tasks.toml", "--yes"]).unwrap();
     match cli.command {
-        Some(Commands::Batch(command_args_a::BatchArgs { yes, no_prompt, .. })) => {
+        Some(Commands::Batch(run_args::BatchArgs { yes, no_prompt, .. })) => {
             assert!(yes);
             assert!(!no_prompt);
         }
@@ -334,7 +334,7 @@ fn batch_yes_flag_parses() {
 fn changelog_version_parses() {
     let cli = Cli::try_parse_from(["aid", "changelog", "--version", "8.21.14"]).unwrap();
     match cli.command {
-        Some(Commands::Changelog(command_args_a::ChangelogArgs { version, all, count, git })) => {
+        Some(Commands::Changelog(inspect_args::ChangelogArgs { version, all, count, git })) => {
             assert_eq!(version, Some("8.21.14".to_string()));
             assert!(!all);
             assert_eq!(count, 5);
@@ -348,7 +348,7 @@ fn changelog_version_parses() {
 fn changelog_git_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "changelog", "--git"]).unwrap();
     match cli.command {
-        Some(Commands::Changelog(command_args_a::ChangelogArgs { git, .. })) => assert!(git),
+        Some(Commands::Changelog(inspect_args::ChangelogArgs { git, .. })) => assert!(git),
         _ => panic!("expected Changelog"),
     }
 }
@@ -357,7 +357,7 @@ fn changelog_git_flag_parses() {
 fn show_summary_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "show", "t-1234", "--summary"]).unwrap();
     match cli.command {
-        Some(Commands::Show(command_args_a::ShowArgs { task_id, summary, diff, file, .. })) => {
+        Some(Commands::Show(inspect_args::ShowArgs { task_id, summary, diff, file, .. })) => {
             assert_eq!(task_id, "t-1234");
             assert!(summary);
             assert!(!diff);
@@ -371,7 +371,7 @@ fn show_summary_flag_parses() {
 fn show_diff_file_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "show", "t-1234", "--diff", "--file", "src/cli.rs"]).unwrap();
     match cli.command {
-        Some(Commands::Show(command_args_a::ShowArgs { diff, summary, file, .. })) => {
+        Some(Commands::Show(inspect_args::ShowArgs { diff, summary, file, .. })) => {
             assert!(diff);
             assert!(!summary);
             assert_eq!(file, Some("src/cli.rs".to_string()));
@@ -384,7 +384,7 @@ fn show_diff_file_flag_parses() {
 fn show_result_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "show", "t-1234", "--result"]).unwrap();
     match cli.command {
-        Some(Commands::Show(command_args_a::ShowArgs { result, .. })) => assert!(result),
+        Some(Commands::Show(inspect_args::ShowArgs { result, .. })) => assert!(result),
         _ => panic!("expected Show"),
     }
 }
@@ -393,7 +393,7 @@ fn show_result_flag_parses() {
 fn show_transcript_flag_parses() {
     let cli = Cli::try_parse_from(["aid", "show", "t-1234", "--transcript"]).unwrap();
     match cli.command {
-        Some(Commands::Show(command_args_a::ShowArgs { task_id, transcript, .. })) => {
+        Some(Commands::Show(inspect_args::ShowArgs { task_id, transcript, .. })) => {
             assert_eq!(task_id, "t-1234");
             assert!(transcript);
         }

@@ -51,6 +51,27 @@ fn dispatch_reports_multiple_conflicts_without_creating_a_task() {
     assert_eq!(count, 0);
 }
 
+/// Read-only plus worktree is rejected once, by the typed run-option diagnostic,
+/// before any task or worktree exists.
+#[test]
+fn read_only_worktree_is_rejected_by_the_typed_diagnostic() {
+    let home = TempDir::new().unwrap();
+    let output = aid_cmd_in(home.path()).args([
+        "run", "grok", "Audit the scan lifecycle", "--read-only", "--worktree", "fix/scan", "--no-hint",
+    ]).output().unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--read-only cannot be used with --worktree"), "{stderr}");
+    let events = records(&home);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["stage"], "validation");
+    assert_eq!(events[0]["issues"].as_array().unwrap().len(), 1);
+    assert_eq!(events[0]["issues"][0]["code"], "read_only_worktree");
+    let db = rusqlite::Connection::open(home.path().join("aid.db")).unwrap();
+    let count: i64 = db.query_row("SELECT count(*) FROM tasks", [], |row| row.get(0)).unwrap();
+    assert_eq!(count, 0);
+}
+
 #[test]
 fn errors_can_be_read_without_initializing_a_database() {
     let home = TempDir::new().unwrap();

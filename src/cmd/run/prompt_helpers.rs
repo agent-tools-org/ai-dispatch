@@ -196,10 +196,6 @@ pub(crate) fn resolve_dir_in_target(base_dir: &str, dir: Option<&str>, repo_dir:
 type WorktreePaths = (Option<String>, Option<String>, Option<String>, Option<String>, bool);
 pub(crate) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) -> Result<WorktreePaths> {
     if let Some(ref branch) = args.worktree {
-        anyhow::ensure!(
-            !args.read_only,
-            "--read-only cannot be used with --worktree"
-        );
         let repo_dir = match repo_path {
             Some(path) => path.to_string(),
             None => resolve_repo_path(args.dir.as_deref().unwrap_or("."))?,

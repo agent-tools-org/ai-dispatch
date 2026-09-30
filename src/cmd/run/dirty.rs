@@ -9,6 +9,8 @@ use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
 
 use super::{RunArgs, retry_target, run};
+#[path = "read_only.rs"]
+mod read_only;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DirtyWorktreeAction {
@@ -24,7 +26,10 @@ pub(crate) async fn post_agent_dirty_worktree_cleanup(
     dir: &str,
     pre_task_dirty_paths: Option<&[String]>,
 ) -> Result<DirtyWorktreeAction> {
-    if args.read_only || args.audit_report_mode {
+    if args.read_only {
+        return read_only::settle(store, task_id, args, dir, pre_task_dirty_paths);
+    }
+    if args.audit_report_mode {
         return Ok(DirtyWorktreeAction::Continue);
     }
 

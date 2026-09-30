@@ -36,6 +36,42 @@ impl WorktreeSnapshot {
             .collect()
     }
 
+    pub fn read_only_state(&self, dir: &Path) -> Result<Vec<String>> {
+        let mut state = Vec::new();
+        for tracked in [true, false] {
+            let args = if tracked { ["ls-files", "-z", "--stage", "--cached"] }
+                else { ["ls-files", "-z", "--others", "--exclude-standard"] };
+            let listed = Command::new("git").current_dir(dir).args(args).output()
+                .context("Failed to list read-only snapshot paths")?;
+            anyhow::ensure!(listed.status.success(), "Read-only snapshot path listing failed");
+            for entry in listed.stdout.split(|byte| *byte == 0).filter(|entry| !entry.is_empty()) {
+                let entry = std::str::from_utf8(entry).context("Non-UTF-8 snapshot path")?;
+                let (index, path) = if tracked { entry.split_once('\t').context("Missing index entry")? }
+                    else { ("", entry) };
+                if is_aid_owned_path(path) { continue; }
+                let file = dir.join(path);
+                let (content, mode) = match std::fs::symlink_metadata(&file) {
+                    Ok(meta) if meta.is_symlink() => (
+                        format!("symlink:{}", std::fs::read_link(&file)?.display()), 0,
+                    ),
+                    Ok(meta) if meta.is_file() => {
+                        use std::os::unix::fs::PermissionsExt;
+                        let hash = Command::new("git").current_dir(dir)
+                            .args(["hash-object", "--no-filters", "--"]).arg(path).output()?;
+                        anyhow::ensure!(hash.status.success(), "Failed to snapshot {path}");
+                        (String::from_utf8(hash.stdout)?, meta.permissions().mode())
+                    }
+                    Ok(_) => anyhow::bail!("Unsupported read-only snapshot path: {path}"),
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => ("missing".into(), 0),
+                    Err(err) => return Err(err).with_context(|| format!("Failed to snapshot {path}")),
+                };
+                state.push(serde_json::to_string(&(path, index, content, mode))?);
+            }
+        }
+        state.sort();
+        Ok(state)
+    }
+
     pub fn rescuable_entries(&self) -> Vec<WorktreeStatusEntry> {
         self.entries
             .iter()

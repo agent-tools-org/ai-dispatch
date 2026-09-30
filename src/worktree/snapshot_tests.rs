@@ -266,3 +266,15 @@ fn empty_diff_uses_default_branch_fallback_for_committed_change() {
 
     assert_eq!(snapshot.empty_diff, Some(false));
 }
+
+#[test]
+fn read_only_state_detects_content_changes_with_identical_dirty_status() {
+    let dir = repo_with_main();
+    std::fs::write(dir.path().join("file.txt"), "user edit").unwrap();
+    let before = capture_worktree_snapshot(dir.path()).unwrap();
+    let state = before.read_only_state(dir.path()).unwrap();
+    std::fs::write(dir.path().join("file.txt"), "agent edit").unwrap();
+    let after = capture_worktree_snapshot(dir.path()).unwrap();
+    assert_eq!(before.status_lines, after.status_lines);
+    assert_ne!(state, after.read_only_state(dir.path()).unwrap());
+}

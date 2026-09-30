@@ -93,12 +93,14 @@ fn assert_worker_retry(site: &str, store: &Store, id: &TaskId, args: &RunArgs, r
     assert_eq!(args.foreground, runtime.foreground, "{site}");
     assert_eq!(args.announce, runtime.announce, "{site}");
     assert!(args.on_done.is_none(), "{site}");
-    assert_eq!(args.output.as_deref(), Some("saved-output"), "{site}");
+    // A read-only child re-enters dispatch, which pins -o to an absolute path for exemption.
+    let output = args.output.as_deref().unwrap_or_default();
+    assert!(std::path::Path::new(output).is_absolute() && output.ends_with("saved-output"), "{site}: {output}");
     assert_eq!(args.verify.as_deref(), Some("skip"), "{site}");
     assert!(args.read_only, "{site}");
     assert_eq!(args.budget, site != "selfheal", "{site}");
     assert_eq!(args.force_default_model, site == "selfheal", "{site}");
-    assert_eq!(args.retry, if site == "selfheal" { 2 } else { 1 }, "{site}");
+    assert_eq!(args.retry, if matches!(site, "selfheal" | "iterate") { 2 } else { 1 }, "{site}");
     assert_eq!(args.parent_task_id.as_deref(), Some("t-worker-retry"), "{site}");
 }
 

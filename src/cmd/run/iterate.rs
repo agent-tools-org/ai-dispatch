@@ -125,7 +125,6 @@ pub async fn maybe_iterate(
     retry_args.announce = args.announce;
     retry_args.on_done = None;
     retry_args.prompt = format!("[Iteration feedback]\n{feedback}\n\n[Original task]\n{root_prompt}");
-    retry_args.retry = args.retry.saturating_sub(1);
     retry_args.parent_task_id = Some(task_id.as_str().to_string());
     retry_args.background = false;
     retry_args.existing_task_id = Some(retry_task_id.clone());

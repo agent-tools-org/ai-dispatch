@@ -42,22 +42,20 @@ pub(crate) async fn maybe_auto_retry_after_model_unavailable(
 
     let root_prompt =
         retry_logic::root_prompt(store.as_ref(), &task).unwrap_or_else(|| args.prompt.clone());
-    let mut retry_args = args.clone();
+    let mut retry_args = RunArgs::for_retry(store, &task)?;
+    retry_args.dir = args.dir.clone();
+    retry_args.env = args.env.clone();
+    retry_args.foreground = args.foreground;
+    retry_args.announce = args.announce;
+    retry_args.on_done = None;
     retry_args.prompt = root_prompt;
     retry_args.force_default_model = true;
     retry_args.model = None;
     retry_args.budget = false;
     retry_args.parent_task_id = Some(task_id.as_str().to_string());
-    retry_args.repo = task.repo_path.clone().or_else(|| retry_args.repo.clone());
-    retry_args.output = task.output_path.clone().or_else(|| retry_args.output.clone());
-    retry_args.verify = task.verify.clone();
-    retry_args.read_only = task.read_only;
     retry_args.background = false;
     apply_retry_target(&task, &mut retry_args)?;
     inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
-    if task.agent.supports_session_resume() {
-        retry_args.session_id = task.agent_session_id.clone();
-    }
 
     insert_model_selfheal_event(store.as_ref(), task_id, &message)?;
     let retry_id = Box::pin(run(store.clone(), retry_args)).await?;

@@ -249,3 +249,6 @@ fn retry_rejects_missing_feedback_sources() {
         err
     );
 }
+
+#[path = "retry_timeout_dispatch_tests.rs"]
+mod retry_timeout_dispatch_tests;

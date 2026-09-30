@@ -28,7 +28,8 @@ Useful controls:
 - `--var key=value` supplies batch interpolation variables.
 
 Retry failed batch members with `aid batch retry --help`; preserve the original
-workgroup so history remains connected.
+workgroup so history remains connected. A same-agent batch retry resumes the
+latest recorded session when the agent supports resume; switching agents clears it.
 
 ## Workgroups
 

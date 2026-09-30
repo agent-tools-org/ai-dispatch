@@ -89,49 +89,17 @@ fn retry_task_to_run_args(
     if announce {
         println!("Retrying {} with feedback: {}", task.id, truncate(&feedback, 60));
     }
-    let mut run_args = load_retry_run_args(store, task)?;
+    let mut run_args = RunArgs::for_retry(store, task)?;
     apply_retry_route(&mut run_args, task, &args);
     finish_retry_run_args(&mut run_args, task, args, prompt, dir, worktree_arg, announce)?;
     Ok(run_args)
 }
 
-fn load_retry_run_args(store: &Store, task: &crate::types::Task) -> Result<RunArgs> {
-    let mut run_args = RunArgs::saved_for_task(store, task.id.as_str())?.unwrap_or_else(|| {
-        RunArgs {
-            repo: task.repo_path.clone(),
-            dir: task.repo_path.clone(),
-            output: task.output_path.clone(),
-            model: task.requested_model.clone(),
-            // requested_model stores the effective model, not whether the
-            // original invocation supplied --model. Old rows cannot retain
-            // that distinction, so let stale preferences degrade on retry.
-            model_source: ModelSource::AidResolved,
-            group: task.workgroup_id.clone(),
-            verify: task.verify.clone(),
-            read_only: task.read_only,
-            budget: task.budget,
-            ..Default::default()
-        }
-    });
-    run_args.repo = run_args.repo.or_else(|| task.repo_path.clone());
-    Ok(run_args)
-}
-
-// Anchor the current route so switch_agent can compare "task's agent" to
-// "next agent" and drop route-owned fields (model + session_id) when they
-// differ. A same-agent retry keeps both; a different-agent retry drops both.
-// Explicit --model / --idle-timeout then override; unspecified inherits.
 fn apply_retry_route(run_args: &mut RunArgs, task: &crate::types::Task, args: &RetryArgs) {
     let agent_name = args
         .agent
         .clone()
         .unwrap_or_else(|| task.agent_display_name().to_string());
-    run_args.agent_name = task.agent_display_name().to_string();
-    run_args.session_id = if task.agent.supports_session_resume() {
-        task.agent_session_id.clone()
-    } else {
-        None
-    };
     switch_agent(run_args, agent_name);
     if let Some(model) = args.model.clone() {
         run_args.model = Some(model);
@@ -162,7 +130,6 @@ fn finish_retry_run_args(
     run_args.announce = announce;
     run_args.parent_task_id = Some(task.id.as_str().to_string());
     run_args.background = args.bg;
-    run_args.existing_task_id = None;
     Ok(())
 }
 

@@ -153,6 +153,7 @@ async fn completed_worktree_survives_when_checklist_retry_dispatches() {
         ..Default::default()
     };
 
+    store.update_task_dispatch_args(task_id.as_str(), &args.dispatch_args_json().unwrap()).unwrap();
     let retry_id = run_lifecycle(&store, &task_id, &args).await;
 
     assert!(retry_id.is_some());

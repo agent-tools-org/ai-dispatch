@@ -2,8 +2,6 @@
 // Exports: validate_task_profile(), resolve_run_agent().
 // Deps: selection advice, routing hints, config/team/store, task-profile types.
 
-use std::sync::Arc;
-
 use anyhow::Result;
 
 use crate::agent;
@@ -41,12 +39,10 @@ pub(super) fn validate_task_profile(
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn resolve_run_agent(
-    store: &Arc<store::Store>, prompt: &str, _dir: &Option<String>, _repo: &Option<String>,
-    _output: &Option<String>, _result_file: &Option<String>, _model: &Option<String>, _budget: bool,
+    store: &store::Store, prompt: &str,
     difficulty: Option<TaskDifficulty>, declared_budget: Option<TaskBudget>,
     urgency: Option<TaskUrgency>, rigor: Option<TaskRigor>, egress: TaskEgress,
-    kind: Option<TaskCategory>, no_hint: bool, _read_only: bool, _sandbox: bool,
-    _worktree: &Option<String>, team_flag: &Option<String>, agent_name: String,
+    kind: Option<TaskCategory>, no_hint: bool, team_flag: &Option<String>, agent_name: String,
 ) -> Result<String> {
     if agent::selection::is_removed_auto_agent(&agent_name) {
         anyhow::bail!("{}", agent::selection::AUTO_AGENT_REMOVED_MSG);

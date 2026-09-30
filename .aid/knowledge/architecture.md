@@ -8,7 +8,7 @@ and the [roadmap](../../docs/roadmap.md) for remaining work.
 
 | Boundary | Source | Responsibility |
 | --- | --- | --- |
-| Entry and commands | `src/main.rs`, `src/cli/`, `src/cli_actions.rs`, `src/cmd_dispatch/` | Parse, diagnose, and dispatch commands |
+| Entry and commands | `src/main.rs`, `src/cli/mod.rs`, domain argument files such as `src/cli/admin_args.rs` and `src/cli/agent_provider_args.rs`, `src/cmd_dispatch/` | Parse, diagnose, and dispatch commands |
 | Run and batch | `src/cmd/run/`, `src/cmd/batch/`, `src/batch/` | Resolve target project, route, prompt, task and DAG execution |
 | Agent abstraction | `src/agent/mod.rs`, `src/agent/registry.rs`, per-agent modules | `Agent` trait, `RunOpts`, adapters and custom definitions |
 | Routing | `src/agent/selection*`, `src/route_availability*`, `src/live_quota*`, `src/rate_limit*` | Advice, capabilities, quota groups, hold/degraded state |

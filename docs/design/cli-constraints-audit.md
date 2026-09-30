@@ -148,10 +148,8 @@ string. A command named `false` must retain its normal command semantics.
 
 ### P2: Output modifiers use inconsistent conflict rules
 
-`show --full --brief` is rejected, but `output --full --brief` is accepted by
-[output arguments](../../src/cli/command_args_c.rs); the
-[dispatch match](../../src/cmd_dispatch/dispatch_match.rs) discards `full` and
-forwards only `brief`. Likewise, `board --stream --json` accepts both output
+`show --full --brief` is rejected by
+[inspection arguments](../../src/cli/inspect_args.rs). `board --stream --json` accepts both output
 modes but [board dispatch](../../src/cmd_dispatch/display.rs) enters streaming
 without forwarding `json`. Export's `--sharegpt` also selects a different output
 path while the independent `--format` value is accepted.

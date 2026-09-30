@@ -24,14 +24,14 @@
 - Test naming: `snake_case` describing the behavior, e.g., `create_worktree_reuses_existing_branch_worktree`
 
 ## CLI Pattern
-- Commands defined in `cli.rs` as clap derive enums
-- Subcommand actions in `cli_actions.rs`
+- Commands defined in `src/cli/mod.rs` as clap derive enums
+- Subcommand actions in domain argument files such as `src/cli/admin_args.rs` and `src/cli/agent_provider_args.rs`
 - Handler functions in `cmd/<name>.rs` with internal action enum
 - Main dispatch in `main.rs` maps CLI variants → handler calls
 
 ## Adding a New Command
-1. Add variant to `Commands` enum in `cli.rs`
-2. Add subcommand enum to `cli_actions.rs` if needed
+1. Add variant to `Commands` enum in `src/cli/mod.rs`
+2. Add subcommand enum to the relevant domain argument file under `src/cli/` if needed
 3. Create `src/cmd/<name>.rs` with handler function
 4. Add `pub mod <name>;` to `src/cmd/mod.rs`
 5. Wire dispatch in `main.rs`

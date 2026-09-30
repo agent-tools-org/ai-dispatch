@@ -57,7 +57,10 @@ fn file_state(dir: &Path, path: &str, index: &str) -> Result<(String, u32)> {
 fn hash_files(dir: &Path, paths: &[&str]) -> Result<Vec<String>> {
     if paths.is_empty() { return Ok(Vec::new()); }
     let mut input = Vec::new();
+    let dir = dir.canonicalize()?;
     for path in paths {
+        let file = dir.join(path);
+        let path = file.to_str().context("Non-UTF-8 snapshot path")?;
         // Git accepts C-quoted paths, so tabs and newlines cannot split records.
         input.push(b'"');
         for byte in path.bytes() {
@@ -69,7 +72,7 @@ fn hash_files(dir: &Path, paths: &[&str]) -> Result<Vec<String>> {
         }
         input.extend_from_slice(b"\"\n");
     }
-    let mut child = Command::new("git").current_dir(dir)
+    let mut child = Command::new("git").current_dir(&dir)
         .args(["hash-object", "--no-filters", "--stdin-paths"])
         .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
     let mut stdin = child.stdin.take().context("Missing hash-object stdin")?;

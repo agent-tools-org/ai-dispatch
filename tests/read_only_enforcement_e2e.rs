@@ -29,7 +29,7 @@ impl Fixture {
         git(repo.path(), &["commit", "-m", "initial"]);
         let head = git(repo.path(), &["rev-parse", "HEAD"]);
         let agent = bin.path().join("claude");
-        std::fs::write(&agent, format!("#!/bin/sh\ncase \"$1\" in --help|--version) echo 'Claude Code 2.1.285'; exit 0;; esac\n{script}\nprintf '%s\\n' '{{\"type\":\"result\",\"subtype\":\"success\",\"result\":\"Inspection completed.\"}}'\n")).unwrap();
+        std::fs::write(&agent, format!("#!/bin/sh\ncase \"$1\" in --help|--version) echo 'Claude Code 2.1.285'; exit 0;; esac\n{script}\nprintf '%s\\n' '{{\"type\":\"assistant\",\"message\":{{\"content\":[{{\"type\":\"text\",\"text\":\"Inspection completed.\"}}]}}}}'\nprintf '%s\\n' '{{\"type\":\"result\",\"subtype\":\"success\",\"result\":\"Inspection completed.\"}}'\n")).unwrap();
         std::fs::set_permissions(agent, std::fs::Permissions::from_mode(0o755)).unwrap();
         Self { home, repo, bin, head }
     }
@@ -268,7 +268,7 @@ fn read_only_nested_head_changes_fail() {
 fn read_only_git_failure_fails_before_agent_execution() {
     let f = Fixture::new("echo executed > probe.txt");
     let wrapper = f.bin.path().join("git");
-    std::fs::write(&wrapper, "#!/bin/sh\nif [ \"$1\" = status ]; then echo 'fatal: permission denied' >&2; exit 128; fi\nexec /usr/bin/git \"$@\"\n").unwrap();
+    std::fs::write(&wrapper, "#!/bin/sh\nfor arg; do if [ \"$arg\" = status ]; then echo 'fatal: permission denied' >&2; exit 128; fi; done\nexec /usr/bin/git \"$@\"\n").unwrap();
     std::fs::set_permissions(wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
     f.foreground(f.repo.path(), "claude", &["-o", "output.md"], "failed");
     assert!(!f.repo.path().join("probe.txt").exists());

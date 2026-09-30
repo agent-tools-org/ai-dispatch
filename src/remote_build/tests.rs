@@ -111,6 +111,25 @@ fn shim_installation_never_follows_operator_aid_symlink() {
     assert_eq!(std::fs::read_dir(&operator).expect("operator entries").count(), 0);
 }
 
+/// A nested `aid run` inherits the parent task's isolated HOME, which holds the
+/// parent's shim directory and scratch dirs. They must not leak in as symlinks.
+#[test]
+fn nested_task_home_gets_its_own_real_shim_dir() {
+    let aid_home = tempfile::tempdir().expect("aid home");
+    let _aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+    let parent = tempfile::tempdir().expect("parent home");
+    std::fs::create_dir(parent.path().join(".aid-build-shims")).expect("parent shims");
+    std::fs::create_dir(parent.path().join(".aid-tmp-abc")).expect("parent tmp");
+    let child = crate::agent::home_isolation::IsolatedHomeGuard::create_from_home(Some(parent.path()), None)
+        .expect("isolated home");
+    assert!(!child.path().join(".aid-tmp-abc").exists());
+    configure(&mut Command::new("agent"), child.path(), "box").expect("configure");
+    let shims = child.path().join(".aid-build-shims");
+    assert!(std::fs::symlink_metadata(&shims).expect("shims").file_type().is_dir());
+    assert!(shims.join("cargo").is_file());
+    assert_eq!(std::fs::read_dir(parent.path().join(".aid-build-shims")).expect("parent").count(), 0);
+}
+
 #[test]
 fn resolve_disabled_is_noop_and_incompatible_is_rejected() {
     let mut args = RunArgs::default();

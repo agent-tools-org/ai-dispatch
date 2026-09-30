@@ -62,6 +62,17 @@ fn project_default_skill_applies_only_when_nothing_is_declared() {
     );
 }
 
+/// Project defaults are write methodologies: a read-only run skips them, but an
+/// explicit `--skill` still applies.
+#[test]
+fn read_only_run_skips_project_default_skill_but_keeps_declared_one() {
+    let project = crate::project::ProjectConfig { skills: vec!["implementer".to_string()], ..Default::default() };
+    let read_only = RunArgs { read_only: true, ..run_args(vec![]) };
+    assert!(effective_skills(&read_only, Some(&project)).is_empty());
+    let declared = RunArgs { read_only: true, ..run_args(vec!["reviewer".to_string()]) };
+    assert_eq!(effective_skills(&declared, Some(&project)), vec!["reviewer"]);
+}
+
 #[test]
 fn a_declared_skill_is_used_verbatim() {
     let temp = tempfile::tempdir().unwrap();

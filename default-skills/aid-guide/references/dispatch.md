@@ -6,7 +6,7 @@ aid does not choose either on the caller's behalf.
 
 - **Skills**: `--skill <name>` declares them, `--no-skill` declares none, and a project sets a
   default once with `skills = ["implementer"]` in `.aid/project.toml`. Omitting all three means no
-  skill. aid previously picked one from the **agent kind alone**, never looking at the task, so
+  skill. A `--read-only` run skips the project default; an explicit `--skill` still applies. aid previously picked one from the **agent kind alone**, never looking at the task, so
   every implementation CLI was handed `implementer` and gemini and agy were handed `researcher`
   whatever the work was — a large block of methodology text and a persona nobody had asked for.
 - **Tools**: omitting `--kind` describes every resolved toolbox tool. Narrowing is opt-in because

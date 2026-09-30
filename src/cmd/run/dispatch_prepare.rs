@@ -215,8 +215,8 @@ fn finish_dispatch(
     )?;
     crate::remote_build::record(store, &claimed.task_id, args)?;
     let requested_skills = run_prompt::effective_skills(args, context.detected_project.as_ref());
-    if args.skills.is_empty() {
-        for skill in &requested_skills { aid_info!("[aid] Auto-applied skill: {skill}"); }
+    if args.skills.is_empty() && !requested_skills.is_empty() {
+        aid_info!("[aid] Project default skill: {} (.aid/project.toml)", requested_skills.join(", "));
     }
     Ok(prepared_dispatch(
         requested_skills,

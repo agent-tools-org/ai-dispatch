@@ -77,7 +77,7 @@ fn advise_succeeds_when_every_builtin_is_rate_limited() {
     for agent in [
         "gemini", "qwen", "codex", "copilot", "opencode", "commandcode",
         "cursor", "kilo", "mimocode", "droid", "oz", "claude",
-        "agy", "grok",
+        "agy", "grok", "droid--standard", "droid--core",
     ] {
         std::fs::write(
             aid_home.path().join(format!("rate-limit-{agent}")),
@@ -95,7 +95,7 @@ fn advise_succeeds_when_every_builtin_is_rate_limited() {
     let payload: serde_json::Value = serde_json::from_slice(&output.stdout).expect("advice JSON");
     let candidates = payload["candidates"].as_array().expect("candidate array");
     assert!(!candidates.is_empty());
-    assert!(candidates.iter().all(|item| item["breakdown"]["rate_limit_penalty"] == -10.0));
+    assert!(candidates.iter().all(|item| item["quota"]["status"] == "held"), "{candidates:?}");
     assert_recommendation_installed(&payload);
     assert!(!aid_home.path().join("aid.db").exists());
 }
@@ -182,7 +182,7 @@ fn only_claude_installed_without_preference_emits_no_recommendation() {
     let bin = home.path().join("bin");
     std::fs::create_dir(&bin).expect("bin");
     let claude = bin.join("claude");
-    std::fs::write(&claude, "#!/bin/sh\nexit 0\n").expect("claude stub");
+    std::fs::write(&claude, "#!/bin/sh\necho 'Claude Code'\n").expect("claude stub");
     std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).expect("executable");
     let output = aid_cmd_in(home.path()).env("PATH", &bin)
         .args(["advise", "refactor the scheduler"]).args(PROFILE_ARGS).output().expect("advise");

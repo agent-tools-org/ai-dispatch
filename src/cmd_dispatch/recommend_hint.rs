@@ -2,45 +2,32 @@
 // Exports non-blocking recommendation emission and hint flag text.
 // Deps: agent selection, CLI flag constants, store/team context.
 
-use crate::agent::{self, RunOpts};
+use crate::agent::classifier::TaskCategory;
+use crate::agent::selection::{advise, caller_advice};
 use crate::cli::command_args_a::NO_HINT_FLAG;
 use crate::store::Store;
 use crate::team::TeamConfig;
-use crate::types::AgentKind;
+use crate::types::{AgentKind, DeclaredTaskProfile};
 
 const MIN_HINT_PROMPT_CHARS: usize = 20;
 
-pub(super) fn emit_if_recommended(
-    user_agent: &str,
-    prompt: &str,
-    no_hint: bool,
-    opts: &RunOpts,
-    store: &Store,
-    team: Option<&TeamConfig>,
-) {
-    if hint_suppressed(user_agent, prompt, no_hint) {
-        return;
-    }
-    let (recommended, _) = agent::select_agent_with_reason(prompt, opts, store, team);
-    if let Some(hint) = recommendation_hint(user_agent, prompt, no_hint, &recommended) {
-        aid_hint!("{hint}");
-    }
-}
-
-fn recommendation_hint(
-    user_agent: &str,
-    prompt: &str,
-    no_hint: bool,
-    recommended_agent: &str,
+pub(super) fn recommendation_hint(
+    user_agent: &str, prompt: &str, no_hint: bool, declared: DeclaredTaskProfile,
+    kind: Option<TaskCategory>, store: &Store, team: Option<&TeamConfig>,
 ) -> Option<String> {
-    if hint_suppressed(user_agent, prompt, no_hint) {
+    if no_hint || prompt.chars().count() < MIN_HINT_PROMPT_CHARS {
         return None;
     }
-    if user_agent.eq_ignore_ascii_case(recommended_agent) {
+    let model = crate::session::caller_model(None);
+    let caller = crate::session::current_caller()
+        .and_then(|session| caller_advice(&session.kind, model.as_deref()));
+    let recommended_agent = advise(prompt, declared, kind, team, Some(store), 0, caller)
+        .recommended?.agent;
+    if user_agent.eq_ignore_ascii_case(&recommended_agent) {
         return None;
     }
 
-    let detail = match AgentKind::parse_str(recommended_agent) {
+    let detail = match AgentKind::parse_str(&recommended_agent) {
         Some(AgentKind::Codex) => return None,
         Some(AgentKind::OpenCode) => " (5-20x cheaper, good for simple edits)",
         Some(AgentKind::Gemini) => " (subscription-based, good for research/docs/web queries)",
@@ -52,86 +39,79 @@ fn recommendation_hint(
     ))
 }
 
-fn hint_suppressed(_user_agent: &str, prompt: &str, no_hint: bool) -> bool {
-    no_hint || prompt.chars().count() < MIN_HINT_PROMPT_CHARS
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::selection::select_agent_from;
-    use crate::paths::{self, AidHomeGuard};
+    use crate::paths::AidHomeGuard;
+    use crate::types::{TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
     use tempfile::TempDir;
 
-    fn opts() -> RunOpts {
-        RunOpts {
-            dir: None,
-            output: None,
-            result_file: None,
-            model: None,
-            budget: false,
-            read_only: false,
-            sandbox: false,
-            context_files: vec![],
-            session_id: None,
-            env: None,
-            env_forward: None,
+    fn profile() -> DeclaredTaskProfile {
+        DeclaredTaskProfile {
+            difficulty: TaskDifficulty::Moderate, budget: TaskBudget::Standard,
+            urgency: TaskUrgency::Normal, rigor: TaskRigor::Standard,
         }
     }
 
-    fn isolated() -> (TempDir, AidHomeGuard) {
-        let temp = TempDir::new().unwrap();
-        let guard = AidHomeGuard::set(temp.path());
-        std::fs::create_dir_all(paths::aid_dir()).unwrap();
-        (temp, guard)
-    }
-
-    fn selected_for(prompt: &str) -> String {
-        let (_temp, _guard) = isolated();
-        let store = Store::open_memory().unwrap();
-        let available = [
-            AgentKind::Gemini,
-            AgentKind::Qwen,
-            AgentKind::Claude,
-            AgentKind::OpenCode,
-            AgentKind::Kilo,
-            AgentKind::MiMoCode,
-            AgentKind::Cursor,
-            AgentKind::Codex,
-        ];
-        select_agent_from(prompt, &opts(), &available, &store, None).0
+    fn hint(user: &str, prompt: &str, no_hint: bool) -> Option<String> {
+        let temp = TempDir::new().expect("home");
+        let _home = AidHomeGuard::set(temp.path());
+        let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::OpenCode]);
+        recommendation_hint(user, prompt, no_hint, profile(), None, &Store::open_memory().expect("store"), None)
     }
 
     #[test]
-    fn hint_fires_when_user_picks_codex_but_classifier_recommends_opencode() {
+    fn hint_fires_when_user_picks_codex_but_advise_recommends_opencode() {
         let prompt = "rename src/types.rs field name to task_name";
-        let recommended = selected_for(prompt);
-
-        assert_eq!(recommended, AgentKind::OpenCode.as_str());
         assert_eq!(
-            recommendation_hint("codex", prompt, false, &recommended),
+            hint("codex", prompt, false),
             Some("[tip] For this prompt, `opencode` would likely work too (5-20x cheaper, good for simple edits). Run `aid advise` to compare agents, then `aid run <agent> ...`. Pass --no-hint to suppress.".to_string())
         );
     }
 
     #[test]
     fn hint_suppressed_with_no_hint_flag() {
-        assert_eq!(
-            recommendation_hint("codex", "rename src/types.rs field name", true, "opencode"),
-            None
-        );
+        assert_eq!(hint("codex", "rename src/types.rs field name", true), None);
     }
 
     #[test]
     fn hint_suppressed_for_short_prompts() {
-        assert_eq!(recommendation_hint("codex", "rename field", false, "opencode"), None);
+        assert_eq!(hint("codex", "rename field", false), None);
     }
 
     #[test]
-    fn hint_suppressed_when_classifier_agrees_with_user_choice() {
-        assert_eq!(
-            recommendation_hint("opencode", "rename src/types.rs field name", false, "opencode"),
-            None
-        );
+    fn hint_suppressed_when_advise_agrees_with_user_choice() {
+        assert_eq!(hint("OPENCODE", "rename src/types.rs field name", false), None);
     }
+
+    #[test]
+    fn only_claude_installed_without_preference_keeps_hint_silent() {
+        let temp = TempDir::new().expect("home");
+        let _home = AidHomeGuard::set(temp.path());
+        let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Claude]);
+        let store = Store::open_memory().expect("store");
+        assert_eq!(recommendation_hint("codex", "refactor the scheduler", false,
+            profile(), None, &store, None), None);
+    }
+
+    #[test]
+    fn hint_recommends_the_advise_agent_for_the_same_profile() {
+        let temp = TempDir::new().expect("home");
+        let _home = AidHomeGuard::set(temp.path());
+        let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Gemini, AgentKind::Droid, AgentKind::OpenCode]);
+        let store = Store::open_memory().expect("store");
+        let prompt = "refactor the scheduler and rename the routing fields";
+        for (declared, kind) in [
+            (DeclaredTaskProfile { difficulty: TaskDifficulty::Simple, budget: TaskBudget::Free,
+                urgency: TaskUrgency::Background, rigor: TaskRigor::Draft }, TaskCategory::Research),
+            (DeclaredTaskProfile { difficulty: TaskDifficulty::Complex, budget: TaskBudget::Premium,
+                urgency: TaskUrgency::Urgent, rigor: TaskRigor::Critical }, TaskCategory::Refactoring),
+        ] {
+            let report = crate::cmd::advise::build_report(Some(&store), prompt, declared, Some(kind), None, 0, None);
+            let recommended = report.recommended.expect("recommendation");
+            let hint = recommendation_hint("qwen", prompt, false, declared, Some(kind), &store, None).expect("hint");
+            assert!(hint.contains(&format!("`{}`", recommended.agent)), "{hint}");
+        }
+    }
+
 }

@@ -20,14 +20,13 @@ fn isolated() -> (tempfile::TempDir, AidHomeGuard, CacheDirGuard) {
     (temp, home, guard)
 }
 
+fn declared(difficulty: TaskDifficulty, budget: TaskBudget) -> DeclaredTaskProfile {
+    DeclaredTaskProfile { difficulty, budget, urgency: TaskUrgency::Normal, rigor: TaskRigor::Standard }
+}
+
 fn run(caller: Option<CallerAdvice>) -> AdviceReport {
-    let declared = DeclaredTaskProfile {
-        difficulty: TaskDifficulty::Moderate,
-        budget: TaskBudget::Standard,
-        urgency: TaskUrgency::Normal,
-        rigor: TaskRigor::Standard,
-    };
-    advise("refactor the scheduler", declared, Some(TaskCategory::Refactoring), None, None, 0, caller)
+    advise("refactor the scheduler", declared(TaskDifficulty::Moderate, TaskBudget::Standard),
+        Some(TaskCategory::Refactoring), None, None, 0, caller)
 }
 
 fn anthropic_caller(capability: Option<f64>) -> CallerAdvice {
@@ -164,4 +163,115 @@ fn cheap_budget_keeps_the_catalog_budget_model() {
     assert_eq!(codex.model.as_deref(), catalog);
     assert!(codex.pinned);
     assert_eq!(codex.source, RunModelSource::BudgetRoute);
+}
+
+#[test]
+fn advised_model_group_hold_switches_route_but_other_group_does_not() {
+    let (temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Droid, AgentKind::Codex]);
+    crate::agent_config::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
+    crate::agent_config::save_agent_default_model("codex", Some("gpt-6-sol")).expect("model");
+    let baseline = run(None).recommended.expect("recommendation");
+    assert_eq!((&*baseline.agent, baseline.model.as_deref()), ("droid", Some("gpt-5.3-codex")));
+    let hold = "hold: manual\nmessage: quota exhausted\n";
+    std::fs::write(temp.path().join("rate-limit-droid--core"), hold).expect("other hold");
+    let other = run(None);
+    let recommended = other.recommended.expect("recommendation");
+    assert_eq!((recommended.agent, recommended.model), (baseline.agent, baseline.model));
+    assert_ne!(find(&run(None), "droid").quota.status, "held");
+    std::fs::remove_file(temp.path().join("rate-limit-droid--core")).expect("clear other hold");
+    std::fs::write(temp.path().join("rate-limit-droid--standard"), hold).expect("model hold");
+    let held = run(None);
+    assert_eq!(find(&held, "droid").quota.status, "held");
+    let recommended = held.recommended.expect("recommendation");
+    assert_eq!((&*recommended.agent, recommended.model.as_deref()), ("codex", Some("gpt-6-sol")));
+}
+
+#[test]
+fn claude_stays_listed_but_recommendation_requires_team_preference() {
+    let (_temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Claude, AgentKind::Codex]);
+    let baseline = run(None);
+    assert!(find(&baseline, "claude").installed);
+    assert_eq!(baseline.recommended.expect("recommendation").agent, "codex");
+    let team: TeamConfig = toml::from_str("id = 'preferred'\ndisplay_name = 'Preferred'\npreferred_agents = ['Claude']\n").expect("team");
+    let report = advise("refactor the scheduler", baseline.declared, Some(TaskCategory::Refactoring), Some(&team), None, 0, None);
+    assert_eq!(report.recommended.expect("recommendation").agent, "claude");
+}
+
+#[test]
+fn only_claude_installed_without_preference_has_no_recommendation() {
+    let (_temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Claude]);
+    let report = run(None);
+    assert!(find(&report, "claude").installed);
+    assert!(report.recommended.is_none());
+}
+
+#[test]
+fn no_installed_routes_or_only_weaker_caller_pool_routes_have_no_recommendation() {
+    let (_temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![]);
+    assert!(run(None).recommended.is_none());
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
+    crate::agent_config::save_agent_default_model("codex", Some("gpt-5.6-sol")).expect("model");
+    let caller = caller_advice("codex", Some("gpt-5.6-sol")).expect("caller");
+    let caller = CallerAdvice { capability: Some(99.0), ..caller };
+    let report = run(Some(caller));
+    assert!(find(&report, "codex").exclusion_codes.contains(&"weaker_on_caller_pool".into()));
+    assert!(report.recommended.is_none());
+}
+
+#[test]
+fn research_and_frontend_advice_recommend_the_expected_installed_agent() {
+    let (_temp, _home, _cache) = isolated();
+    for (prompt, fleet, expected) in [
+        ("Explain the authentication flow and compare the docs?", [AgentKind::Gemini, AgentKind::Qwen], "gemini"),
+        ("Explain the authentication flow and compare the docs?", [AgentKind::Antigravity, AgentKind::Qwen], "agy"),
+        ("Create a responsive React component layout for the settings UI", [AgentKind::Cursor, AgentKind::Codex], "cursor"),
+    ] {
+        let _fleet = crate::agent::DetectAgentsGuard::set(fleet.to_vec());
+        let report = advise(prompt, declared(TaskDifficulty::Moderate, TaskBudget::Standard), None, None, None, 0, None);
+        assert_eq!(report.recommended.expect("recommendation").agent, expected);
+    }
+}
+
+#[test]
+fn budget_simple_edit_advice_launches_opencode_or_kilo_budget_model() {
+    let (_temp, _home, _cache) = isolated();
+    for (fleet, expected) in [
+        (vec![AgentKind::OpenCode, AgentKind::Kilo, AgentKind::Codex], AgentKind::OpenCode),
+        (vec![AgentKind::Kilo, AgentKind::Codex], AgentKind::Kilo),
+    ] {
+        let _fleet = crate::agent::DetectAgentsGuard::set(fleet);
+        let report = advise("rename src/types.rs field name", declared(TaskDifficulty::Simple, TaskBudget::Free),
+            None, None, None, 0, None);
+        let picked = report.recommended.expect("recommendation");
+        assert_eq!(picked.agent, expected.as_str());
+        assert_eq!(picked.model.as_deref(), crate::model_catalog::model_for_task_budget(expected, TaskBudget::Free));
+        assert!(picked.pinned);
+    }
+}
+
+#[test]
+fn team_override_changes_the_advised_agent() {
+    let (_temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Gemini, AgentKind::OpenCode]);
+    let profile = declared(TaskDifficulty::Simple, TaskBudget::Standard);
+    let prompt = "rename src/types.rs field name to task_name";
+    assert_eq!(advise(prompt, profile, None, None, None, 0, None).recommended.expect("baseline").agent, "opencode");
+    let team: TeamConfig = toml::from_str("id = 'override'\ndisplay_name = 'Override'\npreferred_agents = []\n[overrides.gemini]\nsimple_edit = 10\n").expect("team");
+    let picked = advise(prompt, profile, None, Some(&team), None, 0, None).recommended.expect("override");
+    assert_eq!((picked.agent.as_str(), picked.model.as_deref()), ("gemini", None));
+}
+
+#[test]
+fn advice_skips_disabled_installed_agents() {
+    let (_temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Gemini, AgentKind::Qwen]);
+    crate::agent_config::save_agent_disabled("gemini", true).expect("disable");
+    let report = advise("Explain the authentication flow and compare the docs?",
+        declared(TaskDifficulty::Moderate, TaskBudget::Standard), None, None, None, 0, None);
+    assert_eq!(report.recommended.expect("recommendation").agent, "qwen");
+    assert!(report.candidates.iter().all(|candidate| candidate.agent != "gemini"));
 }

@@ -150,7 +150,7 @@ pub(crate) fn advise(
             .then_with(|| compare_candidates(&left.order, &right.order, context.budget).reverse())
     });
     let recommended = recommend::recommendation(
-        &ranked, &avg_cost_map, &duration_map, inferred.kind, declared,
+        &ranked, &avg_cost_map, &duration_map, inferred.kind, declared, team,
     );
     let notes = recommend::availability_notes(&ranked, declared.urgency, recommended.as_ref());
     let mut candidates: Vec<_> = ranked.into_iter().map(|item| item.report).collect();
@@ -268,8 +268,9 @@ fn builtin_candidate(
         .unwrap_or_default();
     let report = AdviceCandidate {
         agent: kind.as_str().to_string(), installed: blocker.is_none(), eligible,
+        quota: selection_quota::candidate_quota(kind, None, model.as_deref()),
         score: breakdown.total, model, pinned, source, breakdown, exclusion_reason, exclusion_codes,
-        demotion_reason, quota: selection_quota::candidate_quota(kind, None), auth,
+        demotion_reason, auth,
         unrated_served_models,
     };
     RankedCandidate { report, order, pool_excluded: verdict == PoolVerdict::Weaker }

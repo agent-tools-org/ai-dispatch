@@ -13,10 +13,15 @@ fn isolated_home() -> (tempfile::TempDir, AidHomeGuard) {
 }
 
 #[test]
-fn rigor_no_longer_gates_agent_identity() {
+fn run_resolution_keeps_explicit_claude_with_missing_profile_or_critical_rigor() {
     let (_temp, _guard) = isolated_home();
-    let result = explicit_agent("claude".into(), TaskEgress::Any);
-    assert!(result.is_ok(), "identity gate must be gone: {result:?}");
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![crate::types::AgentKind::Claude]);
+    let store = store::Store::open_memory().expect("store");
+    for rigor in [None, Some(TaskRigor::Critical)] {
+        let result = resolve_run_agent(&store, "refactor the scheduler", None, None, None,
+            rigor, TaskEgress::Any, None, false, &None, "claude".into());
+        assert_eq!(result.expect("explicit dispatch"), "claude");
+    }
 }
 
 #[test]

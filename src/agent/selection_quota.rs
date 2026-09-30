@@ -6,12 +6,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::rate_limit;
 use crate::route_availability::{
-    availability, ProbeEvidence, QuotaWall, RouteAvailability, RouteStatus, WindowView,
+    availability, availability_for_model, ProbeEvidence, QuotaWall, RouteAvailability, RouteStatus, WindowView,
 };
 use crate::types::{AgentKind, TaskUrgency};
 
-pub(super) fn headroom_penalty(kind: AgentKind) -> f64 {
-    let avail = availability(&kind, None);
+pub(super) fn headroom_penalty(kind: AgentKind, model: Option<&str>) -> f64 {
+    let avail = availability_for_model(&kind, None, model);
     if avail.status == RouteStatus::Held {
         return 0.0;
     }
@@ -64,8 +64,8 @@ impl Default for CandidateQuota {
     }
 }
 
-pub(super) fn candidate_quota(kind: AgentKind, custom_name: Option<&str>) -> CandidateQuota {
-    quota_from(&availability(&kind, custom_name))
+pub(super) fn candidate_quota(kind: AgentKind, custom_name: Option<&str>, model: Option<&str>) -> CandidateQuota {
+    quota_from(&availability_for_model(&kind, custom_name, model))
 }
 
 pub(crate) fn quota_from(avail: &RouteAvailability) -> CandidateQuota {

@@ -80,12 +80,6 @@ pub(super) async fn run(
     let agent_name = resolve_run_agent(
         &store,
         &selection_prompt,
-        &dir,
-        &repo,
-        &output,
-        &result_file,
-        &model,
-        budget_mode,
         difficulty,
         budget,
         urgency,
@@ -93,9 +87,6 @@ pub(super) async fn run(
         egress,
         kind,
         no_hint,
-        read_only,
-        sandbox,
-        &worktree,
         &team_flag,
         agent_name,
     )?;

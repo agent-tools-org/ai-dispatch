@@ -8,16 +8,20 @@ use super::super::selection_quota::{self, NoteTarget};
 use super::{RankedCandidate, RecommendedAdvice};
 use crate::agent::classifier::TaskCategory;
 use crate::types::{AgentKind, DeclaredTaskProfile, TaskUrgency};
+use crate::team::TeamConfig;
 
-/// First eligible candidate; else the best installed one not excluded as a
-/// weaker model on the caller's pool; else the top of the list.
+/// First eligible recommendable route; otherwise the best installed route
+/// outside the caller's weaker-model exclusions. No available route means no pick.
 pub(super) fn recommendation(
     ranked: &[RankedCandidate], costs: &HashMap<AgentKind, f64>,
     durations: &HashMap<AgentKind, i64>, kind: TaskCategory, declared: DeclaredTaskProfile,
+    team: Option<&TeamConfig>,
 ) -> Option<RecommendedAdvice> {
-    let selected = ranked.iter().find(|item| item.report.eligible)
-        .or_else(|| ranked.iter().find(|item| item.report.installed && !item.pool_excluded))
-        .or_else(|| ranked.first())?;
+    let mut candidates = ranked.iter().filter(|item| item.report.installed && !item.pool_excluded
+        && (item.order.kind != AgentKind::Claude
+            || team.is_some_and(|team| team.preferred_agents.iter().any(|name| name.eq_ignore_ascii_case("claude")))));
+    let selected = candidates.clone().find(|item| item.report.eligible)
+        .or_else(|| candidates.next())?;
     let model_suffix = selected.report.model.as_deref().map(|model| format!("/{model}")).unwrap_or_default();
     let mut reason = format!(
         "{}/{} → {}{} (score: {:.1})",

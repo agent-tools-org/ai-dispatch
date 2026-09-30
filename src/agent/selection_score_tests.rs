@@ -192,7 +192,7 @@ fn stale_snapshot_does_not_retune_score() {
     let baseline = score_for(&ctx, AgentKind::Qwen);
     write_snapshot(&cache, "qwen", 90.0, 20 * 60);
     let breakdown = hint_breakdown(&ctx, AgentKind::Qwen);
-    assert_eq!(headroom_penalty(AgentKind::Qwen), 0.0);
+    assert_eq!(headroom_penalty(AgentKind::Qwen, None), 0.0);
     assert_eq!(breakdown.headroom_penalty, 0.0);
     assert_eq!(breakdown.total.to_bits(), baseline.to_bits());
 }
@@ -255,6 +255,7 @@ fn held_background_keeps_zero_penalty_and_note_says_wait() {
 #[test]
 fn advise_notes_distinguish_held_degraded_and_skipped() {
     let (temp, cache, _home, _guard) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::OpenCode]);
     write_clock_hold(temp.path(), "codex");
     write_snapshot(&cache, "qwen", 90.0, 60);
     let report = advise(

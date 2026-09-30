@@ -218,7 +218,8 @@ rate-limit markers, aidbar disk snapshots, team preferences, and task history,
 then runs the production selector without launching an agent or writing the task store.
 Fresh live used-percent ranks remaining headroom (a penalty as the window
 fills; unused quota never boosts). Held routes still take today's −10 when
-urgency is not `background`. Use `--top 0` for all candidates, `--team` for
+urgency is not `background`. Quota penalties and candidate quota use the resolved
+model’s metered group; a hold on another group does not penalize that route. Use `--top 0` for all candidates, `--team` for
 team preferences, and omit `--json` for a concise human-readable breakdown
 (including a headroom term). JSON candidates add a `quota` object (`status`,
 `wall`, `used_percent`, `resets_at`, `freshness_secs`, `stale`, `source`)
@@ -246,7 +247,11 @@ carries `exclusion_reason` (human text, `; `-joined) and `exclusion_codes`
 
 Candidates rank eligible first, then eligible-but-demoted, then ineligible;
 ineligible alternatives still appear with their reasons. The recommendation is
-the first eligible candidate. Each candidate also carries `auth`: `state` is
+the first eligible installed route permitted for recommendation; fallback routes
+must also be installed, enabled, and outside weaker-caller-pool exclusions. When
+none remain, `recommended` is `null` and the run hint stays silent. Claude stays listed and requires team preference for advice. Advice has no
+declared-agent field: explicit `aid run claude` selects Claude for execution
+without changing the hint’s advice profile. Each candidate also carries `auth`: `state` is
 `failed` (with `observed_at` and `message`) when a run of that agent ended on a
 recognised not-signed-in refusal within the last hour (grok `Not signed in`,
 claude `Please run /login` / `Not logged in`, oz `credentials are invalid`),
@@ -281,6 +286,11 @@ when empty) and the human output adds one `note:` line. Those models stay
 unrated and are not selected. Inferred kind is advisory; pass `--kind` when the
 caller knows the task kind. Advice exits successfully even when every agent
 is rate-limited. Advise does not spawn `aidbar`.
+
+`aid run` hints use this ranker with the declared profile and task kind. Missing
+values default to `moderate` / `standard` / `normal` / `standard` and inferred kind;
+keywords never choose budget. Hints stay silent for prompts under 20 characters,
+`--no-hint`, or a recommendation matching the chosen agent.
 
 `aid run auto` and batch `agent = "auto"` (or an empty agent) are hard errors.
 There is no silent routing shim: declare a task profile, run `aid advise`, then

@@ -1,6 +1,6 @@
-// Agent scoring for `aid advise`, `--best-of`, and recommendation hints.
-// Scores prompt signals via capability matrix, respects installed CLIs, returns concise reason.
-// Exports select_agent() helpers and the removed-`auto` error; deps: detect_agents, RunOpts.
+// Agent advice, budget ranking, model tiers, and the removed-auto error.
+// Exports: advise(), budget_ranked_agents(), recommend_model(), and fallback helpers.
+// Deps: scoring, declared profiles, model catalog, teams, and task history.
 
 #[path = "selection_scoring.rs"]
 mod selection_scoring;
@@ -19,17 +19,13 @@ pub(crate) use selection_advice::{AdviceCandidate, AdviceReport, advise, caller_
 pub(crate) use selection_fallback::{coding_fallback_for, coding_fallback_for_prompt};
 pub(crate) use selection_quota::{observed_ok, quota_from, tightest_window};
 use selection_scoring::{
-    BUILTIN_AGENTS, Candidate, CandidateContext, candidate_for, compare_candidates, cost_efficiency,
-    custom_category_score, custom_command_installed, custom_strength_bonus, pick_best_candidate,
-    priority,
+    BUILTIN_AGENTS, Candidate, CandidateContext, candidate_for, compare_candidates,
 };
 use super::classifier::{self, Complexity, TaskCategory};
 use super::{detect_agents, RunOpts};
 use crate::agent_config;
-use crate::rate_limit;
 use crate::store::Store;
 use crate::types::AgentKind;
-use crate::agent::registry::load_custom_agents;
 use crate::team::TeamConfig;
 use std::collections::HashMap;
 
@@ -42,174 +38,6 @@ pub(crate) const AUTO_AGENT_REMOVED_MSG: &str =
 
 pub(crate) fn is_removed_auto_agent(name: &str) -> bool {
     name.trim().is_empty() || name.eq_ignore_ascii_case("auto")
-}
-
-pub(crate) fn select_agent_with_reason(
-    prompt: &str, opts: &RunOpts, store: &Store,
-    team: Option<&TeamConfig>,
-) -> (String, String) {
-    let available = detect_agents();
-    let available = enabled_builtins(&available);
-    select_agent_from(prompt, opts, &available, store, team)
-}
-
-pub(crate) fn select_agent_from(
-    prompt: &str, opts: &RunOpts, available: &[AgentKind],
-    store: &Store,
-    team: Option<&TeamConfig>,
-) -> (String, String) {
-    let normalized = prompt.trim().to_lowercase();
-    let prompt_len = prompt.chars().count();
-    let file_count = classifier::count_file_mentions(&normalized);
-    let profile = classifier::classify(prompt, file_count, prompt_len);
-    let auto_budget = classifier::contains_any(&normalized, classifier::LOW_VALUE_TERMS);
-    let budget = opts.budget || auto_budget;
-    let mut history_map: HashMap<AgentKind, (f64, usize)> = store
-        .agent_success_rates()
-        .unwrap_or_default()
-        .into_iter()
-        .map(|(kind, rate, count)| (kind, (rate, count)))
-        .collect();
-    for (kind, rate, count) in store
-        .agent_success_rates_by_category(profile.category.label())
-        .unwrap_or_default()
-    {
-        history_map.insert(kind, (rate, count));
-    }
-    let avg_cost_map: HashMap<AgentKind, f64> = store
-        .agent_avg_costs()
-        .unwrap_or_default()
-        .into_iter()
-        .collect();
-    let team_default = team.and_then(|t| t.default_agent.as_deref())
-        .and_then(AgentKind::parse_str);
-    let ctx = CandidateContext {
-        profile: &profile,
-        team,
-        history_map: &history_map,
-        avg_cost_map: &avg_cost_map,
-        team_default,
-        budget,
-        penalize_rate_limit: true,
-    };
-    let builtin_agents = enabled_builtins(BUILTIN_AGENTS);
-    let primary_candidate = pick_best_candidate(&builtin_agents, &ctx, budget);
-    let available_agents = enabled_builtins(available);
-    let available_candidate = if available_agents.is_empty() {
-        pick_best_candidate(&builtin_agents, &ctx, budget)
-    } else {
-        pick_best_candidate(&available_agents, &ctx, budget)
-    };
-    let mut selected_name = available_candidate.kind.as_str().to_string();
-    let mut selected_score = available_candidate.score;
-    let mut selected_builtin = Some(available_candidate.kind);
-    if let Some((custom_name, custom_score)) = load_custom_agents()
-        .into_values()
-        .filter(|config| AgentKind::parse_str(&config.id).is_none())
-        .filter(|config| !agent_config::is_agent_disabled(&config.id))
-        .filter(|config| custom_command_installed(&config.command))
-        .filter(|config| {
-            !rate_limit::is_rate_limited(&AgentKind::Custom, Some(config.id.as_str()))
-        })
-        .map(|config| {
-            let mut score = custom_category_score(&config, profile.category);
-            score += custom_strength_bonus(&config, profile.category);
-            // Boost preferred custom agents from team
-            if let Some(tc) = &team
-                && tc.preferred_agents.iter().any(|a| a.eq_ignore_ascii_case(&config.id))
-            {
-                score += 3;
-            }
-            (config.id, score)
-        })
-        .max_by_key(|(_, score)| *score)
-    {
-        let custom_score_value = custom_score as f64;
-        let custom_priority = priority(AgentKind::Custom);
-        let available_priority = priority(available_candidate.kind);
-        if (custom_score_value > available_candidate.score)
-            || (custom_score_value == available_candidate.score && custom_priority > available_priority)
-        {
-            selected_name = custom_name;
-            selected_score = custom_score_value;
-            selected_builtin = None;
-        }
-    }
-    let selected_model = selected_builtin
-        .and_then(|kind| recommend_model(&kind, &profile.complexity, budget));
-    let selected_avg_cost = selected_builtin
-        .and_then(|kind| avg_cost_map.get(&kind).copied())
-        .unwrap_or(0.0);
-    let selected_efficiency = cost_efficiency(selected_score, selected_avg_cost);
-    let selected_model_label = if let Some(model) = selected_model {
-        format!("{}/{}", selected_name, model)
-    } else {
-        selected_name.clone()
-    };
-    let selected_label = if budget && selected_builtin.is_some() {
-        format!(
-            "{} (score: {:.1}, avg: ${:.2}, efficiency: {:.1})",
-            selected_model_label, selected_score, selected_avg_cost, selected_efficiency
-        )
-    } else {
-        format!("{} (score: {:.1})", selected_model_label, selected_score)
-    };
-    let mut reason = format!(
-        "{} task ({}) \u{2192} {}",
-        profile.category.label(), profile.complexity.label(),
-        selected_label,
-    );
-    if let Some(sel_kind) = selected_builtin
-        && sel_kind != primary_candidate.kind
-    {
-        reason.push_str(&format!("; {} unavailable", primary_candidate.kind.as_str()));
-    }
-    if auto_budget {
-        reason.push_str("; auto-budget: low-value task");
-    } else if opts.budget {
-        reason.push_str("; budget mode");
-    }
-    if rate_limit::is_rate_limited(&AgentKind::Codex, None) && selected_name != AgentKind::Codex.as_str() {
-        reason.push_str("; codex rate-limited");
-    }
-    if let Some(sel_kind) = selected_builtin
-        && let Some((rate, count)) = history_map.get(&sel_kind)
-        && *count >= 5
-    {
-        let percent = (*rate * 100.0).round() as i32;
-        let success_label = format!("{:.0}%", rate * 100.0);
-        reason.push_str(&format!("; history: {}% success (success: {})", percent, success_label));
-    }
-    if let Ok(similar_tasks) = store.find_similar_tasks(prompt, 5) {
-        let mut stats: HashMap<AgentKind, (usize, usize)> = HashMap::new();
-        for (task_id, agent, _) in similar_tasks {
-            let Ok(Some(task)) = store.get_task(&task_id) else {
-                continue;
-            };
-            let outcome = task.outcome();
-            if outcome.is_unverified() {
-                continue;
-            }
-            let entry = stats.entry(agent).or_insert((0, 0));
-            entry.1 += 1;
-            if outcome.is_success() {
-                entry.0 += 1;
-            }
-        }
-        if let Some((&agent, &(successes, total))) = stats.iter().max_by(|a, b| {
-            a.1 .0.cmp(&b.1 .0).then(a.1 .1.cmp(&b.1 .1))
-        })
-            && successes >= 3
-        {
-            reason.push_str(&format!(
-                "; similar tasks: {} {}/{} success",
-                agent.as_str(),
-                successes,
-                total,
-            ));
-        }
-    }
-    (selected_name, reason)
 }
 
 pub(crate) fn budget_ranked_agents(
@@ -264,14 +92,6 @@ pub(crate) fn recommend_model(
         Complexity::Low => "cheap", Complexity::Medium => "standard", Complexity::High => "premium",
     };
     models.iter().find(|m| m.tier == tier).or_else(|| models.first()).map(|m| m.model)
-}
-
-fn enabled_builtins(agents: &[AgentKind]) -> Vec<AgentKind> {
-    agents
-        .iter()
-        .copied()
-        .filter(|kind| !agent_config::is_agent_disabled(kind.as_str()))
-        .collect()
 }
 
 #[cfg(test)]

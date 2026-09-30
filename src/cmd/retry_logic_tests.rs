@@ -134,3 +134,32 @@ fn failed_retry_errors_when_recorded_branch_is_gone() {
     assert!(message.contains("branch does not exist"));
     assert!(message.contains("refusing to run in repo root"));
 }
+
+#[test]
+fn failed_retry_keeps_saved_configuration_and_uses_root_feedback() {
+    let store = Store::open_memory().unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    let mut root = failed_task("t-config-root");
+    root.prompt = "root prompt".into();
+    store.insert_task(&root).unwrap();
+    let mut child = failed_task("t-config-child");
+    child.parent_task_id = Some(root.id.to_string());
+    child.repo_path = Some(repo.path().display().to_string());
+    child.output_path = Some("row-output".into());
+    store.insert_task(&child).unwrap();
+    let saved = RunArgs {
+        verify: Some("saved-verify".into()), output: Some("saved-output".into()),
+        budget: true, read_only: true, on_done: Some("saved-hook".into()),
+        ..Default::default()
+    };
+    store.update_task_dispatch_args(child.id.as_str(), &saved.dispatch_args_json().unwrap()).unwrap();
+    let args = retry_args_for(&store, &child).unwrap();
+    assert_eq!(args.prompt, "[Previous attempt failed]\nError: agent failed\n\n[Original task]\nroot prompt");
+    assert_eq!(args.verify, saved.verify);
+    assert_eq!(args.output, saved.output);
+    assert_eq!(args.on_done, saved.on_done);
+    assert!(args.budget && args.read_only);
+    assert_eq!(args.retry, 0);
+    assert_eq!(args.parent_task_id.as_deref(), Some(child.id.as_str()));
+    assert!(!args.background);
+}

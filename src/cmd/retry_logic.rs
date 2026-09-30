@@ -46,14 +46,12 @@ fn build_failed_retry_args(
     stderr_tail: &str,
 ) -> Result<RunArgs> {
     let prompt = root_prompt(store, task).unwrap_or_else(|| args.prompt.clone());
-    let mut retry_args = RunArgs::saved_for_task(store, task_id.as_str())?
-        .unwrap_or_else(|| args.clone());
+    let mut retry_args = RunArgs::for_retry(store, task)?;
     retry_args.prompt =
         format!("[Previous attempt failed]\nError: {stderr_tail}\n\n[Original task]\n{prompt}");
     retry_args.retry = args.retry.saturating_sub(1);
     retry_args.background = false;
     retry_args.parent_task_id = Some(task_id.as_str().to_string());
-    retry_args.existing_task_id = None;
     apply_retry_target(task, &mut retry_args)?;
     Ok(retry_args)
 }

@@ -219,3 +219,22 @@ fn batch_retry_agent_override_clears_session_id() {
     );
     assert!(args.model.is_none(), "model must be cleared on agent change");
 }
+
+#[test]
+fn batch_retry_same_agent_resumes_current_session_and_keeps_saved_budget() {
+    let _guard = aid_home_guard("aid-batch-retry-session-resume");
+    let store = Store::open_memory().unwrap();
+    let repo = TempDir::new().unwrap();
+    let mut task = make_task("t-session-same", AgentKind::Codex);
+    set_repo(&mut task, &repo);
+    task.agent_session_id = Some("current-session".into());
+    task.budget = false;
+    store.insert_task(&task).unwrap();
+    let saved = RunArgs {
+        budget: true, session_id: Some("obsolete-session".into()), ..Default::default()
+    };
+    store.update_task_dispatch_args(task.id.as_str(), &saved.dispatch_args_json().unwrap()).unwrap();
+    let args = retry_task_to_run_args(&store, &task, "wg-test", None).unwrap();
+    assert_eq!(args.session_id, task.agent_session_id);
+    assert!(args.budget);
+}

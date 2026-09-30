@@ -1,5 +1,5 @@
 // Tests for lifecycle ordering around completed worktree cleanup.
-// Covers retry dispatch preserving worktrees and normal finish pruning them.
+// Covers retry, normal completion, and failure preserving worktree artifacts.
 // Isolates AID_HOME so post-run rate-limit cleanup never touches ~/.aid.
 // Deps: post_run_lifecycle, Store, worktree helpers, git CLI, tempfile.
 
@@ -120,7 +120,7 @@ async fn run_lifecycle(
         None,
         &[],
         &prompt_bundle(),
-        TaskStatus::Done,
+        store.get_task(task_id.as_str()).unwrap().unwrap().status,
         None,
     )
     .await
@@ -160,7 +160,7 @@ async fn completed_worktree_survives_when_checklist_retry_dispatches() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn completed_worktree_is_pruned_when_no_retry_dispatches() {
+async fn completed_worktree_survives_when_no_retry_dispatches() {
     let _permit = test_subprocess::acquire();
     let (_home, _guard) = isolated_home();
     let repo = init_repo();
@@ -186,5 +186,40 @@ async fn completed_worktree_is_pruned_when_no_retry_dispatches() {
     let retry_id = run_lifecycle(&store, &task_id, &args).await;
 
     assert!(retry_id.is_none());
+    assert!(wt.exists());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn failed_lifecycle_retains_worktree_branch_and_output() {
+    let _permit = test_subprocess::acquire();
+    let (_home, _guard) = isolated_home();
+    let repo = init_repo();
+    let branch = "fix/lifecycle-failed-keep";
+    let wt = committed_worktree(repo.path(), branch);
+    let output_path = wt.join("output.md");
+    std::fs::write(&output_path, "partial output\n").unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let task_id = TaskId("t-failed-keep".to_string());
+    let mut failed = task(task_id.as_str(), repo.path(), &wt, branch, &output_path);
+    failed.status = TaskStatus::Failed;
+    failed.duration_ms = Some(100);
+    store.insert_task(&failed).unwrap();
+    let args = RunArgs {
+        agent_name: "codex".to_string(),
+        repo: Some(repo.path().display().to_string()),
+        dir: Some(wt.display().to_string()),
+        dry_run: true,
+        skills: vec![super::NO_SKILL_SENTINEL.to_string()],
+        ..Default::default()
+    };
+
+    assert!(run_lifecycle(&store, &task_id, &args).await.is_none());
+
+    assert_eq!(store.get_task(task_id.as_str()).unwrap().unwrap().status, TaskStatus::Failed);
+    assert_eq!(std::fs::read_to_string(output_path).unwrap(), "partial output\n");
+    assert_eq!(std::fs::read_to_string(wt.join("done.txt")).unwrap(), "done\n");
+    git(repo.path(), &["rev-parse", "--verify", &format!("refs/heads/{branch}")]);
+    let err = crate::cmd::worktree::remove(branch, args.repo.as_deref()).unwrap_err();
+    assert!(err.to_string().contains("Direct removal") && err.to_string().contains("forbidden"));
     assert!(wt.exists());
 }

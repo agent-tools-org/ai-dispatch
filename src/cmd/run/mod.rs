@@ -163,7 +163,6 @@ fn final_dirty_assertion(
     run_dirty::final_dirty_assertion(store, task_id, dir, read_only, baseline)
 }
 
-pub(crate) fn maybe_cleanup_fast_fail(store: &Store, task_id: &TaskId, task: &Task) { run_prompt::maybe_cleanup_fast_fail_impl(store, task_id, task); }
 pub(crate) fn maybe_verify(
     store: &Store,
     task_id: &TaskId,

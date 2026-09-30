@@ -112,8 +112,23 @@ fn usable_recorded_dir(dir: Option<&str>) -> Option<String> {
 }
 
 /// Off-machine backup location recorded after a terminal-state upload.
-/// Historical rows stay NULL: nothing was uploaded for them.
+/// Normalizes historical attempts once; events remain reporting evidence.
 pub(super) fn migrate_backup_url(conn: &Connection) -> Result<()> {
     let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN backup_url TEXT;");
+    let tx = rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)?;
+    let version: i64 = tx.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if version == 0 {
+        tx.execute_batch(
+            "UPDATE tasks SET backup_url = ''
+             WHERE backup_url IS NULL AND id IN (
+                 SELECT task_id FROM events
+                 WHERE CASE WHEN json_valid(metadata)
+                            THEN json_type(metadata, '$.backup') IS NOT NULL
+                            ELSE 0 END
+             );
+             PRAGMA user_version = 1;",
+        )?;
+    }
+    tx.commit()?;
     Ok(())
 }

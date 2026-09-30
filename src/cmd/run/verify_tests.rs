@@ -141,48 +141,6 @@ fn maybe_verify_reports_stale_worktree_when_dir_is_missing() {
 }
 
 #[test]
-fn fast_fail_cleanup_allows_legacy_tmp_worktree_path() {
-    let store = Store::open_memory().unwrap();
-    let repo = TempDir::new().unwrap();
-    init_repo(repo.path());
-    // Unique /tmp/aid-wt-* path (sandbox prefix); guard owns teardown on panic too.
-    let path_holder = tempfile::Builder::new()
-        .prefix("aid-wt-fast-fail-")
-        .tempdir_in("/tmp")
-        .unwrap();
-    let worktree_path = path_holder.path().to_path_buf();
-    drop(path_holder);
-    let _guard = crate::test_env::TmpWorktreeGuard::with_repo(repo.path(), worktree_path.clone());
-    git(repo.path(), &["worktree", "add", &worktree_path.to_string_lossy(), "-b", "feat/fast-fail-legacy"]);
-    let task_id = TaskId("t-fast-fail-legacy".to_string());
-    let mut task = make_task(task_id.as_str(), &worktree_path.to_string_lossy());
-    task.status = TaskStatus::Failed;
-    task.duration_ms = Some(100);
-    task.repo_path = Some(repo.path().to_string_lossy().to_string());
-    task.worktree_branch = Some("feat/fast-fail-legacy".to_string());
-    store.insert_task(&task).unwrap();
-
-    maybe_cleanup_fast_fail_impl(&store, &task_id, &task);
-
-    assert!(worktree_path.exists());
-}
-
-#[test]
-fn fast_fail_cleanup_rejects_non_aid_path() {
-    let store = Store::open_memory().unwrap();
-    let worktree = TempDir::new().unwrap();
-    let task_id = TaskId("t-fast-fail-non-aid".to_string());
-    let mut task = make_task(task_id.as_str(), &worktree.path().to_string_lossy());
-    task.status = TaskStatus::Failed;
-    task.duration_ms = Some(100);
-    store.insert_task(&task).unwrap();
-
-    maybe_cleanup_fast_fail_impl(&store, &task_id, &task);
-
-    assert!(worktree.path().exists());
-}
-
-#[test]
 fn retry_target_application_replaces_stale_worktree_dir_with_repo() {
     let stale_dir = "/tmp/aid-stale-worktree-dir";
     let repo = TempDir::new().unwrap();

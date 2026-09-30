@@ -182,4 +182,50 @@ mod backup_url_tests {
         assert!(store.set_backup_url("t-old", "u").unwrap());
         assert_eq!(store.backup_url("t-old").unwrap().as_deref(), Some("u"));
     }
+
+    #[test]
+    fn migration_normalizes_historical_backup_attempts_only_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("aid.db");
+        let store = Store::open(&path).unwrap();
+        for id in ["t-failed", "t-uploaded", "t-null", "t-invalid", "t-fresh", "t-claimed"] {
+            insert(&store, id);
+        }
+        store.set_backup_url("t-uploaded", "existing-url").unwrap();
+        assert!(store.claim_backup("t-claimed").unwrap());
+        for (id, metadata) in [
+            ("t-failed", "{\"backup\":\"failed\"}"),
+            ("t-uploaded", "{\"backup\":\"uploaded\"}"),
+            ("t-null", "{\"backup\":null}"),
+            ("t-invalid", "invalid json"),
+            ("t-fresh", "{\"other\":\"failed\"}"),
+        ] {
+            store.db().execute(
+                "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
+                 VALUES (?1, '2026-09-13T00:00:00Z', 'milestone', 'historical event', ?2)",
+                params![id, metadata],
+            ).unwrap();
+        }
+        store.db().execute_batch("PRAGMA user_version = 0;").unwrap();
+        drop(store);
+
+        let store = Store::open(&path).unwrap();
+        for id in ["t-failed", "t-uploaded", "t-null", "t-claimed"] {
+            assert!(!store.claim_backup(id).unwrap(), "{id}");
+        }
+        assert_eq!(store.backup_url("t-failed").unwrap(), None);
+        assert_eq!(store.backup_url("t-uploaded").unwrap().as_deref(), Some("existing-url"));
+        assert!(store.claim_backup("t-invalid").unwrap());
+        assert!(store.claim_backup("t-fresh").unwrap());
+        assert_eq!(store.get_events("t-failed").unwrap().len(), 1);
+        insert(&store, "t-report-only");
+        store.db().execute(
+            "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
+             VALUES ('t-report-only', '2026-09-13T00:00:00Z', 'milestone', 'report', '{\"backup\":\"failed\"}')",
+            [],
+        ).unwrap();
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert!(store.claim_backup("t-report-only").unwrap(), "events are reporting only after migration");
+    }
 }

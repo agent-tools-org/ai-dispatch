@@ -57,5 +57,4 @@ fn setup_failure_with_no_backup_makes_zero_backup_attempts() {
     assert!(store.get_task_dispatch_args("t-nb-setup").unwrap().is_none(), "args never persisted");
     let events = store.get_events("t-nb-setup").unwrap();
     assert!(!events.iter().any(|e| e.detail.contains("Backup")), "{events:?}");
-    assert!(!crate::backup::already_attempted(&store, "t-nb-setup"));
 }

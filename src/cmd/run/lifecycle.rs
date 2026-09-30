@@ -19,7 +19,7 @@ use super::run_post::{
     maybe_run_post_done_audit, read_quota_error_message, rescue_quota_failed_task,
     take_next_cascade_agent, worktree_is_empty_diff_with_base,
 };
-use super::{RunArgs, inherit_retry_base_branch, iterate_config, maybe_auto_retry_after_checklist_miss, maybe_auto_retry_after_verify_failure, maybe_cleanup_fast_fail, maybe_iterate, maybe_judge_retry, maybe_verify, run, run_agent, run_prompt};
+use super::{RunArgs, inherit_retry_base_branch, iterate_config, maybe_auto_retry_after_checklist_miss, maybe_auto_retry_after_verify_failure, maybe_iterate, maybe_judge_retry, maybe_verify, run, run_agent, run_prompt};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LifecycleMode {
@@ -490,7 +490,6 @@ fn run_task_postprocess_phase(
     if task.status == TaskStatus::Done {
         handle_done_postprocess(store, task_id, args, &task, agent_kind, prompt_bundle);
     }
-    maybe_cleanup_fast_fail(store, task_id, &task);
     persist_result_file(store, task_id, args, &task, effective_dir);
     let task = store.get_task(task_id.as_str())?.unwrap_or(task);
     if task.status == TaskStatus::Failed {

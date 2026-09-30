@@ -1,5 +1,5 @@
-// Worktree and branch garbage-collection helpers for doctor and auto-cleanup.
-// Exports candidate discovery plus safe branch/worktree cleanup primitives.
+// Read-only worktree and branch diagnostics for doctor.
+// Exports candidate discovery and merge heuristics.
 // Deps: anyhow, crate::project::ProjectConfig, std::process::Command.
 
 use crate::project::ProjectConfig;
@@ -42,19 +42,6 @@ impl MergeReason {
             Self::LogEmpty => "rebased/merged (git log empty)",
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum BranchDeleteOutcome {
-    Deleted,
-    Missing,
-    Kept(String),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum WorktreeRemoveOutcome {
-    Removed,
-    Missing,
 }
 
 pub(crate) fn managed_branch_prefixes(project: Option<&ProjectConfig>) -> Vec<String> {
@@ -126,56 +113,6 @@ pub(crate) fn branch_merge_reason(
     let cherry = git_stdout(repo_dir, &["cherry", base_branch, branch])?;
     let log = git_stdout(repo_dir, &["log", "--oneline", &format!("{base_branch}..{branch}")])?;
     Ok(merge_reason_from_outputs(&cherry, &log))
-}
-
-#[cfg(test)]
-pub(crate) fn remove_worktree_path(repo_dir: &Path, worktree_path: &Path) -> Result<WorktreeRemoveOutcome> {
-    if !is_aid_managed_worktree_path(worktree_path) {
-        aid_warn!(
-            "[aid] SAFETY: refusing to remove '{}' — not an aid worktree path. Only ~/.aid/worktrees/* and legacy /tmp/aid-wt-* paths are allowed.",
-            worktree_path.display()
-        );
-        anyhow::bail!("unsafe worktree path {}", worktree_path.display());
-    }
-    if !worktree_path.exists() {
-        return Ok(WorktreeRemoveOutcome::Missing);
-    }
-    let status = Command::new("git")
-        .args([
-            "-C",
-            &repo_dir.to_string_lossy(),
-            "worktree",
-            "remove",
-            &worktree_path.to_string_lossy(),
-        ])
-        .status()
-        .with_context(|| format!("Failed to remove worktree {}", worktree_path.display()))?;
-    if !status.success() {
-        anyhow::bail!("git worktree remove failed for {}", worktree_path.display());
-    }
-    Ok(WorktreeRemoveOutcome::Removed)
-}
-
-#[cfg(test)]
-pub(crate) fn delete_local_branch(repo_dir: &Path, branch: &str) -> Result<BranchDeleteOutcome> {
-    if !local_branch_exists(repo_dir, branch)? {
-        return Ok(BranchDeleteOutcome::Missing);
-    }
-    let output = Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy(), "branch", "-d", branch])
-        .output()
-        .with_context(|| format!("Failed to delete branch {branch}"))?;
-    if output.status.success() {
-        return Ok(BranchDeleteOutcome::Deleted);
-    }
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let note = stderr
-        .lines()
-        .find(|line| !line.trim().is_empty())
-        .unwrap_or("git branch -d refused")
-        .trim()
-        .to_string();
-    Ok(BranchDeleteOutcome::Kept(note))
 }
 
 pub(crate) fn tracked_worktree_paths(store: &crate::store::Store) -> Result<BTreeSet<String>> {

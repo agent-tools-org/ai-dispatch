@@ -45,16 +45,13 @@ pub trait BackupTarget {
 
 /// Entry point for the post-run lifecycle: makes the task's one backup attempt
 /// once its final status, verify status and result file are persisted, if that
-/// status matches a configured trigger. The once-guard and the atomic claim run
-/// before anything can write an event, so a task never produces a second backup
+/// status matches a configured trigger. The atomic claim runs before anything
+/// can write an event, so a task never produces a second backup
 /// milestone of any kind; a resolution error consumes the attempt too. Never
 /// returns an error and never changes the task's status.
 pub(crate) fn on_settled(store: &Store, task_id: &str) {
     let Ok(Some(task)) = store.get_task(task_id) else { return };
     let Some(trigger) = Trigger::for_status(task.status) else { return };
-    if already_attempted(store, task_id) {
-        return;
-    }
     let settings = match config::resolve_for_task(store, task_id) {
         Ok(Some(settings)) if settings.on.contains(&trigger) => Ok(settings),
         Ok(_) => return,
@@ -73,19 +70,6 @@ pub(crate) fn on_settled(store: &Store, task_id: &str) {
         }
         Err(err) => warn(store, task_id, &err),
     }
-}
-
-/// True once a URL is recorded or any event carries a `backup` marker, so a
-/// failed attempt counts as the task's one attempt.
-pub(crate) fn already_attempted(store: &Store, task_id: &str) -> bool {
-    if matches!(store.backup_url(task_id), Ok(Some(_))) {
-        return true;
-    }
-    store.get_events(task_id).is_ok_and(|events| {
-        events
-            .iter()
-            .any(|event| event.metadata.as_ref().is_some_and(|meta| meta.get("backup").is_some()))
-    })
 }
 
 fn target_for(settings: &BackupSettings) -> Option<Box<dyn BackupTarget>> {
@@ -151,8 +135,8 @@ fn record_success(store: &Store, task_id: &str, target: &str, backup: &BackupRef
 }
 
 /// A backup failure is a milestone, not an error event: `latest_error` must
-/// keep reporting the agent's own failure, and the marker still counts as the
-/// task's one attempt.
+/// keep reporting the agent's own failure. The atomic claim retains the task's
+/// one attempt even if writing this event fails.
 fn warn(store: &Store, task_id: &str, err: &anyhow::Error) {
     let detail = format!("Backup failed: {err:#}");
     eprintln!("[aid] {task_id}: {detail}");

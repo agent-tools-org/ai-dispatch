@@ -135,7 +135,6 @@ fn task_failed_by_fail_active_execution_alone_is_not_backed_up() {
 
     assert_eq!(store.get_task("t-reaped").unwrap().unwrap().status, TaskStatus::Failed);
     assert!(!log.exists(), "gws must never run");
-    assert!(!already_attempted(&store, "t-reaped"));
     assert!(store.get_events("t-reaped").unwrap().iter().all(|e| e.metadata.is_none()));
 }
 
@@ -156,7 +155,6 @@ fn task_without_saved_dispatch_args_is_never_backed_up() {
     // must not win over an unknown `--no-backup`.
     settle(&store, "t-setup-fail", TaskStatus::Failed);
     assert!(store.get_events("t-setup-fail").unwrap().is_empty());
-    assert!(!already_attempted(&store, "t-setup-fail"));
 
     // The same task with its args persisted resolves the project target.
     save_args(&store, "t-setup-fail", crate::cmd::run::RunArgs::default());
@@ -176,7 +174,6 @@ fn backup_runs_at_most_once_even_after_a_failed_attempt() {
     save_args(&store, "t-once", args);
 
     settle(&store, "t-once", TaskStatus::Done);
-    assert!(already_attempted(&store, "t-once"));
     settle(&store, "t-once", TaskStatus::Done);
     settle(&store, "t-once", TaskStatus::Failed);
 
@@ -209,4 +206,66 @@ fn failed_backup_keeps_the_agent_error_as_latest_error() {
     assert_eq!(warning.event_kind, EventKind::Milestone);
     assert_eq!(warning.metadata.as_ref().unwrap()["backup"], "failed");
     assert_eq!(store.get_task("t-agent-err").unwrap().unwrap().status, TaskStatus::Failed);
+}
+
+#[test]
+fn two_settlement_contenders_upload_exactly_once() {
+    let _permit = crate::test_subprocess::acquire();
+    let home = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(home.path());
+    let log = working_gws(home.path());
+    let db = home.path().join("aid.db");
+    let store = Store::open(&db).unwrap();
+    store.insert_task(&task("t-race", TaskStatus::Done)).unwrap();
+    save_args(&store, "t-race", crate::cmd::run::RunArgs {
+        backup: Some("gdrive".into()), ..Default::default()
+    });
+    let contender = Store::open(&db).unwrap();
+    let barrier = std::sync::Barrier::new(2);
+
+    std::thread::scope(|scope| {
+        for connection in [&store, &contender] {
+            let barrier = &barrier;
+            let home = home.path();
+            scope.spawn(move || {
+                let _guard = AidHomeGuard::set(home);
+                barrier.wait();
+                on_settled(connection, "t-race");
+            });
+        }
+    });
+
+    let calls = fs::read_to_string(log).unwrap();
+    assert_eq!(calls.lines().filter(|line| line.contains("--upload")).count(), 1, "{calls}");
+    let events = store.get_events("t-race").unwrap();
+    let markers: Vec<_> = events.iter().filter_map(|event| event.metadata.as_ref()?.get("backup")?.as_str()).collect();
+    assert_eq!(markers, vec!["uploaded"], "{events:?}");
+    assert!(store.backup_url("t-race").unwrap().is_some());
+    assert_eq!(store.get_task("t-race").unwrap().unwrap().status, TaskStatus::Done);
+    assert!(store.latest_error("t-race").is_none());
+}
+
+#[test]
+fn failed_event_write_does_not_allow_another_backup_attempt() {
+    let _permit = crate::test_subprocess::acquire();
+    let home = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(home.path());
+    let log = failing_gws(home.path());
+    let store = Store::open_memory().unwrap();
+    store.insert_task(&task("t-event-fail", TaskStatus::Failed)).unwrap();
+    store.insert_event(&event("t-event-fail", EventKind::Error, "agent failed")).unwrap();
+    save_args(&store, "t-event-fail", crate::cmd::run::RunArgs {
+        backup: Some("gdrive".into()), ..Default::default()
+    });
+    store.db().execute_batch(
+        "CREATE TRIGGER reject_events BEFORE INSERT ON events BEGIN SELECT RAISE(FAIL, 'event write failed'); END;",
+    ).unwrap();
+
+    on_settled(&store, "t-event-fail");
+    on_settled(&store, "t-event-fail");
+
+    assert_eq!(fs::read_to_string(log).unwrap().lines().count(), 1);
+    assert_eq!(store.get_events("t-event-fail").unwrap().len(), 1);
+    assert_eq!(store.latest_error("t-event-fail").as_deref(), Some("agent failed"));
+    assert_eq!(store.get_task("t-event-fail").unwrap().unwrap().status, TaskStatus::Failed);
 }

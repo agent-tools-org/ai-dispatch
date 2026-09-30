@@ -73,6 +73,27 @@ impl Fixture {
 }
 
 #[test]
+fn gc_without_principal_acceptance_preserves_artifacts() {
+    let fixture = Fixture::new();
+    fs::write(fixture.worktree.join("partial.txt"), "partial work").unwrap();
+    fixture.db.execute(
+        "INSERT INTO tasks (id, agent, prompt, status, repo_path, worktree_path, created_at)
+         VALUES ('t-unaccepted', 'codex', 'task', 'failed', ?1, ?2, ?3)",
+        params![fixture.repo.to_str().unwrap(), fixture.worktree.to_str().unwrap(),
+            chrono::Local::now().to_rfc3339()],
+    ).unwrap();
+
+    let output = fixture.gc("t-unaccepted").output().unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("has not been accepted"), "{stderr}");
+    assert_eq!(fs::read_to_string(fixture.worktree.join("partial.txt")).unwrap(), "partial work");
+    assert_eq!(fixture.certificates("t-unaccepted"), 0);
+    git(&fixture.repo, &["rev-parse", "--verify", "refs/heads/shared"]);
+}
+
+#[test]
 fn original_and_retry_collect_shared_worktree_with_durability_for_both() {
     let fixture = Fixture::new();
     fixture.accept("t-original", &fixture.worktree);

@@ -1,21 +1,17 @@
 // Verify and retry helpers for `aid run`.
-// Exports fast-fail cleanup, verification execution, and verify-driven retry logic.
+// Exports verification execution and verify-driven retry logic.
 use anyhow::Result;
 use chrono::Local;
 use std::sync::Arc;
 
 use crate::cmd::checklist_scan;
 use crate::store::Store;
-use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{EventKind, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 
 use super::RunArgs;
 
 #[path = "verify_outcome.rs"]
 mod outcome;
-
-pub(in crate::cmd) fn maybe_cleanup_fast_fail_impl(store: &Store, task_id: &TaskId, task: &Task) {
-    let _ = (store, task_id, task);
-}
 
 pub(in crate::cmd) fn maybe_verify_impl(
     store: &Store,

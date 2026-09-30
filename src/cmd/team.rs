@@ -1,10 +1,11 @@
 // Handler for `aid team` subcommands — manage team definitions.
-// Exports: TeamAction, run_team_command.
+// Exports: run_team_command.
 // Deps: crate::team, crate::paths, std::fs.
 
 use anyhow::{bail, Result};
 use std::fs;
 
+use crate::cli_actions::TeamAction;
 use crate::sanitize;
 use crate::team;
 use crate::toolbox;
@@ -28,13 +29,6 @@ preferred_agents = []
 # simple_edit = 10
 # debugging = 6
 "#;
-
-pub enum TeamAction {
-    List,
-    Show { name: String },
-    Create { name: String },
-    Delete { name: String },
-}
 
 pub fn run_team_command(action: TeamAction) -> Result<()> {
     match action {

@@ -95,7 +95,7 @@ pub enum GroupAction {
     /// Post or list workgroup findings
     Finding {
         #[command(subcommand)]
-        action: GroupFindingAction,
+        action: crate::cli::FindingCommands,
     },
     /// Send a message to the workgroup's broadcast channel
     Broadcast {
@@ -119,72 +119,6 @@ pub enum ContainerAction {
     /// Stop and remove a dev container
     Stop {
         name: String,
-    },
-}
-
-#[derive(Subcommand)]
-#[allow(clippy::large_enum_variant)]
-pub enum GroupFindingAction {
-    /// Post a finding to a workgroup
-    Add {
-        /// Workgroup ID
-        group: String,
-        /// Finding content
-        content: Option<String>,
-        #[arg(long)]
-        stdin: bool,
-        #[arg(long)]
-        file: Option<String>,
-        /// Source task ID (optional)
-        #[arg(long)]
-        task: Option<String>,
-        #[arg(long)]
-        severity: Option<String>,
-        #[arg(long)]
-        title: Option<String>,
-        #[arg(long, name = "finding-file")]
-        finding_file: Option<String>,
-        #[arg(long)]
-        lines: Option<String>,
-        #[arg(long)]
-        category: Option<String>,
-        #[arg(long)]
-        confidence: Option<String>,
-    },
-    /// List findings for a workgroup
-    List {
-        /// Workgroup ID
-        group: String,
-        #[arg(long)]
-        json: bool,
-        #[arg(long)]
-        count: bool,
-        #[arg(long)]
-        severity: Option<String>,
-        #[arg(long)]
-        verdict: Option<String>,
-    },
-    /// Show a single finding for a workgroup
-    Get {
-        /// Workgroup ID
-        group: String,
-        /// Finding ID
-        finding_id: i64,
-        #[arg(long)]
-        json: bool,
-    },
-    /// Update review metadata for a finding
-    Update {
-        /// Workgroup ID
-        group: String,
-        /// Finding ID
-        finding_id: i64,
-        #[arg(long)]
-        verdict: Option<String>,
-        #[arg(long)]
-        score: Option<String>,
-        #[arg(long)]
-        note: Option<String>,
     },
 }
 

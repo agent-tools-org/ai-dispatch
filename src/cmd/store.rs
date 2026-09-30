@@ -1,7 +1,8 @@
 // Handler for `aid store` subcommands — browse, install, show, update agents from the community store.
-// Exports: StoreAction, run_store.
+// Exports: run_store.
 // Deps: serde, serde_json, toml, std::fs, std::process::Command (curl), crate::paths.
 
+use crate::cli::StoreCommands;
 use crate::cmd::store_lock::{add_lock_entry, read_lockfile};
 use crate::hooks::Hook;
 use crate::paths;
@@ -52,19 +53,12 @@ enum PackageKind {
     Package,
 }
 
-pub enum StoreAction {
-    Browse { query: Option<String> },
-    Install { name: String },
-    Show { name: String },
-    Update { apply: bool },
-}
-
-pub fn run_store(action: StoreAction) -> Result<()> {
+pub fn run_store(action: StoreCommands) -> Result<()> {
     match action {
-        StoreAction::Browse { query } => browse(query.as_deref()),
-        StoreAction::Install { name } => install(&name),
-        StoreAction::Show { name } => show(&name),
-        StoreAction::Update { apply } => update(apply),
+        StoreCommands::Browse { query } => browse(query.as_deref()),
+        StoreCommands::Install { name } => install(&name),
+        StoreCommands::Show { name } => show(&name),
+        StoreCommands::Update { apply } => update(apply),
     }
 }
 

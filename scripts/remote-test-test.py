@@ -81,6 +81,22 @@ sys.exit(status)
             'exec cargo test --workspace "$@"', "remote-test",
         ])
 
+    def test_main_branch_defaults_and_remote_home(self) -> None:
+        self.git("checkout", "-b", "main")
+        args = self.dry_command()
+        self.assertEqual(args, [
+            "exec", "fixture", str(self.repo), "--to",
+            "~/.rbox/work/sample-repo/main", "--jobs", "4",
+            "--timeout", "5400", "--lock-timeout", "3600", "--", "bash", "-c",
+            'export CARGO_TARGET_DIR=$HOME/.rbox/target/sample-repo; '
+            'exec cargo test --workspace "$@"', "remote-test",
+        ])
+
+    def test_branch_name_sanitizing_with_punctuation(self) -> None:
+        self.git("checkout", "-b", "feature/branch.name@123")
+        args = self.dry_command()
+        self.assertEqual(args[4], "~/.rbox/work/sample-repo/feature-branch-name-123")
+
     def test_detached_head_uses_short_sha(self) -> None:
         self.git("checkout", "--detach")
         args = self.dry_command()
@@ -142,6 +158,12 @@ sys.exit(status)
         self.assertEqual(result.returncode, 75)
         self.assertIn("job not started (no job id assigned)", result.stderr)
         self.assertIn("box lock not acquired", result.stderr)
+
+    def test_rbox_failure_before_tests_is_reported(self) -> None:
+        self.env.update(FAKE_STATUS="1", FAKE_JOB="no")
+        result = self.run_script()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("rbox failed before any test ran (exit 1)", result.stderr)
 
     def test_completed_test_status_is_not_misreported_as_timeout(self) -> None:
         for status in [0, 1, 75, 124]:

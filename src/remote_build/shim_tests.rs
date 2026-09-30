@@ -175,3 +175,23 @@ fn plain_cargo_verify_uses_task_shim() {
     assert!(recorded.ends_with("remote-cargo\ntest\n--lib\n"), "{recorded}");
     assert_eq!(std::fs::read_to_string(f.temp.path().join("argv.target")).expect("target"), "unset");
 }
+
+#[test]
+fn remote_cargo_derives_main_and_detached_layout() {
+    let f = Fixture::new();
+    let git = Command::new("git").current_dir(f.temp.path()).args(["checkout", "-b", "main"]).output().expect("git");
+    assert!(git.status.success());
+    let output = f.command(&["check"], 0).output().expect("shim");
+    assert!(output.status.success());
+    let recorded = std::fs::read_to_string(f.temp.path().join("argv")).expect("argv");
+    assert!(recorded.contains("/main\n"));
+
+    let git = Command::new("git").current_dir(f.temp.path()).args(["checkout", "--detach"]).output().expect("git");
+    assert!(git.status.success());
+    let git_out = Command::new("git").current_dir(f.temp.path()).args(["rev-parse", "--short", "HEAD"]).output().expect("git");
+    let sha = String::from_utf8_lossy(&git_out.stdout).trim().to_string();
+    let output = f.command(&["check"], 0).output().expect("shim");
+    assert!(output.status.success());
+    let recorded = std::fs::read_to_string(f.temp.path().join("argv")).expect("argv");
+    assert!(recorded.contains(&format!("/{sha}\n")));
+}

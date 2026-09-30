@@ -1,18 +1,13 @@
-// OpenCode CLI adapter: delegates to OpenCodeOverlayAgent.
+// Native OpenCode spec and shared OpenCode-compatible parsing helpers.
 // Preserves served-model probing, route identity, and event parsing.
 
-use anyhow::Result;
 use chrono::Local;
 use serde_json::json;
-use std::process::Command;
 
-use super::opencode_overlay::{OpenCodeOverlayAgent, OpenCodeOverlaySpec};
+use super::opencode_overlay::OpenCodeOverlaySpec;
 use super::truncate::capped_detail_with;
-use super::RunOpts;
 use crate::rate_limit;
 use crate::types::*;
-
-pub struct OpenCodeAgent;
 
 pub(crate) fn spec() -> OpenCodeOverlaySpec {
     OpenCodeOverlaySpec {
@@ -26,44 +21,6 @@ pub(crate) fn spec() -> OpenCodeOverlaySpec {
         rate_limit_kind: AgentKind::OpenCode,
         allow_external_directories: true,
         probe_served_models: true,
-    }
-}
-
-pub(crate) fn agent() -> OpenCodeOverlayAgent {
-    OpenCodeOverlayAgent::from_spec(spec())
-}
-
-impl super::Agent for OpenCodeAgent {
-    fn kind(&self) -> AgentKind {
-        AgentKind::OpenCode
-    }
-
-    fn streaming(&self) -> bool {
-        true
-    }
-
-    fn accepts_interactive_input(&self) -> bool {
-        true
-    }
-
-    fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        agent().build_command(prompt, opts)
-    }
-
-    fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent> {
-        agent().parse_event(task_id, line)
-    }
-
-    fn needs_pty(&self) -> bool {
-        true
-    }
-
-    fn parse_completion(&self, output: &str) -> CompletionInfo {
-        agent().parse_completion(output)
-    }
-
-    fn served_models(&self) -> Result<Option<Vec<String>>> {
-        super::opencode_models::probe_served_models()
     }
 }
 

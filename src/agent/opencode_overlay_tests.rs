@@ -109,19 +109,37 @@ fn custom_overlay_marks_its_own_id_not_opencode() {
 
 #[test]
 fn overlay_served_models_probe_behavior() {
-    let unprobed = OpenCodeOverlayAgent::from_spec(OpenCodeOverlaySpec {
-        id: "kilo".into(),
-        display_name: "Kilo".into(),
-        reported_kind: AgentKind::Kilo,
-        binary: "kilo".into(),
-        extra_args: vec![],
-        default_model: None,
-        interactive_input: true,
-        rate_limit_kind: AgentKind::Kilo,
-        allow_external_directories: false,
-        probe_served_models: false,
-    });
-    assert!(unprobed.served_models().unwrap().is_none());
+    if let Some(home) = std::env::var_os("AID_TEST_OPENCODE_PROBE") {
+        let native = crate::agent::get_agent(AgentKind::OpenCode);
+        assert_eq!(native.kind(), AgentKind::OpenCode);
+        assert_eq!(native.rate_limit_name(), None);
+        assert!(native.streaming() && native.accepts_interactive_input() && native.needs_pty());
+        assert_eq!(native.default_model(), None);
+        assert_eq!(native.served_models().unwrap(), Some(vec!["provider/native".into()]));
+        for kind in [AgentKind::Kilo, AgentKind::MiMoCode] {
+            assert_eq!(crate::agent::get_agent(kind).served_models().unwrap(), None);
+        }
+        let custom = OpenCodeOverlayAgent::new("custom".into(), "Custom".into(), "provider/model".into());
+        assert_eq!(custom.served_models().unwrap(), None);
+        assert_eq!(std::fs::read_to_string(std::path::Path::new(&home).join("calls")).unwrap(), "models\n");
+        return;
+    }
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let binary = temp.path().join("opencode");
+    std::fs::write(&binary, concat!(
+        "#!/bin/sh\n",
+        "printf '%s\\n' \"$*\" >> \"$AID_TEST_OPENCODE_PROBE/calls\"\n",
+        "printf 'Fetching available models...\\nprovider/native\\nprovider/native\\n'\n",
+    )).unwrap();
+    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "agent::opencode_overlay::tests::overlay_served_models_probe_behavior", "--nocapture"])
+        .env("PATH", temp.path())
+        .env("AID_TEST_OPENCODE_PROBE", temp.path())
+        .output().unwrap();
+    assert!(output.status.success(), "{}\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
 }
 
 #[test]
@@ -129,8 +147,8 @@ fn argv_parity_base_opts_across_all_variants() {
     let prompt = "test base prompt";
     let opts = base_opts();
 
-    // Native OpenCode (via OpenCodeAgent)
-    let oc_cmd = super::super::opencode::OpenCodeAgent.build_command(prompt, &opts).unwrap();
+    // Native OpenCode
+    let oc_cmd = super::super::get_agent(AgentKind::OpenCode).build_command(prompt, &opts).unwrap();
     assert_eq!(oc_cmd.get_program().to_string_lossy(), "opencode");
     assert_eq!(command_args(&oc_cmd), vec!["run", "--format", "json", "--thinking", prompt]);
 
@@ -186,7 +204,7 @@ fn argv_parity_complex_opts_across_all_variants() {
     ];
 
     // Native OpenCode
-    let oc_cmd = super::super::opencode::OpenCodeAgent.build_command(prompt, &opts).unwrap();
+    let oc_cmd = super::super::get_agent(AgentKind::OpenCode).build_command(prompt, &opts).unwrap();
     assert_eq!(oc_cmd.get_program().to_string_lossy(), "opencode");
     let mut expected_oc = vec!["run"];
     expected_oc.extend(expected_suffix.iter().copied());
@@ -255,7 +273,7 @@ fn recorded_stream_event_parsing_parity() {
         ),
     ];
 
-    let oc = super::super::opencode::OpenCodeAgent;
+    let oc = super::super::get_agent(AgentKind::OpenCode);
     for (line, expected_kind) in stream_lines {
         let event = oc.parse_event(&task_id, line);
         assert_eq!(event.as_ref().map(|e| e.event_kind), expected_kind, "line: {line}");

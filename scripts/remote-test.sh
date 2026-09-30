@@ -27,16 +27,10 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -n "$BOX" ]] || { echo "AID_BUILD_BOX is not set; export the configured rbox build box name" >&2; exit 2; }
 
-repo_root="$(git rev-parse --show-toplevel)"
-cd "$repo_root"
-git rev-parse --verify HEAD >/dev/null
-common_dir="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
-repo_name="$(basename "$(dirname "$common_dir")")"
-repo_name="$(printf '%s' "$repo_name" | LC_ALL=C tr -c 'a-zA-Z0-9_-' '-')"
-checkout_id="$(git symbolic-ref --quiet --short HEAD || git rev-parse --short HEAD)"
-checkout_id="$(printf '%s' "$checkout_id" | LC_ALL=C tr -c 'a-zA-Z0-9_-' '-')"
-remote_dir="~/.rbox/work/${repo_name}/${checkout_id}"
-remote_cmd="export CARGO_TARGET_DIR=\$HOME/.rbox/target/${repo_name}; exec cargo test --workspace \"\$@\""
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "${script_dir}/../src/remote_build/cargo.sh"
+remote_checkout_layout
+remote_cmd="export CARGO_TARGET_DIR=${remote_target}; exec cargo test --workspace \"\$@\""
 command=(rbox exec "$BOX" "$repo_root" --to "$remote_dir" --jobs "$JOBS"
   --timeout "$TIMEOUT" --lock-timeout "$LOCK_TIMEOUT" -- bash -c "$remote_cmd"
   remote-test ${EXTRA[@]+"${EXTRA[@]}"})

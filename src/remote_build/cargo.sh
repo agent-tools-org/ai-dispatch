@@ -1,6 +1,27 @@
 #!/usr/bin/env bash
 # Cargo PATH shim: build commands use rbox; other commands use host Cargo.
 # Dependencies: Bash, git, rbox; AID_BUILD_BOX is resolved by task dispatch.
+remote_checkout_layout() {
+  repo_root="$(git rev-parse --show-toplevel)"
+  local relative_dir
+  relative_dir="$(git rev-parse --show-prefix)"
+  printf -v remote_cwd '%q' "./$relative_dir"
+  cd "$repo_root"
+  git rev-parse --verify HEAD >/dev/null
+  local common_dir
+  common_dir="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
+  repo_name="$(basename "$(dirname "$common_dir")")"
+  repo_name="$(printf '%s' "$repo_name" | LC_ALL=C tr -c 'a-zA-Z0-9_-' '-')"
+  checkout_id="$(git symbolic-ref --quiet --short HEAD || git rev-parse --short HEAD)"
+  checkout_id="$(printf '%s' "$checkout_id" | LC_ALL=C tr -c 'a-zA-Z0-9_-' '-')"
+  remote_dir="~/.rbox/work/${repo_name}/${checkout_id}"
+  remote_target="\$HOME/.rbox/target/${repo_name}"
+}
+
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  return 0 2>/dev/null || exit 0
+fi
+
 set -uo pipefail
 shim_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 clean_path=()
@@ -27,19 +48,10 @@ case "$subcommand" in
   *) exec cargo "$@" ;;
 esac
 set -e
-repo_root="$(git rev-parse --show-toplevel)"
-relative_dir="$(git rev-parse --show-prefix)"
-printf -v remote_cwd '%q' "./$relative_dir"
-cd "$repo_root"
-git rev-parse --verify HEAD >/dev/null
-common_dir="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
-repo_name="$(basename "$(dirname "$common_dir")")"
-repo_name="$(printf '%s' "$repo_name" | LC_ALL=C tr -c 'a-zA-Z0-9_-' '-')"
-checkout_id="$(git symbolic-ref --quiet --short HEAD || git rev-parse --short HEAD)"
-checkout_id="$(printf '%s' "$checkout_id" | LC_ALL=C tr -c 'a-zA-Z0-9_-' '-')"
-remote_cmd="mkdir -p -- ${remote_cwd} && cd -- ${remote_cwd} && export CARGO_TARGET_DIR=\$HOME/.rbox/target/${repo_name} && exec cargo \"\$@\""
+remote_checkout_layout
+remote_cmd="mkdir -p -- ${remote_cwd} && cd -- ${remote_cwd} && export CARGO_TARGET_DIR=${remote_target} && exec cargo \"\$@\""
 unset CARGO_TARGET_DIR
-rbox exec "$AID_BUILD_BOX" "$repo_root" --to "~/.rbox/work/${repo_name}/${checkout_id}" \
+rbox exec "$AID_BUILD_BOX" "$repo_root" --to "$remote_dir" \
   --untracked --jobs "${AID_BUILD_JOBS:-4}" --timeout 3600 --lock-timeout 900 \
   -- bash -c "$remote_cmd" remote-cargo "$@" &
 job_pid=$!

@@ -81,6 +81,22 @@ sys.exit(status)
             'exec cargo test --workspace "$@"', "remote-test",
         ])
 
+    def test_main_branch_defaults_and_remote_home(self) -> None:
+        self.git("checkout", "-b", "main")
+        args = self.dry_command()
+        self.assertEqual(args, [
+            "exec", "fixture", str(self.repo), "--to",
+            "~/.rbox/work/sample-repo/main", "--jobs", "4",
+            "--timeout", "5400", "--lock-timeout", "3600", "--", "bash", "-c",
+            'export CARGO_TARGET_DIR=$HOME/.rbox/target/sample-repo; '
+            'exec cargo test --workspace "$@"', "remote-test",
+        ])
+
+    def test_branch_name_sanitizing_with_punctuation(self) -> None:
+        self.git("checkout", "-b", "feature/branch.name@123")
+        args = self.dry_command()
+        self.assertEqual(args[4], "~/.rbox/work/sample-repo/feature-branch-name-123")
+
     def test_detached_head_uses_short_sha(self) -> None:
         self.git("checkout", "--detach")
         args = self.dry_command()

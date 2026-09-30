@@ -1,9 +1,9 @@
 // Codex CLI contract validation for host-side dispatch preflight.
-// Exports: validate_installed_codex; rejects obsolete approval flag surfaces.
+// Exports: validate_installed_codex_with; rejects obsolete approval flag surfaces.
 // Deps: anyhow and the installed `codex exec --help` output.
 
 use anyhow::{Result, ensure};
-use crate::agent::env_identity::{DEFAULT_PROBE_TIMEOUT, help_defines_flag, run_bounded};
+use crate::agent::env_identity::help_defines_flag;
 
 use crate::agent::CliCommandRunner;
 
@@ -30,10 +30,6 @@ pub(super) fn approval_flag_for_version(version: (u32, u32, u32)) -> ApprovalFla
     } else {
         ApprovalFlag::FullAuto
     }
-}
-
-pub(super) fn validate_installed_codex(version: Option<(u32, u32, u32)>) -> Result<()> {
-    validate_installed_codex_with(version, &|program, args| run_bounded(program, args, DEFAULT_PROBE_TIMEOUT))
 }
 
 pub(super) fn validate_installed_codex_with(
@@ -142,7 +138,7 @@ mod tests {
     #[test]
     fn timed_out_help_probe_is_a_soft_skip_for_a_known_version() {
         let runner = |_program: &str, _args: &[&str]| {
-            super::run_bounded("sh", &["-c", "exec sleep 60"], std::time::Duration::from_millis(50))
+            crate::agent::env_identity::run_bounded("sh", &["-c", "exec sleep 60"], std::time::Duration::from_millis(50))
         };
         validate_installed_codex_with(Some((0, 147, 0)), &runner).unwrap();
     }

@@ -66,7 +66,7 @@ where
     }
     let program = cmd.get_program().to_string_lossy();
     agent::ensure_resolved_binary_available_with(&args.agent_name, &program, which)?;
-    agent.validate_cli_with(run)
+    agent.validate_cli(effective_model, run)
 }
 
 #[cfg(test)]

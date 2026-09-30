@@ -2,7 +2,7 @@
 // Probes runtime CLI capabilities once, then builds the safest command shape
 // supported by the installed agy version.
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -32,6 +32,24 @@ impl super::Agent for AntigravityAgent {
 
     fn needs_pty(&self) -> bool {
         false
+    }
+
+    fn validate_cli(&self, model: Option<&str>, run: &super::CliCommandRunner<'_>) -> Result<()> {
+        let Some(model) = model else { return Ok(()) };
+        let output = match run("agy", &["--help"]) {
+            Ok(output) if output.success => output,
+            _ => {
+                aid_warn!("[aid] could not inspect agy flags; skipping model check");
+                return Ok(());
+            }
+        };
+        if !parse_agy_capabilities(&format!("{}{}", output.stdout, output.stderr)).has_model_flag {
+            bail!(
+                "agy {} does not support --model; cannot run requested model {model}. Omit --model or upgrade agy",
+                agy_version_string().unwrap_or_else(|| "(unknown version)".into())
+            );
+        }
+        Ok(())
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
@@ -247,3 +265,6 @@ mod tests;
 #[cfg(test)]
 #[path = "antigravity_model_tests.rs"]
 mod model_tests;
+#[cfg(test)]
+#[path = "antigravity_preflight_tests.rs"]
+mod preflight_tests;

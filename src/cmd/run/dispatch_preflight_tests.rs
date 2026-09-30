@@ -89,6 +89,30 @@ fn validate_command_preflight_skips_path_probe_on_dry_run() {
 }
 
 #[test]
+fn validate_command_preflight_rejects_agy_effective_model_without_model_flag() {
+    let agent = crate::agent::get_agent(AgentKind::Antigravity);
+    let args = RunArgs { agent_name: "agy".into(), ..Default::default() };
+    let error = validate_command_preflight_with(agent.as_ref(), &args, Some("gemini-3-pro"), |_| true)
+        .unwrap_err().to_string();
+    assert!(error.contains("does not support --model"), "{error}");
+    assert!(error.contains("gemini-3-pro"), "{error}");
+}
+
+#[test]
+fn validate_command_preflight_accepts_agy_without_requested_model() {
+    let agent = crate::agent::get_agent(AgentKind::Antigravity);
+    let args = RunArgs { agent_name: "agy".into(), ..Default::default() };
+    validate_command_preflight_with(agent.as_ref(), &args, None, |_| true).unwrap();
+}
+
+#[test]
+fn validate_command_preflight_skips_agy_model_check_on_dry_run() {
+    let agent = crate::agent::get_agent(AgentKind::Antigravity);
+    let args = RunArgs { agent_name: "agy".into(), dry_run: true, ..Default::default() };
+    validate_command_preflight_with(agent.as_ref(), &args, Some("gemini-3-pro"), |_| false).unwrap();
+}
+
+#[test]
 fn prepare_dispatch_rejects_custom_agent_with_missing_binary_before_task_exists() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = crate::paths::AidHomeGuard::set(temp.path());

@@ -1,7 +1,8 @@
 // Dirty baseline parsing shared by rescue and final assertion logic.
-// Exports porcelain status path extraction and baseline membership helpers.
-// Deps: std collections only.
+// Exports baseline path sets and membership; line parsing lives in status.rs.
+// Deps: status parser, std collections.
 
+use super::status::extract_baseline_path;
 use std::collections::HashSet;
 
 pub(crate) fn extract_baseline_paths(baseline: &[String]) -> HashSet<String> {
@@ -9,20 +10,6 @@ pub(crate) fn extract_baseline_paths(baseline: &[String]) -> HashSet<String> {
         .iter()
         .filter_map(|line| extract_baseline_path(line))
         .collect()
-}
-
-pub(crate) fn extract_baseline_path(line: &str) -> Option<String> {
-    if line.is_empty() || line.len() < 4 {
-        return None;
-    }
-    if let Some(path) = line.strip_prefix("?? ") {
-        return Some(path.to_string());
-    }
-    let path = &line[3..];
-    if let Some((_, renamed_path)) = path.split_once(" -> ") {
-        return Some(renamed_path.to_string());
-    }
-    Some(path.to_string())
 }
 
 pub(crate) fn baseline_contains(baseline: &HashSet<String>, path: &str) -> bool {

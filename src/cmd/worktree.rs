@@ -236,11 +236,7 @@ fn worktree_has_dirty_status(wt_path: &Path) -> bool {
     let Ok(state) = crate::worktree::capture_live_worktree_state(wt_path) else {
         return false;
     };
-    state.status_lines.iter().any(|line| status_line_path(line) != ".aid-lock")
-}
-
-fn status_line_path(line: &str) -> &str {
-    if line.len() > 3 { line[3..].trim() } else { line.trim() }
+    state.status_lines.iter().any(|line| crate::worktree::status_line_path(line) != ".aid-lock")
 }
 
 fn is_stale_worktree_path(wt_path: &Path) -> bool {

@@ -40,8 +40,9 @@ fn static_catalog_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing>
     let row = AGENT_MODELS
         .iter()
         .find(|known| known.agent == agent && known.model.eq_ignore_ascii_case(model))?;
-    // tier "unknown" stores 0.0/0.0 as "no figure", not free (grok).
-    if row.tier == "unknown" {
+    // 0.0/0.0 is a price only on a "free" row; elsewhere it means "no figure"
+    // (droid, oz, grok). Subscription agents are priced before this lookup.
+    if row.input_per_m == 0.0 && row.output_per_m == 0.0 && row.tier != "free" {
         return None;
     }
     Some(ModelPricing {

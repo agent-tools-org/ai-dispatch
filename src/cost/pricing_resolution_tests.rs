@@ -2,7 +2,7 @@
 // Deps: super::resolve_model_pricing, crate::cost::estimate_cost, AGENT_MODELS.
 
 use super::*;
-use crate::cost::{clear_feed_for_tests, estimate_cost, format_cost};
+use crate::cost::{clear_feed_for_tests, estimate_cost, format_cost, format_cost_label};
 use crate::model_catalog::AGENT_MODELS;
 use crate::paths::AidHomeGuard;
 use crate::types::AgentKind;
@@ -99,4 +99,39 @@ fn served_only_model_keeps_explicit_override_and_exact_feed_prices() {
     let terra = resolve_model_pricing("gpt-5.7-terra", AgentKind::Codex).expect("exact feed");
     assert_eq!((terra.input_per_m, terra.output_per_m), (4.0, 20.0));
     clear_feed_for_tests();
+}
+
+#[test]
+fn zero_figure_on_a_paid_tier_row_is_unknown_not_free() {
+    let _guard = isolated();
+    for (model, agent) in [
+        ("claude-opus-5", AgentKind::Droid),
+        ("inkling", AgentKind::Droid),
+        ("auto", AgentKind::Oz),
+        ("grok-4.6", AgentKind::Grok),
+    ] {
+        let cost = estimate_cost(1_000_000, Some(model), agent);
+        assert_eq!(cost, None, "{agent:?}/{model}");
+        assert_eq!(format_cost(cost), "unknown", "{agent:?}/{model}");
+    }
+}
+
+#[test]
+fn free_tier_and_subscription_rows_stay_zero() {
+    let _guard = isolated();
+    for (model, agent) in [
+        ("gemini-3.1-pro-high", AgentKind::Antigravity),
+        ("coder-model", AgentKind::Qwen),
+        ("opencode/deepseek-v4-flash-free", AgentKind::OpenCode),
+        ("kilo/kilo-auto/free", AgentKind::Kilo),
+        ("mimo/mimo-auto", AgentKind::MiMoCode),
+        ("gpt-5.4-high", AgentKind::Cursor),
+    ] {
+        assert_eq!(estimate_cost(1_000_000, Some(model), agent), Some(0.0), "{agent:?}/{model}");
+    }
+    let label = |model, agent| format_cost_label(estimate_cost(1_000_000, Some(model), agent), agent);
+    assert_eq!(label("kilo/kilo-auto/free", AgentKind::Kilo), "included");
+    assert_eq!(label("mimo/mimo-auto", AgentKind::MiMoCode), "included");
+    assert_eq!(label("auto", AgentKind::Cursor), "subscription");
+    assert_eq!(label("any-copilot-model", AgentKind::Copilot), "subscription");
 }

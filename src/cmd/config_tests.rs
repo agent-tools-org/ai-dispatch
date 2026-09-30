@@ -22,7 +22,7 @@ fn loads_and_merges_pricing_overrides() {
             "models": [
                 {
                     "agent": "codex",
-                    "model": "gpt-4.1",
+                    "model": "gpt-5.6-sol",
                     "input_per_m": 9.0,
                     "output_per_m": 19.0,
                     "tier": "custom",
@@ -47,13 +47,12 @@ fn loads_and_merges_pricing_overrides() {
     assert_eq!(loaded.len(), 2);
 
     let merged = merged_agent_models().unwrap();
-    let existing = merged
-        .iter()
-        .find(|model| model.agent == crate::types::AgentKind::Codex && model.model == "gpt-4.1")
-        .unwrap();
+    let existing = merged.iter()
+        .find(|model| model.agent == AgentKind::Codex && model.model == "gpt-5.6-sol").unwrap();
     assert_eq!(existing.tier, "custom");
+    assert_eq!(existing.description, "override");
     crate::cost::clear_feed_for_tests();
-    let price = crate::cost::resolve_pricing(Some("gpt-4.1"), AgentKind::Codex).unwrap();
+    let price = crate::cost::resolve_pricing(Some("gpt-5.6-sol"), AgentKind::Codex).unwrap();
     assert_eq!((price.input_per_m, price.output_per_m), (9.0, 19.0));
 
     let added = merged

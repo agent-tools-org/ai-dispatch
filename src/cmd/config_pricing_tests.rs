@@ -114,7 +114,17 @@ fn pricing_override_is_what_every_display_shows() {
         let shown = assert_displays_resolved_price(&displays, agent, model);
         assert_eq!(shown.json, (Some(input), Some(output)), "{agent:?}/{model}");
         assert_eq!(shown.table, (usd(Some(input)), usd(Some(output))), "{agent:?}/{model}");
+        let cells: Vec<_> = displays.table.lines()
+            .find(|line| line.split_whitespace().take(2).eq([agent.as_str(), model]))
+            .expect("pricing row").split_whitespace().collect();
+        assert_eq!(cells[2], "premium");
+        assert_eq!(cells[5..], ["operator", "price"]);
+        let row = displays.agents.agents.iter().find(|a| a.name == agent.as_str()).expect("agent")
+            .models.available.iter().find(|row| row.model == model).expect("JSON row");
+        assert_eq!(row.tier, "premium");
         let catalogued = AGENT_MODELS.iter().any(|row| row.agent == agent && row.model == model);
+        assert_eq!(row.rated, catalogued);
+        assert_eq!(row.source, if catalogued { "catalog" } else { "pricing_override" });
         assert_eq!(shown.profile.is_some(), catalogued, "{agent:?}/{model}");
     }
     clear_feed_for_tests();

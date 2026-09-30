@@ -559,6 +559,8 @@ invents ratings for served-only models, and routing never auto-selects one.
 Cost estimation prices a model only from an exact match, in this order: an
 explicit `pricing.json` override for the agent and model, subscription
 inclusion, its static catalog row, or an exact price-feed id or alias.
+An explicit override also replaces a listed row's tier and description while
+preserving its catalog rating and source.
 The price feed carries each vendor's own per-token API rate, so it prices only
 the vendor's own CLI (codex, claude, gemini, grok); on a reseller route (droid,
 oz, opencode, and the others) a model without a catalog figure or override

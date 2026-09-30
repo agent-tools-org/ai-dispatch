@@ -4,7 +4,6 @@
 
 use anyhow::Result;
 use serde::Deserialize;
-use std::collections::HashSet;
 
 use super::model_catalog_served::{served_only_models, SERVED_PROBE_AGENTS};
 use super::{static_models_for_agent, AgentModel, AGENT_MODELS};
@@ -102,21 +101,21 @@ pub fn load_pricing_overrides() -> Result<Vec<PricingFileModel>> {
 
 pub fn merged_agent_models() -> Result<Vec<ResolvedAgentModel>> {
     let mut merged = Vec::with_capacity(AGENT_MODELS.len());
-    let mut listed = HashSet::new();
     for model in AGENT_MODELS {
-        listed.insert((model.agent, model.model.to_lowercase()));
         merged.push(ResolvedAgentModel::from(model));
     }
     for model in SERVED_PROBE_AGENTS.iter().flat_map(|agent| served_only_models(*agent)) {
-        listed.insert((model.agent, model.model.to_lowercase()));
         merged.push(model);
     }
     for model in load_pricing_overrides()? {
         let Some(agent) = AgentKind::parse_str(&model.agent) else {
             continue;
         };
-        // Rows already listed take the override price from cost::resolve_pricing.
-        if listed.insert((agent, model.model.to_lowercase())) {
+        if let Some(listed) = merged.iter_mut()
+            .find(|row| row.agent == agent && row.model.eq_ignore_ascii_case(&model.model)) {
+            listed.tier = model.tier;
+            listed.description = model.description;
+        } else {
             merged.push(ResolvedAgentModel::from_override(agent, model));
         }
     }

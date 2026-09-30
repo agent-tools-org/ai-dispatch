@@ -2,11 +2,18 @@
 // Covers eval success/failure flow, prompt feedback, and iteration limits.
 
 use super::*;
+use crate::paths::AidHomeGuard;
 use crate::store::Store;
 use crate::types::{AgentKind, VerifyStatus};
 use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
+
+fn isolated_home() -> (tempfile::TempDir, AidHomeGuard) {
+    let temp = tempfile::tempdir().unwrap();
+    let guard = AidHomeGuard::set(temp.path());
+    (temp, guard)
+}
 
 fn done_task(id: &str, dir: &str, parent_task_id: Option<&str>) -> Task {
     Task {
@@ -33,7 +40,7 @@ fn done_task(id: &str, dir: &str, parent_task_id: Option<&str>) -> Task {
         tokens: None,
         prompt_tokens: None,
         duration_ms: None,
-        model: None,
+        requested_model: None, observed_model: None, attribution_source: None,
         cost_usd: None,
         exit_code: None,
         created_at: Local::now(),
@@ -43,6 +50,7 @@ fn done_task(id: &str, dir: &str, parent_task_id: Option<&str>) -> Task {
         pending_reason: None,
         read_only: false,
         budget: false,
+        audit_verdict: None, audit_report_path: None, delivery_assessment: None,
     }
 }
 
@@ -103,6 +111,7 @@ async fn eval_success_on_first_try_returns_none() {
 
 #[tokio::test]
 async fn eval_failure_retries_with_feedback_output() {
+    let (_home, _guard) = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let temp = tempfile::tempdir().unwrap();
     init_git_repo(temp.path());
@@ -114,6 +123,7 @@ async fn eval_failure_retries_with_feedback_output() {
         ..run_args(temp.path().to_str().unwrap())
     };
 
+    store.update_task_dispatch_args("t-root", &args.dispatch_args_json().unwrap()).unwrap();
     let retry_id = maybe_iterate(
         &store,
         &TaskId("t-root".to_string()),
@@ -179,6 +189,7 @@ async fn max_iterations_reached_stops_retrying() {
 
 #[tokio::test]
 async fn feedback_template_placeholders_are_replaced() {
+    let (_home, _guard) = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let temp = tempfile::tempdir().unwrap();
     init_git_repo(temp.path());
@@ -186,16 +197,16 @@ async fn feedback_template_placeholders_are_replaced() {
         .insert_task(&done_task("t-root", temp.path().to_str().unwrap(), None))
         .unwrap();
 
+    let args = RunArgs {
+        eval: Some("printf 'lint failed'; exit 1".to_string()),
+        eval_feedback_template: Some("Round {iteration}/{max_iterations}: {eval_output}".to_string()),
+        ..run_args(temp.path().to_str().unwrap())
+    };
+    store.update_task_dispatch_args("t-root", &args.dispatch_args_json().unwrap()).unwrap();
     let retry_id = maybe_iterate(
         &store,
         &TaskId("t-root".to_string()),
-        &RunArgs {
-            eval: Some("printf 'lint failed'; exit 1".to_string()),
-            eval_feedback_template: Some(
-                "Round {iteration}/{max_iterations}: {eval_output}".to_string(),
-            ),
-            ..run_args(temp.path().to_str().unwrap())
-        },
+        &args,
         &IterateConfig {
             max_iterations: 4,
             eval_command: "printf 'lint failed'; exit 1".to_string(),

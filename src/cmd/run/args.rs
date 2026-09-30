@@ -278,3 +278,7 @@ mod args_saved_tests;
 #[cfg(test)]
 #[path = "args_retry_tests.rs"]
 mod args_retry_tests;
+
+#[cfg(test)]
+#[path = "args_retry_worker_tests.rs"]
+mod args_retry_worker_tests;

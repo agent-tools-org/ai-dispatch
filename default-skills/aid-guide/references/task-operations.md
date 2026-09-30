@@ -135,6 +135,11 @@ usable. This matters for agents that key their saved sessions by working
 directory: without it, resuming a session from a different directory fails
 immediately.
 
+Retries reuse the saved dispatch configuration, including the declared budget
+request. Same-agent retries resume the latest recorded session when supported.
+Automatic worker retries preserve the live directory and environment and run the
+parent's completion hook once; manual `aid retry` inherits that hook.
+
 Stopping preserves the worktree and attempts to preserve in-flight changes.
 Inspect the artifact afterward. A retry creates linked history; use `tree` to
 understand the chain.

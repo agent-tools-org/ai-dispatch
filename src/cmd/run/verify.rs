@@ -223,7 +223,12 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_verify_failure_impl(
         args.retry - 1
     );
 
-    let mut retry_args = args.clone();
+    let mut retry_args = RunArgs::for_retry(store, &task)?;
+    retry_args.dir = args.dir.clone();
+    retry_args.env = args.env.clone();
+    retry_args.foreground = args.foreground;
+    retry_args.announce = args.announce;
+    retry_args.on_done = None;
     retry_args.prompt = format!(
         "[Previous attempt feedback]\n{}\n\n[Original task]\n{}",
         super::VERIFY_RETRY_FEEDBACK,
@@ -231,20 +236,8 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_verify_failure_impl(
     );
     retry_args.retry = args.retry.saturating_sub(1);
     retry_args.parent_task_id = Some(task_id.as_str().to_string());
-    retry_args.repo = task.repo_path.clone().or_else(|| retry_args.repo.clone());
-    retry_args.output = task
-        .output_path
-        .clone()
-        .or_else(|| retry_args.output.clone());
-    if retry_args.model.is_none() { retry_args.model = task.requested_model.clone(); }
-    retry_args.verify = task.verify.clone();
-    retry_args.read_only = task.read_only;
-    retry_args.budget = task.budget;
     retry_args.background = false;
     super::apply_retry_target(&task, &mut retry_args)?;
-    if task.agent.supports_session_resume() {
-        retry_args.session_id = task.agent_session_id.clone();
-    }
 
     Box::pin(super::super::run(store.clone(), retry_args)).await.map(Some)
 }
@@ -271,24 +264,20 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_checklist_miss_impl(
         args.retry.saturating_sub(1)
     );
     let missing = result.missing_items().join("\n");
-    let mut retry_args = args.clone();
+    let mut retry_args = RunArgs::for_retry(store, &task)?;
+    retry_args.dir = args.dir.clone();
+    retry_args.env = args.env.clone();
+    retry_args.foreground = args.foreground;
+    retry_args.announce = args.announce;
+    retry_args.on_done = None;
     retry_args.prompt = format!(
         "[Checklist items not addressed]\nYou MUST address these items:\n{missing}\n\n[Original task]\n{}",
         task.prompt
     );
     retry_args.retry = args.retry.saturating_sub(1);
     retry_args.parent_task_id = Some(task_id.as_str().to_string());
-    retry_args.repo = task.repo_path.clone().or_else(|| retry_args.repo.clone());
-    retry_args.output = task.output_path.clone().or_else(|| retry_args.output.clone());
-    if retry_args.model.is_none() { retry_args.model = task.requested_model.clone(); }
-    retry_args.verify = task.verify.clone();
-    retry_args.read_only = task.read_only;
-    retry_args.budget = task.budget;
     retry_args.background = false;
     super::apply_retry_target(&task, &mut retry_args)?;
-    if task.agent.supports_session_resume() {
-        retry_args.session_id = task.agent_session_id.clone();
-    }
     Box::pin(super::super::run(store.clone(), retry_args)).await.map(Some)
 }
 #[cfg(test)]

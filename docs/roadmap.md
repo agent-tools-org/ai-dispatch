@@ -1,33 +1,71 @@
 # aid Roadmap
 
-Updated 2026-09-23 for the v10.47.1 bugfix release candidate.
-The previous released baseline is `ffd07e8e` (v10.47.0); custody and budget
-fixes landed in `d7dc85ef`.
+Updated 2026-09-30 after the v10.50.0 release (`89e09057`).
 This document owns execution order and acceptance gates; [CHANGELOG](../CHANGELOG.md)
 owns release history. The [takeover inventory](project-status-2026-09-22.md) records
 source evidence and verification limits. Release validation is recorded separately from historical audit results.
 
 `ai-board` remains the work-item tracker (`ai-board item list --project ai-dispatch`).
-It was unavailable during this inventory: existing `wi-*` IDs are retained for
-reconciliation, and source implementation status below does not assert board closure.
-New slices need board IDs before implementation; priorities here are proposed execution order.
+Existing `wi-*` IDs are retained for reconciliation; source implementation status below
+does not assert board closure. New slices need board IDs before implementation.
 
 ## Current baseline
 
-- The previous release is **v10.47.0** (2026-09-15). The patch candidate includes
-  shared-checkout custody, target-project budgets, and worker-settlement waiting.
-- The authenticated Web API, SSE, and macOS/iPadOS client are implemented; the
-  v10.38.0 changelog includes the former August integration train.
-- Detached foreground execution, isolated-HOME repair, remote builds, backup,
-  status guards, quota visibility, and custody GC have continued evolving through v10.47.0.
-- CI now covers Rust build/test/strict clippy for both default and `web` features.
-  Swift remains a separate validation gate.
-- The patch candidate passes default and Web suites (2,696/2,728 unit tests plus
-  121 integration tests each) and strict clippy for both configurations. The
-  background delivery/wait race has deterministic coverage. See the
-  [bugfix validation](validation-bugfix-2026-09-23.md) for the failed baseline,
-  fixture correction, final gates and remaining limits. Live API/Swift gates
-  remain unverified.
+- The current release is **v10.50.0** (2026-09-30). It carries the first rounds of the
+  structural refactor program below, `--read-only` enforcement, and the command-surface
+  consolidation (removed `kill`, `output`, top-level `summary`/`finding`/`broadcast`,
+  `config add-agent`, `watch --wait`).
+- The release candidate passed the full workspace suite on the build box
+  (34 test binaries, 3,038 passed, 0 failed) and `scripts/release.sh --dry-run`.
+  A recursive `--help` dump (126 pages, default features) was identical before and after
+  the CLI module reorganisation. Web-feature help and the live API/Swift gates were not
+  re-run for this release.
+- Earlier baseline notes (v10.47.x custody and budget work) remain below for reconciliation.
+
+## Structural refactor program (in progress)
+
+Source: a three-lane audit of the 109 non-merge commits before v10.48.0 (execution
+lifecycle, agent/model layer, command surface). Each slice must remove code or a concept;
+no new layer. Behaviour-preserving moves and semantic fixes land separately.
+
+### Landed in v10.50.0
+
+| Area | Result |
+| --- | --- |
+| Run configuration | CLI args convert once into `cmd::run::RunArgs` (positional 49-argument bridge deleted); workers rebuild from saved dispatch args; every retry path starts from `RunArgs::for_retry` |
+| Command surface | Duplicate/hidden verbs removed; subcommand enums defined once; CLI args grouped in domain-named files; one exhaustive dispatch `match` |
+| Agent layer | One bounded probe runner for identity, help, version, model listing and preflight; native OpenCode served by the shared overlay; agy `--model` checked at preflight |
+| Routing | `advise` is the ranker for hints; quota terms use the resolved model's group; only installed, enabled, non-excluded routes are recommended; Gemini is excluded when agy is installed |
+| Pricing | One price function (override, subscription, catalog figure, vendor-CLI feed, unknown); displays read the enforced price |
+| Worktree | One git-status porcelain parser for every reader |
+| Read-only | Post-run snapshot comparison of the Git run directory |
+| Tests | Guide tests check facts generated from code plus a safety-invariant table; gated-verifier settlement E2E harness |
+
+### Next slices (execution order)
+
+| Order | Slice | Acceptance contract |
+| --- | --- | --- |
+| 1 | Route: best-of races advise's launchable candidates | No uninstalled or held route races; each racer's resolved model equals the advised model; plan cycling kept |
+| 2 | Route: cascade fallback from advise | Fallback is the first launchable advise candidate other than the exhausted agent; Claude and superseded Gemini never selected; a peer below the capability floor is not selected |
+| 3 | Pricing: budget scoring uses the price function | Subscription and unknown prices are not "paid"; overrides apply both ways |
+| 4 | Run configuration: job file holds runtime state only | Nine runtime fields; old job files still load so running workers can be waited on, stopped and reaped |
+| 5 | Read-only snapshot scope | Snapshot from the repository top level; the run repository's HEAD and refs compared; repositories without commits and special files recorded instead of failing |
+| 6 | Read-only report location | Auto audit reports written under the task directory for host launches; explicit `--result-file` unchanged |
+| 7 | Worktree observation | One capture per settlement step; comparisons computed only where read; per-consumer filters unchanged |
+| 8 | Task settlement | Terminal status published once after verification, preservation and continuation selection; see [task settlement design](design/task-settlement.md) |
+
+**Exit per slice:** full remote suite green, an independent audit with test evidence,
+guide updated for any contract change, and net production lines not increased.
+
+### Known limits of the current code
+
+- `--read-only` compares only files under the run directory (from a repository
+  subdirectory, that subtree); the run repository's own HEAD, branches and tags are not
+  compared; an embedded repository without commits fails the snapshot.
+- Batch dependencies and `aid accept` can act on a task whose verification is still
+  running; the settlement harness records these as ignored scenarios.
+- Retry children of an agent failure (`prepare_retry`) inherit the saved `on_done` hook
+  and do not overlay the worker's runtime environment.
 
 ## Reconcile the previous queue
 
@@ -105,10 +143,11 @@ personal task history or undocumented local tooling. No release number is promis
 
 ## M3 — Reduce remaining maintenance cost (P2)
 
-- Continue #152 with rate-limit, worker/PTY, Store mutation, and lifecycle boundaries.
+- Continue #152 with rate-limit, worker/PTY and Store mutation boundaries; the
+  lifecycle boundary is tracked in the structural refactor program above.
   Keep behavior-preserving extraction separate from semantic fixes.
-- Reassess #160 adapter consolidation against real captured protocol fixtures before
-  sharing more parsing or completion logic.
+- #160 adapter consolidation: OpenCode native/overlay and CLI probing are shared as of
+  v10.50.0; reassess further sharing against captured protocol fixtures.
 - Re-triage [historical UX debt](ux-debt.md): batch dependency lineage (`wi-f4bf`),
   content-hash resume (`wi-1479`), and resource lifecycle (`wi-7804`) remain separate programs.
   Start each with a current reproduction and a narrow acceptance contract.

@@ -16,6 +16,7 @@ for current sequencing and acceptance gates.
 | Shipped changes | [CHANGELOG](../CHANGELOG.md) |
 | Client/API design | [Client API](design/client-api.md), [XcodeGen targets](../client/project.yml) |
 | Artifact ownership | [Acceptance and worktree lifecycle](design/principal-acceptance-worktree-lifecycle.md) |
+| Task settlement (design) | [One terminal status](design/task-settlement.md) |
 | Result semantics | [Task success contract](design-task-success-contract.md) |
 | Historical architecture findings | [July audit](audit-architecture-2026-07.md) |
 | Historical release candidate evidence | [August handoff](audit-handoff-2026-08-23.md) |

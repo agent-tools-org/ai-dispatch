@@ -1,5 +1,15 @@
 # Lifecycle Refactor Roadmap
 
+## Status (2026-09-30, v10.50.0)
+
+- Phase 3 (worktree snapshot boundary): one porcelain parser (`src/worktree/status.rs`)
+  now serves every reader; one capture per settlement step is still open.
+- Phase 4 is superseded by the task settlement design (`docs/design/task-settlement.md`):
+  publish terminal status once instead of adding a phase-runner framework.
+- Current order and acceptance contracts live in `docs/roadmap.md`
+  ("Structural refactor program").
+- Settlement E2E harness: `tests/settlement_e2e.rs` (ignored scenarios describe open gaps).
+
 ## Goal
 
 Stabilize the `aid run` completion path by replacing the current monolithic post-run flow with small modules that own one decision each. The program targets three chronic problem areas:

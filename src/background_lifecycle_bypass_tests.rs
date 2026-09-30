@@ -3,6 +3,7 @@
 // Deps: background error handler, Store, local webhook listener, task fixtures.
 
 use super::{handle_run_task_inner_error, BackgroundRunSpec};
+use crate::cmd::run::RunArgs;
 use crate::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
@@ -20,15 +21,24 @@ async fn worker_keeps_spec_until_error_lifecycle_finishes() {
     paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let id = "t-bg-barrier";
-    store.insert_task(&task(id, TaskStatus::Running)).unwrap();
+    // The agent resolves for the lifecycle but its binary is missing, so the
+    // worker fails before launching anything.
+    std::fs::create_dir_all(paths::aid_dir().join("agents")).unwrap();
+    std::fs::write(paths::aid_dir().join("agents/missing-bin-test.toml"),
+        "[agent]\nid = \"missing-bin-test\"\ndisplay_name = \"Missing Bin\"\ncommand = \"/nonexistent/aid-test-agent\"\nprompt_mode = \"arg\"\ninteractive_input = false\n").unwrap();
+    let mut row = task(id, TaskStatus::Running);
+    row.agent = AgentKind::Custom;
+    row.custom_agent_name = Some("missing-bin-test".into());
+    store.insert_task(&row).unwrap();
     let observed = temp.path().join("barrier.txt");
-    let spec = BackgroundRunSpec {
-        agent_name: "missing-test-agent".into(),
+    let args = RunArgs {
+        agent_name: "missing-bin-test".into(),
         hooks: vec![format!("on_fail:test -f '{}' && printf present > '{}'",
             paths::job_path(id).display(), observed.display())],
-        ..spec(id)
+        ..Default::default()
     };
-    super::save_spec(&spec).unwrap();
+    store.update_task_dispatch_args(id, &args.dispatch_args_json().unwrap()).unwrap();
+    super::save_spec(&spec(id)).unwrap();
     assert!(super::run_task(store.clone(), id).await.is_err());
     assert_eq!(std::fs::read_to_string(observed).unwrap(), "present");
     assert!(super::load_spec_if_exists(id).unwrap().is_none());
@@ -48,14 +58,16 @@ async fn inner_error_runs_post_lifecycle_once_without_duplicate_callbacks() {
     write_webhook_config(&webhook_url);
     let hook_path = temp.path().join("hook.txt");
     let done_path = temp.path().join("done.txt");
-    let spec = BackgroundRunSpec {
+    let args = RunArgs {
+        agent_name: "codex".into(),
         hooks: vec![format!("on_fail:printf fail >> '{}'", hook_path.display())],
-        on_done: Some(format!("printf done >> '{}'", done_path.display())),
-        ..spec("t-bg-error")
+        ..Default::default()
     };
+    let mut spec = spec("t-bg-error");
+    spec.on_done = Some(format!("printf done >> '{}'", done_path.display()));
 
-    let _ = handle_run_task_inner_error(&store, &spec, anyhow::anyhow!("setup failed")).await;
-    let _ = handle_run_task_inner_error(&store, &spec, anyhow::anyhow!("late duplicate")).await;
+    let _ = handle_run_task_inner_error(&store, &spec, Some(&args), anyhow::anyhow!("setup failed")).await;
+    let _ = handle_run_task_inner_error(&store, &spec, Some(&args), anyhow::anyhow!("late duplicate")).await;
 
     assert_eq!(read_wait(&hook_path), "fail");
     assert_eq!(read_wait(&done_path), "done");
@@ -72,8 +84,9 @@ async fn inner_error_appends_completion_exactly_once() {
         .insert_task(&task("t-bg-completion", TaskStatus::Running))
         .unwrap();
     let spec = spec("t-bg-completion");
+    let args = RunArgs { agent_name: "codex".into(), ..Default::default() };
 
-    let _ = handle_run_task_inner_error(&store, &spec, anyhow::anyhow!("boom")).await;
+    let _ = handle_run_task_inner_error(&store, &spec, Some(&args), anyhow::anyhow!("boom")).await;
 
     let completions_path = paths::aid_dir().join("completions.jsonl");
     let content = std::fs::read_to_string(&completions_path).unwrap_or_default();
@@ -82,6 +95,29 @@ async fn inner_error_appends_completion_exactly_once() {
         count, 1,
         "expected exactly one completions.jsonl entry, got: {content}"
     );
+}
+
+#[tokio::test]
+async fn worker_without_saved_args_fails_the_task_and_notifies_once() {
+    let temp = tempfile::tempdir().unwrap();
+    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let id = "t-bg-unsaved";
+    store.insert_task(&task(id, TaskStatus::Running)).unwrap();
+    let done_path = temp.path().join("done.txt");
+    let mut job = spec(id);
+    job.on_done = Some(format!("printf \"$AID_TASK_STATUS\" > '{}'", done_path.display()));
+    super::save_spec(&job).unwrap();
+
+    let err = super::run_task(store.clone(), id).await.unwrap_err();
+
+    assert!(format!("{err:#}").contains("no saved dispatch args"), "{err:#}");
+    assert_eq!(store.get_task(id).unwrap().unwrap().status, TaskStatus::Failed);
+    assert!(super::load_spec_if_exists(id).unwrap().is_none());
+    let completions = std::fs::read_to_string(paths::aid_dir().join("completions.jsonl")).unwrap();
+    assert_eq!(completions.lines().filter(|line| line.contains(id)).count(), 1);
+    assert_eq!(read_wait(&done_path), "failed", "the job's on_done still reports the failure");
 }
 
 fn start_webhook_counter() -> (String, mpsc::Receiver<usize>) {

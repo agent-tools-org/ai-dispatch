@@ -1,37 +1,29 @@
 // Background lifecycle handoff after a detached worker exits.
 // Exports run_post_lifecycle to reuse foreground post-run phases.
-// Deps: cmd::run lifecycle API, hooks, Store, and BackgroundRunSpec.
+// Deps: cmd::run lifecycle API, hooks, Store, worker RunArgs and BackgroundRunSpec.
 
 use anyhow::Result;
 use std::sync::Arc;
 
 use super::BackgroundRunSpec;
 use crate::agent::Agent;
-use crate::agent::model_validation::ModelSource;
 use crate::store::Store;
 use crate::types::{TaskId, TaskStatus};
 
 pub(super) async fn run_post_lifecycle(
     store: &Arc<Store>,
     spec: &BackgroundRunSpec,
+    lifecycle_args: &crate::cmd::run::RunArgs,
     agent: &dyn Agent,
     container_name: Option<&str>,
 ) -> Result<()> {
-    let saved = crate::cmd::run::RunArgs::saved_for_task(store, &spec.task_id)?;
-    let model_source = saved
-        .as_ref()
-        .map(|args| args.model_source)
-        .unwrap_or(ModelSource::AidResolved);
-    let mut lifecycle_args = run_args_from_spec(spec, model_source);
-    lifecycle_args.remote_build = crate::remote_build::saved_box(store, &spec.task_id)?;
-    carry_saved_overrides(&mut lifecycle_args, saved.as_ref());
     let task_id = TaskId(spec.task_id.clone());
     let pre_verify_status = store
         .get_task(&spec.task_id)?
         .map(|task| task.status)
         .unwrap_or(TaskStatus::Done);
-    let runtime_hooks = load_background_runtime_hooks(&lifecycle_args)?;
-    let prompt_bundle = prompt_bundle_from_spec(spec);
+    let runtime_hooks = load_background_runtime_hooks(lifecycle_args)?;
+    let prompt_bundle = prompt_bundle(lifecycle_args);
     let (repo_path, wt_path) = task_lifecycle_paths(store, &task_id)?;
     crate::cmd::run::post_run_lifecycle(
         if spec.foreground {
@@ -41,10 +33,10 @@ pub(super) async fn run_post_lifecycle(
         },
         store,
         &task_id,
-        &lifecycle_args,
+        lifecycle_args,
         agent.kind(),
-        &spec.agent_name,
-        spec.dir.as_ref(),
+        &lifecycle_args.agent_name,
+        lifecycle_args.dir.as_ref(),
         repo_path.as_ref(),
         wt_path.as_ref(),
         container_name,
@@ -57,70 +49,9 @@ pub(super) async fn run_post_lifecycle(
     Ok(())
 }
 
-fn run_args_from_spec(spec: &BackgroundRunSpec, model_source: ModelSource) -> crate::cmd::run::RunArgs {
-    crate::cmd::run::RunArgs {
-        agent_name: spec.agent_name.clone(),
-        prompt: spec.prompt.clone(),
-        dir: spec.dir.clone(),
-        output: spec.output.clone(),
-        result_file: spec.result_file.clone(),
-        result_file_required: spec.result_file_required,
-        model: spec.model.clone(),
-        model_source,
-        worktree: spec.worktree.clone(),
-        base_branch: spec.base_branch.clone(),
-        group: spec.group.clone(),
-        verify: spec.verify.clone(),
-        setup: spec.setup.clone(),
-        iterate: spec.iterate,
-        eval: spec.eval.clone(),
-        eval_feedback_template: spec.eval_feedback_template.clone(),
-        judge: spec.judge.clone(),
-        judge_retry: spec.judge_retry,
-        peer_review: spec.peer_review.clone(),
-        max_duration_mins: spec.max_duration_mins,
-        max_task_cost: spec.max_task_cost,
-        idle_timeout_secs: spec.idle_timeout_secs,
-        retry: spec.retry,
-        checklist: spec.checklist.clone(),
-        skills: spec.skills.clone(),
-        hooks: spec.hooks.clone(),
-        template: spec.template.clone(),
-        parent_task_id: spec.parent_task_id.clone(),
-        cascade: spec.cascade.clone(),
-        read_only: spec.read_only,
-        audit_report_mode: spec.audit_report_mode,
-        sandbox: spec.sandbox,
-        container: spec.container.clone(),
-        budget: spec.budget,
-        session_id: spec.session_id.clone(),
-        env: spec.env.clone(),
-        env_forward: spec.env_forward.clone(),
-        audit: spec.audit,
-        audit_explicit: spec.audit_explicit,
-        no_audit: spec.no_audit,
-        scope: spec.scope.clone(),
-        link_deps: spec.link_deps,
-        background: true,
-        announce: spec.foreground,
-        foreground: spec.foreground,
-        ..Default::default()
-    }
-}
-
-/// The spec has no backup fields; retries derived from these args must keep
-/// the task's `--backup` / `--no-backup` intent, so copy it from the saved args.
-fn carry_saved_overrides(args: &mut crate::cmd::run::RunArgs, saved: Option<&crate::cmd::run::RunArgs>) {
-    if let Some(saved) = saved {
-        args.backup = saved.backup.clone();
-        args.no_backup = saved.no_backup;
-        args.kind = saved.kind;
-    }
-}
-
-fn prompt_bundle_from_spec(spec: &BackgroundRunSpec) -> crate::cmd::run::PromptBundle {
+fn prompt_bundle(args: &crate::cmd::run::RunArgs) -> crate::cmd::run::PromptBundle {
     crate::cmd::run::PromptBundle {
-        effective_prompt: spec.prompt.clone(),
+        effective_prompt: args.prompt.clone(),
         context_files: Vec::new(),
         prompt_tokens: 0,
         injected_memory_ids: Vec::new(),
@@ -141,34 +72,4 @@ fn task_lifecycle_paths(
         return Ok((None, None));
     };
     Ok((task.repo_path, task.worktree_path))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::carry_saved_overrides;
-    use crate::agent::classifier::TaskCategory;
-    use crate::cmd::run::RunArgs;
-
-    #[test]
-    fn lifecycle_args_carry_saved_backup_overrides() {
-        let saved = RunArgs { backup: Some("gdrive:x".into()), no_backup: false, ..Default::default() };
-        let mut args = RunArgs::default();
-        carry_saved_overrides(&mut args, Some(&saved));
-        assert_eq!(args.backup.as_deref(), Some("gdrive:x"));
-
-        let saved = RunArgs { no_backup: true, ..Default::default() };
-        carry_saved_overrides(&mut args, Some(&saved));
-        assert!(args.no_backup && args.backup.is_none());
-
-        carry_saved_overrides(&mut args, None);
-        assert!(args.no_backup, "absent saved args leave the fields alone");
-    }
-
-    #[test]
-    fn lifecycle_args_carry_declared_kind() {
-        let saved = RunArgs { kind: Some(TaskCategory::ComplexImpl), ..Default::default() };
-        let mut args = RunArgs::default();
-        carry_saved_overrides(&mut args, Some(&saved));
-        assert_eq!(args.kind, Some(TaskCategory::ComplexImpl));
-    }
 }

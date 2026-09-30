@@ -112,6 +112,28 @@ impl RunArgs {
             .map(|json| Self::from_dispatch_args_json(&json))
             .transpose()
     }
+
+    /// Worker configuration: the saved dispatch args plus the facts dispatch
+    /// resolved at launch. The job spec supplies the raw effective dir (None
+    /// stays None), the resolved budget mode and runtime state. `on_done` is
+    /// the worker's own hook: it runs from the spec, so retries built from
+    /// these args do not inherit it.
+    pub(crate) fn for_worker(store: &Store, spec: &crate::background::BackgroundRunSpec) -> Result<Self> {
+        let task_id = spec.task_id.as_str();
+        let mut args = Self::saved_for_task(store, task_id)?
+            .with_context(|| format!("Task {task_id} has no saved dispatch args"))?;
+        let task = store.get_task(task_id)?.with_context(|| format!("Task {task_id} not found"))?;
+        args.agent_name = task.agent_display_name().to_string();
+        args.dir = spec.dir.clone();
+        args.prompt = task.resolved_prompt.unwrap_or(task.prompt);
+        args.budget = spec.budget;
+        args.on_done = None;
+        args.env = spec.env.clone();
+        args.foreground = spec.foreground;
+        args.announce = spec.foreground;
+        args.background = true;
+        Ok(args)
+    }
 }
 
 impl Default for RunArgs {
@@ -220,3 +242,7 @@ pub(super) fn context_file_from_spec(spec: &str) -> String {
     spec.split_once(':')
         .map_or_else(|| spec.to_string(), |(file, _)| file.to_string())
 }
+
+#[cfg(test)]
+#[path = "args_saved_tests.rs"]
+mod args_saved_tests;

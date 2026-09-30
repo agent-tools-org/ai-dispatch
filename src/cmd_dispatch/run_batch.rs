@@ -1,153 +1,84 @@
 // aid CLI run and batch dispatch handlers.
 // Implements run and batch command wrappers.
-#[path = "run_batch_args.rs"]
-mod run_batch_args;
 #[path = "run_profile.rs"]
 mod run_profile;
 
-use crate::cli::{BatchAction, RunExtrasArgs};
+use crate::cli::{BatchAction, RunExtrasArgs, command_args_a};
 use crate::cmd;
 use crate::types::TaskId;
-use crate::types::{TaskBudget, TaskDifficulty, TaskEgress, TaskRigor, TaskUrgency};
-use crate::agent::classifier::TaskCategory;
+use crate::types::TaskBudget;
+use crate::agent::model_validation::ModelSource;
 use crate::{config, store};
 use anyhow::{Context, Result, anyhow};
 use std::sync::Arc;
 
-use self::run_batch_args::build_run_args;
 use self::run_profile::{resolve_run_agent, validate_task_profile};
 
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn run(
     store: Arc<store::Store>,
-    agent_name: String,
-    prompt: Option<String>,
-    prompt_file: Option<String>,
-    repo: Option<String>,
-    repo_root: Option<String>,
-    dir: Option<String>,
-    output: Option<String>,
-    result_file: Option<String>,
-    model: Option<String>,
-    difficulty: Option<TaskDifficulty>,
-    budget: Option<TaskBudget>,
-    urgency: Option<TaskUrgency>,
-    rigor: Option<TaskRigor>,
-    egress: TaskEgress,
-    kind: Option<TaskCategory>,
-    no_hint: bool,
-    worktree: Option<String>,
-    team_flag: Option<String>,
-    group: Option<String>,
-    verify: Option<String>,
-    iterate: Option<u32>,
-    eval: Option<String>,
-    eval_feedback_template: Option<String>,
-    judge: Option<String>,
-    peer_review: Option<String>,
-    retry: u32,
-    context: Vec<String>,
-    checklist: Vec<String>,
-    checklist_file: Option<String>,
-    scope: Vec<String>,
-    run_extras: Box<RunExtrasArgs>,
-    no_skill: bool,
-    bg: bool,
-    dry_run: bool,
-    read_only: bool,
-    sandbox: bool,
-    container: Option<String>,
-    best_of: Option<usize>,
-    metric: Option<String>,
-    parent: Option<String>,
-    id: Option<String>,
-    timeout: Option<u64>,
-    idle_timeout: Option<u64>,
-    audit: bool,
-    no_audit: bool,
-    no_link_deps: bool,
+    cli_args: command_args_a::RunArgs,
 ) -> Result<TaskId> {
-    validate_task_profile(difficulty, budget, urgency, rigor)?;
+    let no_hint = cli_args.no_hint;
+    let checklist_file = cli_args.checklist_file.clone();
+    let mut args = run_args(cli_args);
+    validate_task_profile(
+        args.declared_difficulty, args.declared_budget, args.declared_urgency, args.declared_rigor,
+    )?;
     let config = config::load_config().unwrap_or_default();
-    let budget_mode = budget.is_some_and(TaskBudget::uses_budget_mode)
+    args.budget = args.declared_budget.is_some_and(TaskBudget::uses_budget_mode)
         || config.selection.budget_mode;
-    let selection_prompt = match (&prompt, prompt_file.as_deref()) {
-        (Some(prompt), _) if !prompt.is_empty() => prompt.clone(),
+    let selection_prompt = match (&args.prompt, args.prompt_file.as_deref()) {
+        (prompt, _) if !prompt.is_empty() => prompt.clone(),
         (_, Some(file)) => std::fs::read_to_string(file)
             .with_context(|| format!("Failed to read prompt file: {file}"))?,
         _ => String::new(),
     };
-    let agent_name = resolve_run_agent(
-        &store,
-        &selection_prompt,
-        &dir,
-        &repo,
-        &output,
-        &result_file,
-        &model,
-        budget_mode,
-        difficulty,
-        budget,
-        urgency,
-        rigor,
-        egress,
-        kind,
-        no_hint,
-        read_only,
-        sandbox,
-        &worktree,
-        &team_flag,
-        agent_name,
+    args.agent_name = resolve_run_agent(
+        &store, &selection_prompt, &args.dir, &args.repo, &args.output, &args.result_file,
+        &args.model, args.budget, args.declared_difficulty, args.declared_budget,
+        args.declared_urgency, args.declared_rigor, args.declared_egress, args.kind,
+        no_hint, args.read_only, args.sandbox, &args.worktree, &args.team, args.agent_name,
     )?;
-    let checklist = cmd::checklist::merge_checklist_items(checklist, checklist_file.as_deref())?;
-    let args = build_run_args(
-        agent_name,
-        prompt.unwrap_or_default(),
-        prompt_file,
-        repo,
-        repo_root,
-        dir,
-        output,
-        result_file,
-        model,
-        worktree,
-        group,
-        verify,
-        iterate,
-        eval,
-        eval_feedback_template,
-        judge,
-        peer_review,
-        retry,
-        context,
-        checklist,
-        scope,
-        run_extras,
-        no_skill,
-        bg,
-        dry_run,
-        read_only,
-        sandbox,
-        container,
-        budget_mode,
-        difficulty,
-        budget,
-        urgency,
-        rigor,
-        egress,
-        kind,
-        best_of,
-        metric,
-        team_flag,
-        parent,
-        id,
-        timeout,
-        idle_timeout,
-        audit,
-        no_audit,
-        no_link_deps,
-    );
+    args.checklist = cmd::checklist::merge_checklist_items(args.checklist, checklist_file.as_deref())?;
     cmd::run::run(store, args).await
+}
+
+fn run_args(cli: command_args_a::RunArgs) -> cmd::run::RunArgs {
+    let command_args_a::RunArgs {
+        agent, prompt, prompt_file, repo, repo_root, dir, output, result_file, model,
+        difficulty, budget, urgency, rigor, egress, kind, no_hint: _, worktree, team,
+        group, verify, iterate, eval, eval_feedback_template, judge, peer_review, retry,
+        context, checklist, checklist_file: _, scope, run_extras, no_skill, bg, dry_run,
+        read_only, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout,
+        audit, no_audit, no_link_deps,
+    } = cli;
+    let RunExtrasArgs {
+        remote_build, context_from, skill, template, on_done, cascade, hook, backup, no_backup,
+    } = *run_extras;
+    let skills = if no_skill {
+        vec![cmd::run::NO_SKILL_SENTINEL.to_string()]
+    } else {
+        skill
+    };
+    let model_source = if model.is_some() {
+        ModelSource::UserSupplied
+    } else {
+        ModelSource::AidResolved
+    };
+    cmd::run::RunArgs {
+        agent_name: agent, prompt: prompt.unwrap_or_default(), prompt_file, repo, repo_root,
+        dir, output, result_file, model, model_source,
+        declared_difficulty: difficulty, declared_budget: budget,
+        declared_urgency: urgency, declared_rigor: rigor, declared_egress: egress, kind,
+        worktree, group: super::resolve_group(group), verify, iterate, eval,
+        eval_feedback_template, judge, peer_review, retry, context, checklist, scope, skills,
+        remote_build, backup, no_backup, hooks: hook, template,
+        background: bg, dry_run, announce: true, on_done, cascade, read_only, sandbox, container,
+        best_of, metric, team, context_from, parent_task_id: parent,
+        idle_timeout_secs: idle_timeout, existing_task_id: id.map(TaskId), timeout,
+        audit, audit_explicit: audit, no_audit, link_deps: !no_link_deps,
+        ..Default::default()
+    }
 }
 
 pub(super) async fn batch(
@@ -196,3 +127,7 @@ pub(super) async fn batch(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "run_batch_tests.rs"]
+mod tests;

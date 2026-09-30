@@ -159,7 +159,11 @@ Important controls:
   symlink artifact does not exempt its destination. Enforcement covers Git run
   directories only: a non-Git directory proceeds with a warning event naming
   the reason. Git errors or unavailable Git snapshots fail enforcement. Ignored
-  untracked files and paths outside the run directory are outside this check.
+  untracked files and paths outside the run directory are outside this check;
+  from a repository subdirectory, only that subtree is compared. The run
+  repository's own HEAD, branches, and tags are not compared, so a commit of
+  already staged changes is not detected. An embedded repository without
+  commits fails the snapshot.
   Nested repositories compare commits, not their uncommitted files.
   Claude retains Bash for audit commands, alongside Read, Glob, and Grep. Without
   a result file it uses plan mode and denies Write, Edit, MultiEdit, and

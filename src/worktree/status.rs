@@ -7,43 +7,35 @@ use super::snapshot::{WorktreeStatusEntry, WorktreeStatusKind};
 /// One porcelain line, borrowed and undecoded: git's quoting is left in place.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct StatusEntry<'a> {
+    /// XY status bytes; porcelain v1 keeps them ASCII.
     pub x: char,
     pub y: char,
-    /// Destination of a naive first `" -> "` split; all of `rest` for `??` lines.
+    /// The line starts with exactly `"?? "`.
+    pub untracked: bool,
+    /// Destination of a naive first `" -> "` split; all of `rest` for untracked lines.
     pub path: &'a str,
-    pub orig_path: Option<&'a str>,
     /// Raw text after `"XY "`, unsplit.
     pub rest: &'a str,
-}
-
-impl StatusEntry<'_> {
-    pub(crate) fn is_untracked(&self) -> bool {
-        self.x == '?' && self.y == '?'
-    }
 }
 
 /// `None` for a line too short to hold `"XY "`.
 pub(crate) fn parse_porcelain_line(line: &str) -> Option<StatusEntry<'_>> {
     let rest = line.get(3..)?;
-    let (x, y) = status_code(line);
-    let split = if x == '?' && y == '?' { None } else { rest.split_once(" -> ") };
-    let (orig_path, path) = match split {
-        Some((from, to)) => (Some(from), to),
-        None => (None, rest),
+    let bytes = line.as_bytes();
+    let (x, y) = (char::from(*bytes.first()?), char::from(*bytes.get(1)?));
+    let untracked = line.starts_with("?? ");
+    let path = match rest.split_once(" -> ") {
+        Some((_, to)) if !untracked => to,
+        _ => rest,
     };
-    Some(StatusEntry { x, y, path, orig_path, rest })
-}
-
-fn status_code(line: &str) -> (char, char) {
-    let mut chars = line.chars();
-    (chars.next().unwrap_or(' '), chars.next().unwrap_or(' '))
+    Some(StatusEntry { x, y, untracked, path, rest })
 }
 
 /// Rescue's reading: untracked files, and anything with an `M` in either column.
 /// A rename keeps its whole `old -> new` text as the path.
 pub(crate) fn parse_status_entry(line: &str) -> Option<WorktreeStatusEntry> {
     let entry = parse_porcelain_line(line)?;
-    let kind = if entry.is_untracked() {
+    let kind = if entry.untracked {
         WorktreeStatusKind::Untracked
     } else if line.len() >= 4 && (entry.x == 'M' || entry.y == 'M') {
         WorktreeStatusKind::Modified
@@ -99,11 +91,12 @@ pub(crate) struct WorktreeStatusSummary {
 pub(crate) fn summarize_status(lines: &[String]) -> WorktreeStatusSummary {
     let mut summary = WorktreeStatusSummary { modified: 0, staged: 0, untracked: 0 };
     for line in lines {
-        if parse_porcelain_line(line).is_some_and(|entry| entry.is_untracked()) {
+        if parse_porcelain_line(line).is_some_and(|entry| entry.untracked) {
             summary.untracked += 1;
             continue;
         }
-        let (index, worktree) = status_code(line);
+        let mut chars = line.chars();
+        let (index, worktree) = (chars.next().unwrap_or(' '), chars.next().unwrap_or(' '));
         if index != ' ' {
             summary.staged += 1;
         }

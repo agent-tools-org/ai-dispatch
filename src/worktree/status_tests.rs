@@ -76,6 +76,9 @@ const ROWS: &[Row] = &[
     row("??", None, &[], false, None, (1, 1, 0), "??"),
     row("?? ", Some((Untracked, "")), &[""], false, None, (0, 0, 1), "??"),
     row(" M ", None, &[""], false, None, (0, 1, 0), "M"),
+    row("??x", None, &[""], false, None, (1, 1, 0), "??x"),
+    row("??xa -> b", None, &["a", "b"], false, Some("b"), (1, 1, 0), "a -> b"),
+    row("\u{e9}M x", None, &[" x"], false, Some(" x"), (1, 1, 0), "x"),
 ];
 
 #[test]
@@ -94,7 +97,7 @@ fn every_reading_matches_the_fixture_table() {
         assert_eq!(counts, row.counts, "row {n} counts: {line:?}");
         assert_eq!(status_line_path(line), row.prune, "row {n} prune path: {line:?}");
     }
-    assert_eq!(ROWS.len(), 43);
+    assert_eq!(ROWS.len(), 46);
 }
 
 #[test]
@@ -111,11 +114,16 @@ fn summary_adds_every_line() {
 fn parser_splits_tracked_renames_and_never_untracked_lines() {
     let rename = parse_porcelain_line("RM rm -> rm_new").expect("rename");
     assert_eq!((rename.x, rename.y), ('R', 'M'));
-    assert_eq!((rename.orig_path, rename.path, rename.rest), (Some("rm"), "rm_new", "rm -> rm_new"));
+    assert!(!rename.untracked);
+    assert_eq!((rename.path, rename.rest), ("rm_new", "rm -> rm_new"));
 
     let untracked = parse_porcelain_line(r#"?? "x -> y.txt""#).expect("untracked");
-    assert!(untracked.is_untracked());
-    assert_eq!((untracked.orig_path, untracked.path), (None, r#""x -> y.txt""#));
+    assert!(untracked.untracked);
+    assert_eq!(untracked.path, r#""x -> y.txt""#);
+
+    let not_untracked = parse_porcelain_line("??xa -> b").expect("no separator");
+    assert_eq!((not_untracked.x, not_untracked.y, not_untracked.untracked), ('?', '?', false));
+    assert_eq!(not_untracked.path, "b");
 
     assert_eq!(parse_porcelain_line(" M"), None);
     assert_eq!(parse_porcelain_line(" M ").map(|entry| entry.rest), Some(""));

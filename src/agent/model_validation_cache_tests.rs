@@ -2,6 +2,7 @@
 // Deps: isolated Codex/AID homes and counting adapters; exports the test override guard.
 
 use super::*;
+use std::process::Command;
 
 thread_local! {
     static TEST_OVERRIDE: std::cell::RefCell<HashMap<AgentKind, Option<Vec<String>>>> =

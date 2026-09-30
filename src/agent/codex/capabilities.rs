@@ -2,10 +2,10 @@
 // Exports: validate_installed_codex; rejects obsolete approval flag surfaces.
 // Deps: anyhow and the installed `codex exec --help` output.
 
-use anyhow::{Context, Result, ensure};
-use std::process::Command;
+use anyhow::{Result, ensure};
+use crate::agent::env_identity::{DEFAULT_PROBE_TIMEOUT, help_defines_flag, run_bounded};
 
-use crate::agent::{CliCommandOutput, CliCommandRunner};
+use crate::agent::CliCommandRunner;
 
 const APPROVE_FOR_ME_VERSION: (u32, u32, u32) = (0, 147, 0);
 
@@ -33,7 +33,7 @@ pub(super) fn approval_flag_for_version(version: (u32, u32, u32)) -> ApprovalFla
 }
 
 pub(super) fn validate_installed_codex(version: Option<(u32, u32, u32)>) -> Result<()> {
-    validate_installed_codex_with(version, &run_codex_command)
+    validate_installed_codex_with(version, &|program, args| run_bounded(program, args, DEFAULT_PROBE_TIMEOUT))
 }
 
 pub(super) fn validate_installed_codex_with(
@@ -58,18 +58,6 @@ pub(super) fn validate_installed_codex_with(
     validate_exec_help(version, &format!("{}{}", output.stdout, output.stderr))
 }
 
-fn run_codex_command(program: &str, args: &[&str]) -> Result<CliCommandOutput> {
-    let output = Command::new(program)
-        .args(args)
-        .output()
-        .context("failed to inspect Codex CLI capabilities")?;
-    Ok(CliCommandOutput {
-        success: output.status.success(),
-        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-    })
-}
-
 fn validate_exec_help(version: (u32, u32, u32), help: &str) -> Result<()> {
     let required = approval_flag_for_version(version).as_str();
     ensure!(
@@ -80,14 +68,6 @@ fn validate_exec_help(version: (u32, u32, u32), help: &str) -> Result<()> {
         version.2,
     );
     Ok(())
-}
-
-fn help_defines_flag(help: &str, flag: &str) -> bool {
-    help.lines().any(|line| {
-        line.trim_start().strip_prefix(flag).is_some_and(|rest| {
-            rest.is_empty() || rest.starts_with([' ', '\t', '=', ','])
-        })
-    })
 }
 
 #[cfg(test)]
@@ -156,6 +136,14 @@ mod tests {
             })
         };
 
+        validate_installed_codex_with(Some((0, 147, 0)), &runner).unwrap();
+    }
+
+    #[test]
+    fn timed_out_help_probe_is_a_soft_skip_for_a_known_version() {
+        let runner = |_program: &str, _args: &[&str]| {
+            super::run_bounded("sh", &["-c", "exec sleep 60"], std::time::Duration::from_millis(50))
+        };
         validate_installed_codex_with(Some((0, 147, 0)), &runner).unwrap();
     }
 

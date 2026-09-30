@@ -9,6 +9,7 @@ use std::process::Command;
 use std::sync::OnceLock;
 
 use super::read_only::read_only_prompt;
+use super::env_identity::{DEFAULT_PROBE_TIMEOUT, help_defines_flag, run_bounded};
 use super::RunOpts;
 use crate::types::*;
 
@@ -109,9 +110,7 @@ impl super::Agent for AntigravityAgent {
     }
 
     fn served_models(&self) -> Result<Option<Vec<String>>> {
-        let mut cmd = Command::new("agy");
-        cmd.arg("models");
-        let Some(output) = super::model_validation::run_probe_cmd(cmd) else {
+        let Some(output) = super::model_validation::run_probe_cmd("agy", &["models"]) else {
             return Ok(None);
         };
         let models = parse_agy_models_output(&output.stdout);
@@ -164,13 +163,8 @@ fn agy_capabilities() -> &'static AgyCapabilities {
 
 #[cfg(not(test))]
 fn probe_agy_capabilities() -> Option<AgyCapabilities> {
-    let output = std::process::Command::new("agy")
-        .arg("--help")
-        .output()
-        .ok()?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let help = format!("{stdout}{stderr}");
+    let output = run_bounded("agy", &["--help"], DEFAULT_PROBE_TIMEOUT).ok()?;
+    let help = format!("{}{}", output.stdout, output.stderr);
     Some(parse_agy_capabilities(&help))
 }
 
@@ -188,29 +182,14 @@ fn parse_agy_capabilities(help: &str) -> AgyCapabilities {
     }
 }
 
-/// Does the help text *define* this flag, rather than merely mention it? A bare
-/// `contains` matches prefixes (`--model` inside `--model-fallback`) and prose in another
-/// flag's description, either of which can pick a flag the installed agy does not accept.
-fn help_defines_flag(help: &str, flag: &str) -> bool {
-    help.lines().any(|line| {
-        let line = line.trim_start();
-        line.strip_prefix(flag).is_some_and(|rest| {
-            rest.is_empty() || rest.starts_with([' ', '\t', '=', ','])
-        })
-    })
-}
-
 #[cfg(test)]
 fn probe_agy_capabilities() -> Option<AgyCapabilities> {
     None
 }
 
 fn agy_version_string() -> Option<String> {
-    let output = std::process::Command::new("agy")
-        .arg("--version")
-        .output()
-        .ok()?;
-    let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let output = run_bounded("agy", &["--version"], DEFAULT_PROBE_TIMEOUT).ok()?;
+    let s = output.stdout.trim().to_string();
     if s.is_empty() { None } else { Some(s) }
 }
 

@@ -219,11 +219,13 @@ fn builtin_candidates(
     selection: &SelectionConfig,
     caller: Option<&CallerAdvice>,
 ) -> Vec<RankedCandidate> {
-    crate::agent::route_inventory().into_iter()
+    let inventory = crate::agent::route_inventory();
+    let agy_installed = inventory.iter().any(|(kind, blocker)| *kind == AgentKind::Antigravity && blocker.is_none());
+    inventory.into_iter()
         .filter(|(kind, _)| !agent_config::is_agent_disabled(kind.as_str()))
         .map(|(kind, blocker)| {
             let input = RunModelInput::declared(kind.as_str(), kind, None, declared, selection);
-            builtin_candidate(context, declared, caller, resolve_run_model(&input), (kind, blocker))
+            builtin_candidate(context, declared, caller, resolve_run_model(&input), (kind, blocker), agy_installed)
         })
         .collect()
 }
@@ -233,10 +235,12 @@ fn builtin_candidates(
 fn builtin_candidate(
     context: &CandidateContext<'_>, declared: DeclaredTaskProfile, caller: Option<&CallerAdvice>,
     run_model: RunModel, (kind, blocker): (AgentKind, Option<RouteBlocker>),
+    agy_installed: bool,
 ) -> RankedCandidate {
     let RunModel { model, pinned, source } = run_model;
     let breakdown = score_breakdown(context, kind, model.as_deref());
     let mut exclusions = Exclusions::default();
+    exclusions.superseded_by_agy(kind, agy_installed);
     if let Some(blocker) = &blocker {
         exclusions.push(blocker.code(), blocker.reason());
     }

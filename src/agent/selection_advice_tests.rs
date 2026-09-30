@@ -179,13 +179,19 @@ fn advised_model_group_hold_switches_route_but_other_group_does_not() {
     let recommended = other.recommended.expect("recommendation");
     assert_eq!((recommended.agent, recommended.model), (baseline.agent, baseline.model));
     assert_ne!(find(&run(None), "droid").quota.status, "held");
+    assert!(find(&run(None), "droid").launchable(None));
     std::fs::remove_file(temp.path().join("rate-limit-droid--core")).expect("clear other hold");
     std::fs::write(temp.path().join("rate-limit-droid--standard"), hold).expect("model hold");
     let held = run(None);
     assert_eq!(find(&held, "droid").quota.status, "held");
+    assert!(find(&held, "droid").eligible);
+    assert!(!find(&held, "droid").launchable(None));
     let recommended = held.recommended.expect("recommendation");
     assert_eq!((&*recommended.agent, recommended.model.as_deref()), ("codex", Some("gpt-6-sol")));
 }
+
+#[path = "selection_advice_launch_tests.rs"]
+mod launch_tests;
 
 #[test]
 fn claude_stays_listed_but_recommendation_requires_team_preference() {

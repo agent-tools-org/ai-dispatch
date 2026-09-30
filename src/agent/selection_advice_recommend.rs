@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 use super::super::selection_quota::{self, NoteTarget};
 use super::{RankedCandidate, RecommendedAdvice};
+use super::gate::claude_allowed;
 use crate::agent::classifier::TaskCategory;
 use crate::types::{AgentKind, DeclaredTaskProfile, TaskUrgency};
 use crate::team::TeamConfig;
@@ -18,8 +19,8 @@ pub(super) fn recommendation(
     team: Option<&TeamConfig>,
 ) -> Option<RecommendedAdvice> {
     let mut candidates = ranked.iter().filter(|item| item.report.installed && !item.pool_excluded
-        && (item.order.kind != AgentKind::Claude
-            || team.is_some_and(|team| team.preferred_agents.iter().any(|name| name.eq_ignore_ascii_case("claude")))));
+        && !item.report.exclusion_codes.iter().any(|code| code == "superseded_by_agy")
+        && claude_allowed(item.order.kind, team));
     let selected = candidates.clone().find(|item| item.report.eligible)
         .or_else(|| candidates.next())?;
     let model_suffix = selected.report.model.as_deref().map(|model| format!("/{model}")).unwrap_or_default();

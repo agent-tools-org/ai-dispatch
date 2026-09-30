@@ -5,7 +5,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::agent::classifier::TaskCategory;
+use crate::team::TeamConfig;
 use crate::types::{provider_for_cli, AgentKind, TaskBudget, TaskDifficulty};
+use super::AdviceCandidate;
 
 pub(crate) const WEAKER_ON_CALLER_POOL: &str = "weaker model on caller's pool";
 
@@ -17,6 +19,12 @@ pub(super) struct Exclusions {
 }
 
 impl Exclusions {
+    pub(super) fn superseded_by_agy(&mut self, kind: AgentKind, agy_installed: bool) {
+        if kind == AgentKind::Gemini && agy_installed {
+            self.push("superseded_by_agy", "gemini individual tier superseded by agy (installed)".to_string());
+        }
+    }
+
     pub(super) fn push(&mut self, code: &str, reason: String) {
         self.codes.push(code.to_string());
         self.reasons.push(reason);
@@ -48,6 +56,22 @@ impl Exclusions {
     pub(super) fn into_parts(self) -> (Option<String>, Vec<String>) {
         let reason = (!self.reasons.is_empty()).then(|| self.reasons.join("; "));
         (reason, self.codes)
+    }
+}
+
+pub(super) fn claude_allowed(kind: AgentKind, team: Option<&TeamConfig>) -> bool {
+    kind != AgentKind::Claude
+        || team.is_some_and(|team| team.preferred_agents.iter().any(|name| name.eq_ignore_ascii_case("claude")))
+}
+
+impl AdviceCandidate {
+    pub(crate) fn launchable(&self, team: Option<&TeamConfig>) -> bool {
+        self.eligible && self.quota.status != "held"
+            && self.kind().is_some_and(|kind| claude_allowed(kind, team))
+    }
+
+    pub(crate) fn kind(&self) -> Option<AgentKind> {
+        AgentKind::parse_str(&self.agent)
     }
 }
 

@@ -34,6 +34,12 @@ opencode / opencode-zen / glm-5.2
 
 Before dispatching, `aid` validates requested `--model` parameters against the target CLI's served model list (e.g. `grok models`, `agy models`, `cursor-agent models`, or local CLI config). Only models positively reported as absent by the CLI are rejected before execution.
 
+For `agy`, host preflight also rejects a requested model when `agy --help` succeeds
+but does not define `--model`. Omit `--model` or upgrade agy. If help inspection
+fails or times out, `aid` warns and skips this check. Container, sandbox, and
+dry-run dispatch skip host flag validation; command construction still warns
+and drops the requested model when agy has no model flag.
+
 `aid advise` names the recommended route in this form. `aid agent list --json`
 carries `provider` and `metering` per agent. Agent names keep working unchanged:
 `aid run codex` resolves to a route.

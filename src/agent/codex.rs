@@ -143,11 +143,7 @@ impl super::Agent for CodexAgent {
         self.build_codex_command(prompt, opts, true, &roots)
     }
 
-    fn validate_cli(&self) -> Result<()> {
-        capabilities::validate_installed_codex(codex_version())
-    }
-
-    fn validate_cli_with(&self, run: &crate::agent::CliCommandRunner<'_>) -> Result<()> {
+    fn validate_cli(&self, _model: Option<&str>, run: &crate::agent::CliCommandRunner<'_>) -> Result<()> {
         capabilities::validate_installed_codex_with(codex_version(), run)
     }
 

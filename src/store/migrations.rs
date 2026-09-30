@@ -19,6 +19,16 @@ const CREATE_TASK_MESSAGES_SQL: &str = "CREATE TABLE IF NOT EXISTS task_messages
     acked_at DATETIME
 );";
 
+const NORMALIZE_BACKUP_ATTEMPTS_SQL: &str = "UPDATE tasks SET backup_url = ''
+    WHERE backup_url IS NULL AND EXISTS (
+        SELECT 1 FROM events INDEXED BY idx_events_task_kind
+        WHERE task_id = tasks.id AND event_type IN ('milestone', 'error')
+          AND metadata LIKE '%\"backup\"%'
+          AND CASE WHEN json_valid(metadata)
+                   THEN json_type(metadata, '$.backup') IS NOT NULL
+                   ELSE 0 END
+    );";
+
 pub(super) fn migrate_task_messages(conn: &Connection) -> Result<()> {
     conn.execute_batch(CREATE_TASK_MESSAGES_SQL)?;
     Ok(())
@@ -118,17 +128,64 @@ pub(super) fn migrate_backup_url(conn: &Connection) -> Result<()> {
     let tx = rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)?;
     let version: i64 = tx.query_row("PRAGMA user_version", [], |row| row.get(0))?;
     if version == 0 {
-        tx.execute_batch(
-            "UPDATE tasks SET backup_url = ''
-             WHERE backup_url IS NULL AND id IN (
-                 SELECT task_id FROM events
-                 WHERE CASE WHEN json_valid(metadata)
-                            THEN json_type(metadata, '$.backup') IS NOT NULL
-                            ELSE 0 END
-             );
-             PRAGMA user_version = 1;",
-        )?;
+        tx.execute_batch(NORMALIZE_BACKUP_ATTEMPTS_SQL)?;
+        tx.execute_batch("PRAGMA user_version = 1;")?;
     }
     tx.commit()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::Store;
+
+    #[test]
+    fn backup_admission_searches_task_kind_index() {
+        let store = Store::open_memory().unwrap();
+        let conn = store.db();
+        let mut stmt = conn.prepare(&format!(
+            "EXPLAIN QUERY PLAN {NORMALIZE_BACKUP_ATTEMPTS_SQL}"
+        )).unwrap();
+        let plan: Vec<String> = stmt.query_map([], |row| row.get(3))
+            .unwrap().collect::<rusqlite::Result<_>>().unwrap();
+        assert!(plan.iter().any(|step| step.contains(
+            "SEARCH events USING INDEX idx_events_task_kind (task_id=? AND event_type=?)"
+        )), "{plan:?}");
+        assert!(!plan.iter().any(|step| step.contains("SCAN events")), "{plan:?}");
+    }
+
+    #[test]
+    fn backup_admission_filters_metadata_before_validating_backup_markers() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("aid.db");
+        let store = Store::open(&path).unwrap();
+        let cases = [
+            ("t-failed", "milestone", r#"{"backup":"failed"}"#, true),
+            ("t-error", "error", r#"{"backup":"failed"}"#, true),
+            ("t-uploaded", "milestone", r#"{"backup":"uploaded"}"#, true),
+            ("t-null", "milestone", r#"{"backup":null}"#, true),
+            ("t-invalid", "milestone", r#"{"backup":invalid}"#, false),
+            ("t-nested", "milestone", r#"{"nested":{"backup":"failed"}}"#, false),
+            ("t-lookalike", "milestone", r#"{"backup_url":"url"}"#, false),
+        ];
+        for (id, event_kind, metadata, _) in cases {
+            store.db().execute(
+                "INSERT INTO tasks (id, agent, prompt, created_at) VALUES (?1, 'codex', '', 'now')",
+                [id],
+            ).unwrap();
+            store.db().execute(
+                "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
+                 VALUES (?1, 'now', ?2, '', ?3)",
+                rusqlite::params![id, event_kind, metadata],
+            ).unwrap();
+            assert!(store.backup_url(id).unwrap().is_none());
+        }
+        store.db().execute_batch("PRAGMA user_version = 0;").unwrap();
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        for (id, _, _, claimed) in cases {
+            assert_eq!(store.claim_backup(id).unwrap(), !claimed, "{id}");
+        }
+    }
 }

@@ -6,6 +6,8 @@ use super::status::{parse_status_entry, status_line_paths};
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::process::Command;
+#[path = "snapshot_read_only.rs"]
+mod read_only;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorktreeSnapshot {
@@ -35,6 +37,10 @@ impl WorktreeSnapshot {
             .filter(|line| !line_is_only_aid_owned(line))
             .cloned()
             .collect()
+    }
+
+    pub fn read_only_state(&self, dir: &Path) -> Result<Vec<String>> {
+        read_only::capture(dir)
     }
 
     pub fn rescuable_entries(&self) -> Vec<WorktreeStatusEntry> {

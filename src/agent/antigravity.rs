@@ -60,7 +60,7 @@ impl super::Agent for AntigravityAgent {
         let use_plan = opts.read_only && plan_flag.is_some() && !allow_result;
         let effective_prompt = if opts.read_only && !use_plan {
             if plan_flag.is_none() {
-                aid_warn!("[aid] agy read-only is prompt-level only, not enforced. Use --worktree or --sandbox for isolation.");
+                aid_warn!("[aid] agy read-only does not sandbox the agent; aid fails the task if the Git run directory changes.");
             }
             read_only_prompt(prompt, opts)
         } else {

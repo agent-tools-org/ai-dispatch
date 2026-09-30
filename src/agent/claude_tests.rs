@@ -28,6 +28,7 @@ fn build_command_uses_stream_json_and_verbose() {
     assert_eq!(cmd.get_program().to_string_lossy(), "claude");
     assert!(args.windows(2).any(|pair| pair == ["--output-format", "stream-json"]));
     assert!(args.iter().any(|arg| arg == "--verbose"));
+    assert!(args.iter().any(|arg| arg == "--dangerously-skip-permissions"));
     assert!(args.windows(2).any(|pair| pair == ["--model", "sonnet"]));
     assert!(args.windows(2).any(|pair| pair[0] == "--add-dir"));
 }
@@ -49,7 +50,8 @@ fn build_command_read_only_restricts_tools() {
     };
     let cmd = ClaudeAgent.build_command("inspect", &opts).unwrap();
     let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
-    assert!(args.windows(2).any(|pair| pair == ["--allowedTools", "Read,Glob,Grep,LS,Write"]));
+    assert_read_only_flags(&args, "dontAsk", "Read,Glob,Grep,Bash,Write", "Edit,MultiEdit,NotebookEdit");
+    assert!(args[1].contains("EXCEPT the result file"));
 }
 
 #[test]
@@ -69,7 +71,24 @@ fn build_command_read_only_without_result_file_keeps_strict_tools() {
     };
     let cmd = ClaudeAgent.build_command("inspect", &opts).unwrap();
     let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
-    assert!(args.windows(2).any(|pair| pair == ["--allowedTools", "Read,Glob,Grep,LS"]));
+    assert_read_only_flags(&args, "plan", "Read,Glob,Grep,Bash", "Edit,Write,MultiEdit,NotebookEdit");
+    assert!(args[1].contains("Do NOT modify, create, or delete any files."));
+}
+
+fn assert_read_only_flags(args: &[String], mode: &str, tools: &str, denied: &str) {
+    let help = include_str!("../../tests/fixtures/claude-2.1.285-read-only-help.txt");
+    for flag in ["--permission-mode <mode>", "--tools <tools...>",
+        "--allowedTools, --allowed-tools <tools...>",
+        "--disallowedTools, --disallowed-tools <tools...>"] {
+        assert!(help.contains(flag), "Flag absent from captured claude --help: {flag}");
+    }
+    assert!(help.contains(&format!("\"{mode}\"")), "Mode absent from captured help: {mode}");
+    for pair in [["--permission-mode", mode], ["--tools", tools],
+        ["--allowedTools", tools], ["--disallowedTools", denied]] {
+        assert!(args.windows(2).any(|args| args == pair));
+    }
+    assert!(tools.split(',').any(|tool| tool == "Bash"));
+    assert!(!args.iter().any(|arg| arg == "--dangerously-skip-permissions"));
 }
 
 #[test]

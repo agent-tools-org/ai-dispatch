@@ -5,8 +5,8 @@
 use super::RunOpts;
 
 /// Hard CLI plan/read-only modes block every write, including the task result
-/// file. When a result file is declared, prefer prompt-level read-only so the
-/// agent can deliver the report without modifying the repo under test.
+/// file. Adapters can allow report delivery and rely on the post-run snapshot
+/// guard to fail any task that changes files outside the declared result file.
 pub(crate) fn allow_result_file_write(opts: &RunOpts) -> bool {
     opts.read_only && opts.result_file.is_some()
 }

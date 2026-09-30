@@ -49,8 +49,16 @@ pub(super) fn run_background_task(
     prompt_bundle: &run_prompt::PromptBundle,
 ) -> Result<()> {
     background::check_worker_capacity(store)?;
-    let pre_task_dirty_paths = if args.read_only || args.audit_report_mode {
+    let pre_task_dirty_paths = if args.audit_report_mode && !args.read_only {
         None
+    } else if args.read_only {
+        match super::run_dirty::capture_baseline(store, &prepared.task_id, prepared.effective_dir.as_deref()) {
+            Ok(baseline) => baseline,
+            Err(err) => {
+                crate::task_lifecycle::mark_failed(store, &prepared.task_id)?;
+                return Err(err);
+            }
+        }
     } else {
         capture_pre_task_dirty_paths(prepared.effective_dir.as_ref())
     };

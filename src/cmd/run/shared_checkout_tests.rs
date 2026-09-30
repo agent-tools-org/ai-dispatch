@@ -70,9 +70,11 @@ async fn read_only_shared_checkout_never_creates_a_recovery_ref() {
     let store = Arc::new(Store::open_memory().unwrap());
     let row = task("t-shared-readonly", TaskStatus::Done);
     store.insert_task(&row).unwrap();
+    let baseline = crate::worktree::capture_worktree_snapshot(dir.path()).unwrap()
+        .read_only_state(dir.path()).unwrap();
     let args = RunArgs { read_only: true, ..Default::default() };
     let action = post_agent_dirty_worktree_cleanup(
-        &store, &row.id, &args, dir.path().to_str().unwrap(), None,
+        &store, &row.id, &args, dir.path().to_str().unwrap(), Some(&baseline),
     ).await.unwrap();
     assert_eq!(action, DirtyWorktreeAction::Continue);
     assert!(store.get_events(row.id.as_str()).unwrap().is_empty());
@@ -125,4 +127,25 @@ async fn mismatched_task_worktree_is_rejected_before_rescue() {
     assert!(error.to_string().contains("does not match settlement directory"));
     assert!(!shared.path().join(".git/index").exists());
     assert!(shared.path().join("result.txt").exists());
+}
+
+#[tokio::test]
+async fn read_only_missing_baseline_fails_without_recovery() {
+    let _permit = test_subprocess::acquire();
+    let dir = init_repo();
+    write_path(dir.path(), "evidence.txt", "retain");
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut row = task("t-missing-baseline", TaskStatus::Done);
+    row.read_only = true;
+    store.insert_task(&row).unwrap();
+    let args = RunArgs { read_only: true, ..Default::default() };
+    let action = post_agent_dirty_worktree_cleanup(
+        &store, &row.id, &args, dir.path().to_str().unwrap(), None,
+    ).await.unwrap();
+    assert_eq!(action, DirtyWorktreeAction::Failed);
+    assert_eq!(store.get_task(row.id.as_str()).unwrap().unwrap().status, TaskStatus::Failed);
+    assert!(store.get_events(row.id.as_str()).unwrap().iter().any(|event|
+        event.event_kind == EventKind::Error && event.detail.contains("Dispatch snapshot is unavailable")));
+    assert_eq!(std::fs::read_to_string(dir.path().join("evidence.txt")).unwrap(), "retain");
+    assert_eq!(output(dir.path(), &["for-each-ref", "--format=%(refname)", "refs/aid/recovery/"]), "");
 }

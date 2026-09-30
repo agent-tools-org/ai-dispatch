@@ -28,21 +28,25 @@ impl super::Agent for ClaudeAgent {
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = Command::new("claude");
         let prompt = super::embed_context_in_prompt(prompt, &opts.context_files)?;
+        let prompt = if opts.read_only { super::read_only::read_only_prompt(&prompt, opts) }
+            else { prompt };
         cmd.args([
             "-p",
             &prompt,
             "--output-format",
             "stream-json",
             "--verbose",
-            "--dangerously-skip-permissions",
         ]);
         if opts.read_only {
-            let allowed_tools = if opts.result_file.is_some() {
-                "Read,Glob,Grep,LS,Write"
+            let (mode, tools, denied) = if opts.result_file.is_some() {
+                ("dontAsk", "Read,Glob,Grep,Bash,Write", "Edit,MultiEdit,NotebookEdit")
             } else {
-                "Read,Glob,Grep,LS"
+                ("plan", "Read,Glob,Grep,Bash", "Edit,Write,MultiEdit,NotebookEdit")
             };
-            cmd.args(["--allowedTools", allowed_tools]);
+            cmd.args(["--permission-mode", mode, "--tools", tools,
+                "--allowedTools", tools, "--disallowedTools", denied]);
+        } else {
+            cmd.arg("--dangerously-skip-permissions");
         }
         if let Some(ref model) = opts.model {
             cmd.args(["--model", model]);

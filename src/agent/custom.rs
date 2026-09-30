@@ -144,7 +144,7 @@ impl super::Agent for CustomAgent {
             prompt.to_string()
         };
         if opts.read_only {
-            aid_warn!("[aid] ⚠ Custom agent read-only is prompt-level only, not enforced. Use --worktree for isolation.");
+            aid_warn!("[aid] ⚠ Custom agent read-only does not sandbox the agent; aid fails the task if the Git run directory changes.");
         }
         let mut cmd = Command::new(&self.config.command);
 

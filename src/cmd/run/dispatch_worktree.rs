@@ -56,6 +56,9 @@ pub(super) fn setup_worktree(
 ) -> Result<WorktreeSetup> {
     let (wt_path, wt_branch, effective_dir, resolved_repo, fresh_worktree) =
         run_prompt::resolve_worktree_paths(args, explicit_repo_path)?;
+    let effective_dir = if args.read_only {
+        Some(std::env::current_dir()?.join(effective_dir.as_deref().unwrap_or(".")).to_string_lossy().into_owned())
+    } else { effective_dir };
     let repo_path = resolved_repo.or_else(|| explicit_repo_path.map(str::to_string));
     crate::worktree::ensure_requested_worktree_is_isolated(
         args.worktree.as_deref(), repo_path.as_deref(), wt_path.as_deref(),

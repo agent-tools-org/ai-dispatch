@@ -98,6 +98,7 @@ async fn foreground_watcher_follows_a_retry_created_after_the_original_task() {
 #[tokio::test]
 async fn foreground_watcher_observes_a_real_background_worker() {
     let home = tempfile::tempdir().expect("home");
+    let (repo, baseline) = read_only_repo();
     let _aid_home = paths::AidHomeGuard::set(home.path());
     paths::ensure_dirs().expect("aid dirs");
     let agents_dir = paths::aid_dir().join("agents");
@@ -132,7 +133,8 @@ interactive_input = false
         "worker_pid": null,
         "agent_name": "watch-test",
         "prompt": "run the real worker",
-        "dir": ".",
+        "dir": repo.path(),
+        "pre_task_dirty_paths": baseline,
         "output": null,
         "model": null,
         "verify": null,
@@ -160,4 +162,13 @@ interactive_input = false
             .expect("worker log")
             .contains("real worker progress")
     );
+}
+
+fn read_only_repo() -> (tempfile::TempDir, Vec<String>) {
+    let repo = tempfile::tempdir().expect("repo");
+    assert!(std::process::Command::new("git").args(["init", "--quiet"])
+        .arg(repo.path()).status().expect("git init").success());
+    let baseline = crate::worktree::capture_worktree_snapshot(repo.path())
+        .expect("snapshot").read_only_state(repo.path()).expect("baseline");
+    (repo, baseline)
 }

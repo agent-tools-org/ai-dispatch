@@ -1,7 +1,7 @@
 // CLI batch setup: validate the entire input, resolve the key once, append results.
 // Exports: run; depends on the shared classify template and TypeSafe batch engine.
 
-use crate::cli::command_args_classify::ClassifyArgs;
+use crate::cli::classify_args::ClassifyArgs;
 use crate::typesafe::batch::{self, Summary};
 use crate::typesafe::classify::{BatchClassifier, ClassifyError, ErrorKind};
 use std::fs::File;

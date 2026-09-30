@@ -266,3 +266,6 @@ fn is_error_line(line: &str) -> bool {
 #[cfg(test)]
 #[path = "cursor_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "cursor_identity_tests.rs"]
+mod identity_tests;

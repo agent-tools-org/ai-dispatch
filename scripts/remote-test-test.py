@@ -159,6 +159,12 @@ sys.exit(status)
         self.assertIn("job not started (no job id assigned)", result.stderr)
         self.assertIn("box lock not acquired", result.stderr)
 
+    def test_rbox_failure_before_tests_is_reported(self) -> None:
+        self.env.update(FAKE_STATUS="1", FAKE_JOB="no")
+        result = self.run_script()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("rbox failed before any test ran (exit 1)", result.stderr)
+
     def test_completed_test_status_is_not_misreported_as_timeout(self) -> None:
         for status in [0, 1, 75, 124]:
             with self.subTest(status=status):

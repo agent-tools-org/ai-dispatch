@@ -17,14 +17,7 @@ pub(super) fn worktree(action: WorktreeAction) -> Result<()> {
 }
 
 pub(super) fn project(action: ProjectAction) -> Result<()> {
-    use cmd::project::{ProjectAction as ProjectCommand, run_project_command};
-    let action = match action {
-        ProjectAction::Init => ProjectCommand::Init,
-        ProjectAction::Show => ProjectCommand::Show,
-        ProjectAction::State => ProjectCommand::State,
-        ProjectAction::Sync => ProjectCommand::Sync,
-    };
-    run_project_command(action)
+    cmd::project::run_project_command(action)
 }
 
 pub(super) async fn internal_run_task(store: Arc<store::Store>, task_id: String) -> Result<()> {

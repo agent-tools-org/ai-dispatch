@@ -1,5 +1,5 @@
-// E2E snapshot of `--help` for subcommand groups whose clap enums are shared with handlers.
-// Fails if help text or subcommand syntax drifts from the recorded fixture.
+// E2E snapshot of `--help` for subcommand groups whose clap enums are shared with handlers,
+// plus proof that `aid finding` and `aid group finding` reach the same handler.
 // Deps: compiled aid binary, tempfile, tests/fixtures/cli_help_snapshot.txt.
 
 use tempfile::TempDir;
@@ -71,4 +71,23 @@ fn shared_subcommand_help_matches_snapshot() {
         assert_eq!(actual, wanted, "help snapshot differs at line {}", line_no + 1);
     }
     assert_eq!(rendered.lines().count(), expected.lines().count(), "help snapshot length differs");
+}
+
+#[test]
+fn group_finding_and_finding_share_one_handler() {
+    let aid_home = TempDir::new().unwrap();
+    let run = |args: &[&str]| {
+        let output = aid_cmd_in(aid_home.path()).args(args).output().unwrap();
+        assert!(output.status.success(), "aid {} failed: {}", args.join(" "), String::from_utf8_lossy(&output.stderr));
+        String::from_utf8_lossy(&output.stdout).into_owned()
+    };
+    run(&["group", "create", "snap", "--id", "wg-snap"]);
+    run(&["group", "finding", "add", "wg-snap", "posted via group", "--severity", "high"]);
+    run(&["finding", "add", "wg-snap", "posted via finding"]);
+    for listing in [run(&["finding", "list", "wg-snap"]), run(&["group", "finding", "list", "wg-snap"])] {
+        assert!(listing.contains("posted via group"), "{listing}");
+        assert!(listing.contains("posted via finding"), "{listing}");
+    }
+    let count = run(&["group", "finding", "list", "wg-snap", "--count", "--severity", "high"]);
+    assert_eq!(count.trim(), "1");
 }

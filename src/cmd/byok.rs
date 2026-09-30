@@ -1,8 +1,9 @@
 // Handler for `aid byok` — wraps the embedded BYOK shell scripts so users
 // installed from crates.io get the same apply/remove/probe flow.
 // Exports: BYOK_LIB, BYOK_APPLY, BYOK_REMOVE, BYOK_PROBE, BYOK_EXAMPLE_MIMO, BYOK_DOC,
-//   ByokAction, run_byok_command. Deps: std::process, std::fs, anyhow.
+//   run_byok_command. Deps: std::process, std::fs, anyhow.
 
+use crate::cli::ByokCommands;
 use anyhow::{Context, Result, bail};
 use std::ffi::OsStr;
 use std::fs;
@@ -18,33 +19,16 @@ pub const BYOK_PROBE: &str = include_str!("../../scripts/aid-byok-probe.sh");
 pub const BYOK_EXAMPLE_MIMO: &str = include_str!("../../examples/byok/mimo.toml");
 pub const BYOK_DOC: &str = include_str!("../../docs/byok-pattern.md");
 
-pub enum ByokAction {
-    Apply {
-        manifest: PathBuf,
-        dry_run: bool,
-        key: Option<String>,
-    },
-    Remove {
-        target: String,
-    },
-    Probe {
-        manifest: PathBuf,
-        key: Option<String>,
-    },
-    Example,
-    Doc,
-}
-
-pub fn run_byok_command(action: ByokAction) -> Result<()> {
+pub fn run_byok_command(action: ByokCommands) -> Result<()> {
     match action {
-        ByokAction::Apply { manifest, dry_run, key } => apply(manifest, dry_run, key),
-        ByokAction::Remove { target } => remove(target),
-        ByokAction::Probe { manifest, key } => probe(manifest, key),
-        ByokAction::Example => {
+        ByokCommands::Apply { manifest, dry_run, key } => apply(manifest, dry_run, key),
+        ByokCommands::Remove { target } => remove(target),
+        ByokCommands::Probe { manifest, key } => probe(manifest, key),
+        ByokCommands::Example => {
             print!("{}", BYOK_EXAMPLE_MIMO);
             Ok(())
         }
-        ByokAction::Doc => {
+        ByokCommands::Doc => {
             print!("{}", BYOK_DOC);
             Ok(())
         }

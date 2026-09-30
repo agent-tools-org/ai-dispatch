@@ -3,7 +3,7 @@
 
 use super::{resolve_finding_content, resolve_group};
 use crate::cli::{FindingCommands, KgCommands, MemoryCommands};
-use crate::cli_actions::{GroupAction, GroupFindingAction};
+use crate::cli_actions::GroupAction;
 use crate::cmd;
 use crate::store;
 use anyhow::Result;
@@ -45,20 +45,8 @@ pub(super) fn group(store: Arc<store::Store>, action: GroupAction) -> Result<()>
         GroupAction::Delete { group_id, cascade } => cmd::group::delete(&store, &group_id, cascade),
         GroupAction::Cancel { group_id } => cmd::group::cancel(&store, &group_id),
         GroupAction::Summary { group_id } => cmd::summary_cli::run(&store, &group_id),
-        GroupAction::Finding { action } => group_finding(store, action),
+        GroupAction::Finding { action } => finding(store, action),
         GroupAction::Broadcast { group_id, message } => cmd::broadcast::run(&store, &group_id, &message),
-    }
-}
-
-fn group_finding(store: Arc<store::Store>, action: GroupFindingAction) -> Result<()> {
-    match action {
-        GroupFindingAction::Add { group, content, stdin, file, task, severity, title, finding_file, lines, category, confidence } => {
-            let content = resolve_finding_content(content, stdin, file)?;
-            cmd::finding::add(&store, &group, &content, task.as_deref(), severity.as_deref(), title.as_deref(), finding_file.as_deref(), lines.as_deref(), category.as_deref(), confidence.as_deref())
-        }
-        GroupFindingAction::List { group, json, count, severity, verdict } => cmd::finding::list(&store, &group, json, count, severity.as_deref(), verdict.as_deref()),
-        GroupFindingAction::Get { group, finding_id, json } => cmd::finding::get(&store, &group, finding_id, json),
-        GroupFindingAction::Update { group, finding_id, verdict, score, note } => cmd::finding::update(&store, &group, finding_id, verdict.as_deref(), score.as_deref(), note.as_deref()),
     }
 }
 

@@ -1,23 +1,11 @@
 // Handler for `aid credential` subcommands.
-// Exports: CredentialAction, run_credential_command.
+// Exports: run_credential_command.
 // Deps: crate::credential_pool, chrono, anyhow.
 
+use crate::cli_actions::CredentialAction;
 use crate::credential_pool;
 use anyhow::{Result, bail};
 use chrono::Local;
-
-pub enum CredentialAction {
-    List,
-    Add {
-        provider: String,
-        name: String,
-        env: String,
-    },
-    Remove {
-        provider: String,
-        name: String,
-    },
-}
 
 pub(crate) fn run_credential_command(action: CredentialAction) -> Result<()> {
     match action {

@@ -4,6 +4,7 @@
 // Deps: curl on PATH; the macOS login keychain for the key.
 
 mod answer;
+pub(crate) mod batch;
 pub(crate) mod classify;
 pub(crate) mod question;
 mod screen;

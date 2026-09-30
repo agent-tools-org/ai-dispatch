@@ -13,7 +13,7 @@ current arguments.
 | `aid benchmark` | Run the same task through multiple agents and compare results. |
 | `aid ask` | Run a focused research or exploration request with optional files. |
 | `aid query` | Query an LLM directly, optionally using automatic routing. |
-| `aid classify` | Ask TypeSafe Jev typed `noul`/`choice`/`score` questions about a text or JSON state (stdin by default) and print a small validated JSON answer; also the MCP `classify` tool. Exits 2 no key, 3 API error, 4 invalid questions, 5 state refused. Answers over agent output are hints, never a verdict; see [classify.md](classify.md). |
+| `aid classify` | Ask TypeSafe Jev typed `noul`/`choice`/`score` questions about a text or JSON state (stdin by default); also the single-item MCP `classify` tool. `--batch <items.jsonl> --out <results.jsonl> [--jobs N] [--resume]` appends per-item results with shared backoff, 4 workers by default (1-16), resume by successful id, and stderr totals/choice counts. Exits 2 no key, 3 API error, 4 invalid setup/questions, 5 single-state refusal, 6 batch item failures. Answers over agent output are hints, never a verdict; see [classify.md](classify.md). |
 | `aid build` | Run supported Cargo checks (check/clippy) with compact diagnostics; zero-unit no-target runs fail clearly. |
 | `aid test` | Run Cargo tests with trusted guarantees: zero-match filters fail, executed tests are named, failures stay compact. |
 | `aid experiment` | Run and inspect metric-driven iterative experiments. |
@@ -60,7 +60,7 @@ current arguments.
 
 | Command | Purpose |
 |---|---|
-| `aid setup` | Configure AID and install bundled resources when needed. |
+| `aid setup` | Configure AID, optionally set/replace the TypeSafe (Jev) macOS keychain key with hidden terminal input and classify verification (`OK` or `FAILED: <message>`), and install bundled resources when needed. |
 | `aid project` | Initialize, inspect, or synchronize project configuration. |
 | `aid agent` | Register custom agents with `add <name>` and inspect built-in agent availability and related state. `aid agent config <name> --model` sets a sticky default for `aid run` and `aid batch`. `aid agent quota` shows live used percent and freshness when an aidbar snapshot exists; `STALE` is display-only. `aid agent list` includes `claude`. `aid agent list --json` quota objects carry `ok` (a successful probe observed it), `unknown` (no evidence), `degraded`, `partial`, or `limited` state plus `used_percent`, `resets_at`, and `source` (`probe` / `marker` / `none`); each agent carries `auth` (`failed` with `observed_at` after a not-signed-in run within the last hour, else `unknown`). Its `models` object carries `default_source` (`sticky` / `custom_forced` / `budget_route` / `cli_config`; `null` with `default` when unknown), and each `models.available` row carries `rated` and `source` (`catalog` / `served` / `pricing_override`); served-only rows are `rated: false` with `null` capability; `input_per_m`/`output_per_m` are the price cost estimation resolves, `null` when unknown. `aid agent quota` prints `UNKNOWN` for a route no probe observed. A NeedsHuman hold on `aid agent list` prints `needs human: <stored first line> — fix, then aid config clear-limit <agent>` rather than a bare `LIMITED`. |
 | `aid config` | Inspect agents, pricing, installed skills, templates, and prompt budgets. Pricing overrides replace listed rows' tier and description; displayed prices come from the cost resolver. |

@@ -130,7 +130,7 @@ pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
     }
     if !task.status.is_terminal() {
         aid_hint!(
-            "[aid] Task is still running. To wait for completion: aid watch --wait {}",
+            "[aid] Task is still running. To wait for completion: aid wait {}",
             args.task_id
         );
     }

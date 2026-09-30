@@ -37,9 +37,6 @@ pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
         ConfigAction::Templates => print_templates(),
         ConfigAction::Pricing { update } => print_pricing(update)?,
         ConfigAction::ClearLimit { agent } => clear_limit(&agent)?,
-        ConfigAction::AddAgent { .. } => {
-            println!("Custom agent registration not yet implemented");
-        }
     }
     Ok(())
 }

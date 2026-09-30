@@ -103,8 +103,8 @@ User-visible behavior for these rows is:
   not append the milestone to a skipped row because milestone enrichment is
   limited to `RUN` at `src/board.rs:254-268`. Its top-level status counts also
   omit skipped from done/running/failed at `src/board.rs:176-188`.
-- `aid watch --wait`: the `--wait` route calls `cmd::wait::run` at
-  `src/cmd_dispatch/display.rs:83-86`. `wait` treats every terminal status,
+- `aid wait`: the command calls `cmd::wait::run` through
+  `src/cmd_dispatch/display.rs`. `wait` treats every terminal status,
   including `Skipped`, as completed at `src/cmd/wait.rs:126-150` and exits
   successfully once no active tasks remain at `src/cmd/wait.rs:172-188`.
   It prints the terminal row as `SKIP` with `-` duration/tokens/cost and no

@@ -2,7 +2,7 @@
 
 ## Scope
 
-This patch adds worker-settlement waiting to `aid wait` and `aid watch --wait`.
+This patch adds worker-settlement waiting to `aid wait`.
 The worker job spec remains present until delivery, verification and error
 settlement finish. Waiters observe that barrier before reading final task state;
 group and implicit selection include terminal tasks with outstanding job specs.

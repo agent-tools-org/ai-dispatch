@@ -24,16 +24,15 @@ current arguments.
 |---|---|
 | `aid errors` | Inspect recent CLI parse errors and pre-task rejections, with correction hints; see [command-errors.md](command-errors.md). |
 | `aid board` | Show the current task board (default: current project only; `--all` shows every project). Includes verification tags when verification has something to report. |
-| `aid watch` | Stream task or group progress; `--wait` waits for worker delivery and verification checks to settle and exits non-zero when a task did not succeed. |
+| `aid watch` | Follow live task or group progress in text mode, the TUI, or a JSONL stream. |
 | `aid wait` | Block until selected tasks or a group finish worker settlement, including delivery and verification checks; returns non-zero when any task did not succeed. |
 | `aid show` | Inspect task state, outcome, verification, events, context, output, result, transcript, summary, audit, or diff; prints `Backup: <url>` (also `backup_url` in `--json`) once an artifact backup was uploaded; `--diff --branch` widens the diff from the task's own commits to the whole branch. |
-| `aid output` | Print task output directly. |
 | `aid tree` | Show task ancestry and retries. |
 | `aid respond` | Supply an answer to a task awaiting input. |
 | `aid reply` | Send a message to a running task and optionally wait for acknowledgement. |
 | `aid steer` | Inject updated direction into a running task. |
 | `aid unstick` | Request recovery or escalation for a stalled task. |
-| `aid stop` | Stop one task or its retry tree while preserving artifacts. |
+| `aid stop` | Stop one task or its retry tree while preserving artifacts; `--force` kills it immediately. |
 | `aid retry` | Start a new attempt using prior task context and artifacts; supersedes a non-terminal task by stopping its live worker first. Optional `--model`, `--idle-timeout`, and `--feedback-file` (`-F`) override those fields; unspecified model/idle-timeout inherit the original task. |
 | `aid merge` | Merge delivered code only when its outcome is successful by default; `--force` overrides a failed or inconclusive verification and records the reason. This is not principal acceptance. |
 
@@ -50,7 +49,7 @@ current arguments.
 
 | Command | Purpose |
 |---|---|
-| `aid group` | Create and manage workgroups, findings, summaries, and broadcasts. |
+| `aid group` | Create and manage workgroups; `summary <group-id>`, `finding add/list/get/update <group-id>`, and `broadcast <group-id> <message>` handle shared results and messages. |
 | `aid team` | Manage reusable team definitions. |
 | `aid memory` | Add, search, update, version, or forget project memory. |
 | `aid kg` | Add, query, invalidate, search, or inspect temporal knowledge-graph facts. |
@@ -63,7 +62,7 @@ current arguments.
 |---|---|
 | `aid setup` | Configure AID and install bundled resources when needed. |
 | `aid project` | Initialize, inspect, or synchronize project configuration. |
-| `aid agent` | Inspect built-in agent availability and related state. `aid agent config <name> --model` sets a sticky default for `aid run` and `aid batch`. `aid agent quota` shows live used percent and freshness when an aidbar snapshot exists; `STALE` is display-only. `aid agent list` includes `claude`. `aid agent list --json` quota objects carry `ok` (a successful probe observed it), `unknown` (no evidence), `degraded`, `partial`, or `limited` state plus `used_percent`, `resets_at`, and `source` (`probe` / `marker` / `none`); each agent carries `auth` (`failed` with `observed_at` after a not-signed-in run within the last hour, else `unknown`). Its `models` object carries `default_source` (`sticky` / `custom_forced` / `budget_route` / `cli_config`; `null` with `default` when unknown), and each `models.available` row carries `rated` and `source` (`catalog` / `served` / `pricing_override`); served-only rows are `rated: false` with `null` capability and prices. `aid agent quota` prints `UNKNOWN` for a route no probe observed. A NeedsHuman hold on `aid agent list` prints `needs human: <stored first line> — fix, then aid config clear-limit <agent>` rather than a bare `LIMITED`. |
+| `aid agent` | Register custom agents with `add <name>` and inspect built-in agent availability and related state. `aid agent config <name> --model` sets a sticky default for `aid run` and `aid batch`. `aid agent quota` shows live used percent and freshness when an aidbar snapshot exists; `STALE` is display-only. `aid agent list` includes `claude`. `aid agent list --json` quota objects carry `ok` (a successful probe observed it), `unknown` (no evidence), `degraded`, `partial`, or `limited` state plus `used_percent`, `resets_at`, and `source` (`probe` / `marker` / `none`); each agent carries `auth` (`failed` with `observed_at` after a not-signed-in run within the last hour, else `unknown`). Its `models` object carries `default_source` (`sticky` / `custom_forced` / `budget_route` / `cli_config`; `null` with `default` when unknown), and each `models.available` row carries `rated` and `source` (`catalog` / `served` / `pricing_override`); served-only rows are `rated: false` with `null` capability and prices. `aid agent quota` prints `UNKNOWN` for a route no probe observed. A NeedsHuman hold on `aid agent list` prints `needs human: <stored first line> — fix, then aid config clear-limit <agent>` rather than a bare `LIMITED`. |
 | `aid config` | Inspect agents, pricing, installed skills, templates, and prompt budgets. |
 | `aid store` | Browse, install, inspect, and update community packages. |
 | `aid tool` | Manage reusable tool definitions. |
@@ -86,4 +85,5 @@ current arguments.
 | `aid cost` | Report estimated costs by group, agent, or period. |
 | `aid stats` | Report outcome-based task success, declared difficulty versus outcomes, models, failures, and usage concentration. |
 
-Global options include `--quiet`, `--help`, and `--version`.
+Global options include `--quiet`, `--help`, and `--version`. Quiet mode only
+reduces informational output; use `aid wait` for blocking completion checks.

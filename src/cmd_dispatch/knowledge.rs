@@ -91,7 +91,3 @@ pub(super) fn finding(store: Arc<store::Store>, action: FindingCommands) -> Resu
         FindingCommands::Update { group, finding_id, verdict, score, note } => cmd::finding::update(&store, &group, finding_id, verdict.as_deref(), score.as_deref(), note.as_deref()),
     }
 }
-
-pub(super) fn broadcast(store: Arc<store::Store>, group: String, message: String) -> Result<()> {
-    cmd::broadcast::run(&store, &group, &message)
-}

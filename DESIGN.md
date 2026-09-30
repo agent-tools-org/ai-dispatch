@@ -41,7 +41,7 @@
 - Cursor CLI 3-tier model support (auto/composer-1.5/opus-4.6-thinking/gpt-5.4-high)
 
 **Live Task Control (v8.3):**
-- `aid stop` / `aid kill` — graceful SIGTERM+wait and forced SIGKILL task termination
+- `aid stop` / `aid stop --force` — graceful SIGTERM+wait and forced SIGKILL task termination
 - `aid steer` — inject guidance into running PTY tasks mid-flight
 - `Stopped` task status with full TUI/board/webhook integration
 
@@ -69,7 +69,7 @@ State is stored under `~/.aid` by default, or `AID_HOME` when overridden.
 - fix zombie background tasks (dead processes shown as Running forever)
 - fix UTF-8 boundary panic in codex/opencode adapters (multi-byte chars)
 - shared CARGO_TARGET_DIR for worktree tasks (build cache reuse)
-- CLI consolidation: 17 commands → 11 (`show`, `ask`, `watch --quiet`, `config agents`)
+- CLI consolidation: 17 commands → 11 (`show`, `ask`, `wait`, `config agents`)
 
 ## Problem
 
@@ -169,8 +169,8 @@ aid watch            # Text mode for running tasks
 aid watch t-3a7f     # Follow a specific task
 aid watch --group wg-a3f1
 aid watch --tui      # Interactive ratatui dashboard
-aid watch --quiet    # Block until current running tasks finish
-aid watch --quiet t-3a7f  # Block until one task finishes
+aid wait    # Block until current running tasks finish
+aid wait t-3a7f  # Block until one task finishes
 ```
 
 ```
@@ -264,7 +264,7 @@ Shows:
 
 ```bash
 aid config agents            # List detected agents
-aid config agents add foo    # Register custom agent
+aid agent add foo    # Register custom agent
 aid config prompts           # Show prompt templates
 ```
 
@@ -454,7 +454,7 @@ ai-dispatch/
 - Cursor headless mode: `--force` and `--stream-partial-output` flags, model metadata extraction, cost tracking
 
 ### v8.3 — Live Task Control (done)
-- `aid stop <id>` / `aid kill <id>` — graceful (SIGTERM + 5s wait + SIGKILL) and forced task termination
+- `aid stop <id>` / `aid stop <id> --force` — graceful (SIGTERM + 5s wait + SIGKILL) and forced task termination
 - `aid steer <id> "message"` — inject guidance into running PTY tasks via file-based signal
 - `Stopped` status with full integration: TUI, board, webhook, batch validation, summary
 

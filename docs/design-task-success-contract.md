@@ -143,7 +143,7 @@ meaning the design assigns it — asked, no answer recorded yet — and closes a
 race that was live in the P1 waiter: a task flips to `Done` in the runner, then
 post-run work including the `after_complete` hook runs arbitrary shell commands,
 and only then does verification start. In that window `verify_status` was still
-the column default, so `aid watch --wait` derived `Unverified(NoResult)` and
+the column default, so `aid wait` derived `Unverified(NoResult)` and
 reported failure for a task that was merely mid-verification — the contract's
 own defect pointing the other way. The waiter now waits while verification is in
 flight, bounded by the verify timeout so it cannot hang.

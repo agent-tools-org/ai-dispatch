@@ -9,7 +9,7 @@ Historical UX issues observed via dogfooding. The **v9.0 UX overhaul** label is 
 ### GitButler batch merge-back (issue #105)
 
 - **Aid worktree custody** — task completion no longer destroys worktrees. Review is followed by explicit principal acceptance and durability-gated GC.
-- **`aid merge --lanes` was undiscoverable on GitButler repos** — `aid batch` completion + `aid watch --quiet --group` now print the lane merge-back hint when GitButler integration is active.
+- **`aid merge --lanes` was undiscoverable on GitButler repos** — `aid batch` completion + `aid wait --group` now print the lane merge-back hint when GitButler integration is active.
 - **First `aid batch` on a GitButler repo without project.toml config required manual wiring** — batch now offers a one-time enable prompt. `--yes` / `--no-prompt` skip silently; declining writes a `suppress_gitbutler_prompt = true` marker.
 - **GitButler workflow documentation** — `docs/gitbutler.md` covers modes, batch-to-review flow, custody acceptance, and the `AID_GITBUTLER=0` escape hatch.
 

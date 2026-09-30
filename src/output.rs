@@ -35,7 +35,7 @@ macro_rules! aid_info {
 }
 
 /// Hint/tip for the user — suppressed in quiet mode.
-/// Use for: "aid watch --quiet ...", "aid merge ...", TUI suggestions.
+/// Use for: "aid wait ...", "aid merge ...", TUI suggestions.
 #[macro_export]
 macro_rules! aid_hint {
     ($($arg:tt)*) => {

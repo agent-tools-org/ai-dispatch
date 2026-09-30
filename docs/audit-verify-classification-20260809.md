@@ -13,7 +13,7 @@ Yes, the new status leaks catastrophically. Because `InfrastructureFailure` is d
 - `enforce_verify_status` (Evidence: `src/verify.rs:190`): Explicitly checks `task.verify_status == VerifyStatus::Failed`. It ignores `InfrastructureFailure`, leaving the task in `TaskStatus::Done`.
 - `exit_code_for_status` (Evidence: `src/cmd_dispatch.rs:133`): Returns `0` (Success) because the status is `Done` and verify status is not `Failed`. CI and shell scripts will perceive the run as successful.
 - Auto-retry (Evidence: `src/cmd/run_verify.rs:208`): `maybe_auto_retry_after_verify_failure_impl` explicitly checks `task.verify_status != crate::types::VerifyStatus::Failed` and skips retrying.
-- `watch --wait`: Will exit `0` because the underlying task is `Done` and not `Failed`.
+- `wait`: Will exit `0` because the underlying task is `Done` and not `Failed`.
 
 Construction sites:
 - `VerifyResult::infrastructure_failure`: Updated at all 3 construction sites in `src/verify.rs` (skip, no project, main execution) and all mock sites in `src/verify_tests.rs`.

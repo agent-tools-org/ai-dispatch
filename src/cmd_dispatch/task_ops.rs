@@ -127,10 +127,6 @@ pub(super) fn stop(
     }
 }
 
-pub(super) fn kill(store: Arc<store::Store>, task_id: String) -> Result<()> {
-    cmd::stop::kill(&store, &task_id)
-}
-
 pub(super) fn steer(store: Arc<store::Store>, task_id: String, message: String) -> Result<()> {
     cmd::steer::run(&store, &task_id, &message)
 }

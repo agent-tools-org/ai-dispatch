@@ -61,11 +61,6 @@ pub struct StatsArgs {
 }
 
 #[derive(Args)]
-pub struct SummaryArgs {
-    pub group: String,
-}
-
-#[derive(Args)]
 pub struct RetryArgs {
     pub task_id: String,
     #[arg(short, long, conflicts_with = "feedback_file")]
@@ -148,11 +143,6 @@ pub struct ReplyArgs {
     pub async_mode: bool,
     #[arg(long = "timeout", value_name = "SECS", default_value = "30", help = "Wait this many seconds for an acknowledgement")]
     pub timeout_secs: u64,
-}
-
-#[derive(Args)]
-pub struct KillArgs {
-    pub task_id: String,
 }
 
 #[derive(Args)]

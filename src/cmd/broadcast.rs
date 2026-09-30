@@ -1,4 +1,4 @@
-// CLI handler for `aid broadcast` — send messages to workgroup broadcast file.
+// CLI handler for `aid group broadcast` — send messages to workgroup broadcast file.
 // Exports: run.
 // Deps: paths, store.
 

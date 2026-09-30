@@ -1,4 +1,4 @@
-// CLI handler for `aid finding` — post, list, get, and review workgroup findings.
+// CLI handler for `aid group finding` — post, list, get, and review workgroup findings.
 // Exports: add, list, get, update.
 // Deps: store::Store, cmd::finding_render, serde_json.
 

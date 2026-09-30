@@ -199,3 +199,26 @@ fn claude_stays_listed_but_recommendation_requires_team_preference() {
     let report = advise("refactor the scheduler", baseline.declared, Some(TaskCategory::Refactoring), Some(&team), None, 0, None);
     assert_eq!(report.recommended.expect("recommendation").agent, "claude");
 }
+
+#[test]
+fn only_claude_installed_without_preference_has_no_recommendation() {
+    let (_temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Claude]);
+    let report = run(None);
+    assert!(find(&report, "claude").installed);
+    assert!(report.recommended.is_none());
+}
+
+#[test]
+fn no_installed_routes_or_only_weaker_caller_pool_routes_have_no_recommendation() {
+    let (_temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![]);
+    assert!(run(None).recommended.is_none());
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
+    crate::agent_config::save_agent_default_model("codex", Some("gpt-5.6-sol")).expect("model");
+    let caller = caller_advice("codex", Some("gpt-5.6-sol")).expect("caller");
+    let caller = CallerAdvice { capability: Some(99.0), ..caller };
+    let report = run(Some(caller));
+    assert!(find(&report, "codex").exclusion_codes.contains(&"weaker_on_caller_pool".into()));
+    assert!(report.recommended.is_none());
+}

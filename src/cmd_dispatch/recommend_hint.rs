@@ -85,6 +85,16 @@ mod tests {
     }
 
     #[test]
+    fn only_claude_installed_without_preference_keeps_hint_silent() {
+        let temp = TempDir::new().expect("home");
+        let _home = AidHomeGuard::set(temp.path());
+        let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Claude]);
+        let store = Store::open_memory().expect("store");
+        assert_eq!(recommendation_hint("codex", "refactor the scheduler", false,
+            profile(), None, &store, None), None);
+    }
+
+    #[test]
     fn hint_recommends_the_advise_agent_for_the_same_profile() {
         let temp = TempDir::new().expect("home");
         let _home = AidHomeGuard::set(temp.path());

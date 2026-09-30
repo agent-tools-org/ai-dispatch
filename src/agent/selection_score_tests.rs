@@ -255,6 +255,7 @@ fn held_background_keeps_zero_penalty_and_note_says_wait() {
 #[test]
 fn advise_notes_distinguish_held_degraded_and_skipped() {
     let (temp, cache, _home, _guard) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::OpenCode]);
     write_clock_hold(temp.path(), "codex");
     write_snapshot(&cache, "qwen", 90.0, 60);
     let report = advise(

@@ -29,7 +29,7 @@ fn advise_emits_json_without_creating_store_state() {
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     let payload: serde_json::Value = serde_json::from_slice(&output.stdout).expect("advice JSON");
     assert_eq!(payload["declared"]["difficulty"], "moderate");
-    assert!(payload["recommended"].is_object());
+    assert_recommendation_installed(&payload);
     assert!(payload["candidates"].as_array().is_some_and(|items| !items.is_empty()));
     let candidates = payload["candidates"].as_array().expect("candidates");
     assert!(candidates.iter().all(|item| item["quota"]["status"].is_string()));
@@ -57,8 +57,7 @@ fn advise_ranks_actionable_builtins_before_separate_custom_context() {
     let payload: serde_json::Value = serde_json::from_slice(&output.stdout).expect("advice JSON");
     assert_eq!(payload["inferred"]["kind"], "simple-edit");
     let candidates = payload["candidates"].as_array().expect("built-in candidates");
-    let recommended = payload["recommended"]["agent"].as_str().expect("recommended agent");
-    assert_eq!(candidates[0]["agent"], recommended);
+    assert_recommendation_installed(&payload);
     // Ineligible candidates stay listed, each with a reason and a code per reason.
     for item in candidates.iter().filter(|item| item["eligible"] == false) {
         assert!(item["exclusion_reason"].as_str().is_some_and(|text| !text.is_empty()));
@@ -97,7 +96,7 @@ fn advise_succeeds_when_every_builtin_is_rate_limited() {
     let candidates = payload["candidates"].as_array().expect("candidate array");
     assert!(!candidates.is_empty());
     assert!(candidates.iter().all(|item| item["breakdown"]["rate_limit_penalty"] == -10.0));
-    assert!(payload["recommended"].is_object());
+    assert_recommendation_installed(&payload);
     assert!(!aid_home.path().join("aid.db").exists());
 }
 
@@ -163,4 +162,34 @@ fn directory_entries(path: &std::path::Path) -> Vec<String> {
         .collect::<Vec<_>>();
     entries.sort();
     entries
+}
+
+fn assert_recommendation_installed(report: &serde_json::Value) {
+    let Some(agent) = report["recommended"]["agent"].as_str() else {
+        assert!(report["recommended"].is_null());
+        return;
+    };
+    let candidate = report["candidates"].as_array().expect("candidates").iter()
+        .find(|item| item["agent"] == agent).expect("recommended candidate");
+    assert_eq!(candidate["installed"], true);
+    assert_eq!(candidate["model"], report["recommended"]["model"]);
+}
+
+#[test]
+fn only_claude_installed_without_preference_emits_no_recommendation() {
+    use std::os::unix::fs::PermissionsExt;
+    let home = TempDir::new().expect("home");
+    let bin = home.path().join("bin");
+    std::fs::create_dir(&bin).expect("bin");
+    let claude = bin.join("claude");
+    std::fs::write(&claude, "#!/bin/sh\nexit 0\n").expect("claude stub");
+    std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).expect("executable");
+    let output = aid_cmd_in(home.path()).env("PATH", &bin)
+        .args(["advise", "refactor the scheduler"]).args(PROFILE_ARGS).output().expect("advise");
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).expect("report");
+    let installed: Vec<_> = report["candidates"].as_array().expect("candidates").iter()
+        .filter(|item| item["installed"] == true).map(|item| &item["agent"]).collect();
+    assert_eq!(installed, vec![&serde_json::json!("claude")]);
+    assert!(report["recommended"].is_null());
 }

@@ -24,7 +24,7 @@ use selection_scoring::{
     priority,
 };
 use super::classifier::{self, Complexity, TaskCategory};
-use super::RunOpts;
+use super::{detect_agents, RunOpts};
 use crate::agent_config;
 use crate::rate_limit;
 use crate::store::Store;

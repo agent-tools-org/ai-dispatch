@@ -137,6 +137,8 @@ fn check_coverage(facts: &BTreeSet<String>, guide: &str, gaps: &[&str]) {
 
 #[test]
 fn official_guide_covers_generated_facts() {
+    assert!(UNDOCUMENTED_FLAGS.len() <= 64, "undocumented flags must only shrink");
+    assert!(UNDOCUMENTED_CONFIG_KEYS.len() <= 36, "undocumented config keys must only shrink");
     let guide = GUIDE_FILES.iter().map(|(_, content)| *content).collect::<Vec<_>>().join("\n");
     let mut cli = crate::cli::Cli::command();
     cli.build();

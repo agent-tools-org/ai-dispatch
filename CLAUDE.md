@@ -67,6 +67,7 @@ complete. Run:
 ```bash
 python3 ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py \
   default-skills/aid-guide
+scripts/remote-test.sh -- --bin aid init_official_guide
 scripts/remote-test.sh -- --test aid_guide_e2e --test init_e2e
 ```
 

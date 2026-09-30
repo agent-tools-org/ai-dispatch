@@ -3,7 +3,7 @@
 
 use super::{resolve_finding_content, resolve_group};
 use crate::cli::{FindingCommands, KgCommands, MemoryCommands};
-use crate::cli_actions::GroupAction;
+use crate::cli::GroupAction;
 use crate::cmd;
 use crate::store;
 use anyhow::Result;

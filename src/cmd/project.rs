@@ -3,7 +3,7 @@
 // Deps: crate::config, crate::project, serde_json, std::{fs, io, path, process}.
 mod state_command;
 
-use crate::cli_actions::ProjectAction;
+use crate::cli::ProjectAction;
 use crate::{config as aid_config, project};
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::Value;

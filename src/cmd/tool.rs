@@ -5,7 +5,7 @@
 use anyhow::{bail, Context, Result};
 use std::fs;
 
-use crate::cli_actions::ToolAction;
+use crate::cli::ToolAction;
 use crate::sanitize;
 use crate::toolbox;
 
@@ -152,7 +152,7 @@ fn truncate_str(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli_actions::ToolAction;
+    use crate::cli::ToolAction;
     use crate::paths::AidHomeGuard;
     use std::{fs, path::PathBuf};
     use tempfile::TempDir;

@@ -2,7 +2,7 @@
 // Exports: run_credential_command.
 // Deps: crate::credential_pool, chrono, anyhow.
 
-use crate::cli_actions::CredentialAction;
+use crate::cli::CredentialAction;
 use crate::credential_pool;
 use anyhow::{Result, bail};
 use chrono::Local;

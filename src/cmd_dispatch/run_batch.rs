@@ -3,7 +3,7 @@
 #[path = "run_profile.rs"]
 mod run_profile;
 
-use crate::cli::{BatchAction, RunExtrasArgs, command_args_a};
+use crate::cli::{BatchAction, RunExtrasArgs, run_args};
 use crate::cmd;
 use crate::types::TaskId;
 use crate::types::TaskBudget;
@@ -16,7 +16,7 @@ use self::run_profile::{resolve_run_agent, validate_task_profile};
 
 pub(super) async fn run(
     store: Arc<store::Store>,
-    cli_args: command_args_a::RunArgs,
+    cli_args: run_args::RunArgs,
 ) -> Result<TaskId> {
     let no_hint = cli_args.no_hint;
     let checklist_file = cli_args.checklist_file.clone();
@@ -42,8 +42,8 @@ pub(super) async fn run(
     cmd::run::run(store, args).await
 }
 
-fn run_args(cli: command_args_a::RunArgs) -> cmd::run::RunArgs {
-    let command_args_a::RunArgs {
+fn run_args(cli: run_args::RunArgs) -> cmd::run::RunArgs {
+    let run_args::RunArgs {
         agent, prompt, prompt_file, repo, repo_root, dir, output, result_file, model,
         difficulty, budget, urgency, rigor, egress, kind, no_hint: _, worktree, team,
         group, verify, iterate, eval, eval_feedback_template, judge, peer_review, retry,

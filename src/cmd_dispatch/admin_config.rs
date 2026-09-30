@@ -2,7 +2,7 @@
 // Implements config, local tools, setup, upgrade, and web wrappers.
 
 use crate::cli::{ByokCommands, HookAction, StoreCommands};
-use crate::cli_actions::{ConfigAction, ContainerAction, CredentialAction, TeamAction, ToolAction};
+use crate::cli::{ConfigAction, ContainerAction, CredentialAction, TeamAction, ToolAction};
 use crate::cmd;
 use crate::store;
 use anyhow::Result;

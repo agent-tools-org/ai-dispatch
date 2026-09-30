@@ -4,7 +4,7 @@
 
 use crate::agent::classifier::TaskCategory;
 use crate::agent::selection::{advise, caller_advice};
-use crate::cli::command_args_a::NO_HINT_FLAG;
+use crate::cli::run_args::NO_HINT_FLAG;
 use crate::store::Store;
 use crate::team::TeamConfig;
 use crate::types::{AgentKind, DeclaredTaskProfile};

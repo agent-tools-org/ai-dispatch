@@ -1,11 +1,11 @@
 // `aid classify`: builds a classify request from flags and state input, prints JSON or a one-line error.
 // Exports: run (returns the process exit code), request_from_args.
-// Deps: cli::command_args_classify, typesafe::{classify, question}.
+// Deps: cli::classify_args, typesafe::{classify, question}.
 
 use serde_json::{Map, Value};
 use std::io::Read;
 
-use crate::cli::command_args_classify::ClassifyArgs;
+use crate::cli::classify_args::ClassifyArgs;
 use crate::typesafe::classify::{ClassifyError, ClassifyRequest, ClassifyState, ErrorKind, classify};
 use crate::typesafe::question::{merge_questions, questions_from_flags};
 

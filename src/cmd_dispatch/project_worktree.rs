@@ -2,7 +2,7 @@
 // Implements project/worktree commands, experiment runs, and internal task execution.
 
 use crate::cli::{self, ExperimentCommands};
-use crate::cli_actions::{ProjectAction, WorktreeAction};
+use crate::cli::{ProjectAction, WorktreeAction};
 use crate::cmd;
 use crate::cmd::experiment_types::{ExperimentConfig, MetricDirection};
 use crate::{background, store};

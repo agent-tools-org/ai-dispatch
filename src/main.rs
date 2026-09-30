@@ -28,7 +28,6 @@ mod auth_marker;
 mod background;
 mod batch;
 mod board;
-mod cli_actions;
 mod command_diagnostics;
 mod cmd;
 mod cmd_dispatch;

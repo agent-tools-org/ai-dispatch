@@ -11,7 +11,7 @@ use std::sync::Arc;
 use crate::agent;
 use crate::agent::registry;
 use crate::agent_config;
-use crate::cli_actions::ConfigAction;
+use crate::cli::ConfigAction;
 use crate::rate_limit;
 use crate::skills;
 use crate::store::Store;

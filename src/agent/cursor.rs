@@ -178,9 +178,7 @@ impl super::Agent for CursorAgent {
 
     fn served_models(&self) -> Result<Option<Vec<String>>> {
         let binary = cursor_binary();
-        let mut cmd = Command::new(binary);
-        cmd.arg("models");
-        let output = super::model_validation::run_probe_cmd(cmd);
+        let output = super::model_validation::run_probe_cmd(binary, &["models"]);
         let Some(probe) = output else {
             return Ok(None);
         };

@@ -4,7 +4,6 @@
 
 use anyhow::{Result, anyhow};
 use std::collections::HashMap;
-use std::process::Command;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
@@ -30,7 +29,6 @@ struct CachedServedModels {
 #[cfg(not(test))]
 static SERVED_CACHE: std::sync::OnceLock<Mutex<HashMap<AgentKind, CachedServedModels>>> = std::sync::OnceLock::new();
 
-pub(crate) const DEFAULT_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const SERVED_MODELS_CACHE_TTL: Duration = Duration::from_secs(24 * 3600);
 
 fn cache() -> &'static Mutex<HashMap<AgentKind, CachedServedModels>> {
@@ -257,31 +255,9 @@ pub(crate) fn get_served_models_cached_with_status(agent: &dyn Agent) -> (Option
     (fresh, true)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ProbeOutput {
-    pub stdout: String,
-    pub stderr: String,
-}
-
-pub(crate) fn run_probe_cmd(cmd: Command) -> Option<ProbeOutput> {
-    run_cmd_with_timeout(cmd, DEFAULT_PROBE_TIMEOUT)
-}
-
-pub(crate) fn run_cmd_with_timeout(mut cmd: Command, timeout: Duration) -> Option<ProbeOutput> {
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let res = cmd.output().ok().and_then(|output| {
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                Some(ProbeOutput { stdout, stderr })
-            } else {
-                None
-            }
-        });
-        let _ = tx.send(res);
-    });
-    rx.recv_timeout(timeout).ok().flatten()
+pub(crate) fn run_probe_cmd(program: &str, args: &[&str]) -> Option<super::env::CliCommandOutput> {
+    super::env_identity::run_bounded(program, args, super::env_identity::DEFAULT_PROBE_TIMEOUT)
+        .ok().filter(|output| output.success)
 }
 
 #[cfg(test)]

@@ -6,7 +6,6 @@ use crate::agent::{self, RunOpts};
 use crate::store::Store;
 use crate::types::{AgentKind, TaskStatus};
 use super::RunArgs;
-use std::process::Command;
 
 pub(super) fn validate_command_preflight_with<F>(
     agent: &dyn agent::Agent,
@@ -70,15 +69,6 @@ where
     agent.validate_cli_with(run)
 }
 
-fn run_cli_command(program: &str, args: &[&str]) -> Result<agent::CliCommandOutput> {
-    let output = Command::new(program).args(args).output()?;
-    Ok(agent::CliCommandOutput {
-        success: output.status.success(),
-        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-    })
-}
-
 #[cfg(test)]
 fn preflight_cli_command_runner(_program: &str, _args: &[&str]) -> Result<agent::CliCommandOutput> {
     Ok(agent::CliCommandOutput {
@@ -90,7 +80,7 @@ fn preflight_cli_command_runner(_program: &str, _args: &[&str]) -> Result<agent:
 
 #[cfg(not(test))]
 fn preflight_cli_command_runner(program: &str, args: &[&str]) -> Result<agent::CliCommandOutput> {
-    run_cli_command(program, args)
+    agent::env_identity::run_bounded(program, args, agent::env_identity::DEFAULT_PROBE_TIMEOUT)
 }
 
 pub(super) fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {

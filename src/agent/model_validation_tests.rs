@@ -285,10 +285,9 @@ fn cold_cache_probes_only_once_on_unserved_model() {
 }
 
 #[test]
-fn run_cmd_with_timeout_separates_stdout_and_stderr() {
-    let mut cmd = Command::new("sh");
-    cmd.arg("-c").arg("echo 'stdout output'; echo 'stderr output' >&2");
-    let res = run_cmd_with_timeout(cmd, Duration::from_secs(2)).expect("command output");
+fn run_probe_cmd_separates_stdout_and_stderr() {
+    let res = run_probe_cmd("sh", &["-c", "echo 'stdout output'; echo 'stderr output' >&2"])
+        .expect("command output");
     assert_eq!(res.stdout.trim(), "stdout output");
     assert_eq!(res.stderr.trim(), "stderr output");
 }

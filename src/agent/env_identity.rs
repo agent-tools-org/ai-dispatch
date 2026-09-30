@@ -1,5 +1,5 @@
-// Bounded identity probes for ambiguous agent command names.
-// Exports: identity_markers, binary_identity_matches, help_identifies,
+// Bounded CLI probes and identity checks for ambiguous agent command names.
+// Exports: run_bounded, identity_markers, binary_identity_matches, help helpers,
 // first_matching_executable, identity_exists_on_path.
 // Deps: std process pipes, reader threads, and a fixed probe deadline.
 
@@ -8,11 +8,15 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::thread::JoinHandle;
+use std::sync::mpsc::{self, Receiver};
+
+use anyhow::{Context, Result, bail};
+use super::env::CliCommandOutput;
 use std::time::{Duration, Instant};
 
-const OUTPUT_LIMIT: u64 = 64 * 1024;
+const OUTPUT_LIMIT: usize = 64 * 1024;
 const PROBE_TIMEOUT: Duration = Duration::from_millis(500);
+pub(crate) const DEFAULT_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Walk `$PATH` in order and return the first executable `<dir>/<name>` that
 /// satisfies `matches` (called with the absolute path). Non-executables are
@@ -65,62 +69,80 @@ fn is_executable_file(path: &Path) -> bool {
 }
 
 pub(crate) fn binary_identity_matches(name: &str, markers: &[&str]) -> bool {
-    let mut command = Command::new(name);
-    command.arg("--help").stdout(Stdio::piped()).stderr(Stdio::piped());
-    let Ok(mut child) = command.spawn() else {
-        return false;
-    };
-    let stdout = child.stdout.take().map(|stream| std::thread::spawn(move || read_capped(stream)));
-    let stderr = child.stderr.take().map(|stream| std::thread::spawn(move || read_capped(stream)));
-    let deadline = Instant::now() + PROBE_TIMEOUT;
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let stdout = join_output(stdout);
-                let stderr = join_output(stderr);
-                let text = format!(
-                    "{}{}",
-                    String::from_utf8_lossy(&stdout),
-                    String::from_utf8_lossy(&stderr)
-                );
-                return status.success() && help_identifies(&text, markers);
-            }
-            Ok(None) if Instant::now() >= deadline => {
-                terminate_child(child);
-                drop((stdout, stderr));
-                return false;
-            }
-            Ok(None) => std::thread::sleep(Duration::from_millis(5)),
-            Err(_) => {
-                terminate_child(child);
-                drop((stdout, stderr));
-                return false;
-            }
-        }
-    }
+    run_bounded(name, &["--help"], PROBE_TIMEOUT).is_ok_and(|output| {
+        output.success && help_identifies(&format!("{}{}", output.stdout, output.stderr), markers)
+    })
 }
 
-fn read_capped<R: Read>(stream: R) -> Vec<u8> {
-    let mut output = Vec::new();
-    let _ = stream.take(OUTPUT_LIMIT).read_to_end(&mut output);
-    output
-}
-
-fn join_output(reader: Option<JoinHandle<Vec<u8>>>) -> Vec<u8> {
-    reader.and_then(|handle| handle.join().ok()).unwrap_or_default()
-}
-
-fn terminate_child(mut child: std::process::Child) {
-    let _ = std::thread::spawn(move || {
+pub(crate) fn run_bounded(program: &str, args: &[&str], timeout: Duration) -> Result<CliCommandOutput> {
+    let deadline = Instant::now() + timeout;
+    let mut child = Command::new(program).args(args)
+        .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())
+        .spawn().with_context(|| format!("failed to probe {program}"))?;
+    let stdout = child.stdout.take().map(capped_reader);
+    let stderr = child.stderr.take().map(capped_reader);
+    let result = (|| {
+        let status = loop {
+            match child.try_wait()? {
+                Some(status) => break status,
+                None if Instant::now() >= deadline => bail!("{program} probe timed out"),
+                None => std::thread::sleep(Duration::from_millis(5)),
+            }
+        };
+        Ok(CliCommandOutput {
+            success: status.success(),
+            stdout: collect_output(stdout, deadline)?,
+            stderr: collect_output(stderr, deadline)?,
+        })
+    })();
+    if result.is_err() {
         let _ = child.kill();
         let _ = child.wait();
+    }
+    result
+}
+
+fn capped_reader<R: Read + Send + 'static>(mut stream: R) -> Receiver<Vec<u8>> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut output = Vec::new();
+        let mut buffer = [0; 8192];
+        loop {
+            match stream.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(n) => {
+                    let keep = n.min(OUTPUT_LIMIT - output.len());
+                    output.extend_from_slice(&buffer[..keep]);
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(_) => break,
+            }
+        }
+        let _ = tx.send(output);
     });
+    rx
+}
+
+fn collect_output(reader: Option<Receiver<Vec<u8>>>, deadline: Instant) -> Result<String> {
+    let Some(reader) = reader else { return Ok(String::new()); };
+    let output = reader.recv_timeout(deadline.saturating_duration_since(Instant::now()))
+        .context("CLI probe output timed out")?;
+    Ok(String::from_utf8_lossy(&output).into_owned())
 }
 
 /// True when the help text names the product through any of `markers` (case-insensitive).
 pub(crate) fn help_identifies(help: &str, markers: &[&str]) -> bool {
     let help = help.to_ascii_lowercase();
     markers.iter().any(|marker| help.contains(marker))
+}
+
+/// True when help defines a flag, excluding prefixes and mentions in prose.
+pub(crate) fn help_defines_flag(help: &str, flag: &str) -> bool {
+    help.lines().any(|line| {
+        line.trim_start().strip_prefix(flag).is_some_and(|rest| {
+            rest.is_empty() || rest.starts_with([' ', '\t', '=', ','])
+        })
+    })
 }
 
 /// Product names a generic command name must print in `--help` to count as that agent.
@@ -134,3 +156,7 @@ pub(crate) fn identity_markers(name: &str) -> Option<&'static [&'static str]> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+#[path = "env_identity_tests.rs"]
+mod tests;

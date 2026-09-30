@@ -96,9 +96,7 @@ impl super::Agent for GrokAgent {
     }
 
     fn served_models(&self) -> Result<Option<Vec<String>>> {
-        let mut cmd = Command::new("grok");
-        cmd.arg("models");
-        let Some(output) = super::model_validation::run_probe_cmd(cmd) else {
+        let Some(output) = super::model_validation::run_probe_cmd("grok", &["models"]) else {
             return Ok(None);
         };
         let models = parse_grok_models_output(&output.stdout);

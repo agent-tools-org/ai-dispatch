@@ -36,17 +36,10 @@ use crate::types::*;
 fn codex_version() -> Option<(u32, u32, u32)> {
     static VERSION: OnceLock<Option<(u32, u32, u32)>> = OnceLock::new();
     *VERSION.get_or_init(|| {
-        Command::new("codex")
-            .arg("--version")
-            .output()
+        super::env_identity::run_bounded("codex", &["--version"], super::env_identity::DEFAULT_PROBE_TIMEOUT)
             .ok()
-            .and_then(|out| {
-                if !out.status.success() {
-                    return None;
-                }
-                let text = String::from_utf8_lossy(&out.stdout);
-                parse_semver(text.trim())
-            })
+            .filter(|out| out.success)
+            .and_then(|out| parse_semver(out.stdout.trim()))
     })
 }
 

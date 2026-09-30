@@ -3,12 +3,9 @@
 // Deps: model_validation::run_probe_cmd.
 
 use anyhow::Result;
-use std::process::Command;
 
 pub(crate) fn probe_served_models() -> Result<Option<Vec<String>>> {
-    let mut cmd = Command::new("opencode");
-    cmd.arg("models");
-    let Some(output) = super::model_validation::run_probe_cmd(cmd) else {
+    let Some(output) = super::model_validation::run_probe_cmd("opencode", &["models"]) else {
         return Ok(None);
     };
     Ok(served_models_from_cli_output(&output.stdout))

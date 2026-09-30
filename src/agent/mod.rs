@@ -198,7 +198,7 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
         AgentKind::Cursor => Box::new(cursor::CursorAgent),
         AgentKind::Gemini => Box::new(gemini::GeminiAgent),
         AgentKind::Qwen => Box::new(qwen::QwenAgent),
-        AgentKind::OpenCode => Box::new(opencode::OpenCodeAgent),
+        AgentKind::OpenCode => Box::new(opencode_overlay::OpenCodeOverlayAgent::from_spec(opencode::spec())),
         AgentKind::Kilo => Box::new(kilo::agent()),
         AgentKind::MiMoCode => Box::new(mimocode::agent()),
         AgentKind::Droid => Box::new(droid::DroidAgent),

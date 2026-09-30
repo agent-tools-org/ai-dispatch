@@ -309,7 +309,7 @@ fn streamed_opencode_refusal_holds_only_the_dispatched_provider() {
     crate::rate_limit::clear_all_rate_limits_for_agent(&AgentKind::OpenCode, None);
 
     let refusal = r#"{"type":"error","timestamp":1776000000000,"sessionID":"ses_live","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here: https://opencode.ai/workspace/wrk_live/billing","statusCode":401,"isRetryable":false,"responseHeaders":{},"responseBody":"{\"type\":\"error\",\"error\":{\"type\":\"CreditsError\"}}","metadata":{"url":"https://opencode.ai/zen/v1/chat/completions"}}}}"#;
-    feed_stream_line_with_agent(&store, &task, refusal, &crate::agent::opencode::OpenCodeAgent);
+    feed_stream_line_with_agent(&store, &task, refusal, crate::agent::get_agent(AgentKind::OpenCode).as_ref());
 
     assert!(!crate::rate_limit::is_rate_limited(&AgentKind::OpenCode, None));
     assert!(crate::rate_limit::dispatch_blocking_hold_for_model(

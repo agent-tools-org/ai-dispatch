@@ -118,6 +118,7 @@ fn opencode_spec(config: &CustomAgentConfig, model: &str) -> OpenCodeOverlaySpec
         interactive_input: config.interactive_input,
         rate_limit_kind: parse_rate_limit_kind(config),
         allow_external_directories: true,
+        probe_served_models: false,
     }
 }
 

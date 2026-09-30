@@ -141,7 +141,7 @@ fn auto_nudge_echo_does_not_reset_idle_progress_clock() {
     // Stream goes silent except for aid's own nudge echoes (the live failure shape).
     state
         .handle_chunk(
-            &crate::agent::opencode::OpenCodeAgent,
+            crate::agent::get_agent(AgentKind::OpenCode).as_ref(),
             &task.id,
             &store,
             log.as_file_mut(),
@@ -187,7 +187,7 @@ fn agent_resume_after_nudge_echo_does_reset_idle_progress_clock() {
 
     state
         .handle_chunk(
-            &crate::agent::opencode::OpenCodeAgent,
+            crate::agent::get_agent(AgentKind::OpenCode).as_ref(),
             &task.id,
             &store,
             log.as_file_mut(),
@@ -226,7 +226,7 @@ fn reasoning_events_refresh_liveness_clock() {
 
     state
         .handle_chunk(
-            &crate::agent::opencode::OpenCodeAgent,
+            crate::agent::get_agent(AgentKind::OpenCode).as_ref(),
             &task.id,
             &store,
             log.as_file_mut(),

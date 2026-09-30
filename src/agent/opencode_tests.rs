@@ -1,7 +1,7 @@
 // Tests for the OpenCode CLI adapter command builder and JSON event parsing.
 // Covers session reuse, budget variants, context files, and milestone events.
 
-use super::super::Agent;
+use super::super::{Agent, RunOpts, get_agent};
 use super::*;
 use crate::{paths, rate_limit};
 
@@ -77,7 +77,7 @@ fn build_command_includes_file_flags_for_context_files() {
         env: None,
         env_forward: None,
     };
-    let cmd = OpenCodeAgent
+    let cmd = get_agent(AgentKind::OpenCode)
         .build_command("test prompt", &opts)
         .expect("command should build");
     let args: Vec<String> = cmd
@@ -139,7 +139,7 @@ fn session_flags_appear_in_command() {
         env: None,
         env_forward: None,
     };
-    let cmd = OpenCodeAgent
+    let cmd = get_agent(AgentKind::OpenCode)
         .build_command("test prompt", &opts)
         .expect("command should build");
     let args: Vec<String> = cmd
@@ -168,7 +168,7 @@ fn budget_mode_sets_minimal_variant() {
         env: None,
         env_forward: None,
     };
-    let cmd = OpenCodeAgent
+    let cmd = get_agent(AgentKind::OpenCode)
         .build_command("test prompt", &opts)
         .expect("command should build");
     let args: Vec<String> = cmd
@@ -181,7 +181,7 @@ fn budget_mode_sets_minimal_variant() {
 
 #[test]
 fn opencode_needs_pty() {
-    assert!(OpenCodeAgent.needs_pty());
+    assert!(get_agent(AgentKind::OpenCode).needs_pty());
 }
 
 #[test]
@@ -204,7 +204,7 @@ fn no_session_flags_when_session_id_absent() {
         env: None,
         env_forward: None,
     };
-    let cmd = OpenCodeAgent
+    let cmd = get_agent(AgentKind::OpenCode)
         .build_command("test prompt", &opts)
         .expect("command should build");
     let args: Vec<String> = cmd
@@ -233,7 +233,7 @@ fn build_command_read_only_prepends_readonly_prefix() {
         env: None,
         env_forward: None,
     };
-    let cmd = OpenCodeAgent
+    let cmd = get_agent(AgentKind::OpenCode)
         .build_command("analyze this code", &opts)
         .expect("command should build");
     let args: Vec<String> = cmd
@@ -263,7 +263,7 @@ fn build_command_read_only_without_result_file_keeps_strict_prefix() {
         env: None,
         env_forward: None,
     };
-    let cmd = OpenCodeAgent
+    let cmd = get_agent(AgentKind::OpenCode)
         .build_command("analyze this code", &opts)
         .expect("command should build");
     let args: Vec<String> = cmd
@@ -284,7 +284,7 @@ fn live_insufficient_balance_envelope_is_a_stream_refusal() {
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
     let line = r#"{"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here: https://x"}}}"#;
-    let _ = OpenCodeAgent.parse_event(&TaskId("t-oc".to_string()), line);
+    let _ = get_agent(AgentKind::OpenCode).parse_event(&TaskId("t-oc".to_string()), line);
     assert!(!rate_limit::is_rate_limited(&AgentKind::OpenCode, None));
     let refusal = rate_limit::refusal_on_channel(
         line,

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::agent::claude::ClaudeAgent;
 use crate::agent::commandcode::CommandCodeAgent;
 use crate::agent::cursor::CursorAgent;
-use crate::agent::opencode::OpenCodeAgent;
+use crate::types::AgentKind;
 use crate::agent::qwen::QwenAgent;
 use crate::agent::Agent;
 use crate::paths;
@@ -106,7 +106,7 @@ async fn exit0_opencode_error_envelope_records_failed() {
         output.contains("\"type\":\"error\""),
         "fixture must carry real opencode nested error"
     );
-    let status = watch_exit0(&OpenCodeAgent, &output, "t-stream-oc-err").await;
+    let status = watch_exit0(crate::agent::get_agent(AgentKind::OpenCode).as_ref(), &output, "t-stream-oc-err").await;
     assert_eq!(status, TaskStatus::Failed);
 }
 
@@ -117,7 +117,7 @@ async fn exit0_opencode_success_fixture_records_done() {
         !output.contains("\"type\":\"error\""),
         "success fixture must not include error events"
     );
-    let status = watch_exit0(&OpenCodeAgent, &output, "t-stream-oc-ok").await;
+    let status = watch_exit0(crate::agent::get_agent(AgentKind::OpenCode).as_ref(), &output, "t-stream-oc-ok").await;
     assert_eq!(status, TaskStatus::Done);
 }
 

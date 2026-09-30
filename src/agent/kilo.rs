@@ -20,6 +20,7 @@ pub(crate) fn spec() -> OpenCodeOverlaySpec {
         interactive_input: true,
         rate_limit_kind: AgentKind::Kilo,
         allow_external_directories: false,
+        probe_served_models: false,
     }
 }
 

@@ -22,6 +22,7 @@ pub(crate) struct OpenCodeOverlaySpec {
     pub interactive_input: bool,
     pub rate_limit_kind: AgentKind,
     pub allow_external_directories: bool,
+    pub probe_served_models: bool,
 }
 
 pub struct OpenCodeOverlayAgent {
@@ -40,6 +41,7 @@ impl OpenCodeOverlayAgent {
             interactive_input: true,
             rate_limit_kind: AgentKind::OpenCode,
             allow_external_directories: true,
+            probe_served_models: false,
         })
     }
 
@@ -76,7 +78,7 @@ impl Agent for OpenCodeOverlayAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        if opts.read_only && self.spec.reported_kind == AgentKind::Custom {
+        if opts.read_only && matches!(self.spec.reported_kind, AgentKind::OpenCode | AgentKind::Custom) {
             aid_warn!("[aid] ⚠OpenCode read-only is prompt-level only, not enforced. Use --worktree for isolation.");
         }
         let effective_prompt = if opts.read_only {
@@ -158,134 +160,17 @@ impl Agent for OpenCodeOverlayAgent {
     fn needs_pty(&self) -> bool {
         true
     }
+
+    fn served_models(&self) -> Result<Option<Vec<String>>> {
+        if self.spec.probe_served_models {
+            super::opencode_models::probe_served_models()
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{paths, rate_limit};
+#[path = "opencode_overlay_tests.rs"]
+mod tests;
 
-    fn base_opts() -> RunOpts {
-        RunOpts {
-            dir: None,
-            output: None,
-            result_file: None,
-            model: None,
-            budget: false,
-            read_only: false,
-            sandbox: false,
-            context_files: Vec::new(),
-            session_id: None,
-            env: None,
-            env_forward: None,
-        }
-    }
-
-    #[test]
-    fn overlay_kind_is_custom() {
-        let agent = OpenCodeOverlayAgent::new(
-            "mimo".into(),
-            "MiMo".into(),
-            "mimo/mimo-v2.5-pro".into(),
-        );
-        assert_eq!(agent.kind(), AgentKind::Custom);
-    }
-
-    #[test]
-    fn overlay_forces_model_when_unset() {
-        let agent = OpenCodeOverlayAgent::new(
-            "mimo".into(),
-            "MiMo".into(),
-            "mimo/mimo-v2.5-pro".into(),
-        );
-        let cmd = agent.build_command("hi", &base_opts()).unwrap();
-        let args: Vec<String> = cmd
-            .get_args()
-            .map(|a| a.to_string_lossy().into_owned())
-            .collect();
-        let i = args.iter().position(|a| a == "-m").expect("-m flag");
-        assert_eq!(args.get(i + 1).map(String::as_str), Some("mimo/mimo-v2.5-pro"));
-    }
-
-    #[test]
-    fn overlay_respects_caller_model_override() {
-        let agent = OpenCodeOverlayAgent::new(
-            "mimo".into(),
-            "MiMo".into(),
-            "mimo/mimo-v2.5-pro".into(),
-        );
-        let mut opts = base_opts();
-        opts.model = Some("mimo/mimo-v2.5".into());
-        let cmd = agent.build_command("hi", &opts).unwrap();
-        let args: Vec<String> = cmd
-            .get_args()
-            .map(|a| a.to_string_lossy().into_owned())
-            .collect();
-        let i = args.iter().position(|a| a == "-m").expect("-m flag");
-        assert_eq!(args.get(i + 1).map(String::as_str), Some("mimo/mimo-v2.5"));
-    }
-
-    #[test]
-    fn overlay_spec_uses_binary_args_kind_and_rate_limit_kind() {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = paths::AidHomeGuard::set(temp.path());
-        rate_limit::clear_rate_limit(&AgentKind::MiMoCode, None);
-        rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
-        let agent = OpenCodeOverlayAgent::from_spec(OpenCodeOverlaySpec {
-            id: "mimocode".into(),
-            display_name: "MiMo Code".into(),
-            reported_kind: AgentKind::MiMoCode,
-            binary: "mimo".into(),
-            extra_args: vec!["--dangerously-skip-permissions".into()],
-            default_model: Some("mimo/mimo-auto".into()),
-            interactive_input: true,
-            rate_limit_kind: AgentKind::MiMoCode,
-            allow_external_directories: false,
-        });
-        let cmd = agent.build_command("hi", &base_opts()).unwrap();
-        assert_eq!(agent.kind(), AgentKind::MiMoCode);
-        assert_eq!(cmd.get_program().to_string_lossy(), "mimo");
-        let args: Vec<String> = cmd
-            .get_args()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect();
-        assert!(args.contains(&"--dangerously-skip-permissions".to_string()));
-        assert!(args.windows(2).any(|pair| pair == ["-m", "mimo/mimo-auto"]));
-        let event = agent
-            .parse_event(
-                &TaskId("t-mimo".into()),
-                r#"{"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here"}}}"#,
-            )
-            .unwrap();
-        assert_eq!(event.event_kind, EventKind::Error);
-        assert!(rate_limit::is_rate_limited(&AgentKind::MiMoCode, None));
-        assert!(!rate_limit::is_rate_limited(&AgentKind::OpenCode, None));
-        rate_limit::clear_rate_limit(&AgentKind::MiMoCode, None);
-        rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
-    }
-
-    #[test]
-    fn custom_overlay_marks_its_own_id_not_opencode() {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = paths::AidHomeGuard::set(temp.path());
-        let agent = OpenCodeOverlayAgent::from_spec(OpenCodeOverlaySpec {
-            id: "auditor".into(),
-            display_name: "Auditor".into(),
-            reported_kind: AgentKind::Custom,
-            binary: "opencode".into(),
-            extra_args: Vec::new(),
-            default_model: Some("x".into()),
-            interactive_input: false,
-            rate_limit_kind: AgentKind::OpenCode,
-            allow_external_directories: true,
-        });
-        assert!(!agent.accepts_interactive_input());
-        let _ = agent.parse_event(
-            &TaskId("t-aud".into()),
-            r#"{"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here"}}}"#,
-        );
-        assert!(rate_limit::is_rate_limited(&AgentKind::Custom, Some("auditor")));
-        assert!(!rate_limit::is_rate_limited(&AgentKind::OpenCode, None));
-        assert!(!rate_limit::is_rate_limited(&AgentKind::Custom, Some("other")));
-    }
-}

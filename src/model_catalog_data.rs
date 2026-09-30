@@ -146,7 +146,8 @@ pub const AGENT_MODELS: &[AgentModel] = &[
     AgentModel { agent: AgentKind::Cursor, model: "composer-2.5", input_per_m: 0.50, output_per_m: 2.50, tier: "standard", description: "Composer 2.5 frontier coding", capability: 8.5 },
     AgentModel { agent: AgentKind::Cursor, model: "gpt-5.4-high", input_per_m: 0.0, output_per_m: 0.0, tier: "premium", description: "GPT-5.4 High, premium pool", capability: 9.0 },
     // droid 0.199.0 served catalog, captured 2026-08-19. Factory publishes no
-    // per-token rate (estimate_cost is None). 0.0/0.0 is "no figure", not free.
+    // per-token rate. 0.0/0.0 on a non-"free" row is "no figure", not free, so
+    // estimate_cost is None unless a pricing override prices it.
     // CLI-selectable billingPool:"core" rows are cheap so `--budget` survives
     // the weekly standard pool; everything else is standard (Factory's own
     // billingPool default is "standard").

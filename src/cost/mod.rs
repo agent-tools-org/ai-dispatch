@@ -18,12 +18,14 @@ pub(crate) struct ModelPricing {
     pub(crate) output_per_m: f64,
 }
 
+type PricingOverrides = HashMap<(AgentKind, String), ModelPricing>;
+
 #[cfg(not(test))]
-static PRICING_OVERRIDES: OnceLock<HashMap<(AgentKind, String), ModelPricing>> = OnceLock::new();
+static PRICING_OVERRIDES: OnceLock<PricingOverrides> = OnceLock::new();
 
 #[cfg(test)]
 thread_local! {
-    static TEST_PRICING_OVERRIDES: std::cell::RefCell<Option<Arc<HashMap<(AgentKind, String), ModelPricing>>>> = const { std::cell::RefCell::new(None) };
+    static TEST_PRICING_OVERRIDES: std::cell::RefCell<Option<PricingOverrides>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Most recent observed Gemini model from the task DB; unset means unknown cost.
@@ -191,58 +193,34 @@ fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing
     }
 }
 
-fn pricing_overrides() -> Arc<HashMap<(AgentKind, String), ModelPricing>> {
-    #[cfg(not(test))]
-    {
-        let cache = PRICING_OVERRIDES.get_or_init(|| {
-            model_catalog::load_pricing_overrides()
-                .unwrap_or_default()
-                .into_iter()
-                .filter_map(|model| {
-                    let agent = AgentKind::parse_str(&model.agent)?;
-                    Some((
-                        (agent, model.model.to_lowercase()),
-                        ModelPricing {
-                            input_per_m: model.input_per_m,
-                            output_per_m: model.output_per_m,
-                        },
-                    ))
-                })
-                .collect()
-        });
-        Arc::new(cache.clone())
-    }
-    #[cfg(test)]
-    {
-        TEST_PRICING_OVERRIDES.with(|cell| {
-            let mut borrowed = cell.borrow_mut();
-            if let Some(cached) = borrowed.as_ref() {
-                return cached.clone();
-            }
-            let loaded = model_catalog::load_pricing_overrides()
-                .unwrap_or_default()
-                .into_iter()
-                .filter_map(|model| {
-                    let agent = AgentKind::parse_str(&model.agent)?;
-                    Some((
-                        (agent, model.model.to_lowercase()),
-                        ModelPricing {
-                            input_per_m: model.input_per_m,
-                            output_per_m: model.output_per_m,
-                        },
-                    ))
-                })
-                .collect::<HashMap<_, _>>();
-            let arc = Arc::new(loaded);
-            *borrowed = Some(arc.clone());
-            arc
+fn load_pricing_overrides() -> PricingOverrides {
+    model_catalog::load_pricing_overrides()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|model| {
+            let agent = AgentKind::parse_str(&model.agent)?;
+            let pricing = ModelPricing {
+                input_per_m: model.input_per_m,
+                output_per_m: model.output_per_m,
+            };
+            Some(((agent, model.model.to_lowercase()), pricing))
         })
-    }
+        .collect()
 }
 
 /// Explicit pricing override for exactly this agent and model (case-insensitive).
 fn override_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
-    pricing_overrides().get(&(agent, model.to_lowercase())).copied()
+    let key = (agent, model.to_lowercase());
+    #[cfg(not(test))]
+    {
+        PRICING_OVERRIDES.get_or_init(load_pricing_overrides).get(&key).copied()
+    }
+    #[cfg(test)]
+    {
+        TEST_PRICING_OVERRIDES.with(|cell| {
+            cell.borrow_mut().get_or_insert_with(load_pricing_overrides).get(&key).copied()
+        })
+    }
 }
 
 #[cfg(test)]

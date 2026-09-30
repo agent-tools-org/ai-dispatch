@@ -75,6 +75,13 @@ mod tests {
     }
 
     #[test]
+    fn zero_figure_catalog_row_is_unpriced_so_ceiling_warns() {
+        assert_eq!(dispatch("droid", "claude-opus-5", Some(1.0)), vec![
+            "cost ceiling $1 cannot be enforced: no known price for droid/claude-opus-5".to_string(),
+        ]);
+    }
+
+    #[test]
     fn priced_route_is_silent() {
         assert!(dispatch("codex", "gpt-5.6-sol", Some(2.5)).is_empty());
     }

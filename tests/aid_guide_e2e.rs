@@ -228,7 +228,7 @@ fn official_guide_documents_discovered_model_unknowns() {
     assert!(!dispatch.contains("self-declared free"), "free-name pricing is gone");
     let index = include_str!("../default-skills/aid-guide/references/command-index.md");
     assert!(index.contains("`model`, `pinned`, and `source`"));
-    assert!(dispatch.contains("exact price-feed entry, never from a\nsimilar-name rate"));
+    assert!(dispatch.contains("exact price-feed entry on its vendor's CLI, never from a\nsimilar-name rate"));
     let configuration = include_str!("../default-skills/aid-guide/references/configuration.md");
     assert!(configuration.contains("`models.default_source`"));
     assert!(configuration.contains("`cli_config`"));

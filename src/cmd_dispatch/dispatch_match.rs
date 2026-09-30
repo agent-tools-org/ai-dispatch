@@ -16,84 +16,10 @@ pub(crate) async fn dispatch(
     store: Arc<crate::store::Store>,
     command: Commands,
 ) -> Result<DispatchOutcome> {
-    match command {
-        Commands::Errors(args) => crate::command_diagnostics::show(&args).map(|()| DispatchOutcome::CommandCompleted),
-        Commands::Run(args) => dispatch_run(store, args).await.map(DispatchOutcome::Run),
+    let completed = match command {
+        Commands::Errors(args) => crate::command_diagnostics::show(&args),
+        Commands::Run(args) => return dispatch_run(store, args).await.map(DispatchOutcome::Run),
         Commands::Classify(args) => std::process::exit(crate::cmd::classify::run(args)),
-        command @ (
-            Commands::Batch(..)
-            | Commands::Advise(..)
-            | Commands::Benchmark(..)
-            | Commands::Watch(..)
-            | Commands::Wait(..)
-            | Commands::Board(..)
-            | Commands::Notifications
-            | Commands::Changelog(..)
-            | Commands::Agent(..)
-            | Commands::Clean(..)
-            | Commands::Show(..)
-            | Commands::Export(..)
-            | Commands::Tree(..)
-            | Commands::Usage(..)
-            | Commands::Cost(..)
-            | Commands::Stats(..)
-        ) => dispatch_primary(store, command).await.map(|()| DispatchOutcome::CommandCompleted),
-        command @ (
-            Commands::Retry(..)
-            | Commands::Merge(..)
-            | Commands::Accept(..)
-            | Commands::Reject(..)
-            | Commands::Gc(..)
-            | Commands::Respond(..)
-            | Commands::Reply(..)
-            | Commands::Stop(..)
-            | Commands::Steer(..)
-            | Commands::Unstick(..)
-            | Commands::Ask(..)
-            | Commands::Query(..)
-            | Commands::Mcp
-            | Commands::Hook(..)
-            | Commands::Config(..)
-            | Commands::Group(..)
-            | Commands::Container(..)
-            | Commands::Build(..)
-            | Commands::Test(..)
-            | Commands::Worktree(..)
-            | Commands::Store(..)
-            | Commands::Team(..)
-            | Commands::Tool(..)
-            | Commands::Doctor(..)
-            | Commands::Byok(..)
-            | Commands::Credential(..)
-        ) => dispatch_secondary(store, command).await.map(|()| DispatchOutcome::CommandCompleted),
-        command @ (
-            Commands::Project(..)
-            | Commands::Memory(..)
-            | Commands::Kg(..)
-            | Commands::Upgrade(..)
-            | Commands::Init
-            | Commands::Setup
-            | Commands::InternalRunTask(..)
-            | Commands::Experiment(..)
-        ) => dispatch_tertiary(store, command).await.map(|()| DispatchOutcome::CommandCompleted),
-        #[cfg(feature = "web")]
-        Commands::Web(admin_args::WebArgs { port, host, token }) => admin_config::run_web(port, host, token)
-            .await
-            .map(|()| DispatchOutcome::CommandCompleted),
-    }
-}
-
-async fn dispatch_run(
-    store: Arc<crate::store::Store>,
-    args: run_args::RunArgs,
-) -> Result<RunDispatch> {
-    let (bg, dry_run) = (args.bg, args.dry_run);
-    let task_id = run_batch::run(store, args).await?;
-    Ok(RunDispatch::new(task_id, bg, dry_run))
-}
-
-async fn dispatch_primary(store: Arc<crate::store::Store>, command: Commands) -> Result<()> {
-    match command {
         Commands::Advise(args) => crate::cmd::advise::run(Some(store.as_ref()), args),
         Commands::Batch(run_args::BatchArgs { action, file, vars, group, repo_root, parallel, analyze, wait, dry_run, no_prompt, yes, force, max_concurrent, output }) => run_batch::batch(store, action, file, vars, parallel, analyze, wait, dry_run, no_prompt, yes, force, max_concurrent, output, group, repo_root).await,
         Commands::Benchmark(run_args::BenchmarkArgs { prompt, agents, dir, verify }) => display::benchmark(store, prompt, agents, dir, verify).await,
@@ -116,12 +42,6 @@ async fn dispatch_primary(store: Arc<crate::store::Store>, command: Commands) ->
         Commands::Usage(inspect_args::UsageArgs { session, agent, team, period, json }) => display::usage(store, session, agent, team, period, json),
         Commands::Cost(inspect_args::CostArgs { group, summary, agent, period }) => display::cost(store, group, summary, agent, period),
         Commands::Stats(inspect_args::StatsArgs { window, agent, insights }) => crate::cmd::stats::run(&store, window, agent, insights),
-        _ => unreachable!("dispatch_primary received unsupported command"),
-    }
-}
-
-async fn dispatch_secondary(store: Arc<crate::store::Store>, command: Commands) -> Result<()> {
-    match command {
         Commands::Retry(task_control_args::RetryArgs {
             task_id,
             feedback,
@@ -190,12 +110,6 @@ async fn dispatch_secondary(store: Arc<crate::store::Store>, command: Commands) 
         Commands::Doctor(admin_args::DoctorArgs { apply }) => display::doctor(store, apply),
         Commands::Byok(agent_provider_args::ByokArgs { action }) => admin_config::byok(action),
         Commands::Credential(agent_provider_args::CredentialArgs { action }) => admin_config::credential(action),
-        _ => unreachable!("dispatch_secondary received unsupported command"),
-    }
-}
-
-async fn dispatch_tertiary(store: Arc<crate::store::Store>, command: Commands) -> Result<()> {
-    match command {
         Commands::Project(project_args::ProjectArgs { action }) => project_worktree::project(action),
         Commands::Memory(knowledge_args::MemoryArgs { action }) => knowledge::memory(store, action),
         Commands::Kg(knowledge_args::KgArgs { action }) => knowledge::kg(store, action),
@@ -204,6 +118,17 @@ async fn dispatch_tertiary(store: Arc<crate::store::Store>, command: Commands) -
         Commands::Setup => admin_config::setup(),
         Commands::InternalRunTask(project_args::InternalRunTaskArgs { task_id }) => project_worktree::internal_run_task(store, task_id).await,
         Commands::Experiment(subcommand) => project_worktree::experiment(store, subcommand).await,
-        _ => unreachable!("dispatch_tertiary received unsupported command"),
-    }
+        #[cfg(feature = "web")]
+        Commands::Web(admin_args::WebArgs { port, host, token }) => admin_config::run_web(port, host, token).await,
+    };
+    completed.map(|()| DispatchOutcome::CommandCompleted)
+}
+
+async fn dispatch_run(
+    store: Arc<crate::store::Store>,
+    args: run_args::RunArgs,
+) -> Result<RunDispatch> {
+    let (bg, dry_run) = (args.bg, args.dry_run);
+    let task_id = run_batch::run(store, args).await?;
+    Ok(RunDispatch::new(task_id, bg, dry_run))
 }

@@ -23,6 +23,9 @@ mod config_display;
 #[cfg(test)]
 #[path = "config_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "config_pricing_tests.rs"]
+mod pricing_tests;
 
 use config_display::{agent_profile, compute_agent_history, compute_model_history, format_capabilities};
 use crate::model_catalog::AGENT_PROFILES;
@@ -197,28 +200,27 @@ fn print_pricing(update: bool) -> Result<()> {
         let updated = update_pricing_file()?;
         println!("Updated {updated} models in {}.", crate::paths::pricing_path().display());
     }
+    print!("{}", pricing_table()?);
+    Ok(())
+}
+
+/// Every listed model priced by `cost::resolve_pricing`; no known price prints "unknown".
+fn pricing_table() -> Result<String> {
     let pricing = merged_agent_models()?;
-    println!(
-        "{:<10} {:<25} {:>10} {:>10} {:>10} Description",
-        "Agent", "Model", "Tier", "Input/M", "Output/M"
-    );
-    println!("{}", "-".repeat(85));
-    for &agent in AgentKind::ALL_BUILTIN {
+    let usd = |value: Option<f64>| value.map_or_else(|| "unknown".to_string(), |v| format!("${v:.2}"));
+    let mut out = format!("{:<10} {:<25} {:>10} {:>10} {:>10} Description\n", "Agent", "Model", "Tier", "Input/M", "Output/M");
+    out.push_str(&format!("{}\n", "-".repeat(85)));
+    for agent in crate::agent::routable_builtins() {
         for am in pricing.iter().filter(|model| model.agent == agent) {
-            let input = am.input_per_m.map(|value| format!("${value:.2}")).unwrap_or_else(|| "unknown".to_string());
-            let output = am.output_per_m.map(|value| format!("${value:.2}")).unwrap_or_else(|| "unknown".to_string());
-            println!(
-                "{:<10} {:<25} {:>10} {:>10} {:>10} {}",
-                agent.as_str(),
-                am.model,
-                am.tier,
-                input,
-                output,
-                am.description
-            );
+            let price = crate::cost::resolve_pricing(Some(&am.model), agent);
+            out.push_str(&format!(
+                "{:<10} {:<25} {:>10} {:>10} {:>10} {}\n",
+                agent.as_str(), am.model, am.tier,
+                usd(price.map(|p| p.input_per_m)), usd(price.map(|p| p.output_per_m)), am.description
+            ));
         }
     }
-    Ok(())
+    Ok(out)
 }
 
 fn clear_limit(agent: &str) -> Result<()> {

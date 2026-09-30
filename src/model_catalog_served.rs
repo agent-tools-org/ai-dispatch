@@ -36,8 +36,6 @@ pub(crate) fn served_only_models(agent: AgentKind) -> Vec<ResolvedAgentModel> {
         .map(|model| ResolvedAgentModel {
             agent,
             model,
-            input_per_m: None,
-            output_per_m: None,
             tier: "unknown".to_string(),
             description: description.clone(),
             capability: None,

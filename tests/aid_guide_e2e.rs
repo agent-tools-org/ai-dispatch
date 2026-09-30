@@ -217,8 +217,9 @@ fn official_guide_documents_discovered_model_unknowns() {
     assert!(dispatch.contains("codex, grok, cursor,\nqwen, agy, and opencode"));
     assert!(dispatch.contains("read the cache only and never probe"));
     assert!(dispatch.contains("`rated: false`, `source: \"served\"`"));
-    assert!(dispatch.contains("`null` `input_per_m`"));
-    assert!(dispatch.contains("cost displays report `unknown`"));
+    assert!(dispatch.contains("`null` `capability`"));
+    assert!(dispatch.contains("is the price cost estimation resolves below"));
+    assert!(dispatch.contains("the JSON carries `null` and the text prints `unknown`"));
     assert!(dispatch.contains("`unrated_served_models`"));
     assert!(dispatch.contains("`pinned: false` and `source: \"cli_config\"`"));
     assert!(dispatch.contains("`agent default (unknown)`"));

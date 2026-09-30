@@ -45,8 +45,20 @@ mod tests {
     /// Prepares a real dispatch (task row, route resolution) and returns the
     /// cost-ceiling events it recorded.
     fn dispatch(agent: &str, model: &str, max_task_cost: Option<f64>) -> Vec<String> {
+        dispatch_with_override(agent, model, max_task_cost, None)
+    }
+
+    /// `price` writes an operator pricing override for exactly this route first.
+    fn dispatch_with_override(agent: &str, model: &str, max_task_cost: Option<f64>, price: Option<f64>) -> Vec<String> {
         let home = tempfile::tempdir().expect("temporary aid home");
         let _guard = crate::paths::AidHomeGuard::set(home.path());
+        if let Some(price) = price {
+            crate::paths::ensure_dirs().expect("aid dirs");
+            let row = serde_json::json!({"agent": agent, "model": model, "input_per_m": price,
+                "output_per_m": price, "tier": "premium", "description": "operator price", "updated": "2026-09-30"});
+            std::fs::write(crate::paths::pricing_path(), serde_json::json!({"models": [row]}).to_string())
+                .expect("pricing override");
+        }
         crate::cost::clear_feed_for_tests();
         let dir = tempfile::tempdir().expect("non-project dir");
         let store = Arc::new(Store::open_memory().expect("store"));
@@ -84,6 +96,14 @@ mod tests {
     #[test]
     fn priced_route_is_silent() {
         assert!(dispatch("codex", "gpt-5.6-sol", Some(2.5)).is_empty());
+    }
+
+    #[test]
+    fn pricing_override_makes_the_ceiling_enforceable() {
+        for (agent, model) in [("codex", "gpt-5.6-sol"), ("cursor", "composer-2.5"), ("codex", "gpt-9-uncatalogued")] {
+            assert!(dispatch_with_override(agent, model, Some(1.0), Some(3.0)).is_empty(), "{agent}/{model}");
+        }
+        assert_eq!(dispatch("codex", "gpt-9-uncatalogued", Some(1.0)).len(), 1, "unpriced without the override");
     }
 
     #[test]

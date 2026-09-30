@@ -51,16 +51,18 @@ fn loads_and_merges_pricing_overrides() {
         .iter()
         .find(|model| model.agent == crate::types::AgentKind::Codex && model.model == "gpt-4.1")
         .unwrap();
-    assert_eq!(existing.input_per_m, Some(9.0));
-    assert_eq!(existing.output_per_m, Some(19.0));
     assert_eq!(existing.tier, "custom");
+    crate::cost::clear_feed_for_tests();
+    let price = crate::cost::resolve_pricing(Some("gpt-4.1"), AgentKind::Codex).unwrap();
+    assert_eq!((price.input_per_m, price.output_per_m), (9.0, 19.0));
 
     let added = merged
         .iter()
         .find(|model| model.agent == crate::types::AgentKind::Codex && model.model == "new-model")
         .unwrap();
-    assert_eq!(added.input_per_m, Some(1.5));
-    assert_eq!(added.output_per_m, Some(2.5));
+    assert_eq!(added.tier, "cheap");
+    let price = crate::cost::resolve_pricing(Some("new-model"), AgentKind::Codex).unwrap();
+    assert_eq!((price.input_per_m, price.output_per_m), (1.5, 2.5));
 }
 
 #[test]

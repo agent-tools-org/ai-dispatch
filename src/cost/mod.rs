@@ -177,7 +177,7 @@ pub(crate) fn clear_feed_for_tests() {
 
 /// Prices the reported model; with none reported, only a model aid observed
 /// run (Gemini's last recorded default, Qwen's selected model). Else unknown.
-fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing> {
+pub(crate) fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing> {
     let known = match (model, agent) {
         (Some(model), _) => Some(model.to_string()),
         (None, AgentKind::Gemini) => GEMINI_DEFAULT_MODEL_CACHE

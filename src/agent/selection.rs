@@ -16,7 +16,6 @@ pub(crate) use explicit_model::declared_budget_warning;
 pub(crate) use selection_advice::{AdviceCandidate, AdviceReport, advise, caller_advice};
 pub(crate) use selection_quota::{observed_ok, quota_from, tightest_window};
 use super::classifier::{self, TaskCategory};
-use super::detect_agents;
 use crate::types::AgentKind;
 
 pub(crate) const AGENT_CAPABILITIES: &[(AgentKind, &[(TaskCategory, i32)])] =

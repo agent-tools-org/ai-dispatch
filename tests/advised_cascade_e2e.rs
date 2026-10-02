@@ -32,6 +32,7 @@ fn quota_continuation_launches_first_advised_peer_with_exact_model_profile_and_p
 fn prelaunch_held_substitution_pins_known_cli_default_and_protects_unknown_under_budget_pressure() {
     for model in [Some("gpt-6-sol"), None] {
         let h = Harness::new(model, false);
+        std::fs::write(h.home.path().join("agent_config.toml"), format!("{}\n[claude]\ndisabled = true\n", std::fs::read_to_string(h.home.path().join("agent_config.toml")).expect("agents"))).expect("fixed peer inventory");
         h.hold("oz");
         std::fs::write(h.home.path().join("config.toml"),
             "[[usage.budget]]\nname = 'synthetic'\nagent = 'codex'\ncost_limit_usd = 10.0\nexternal_cost_usd = 9.0\n").expect("near budget limit");

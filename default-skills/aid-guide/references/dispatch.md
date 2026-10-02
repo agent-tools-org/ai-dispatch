@@ -184,6 +184,16 @@ Important controls:
 
 For remote Cargo work, use `aid run codex "Implement the change" --remote-build --worktree feat/change --dir . --bg`. Rbox sync includes untracked files and uses the same sanitized repo/branch checkout and remote target as `scripts/remote-test.sh`; the local `CARGO_TARGET_DIR` is never forwarded. Cargo runs from the caller's same relative subdirectory within the synced checkout. Shim defaults are `AID_BUILD_JOBS` or 4 jobs, 3600 seconds timeout and 900 seconds lock timeout. A stderr heartbeat every 60 seconds keeps silent builds visible to the idle watcher. Exit 75 means the box lock was not acquired; exit 124 means the job is still running on the box; exit 69 means the box refused admission due to disk space constraints.
 
+For a task with a saved remote box, the verification wrapper uses the remaining
+resolved task duration: saved `TimeoutPolicy.max_duration` bounded by `hard_cap`,
+minus wall time since `started_at` (or `created_at` if not started). Future
+timestamps are clamped to the first verification attempt's current time. Each
+attempt, including a disk-admission re-pick, consumes the same deadline. An
+exhausted deadline records `timed_out` without launching a verification command
+or remote job. This wrapper deadline is separate from rbox's own wait timeout;
+a wrapper timeout does not establish the remote job's test result. Legacy tasks
+without a saved remote box and local verification retain the 120-second cap.
+
 Run `aid run --help` for iteration, evaluation, judging, peer review, best-of,
 model, budget, context, scope, checklist, skill, template, hook, container, and cascade options.
 

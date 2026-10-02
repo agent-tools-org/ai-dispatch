@@ -47,7 +47,7 @@ Those tests cover the existing bundle, adapter, warning and one-attempt behavior
 The loss path was subsequently reproduced on unchanged production source with
 only the new regression fixtures added: 1 passed, 2 failed, exit 101, remote job
 `8141f79d62ca4d09b0ed6f06f2df3385`. The fix in `e26d90bd` passed the full
-remote default suite: 3,041 passed, 0 failed, 14 existing ignored tests across
-34 binaries, job `7ba127558b9a4f5cb16ef539d4b2a5b7`, exit 0. See
+remote default suite: 3,040 passed, 0 failed, 14 existing ignored tests across
+33 top-level binaries, job `7ba127558b9a4f5cb16ef539d4b2a5b7`, exit 0. See
 [investigation-backup-result-2026-10-02.md](investigation-backup-result-2026-10-02.md).
 The remaining three gaps above still have source-only evidence.

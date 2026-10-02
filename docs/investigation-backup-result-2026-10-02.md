@@ -71,7 +71,7 @@ Remote job `8141f79d62ca4d09b0ed6f06f2df3385` exited 101: **1 passed,
 missing task artifact. The optional-report/no-backup control passed.
 
 On the fix commit, `scripts/remote-test.sh -- --locked` completed as remote job
-`7ba127558b9a4f5cb16ef539d4b2a5b7`, exit 0: **34 test binaries, 3,041 passed,
+`7ba127558b9a4f5cb16ef539d4b2a5b7`, exit 0: **33 top-level test binaries, 3,040 passed,
 0 failed, 14 existing ignored tests**. This includes all three new regressions.
 Guide validation with `quick_validate.py default-skills/aid-guide` passed.
 

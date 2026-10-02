@@ -69,7 +69,7 @@ const INVARIANTS: &[(&str /* reference file */, &str /* phrase */)] = &[
     ("dispatch.md", "is never turned into a report task by prompt wording"),
     ("task-operations.md", "Repeated activity is not itself a stop condition"),
     ("task-operations.md", "activity-aware rather than a hard wall-clock cap"),
-    ("task-operations.md", "`steer` is refused for the one-shot print-mode `agy` and `grok` CLIs"),
+    ("task-operations.md", "`steer` is refused for the one-shot print-mode `agy`, `grok` and `claude`"),
     ("task-operations.md", "`respond` is refused for those same one-shot CLIs"),
     ("task-operations.md", "no response signal was written"),
     ("task-operations.md", "`aid show --output` only renders content proven to belong to that task"),

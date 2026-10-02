@@ -10,6 +10,9 @@ use crate::types::{
     AgentKind, EventKind, Task, TaskEvent, TaskStatus, VerifyStatus,
 };
 
+#[path = "background_orphan_input_tests.rs"]
+mod input;
+
 fn make_task(task_id: &str) -> Task {
     Task {
         id: TaskId(task_id.to_string()),

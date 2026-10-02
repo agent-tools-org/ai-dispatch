@@ -1,5 +1,5 @@
 // Test-only subprocess semaphore for limiting parallel child-process spawns.
-// Exports: acquire() permit guard for subprocess-heavy tests.
+// Exports: acquire() permit guard for subprocess-heavy tests, and is_live for pid checks.
 // Deps: std::sync::{Condvar, Mutex, OnceLock}
 
 use std::sync::{Condvar, Mutex, OnceLock};
@@ -38,4 +38,15 @@ impl Drop for SubprocessPermit {
         *count -= 1;
         semaphore.condvar.notify_one();
     }
+}
+
+/// Signal 0 succeeds on a zombie that an init without reaping keeps around.
+#[cfg(unix)]
+pub fn is_live(pid: i32) -> bool {
+    if unsafe { libc::kill(pid, 0) } != 0 {
+        return false;
+    }
+    let stat = std::process::Command::new("ps").args(["-o", "stat=", "-p", &pid.to_string()]).output();
+    stat.map(|out| !String::from_utf8_lossy(&out.stdout).trim_start().starts_with('Z'))
+        .unwrap_or(true)
 }

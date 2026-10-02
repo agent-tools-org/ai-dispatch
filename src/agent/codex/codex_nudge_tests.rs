@@ -2,7 +2,7 @@
 // Exports: none. Deps: CodexAgent, GeminiAgent, and the Agent trait.
 
 use super::CodexAgent;
-use crate::agent::{antigravity::AntigravityAgent, gemini::GeminiAgent, grok::GrokAgent, Agent};
+use crate::agent::{antigravity::AntigravityAgent, claude::ClaudeAgent, gemini::GeminiAgent, grok::GrokAgent, Agent};
 use crate::types::AgentKind;
 
 #[test]
@@ -17,7 +17,7 @@ fn default_agent_accepts_idle_nudges() {
 
 #[test]
 fn noninteractive_agents_never_accept_idle_nudges() {
-    for agent in [&AntigravityAgent as &dyn Agent, &GrokAgent] {
+    for agent in [&AntigravityAgent as &dyn Agent, &GrokAgent, &ClaudeAgent] {
         assert!(!agent.accepts_interactive_input());
         assert!(!agent.accepts_idle_nudge());
     }

@@ -21,8 +21,9 @@ impl super::Agent for ClaudeAgent {
         true
     }
 
+    /// `claude -p` never reads its tty: PTY input would be swallowed, then block.
     fn accepts_interactive_input(&self) -> bool {
-        true
+        false
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {

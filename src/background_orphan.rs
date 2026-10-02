@@ -102,6 +102,11 @@ fn is_idle_bookkeeping_event(event: &TaskEvent) -> bool {
         || metadata.get("auto_escalated").and_then(|value| value.as_bool()) == Some(true)
         || metadata.get("acked_reply").and_then(|value| value.as_bool()) == Some(true)
         || metadata.get("source").and_then(|value| value.as_str()) == Some("unstick-auto")
+        // Aid writing operator input (Steered:, Replied:, "… not delivered") is not
+        // agent progress: steering a silent agent must not postpone the backstop.
+        || metadata.get("steered").and_then(|value| value.as_bool()) == Some(true)
+        || metadata.get("input_delivery").is_some()
+        || metadata.get("message_id").is_some()
 }
 
 /// Buffered agents (grok/agy) emit no progress events until exit; watch_buffered

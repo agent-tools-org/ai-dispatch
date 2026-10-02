@@ -154,7 +154,7 @@ fn remote_cargo_preserves_workspace_member_cwd() {
 fn plain_cargo_verify_uses_task_shim() {
     if std::env::var_os("AID_VERIFY_SHIM_CHILD").is_some() {
         let store = Store::open_memory().expect("store");
-        store.db().execute("INSERT INTO tasks (id, agent, prompt, status, created_at) VALUES ('t-verify-shim', 'codex', 'task', 'pending', '2026-09-12T00:00:00Z')", []).expect("task");
+        store.db().execute("INSERT INTO tasks (id, agent, prompt, status, created_at) VALUES ('t-verify-shim', 'codex', 'task', 'pending', ?1)", [chrono::Local::now().to_rfc3339()]).expect("task");
         let args = RunArgs { remote_build: Some("chosen-box".into()), ..Default::default() };
         store.update_task_dispatch_args("t-verify-shim", &args.dispatch_args_json().expect("args")).expect("persist");
         let result = verify(&store, "t-verify-shim", Path::new("."), Some("cargo test --lib"), Some("/local-target"), None).expect("verify");

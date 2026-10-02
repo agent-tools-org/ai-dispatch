@@ -32,9 +32,9 @@ fn selection_uses_explicit_name_or_one_pick_and_retains_stderr() {
     assert!(resolve_with("auto", Path::new(""), &mut Command::new(&rbox)).is_err());
 }
 
-fn stored_task() -> (Store, TaskId, RunArgs) {
+pub(super) fn stored_task() -> (Store, TaskId, RunArgs) {
     let store = Store::open_memory().expect("store");
-    store.db().execute("INSERT INTO tasks (id, agent, prompt, status, created_at) VALUES ('t-remote', 'codex', 'task', 'pending', '2026-09-12T00:00:00Z')", []).expect("task");
+    store.db().execute("INSERT INTO tasks (id, agent, prompt, status, created_at) VALUES ('t-remote', 'codex', 'task', 'pending', ?1)", [chrono::Local::now().to_rfc3339()]).expect("task");
     let args = RunArgs { remote_build: Some("chosen-box".into()), ..Default::default() };
     store.update_task_dispatch_args("t-remote", &args.dispatch_args_json().expect("serialize")).expect("persist");
     (store, TaskId("t-remote".into()), args)
@@ -172,7 +172,7 @@ fn pick_passes_repo_and_exclude_to_rbox() {
     assert_eq!(std::fs::read_to_string(&argv).expect("argv"), "pick\n--role\nrust-build\n--repo\n/repos/main\n");
 }
 
-fn refusing_verify(dir: &Path, refusing: &str) {
+pub(super) fn refusing_verify(dir: &Path, refusing: &str) {
     executable(&dir.join("verify"), &format!("#!/bin/bash\ncase \"$AID_BUILD_BOX\" in {refusing}) echo \"rbox: $AID_BUILD_BOX 9.9 GiB free; requires 10 GiB\" >&2; exit 69 ;; esac\necho \"ran on $AID_BUILD_BOX\"\n"));
 }
 

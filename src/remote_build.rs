@@ -129,7 +129,8 @@ fn verify_with(
     let Some(name) = saved_box(store, task_id)? else {
         return crate::verify_cargo::run_verify_with_store(store, path, command, target, container);
     };
-    let result = verify_on(task_id, &name, path, command, target, container)?;
+    let deadline = verify_deadline(store, task_id, chrono::Local::now())?;
+    let result = verify_on(task_id, &name, path, command, target, container, deadline)?;
     if result.exit_code != Some(ADMISSION_REFUSED) { return Ok(result); }
     let refusal = refusal_line(&result.output);
     let replacement = pick(rbox, path, Some(&name)).map_err(|error| anyhow::anyhow!(
@@ -142,7 +143,7 @@ fn verify_with(
         metadata: Some(serde_json::json!({"remote_build": replacement, "refused_box": name})),
     })?;
     persist_box(store, task_id, &replacement)?;
-    let result = verify_on(task_id, &replacement, path, command, target, container)?;
+    let result = verify_on(task_id, &replacement, path, command, target, container, deadline)?;
     if result.exit_code == Some(ADMISSION_REFUSED) {
         bail!(
             "Remote build box {replacement} refused admission after re-pick from {name} ({})",
@@ -154,16 +155,49 @@ fn verify_with(
 
 fn verify_on(
     task_id: &str, name: &str, path: &Path, command: Option<&str>,
-    target: Option<&str>, container: Option<&str>,
+    target: Option<&str>, container: Option<&str>, deadline: chrono::DateTime<chrono::Local>,
 ) -> Result<crate::verify::VerifyResult> {
+    let timeout = remaining_verify_time(deadline, chrono::Local::now());
+    if timeout.is_zero() {
+        return Ok(crate::verify::VerifyResult {
+            success: false, timed_out: true,
+            output: "Task deadline exhausted before remote verification; no command launched".into(),
+            command: command.unwrap_or("auto").to_string(),
+            infrastructure_failure: false, exit_code: None,
+        });
+    }
     let mut environment = Command::new("cargo");
     configure(&mut environment, &crate::paths::task_dir(task_id).join("home"), name)?;
     let env = environment.get_envs().filter_map(|(key, value)| {
         value.map(|value| (key.to_string_lossy().into_owned(), value.to_string_lossy().into_owned()))
     }).collect::<Vec<_>>();
     crate::verify::run_verify_with_env(
-        path, command, target, container, crate::verify::VERIFY_TIMEOUT, &env,
+        path, command, target, container, timeout, &env,
     )
+}
+
+fn verify_deadline(
+    store: &Store, task_id: &str, now: chrono::DateTime<chrono::Local>,
+) -> Result<chrono::DateTime<chrono::Local>> {
+    let args = RunArgs::saved_for_task(store, task_id)?
+        .with_context(|| format!("Task {task_id} has no saved dispatch args for verification"))?;
+    let (started_at, created_at): (Option<String>, String) = store.db().query_row(
+        "SELECT started_at, created_at FROM tasks WHERE id = ?1", [task_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    let start = chrono::DateTime::parse_from_rfc3339(started_at.as_deref().unwrap_or(&created_at))
+        .context("Invalid task start timestamp for remote verification")?
+        .with_timezone(&chrono::Local).min(now);
+    let policy = args.timeout_policy;
+    let allowance = chrono::Duration::from_std(policy.max_duration.min(policy.hard_cap))
+        .context("Remote verification allowance is out of range")?;
+    start.checked_add_signed(allowance).context("Remote verification deadline is out of range")
+}
+
+fn remaining_verify_time(
+    deadline: chrono::DateTime<chrono::Local>, now: chrono::DateTime<chrono::Local>,
+) -> std::time::Duration {
+    deadline.signed_duration_since(now).to_std().unwrap_or_default()
 }
 
 fn refusal_line(output: &str) -> String {
@@ -186,3 +220,6 @@ mod tests;
 #[cfg(test)]
 #[path = "remote_build/shim_tests.rs"]
 mod shim_tests;
+#[cfg(test)]
+#[path = "remote_build/deadline_tests.rs"]
+mod deadline_tests;

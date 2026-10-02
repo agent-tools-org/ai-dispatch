@@ -188,7 +188,9 @@ For a task with a saved remote box, the verification wrapper uses the remaining
 resolved task duration: saved `TimeoutPolicy.max_duration` bounded by `hard_cap`,
 minus wall time since `started_at` (or `created_at` if not started). Future
 timestamps are clamped to the first verification attempt's current time. Each
-attempt, including a disk-admission re-pick, consumes the same deadline. An
+attempt, including command preparation, the verifier lock and a disk-admission
+re-pick, consumes the same deadline. The wrapper rechecks it before launch and
+uses only the remaining allowance when waiting for the command. An
 exhausted deadline records `timed_out` without launching a verification command
 or remote job. This wrapper deadline is separate from rbox's own wait timeout;
 a wrapper timeout does not establish the remote job's test result. Legacy tasks

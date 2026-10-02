@@ -6,7 +6,7 @@ use super::{shim_tests::executable, tests::{refusing_verify, stored_task}};
 use chrono::{DateTime, Local};
 use std::time::Duration;
 
-fn save_policy(store: &Store, id: &TaskId, max_duration: Duration, hard_cap: Duration) {
+pub(super) fn save_policy(store: &Store, id: &TaskId, max_duration: Duration, hard_cap: Duration) {
     let mut args = RunArgs::saved_for_task(store, id.as_str()).expect("saved").expect("args");
     args.timeout_policy.max_duration = max_duration;
     args.timeout_policy.hard_cap = hard_cap;
@@ -16,7 +16,7 @@ fn save_policy(store: &Store, id: &TaskId, max_duration: Duration, hard_cap: Dur
         .expect("save policy");
 }
 
-fn timestamps(store: &Store, id: &TaskId, created: DateTime<Local>, started: Option<DateTime<Local>>) {
+pub(super) fn timestamps(store: &Store, id: &TaskId, created: DateTime<Local>, started: Option<DateTime<Local>>) {
     store.db().execute("UPDATE tasks SET created_at = ?1, started_at = ?2 WHERE id = ?3",
         rusqlite::params![created.to_rfc3339(), started.map(|time| time.to_rfc3339()), id.as_str()])
         .expect("timestamps");
@@ -42,7 +42,7 @@ fn configured_remote_allowance_above_120_seconds_reaches_verify_runner() {
     save_policy(&store, &id, Duration::from_secs(900), Duration::from_secs(1800));
     timestamps(&store, &id, now, Some(now));
     let deadline = verify_deadline(&store, id.as_str(), now).expect("deadline");
-    // Deterministic evidence for the very timeout passed by verify_on to the runner.
+    // The runner receives this deadline, preserving the allowance through preparation.
     assert_eq!(remaining_verify_time(deadline, now), Duration::from_secs(900));
     assert!(remaining_verify_time(deadline, now) > crate::verify::VERIFY_TIMEOUT);
     executable(&temp.path().join("verify"), "#!/bin/bash\nprintf '%s' \"$AID_BUILD_BOX\"\n");

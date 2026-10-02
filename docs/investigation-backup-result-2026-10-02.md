@@ -4,8 +4,7 @@ KB consulted: `backup artifact gdrive lifecycle`; no direct backup-specific less
 
 Source base: `291aa2521028adce4b10860e923d57568ff1d4ed`.
 Scope: the declared report loss path tracked by wi-562b in issue #118.
-The implementation and reproducer are recorded in the same commit as this file;
-its SHA can be obtained with `git log -1 --format=%H -- docs/investigation-backup-result-2026-10-02.md`.
+Implementation and reproducer: `e26d90bd237e97d40a4e82c3a2daf8c414c447fe`.
 
 ## Verified source path
 
@@ -58,43 +57,31 @@ The three tests assert:
 The Markdown archive records verification through its existing event timeline;
 its header has a task status field but no separate verify-status field.
 
-## Commands and results
+## Executed verification
 
-Remote commands to execute with `AID_BUILD_BOX=<configured-box>`:
+The unchanged production source at `291aa252`, with only the regression fixtures
+added, reproduced the loss using:
 
 ```sh
-rbox status --json
-rbox ensure "$AID_BUILD_BOX"
-aid build check -p ai-dispatch
-aid test -p ai-dispatch --bin aid read_only_stop_
-aid test -p ai-dispatch --bin aid run_lifecycle_verify_gate_tests
-aid test -p ai-dispatch --bin aid backup::lifecycle_tests
-aid test -p ai-dispatch --test read_only_enforcement_e2e
-aid test -p ai-dispatch --test aid_guide_e2e
-scripts/remote-test.sh -- --bin aid
+AID_BUILD_BOX=<configured-box> scripts/remote-test.sh -- --locked --bin aid read_only_stop_
 ```
 
-Fleet discovery and ensure returned `tailscale status returned no JSON
-(Expecting value at byte 0)`. No remote Rust check, compilation, or test ran.
-Regression failure on the unchanged base and success with the fix have not been
-demonstrated at runtime. The configured full-suite verification remains required.
+Remote job `8141f79d62ca4d09b0ed6f06f2df3385` exited 101: **1 passed,
+2 failed, 0 ignored**. Both report-preservation cases failed while reading the
+missing task artifact. The optional-report/no-backup control passed.
 
-Completed checks:
+On the fix commit, `scripts/remote-test.sh -- --locked` completed as remote job
+`7ba127558b9a4f5cb16ef539d4b2a5b7`, exit 0: **34 test binaries, 3,041 passed,
+0 failed, 14 existing ignored tests**. This includes all three new regressions.
+Guide validation with `quick_validate.py default-skills/aid-guide` passed.
 
-- Extracted shell fixtures: fake agent writes exact report and violating edit;
-  missing-report variant writes only the edit. Fake gws captures identical tar
-  bytes, responds to folder operations, and fails only upload when requested.
-- Fake-rbox routing for `aid build check -p ai-dispatch` and
-  `aid test -p ai-dispatch --bin aid read_only_stop_`: both reached `rbox exec`
-  with untracked-file sync enabled. The stub stopped before transport with exit
-  64; both aid commands failed, and no Rust test executed. Output included
-  `FAKE_RBOX: stopped before transport; no Rust tests ran`.
-- `scripts/remote-test.sh --dry-run -- --bin aid`: one rbox command, no execution.
-- Rustfmt parsed the changed Rust files; the new test file passes its targeted
-  formatting check with `skip_children=true,max_width=120`. No workspace formatting.
-- `git diff --check`: passed. New test file is 291 lines; its functions are under
-  50 lines. The existing oversized lifecycle file has only five added lines.
-- Guide quick validation could not run because the available Python lacks `yaml`.
+The outer AID verifier recorded a timeout after its fixed 120-second allowance,
+while the remote job continued to completion. The completed rbox log establishes
+the test result; the wrapper timeout remains a distinct result, not a test
+failure or a pass. That deadline mismatch is tracked separately as `wi-8b23`.
 
-Shell smoke checks and Rust parsing do not establish Rust type correctness or
-lifecycle execution. Tests use synthetic local executables and archives only.
+Tests use synthetic executables and captured archives. No live Google Drive
+compatibility is established. The other configuration and prelaunch gaps in
+[investigation-backup118-2026-10-02.md](investigation-backup118-2026-10-02.md)
+remain outside this fix. Independent review and combined-candidate verification
+are recorded separately.

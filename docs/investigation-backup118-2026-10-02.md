@@ -41,3 +41,13 @@ Acceptance: cover `target = 42`, an unknown key and unsupported include/on value
 On the baseline SHA, `AID_BUILD_BOX=<configured-box> scripts/remote-test.sh -- --locked --bin aid backup::` completed with exit 0: **22 passed, 0 failed, 0 ignored**, with 2,859 tests filtered out. Remote job: `0de4373ecf774d0abda3460645319887`.
 
 Those tests cover the existing bundle, adapter, warning and one-attempt behavior using fake gws. They do not reproduce the four gaps above. The source review ran no tests of its own; the remote run is separate executed evidence. No real Drive upload, authenticated gws probe or issue closure was performed. Required remaining evidence includes the new failure-path regressions and a controlled CLI round trip through completion, archive inspection, persisted URL and `aid show`.
+
+## Result-preservation regression evidence
+
+The loss path was subsequently reproduced on unchanged production source with
+only the new regression fixtures added: 1 passed, 2 failed, exit 101, remote job
+`8141f79d62ca4d09b0ed6f06f2df3385`. The fix in `e26d90bd` passed the full
+remote default suite: 3,041 passed, 0 failed, 14 existing ignored tests across
+34 binaries, job `7ba127558b9a4f5cb16ef539d4b2a5b7`, exit 0. See
+[investigation-backup-result-2026-10-02.md](investigation-backup-result-2026-10-02.md).
+The remaining three gaps above still have source-only evidence.

@@ -122,6 +122,11 @@ async fn run_lifecycle_phases(
                 args,
                 "dirty worktree settlement failed before verify".to_string(),
             );
+            if args.read_only
+                && let Some(task) = store.get_task(task_id.as_str())?
+            {
+                persist_result_file(store, task_id, args, &task, effective_dir);
+            }
             return Ok(None);
         }
     }

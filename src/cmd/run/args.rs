@@ -86,9 +86,9 @@ pub struct RunArgs {
     pub no_audit: bool,
     pub suppress_nested_repo_warning: bool,
     pub link_deps: bool,
-    /// Set on a self-heal retry after a "model unavailable" failure: bypasses
-    /// model selection (smart-route/budget/configured default) so the agent runs
-    /// on its own current default model.
+    /// Bypasses model selection for self-heal retries and best-of candidates
+    /// whose CLI default is unknown, so smart-route/budget/configured defaults
+    /// cannot replace the selected default route.
     pub force_default_model: bool,
 }
 

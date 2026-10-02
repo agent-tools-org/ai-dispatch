@@ -17,10 +17,10 @@ pub(super) fn model_selection_info(
         .then_some(run_model.model.as_deref()).flatten();
     let source = match effective_model {
         None if args.force_default_model => match (custom, adapter_default.is_some()) {
-            (true, false) => "self-heal retry: custom/delegate default (unknown)",
-            (true, true) => "self-heal retry: custom/delegate default",
-            (false, true) => "self-heal retry: adapter default",
-            (false, false) => "self-heal retry: CLI default",
+            (true, false) => "forced default: custom/delegate default (unknown)",
+            (true, true) => "forced default: custom/delegate default",
+            (false, true) => "forced default: adapter default",
+            (false, false) => "forced default: CLI default",
         },
         None if custom && adapter_default.is_none() => "custom/delegate default (unknown)",
         None if custom => "custom/delegate default (no caller -m)",
@@ -28,7 +28,9 @@ pub(super) fn model_selection_info(
         None if cli_config.is_some() => RunModelSource::CliConfig.label(),
         None => "CLI default (no -m)",
         Some(model) if run_model.pinned && run_model.model.as_deref() == Some(model) => {
-            run_model.source.label()
+            if run_model.source == RunModelSource::Explicit
+                && args.model_source == crate::agent::model_validation::ModelSource::AidResolved
+            { "aid-selected model" } else { run_model.source.label() }
         }
         Some(_) => "quota/budget routing",
     };
@@ -61,7 +63,19 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(model_selection_info(&args, &unpinned(), None, &crate::agent::codex::CodexAgent),
-            "[aid] codex model: CLI default; source: self-heal retry: CLI default");
+            "[aid] codex model: CLI default; source: forced default: CLI default");
+    }
+
+    #[test]
+    fn materialized_advice_model_is_not_attributed_to_the_user() {
+        let args = RunArgs {
+            agent_name: "codex".into(), model: Some("gpt-6-sol".into()),
+            model_source: crate::agent::model_validation::ModelSource::AidResolved,
+            ..Default::default()
+        };
+        let model = RunModel { model: args.model.clone(), pinned: true, source: RunModelSource::Explicit };
+        assert_eq!(model_selection_info(&args, &model, args.model.as_deref(), &crate::agent::codex::CodexAgent),
+            "[aid] codex model: gpt-6-sol; source: aid-selected model");
     }
 
     #[test]
@@ -99,7 +113,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(model_selection_info(&args, &unpinned(), None, &crate::agent::cursor::CursorAgent),
-            "[aid] cursor model: composer-2.5; source: self-heal retry: adapter default");
+            "[aid] cursor model: composer-2.5; source: forced default: adapter default");
     }
 
     #[test]
@@ -111,7 +125,7 @@ mod tests {
             agent_name: "byok".to_string(), force_default_model: true, ..Default::default()
         };
         assert_eq!(model_selection_info(&args, &unpinned(), None, &agent),
-            "[aid] byok model: provider/custom-model; source: self-heal retry: custom/delegate default");
+            "[aid] byok model: provider/custom-model; source: forced default: custom/delegate default");
     }
 
     #[test]
@@ -125,7 +139,7 @@ mod tests {
             agent_name: "byok".to_string(), force_default_model: true, ..Default::default()
         };
         assert_eq!(model_selection_info(&args, &unpinned(), None, &agent),
-            "[aid] byok model: unknown (custom/delegate default); source: self-heal retry: custom/delegate default (unknown)");
+            "[aid] byok model: unknown (custom/delegate default); source: forced default: custom/delegate default (unknown)");
     }
 
     #[test]

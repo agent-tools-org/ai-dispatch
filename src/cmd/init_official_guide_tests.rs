@@ -20,7 +20,6 @@ const UNDOCUMENTED_FLAGS: &[&str] = &[
     "--async",
     "--auto",
     "--base",
-    "--best-of",
     "--brief",
     "--category",
     "--checks",

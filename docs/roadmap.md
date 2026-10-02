@@ -57,6 +57,11 @@ no new layer. Behaviour-preserving moves and semantic fixes land separately.
 **Exit per slice:** full remote suite green, an independent audit with test evidence,
 guide updated for any contract change, and net production lines not increased.
 
+2026-10-03 progress (`wi-843a`, slice 1): implementation and 128 targeted remote
+regressions pass; production lines decrease by 35. Full workspace verification
+and independent audit remain pending; clippy is blocked by the remote toolchain's
+missing component. [Evidence](investigation-bestof-advise-2026-10-02.md).
+
 ### Known limits of the current code
 
 - `--read-only` compares only files under the run directory (from a repository

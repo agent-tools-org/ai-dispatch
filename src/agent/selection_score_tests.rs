@@ -1,5 +1,5 @@
 // Regression coverage for behavior-preserving selector score decomposition.
-// Proves score_for retains the pre-refactor floating-point bit pattern.
+// Pins the historical catalog-tier score while testing the live scoring engine.
 // Deps: selection scoring, classifier profile, team config, isolated AID_HOME.
 
 use std::collections::HashMap;
@@ -10,7 +10,7 @@ use tempfile::TempDir;
 
 use super::selection_quota::{headroom_penalty, penalty_from_used};
 use super::selection_scoring::{
-    CandidateContext, model_capability_score, model_quality_score, score_breakdown, score_for,
+    CandidateContext, model_capability_score, model_quality_score, score_breakdown,
 };
 use super::advise;
 use crate::agent::classifier::{Complexity, TaskCategory, TaskProfile};
@@ -84,14 +84,22 @@ fn declared(urgency: TaskUrgency) -> DeclaredTaskProfile {
     }
 }
 
-/// The breakdown `score_for` sums: scored with the hint's catalog tier model.
+/// Historical catalog-tier inputs, kept only as scoring regression fixtures.
 fn hint_breakdown(ctx: &CandidateContext<'_>, kind: AgentKind) -> super::selection_scoring::ScoreBreakdown {
-    let model = super::recommend_model(&kind, &ctx.profile.complexity, ctx.budget);
+    let models = crate::model_catalog::static_models_for_agent(&kind);
+    let tier = match ctx.profile.complexity {
+        Complexity::Low => "cheap", Complexity::Medium => "standard", Complexity::High => "premium",
+    };
+    let model = if ctx.budget {
+        crate::model_catalog::budget_model(&kind)
+    } else {
+        models.iter().find(|m| m.tier == tier).or_else(|| models.first()).map(|m| m.model)
+    };
     score_breakdown(ctx, kind, model)
 }
 
 #[test]
-fn score_for_is_bit_identical_to_pre_breakdown_value() {
+fn breakdown_is_bit_identical_to_pre_decomposition_value() {
     let temp = TempDir::new().expect("temp dir");
     let _guard = AidHomeGuard::set(temp.path());
     let profile = TaskProfile {
@@ -111,8 +119,6 @@ fn score_for_is_bit_identical_to_pre_breakdown_value() {
         toolbox: Default::default(),
     };
     let context = score_ctx(&profile, &history_map, &avg_cost_map, Some(&team), true);
-
-    let score = score_for(&context, AgentKind::Codex);
     let breakdown = hint_breakdown(&context, AgentKind::Codex);
 
     // Absolute pin, so an unintended scoring change cannot slip through: floating
@@ -120,8 +126,7 @@ fn score_for_is_bit_identical_to_pre_breakdown_value() {
     // It is derived from the model catalog, so a legitimate catalog refresh moves
     // it — re-pin deliberately and say why. 2026-08-05: 16.3 -> 16.35 when the
     // refresh made gpt-5.6-sol codex's default.
-    assert_eq!(score.to_bits(), 0x4030_5999_9999_999a);
-    assert_eq!(breakdown.total.to_bits(), score.to_bits());
+    assert_eq!(breakdown.total.to_bits(), 0x4030_5999_9999_999a);
     assert_eq!(breakdown.headroom_penalty, 0.0);
 }
 
@@ -167,8 +172,8 @@ fn two_free_agents_ten_percent_ranks_three_above_ninety() {
     let history = HashMap::new();
     let costs = HashMap::new();
     let ctx = score_ctx(&profile, &history, &costs, None, true);
-    let qwen_base = score_for(&ctx, AgentKind::Qwen);
-    let agy_base = score_for(&ctx, AgentKind::Antigravity);
+    let qwen_base = hint_breakdown(&ctx, AgentKind::Qwen).total;
+    let agy_base = hint_breakdown(&ctx, AgentKind::Antigravity).total;
 
     write_snapshot(&cache, "qwen", 90.0, 60);
     write_snapshot(&cache, "agy", 10.0, 60);
@@ -189,7 +194,7 @@ fn stale_snapshot_does_not_retune_score() {
     let history = HashMap::new();
     let costs = HashMap::new();
     let ctx = score_ctx(&profile, &history, &costs, None, true);
-    let baseline = score_for(&ctx, AgentKind::Qwen);
+    let baseline = hint_breakdown(&ctx, AgentKind::Qwen).total;
     write_snapshot(&cache, "qwen", 90.0, 20 * 60);
     let breakdown = hint_breakdown(&ctx, AgentKind::Qwen);
     assert_eq!(headroom_penalty(AgentKind::Qwen, None), 0.0);
@@ -204,7 +209,7 @@ fn unused_quota_does_not_boost() {
     let history = HashMap::new();
     let costs = HashMap::new();
     let ctx = score_ctx(&profile, &history, &costs, None, true);
-    let baseline = score_for(&ctx, AgentKind::Qwen);
+    let baseline = hint_breakdown(&ctx, AgentKind::Qwen).total;
     write_snapshot(&cache, "qwen", 10.0, 60);
     let breakdown = hint_breakdown(&ctx, AgentKind::Qwen);
     assert_eq!(breakdown.headroom_penalty, 0.0);

@@ -1,4 +1,4 @@
-// Best-of-N dispatch: send task to N budget agents, pick best result.
+// Best-of-N dispatch: race N launchable advice candidates, pick best result.
 // Exports: run_best_of(). Deps: run::RunArgs, judge, agent selection.
 use anyhow::{anyhow, bail, Result};
 use std::cmp::Ordering;
@@ -6,19 +6,22 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use crate::agent::{self, RunOpts};
+use crate::agent::selection::AdviceCandidate;
 use crate::cmd::judge;
 use crate::sanitize::{is_valid_task_id, validate_task_id};
 use crate::store::Store;
-use crate::team;
 use crate::types::*;
 use super::run_validate::{IdConflict, resolve_id_conflict};
-use super::{run, switch_agent, RunArgs};
+use super::{run, RunArgs};
 #[path = "bestof/output_files.rs"]
 mod output_files;
 use self::output_files::{
-    dispatch_artifacts_for_candidate, finalize_winner_artifacts,
+    DispatchArtifacts, dispatch_artifacts_for_candidate, finalize_winner_artifacts,
 };
+
+#[path = "bestof_plan.rs"]
+mod plan;
+use plan::{advised_plan, racer_args};
 
 struct BestOfDispatch {
     agent_hint: String,
@@ -79,14 +82,6 @@ fn evaluate_metric(
 
 fn is_completed_best_of_status(status: &TaskStatus) -> bool {
     status.is_terminal() || *status == TaskStatus::AwaitingInput
-}
-
-fn expand_best_of_plan(mut plan: Vec<AgentKind>, n: usize) -> Vec<AgentKind> {
-    let base_len = plan.len();
-    while plan.len() < n {
-        plan.push(plan[plan.len() % base_len]);
-    }
-    plan
 }
 
 impl CandidateResult {
@@ -171,54 +166,45 @@ pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<T
     validate_best_of_count(n)?;
     let original_artifacts =
         dispatch_artifacts_for_candidate(args.output.as_deref(), args.result_file.as_deref(), 0);
-    let team_config = args.team.as_deref().and_then(team::resolve_team);
-    let selection_opts = RunOpts {
-        dir: args.dir.clone(),
-        output: args.output.clone(),
-        result_file: args.result_file.clone(),
-        model: args.model.clone(),
-        budget: true,
-        read_only: args.read_only,
-        sandbox: args.sandbox,
-        context_files: Vec::new(),
-        session_id: args.session_id.clone(),
-        env: None,
-        env_forward: None,
-    };
-    let agents = agent::selection::budget_ranked_agents(
-        &args.prompt,
-        &selection_opts,
-        &store,
-        team_config.as_ref(),
-    );
-    if agents.is_empty() {
-        bail!("best-of-{n}: no budget agents available");
-    }
-    let plan = expand_best_of_plan(agents.into_iter().take(n).collect(), n);
+    let (declared, plan) = advised_plan(&store, &args, n)?;
+    let (dispatches, candidate_artifacts) = launch_candidates(&store, &args, declared, plan, n).await?;
+    let completed = collect_results(&store, dispatches, args.metric.as_deref(), n).await?;
+    let best = pick_best_result(&completed)
+        .ok_or_else(|| anyhow!("best-of-{n}: no successful tasks"))?;
+    finalize_winner_artifacts(&original_artifacts, &candidate_artifacts, &best.task_id)?;
+    announce_winner(&completed, best, n);
+    Ok(best.task_id.clone())
+}
+
+async fn launch_candidates(
+    store: &Arc<Store>, args: &RunArgs, declared: DeclaredTaskProfile,
+    plan: Vec<AdviceCandidate>, n: usize,
+) -> Result<(Vec<BestOfDispatch>, Vec<(TaskId, DispatchArtifacts)>)> {
     let mut dispatches = Vec::new();
     let mut candidate_artifacts = Vec::new();
-    for (candidate_idx, kind) in plan.into_iter().enumerate() {
-        let agent_label = kind.as_str().to_string();
-        let mut child_args = args.clone();
+    for (candidate_idx, candidate) in plan.into_iter().enumerate() {
+        let agent_label = candidate.agent.clone();
+        let mut child_args = racer_args(args, &candidate, declared);
         let artifacts = dispatch_artifacts_for_candidate(
             args.output.as_deref(),
             args.result_file.as_deref(),
             candidate_idx,
         );
-        // switch_agent drops route-owned fields (model + session_id) when the
-        // racer uses a different agent than the parent, so each CLI only
-        // receives context its own route can interpret.
-        switch_agent(&mut child_args, agent_label.clone());
-        child_args.background = true;
-        child_args.judge = None;
-        child_args.announce = false;
-        child_args.best_of = None;
         child_args.output = artifacts.output.clone();
         child_args.result_file = artifacts.result_file.clone();
         child_args.existing_task_id =
             best_of_task_id(store.as_ref(), args.existing_task_id.as_ref(), candidate_idx)?;
         let store = store.clone();
-        match run(store, child_args).await {
+        let dispatch = async {
+            if let (Some(kind), Some(model)) = (candidate.kind(), candidate.model.as_deref())
+                && !crate::agent::model_validation::validate_model_for_agent(
+                    crate::agent::get_agent(kind).as_ref(), model, child_args.model_source,
+                )? {
+                bail!("advised model '{model}' unavailable; refusing a different default");
+            }
+            run(store, child_args).await
+        }.await;
+        match dispatch {
             Ok(task_id) => {
                 candidate_artifacts.push((task_id.clone(), artifacts));
                 dispatches.push(BestOfDispatch {
@@ -234,7 +220,12 @@ pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<T
     if dispatches.is_empty() {
         bail!("best-of-{n}: all dispatch attempts failed");
     }
-    let mut pending = dispatches;
+    Ok((dispatches, candidate_artifacts))
+}
+
+async fn collect_results(
+    store: &Store, mut pending: Vec<BestOfDispatch>, metric: Option<&str>, n: usize,
+) -> Result<Vec<CandidateResult>> {
     let mut completed = Vec::new();
     while !pending.is_empty() {
         let mut done = Vec::new();
@@ -242,7 +233,7 @@ pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<T
             if let Some(task) = store.get_task(dispatch.task_id.as_str())? {
                 if is_completed_best_of_status(&task.status) {
                     done.push(idx);
-                    completed.push(CandidateResult::from_task(task, args.metric.as_deref()));
+                    completed.push(CandidateResult::from_task(task, metric));
                 }
             } else {
                 aid_warn!(
@@ -259,9 +250,10 @@ pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<T
             sleep(Duration::from_secs(2)).await;
         }
     }
-    let best = pick_best_result(&completed)
-        .ok_or_else(|| anyhow!("best-of-{n}: no successful tasks"))?;
-    finalize_winner_artifacts(&original_artifacts, &candidate_artifacts, &best.task_id)?;
+    Ok(completed)
+}
+
+fn announce_winner(completed: &[CandidateResult], best: &CandidateResult, n: usize) {
     let others = completed
         .iter()
         .filter(|candidate| candidate.task_id != best.task_id)
@@ -279,7 +271,6 @@ pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<T
             best.task_id, best.agent_label, others
         );
     }
-    Ok(best.task_id.clone())
 }
 
 #[cfg(test)]

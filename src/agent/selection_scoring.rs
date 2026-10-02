@@ -1,5 +1,5 @@
 // Scoring internals for agent auto-selection.
-// Exports: Candidate, CandidateContext, ScoreBreakdown, score_for, comparison helpers.
+// Exports: Candidate, CandidateContext, ScoreBreakdown, comparison helpers.
 // Deps: classifier, capability matrix, model catalog, rate limits, task profiles.
 
 use crate::agent::classifier::{self, Complexity};
@@ -59,7 +59,6 @@ fn model_is_paid(agent: AgentKind, model: &str) -> bool {
         .unwrap_or(false)
 }
 
-pub(super) const BUILTIN_AGENTS: &[AgentKind] = AgentKind::ALL_BUILTIN;
 
 #[derive(Clone)]
 pub(super) struct Candidate {
@@ -170,24 +169,6 @@ fn has_team_bonus(ctx: &CandidateContext<'_>, kind: AgentKind) -> bool {
         .any(|agent| agent.eq_ignore_ascii_case(kind.as_str())))
 }
 
-/// Recommendation-hint score: the hint names the catalog tier model it shows.
-pub(super) fn score_for(ctx: &CandidateContext<'_>, kind: AgentKind) -> f64 {
-    let model = super::recommend_model(&kind, &ctx.profile.complexity, ctx.budget);
-    score_breakdown(ctx, kind, model).total
-}
-
-pub(super) fn candidate_for(kind: AgentKind, ctx: &CandidateContext<'_>) -> Candidate {
-    let score = score_for(ctx, kind);
-    let avg_cost = ctx.avg_cost_map.get(&kind).copied().unwrap_or(0.0);
-    Candidate {
-        kind,
-        score,
-        efficiency: cost_efficiency(score, avg_cost),
-        is_default: ctx.team_default == Some(kind),
-        priority: priority(kind),
-    }
-}
-
 pub(super) fn compare_candidates(a: &Candidate, b: &Candidate, budget: bool) -> Ordering {
     let primary = if budget {
         a.efficiency.partial_cmp(&b.efficiency).unwrap_or(Ordering::Equal)
@@ -211,12 +192,4 @@ pub(super) fn compare_candidates(a: &Candidate, b: &Candidate, budget: bool) -> 
         ord = a.priority.cmp(&b.priority);
     }
     ord
-}
-
-pub(super) fn pick_best_candidate(agents: &[AgentKind], ctx: &CandidateContext<'_>, budget: bool) -> Candidate {
-    agents
-        .iter()
-        .map(|&kind| candidate_for(kind, ctx))
-        .max_by(|a, b| compare_candidates(a, b, budget))
-        .unwrap_or_else(|| candidate_for(AgentKind::Codex, ctx))
 }

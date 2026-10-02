@@ -187,7 +187,23 @@ For remote Cargo work, use `aid run codex "Implement the change" --remote-build 
 Run `aid run --help` for iteration, evaluation, judging, peer review, best-of,
 model, budget, context, scope, checklist, skill, template, hook, container, and cascade options.
 
-Missing task-profile dimensions produce one warning and persist as null. Projects
+`--best-of N` races the top N launchable builtin `aid advise` candidates for the
+declared profile, kind, team and caller pool. Unavailable, disabled, held (including
+the selected model's group), auth-failed, superseded, weaker-caller-pool and
+below-floor routes do not race; Claude requires team preference. Custom advice
+uses a separate scale and is excluded. Fewer launchable candidates cycle to N;
+none produces an error before creating racer tasks.
+
+Each racer uses its advised model, overriding even a same-agent parent's
+`--model`. Known CLI defaults are pinned to retain model agreement; unavailable
+selected models fail that launch instead of using another default. Unknown
+defaults pass no model and suppress later budget routing. Saved model provenance
+is AID-resolved. Agent switches clear the parent's session; same-agent sessions
+remain. Output/result paths, candidate task IDs and winner finalization retain
+their usual best-of behavior. Missing profile dimensions use the advice defaults
+(moderate / standard / normal / standard) and are recorded on every racer.
+
+Outside best-of, missing task-profile dimensions produce one warning and persist as null. Projects
 with `require_task_profile = true` reject incomplete runs; the production profile
 enables this requirement.
 

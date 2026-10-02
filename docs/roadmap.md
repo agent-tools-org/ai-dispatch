@@ -48,7 +48,7 @@ no new layer. Behaviour-preserving moves and semantic fixes land separately.
 | --- | --- | --- |
 | 1 (complete locally) | Route: best-of races advise's launchable candidates | No uninstalled or held route races; each racer's resolved model equals the advised model; plan cycling kept |
 | 2 (complete locally) | Route: cascade fallback from advise | Fallback is the first launchable advise candidate other than the exhausted agent; Claude and superseded Gemini never selected; a peer below the capability floor is not selected |
-| 3 | Pricing: budget scoring uses the price function | Subscription and unknown prices are not "paid"; overrides apply both ways |
+| 3 (complete locally) | Pricing: budget scoring uses the price function | Subscription and unknown prices are not "paid"; overrides apply both ways |
 | 4 | Run configuration: job file holds runtime state only | Nine runtime fields; old job files still load so running workers can be waited on, stopped and reaped |
 | 5 | Read-only snapshot scope | Snapshot from the repository top level; the run repository's HEAD and refs compared; repositories without commits and special files recorded instead of failing |
 | 6 | Read-only report location | Auto audit reports written under the task directory for host launches; explicit `--result-file` unchanged |
@@ -65,7 +65,12 @@ advice's exact model and declared profile through resolver, quota continuation
 and batch handoffs. Production Rust decreases by 10 physical lines; 3,098 default
 and 3,130 Web tests pass, with zero failed and 14 existing ignored per suite.
 Strict default/Web production lint and independent review pass. [Cascade validation](validation-advised-cascade-2026-10-03.md)
-records the source and completed jobs. Next: price-function scoring (`wi-739e`).
+records the source and completed jobs. Slice 3 (`wi-739e`) is complete locally:
+budget scoring uses resolved prices and exact overrides, with production Rust
+reduced by 2 lines. The final pricing source passes 3,102 default and 3,134 Web
+tests, zero failed and 14 existing ignored per suite, strict default/Web lint,
+guide validation and independent SHIP. [Pricing validation](validation-resolved-price-scoring-2026-10-03.md)
+records the exact source and jobs. Slice 4, runtime-only job state, remains open.
 
 Read-only report preservation (`wi-562b`) and the remote verifier's absolute
 launch/wait deadline (`wi-8b23`) also pass their before/after regressions and

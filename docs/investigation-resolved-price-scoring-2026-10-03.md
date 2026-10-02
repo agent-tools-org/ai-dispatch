@@ -5,9 +5,8 @@ KB consulted: `budget scoring price subscription override`. Broad matches return
 ## Source and scope
 
 Structural roadmap slice 3 (`wi-739e`) starts from
-`d45681b71f65566dc68db9d85de4b4089625b726` on `fix/resolved-price-scoring`.
-The branch's initial HEAD equals current main. That baseline records acceptance
-of the prerequisite cascade slice: full default/Web suites, strict production
+`d45681b71f65566dc68db9d85de4b4089625b726`. That baseline contains the
+prerequisite cascade slice: full default/Web suites, strict production
 lint and independent review in
 [cascade validation](validation-advised-cascade-2026-10-03.md) and
 [cascade audit](audit-advised-cascade-2026-10-03.md).
@@ -48,70 +47,43 @@ override caches before resolution and after fixture updates. Prices come only
 from synthetic files. Existing score tests and ignored-test annotations are
 unchanged.
 
-## Baseline-compatible before/after procedure
+## Observed before/after evidence
 
-Only the new test file and its three-line `#[cfg(test)]` module registration in
-`src/agent/selection.rs` are needed on an isolated checkout of the baseline.
-Both use interfaces already present there. Do not copy the production scoring
-change to that checkout. Stage the new fixture so remote synchronization
-includes it. Record the baseline SHA, production-clean diff and fixture SHA-256
-alongside the remote output, then use the identical fixture bytes on the candidate.
+The unchanged baseline production source received only the new sibling fixture
+and its trailing three-line test-only registration. Remote job
+`f4a553fb280f411eb98fe50446f42c00` records baseline `d45681b7`, clean production,
+bytewise selector-prefix equality and the same fixture SHA256 as candidate
+`e469c500`. The exact catalog/subscription boundary regression fails: 0 passed,
+1 failed and 2,930 filtered, exit 101. Cursor `composer-2.5` receives `-3.0`
+where subscription inclusion requires zero. Direct scoring and actual advice
+agree before the assertion fails. This is observed output, not a prediction.
 
-The baseline reproducer is
-`agent::selection::selection_price_tests::resolved_price_catalog_subscription_unknown_and_free_at_both_boundaries`.
-The expected old-path mismatch is Cursor `composer-2.5`: actual `-3.0`, expected
-zero in budget mode. The zero-override and vendor-feed tests independently
-exercise other old-path mismatches. These are predicted failures from source
-inspection, not observed test results.
+The same four fixtures pass in both complete candidate suites. No existing
+score test or ignored-test annotation was changed. Price, eligibility and
+non-budget comparisons use the actual scoring/advice boundaries.
 
-Remote diagnostic payloads (run through the authorized `rbox` path, never on
-the host):
+## Completed validation and limits
 
-```bash
-aid build check -p ai-dispatch --locked
-aid test --isolated --bin aid agent::selection::selection_price_tests
-aid test --isolated --bin aid agent::selection::selection_score_tests
-aid test --isolated --bin aid agent::selection::selection_price_tests::resolved_price_catalog_subscription_unknown_and_free_at_both_boundaries -- --exact
-```
+Full remote default/Web suites pass on the same clean source `e469c500`: 3,102
+and 3,134 passed respectively, zero failed, 14 existing ignored per suite.
+Both strict production clippy configurations and standalone guide validation
+pass. [Validation evidence](validation-resolved-price-scoring-2026-10-03.md)
+records the exact source, toolchain, commands and completed job identifiers.
+[Independent audit](audit-resolved-price-scoring-2026-10-03.md) returns
+PASS for all three questions and SHIP for the exact reviewed source.
 
-The principal acceptance checks also require full default/Web remote tests,
-strict default/Web production lint, and independent read-only audit. The
-repository's full-suite entry points are `scripts/remote-test.sh -- --locked`
-and `scripts/remote-test.sh -- --locked --features web`. Use one remote job per
-box and preserve the warm shared target. No baseline worktree or main source
-was modified during this draft.
-
-## Actual validation and limits
-
-The attempted remote prerequisite was `rbox ensure` for the configured box.
-It exited 1 with:
-
-```text
-rbox: tailscale status returned no JSON (Expecting value at byte 0)
-```
-
-The preceding `rbox status` invocation was rejected by the CLI because it
-requires `--json`; it supplied no load evidence. No remote job ID was assigned.
-No compilation, test, baseline reproduction or strict lint ran. No local Cargo
-build/test or raw transport fallback was used. The fixture is a draft until
-the above checks and independent audit complete.
-
-Local source checks cover Rust syntax formatting of the new fixture,
-changed-file size, new-function length, headers, diff whitespace, production
-lookup scope and unchanged existing score tests. These checks do not establish
-that the Rust files type-check or that the regressions pass.
-The formatting and whitespace checks pass. The changed Rust files have 41,
-193 and 186 lines; the longest new function is 36 lines. There are four new
-test functions and zero new ignores. Source comparison confirms that the
-production diff consists exactly of the resolver call and unused import removal.
+An earlier sandbox transport attempt assigned no job and ran no Rust checks;
+the completed remote jobs establish the actual results. No local Cargo fallback
+was used. Synthetic pricing fixtures do not establish live vendor prices.
+Client/API, Swift, Drive and publication/deployment behavior remain outside
+this slice. Package version and installed release are unchanged.
 
 ## Production line accounting
 
-Count physical Rust lines relative to the baseline, including comments,
-imports and blanks; exclude dedicated test files and explicitly test-only
-module registrations. `selection_scoring.rs` changes from 195 to 193 lines
-(net **-2**). `selection.rs` adds three test-only registration lines (zero
-production lines), and the new sibling fixture contributes zero production
-lines. Net production Rust is **-2**. No other production Rust file changes.
-All changed source files are at most 300 lines and all new functions are at
-most 50 lines. The simpler choice is to reuse the existing resolver directly.
+Count physical Rust lines relative to the baseline, including headers, imports
+and blanks; exclude dedicated tests and explicitly test-only registrations.
+`selection_scoring.rs` decreases from 195 to 193 lines. The selector's three
+new registration lines and sibling fixture contain no production code. Net
+production Rust is **-2**; no other production Rust file changes. Changed source
+files are at most 300 lines and new functions at most 50. The existing price
+resolver is reused directly, without a new pricing owner.

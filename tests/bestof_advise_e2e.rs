@@ -71,7 +71,7 @@ fn assert_launches(h: &Harness, model: Option<&str>) {
         assert_eq!(id, &format!("t-model-race-bo{}", idx + 1));
         assert_eq!(requested.as_deref(), model);
         let saved: serde_json::Value = serde_json::from_str(saved).expect("saved dispatch");
-        assert_eq!(saved["model_source"], "AidResolved");
+        assert_eq!(saved["model_source"], "Advised");
         for (field, value) in [("declared_difficulty", "moderate"), ("declared_budget", "standard"), ("declared_urgency", "normal"), ("declared_rigor", "standard")] {
             assert_eq!(saved[field], value);
         }

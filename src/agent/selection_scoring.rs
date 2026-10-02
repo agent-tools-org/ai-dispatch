@@ -3,7 +3,7 @@
 // Deps: classifier, capability matrix, model catalog, rate limits, task profiles.
 
 use crate::agent::classifier::{self, Complexity};
-use crate::model_catalog::{models_for_agent, AGENT_MODELS};
+use crate::model_catalog::models_for_agent;
 use crate::route_availability::{availability_for_model, RouteStatus};
 use crate::team::TeamConfig;
 use crate::types::AgentKind;
@@ -53,10 +53,8 @@ pub(super) fn model_capability_score(agent: AgentKind, model: &str) -> Option<f6
 /// True when the model has a non-zero price. Used to bias budget mode toward
 /// free models so a marginally stronger paid model doesn't win trivial tasks.
 fn model_is_paid(agent: AgentKind, model: &str) -> bool {
-    AGENT_MODELS.iter()
-        .find(|m| m.agent == agent && m.model == model)
-        .map(|m| m.input_per_m > 0.0 || m.output_per_m > 0.0)
-        .unwrap_or(false)
+    crate::cost::resolve_pricing(Some(model), agent)
+        .is_some_and(|price| price.input_per_m > 0.0 || price.output_per_m > 0.0)
 }
 
 

@@ -36,3 +36,6 @@ mod disabled_tests;
 #[cfg(test)]
 #[path = "selection_score_tests.rs"]
 mod selection_score_tests;
+#[cfg(test)]
+#[path = "selection_price_tests.rs"]
+mod selection_price_tests;

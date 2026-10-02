@@ -342,6 +342,18 @@ unrated and are not selected. Inferred kind is advisory; pass `--kind` when the
 caller knows the task kind. Advice exits successfully even when every agent
 is rate-limited. Advise does not spawn `aidbar`.
 
+For `free` and `cheap` profiles, `breakdown.budget_penalty` is `-3.0` only
+when the candidate's resolved model price has a positive input or output rate.
+Scoring uses the same price resolution as cost estimation: exact agent/model
+override (case-insensitive), subscription inclusion, catalog figure, then an
+exact vendor-CLI feed entry. Unknown prices and included subscription routes
+have no paid-model penalty, even when the catalog lists API-looking rates.
+A zero override removes the penalty from a paid route; a positive override
+adds it to a free, subscription, or previously unknown route. Vendor feed
+rates do not price reseller routes. `standard` and `premium` profiles have no
+paid-model penalty. These price rules do not change model eligibility or the
+other score terms.
+
 `aid run` hints use this ranker with the declared profile and task kind. Missing
 values default to `moderate` / `standard` / `normal` / `standard` and inferred kind;
 keywords never choose budget. Hints stay silent for prompts under 20 characters,

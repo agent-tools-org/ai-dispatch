@@ -35,7 +35,7 @@ mod batch_types;
 use batch_analyze::OverlapSeverity;
 use batch_validate::{analyze_file_overlap, task_has_dependencies, validate_batch_config};
 #[cfg(test)]
-pub(crate) use batch_dispatch_support::{auto_fallback_agent, pre_dispatch_fallback_choice, should_auto_fallback};
+pub(crate) use batch_dispatch_support::{auto_fallback_args, pre_dispatch_fallback_choice, should_auto_fallback};
 #[cfg(test)]
 pub(crate) use batch_types::BatchTaskOutcome;
 pub use batch_retry::retry_failed;

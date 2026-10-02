@@ -32,6 +32,7 @@ pub(super) fn keep_aid_resolved_pin(
 }
 
 pub(super) fn switch_model_held_route(
+    store: &Store,
     args: &mut super::RunArgs,
     agent_kind: &mut AgentKind,
     custom_agent_name: &mut Option<String>,
@@ -43,14 +44,11 @@ pub(super) fn switch_model_held_route(
         .as_deref()
         .unwrap_or_else(|| agent_kind.as_str())
         .to_string();
-    let (next_kind, next_name, remaining) =
-        skip_held_to_fallback(*agent_kind, &original, &hold, &args.cascade, &args.prompt)?;
+    let (next_kind, next_name) = skip_held_to_fallback(store, args, &original, &hold)?;
     aid_warn!(
         "[aid] {} model provider is held ({}) — dispatching to {} instead. Use `aid config clear-limit {}` to clear.",
         original, hold, next_name, original
     );
-    super::super::switch_agent(args, next_name.clone());
-    args.cascade = remaining;
     *agent_kind = next_kind;
     *custom_agent_name = (next_kind == AgentKind::Custom).then_some(next_name);
     *substituted_from = Some((original, hold));
@@ -60,12 +58,15 @@ pub(super) fn switch_model_held_route(
     // The old model belongs to the substituted CLI, so evaluate the next agent
     // with no current model and pin a healthy group when it has one (agy on its
     // claude family); ungrouped agents keep their own default.
-    *effective_model = agent::model_group::healthy_model_for(
-        *agent_kind,
-        None,
-        |group| rate_limit::is_group_rate_limited(agent_kind, next_custom, group),
-    )
-    .map(str::to_string);
+    *effective_model = if args.advised_route {
+        args.model.clone()
+    } else {
+        agent::model_group::healthy_model_for(*agent_kind, None, |group| {
+            rate_limit::is_group_rate_limited(agent_kind, next_custom, group)
+        })
+        .map(str::to_string)
+    };
+    super::super::advice_route::validate_candidate_model(args, *agent_kind)?;
     Ok(())
 }
 
@@ -77,13 +78,42 @@ pub(super) fn background_keeps_hold(kind: AgentKind, custom_name: Option<&str>) 
 
 // Walk `cascade` (then auto-fallback) to the first non-held alternative. Unrecognised names error; custom agents are valid.
 pub(super) fn skip_held_to_fallback(
-    held_kind: AgentKind,
+    store: &Store,
+    args: &mut super::RunArgs,
     held_name: &str,
     hold: &str,
-    cascade: &[String],
-    prompt: &str,
-) -> Result<(AgentKind, String, Vec<String>)> {
-    let all: Vec<(AgentKind, String)> = cascade
+) -> Result<(AgentKind, String)> {
+    let all = cascade_routes(&args.cascade)?;
+    let start = all
+        .iter()
+        .position(|(_, n)| n == held_name)
+        .map_or(0, |i| i + 1);
+    for (i, (kind, name)) in all[start..].iter().enumerate() {
+        let custom = (*kind == AgentKind::Custom).then_some(name.as_str());
+        if !candidate_is_blocked(kind, custom) {
+            super::super::switch_agent(args, name.clone());
+            args.cascade = all[start + i + 1..]
+                .iter()
+                .map(|(_, n)| n.clone())
+                .collect();
+            return Ok((*kind, name.clone()));
+        }
+    }
+    if let Some(candidate) = super::super::advice_route::automatic_candidate(Some(store), args) {
+        let kind = candidate
+            .kind()
+            .ok_or_else(|| anyhow::anyhow!("advised route is not builtin"))?;
+        super::super::advice_route::apply_candidate(args, &candidate);
+        args.cascade.clear();
+        return Ok((kind, candidate.agent));
+    }
+    anyhow::bail!(
+        "{held_name} is held ({hold}). Use --cascade <agent> or `aid config clear-limit {held_name}` to clear."
+    )
+}
+
+fn cascade_routes(cascade: &[String]) -> Result<Vec<(AgentKind, String)>> {
+    cascade
         .iter()
         .map(|s| {
             AgentKind::parse_str(s)
@@ -97,34 +127,7 @@ pub(super) fn skip_held_to_fallback(
                     )
                 })
         })
-        .collect::<Result<_>>()?;
-    let start = all
-        .iter()
-        .position(|(_, n)| n == held_name)
-        .map_or(0, |i| i + 1);
-    for (i, (kind, name)) in all[start..].iter().enumerate() {
-        // A custom candidate is held under its own name, not the shared
-        // `custom` marker — see rate_limit::marker_path.
-        let candidate_custom = (*kind == AgentKind::Custom).then_some(name.as_str());
-        if !candidate_is_blocked(kind, candidate_custom) {
-            return Ok((
-                *kind,
-                name.clone(),
-                all[start + i + 1..]
-                    .iter()
-                    .map(|(_, n)| n.clone())
-                    .collect(),
-            ));
-        }
-    }
-    if let Some(fb) = crate::agent::selection::coding_fallback_for_prompt(&held_kind, prompt)
-        .filter(|fb| !candidate_is_blocked(fb, None))
-    {
-        return Ok((fb, fb.as_str().to_string(), vec![]));
-    }
-    anyhow::bail!(
-        "{held_name} is held ({hold}). Use --cascade <agent> or `aid config clear-limit {held_name}` to clear."
-    )
+        .collect()
 }
 
 pub(super) fn warn_if_degraded(kind: AgentKind, custom_name: Option<&str>) {

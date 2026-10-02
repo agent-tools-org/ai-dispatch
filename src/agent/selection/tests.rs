@@ -1,6 +1,6 @@
 // Existing fallback and cost-efficiency regression coverage.
-// Routing expectations live with advise tests; fallback behavior is unchanged.
-// Deps: fallback helpers, scoring, isolated AID_HOME, and pinned installed agents.
+// Fallback readers use command-layer advice; scoring stays agent-owned.
+// Deps: run advice routes, scoring, isolated AID_HOME and installed agents.
 
 use crate::paths::{self, AidHomeGuard};
 use crate::types::AgentKind;
@@ -28,7 +28,15 @@ fn gemini_in_fallback_chain() {
         AgentKind::Qwen,
         AgentKind::Codex,
     ]);
-    let result = super::coding_fallback_for(&AgentKind::Gemini, None, None);
+    let result = crate::cmd::run::advice_route::automatic_candidate(
+        None,
+        &crate::cmd::run::RunArgs {
+            agent_name: "gemini".into(),
+            prompt: "Implement a feature".into(),
+            ..Default::default()
+        },
+    )
+    .and_then(|candidate| candidate.kind());
     assert!(result.is_some(), "Gemini should have a fallback agent");
     assert_ne!(result, Some(AgentKind::Gemini));
 }
@@ -43,7 +51,15 @@ fn fallback_chain_skips_rate_limited() {
         AgentKind::Cursor,
     ]);
     crate::rate_limit::mark_rate_limited(&AgentKind::Codex, None, "quota exhausted");
-    let result = super::coding_fallback_for(&AgentKind::Gemini, None, None);
+    let result = crate::cmd::run::advice_route::automatic_candidate(
+        None,
+        &crate::cmd::run::RunArgs {
+            agent_name: "gemini".into(),
+            prompt: "Implement a feature".into(),
+            ..Default::default()
+        },
+    )
+    .and_then(|candidate| candidate.kind());
     // Should skip Codex (rate-limited) and pick the next available.
     assert!(result.is_some());
     assert_ne!(result.unwrap(), AgentKind::Codex);

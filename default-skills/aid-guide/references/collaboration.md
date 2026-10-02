@@ -30,6 +30,11 @@ Useful controls:
 Retry failed batch members with `aid batch retry --help`; preserve the original
 workgroup so history remains connected. A same-agent batch retry resumes the
 latest recorded session when the agent supports resume; switching agents clears it.
+Automatic held substitution and failed-task fallback retain the first launchable
+advice candidate's model and complete task profile; Claude is always excluded
+from automatic cascades. Saved dispatch arguments are authoritative for retries;
+category and stored profiles are legacy fallbacks only when saved arguments are
+absent. Explicit fallback lists preserve order, custom names and remaining entries.
 
 ## Workgroups
 

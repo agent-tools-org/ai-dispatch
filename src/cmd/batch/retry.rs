@@ -70,35 +70,19 @@ pub(super) fn should_retry_task(status: TaskStatus, include_waiting: bool) -> bo
 }
 
 pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str, agent_override: Option<&str>) -> Result<RunArgs> {
-    let agent_name = if let Some(override_name) = agent_override {
-        override_name.to_string()
-    } else {
-        let original = task.agent_display_name().to_string();
-        let (kind, custom_name) = crate::rate_limit::resolve_agent(&original);
-        if crate::rate_limit::is_rate_limited(&kind, custom_name) {
-            if kind != crate::types::AgentKind::Custom
-                && let Some(fallback) = crate::agent::selection::coding_fallback_for(
-                    &kind,
-                    task.category.as_deref(),
-                    Some(task.prompt.as_str()),
-                )
-            {
-                crate::aid_info!(
-                    "[aid] {} is rate-limited, retrying with fallback: {}",
-                    original,
-                    fallback.as_str()
-                );
-                fallback.as_str().to_string()
-            } else {
-                original
-            }
-        } else {
-            original
-        }
-    };
     let mut run_args = RunArgs::for_retry(store, task)?;
-    switch_agent(&mut run_args, agent_name);
     run_args.prompt = task.prompt.clone();
+    if let Some(name) = agent_override {
+        switch_agent(&mut run_args, name.to_string());
+    } else {
+        let (kind, custom) = crate::rate_limit::resolve_agent(&run_args.agent_name);
+        if crate::rate_limit::is_rate_limited(&kind, custom)
+            && run_args.cascade.is_empty()
+            && let Some(candidate) = run::advice_route::automatic_candidate(Some(store), &run_args)
+        {
+            run::advice_route::apply_candidate(&mut run_args, &candidate);
+        }
+    }
     apply_retry_target(task, &mut run_args)?;
     run_args.group = Some(group_id.to_string());
     run_args.background = true;

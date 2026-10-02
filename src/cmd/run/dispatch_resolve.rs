@@ -140,6 +140,7 @@ pub(super) fn resolve_agent_setup(
         args.dir = Some(".".to_string());
         aid_info!("[aid] Auto-set --dir . (git repo detected)");
     }
+    super::advice_route::validate_candidate_model(args, agent_kind)?;
     let mut substituted_from: Option<(String, String)> = None;
     if args.declared_urgency == Some(crate::types::TaskUrgency::Background)
         && held::background_keeps_hold(agent_kind, custom_agent_name.as_deref())
@@ -155,14 +156,11 @@ pub(super) fn resolve_agent_setup(
             .as_deref()
             .unwrap_or_else(|| agent_kind.as_str())
             .to_string();
-        let (next_kind, next_name, remaining) =
-            held::skip_held_to_fallback(agent_kind, &original, &hold, &args.cascade, &args.prompt)?;
+        let (next_kind, next_name) = held::skip_held_to_fallback(store, args, &original, &hold)?;
         aid_warn!(
             "[aid] {} is held ({}) — dispatching to {} instead. Use `aid config clear-limit {}` to clear.",
             original, hold, next_name, original
         );
-        super::switch_agent(args, next_name.clone());
-        args.cascade = remaining;
         agent_kind = next_kind;
         custom_agent_name = (next_kind == AgentKind::Custom).then_some(next_name);
         substituted_from = Some((original, hold));
@@ -192,22 +190,29 @@ pub(super) fn resolve_agent_setup(
     let effective_model = run_model.model.clone().filter(|_| run_model.pinned);
     // Family-metered agents: switch groups, and say so — a silent model swap
     // is the same defect as a CLI substituting a model the caller did not ask for.
-    let mut effective_model = match agent::model_group::healthy_model_for(
-        agent_kind,
-        effective_model.as_deref(),
-        |group| rate_limit::is_group_rate_limited(&agent_kind, custom_agent_name.as_deref(), group),
-    ) {
-        Some(replacement) => {
-            aid_warn!(
-                "[aid] {} model group exhausted; switching {} -> {}",
-                agent_kind.as_str(),
-                effective_model.as_deref().unwrap_or("(default)"),
-                replacement
-            );
-            args.model_source = agent::model_validation::ModelSource::AidResolved;
-            Some(replacement.to_string())
+    super::advice_route::validate_candidate_model(args, agent_kind)?;
+    let mut effective_model = if args.advised_route {
+        effective_model
+    } else {
+        match agent::model_group::healthy_model_for(
+            agent_kind,
+            effective_model.as_deref(),
+            |group| {
+                rate_limit::is_group_rate_limited(&agent_kind, custom_agent_name.as_deref(), group)
+            },
+        ) {
+            Some(replacement) => {
+                aid_warn!(
+                    "[aid] {} model group exhausted; switching {} -> {}",
+                    agent_kind.as_str(),
+                    effective_model.as_deref().unwrap_or("(default)"),
+                    replacement
+                );
+                args.model_source = agent::model_validation::ModelSource::AidResolved;
+                Some(replacement.to_string())
+            }
+            None => effective_model,
         }
-        None => effective_model,
     };
     // No-group for_model is agent-level; skip it or background keep is undone.
     if agent::model_group::model_group(agent_kind, effective_model.as_deref()).is_some()
@@ -218,6 +223,7 @@ pub(super) fn resolve_agent_setup(
         )
     {
         held::switch_model_held_route(
+            store,
             args,
             &mut agent_kind,
             &mut custom_agent_name,
@@ -235,7 +241,10 @@ pub(super) fn resolve_agent_setup(
     let model_source = args.model.as_ref().map(|_| args.model_source).unwrap_or(agent::model_validation::ModelSource::AidResolved);
     args.model_source = model_source;
     if let Some(ref model) = effective_model
-        && !held::keep_aid_resolved_pin(substituted_from.as_ref(), model_source) && !agent::model_validation::validate_model_for_agent(agent.as_ref(), model, model_source)? {
+        && !args.advised_route
+        && !held::keep_aid_resolved_pin(substituted_from.as_ref(), model_source)
+        && !agent::model_validation::validate_model_for_agent(agent.as_ref(), model, model_source)?
+    {
         effective_model = None;
     }
     aid_info!("{}", model_info::model_selection_info(args, &run_model, effective_model.as_deref(), agent.as_ref()));
@@ -247,7 +256,7 @@ pub(super) fn resolve_agent_setup(
             .unwrap_or_else(|| agent_kind.as_str())
             .to_string(),
         effective_model,
-        budget_active,
+        budget_active: budget_active && !args.force_default_model,
         agent,
         substituted_from,
     })

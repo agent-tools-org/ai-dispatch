@@ -1,5 +1,5 @@
 // Batch dispatch helpers for spawning, completion polling, and fallback selection.
-// Exports: dispatch_level_with_ids, poll_completed_tasks, pre_dispatch_fallback_choice, should_auto_fallback, auto_fallback_agent, dispatch_task_ref
+// Exports: dispatch_level_with_ids, poll_completed_tasks, pre_dispatch_fallback_choice, should_auto_fallback, auto_fallback_args, dispatch_task_ref
 // Deps: crate::batch, crate::cmd::run, crate::rate_limit, crate::store::Store, super::batch_args, super::batch_types, super::batch_validate
 use crate::batch;
 use crate::cmd::run;
@@ -101,31 +101,20 @@ pub(super) async fn maybe_dispatch_auto_fallback(
     outcome: BatchTaskOutcome,
     auto_fallback: bool,
     retried: &mut [bool],
-    shared_dir_path: Option<&str>,
+    _shared_dir_path: Option<&str>,
     repo_root: Option<&str>,
 ) -> Result<Option<String>> {
     if !should_auto_fallback(auto_fallback, retried[task_idx], outcome) {
         return Ok(None);
     }
-    let Some((original_agent, fallback_agent)) = auto_fallback_agent(&store, task_id, tasks, task_idx)? else {
+    let Some((original_agent, mut run_args)) =
+        auto_fallback_args(&store, task_id, tasks, task_idx)?
+    else {
         return Ok(None);
     };
-    let siblings: Vec<_> = tasks
-        .iter()
-        .enumerate()
-        .filter(|(idx, _)| *idx != task_idx)
-        .map(|(_, task)| task)
-        .collect();
-    let mut run_args = task_to_run_args(
-        &tasks[task_idx],
-        &siblings,
-        true,
-        &store,
-        shared_dir_path,
-    );
+    let fallback_agent = run_args.agent_name.clone();
     run_args.repo_root = repo_root.map(str::to_string);
     run_args.suppress_nested_repo_warning = true;
-    crate::cmd::run::switch_agent(&mut run_args, fallback_agent.clone());
     run_args.parent_task_id = Some(task_id.to_string());
     retried[task_idx] = true;
     aid_progress!(
@@ -195,32 +184,41 @@ pub(crate) fn should_auto_fallback(
     auto_fallback && !already_retried && outcome == BatchTaskOutcome::Failed
 }
 
-pub(crate) fn auto_fallback_agent(
+pub(crate) fn auto_fallback_args(
     store: &Store,
     task_id: &str,
     tasks: &[batch::BatchTask],
     task_idx: usize,
-) -> Result<Option<(String, String)>> {
-    let Some(task) = store.get_task(task_id)? else {
-        anyhow::bail!("batch task not found after dispatch: {task_id}");
+) -> Result<Option<(String, run::RunArgs)>> {
+    let task = store
+        .get_task(task_id)?
+        .ok_or_else(|| anyhow::anyhow!("batch task not found after dispatch: {task_id}"))?;
+    let mut args = run::RunArgs::for_retry(store, &task)?;
+    args.prompt = task.prompt.clone();
+    let fallback = if run::RunArgs::saved_for_task(store, task_id)?.is_some() {
+        (!args.cascade.is_empty()).then(|| args.cascade.join(","))
+    } else {
+        tasks.get(task_idx).and_then(|spec| spec.fallback.clone())
     };
-    if let Some((fallback_name, _)) = tasks
-        .get(task_idx)
-        .map(|task_spec| available_fallback_after(task.agent.as_str(), task_spec.fallback.as_deref()))
-        .transpose()?
-        .flatten()
-    {
-        return Ok(Some((task.agent.as_str().to_string(), fallback_name)));
-    }
-    if tasks.get(task_idx).and_then(|task_spec| task_spec.fallback.as_deref()).is_some() {
+    if let Some(fallback) = fallback {
+        let Some((name, remaining)) =
+            available_fallback_after(task.agent_display_name(), Some(&fallback))?
+        else {
+            return Ok(None);
+        };
+        run::switch_agent(&mut args, name);
+        args.cascade = remaining;
+    } else if let Some(candidate) = run::advice_route::automatic_candidate(Some(store), &args) {
+        run::advice_route::apply_candidate(&mut args, &candidate);
+    } else {
         return Ok(None);
     }
-    Ok(crate::agent::selection::coding_fallback_for(
-        &task.agent,
-        task.category.as_deref(),
-        Some(task.prompt.as_str()),
-    )
-    .map(|fallback| (task.agent.as_str().to_string(), fallback.as_str().to_string())))
+    if task.repo_path.is_some() || task.worktree_path.is_some() || task.worktree_branch.is_some() {
+        run::apply_retry_target(&task, &mut args)?;
+    }
+    args.background = true;
+    args.announce = true;
+    Ok(Some((task.agent_display_name().to_string(), args)))
 }
 
 /// Resolve cascade names the same way `aid run` does: custom agents are valid

@@ -195,15 +195,7 @@ async fn launch_candidates(
         child_args.existing_task_id =
             best_of_task_id(store.as_ref(), args.existing_task_id.as_ref(), candidate_idx)?;
         let store = store.clone();
-        let dispatch = async {
-            if let (Some(kind), Some(model)) = (candidate.kind(), candidate.model.as_deref())
-                && !crate::agent::model_validation::validate_model_for_agent(
-                    crate::agent::get_agent(kind).as_ref(), model, child_args.model_source,
-                )? {
-                bail!("advised model '{model}' unavailable; refusing a different default");
-            }
-            run(store, child_args).await
-        }.await;
+        let dispatch = run(store, child_args).await;
         match dispatch {
             Ok(task_id) => {
                 candidate_artifacts.push((task_id.clone(), artifacts));

@@ -1,8 +1,7 @@
 // Best-of plans retain advice's ranked builtin routes and resolved models.
 // Exports plan construction and racer arguments; deps: advise, RunArgs, team policy.
 
-use anyhow::{bail, Result};
-use crate::cmd::run::{switch_agent, RunArgs};
+#[cfg(test)]
 use crate::agent::model_validation::ModelSource;
 use crate::agent::selection::AdviceCandidate;
 use crate::store::Store;
@@ -12,15 +11,8 @@ use crate::types::DeclaredTaskProfile;
 pub(super) fn advised_plan(
     store: &Store, args: &RunArgs, n: usize,
 ) -> Result<(DeclaredTaskProfile, Vec<AdviceCandidate>)> {
-    let declared = DeclaredTaskProfile {
-        difficulty: args.declared_difficulty.unwrap_or_default(),
-        budget: args.declared_budget.unwrap_or_default(),
-        urgency: args.declared_urgency.unwrap_or_default(),
-        rigor: args.declared_rigor.unwrap_or_default(),
-    };
-    let report = crate::cmd::advise::build_report(
-        Some(store), &args.prompt, declared, args.kind, args.team.as_deref(), 0, None,
-    );
+    let report = super::super::advice_route::report(Some(store), args);
+    let declared = report.declared;
     let team = args.team.as_deref().and_then(crate::team::resolve_team);
     Ok((declared, expand_best_of_plan(report.candidates, team.as_ref(), n)?))
 }
@@ -43,10 +35,7 @@ pub(super) fn racer_args(
     args: &RunArgs, candidate: &AdviceCandidate, declared: DeclaredTaskProfile,
 ) -> RunArgs {
     let mut child = args.clone();
-    switch_agent(&mut child, candidate.agent.clone());
-    child.model = candidate.model.clone();
-    child.model_source = ModelSource::AidResolved;
-    child.force_default_model = candidate.model.is_none();
+    super::super::advice_route::apply_candidate(&mut child, candidate);
     child.declared_difficulty = Some(declared.difficulty);
     child.declared_budget = Some(declared.budget);
     child.declared_urgency = Some(declared.urgency);

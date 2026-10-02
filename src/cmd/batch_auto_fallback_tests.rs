@@ -6,10 +6,7 @@ use chrono::Local;
 use tempfile::TempDir;
 
 use super::batch::{
-    auto_fallback_agent,
-    pre_dispatch_fallback_choice,
-    should_auto_fallback,
-    BatchTaskOutcome,
+    BatchTaskOutcome, auto_fallback_args, pre_dispatch_fallback_choice, should_auto_fallback,
 };
 use crate::paths::AidHomeGuard;
 use crate::rate_limit::{clear_rate_limit, mark_rate_limited};
@@ -80,13 +77,17 @@ fn should_auto_fallback_only_once_for_failed_tasks() {
 }
 
 #[test]
-fn auto_fallback_agent_returns_none_when_no_usable_peer() {
+fn auto_fallback_args_returns_none_when_no_usable_peer() {
     let store = Store::open_memory().unwrap();
     // Only the exhausted agent is installed — category-aware fallback must not invent peers.
     let _agents = crate::agent::DetectAgentsGuard::set(vec![AgentKind::MiMoCode]);
     store.insert_task(&stored_task("t-mimocode", AgentKind::MiMoCode)).unwrap();
 
-    assert!(auto_fallback_agent(&store, "t-mimocode", &[], 0).unwrap().is_none());
+    assert!(
+        auto_fallback_args(&store, "t-mimocode", &[], 0)
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]
@@ -143,11 +144,11 @@ fn auto_fallback_skips_rate_limited_toml_fallbacks() {
     store.insert_task(&stored_task("t-codex", AgentKind::Codex)).unwrap();
     let tasks = vec![batch_task_with_fallback("opencode,cursor")];
 
-    let result = auto_fallback_agent(&store, "t-codex", &tasks, 0).unwrap();
+    let result = auto_fallback_args(&store, "t-codex", &tasks, 0).unwrap();
     assert!(result.is_some());
     let (original, fallback) = result.unwrap();
     assert_eq!(original, "codex");
-    assert_eq!(fallback, "cursor");
+    assert_eq!(fallback.agent_name, "cursor");
 
     clear_rate_limit(&AgentKind::OpenCode, None);
 }
@@ -269,7 +270,7 @@ fn pre_dispatch_unknown_fallback_is_an_error() {
 }
 
 #[test]
-fn auto_fallback_agent_selects_custom_toml_fallback() {
+fn auto_fallback_args_selects_custom_toml_fallback() {
     let (_temp, _guard) = isolated_rate_limit_home();
     write_custom_agent("glm5");
 
@@ -277,8 +278,8 @@ fn auto_fallback_agent_selects_custom_toml_fallback() {
     store.insert_task(&stored_task("t-codex", AgentKind::Codex)).unwrap();
     let tasks = vec![batch_task_with_fallback("glm5")];
 
-    let result = auto_fallback_agent(&store, "t-codex", &tasks, 0).unwrap();
+    let result = auto_fallback_args(&store, "t-codex", &tasks, 0).unwrap();
     let (original, fallback) = result.expect("custom fallback");
     assert_eq!(original, "codex");
-    assert_eq!(fallback, "glm5");
+    assert_eq!(fallback.agent_name, "glm5");
 }

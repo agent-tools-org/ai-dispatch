@@ -90,7 +90,13 @@ pub struct RunArgs {
     /// whose CLI default is unknown, so smart-route/budget/configured defaults
     /// cannot replace the selected default route.
     pub force_default_model: bool,
+    /// Advice selected this exact route; resolution must not replace its model.
+    #[serde(default)]
+    pub advised_route: bool,
 }
+
+#[path = "args_retry.rs"]
+mod args_retry;
 
 impl RunArgs {
     pub(crate) fn dispatch_args_json(&self) -> Result<String> {
@@ -111,34 +117,6 @@ impl RunArgs {
             .get_task_dispatch_args(task_id)?
             .map(|json| Self::from_dispatch_args_json(&json))
             .transpose()
-    }
-
-    pub(crate) fn for_retry(store: &Store, task: &crate::types::Task) -> Result<Self> {
-        let mut args = Self::saved_for_task(store, task.id.as_str())?.unwrap_or_else(|| Self {
-            repo: task.repo_path.clone(),
-            dir: task.repo_path.clone(),
-            output: task.output_path.clone(),
-            model: task.requested_model.clone(),
-            model_source: ModelSource::AidResolved,
-            group: task.workgroup_id.clone(),
-            verify: task.verify.clone(),
-            read_only: task.read_only,
-            budget: task.budget,
-            ..Default::default()
-        });
-        args.agent_name = task.agent_display_name().to_string();
-        args.repo = args.repo.or_else(|| task.repo_path.clone());
-        if args.model_source != ModelSource::UserSupplied {
-            args.model = task.requested_model.clone();
-        }
-        args.session_id = if task.agent.supports_session_resume() {
-            task.agent_session_id.clone()
-        } else {
-            None
-        };
-        args.existing_task_id = None;
-        args.env = None;
-        Ok(args)
     }
 
     /// Worker configuration: the saved dispatch args plus the facts dispatch
@@ -237,6 +215,7 @@ impl Default for RunArgs {
             suppress_nested_repo_warning: false,
             link_deps: true,
             force_default_model: false,
+            advised_route: false,
         }
     }
 }

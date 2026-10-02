@@ -1,5 +1,5 @@
 // Agent advice and the removed-auto error.
-// Exports: advise() and fallback helpers.
+// Exports: advise() and declared budget warnings.
 // Deps: scoring, declared profiles, model catalog, teams, and task history.
 
 #[path = "selection_scoring.rs"]
@@ -10,13 +10,10 @@ mod selection_quota;
 mod selection_capabilities;
 #[path = "selection_advice.rs"]
 mod selection_advice;
-#[path = "selection_fallback.rs"]
-mod selection_fallback;
 #[path = "explicit_model.rs"]
 mod explicit_model;
 pub(crate) use explicit_model::declared_budget_warning;
 pub(crate) use selection_advice::{AdviceCandidate, AdviceReport, advise, caller_advice};
-pub(crate) use selection_fallback::{coding_fallback_for, coding_fallback_for_prompt};
 pub(crate) use selection_quota::{observed_ok, quota_from, tightest_window};
 use super::classifier::{self, TaskCategory};
 use super::detect_agents;

@@ -10,6 +10,8 @@ mod final_state;
 pub(crate) use final_state::capture_final_worktree_state;
 #[path = "lifecycle/missing_report.rs"]
 mod missing_report;
+#[path = "quota_continuation.rs"]
+mod quota_continuation;
 pub(crate) use missing_report::record_missing_report;
 use super::run_dirty::{DirtyWorktreeAction, post_agent_dirty_worktree_cleanup};
 use super::run_model_selfheal::maybe_auto_retry_after_model_unavailable;
@@ -276,30 +278,13 @@ async fn run_lifecycle_phases(
         // nothing else. Re-matching it here would only be a second opinion on
         // text that has already passed the one gate.
         && let Some(message) = quota_error_message.as_deref()
-        && let Some(fallback) =
-            agent::selection::coding_fallback_for_prompt(&agent_kind, &args.prompt)
     {
-        let model = task
-            .requested_model
-            .as_deref()
-            .or(args.model.as_deref())
-            .or(task.observed_model.as_deref());
-        rate_limit::mark_rate_limited_for_model(
-            &agent_kind,
-            task.custom_agent_name.as_deref(),
-            model,
-            message,
-        );
-        aid_info!(
-            "[aid] Quota exhausted for {}, auto-cascading to {}",
-            task.agent_display_name(),
-            fallback.as_str()
-        );
-        let mut cascade_args = args.clone();
-        super::run_post::switch_agent(&mut cascade_args, fallback.as_str().to_string());
-        cascade_args.parent_task_id = Some(task_id.as_str().to_string());
-        inherit_cascade_target(&mut cascade_args, &task)?;
-        return Box::pin(run(store.clone(), cascade_args)).await.map(Some);
+        if let Some(retry_id) =
+            quota_continuation::continue_quota(store, args, &task, message).await?
+        {
+            return Ok(Some(retry_id));
+        }
+        true
     } else {
         true
     };

@@ -151,9 +151,16 @@ fn render_rate_limit_line(kind: AgentKind) -> String {
     }
     match rate_limit::get_rate_limit_info(&kind, None) {
         Some(info) => {
-            let fallback_hint = crate::agent::selection::coding_fallback_for(&kind, None, None)
-                .map(|fallback| format!(" → use --fallback {}", fallback.as_str()))
-                .unwrap_or_default();
+            let fallback_hint = crate::cmd::run::advice_route::automatic_candidate(
+                None,
+                &crate::cmd::run::RunArgs {
+                    agent_name: kind.as_str().to_string(),
+                    prompt: "Implement a feature".to_string(),
+                    ..Default::default()
+                },
+            )
+            .map(|fallback| format!(" → use --fallback {}", fallback.agent))
+            .unwrap_or_default();
             let cause = match info.recovery_at {
                 Some(recovery) => format!("try again at {recovery}"),
                 None if info.needs_human => {

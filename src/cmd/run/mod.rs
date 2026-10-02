@@ -17,6 +17,7 @@ mod run_validate;
 mod run_prompt;
 #[path = "agent.rs"]
 mod run_agent;
+pub(crate) mod advice_route;
 #[path = "bestof.rs"]
 mod run_bestof;
 #[path = "lifecycle.rs"]

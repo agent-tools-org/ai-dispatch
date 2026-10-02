@@ -12,3 +12,5 @@ mod helpers;
 #[path = "batch_tests/retry.rs"]
 mod retry;
 
+#[path = "advised_retry_tests.rs"]
+mod advised_retry;

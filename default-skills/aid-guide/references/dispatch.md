@@ -515,12 +515,21 @@ failed attempt. Inspect the tree with `aid tree <task-id>`. Unspecified
 `--model` / `--idle-timeout` keep the original task values; `--feedback` and
 `--feedback-file` cannot be combined.
 
-When `--cascade` is omitted and the primary agent is rate-limited or hits a
-quota/auth dead path, aid auto-cascades to the best installed peer for the
-task category (capability matrix), skipping rate-limited, disabled, not
-installed, and known-unhealthy agents (for example gemini when `agy` is
-present). A frontend task falling off codex prefers cursor; a research task
-prefers agy — not gemini.
+Automatic cascade takes the first launchable builtin candidate in `aid advise`'s
+ranked list, using the task's difficulty, budget, urgency, rigor, kind, team,
+history and detected caller. It excludes the exhausted agent and always excludes
+Claude, even when team-preferred. Advice gates exclude disabled, missing,
+auth-failed, below-floor, weaker same-pool and superseded Gemini routes, plus
+holds on the candidate's selected model group even under background urgency.
+An advisory `recommended` route never rescues an empty launchable set.
+
+The candidate's model is retained through dispatch: known CLI defaults are
+pinned, and unknown defaults cannot be replaced by later budget routing. A known
+unservable advice model fails before launch rather than running another default.
+Explicit cascade/fallback lists keep their order, custom-name resolution,
+remaining entries and unknown-name errors. Explicit Gemini remains allowed when
+agy is installed. Cross-agent switches clear the source model and session before
+applying the selected route.
 
 A hold diverts dispatch whenever it is still live, whether it ends on a stated
 time, a dated aidbar window, or only when a person runs
@@ -555,8 +564,8 @@ default runs instead, because a stale catalog entry is aid's problem to absorb,
 not a reason to refuse your dispatch. Where the CLI cannot be asked what it
 serves, dispatch proceeds unvalidated and says so.
 
-One exception: on a substituted route — where a held agent was replaced by a
-fallback before dispatch — an aid-resolved model survives a served-list miss
+For explicit fallback substitution — where a held agent was replaced by a
+caller-listed fallback before dispatch — an aid-resolved model survives a served-list miss
 rather than being dropped. The substitution already proved the requested
 family spent, and the fallback's own default can re-enter that exhausted
 family (agy's default is a gemini model, the group the hold just escaped), so

@@ -288,6 +288,8 @@ pub(crate) fn switch_agent(args: &mut RunArgs, next_agent: String) {
     if args.agent_name != next_agent {
         args.model = None;
         args.session_id = None;
+        args.force_default_model = false;
+        args.advised_route = false;
     }
     args.agent_name = next_agent;
 }

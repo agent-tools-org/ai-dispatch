@@ -43,7 +43,7 @@ pub(crate) fn task_to_run_args(
                 .map(ToString::to_string)
                 .collect()
         })
-        .unwrap_or_else(|| auto_cascade_for_rate_limited(&agent_name, &task.prompt));
+        .unwrap_or_default();
     let env = merged_env(task.env.as_ref(), task.env_forward.as_ref(), shared_dir_path);
     let skills = if task.no_skill {
         vec![NO_SKILL_SENTINEL.to_string()]
@@ -110,21 +110,6 @@ pub(crate) fn task_to_run_args(
         link_deps: task.worktree_link_deps.unwrap_or(true),
         ..Default::default()
     }
-}
-
-/// If the agent is rate-limited, return the suggested fallback as an auto-cascade.
-fn auto_cascade_for_rate_limited(agent_name: &str, prompt: &str) -> Vec<String> {
-    let (agent, custom_name) = crate::rate_limit::resolve_agent(agent_name);
-    if !crate::rate_limit::is_rate_limited(&agent, custom_name) {
-        return vec![];
-    }
-    // Coding fallback is defined for built-ins; a held custom has no matrix entry.
-    if agent == crate::types::AgentKind::Custom {
-        return vec![];
-    }
-    crate::agent::selection::coding_fallback_for_prompt(&agent, prompt)
-        .map(|fallback| vec![fallback.as_str().to_string()])
-        .unwrap_or_default()
 }
 
 /// Auto-scope result_file when sibling tasks share the same filename.

@@ -114,9 +114,17 @@ fn every_field_set() -> RunArgs {
         env_forward: Some(vec!["FORWARDED".into()]), judge_retry: true,
         existing_task_id: Some(TaskId("t-existing".into())), timeout: Some(71),
         idle_timeout_secs: Some(7),
-        timeout_policy: TimeoutPolicy { idle: Duration::from_secs(7), ..TimeoutPolicy::default() },
-        audit: true, audit_explicit: true, no_audit: true, suppress_nested_repo_warning: true,
-        link_deps: false, force_default_model: true,
+        timeout_policy: TimeoutPolicy {
+            idle: Duration::from_secs(7),
+            ..TimeoutPolicy::default()
+        },
+        audit: true,
+        audit_explicit: true,
+        no_audit: true,
+        suppress_nested_repo_warning: true,
+        link_deps: false,
+        force_default_model: true,
+        advised_route: true,
     }
 }
 

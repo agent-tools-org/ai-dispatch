@@ -529,8 +529,10 @@ unservable advice model fails before launch rather than running another default.
 When served-model evidence is unknown, the exact requested advice pin is allowed.
 Advice provenance is persisted for both model pins and unknown defaults.
 Explicit cascade/fallback lists keep their order, custom-name resolution,
-remaining entries and unknown-name errors. An exhausted explicit batch fallback
-list never resumes automatic selection. Explicit Gemini and Claude remain allowed when
+remaining entries and unknown-name errors. Failed-task batch `auto_fallback`
+never replaces an exhausted explicit list with advice. Explicit `aid batch retry`
+can use advice when the saved list is empty and the agent is held. Explicit Gemini
+and Claude remain allowed when
 agy is installed. Cross-agent switches clear the source model and session before
 applying the selected route.
 

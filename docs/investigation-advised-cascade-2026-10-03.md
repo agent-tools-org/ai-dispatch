@@ -47,7 +47,7 @@ and behavior in smaller source files. All new or changed Rust files are at most
 300 lines. The inherited lifecycle orchestration and dispatch/model-validation
 functions still exceed 50 lines; the function-size requirement is not fully met.
 
-The net production Rust change against `724395fd` is -2 lines, counting moved
+The net production Rust change against `724395fd` is -4 lines, counting moved
 code, headers, imports and blanks and excluding dedicated tests and trailing test
 modules. Rustfmt parsed the reviewed files without syntax errors. This is not
 compiler, clippy or test evidence.

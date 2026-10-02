@@ -268,4 +268,3 @@ pub(super) fn run_fail_hook(
         aid_error!("[aid] Hook on_fail failed: {err}");
     }
 }
-

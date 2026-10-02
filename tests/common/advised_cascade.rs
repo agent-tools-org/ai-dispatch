@@ -271,7 +271,7 @@ printf '%s\n' '{"type":"item.completed","item":{"id":"final","type":"agent_messa
 printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":10,"output_tokens":80}}'
 "#;
 const OZ: &str = r#"#!/bin/sh
-if [ "$1" = '--version' ]; then echo 'oz 1.0.0'; exit 0; fi
+if [ "$1" = '--version' ]; then echo 'Warp oz 1.0.0'; exit 0; fi
 printf '%s\n' "$@" > "$CASCADE_CAPTURE_ROOT/oz.args"
 if [ "$(cat "$CASCADE_CAPTURE_ROOT/mode")" = 'quota' ]; then
   echo 'Error: Quota limit reached.' >&2
@@ -281,7 +281,7 @@ fi
 exit 1
 "#;
 const CLAUDE: &str = r#"#!/bin/sh
-if [ "$1" = '--version' ]; then echo 'claude 1.0.0'; exit 0; fi
+if [ "$1" = '--version' ]; then echo 'Claude Code 1.0.0'; exit 0; fi
 printf '%s\n' "$@" > "$CASCADE_CAPTURE_ROOT/claude.args"
 exit 7
 "#;

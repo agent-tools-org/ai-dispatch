@@ -15,6 +15,9 @@ use crate::{
 use chrono::Local;
 use std::{os::unix::fs::PermissionsExt, path::{Path, PathBuf}, process::Command, sync::Arc};
 
+#[path = "lifecycle_read_only_backup_tests.rs"]
+mod read_only_backup_tests;
+
 fn git(dir: &Path, args: &[&str]) {
     assert!(Command::new("git")
         .args(["-C", &dir.to_string_lossy()])

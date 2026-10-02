@@ -33,7 +33,7 @@ Code trace before: selection returned an agent name; batch conversion and contin
 
 Failed batch fallback overlays the current specification's runtime environment and forwarded names using the same merged environment/shared directory mechanism as initial dispatch. Saved dispatch JSON omits all environment values. Remaining saved explicit cascade entries are authoritative; a supplied explicit fallback with an empty saved cascade is exhausted and never rescued automatically. Builtin identity parsing excludes uppercase names and Antigravity aliases from selecting themselves.
 
-Controlled CLI regressions and resolver/store tests are supplied with this change. They are draft evidence until executed. One remote verification attempt failed before any job or test was started because transport status returned `tailscale status returned no JSON (Expecting value at byte 0)`. No Rust compilation, tests or independent cross-review have run for this draft. No local Cargo fallback was used.
+Controlled CLI regressions and resolver/store tests pass on final source `f4e6014a`. The baseline public CLI regression launches `gpt-5.6-luna` where advice selected `gpt-6-sol`; the final suite preserves the exact advised model. An early sandbox transport attempt failed before any job or test started. Final verification ran remotely; no local Cargo fallback was used.
 
 ## Correction checks
 
@@ -47,14 +47,13 @@ and behavior in smaller source files. All new or changed Rust files are at most
 300 lines. The inherited lifecycle orchestration and dispatch/model-validation
 functions still exceed 50 lines; the function-size requirement is not fully met.
 
-The net production Rust change against `724395fd` is -4 lines, counting moved
-code, headers, imports and blanks and excluding dedicated tests and trailing test
-modules. Rustfmt parsed the reviewed files without syntax errors. This is not
-compiler, clippy or test evidence.
-
-Required remote verification remains pending: `aid build check -p ai-dispatch`,
-`aid test -p ai-dispatch`, the full web-feature suite through the remote test
-wrapper, and strict production clippy for default and web configurations. The
-focused CLI target is `aid test --test advised_cascade_e2e`. None ran: transport
-admission failed before a job was created. Independent read-only audit is also
-pending; this checkout is an unaccepted draft.
+The net production Rust change against `724395fd` is -10 physical lines, counting
+moved code, headers, imports and blanks and excluding dedicated tests, test-only imports and trailing
+test modules. Full remote default and Web workspace suites pass on the same clean
+source: 3,098 and 3,130 passed respectively, zero failed and 14 existing ignored
+per suite. Strict default/Web production clippy and the guide validator pass.
+[Validation evidence](validation-advised-cascade-2026-10-03.md) records source,
+commands, completed job identifiers, failed draft attempts and verification limits.
+[Independent read-only review](audit-advised-cascade-2026-10-03.md) returns
+PASS on all three questions and SHIP. Dedicated background-mode quota continuation
+E2E output remains unverified; both modes use the traced shared branch.

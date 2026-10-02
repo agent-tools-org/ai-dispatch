@@ -47,7 +47,7 @@ no new layer. Behaviour-preserving moves and semantic fixes land separately.
 | Order | Slice | Acceptance contract |
 | --- | --- | --- |
 | 1 (complete locally) | Route: best-of races advise's launchable candidates | No uninstalled or held route races; each racer's resolved model equals the advised model; plan cycling kept |
-| 2 | Route: cascade fallback from advise | Fallback is the first launchable advise candidate other than the exhausted agent; Claude and superseded Gemini never selected; a peer below the capability floor is not selected |
+| 2 (complete locally) | Route: cascade fallback from advise | Fallback is the first launchable advise candidate other than the exhausted agent; Claude and superseded Gemini never selected; a peer below the capability floor is not selected |
 | 3 | Pricing: budget scoring uses the price function | Subscription and unknown prices are not "paid"; overrides apply both ways |
 | 4 | Run configuration: job file holds runtime state only | Nine runtime fields; old job files still load so running workers can be waited on, stopped and reaped |
 | 5 | Read-only snapshot scope | Snapshot from the repository top level; the run repository's HEAD and refs compared; repositories without commits and special files recorded instead of failing |
@@ -60,8 +60,12 @@ guide updated for any contract change, and net production lines not increased.
 
 2026-10-03 progress: slice 1 (`wi-843a`) is complete locally. Production lines
 decrease by 35; both full remote suites and strict default/Web lint pass, and
-independent review returns SHIP. Next: advise-driven automatic cascade (`wi-7aad`),
-then price-function scoring (`wi-739e`); both are ready in the local board.
+independent review returns SHIP. Slice 2 (`wi-7aad`) is also complete locally: automatic cascades preserve
+advice's exact model and declared profile through resolver, quota continuation
+and batch handoffs. Production Rust decreases by 10 physical lines; 3,098 default
+and 3,130 Web tests pass, with zero failed and 14 existing ignored per suite.
+Strict default/Web production lint and independent review pass. [Cascade validation](validation-advised-cascade-2026-10-03.md)
+records the source and completed jobs. Next: price-function scoring (`wi-739e`).
 
 Read-only report preservation (`wi-562b`) and the remote verifier's absolute
 launch/wait deadline (`wi-8b23`) also pass their before/after regressions and

@@ -189,10 +189,12 @@ fn detected_caller_excludes_weaker_same_pool_route_before_launch() {
 fn batch_fallback_child_receives_runtime_env_forward_and_shared_dir_without_persisting_values() {
     let h = Harness::new(Some("gpt-6-sol"), false);
     h.mode("failure");
+    success(&h.aid().args(["group", "create", "Environment fixture", "--id", "wg-env-route"]).output().expect("group"));
+    std::fs::create_dir_all(h.home.path().join("shared/wg-env-route")).expect("shared directory");
     let candidate = h.first_peer().expect("peer");
     let batch = h.home.path().join("env-batch.toml");
     std::fs::write(&batch, format!(
-        "[defaults]\nauto_fallback = true\nshared_dir = true\n[[task]]\nid = 't-env-parent'\nagent = 'oz'\nprompt = '{PROMPT}'\nkind = 'refactoring'\nteam = 'routes'\ndifficulty = 'complex'\nbudget = 'premium'\nurgency = 'normal'\nrigor = 'standard'\nno_skill = true\nmodel = 'parent-model'\ndir = '{}'\noutput = '{}'\nenv_forward = ['CASCADE_SYNTHETIC_FORWARDED']\n[task.env]\nCASCADE_SYNTHETIC_INLINE = 'synthetic-inline-value'\n",
+        "[defaults]\nauto_fallback = true\nshared_dir = true\n[[task]]\nid = 't-env-parent'\ngroup = 'wg-env-route'\nagent = 'oz'\nprompt = '{PROMPT}'\nkind = 'refactoring'\nteam = 'routes'\ndifficulty = 'complex'\nbudget = 'premium'\nurgency = 'normal'\nrigor = 'standard'\nno_skill = true\nmodel = 'parent-model'\ndir = '{}'\noutput = '{}'\nenv_forward = ['CASCADE_SYNTHETIC_FORWARDED']\n[task.env]\nCASCADE_SYNTHETIC_INLINE = 'synthetic-inline-value'\n",
         h.home.path().display(), h.home.path().join("answer.md").display(),
     )).expect("batch");
     success(&h.aid().arg("batch").arg(batch).args(["--wait", "--yes"])

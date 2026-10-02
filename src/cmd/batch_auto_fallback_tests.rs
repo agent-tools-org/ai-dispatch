@@ -78,6 +78,7 @@ fn should_auto_fallback_only_once_for_failed_tasks() {
 
 #[test]
 fn auto_fallback_args_returns_none_when_no_usable_peer() {
+    let (_temp, _guard) = isolated_rate_limit_home();
     let store = Store::open_memory().unwrap();
     // Only the exhausted agent is installed — category-aware fallback must not invent peers.
     let _agents = crate::agent::DetectAgentsGuard::set(vec![AgentKind::MiMoCode]);

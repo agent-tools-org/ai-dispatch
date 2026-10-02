@@ -206,7 +206,7 @@ fn resolver_excludes_uppercase_and_alias_primary_by_builtin_kind() {
     let _served = crate::agent::model_validation::MockServedModelsGuard::set(AgentKind::Codex, None);
     for name in ["AGY", "antigravity", "ANTIGRAVITY"] {
         hold(dir.path(), "agy");
-        let mut child = RunArgs { agent_name: name.into(), kind: Some(TaskCategory::Research), ..args() };
+        let mut child = RunArgs { agent_name: name.into(), ..args() };
         let setup = super::super::run_dispatch_resolve::resolve_agent_setup(&store, &mut child, None)
             .expect("other builtin");
         assert_eq!(setup.agent_kind, AgentKind::Codex, "{name}");

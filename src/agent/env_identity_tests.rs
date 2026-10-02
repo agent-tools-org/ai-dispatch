@@ -22,7 +22,7 @@ fn timeout_returns_promptly_and_reaps_the_probe_pid() {
     let error = run_bounded(&binary, &[pid_file.to_str().expect("pid path")], timeout)
         .expect_err("sleeping probe must time out");
     let elapsed = start.elapsed();
-    assert!(error.to_string().contains("timed out"));
+    assert!(error.to_string().contains("timed out"), "{error:#}");
     assert!(elapsed >= timeout && elapsed < timeout + Duration::from_secs(1), "{elapsed:?}");
     let pid: i32 = fs::read_to_string(pid_file).expect("probe started").trim().parse().expect("pid");
     assert_eq!(unsafe { libc::kill(pid, 0) }, -1, "probe pid still exists");

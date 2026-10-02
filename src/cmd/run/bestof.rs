@@ -166,8 +166,8 @@ pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<T
     validate_best_of_count(n)?;
     let original_artifacts =
         dispatch_artifacts_for_candidate(args.output.as_deref(), args.result_file.as_deref(), 0);
-    let (declared, plan) = advised_plan(&store, &args, n)?;
-    let (dispatches, candidate_artifacts) = launch_candidates(&store, &args, declared, plan, n).await?;
+    let (_, plan) = advised_plan(&store, &args, n)?;
+    let (dispatches, candidate_artifacts) = launch_candidates(&store, &args, plan, n).await?;
     let completed = collect_results(&store, dispatches, args.metric.as_deref(), n).await?;
     let best = pick_best_result(&completed)
         .ok_or_else(|| anyhow!("best-of-{n}: no successful tasks"))?;
@@ -177,14 +177,14 @@ pub async fn run_best_of(store: Arc<Store>, args: RunArgs, n: usize) -> Result<T
 }
 
 async fn launch_candidates(
-    store: &Arc<Store>, args: &RunArgs, declared: DeclaredTaskProfile,
+    store: &Arc<Store>, args: &RunArgs,
     plan: Vec<AdviceCandidate>, n: usize,
 ) -> Result<(Vec<BestOfDispatch>, Vec<(TaskId, DispatchArtifacts)>)> {
     let mut dispatches = Vec::new();
     let mut candidate_artifacts = Vec::new();
     for (candidate_idx, candidate) in plan.into_iter().enumerate() {
         let agent_label = candidate.agent.clone();
-        let mut child_args = racer_args(args, &candidate, declared);
+        let mut child_args = racer_args(args, &candidate);
         let artifacts = dispatch_artifacts_for_candidate(
             args.output.as_deref(),
             args.result_file.as_deref(),

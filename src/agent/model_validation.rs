@@ -130,6 +130,7 @@ pub(crate) fn clear_served_models_cache_for_agent(kind: AgentKind) {
 pub(crate) enum ModelSource {
     UserSupplied,
     AidResolved,
+    Advised,
 }
 
 impl Default for ModelSource {
@@ -176,14 +177,24 @@ pub(crate) fn validate_model_for_agent(
     let fresh_served_list = if from_live_probe {
         served_list
     } else {
-        refresh_served_models_cached(agent).unwrap_or(served_list)
+        match refresh_served_models_cached(agent) {
+            Some(models) => models,
+            None if source == ModelSource::Advised => return Ok(true),
+            None => served_list,
+        }
     };
 
+    if source == ModelSource::Advised && fresh_served_list.is_empty() {
+        return Ok(true);
+    }
     if fresh_served_list.iter().any(|m| m.eq_ignore_ascii_case(model_clean)) {
         return Ok(true);
     }
 
     let list_str = fresh_served_list.join(", ");
+    if source == ModelSource::Advised {
+        return Err(anyhow!("advised model '{model_clean}' unavailable for {}; refusing a different default. Served models: {list_str}", kind.as_str()));
+    }
     if source == ModelSource::UserSupplied {
         return Err(anyhow!(
             "Agent '{}' does not serve model '{model_clean}'. Served models: {list_str}",

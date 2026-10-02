@@ -135,7 +135,7 @@ fn scope_filename(path: &str, suffix: &str) -> String {
     }
 }
 
-fn merged_env(
+pub(super) fn merged_env(
     env: Option<&HashMap<String, String>>,
     env_forward: Option<&Vec<String>>,
     shared_dir_path: Option<&str>,

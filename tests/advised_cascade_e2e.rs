@@ -184,3 +184,72 @@ fn detected_caller_excludes_weaker_same_pool_route_before_launch() {
     assert!(h.rows().is_empty());
     assert!(!h.home.path().join("codex.args").exists());
 }
+
+#[test]
+fn batch_fallback_child_receives_runtime_env_forward_and_shared_dir_without_persisting_values() {
+    let h = Harness::new(Some("gpt-6-sol"), false);
+    h.mode("failure");
+    let candidate = h.first_peer().expect("peer");
+    let batch = h.home.path().join("env-batch.toml");
+    std::fs::write(&batch, format!(
+        "[defaults]\nauto_fallback = true\nshared_dir = true\n[[task]]\nid = 't-env-parent'\nagent = 'oz'\nprompt = '{PROMPT}'\nkind = 'refactoring'\nteam = 'routes'\ndifficulty = 'complex'\nbudget = 'premium'\nurgency = 'normal'\nrigor = 'standard'\nno_skill = true\nmodel = 'parent-model'\ndir = '{}'\noutput = '{}'\nenv_forward = ['CASCADE_SYNTHETIC_FORWARDED']\n[task.env]\nCASCADE_SYNTHETIC_INLINE = 'synthetic-inline-value'\n",
+        h.home.path().display(), h.home.path().join("answer.md").display(),
+    )).expect("batch");
+    success(&h.aid().arg("batch").arg(batch).args(["--wait", "--yes"])
+        .env("CASCADE_SYNTHETIC_FORWARDED", "synthetic-forwarded-value").output().expect("batch run"));
+    let rows = h.rows();
+    assert_eq!(rows.len(), 2);
+    let child = rows.iter().find(|r| r.parent.as_deref() == Some("t-env-parent")).expect("fallback");
+    h.assert_route(child, &candidate);
+    let captured = std::fs::read_to_string(h.home.path().join("codex.env")).expect("child environment");
+    let values: Vec<_> = captured.lines().collect();
+    assert_eq!(&values[..2], ["synthetic-inline-value", "synthetic-forwarded-value"]);
+    assert!(!values[2].is_empty(), "shared directory missing: {captured}");
+    assert!(std::path::Path::new(values[2]).ends_with(child.saved["group"].as_str().expect("group")));
+    for row in rows {
+        let saved = row.saved.to_string();
+        assert!(!saved.contains("synthetic-inline-value") && !saved.contains("synthetic-forwarded-value"));
+        assert!(row.saved["env"].is_null());
+        assert_eq!(row.saved["env_forward"], serde_json::json!(["CASCADE_SYNTHETIC_FORWARDED"]));
+    }
+}
+
+#[test]
+fn failed_batch_with_consumed_explicit_fallback_does_not_launch_automatic_peer() {
+    let h = Harness::new(Some("gpt-6-sol"), false);
+    h.mode("failure");
+    let batch = h.home.path().join("exhausted-batch.toml");
+    std::fs::write(&batch, format!(
+        "[defaults]\nauto_fallback = true\n[[task]]\nid = 't-explicit-parent'\nagent = 'claude'\nfallback = 'oz'\nprompt = '{PROMPT}'\nno_skill = true\ndir = '{}'\n",
+        h.home.path().display(),
+    )).expect("batch");
+    h.hold("claude");
+    let _output = h.aid().arg("batch").arg(batch).args(["--wait", "--yes"]).output().expect("batch run");
+    let rows = h.rows();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].agent, "oz");
+    assert_eq!(rows[0].saved["cascade"], serde_json::json!([]));
+    assert!(!h.home.path().join("codex.args").exists());
+}
+
+#[test]
+fn prelaunch_default_profile_dimensions_are_materialized_in_saved_dispatch() {
+    let h = Harness::new(Some("gpt-6-sol"), false);
+    h.hold("oz");
+    success(&h.aid().args(["run", "oz", PROMPT, "--no-hint", "--no-skill", "--no-audit",
+        "--kind", "refactoring", "--team", "routes"])
+        .arg("--dir").arg(h.home.path()).arg("--output").arg(h.home.path().join("answer.md"))
+        .output().expect("default profile run"));
+    let rows = h.rows();
+    assert_eq!(rows.len(), 1);
+    let row = &rows[0];
+    assert_eq!(row.agent, "codex");
+    assert_eq!(row.model.as_deref(), Some("gpt-6-sol"));
+    assert!(row.parent.is_none());
+    for (key, value) in [("declared_difficulty", "moderate"), ("declared_budget", "standard"),
+        ("declared_urgency", "normal"), ("declared_rigor", "standard"), ("model_source", "Advised")] {
+        assert_eq!(row.saved[key], value, "{key}");
+    }
+    let argv = std::fs::read_to_string(h.home.path().join("codex.args")).expect("actual argv");
+    assert!(argv.lines().collect::<Vec<_>>().windows(2).any(|pair| pair == ["-m", "gpt-6-sol"]));
+}

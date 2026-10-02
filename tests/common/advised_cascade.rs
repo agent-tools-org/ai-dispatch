@@ -236,7 +236,7 @@ impl Harness {
             ("declared_rigor", "standard"),
             ("kind", "refactoring"),
             ("team", "routes"),
-            ("model_source", "AidResolved"),
+            ("model_source", "Advised"),
         ] {
             assert_eq!(row.saved[key], value, "{key}");
         }
@@ -261,6 +261,7 @@ const CODEX: &str = r#"#!/bin/sh
 if [ "$1" = '--version' ]; then echo 'codex-cli 0.147.0'; exit 0; fi
 if [ "$2" = '--help' ]; then echo '      --approve-for-me'; exit 0; fi
 printf '%s\n' "$@" > "$CASCADE_CAPTURE_ROOT/codex.args"
+printf '%s\n' "$CASCADE_SYNTHETIC_INLINE" "$CASCADE_SYNTHETIC_FORWARDED" "$AID_SHARED_DIR" > "$CASCADE_CAPTURE_ROOT/codex.env"
 previous=''
 for arg in "$@"; do
   if [ "$previous" = '-o' ]; then printf 'Validated route and profile.\n' > "$arg"; fi

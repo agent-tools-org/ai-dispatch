@@ -156,7 +156,6 @@ fn every_field_set() -> RunArgs {
         suppress_nested_repo_warning: true,
         link_deps: false,
         force_default_model: true,
-        advised_route: true,
     }
 }
 

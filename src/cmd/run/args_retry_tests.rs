@@ -124,7 +124,6 @@ fn every_field_set() -> RunArgs {
         suppress_nested_repo_warning: true,
         link_deps: false,
         force_default_model: true,
-        advised_route: true,
     }
 }
 
@@ -150,5 +149,28 @@ fn task(task_id: &str) -> Task {
         verify: None, verify_status: VerifyStatus::Skipped, pending_reason: None,
         read_only: false, budget: false, audit_verdict: None, audit_report_path: None,
         delivery_assessment: None,
+    }
+}
+
+#[test]
+fn advised_model_and_unknown_default_survive_saved_retry_and_source_reset() {
+    let store = Store::open_memory().expect("store");
+    let mut row = task("t-advised-retry");
+    row.requested_model = Some("different-row-model".into());
+    store.insert_task(&row).expect("task");
+    for model in [Some("exact-model".to_string()), None] {
+        let saved = RunArgs { agent_name: "codex".into(), model: model.clone(),
+            model_source: ModelSource::Advised, force_default_model: model.is_none(),
+            ..Default::default() };
+        store.update_task_dispatch_args(row.id.as_str(), &saved.dispatch_args_json().expect("serialize")).expect("save");
+        let mut retry = RunArgs::for_retry(&store, &row).expect("retry");
+        assert_eq!(retry.model, model);
+        assert_eq!(retry.model_source, ModelSource::Advised);
+        assert_eq!(retry.force_default_model, model.is_none());
+        crate::cmd::run::switch_agent(&mut retry, "codex".into());
+        assert_eq!(retry.model_source, ModelSource::Advised);
+        crate::cmd::run::switch_agent(&mut retry, "agy".into());
+        assert_eq!(retry.model_source, ModelSource::AidResolved);
+        assert!(retry.model.is_none() && !retry.force_default_model);
     }
 }

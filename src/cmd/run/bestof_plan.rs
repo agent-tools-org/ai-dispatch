@@ -1,6 +1,8 @@
 // Best-of plans retain advice's ranked builtin routes and resolved models.
 // Exports plan construction and racer arguments; deps: advise, RunArgs, team policy.
 
+use anyhow::{bail, Result};
+use crate::cmd::run::RunArgs;
 #[cfg(test)]
 use crate::agent::model_validation::ModelSource;
 use crate::agent::selection::AdviceCandidate;
@@ -32,14 +34,10 @@ fn expand_best_of_plan(
 }
 
 pub(super) fn racer_args(
-    args: &RunArgs, candidate: &AdviceCandidate, declared: DeclaredTaskProfile,
+    args: &RunArgs, candidate: &AdviceCandidate,
 ) -> RunArgs {
     let mut child = args.clone();
     super::super::advice_route::apply_candidate(&mut child, candidate);
-    child.declared_difficulty = Some(declared.difficulty);
-    child.declared_budget = Some(declared.budget);
-    child.declared_urgency = Some(declared.urgency);
-    child.declared_rigor = Some(declared.rigor);
     child.background = true;
     child.judge = None;
     child.announce = false;
@@ -178,9 +176,9 @@ mod tests {
             ..Default::default()
         };
         for candidate in candidates().iter().filter(|c| c.launchable(None)) {
-            let mut child = racer_args(&parent, candidate, profile());
+            let mut child = racer_args(&parent, candidate);
             assert_eq!(child.model, candidate.model);
-            assert_eq!(child.model_source, ModelSource::AidResolved);
+            assert_eq!(child.model_source, ModelSource::Advised);
             assert!(!child.force_default_model);
             assert_eq!(child.session_id.as_deref(), (candidate.agent == "codex").then_some("parent-session"));
             assert!(child.background && child.best_of.is_none() && child.judge.is_none() && !child.announce);
@@ -206,7 +204,7 @@ mod tests {
             assert!(!candidate.pinned);
             assert_eq!(candidate.source, if model.is_some() { RunModelSource::CliConfig } else { RunModelSource::AgentDefault });
             let parent = RunArgs { agent_name: "codex".into(), model: Some("parent-model".into()), budget: true, ..Default::default() };
-            let mut child = racer_args(&parent, &candidate, profile());
+            let mut child = racer_args(&parent, &candidate);
             assert_eq!(child.model.as_deref(), model);
             assert_eq!(child.force_default_model, model.is_none());
             std::fs::write(temp.path().join("config.toml"), "[selection]\nbudget_mode = true\n").expect("budget pressure");
@@ -228,10 +226,10 @@ mod tests {
                 model: Some("parent-model".into()), session_id: Some("parent-session".into()),
                 ..Default::default()
             };
-            let (declared, plan) = advised_plan(&store, &parent, 2).expect("budget plan");
+            let (_, plan) = advised_plan(&store, &parent, 2).expect("budget plan");
             assert!(plan[0].pinned);
             assert_eq!(plan[0].source, RunModelSource::BudgetRoute);
-            let mut child = racer_args(&parent, &plan[0], declared);
+            let mut child = racer_args(&parent, &plan[0]);
             assert!(child.session_id.is_none());
             assert_eq!(child.declared_budget, Some(budget));
             assert_eq!(resolved_model(&mut child), plan[0].model);
@@ -253,7 +251,7 @@ mod tests {
             assert_eq!(declared.budget, args.declared_budget.unwrap_or_default());
             assert_eq!(declared.urgency, args.declared_urgency.unwrap_or_default());
             assert_eq!(declared.rigor, args.declared_rigor.unwrap_or_default());
-            let child = racer_args(&args, &plan[0], declared);
+            let child = racer_args(&args, &plan[0]);
             assert_eq!(child.declared_difficulty, Some(declared.difficulty));
             assert_eq!(child.declared_budget, Some(declared.budget));
             assert_eq!(child.declared_urgency, Some(declared.urgency));

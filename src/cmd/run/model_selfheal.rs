@@ -50,7 +50,7 @@ pub(crate) async fn maybe_auto_retry_after_model_unavailable(
     retry_args.on_done = None;
     retry_args.prompt = root_prompt;
     retry_args.force_default_model = true;
-    retry_args.advised_route = false;
+    retry_args.model_source = crate::agent::model_validation::ModelSource::AidResolved;
     retry_args.model = None;
     retry_args.budget = false;
     retry_args.parent_task_id = Some(task_id.as_str().to_string());

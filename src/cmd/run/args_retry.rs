@@ -32,7 +32,7 @@ impl RunArgs {
         });
         args.agent_name = task.agent_display_name().to_string();
         args.repo = args.repo.or_else(|| task.repo_path.clone());
-        if args.model_source != ModelSource::UserSupplied {
+        if args.model_source == ModelSource::AidResolved {
             args.model = task.requested_model.clone();
         }
         args.session_id = if task.agent.supports_session_resume() {

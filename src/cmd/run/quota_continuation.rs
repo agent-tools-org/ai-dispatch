@@ -1,12 +1,7 @@
 // Automatic continuation preserves advice's selected route after a quota refusal.
 // Exports continue_quota; deps: captured quota sentence, Task, Store and run advice.
-use super::{RunArgs, inherit_cascade_target, run};
-use crate::{
-    cmd::run::advice_route,
-    rate_limit,
-    store::Store,
-    types::{Task, TaskId},
-};
+use super::{RunArgs, Store, Task, TaskId, inherit_cascade_target, run};
+use crate::{cmd::run::advice_route, rate_limit};
 use anyhow::Result;
 use std::sync::Arc;
 

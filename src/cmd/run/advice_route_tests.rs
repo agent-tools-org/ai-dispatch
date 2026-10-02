@@ -194,7 +194,55 @@ fn automatic_excludes_superseded_gemini_and_claude_but_explicit_gemini_still_run
             .expect("explicit Gemini");
     assert_eq!(setup.agent_kind, AgentKind::Gemini);
     assert_eq!(explicit.cascade, ["claude"]);
-    assert!(!explicit.advised_route);
+    assert_ne!(explicit.model_source, ModelSource::Advised);
+}
+
+#[test]
+fn resolver_excludes_uppercase_and_alias_primary_by_builtin_kind() {
+    let (dir, _home, _cache) = isolated();
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let _fleet = DetectAgentsGuard::set(vec![AgentKind::Antigravity, AgentKind::Codex]);
+    crate::agent_config::save_agent_default_model("codex", Some("gpt-6-sol")).expect("model");
+    let _served = crate::agent::model_validation::MockServedModelsGuard::set(AgentKind::Codex, None);
+    for name in ["AGY", "antigravity", "ANTIGRAVITY"] {
+        hold(dir.path(), "agy");
+        let mut child = RunArgs { agent_name: name.into(), kind: Some(TaskCategory::Research), ..args() };
+        let setup = super::super::run_dispatch_resolve::resolve_agent_setup(&store, &mut child, None)
+            .expect("other builtin");
+        assert_eq!(setup.agent_kind, AgentKind::Codex, "{name}");
+        assert_eq!(child.model_source, ModelSource::Advised);
+        std::fs::remove_file(dir.path().join("rate-limit-agy")).expect("clear");
+    }
+    // Exclusion is by identity even before a marker exists, not just quota filtering.
+    let only = DetectAgentsGuard::set(vec![AgentKind::Antigravity]);
+    for name in ["AGY", "antigravity", "ANTIGRAVITY"] {
+        let child = RunArgs { agent_name: name.into(), kind: Some(TaskCategory::Research), ..args() };
+        assert!(automatic_candidate(Some(&store), &child).is_none(), "{name}");
+    }
+    drop(only);
+    let only = DetectAgentsGuard::set(vec![AgentKind::Codex]);
+    assert!(automatic_candidate(Some(&store), &RunArgs { agent_name: "CODEX".into(), ..args() }).is_none());
+    drop(only);
+}
+
+#[test]
+fn selected_route_materializes_and_persists_default_profiles_without_changing_kind_team() {
+    let (_dir, _home, _cache) = isolated();
+    let _fleet = DetectAgentsGuard::set(vec![AgentKind::Codex]);
+    let store = Store::open_memory().expect("store");
+    let mut child = RunArgs { agent_name: "oz".into(), prompt: "Refactor scheduler".into(),
+        kind: Some(TaskCategory::Refactoring), ..Default::default() };
+    let expected = report(Some(&store), &child).declared;
+    let selected = automatic_candidate(Some(&store), &child).expect("peer");
+    apply_candidate(&mut child, &selected);
+    let restored = RunArgs::from_dispatch_args_json(&child.dispatch_args_json().expect("save")).expect("restore");
+    assert_eq!(restored.declared_difficulty, Some(expected.difficulty));
+    assert_eq!(restored.declared_budget, Some(expected.budget));
+    assert_eq!(restored.declared_urgency, Some(expected.urgency));
+    assert_eq!(restored.declared_rigor, Some(expected.rigor));
+    assert_eq!(restored.kind, child.kind);
+    assert_eq!(restored.team, child.team);
+    assert_eq!(restored.model_source, ModelSource::Advised);
 }
 
 #[path = "advice_route_resolve_tests.rs"]

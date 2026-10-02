@@ -29,7 +29,7 @@ pub(super) fn model_selection_info(
         None => "CLI default (no -m)",
         Some(model) if run_model.pinned && run_model.model.as_deref() == Some(model) => {
             if run_model.source == RunModelSource::Explicit
-                && args.model_source == crate::agent::model_validation::ModelSource::AidResolved
+                && matches!(args.model_source, crate::agent::model_validation::ModelSource::AidResolved | crate::agent::model_validation::ModelSource::Advised)
             { "aid-selected model" } else { run_model.source.label() }
         }
         Some(_) => "quota/budget routing",

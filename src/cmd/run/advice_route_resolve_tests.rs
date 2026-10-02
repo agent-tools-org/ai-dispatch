@@ -29,7 +29,7 @@ fn selected_defaults_are_exact_through_budget_pressure_and_cross_agent_reset() {
         assert_eq!(selected.model.as_deref(), model);
         apply_candidate(&mut child, &selected);
         assert!(child.session_id.is_none());
-        assert_eq!(child.model_source, ModelSource::AidResolved);
+        assert_eq!(child.model_source, ModelSource::Advised);
         assert_eq!(child.force_default_model, model.is_none());
         std::fs::write(
             dir.path().join("config.toml"),
@@ -40,6 +40,9 @@ fn selected_defaults_are_exact_through_budget_pressure_and_cross_agent_reset() {
             crate::cmd::run::run_dispatch_resolve::resolve_agent_setup(&store, &mut child, None)
                 .expect("route");
         assert_eq!(setup.effective_model.as_deref(), model);
+        assert_eq!(child.model_source, ModelSource::Advised);
+        let saved = RunArgs::from_dispatch_args_json(&child.dispatch_args_json().expect("save")).expect("restore");
+        assert_eq!(saved.model_source, ModelSource::Advised);
         std::fs::remove_file(dir.path().join("config.toml")).expect("clear pressure");
     }
 }
@@ -65,7 +68,7 @@ fn automatic_preserves_candidate_in_both_held_resolution_phases() {
                 .expect("substitute");
         assert_eq!(child.agent_name, selected.agent);
         assert_eq!(setup.effective_model, selected.model);
-        assert!(child.advised_route && setup.substituted_from.is_some());
+        assert!(child.model_source == ModelSource::Advised && setup.substituted_from.is_some());
         std::fs::remove_file(dir.path().join(format!("rate-limit-{route}"))).expect("clear");
     }
 }

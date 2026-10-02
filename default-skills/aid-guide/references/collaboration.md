@@ -34,7 +34,10 @@ Automatic held substitution and failed-task fallback retain the first launchable
 advice candidate's model and complete task profile; Claude is always excluded
 from automatic cascades. Saved dispatch arguments are authoritative for retries;
 category and stored profiles are legacy fallbacks only when saved arguments are
-absent. Explicit fallback lists preserve order, custom names and remaining entries.
+absent. Explicit fallback lists preserve order, custom names and remaining entries;
+an exhausted saved list is never replaced by automatic advice. Batch fallback
+restores runtime `env`, `env_forward` and the shared directory from the current
+specification; saved dispatch arguments omit environment values.
 
 ## Workgroups
 

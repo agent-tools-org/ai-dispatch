@@ -17,9 +17,9 @@ fn fallback_chain_skips_disabled_agent() {
     ]);
     agent_config::save_agent_disabled("qwen", true).expect("disable agent");
 
-    let result = automatic_candidate(
+    let result = crate::cmd::run::advice_route::automatic_candidate(
         None,
-        &RunArgs {
+        &crate::cmd::run::RunArgs {
             agent_name: "gemini".into(),
             prompt: "Implement a feature".into(),
             ..Default::default()

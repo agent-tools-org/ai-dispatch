@@ -1,4 +1,5 @@
-// Tests for pre-dispatch model validation.
+// Tests for pre-dispatch model validation and exact advice pins.
+// Deps: queryable agent fixtures, isolated served-model cache and provenance.
 
 use super::*;
 use std::process::Command;
@@ -53,6 +54,7 @@ fn validate_model_rejects_absent_model_naming_served() {
         .to_string();
     assert!(err.contains("Agent 'codex' does not serve model 'auto'"));
     assert!(err.contains("Served models: gpt-5.6-sol, gpt-5.5"));
+    assert!(validate_model_for_agent(&mock, "auto", ModelSource::Advised).is_err());
 }
 
 #[test]
@@ -62,6 +64,7 @@ fn validate_model_allows_unqueryable_cli() {
     let mock = MockQueryableAgent::new(AgentKind::Kilo, None);
 
     assert!(validate_model_for_agent(&mock, "any-unknown-model", ModelSource::AidResolved).is_ok());
+    assert!(validate_model_for_agent(&mock, "exact-advice-pin", ModelSource::Advised).expect("unknown permits exact pin"));
 }
 
 #[test]
@@ -291,3 +294,6 @@ fn run_probe_cmd_separates_stdout_and_stderr() {
     assert_eq!(res.stdout.trim(), "stdout output");
     assert_eq!(res.stderr.trim(), "stderr output");
 }
+
+#[path = "model_validation_advised_tests.rs"]
+mod advised;

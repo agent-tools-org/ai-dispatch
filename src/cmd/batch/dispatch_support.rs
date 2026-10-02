@@ -101,7 +101,7 @@ pub(super) async fn maybe_dispatch_auto_fallback(
     outcome: BatchTaskOutcome,
     auto_fallback: bool,
     retried: &mut [bool],
-    _shared_dir_path: Option<&str>,
+    shared_dir_path: Option<&str>,
     repo_root: Option<&str>,
 ) -> Result<Option<String>> {
     if !should_auto_fallback(auto_fallback, retried[task_idx], outcome) {
@@ -112,6 +112,9 @@ pub(super) async fn maybe_dispatch_auto_fallback(
     else {
         return Ok(None);
     };
+    let spec = &tasks[task_idx];
+    run_args.env = super::batch_args::merged_env(spec.env.as_ref(), spec.env_forward.as_ref(), shared_dir_path);
+    run_args.env_forward = spec.env_forward.clone();
     let fallback_agent = run_args.agent_name.clone();
     run_args.repo_root = repo_root.map(str::to_string);
     run_args.suppress_nested_repo_warning = true;
@@ -196,6 +199,9 @@ pub(crate) fn auto_fallback_args(
     let mut args = run::RunArgs::for_retry(store, &task)?;
     args.prompt = task.prompt.clone();
     let fallback = if run::RunArgs::saved_for_task(store, task_id)?.is_some() {
+        if args.cascade.is_empty() && tasks.get(task_idx).is_some_and(|spec| spec.fallback.is_some()) {
+            return Ok(None);
+        }
         (!args.cascade.is_empty()).then(|| args.cascade.join(","))
     } else {
         tasks.get(task_idx).and_then(|spec| spec.fallback.clone())

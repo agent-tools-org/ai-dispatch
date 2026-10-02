@@ -90,9 +90,6 @@ pub struct RunArgs {
     /// whose CLI default is unknown, so smart-route/budget/configured defaults
     /// cannot replace the selected default route.
     pub force_default_model: bool,
-    /// Advice selected this exact route; resolution must not replace its model.
-    #[serde(default)]
-    pub advised_route: bool,
 }
 
 #[path = "args_retry.rs"]
@@ -215,7 +212,6 @@ impl Default for RunArgs {
             suppress_nested_repo_warning: false,
             link_deps: true,
             force_default_model: false,
-            advised_route: false,
         }
     }
 }

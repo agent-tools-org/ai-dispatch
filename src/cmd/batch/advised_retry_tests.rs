@@ -86,7 +86,7 @@ fn held_batch_retry_uses_saved_profile_not_row_category_and_keeps_candidate_mode
         advice_route::report(Some(&store), &retry).declared,
         advice_route::report(Some(&store), &saved).declared
     );
-    assert!(retry.session_id.is_none() && retry.advised_route);
+    assert!(retry.session_id.is_none() && retry.model_source == crate::agent::model_validation::ModelSource::Advised);
     assert_eq!(retry.parent_task_id.as_deref(), Some(task.id.as_str()));
 }
 
@@ -107,15 +107,14 @@ fn failed_batch_auto_fallback_returns_exact_candidate_args_from_saved_dispatch()
     let mut input = saved.clone();
     input.prompt = task.prompt.clone();
     let candidate = advice_route::automatic_candidate(Some(&store), &input).expect("candidate");
-    let conflicting_spec =
-        toml::from_str("agent = 'oz'\nprompt = 'different'\nfallback = 'claude'").expect("spec");
-    let (original, fallback) = auto_fallback_args(&store, task.id.as_str(), &[conflicting_spec], 0)
+    let spec = toml::from_str("agent = 'oz'\nprompt = 'different'").expect("spec");
+    let (original, fallback) = auto_fallback_args(&store, task.id.as_str(), &[spec], 0)
         .expect("fallback")
         .expect("route");
     assert_eq!(original, "oz");
     assert_eq!(fallback.agent_name, candidate.agent);
     assert_eq!(fallback.model, candidate.model);
-    assert!(fallback.advised_route);
+    assert_eq!(fallback.model_source, crate::agent::model_validation::ModelSource::Advised);
     assert_eq!(fallback.declared_difficulty, saved.declared_difficulty);
     assert_eq!(fallback.declared_budget, saved.declared_budget);
     assert_eq!(fallback.declared_urgency, saved.declared_urgency);
@@ -151,7 +150,7 @@ fn saved_explicit_batch_list_keeps_order_custom_resolution_and_remaining_entries
         .expect("custom");
     assert_eq!(fallback.agent_name, "custom-peer");
     assert_eq!(fallback.cascade, ["gemini", "claude"]);
-    assert!(!fallback.advised_route);
+    assert_ne!(fallback.model_source, crate::agent::model_validation::ModelSource::Advised);
     saved.cascade.push("unknown-peer".into());
     store
         .update_task_dispatch_args(
@@ -206,4 +205,26 @@ fn legacy_retry_recovers_stored_category_and_profile_only_without_saved_args() {
             && restored.declared_urgency.is_none()
             && restored.declared_rigor.is_none()
     );
+}
+
+#[test]
+fn saved_empty_cascade_preserves_explicit_exhaustion_even_with_conflicting_spec() {
+    let (dir, _home, _cache, store) = setup();
+    let _fleet = DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Claude]);
+    let task = make_stored_task("t-exhausted-batch", AgentKind::Oz, TaskStatus::Failed);
+    store.insert_task(&task).expect("task");
+    let mut saved = args(dir.path());
+    store.update_task_dispatch_args(task.id.as_str(), &saved.dispatch_args_json().expect("serialize")).expect("save");
+    assert!(advice_route::automatic_candidate(Some(&store), &saved).is_some());
+    for fallback in ["oz", "claude", "unknown-peer", ""] {
+        let spec = toml::from_str(&format!("agent = 'oz'\nprompt = 'different'\nfallback = '{fallback}'")).expect("spec");
+        assert!(auto_fallback_args(&store, task.id.as_str(), &[spec], 0).expect("exhausted").is_none());
+    }
+    // Remaining saved entries are authoritative over a conflicting current specification.
+    saved.cascade = vec!["gemini".into(), "claude".into()];
+    store.update_task_dispatch_args(task.id.as_str(), &saved.dispatch_args_json().expect("serialize")).expect("save");
+    let spec = toml::from_str("agent = 'oz'\nprompt = 'different'\nfallback = 'unknown-peer'").expect("spec");
+    let (_, next) = auto_fallback_args(&store, task.id.as_str(), &[spec], 0).expect("saved list").expect("Gemini");
+    assert_eq!(next.agent_name, "gemini");
+    assert_eq!(next.cascade, ["claude"]);
 }

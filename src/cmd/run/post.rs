@@ -289,7 +289,7 @@ pub(crate) fn switch_agent(args: &mut RunArgs, next_agent: String) {
         args.model = None;
         args.session_id = None;
         args.force_default_model = false;
-        args.advised_route = false;
+        args.model_source = crate::agent::model_validation::ModelSource::AidResolved;
     }
     args.agent_name = next_agent;
 }

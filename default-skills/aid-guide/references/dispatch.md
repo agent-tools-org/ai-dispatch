@@ -526,8 +526,11 @@ An advisory `recommended` route never rescues an empty launchable set.
 The candidate's model is retained through dispatch: known CLI defaults are
 pinned, and unknown defaults cannot be replaced by later budget routing. A known
 unservable advice model fails before launch rather than running another default.
+When served-model evidence is unknown, the exact requested advice pin is allowed.
+Advice provenance is persisted for both model pins and unknown defaults.
 Explicit cascade/fallback lists keep their order, custom-name resolution,
-remaining entries and unknown-name errors. Explicit Gemini remains allowed when
+remaining entries and unknown-name errors. An exhausted explicit batch fallback
+list never resumes automatic selection. Explicit Gemini and Claude remain allowed when
 agy is installed. Cross-agent switches clear the source model and session before
 applying the selected route.
 

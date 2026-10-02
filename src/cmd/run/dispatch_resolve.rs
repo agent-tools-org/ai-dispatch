@@ -140,7 +140,7 @@ pub(super) fn resolve_agent_setup(
         args.dir = Some(".".to_string());
         aid_info!("[aid] Auto-set --dir . (git repo detected)");
     }
-    super::advice_route::validate_candidate_model(args, agent_kind)?;
+    super::advice_route::validate_candidate_route(args, agent_kind)?;
     let mut substituted_from: Option<(String, String)> = None;
     if args.declared_urgency == Some(crate::types::TaskUrgency::Background)
         && held::background_keeps_hold(agent_kind, custom_agent_name.as_deref())
@@ -190,8 +190,8 @@ pub(super) fn resolve_agent_setup(
     let effective_model = run_model.model.clone().filter(|_| run_model.pinned);
     // Family-metered agents: switch groups, and say so — a silent model swap
     // is the same defect as a CLI substituting a model the caller did not ask for.
-    super::advice_route::validate_candidate_model(args, agent_kind)?;
-    let mut effective_model = if args.advised_route {
+    super::advice_route::validate_candidate_route(args, agent_kind)?;
+    let mut effective_model = if args.model_source == agent::model_validation::ModelSource::Advised {
         effective_model
     } else {
         match agent::model_group::healthy_model_for(
@@ -238,10 +238,9 @@ pub(super) fn resolve_agent_setup(
     } else {
         agent::get_agent(agent_kind)
     };
-    let model_source = args.model.as_ref().map(|_| args.model_source).unwrap_or(agent::model_validation::ModelSource::AidResolved);
+    let model_source = if args.model.is_some() || args.model_source == agent::model_validation::ModelSource::Advised { args.model_source } else { agent::model_validation::ModelSource::AidResolved };
     args.model_source = model_source;
     if let Some(ref model) = effective_model
-        && !args.advised_route
         && !held::keep_aid_resolved_pin(substituted_from.as_ref(), model_source)
         && !agent::model_validation::validate_model_for_agent(agent.as_ref(), model, model_source)?
     {

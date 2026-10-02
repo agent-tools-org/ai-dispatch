@@ -195,3 +195,78 @@ pub(crate) fn low_disk_space_mb(min_mb: u64) -> Option<u64> {
         None
     }
 }
+
+pub(super) fn finalize_batch(
+    path: &Path,
+    dispatch: &super::batch_types::BatchDispatchResult,
+    task_ids: &[String],
+    config: &batch::BatchConfig,
+    store: &Store,
+    start_time: Instant,
+    batch_repo_path: Option<&str>,
+    wait_error: Option<anyhow::Error>,
+    total: usize,
+) -> Result<()> {
+    aid_info!(
+        "{}",
+        batch_summary(
+            &dispatch.outcomes,
+            &dispatch.task_ids,
+            &config.tasks,
+            store,
+            start_time,
+            batch_repo_path,
+        )
+    );
+    let archive_dir = crate::paths::aid_dir().join("batches");
+    if let Err(e) = std::fs::create_dir_all(&archive_dir) {
+        aid_error!("[aid] Failed to create batch archive dir: {e}");
+    } else {
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("batch");
+        let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+        let dest = archive_dir.join(format!("{timestamp}-{stem}.toml"));
+        match std::fs::copy(path, &dest) {
+            Ok(_) => aid_info!("[aid] Archived batch to {}", dest.display()),
+            Err(e) => aid_error!("[aid] Failed to archive batch: {e}"),
+        }
+    }
+    println!("Batch: {total} task(s) dispatched");
+    let group_id = config.tasks.first().and_then(|t| t.group.as_deref());
+    if let Some(gid) = group_id {
+        aid_hint!("[aid] Wait: aid wait --group {gid}");
+    } else if task_ids.len() == 1 {
+        aid_hint!("[aid] Wait: aid wait {}", task_ids[0]);
+    }
+    aid_hint!("[aid] TUI:   aid watch --tui");
+    if let Some(error) = wait_error {
+        return Err(error);
+    }
+    Ok(())
+}
+
+pub(super) fn parse_cli_vars(raw_vars: &[String]) -> Result<HashMap<String, String>> {
+    let mut vars = HashMap::new();
+    for raw_var in raw_vars {
+        let Some((key, value)) = raw_var.split_once('=') else {
+            anyhow::bail!("invalid --var '{}': expected key=value", raw_var);
+        };
+        let key = key.trim();
+        anyhow::ensure!(!key.is_empty(), "invalid --var '{}': key cannot be empty", raw_var);
+        vars.insert(key.to_string(), value.to_string());
+    }
+    Ok(vars)
+}
+
+pub(super) fn resolve_config_path(batch_path: &Path, value: &str) -> String {
+    let path = Path::new(value);
+    if path.is_absolute() {
+        return value.to_string();
+    }
+    batch_path.parent().unwrap_or_else(|| Path::new(".")).join(path).to_string_lossy().into_owned()
+}
+pub(super) fn warn_nested_repo_for_batch(tasks: &[batch::BatchTask]) {
+    let Some(task) = tasks.iter().find(|task| task.worktree.is_some()) else {
+        return;
+    };
+    crate::repo_root::warn_if_nested_repo(task.dir.as_deref().unwrap_or("."));
+}

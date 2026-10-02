@@ -104,7 +104,6 @@ fn apply_retry_route(run_args: &mut RunArgs, task: &crate::types::Task, args: &R
     if let Some(model) = args.model.clone() {
         run_args.model = Some(model);
         run_args.model_source = ModelSource::UserSupplied;
-        run_args.advised_route = false;
     }
     if let Some(secs) = args.idle_timeout_secs {
         run_args.idle_timeout_secs = Some(secs);

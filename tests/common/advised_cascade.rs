@@ -272,6 +272,7 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input
 "#;
 const OZ: &str = r#"#!/bin/sh
 if [ "$1" = '--version' ]; then echo 'Warp oz 1.0.0'; exit 0; fi
+if [ "$1" = '--help' ]; then echo 'Warp Oz agent'; exit 0; fi
 printf '%s\n' "$@" > "$CASCADE_CAPTURE_ROOT/oz.args"
 if [ "$(cat "$CASCADE_CAPTURE_ROOT/mode")" = 'quota' ]; then
   echo 'Error: Quota limit reached.' >&2
@@ -282,6 +283,7 @@ exit 1
 "#;
 const CLAUDE: &str = r#"#!/bin/sh
 if [ "$1" = '--version' ]; then echo 'Claude Code 1.0.0'; exit 0; fi
+if [ "$1" = '--help' ]; then echo 'Claude Code'; exit 0; fi
 printf '%s\n' "$@" > "$CASCADE_CAPTURE_ROOT/claude.args"
 exit 7
 "#;

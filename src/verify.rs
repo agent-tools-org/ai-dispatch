@@ -13,6 +13,10 @@ use crate::process_guard::ProcessGuard;
 use crate::store::Store;
 use crate::types::{TaskId, TaskStatus, VerifyStatus};
 
+#[path = "verify_budget.rs"]
+mod budget;
+pub(crate) use budget::VerifyBudget;
+
 pub(crate) static VERIFY_LOCK: Mutex<()> = Mutex::new(());
 pub(crate) const VERIFY_TIMEOUT: Duration = Duration::from_secs(120);
 
@@ -52,12 +56,19 @@ pub(crate) fn run_verify_with_timeout(
     container_name: Option<&str>,
     timeout: Duration,
 ) -> Result<VerifyResult> {
-    run_verify_with_env(worktree_path, command, cargo_target_dir, container_name, timeout, &[])
+    run_verify_with_env(
+        worktree_path,
+        command,
+        cargo_target_dir,
+        container_name,
+        VerifyBudget::Duration(timeout),
+        &[],
+    )
 }
 
 pub(crate) fn run_verify_with_env(
     worktree_path: &Path, command: Option<&str>, cargo_target_dir: Option<&str>,
-    container_name: Option<&str>, timeout: Duration, env: &[(String, String)],
+    container_name: Option<&str>, budget: VerifyBudget, env: &[(String, String)],
 ) -> Result<VerifyResult> {
     if command.is_some_and(|command| command.trim() == "skip") {
         return Ok(VerifyResult {
@@ -90,21 +101,24 @@ pub(crate) fn run_verify_with_env(
     }
 
     cmd.envs(env.iter().cloned());
-    execute_verify(cmd, cmd_str, worktree_path, timeout)
+    execute_verify(cmd, cmd_str, worktree_path, budget)
 }
 
 fn execute_verify(
-    mut cmd: Command, cmd_str: String, worktree_path: &Path, timeout: Duration,
+    mut cmd: Command, cmd_str: String, worktree_path: &Path, budget: VerifyBudget,
 ) -> Result<VerifyResult> {
     let _lock = VERIFY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     cmd.current_dir(worktree_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
+    if budget.expired() {
+        return Ok(VerifyBudget::no_launch(cmd_str));
+    }
     let mut guard = ProcessGuard::spawn(&mut cmd)
         .with_context(|| format!("Failed to run verify command: {cmd_str}"))?;
     let reader = spawn_output_reader(guard.child_mut())?;
-    let status = guard.wait_with_timeout(timeout)?;
+    let (status, timeout) = budget.wait(&mut guard)?;
     let timed_out = status.is_none();
     let combined = match reader.join() {
         Ok(result) => result?,

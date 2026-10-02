@@ -157,14 +157,8 @@ fn verify_on(
     task_id: &str, name: &str, path: &Path, command: Option<&str>,
     target: Option<&str>, container: Option<&str>, deadline: chrono::DateTime<chrono::Local>,
 ) -> Result<crate::verify::VerifyResult> {
-    let timeout = remaining_verify_time(deadline, chrono::Local::now());
-    if timeout.is_zero() {
-        return Ok(crate::verify::VerifyResult {
-            success: false, timed_out: true,
-            output: "Task deadline exhausted before remote verification; no command launched".into(),
-            command: command.unwrap_or("auto").to_string(),
-            infrastructure_failure: false, exit_code: None,
-        });
+    if remaining_verify_time(deadline, chrono::Local::now()).is_zero() {
+        return Ok(crate::verify::VerifyBudget::no_launch(command.unwrap_or("auto").to_string()));
     }
     let mut environment = Command::new("cargo");
     configure(&mut environment, &crate::paths::task_dir(task_id).join("home"), name)?;
@@ -172,7 +166,7 @@ fn verify_on(
         value.map(|value| (key.to_string_lossy().into_owned(), value.to_string_lossy().into_owned()))
     }).collect::<Vec<_>>();
     crate::verify::run_verify_with_env(
-        path, command, target, container, timeout, &env,
+        path, command, target, container, crate::verify::VerifyBudget::Deadline(deadline), &env,
     )
 }
 
@@ -223,3 +217,6 @@ mod shim_tests;
 #[cfg(test)]
 #[path = "remote_build/deadline_tests.rs"]
 mod deadline_tests;
+#[cfg(test)]
+#[path = "remote_build/launch_deadline_tests.rs"]
+mod launch_deadline_tests;

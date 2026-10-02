@@ -2,7 +2,7 @@ KB consulted: `best-of advise routing launchable model`, `backup artifact gdrive
 
 # Route and settlement validation — 2026-10-03
 
-Reviewed and tested source: `b380c181fb8dab098d3910b4c6c05e8aa9d38390`.
+Reviewed and tested source: `113584e2ad0b2adf7a2d0dd1dbce8cf00fdea6f6`.
 Base: `291aa2521028adce4b10860e923d57568ff1d4ed`.
 The source includes launchable best-of advice routes (`wi-843a`), read-only report
 preservation before backup (`wi-562b`), the remaining remote verification deadline
@@ -12,16 +12,16 @@ No release or binary installation is part of this validation.
 ## Completed remote checks
 
 All Rust compilation and execution used rbox. Both full suites ran from the same
-clean candidate. Strict lint ran sequentially after the default suite. The
+clean candidate; each job printed its source SHA, tracked-clean result, toolchain
+and exact check argv before execution. Strict lint ran sequentially after the default suite. The
 configured remote toolchain reported `rustc 1.99.0 (b940084d7 2026-09-28)` and
-`cargo 1.99.0 (5f94df478 2026-08-27)`. Metadata job
-`be1c03d7221848e78bcbf7115545e086` returned the exact candidate SHA and exited 0.
+`cargo 1.99.0 (5f94df478 2026-08-27)`. All three final job headers returned the exact candidate SHA.
 
 | Check | Command through configured remote box | Completed job | Result |
 | --- | --- | --- | --- |
-| Default workspace | `scripts/remote-test.sh -- --locked` | `a74fb30d027842d38d56d13cbf5c70b2` | exit 0; 34 binaries; 3,062 passed, 0 failed, 14 ignored |
-| Web workspace | `scripts/remote-test.sh -- --locked --features web` | `9120e40e4bdf48ebaa1041d792d04f71` | exit 0; 34 binaries; 3,094 passed, 0 failed, 14 ignored |
-| Strict production lint | `cargo clippy --locked -- -D warnings` then `cargo clippy --locked --features web -- -D warnings` | `328513dd2f7e494291efb86f85dabe46` | both commands passed; exit 0 |
+| Default workspace | `cargo test --workspace --locked` | `59c4849f37544817adaa76bd0813c59a` | exit 0; 34 binaries; 3,066 passed, 0 failed, 14 ignored |
+| Web workspace | `cargo test --workspace --locked --features web` | `a156f4c955854728944922005bb08dcc` | exit 0; 34 binaries; 3,098 passed, 0 failed, 14 ignored |
+| Strict production lint | `cargo clippy --locked -- -D warnings` then `cargo clippy --locked --features web -- -D warnings` | `554783c2d45243939d19042785225aa8` | both commands passed; exit 0 |
 
 The suite counts use the 34 top-level Cargo summaries with zero filtered tests.
 Each full log also includes one nested isolated test summary; it is excluded from
@@ -48,17 +48,38 @@ The guide validator returned `Skill is valid!`; `git diff --check` passed.
   `--port` argument was undocumented (2,921 unit tests passed, one failed,
   11 ignored; the remaining binaries did not run). Documenting the flag and
   default 8080 corrected the gap without an allowlist change or skipped test.
-  Both full suites and lint were then rerun at the reviewed candidate above.
+  The b380c181 follow-up passed both full suites and lint, but independent review
+  found the further preparation/lock deadline handoff below.
+
+## Launch-boundary reproducer and repair
+
+The [first independent audit](audit-route-settlement-2026-10-03-round1.md)
+passed best-of and report preservation, but returned **FIX** for remote verify:
+a duration computed before preparation and `VERIFY_LOCK` can permit a late
+launch or restart the allowance after lock acquisition.
+
+With production behavior unchanged at `b380c181`, only the synchronized test
+fixtures, fixture-helper visibility and a test-module include were added. Remote
+job `5c39797d599842229f4ff645d96ddc01` exited 101: **one passed, two failed**.
+Both remote cases returned success after the saved deadline; the local relative
+500 ms duration control passed. The fourth new test uses the new budget API and
+was deliberately excluded from that older-source compilation.
+
+Commit `fd248424` carries one absolute deadline through the existing environment
+runner using mutually exclusive duration/deadline budgets. It checks after real
+lock acquisition before spawning, recomputes the wait allowance, kills/reaps on
+exhaustion and treats an observed post-deadline exit as inconclusive. Local
+relative durations and explicit skip/no-project behavior retain their contracts.
+All four new cases passed in both final complete suites above.
 
 ## Independent review
 
-The [first independent audit](audit-route-settlement-2026-10-03-round1.md)
-reviewed the frozen source and supplied completed logs without running tests of
-its own. Best-of and read-only result preservation passed. The combined verdict
-was **FIX**: converting the remote absolute deadline to a duration before
-preparation and verifier-lock acquisition can launch a command after expiry.
-A bounded launch-boundary repair and isolated held-lock regressions are pending;
-the passing suites above do not cover that counterexample.
+The [independent re-audit](audit-route-settlement-2026-10-03.md) reviewed
+`113584e2` and the completed logs, verified the synchronized before/after evidence
+and returned **PASS** for all three questions and **SHIP** for the scoped source.
+The reviewer ran no tests of its own. The first-round **FIX** remains archived.
+Subsequent changes reconcile documentation only; source, tests and the embedded
+authoritative guide remain identical to this reviewed and tested candidate.
 
 ## Limits and next slices
 

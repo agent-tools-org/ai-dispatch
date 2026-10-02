@@ -18,4 +18,21 @@ A fourth non-ignored test calls the environment runner with an expired deadline 
 
 Existing saved-policy, initial-expiry, local/legacy and disk re-pick regressions remain in place. The guide explicitly includes preparation and verifier-lock time in the remote deadline.
 
-Rust compilation, tests and clippy did not run in this sandbox. The single remote prerequisite attempt failed because Tailscale returned no JSON; live remote attempts stopped at that point. No local Rust build or test was substituted. Local Rust parsing, diff hygiene, source limits and production `unwrap()` checks passed. Guide validation could not start because its Python environment lacks PyYAML. A staged-byte security-guard scan passed before committing. These checks do not establish compilation or runtime correctness. Independent review, pre-fix reproduction, complete default/Web tests and lint remain integration gates.
+## Executed before/after evidence
+
+At `b380c181`, with production behavior unchanged and only the first three new
+test fixtures included, job `5c39797d599842229f4ff645d96ddc01` exited 101:
+one passed and two failed. Both remote results incorrectly reported success;
+the local duration control passed. This executes the source counterexample.
+
+Final candidate `113584e2` passed all four cases in complete remote default and
+Web suites: 3,066 and 3,098 top-level tests passed, zero failed and 14 existing
+ignored in each. Both strict production lint configurations passed. Actual job
+headers record the exact source SHA, tracked-clean state, toolchain and command.
+The guide validator passed. Independent re-audit returned PASS on all questions
+and SHIP. [Completed validation](validation-route-settlement-2026-10-03.md)
+records commands, job IDs, earlier failures and limits.
+
+No authenticated provider, live Drive, API/Swift or release proof is established.
+Mutex responsiveness and cancellation of an already-running remote job remain
+outside this deadline-handling guarantee.

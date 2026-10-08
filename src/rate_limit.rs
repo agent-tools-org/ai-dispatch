@@ -504,10 +504,11 @@ pub(crate) fn refusal_on_channel(
     channel: crate::quota_channel::Channel,
 ) -> Option<String> {
     let kept = crate::quota_channel::provider_attributable(raw, agent, channel);
-    if agent != AgentKind::Claude || channel == crate::quota_channel::Channel::CliStream {
-        if let Some(refusal) = crate::agent::stream_completion::quota_line(&kept.all(), agent) {
-            return Some(refusal);
-        }
+    // Claude's refusal counts only from a CLI envelope on the stream.
+    let signed = (agent != AgentKind::Claude || channel == crate::quota_channel::Channel::CliStream)
+        .then(|| kept.quota_text(agent));
+    if let Some(refusal) = signed.and_then(|text| crate::agent::stream_completion::quota_line(&text, agent)) {
+        return Some(refusal);
     }
     let generic = kept
         .cli_diagnostic

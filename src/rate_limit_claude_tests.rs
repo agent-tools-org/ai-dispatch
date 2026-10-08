@@ -81,3 +81,11 @@ fn far_future_claude_reset_falls_back_to_signature_window() {
     let minutes = (at - Local::now().naive_local()).num_minutes();
     assert!((298..=300).contains(&minutes), "expected five-hour fallback, got {minutes}");
 }
+
+#[test]
+fn plain_claude_stdout_still_sets_the_auth_marker() {
+    let line = "Invalid API key · Please run /login";
+    let found = crate::auth_marker::auth_failure_line(line, AgentKind::Claude, Channel::CliStream);
+    assert!(found.is_some_and(|text| text.contains("/login")));
+    assert_eq!(refusal_on_channel(line, AgentKind::Claude, Channel::CliStream), None);
+}

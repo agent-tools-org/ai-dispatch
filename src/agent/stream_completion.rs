@@ -136,7 +136,7 @@ pub(crate) fn record_quota_exhaustion_with_delivery(
         agent,
         crate::quota_channel::Channel::CliStream,
     )
-    .all();
+    .quota_text(agent);
     let tail = tail.as_str();
     if !agent_prose_quota_match(tail, agent) {
         return QuotaOutcome::None;

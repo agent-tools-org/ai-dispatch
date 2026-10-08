@@ -111,8 +111,7 @@ pub(crate) fn provider_attributable(
             .and_then(|value| value.as_object().cloned())
         {
             Some(object) => keep_envelope_strings(&object, agent, &mut kept),
-            None if agent != AgentKind::Claude => push_line(&mut kept.unsplit, line),
-            None => {}
+            None => push_line(&mut kept.unsplit, line),
         }
     }
     kept
@@ -137,10 +136,14 @@ pub(crate) struct Attributable {
 }
 
 impl Attributable {
-    /// Both kinds, for callers that apply the narrow signature-only rule to all
-    /// of it anyway.
+    /// Both kinds, for callers that apply the narrow signature-only rule anyway.
     pub(crate) fn all(&self) -> String {
         format!("{}{}", self.cli_diagnostic, self.unsplit)
+    }
+
+    /// Quota evidence: Claude's plain lines can be model prose, so only envelopes.
+    pub(crate) fn quota_text(&self, agent: AgentKind) -> String {
+        if agent == AgentKind::Claude { self.cli_diagnostic.clone() } else { self.all() }
     }
 }
 

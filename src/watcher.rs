@@ -17,6 +17,9 @@ mod streaming_tests;
 #[cfg(test)]
 #[path = "watcher/streaming_completion_tests.rs"]
 mod streaming_completion_tests;
+#[cfg(test)]
+#[path = "watcher/opencode_usage_tests.rs"]
+mod opencode_usage_tests;
 
 pub(crate) use buffered::watch_buffered;
 pub(crate) use esc::strip_terminal_escapes;

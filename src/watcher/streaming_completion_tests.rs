@@ -132,7 +132,9 @@ async fn exit0_commandcode_failed_result_fixture_records_failed() {
     assert_eq!(status, TaskStatus::Failed);
 }
 
-async fn watch_opencode_usage(
+pub(super) async fn watch_usage(
+    agent: &dyn Agent,
+    output: &str,
     max_cost: Option<f64>,
 ) -> (crate::types::CompletionInfo, Vec<crate::types::TaskEvent>) {
     use std::os::unix::process::CommandExt;
@@ -142,7 +144,7 @@ async fn watch_opencode_usage(
     let task_id = crate::types::TaskId("t-opencode-usage".to_string());
     insert_running_task(store.as_ref(), &task_id);
     let input_path = temp.path().join("input.jsonl");
-    std::fs::write(&input_path, fixture("opencode-multi-step.jsonl")).unwrap();
+    std::fs::write(&input_path, output).unwrap();
     let mut command = tokio::process::Command::new("sh");
     command.as_std_mut().process_group(0);
     let mut child = command
@@ -157,7 +159,7 @@ async fn watch_opencode_usage(
         .spawn()
         .unwrap();
     let info = watch_streaming(
-        crate::agent::get_agent(AgentKind::OpenCode).as_ref(),
+        agent,
         &mut child,
         &task_id,
         &store,
@@ -173,7 +175,8 @@ async fn watch_opencode_usage(
 
 #[tokio::test]
 async fn opencode_multi_step_completion_records_sum() {
-    let (info, _) = watch_opencode_usage(None).await;
+    let agent = crate::agent::get_agent(AgentKind::OpenCode);
+    let (info, _) = watch_usage(agent.as_ref(), &fixture("opencode-multi-step.jsonl"), None).await;
     assert_eq!(info.status, TaskStatus::Done);
     assert_eq!(info.exit_code, Some(0));
     assert_eq!(info.tokens, Some(1_498_073));
@@ -182,7 +185,9 @@ async fn opencode_multi_step_completion_records_sum() {
 
 #[tokio::test]
 async fn opencode_running_sum_enforces_cost_ceiling() {
-    let (info, events) = watch_opencode_usage(Some(0.009)).await;
+    let agent = crate::agent::get_agent(AgentKind::OpenCode);
+    let output = fixture("opencode-multi-step.jsonl");
+    let (info, events) = watch_usage(agent.as_ref(), &output, Some(0.009)).await;
     assert_eq!(info.status, TaskStatus::Failed);
     assert_eq!(info.tokens, Some(29_465));
     assert!((info.cost_usd.unwrap() - 0.009527012).abs() < 1e-12);

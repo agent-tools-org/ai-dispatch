@@ -23,7 +23,7 @@ pub struct PtyBridge {
 }
 
 impl PtyBridge {
-    pub fn spawn(cmd: &[String], dir: Option<&str>, env: Vec<(String, String)>) -> Result<Self> {
+    pub fn spawn(cmd: &[String], dir: Option<&str>, env: Vec<(String, Option<String>)>) -> Result<Self> {
         let program = cmd.first().context("PTY command is missing a program")?;
         let pty = native_pty_system().openpty(PtySize {
             rows: 24,
@@ -39,7 +39,10 @@ impl PtyBridge {
             builder.cwd(dir);
         }
         for (key, value) in env {
-            builder.env(key, value);
+            match value {
+                Some(value) => builder.env(key, value),
+                None => builder.env_remove(key),
+            }
         }
         let reader = pty.master.try_clone_reader()?;
         let writer = pty.master.take_writer()?;

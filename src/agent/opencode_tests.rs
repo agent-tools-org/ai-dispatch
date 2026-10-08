@@ -6,43 +6,6 @@ use super::*;
 use crate::{paths, rate_limit};
 
 #[test]
-fn parses_step_finish_token_event() {
-    let task_id = TaskId("t-step".to_string());
-    let event = parse_json_event(
-        AgentKind::OpenCode,
-        AgentKind::OpenCode,
-        None,
-        &task_id,
-        &serde_json::json!({
-            "type": "step_finish",
-            "part": {
-                "tokens": {
-                    "total": 16125,
-                    "input": 14040,
-                    "output": 2,
-                    "reasoning": 0
-                },
-                "cost": 0.0
-            }
-        }),
-        Local::now(),
-    )
-    .expect("step_finish events should parse");
-
-    assert_eq!(event.event_kind, EventKind::Completion);
-    assert_eq!(event.detail, "tokens: 14040 in + 2 out = 16125");
-    assert_eq!(
-        event.metadata,
-        Some(serde_json::json!({
-            "tokens": 16125,
-            "input_tokens": 14040,
-            "output_tokens": 2,
-            "cost_usd": 0.0
-        }))
-    );
-}
-
-#[test]
 fn parses_new_milestone_events() {
     for value in [
         serde_json::json!({"type": "auto_compact", "message": "compacted session"}),

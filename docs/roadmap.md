@@ -1,7 +1,6 @@
 # aid Roadmap
 
-Updated 2026-10-03 after unreleased route and settlement fixes.
-The current release remains v10.50.0 (`89e09057`).
+Updated 2026-10-08 after v10.51.0 (`7626ee86`).
 This document owns execution order and acceptance gates; [CHANGELOG](../CHANGELOG.md)
 owns release history. The [takeover inventory](project-status-2026-09-22.md) records
 source evidence and verification limits. Release validation is recorded separately from historical audit results.
@@ -12,7 +11,11 @@ does not assert board closure. New slices need board IDs before implementation.
 
 ## Current baseline
 
-- The current release is **v10.50.0** (2026-09-30). It carries the first rounds of the
+- The current release is **v10.51.0** (2026-10-08): quota, cost and isolation fixes from
+  [the magpie comparison](investigation-magpie-absorption.md); see the section below.
+  The release candidate passed the full `--bin aid` suite on the build box (2,982 passed,
+  0 failed, 11 ignored), `aid_guide_e2e`/`init_e2e`, and `scripts/release.sh --dry-run`.
+- v10.50.0 (2026-09-30) carried the first rounds of the
   structural refactor program below, `--read-only` enforcement, and the command-surface
   consolidation (removed `kill`, `output`, top-level `summary`/`finding`/`broadcast`,
   `config add-agent`, `watch --wait`).
@@ -22,6 +25,32 @@ does not assert board closure. New slices need board IDs before implementation.
   the CLI module reorganisation. Web-feature help and the live API/Swift gates were not
   re-run for this release.
 - Earlier baseline notes (v10.47.x custody and budget work) remain below for reconciliation.
+
+## Quota, cost and isolation (v10.51.0)
+
+### Landed
+
+| Area | Result |
+| --- | --- |
+| Claude quota | Rejected `rate_limit_event` and error results hold the claude route until the stated reset (≤ 8 days); quota evidence for Claude is envelope text only (`Attributable::quota_text`); plain lines still reach auth markers |
+| Quota ranking | Headroom penalty reads only windows that cover the requested model; expired windows and sub-24h windows resetting within 60 minutes do not penalise |
+| Cost | Codex/Claude completions priced by component (uncached input, cached input, output, cache writes at 1.25× input) when recorded; Claude `total_cost_usd` stays authoritative |
+| Usage | OpenCode-format parsers (OpenCode, Kilo, MiMo Code, custom delegates) sum `step_finish` usage; the recorded model is the dominant `modelUsage`/Gemini entry |
+| Isolation | Inherited per-CLI config redirect variables (`CONFIG_REDIRECT_VARS`) are removed from host and PTY launches; batch `env_forward` values resolve at launch; job specs are `0600` |
+| Tooling | `scripts/remote-test.sh` exits 66 when a filter matches no tests |
+
+### Next (from the same study; none started)
+
+| Slice | Acceptance contract |
+| --- | --- |
+| Salvage commit identity | `failure_salvage` WIP commits carry the repository's configured identity inside an isolated HOME; a test fails when it falls back to `user@host` |
+| Idle timeout during box waits | A verify or agent blocked on the build-box lock is not killed as idle; queue wait does not count toward the verify timeout |
+| Model id normalisation | One `canonical_model_id` (case, vendor prefix, date suffix, `[1m]`, `.`≡`-`) used by rating, gate, pricing and probes; Codex probe drops hidden models |
+| Context overflow | An overflow failure writes no hold and continues on a model with a larger context instead of a same-model retry |
+| Early failure cascade | A non-quota failure in under 30 s with no work cascades without consuming `--retry`; an all-held error lists every route and its reset |
+| Vendor signatures | Agent-independent credit refusals (`余额不足`, `insufficient_quota`) and Codex JSON `resets_at` |
+| Cost settlement | A Codex ceiling is not failed on a provisional model price; reports prefer the persisted task cost |
+| Quota snapshot fields | `credits`, `held`, `span_secs` read from aidbar snapshots |
 
 ## Structural refactor program (in progress)
 

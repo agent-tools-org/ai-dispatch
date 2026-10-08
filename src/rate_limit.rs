@@ -496,19 +496,18 @@ fn contains_status_code(s: &str, code: &str) -> bool {
 /// caller may hand this an adapter's rendered event detail, an assistant
 /// message, or a tool result. Those are not channels — see `quota_channel`.
 ///
-/// The evidence rule follows the split rather than the call site: a string the
-/// CLI put inside a diagnostic envelope may carry a bare status token, because
-/// only the CLI could have put it there. A line with no envelope around it must
-/// match that agent's own anchored signature, because on a PTY transport it may
-/// be the model's rendered answer.
+/// The evidence rule follows the split: CLI diagnostics may carry a bare status
+/// token; unsplit lines need an agent signature. Claude needs an envelope.
 pub(crate) fn refusal_on_channel(
     raw: &str,
     agent: AgentKind,
     channel: crate::quota_channel::Channel,
 ) -> Option<String> {
     let kept = crate::quota_channel::provider_attributable(raw, agent, channel);
-    if let Some(refusal) = crate::agent::stream_completion::quota_line(&kept.all(), agent) {
-        return Some(refusal);
+    if agent != AgentKind::Claude || channel == crate::quota_channel::Channel::CliStream {
+        if let Some(refusal) = crate::agent::stream_completion::quota_line(&kept.all(), agent) {
+            return Some(refusal);
+        }
     }
     let generic = kept
         .cli_diagnostic

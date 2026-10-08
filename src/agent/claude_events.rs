@@ -268,15 +268,19 @@ fn base_metadata(model: Option<&str>, session_id: Option<&str>) -> Option<Value>
 fn extract_result_model(payload: &Value) -> Option<String> {
     payload
         .pointer("/modelUsage")
-        .and_then(|value| value.as_object())
-        .and_then(|models| models.keys().next())
-        .map(|name| normalize_model(name))
-        .or_else(|| {
-            payload
-                .get("model")
-                .and_then(|value| value.as_str())
-                .map(normalize_model)
+        .and_then(Value::as_object)
+        .and_then(|models| {
+            let use_cost = models.values().all(|v| v.get("costUSD").and_then(Value::as_f64).is_some());
+            let tokens = |v: &Value| ["inputTokens", "outputTokens", "cacheReadInputTokens", "cacheCreationInputTokens"]
+                .iter().filter_map(|key| v.get(*key).and_then(Value::as_i64)).sum::<i64>();
+            models.iter().rev().max_by(|(_, a), (_, b)| {
+                let cost = || a["costUSD"].as_f64().zip(b["costUSD"].as_f64()).and_then(|(a, b)| a.partial_cmp(&b));
+                let cost_order = if use_cost { cost() } else { None };
+                cost_order.filter(|order| !order.is_eq()).unwrap_or_else(|| tokens(a).cmp(&tokens(b)))
+            }).map(|(name, _)| name)
         })
+        .map(|name| normalize_model(name))
+        .or_else(|| payload.get("model").and_then(Value::as_str).map(normalize_model))
 }
 
 fn normalize_model(model: &str) -> String {

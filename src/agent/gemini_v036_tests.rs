@@ -238,3 +238,53 @@ fn read_only_with_result_file_allows_write_via_yolo() {
     let prompt = args.windows(2).find(|p| p[0] == "-p").map(|p| p[1].as_str()).unwrap();
     assert!(prompt.contains("EXCEPT the result file"));
 }
+
+#[test]
+fn picks_gemini_object_model_by_cost_in_both_paths() {
+    let mut result = serde_json::json!({
+        "type": "result",
+        "stats": {
+            "total_tokens": 1000,
+            "models": {
+                "gemini-2.5-flash": {"total_tokens": 900, "costUSD": 0.01},
+                "gemini-2.5-pro": {"total_tokens": 100, "costUSD": 0.2}
+            }
+        }
+    });
+    let event = parse_stream_event(&TaskId::generate(), &result, Local::now()).unwrap();
+    assert_eq!(event.metadata.as_ref().unwrap()["tokens"], 1000);
+    assert_eq!(event.metadata.unwrap()["model"], "gemini-2.5-pro");
+    let info = GeminiAgent.parse_completion(&result.to_string());
+    assert_eq!(info.tokens, Some(1000));
+    assert_eq!(info.model.as_deref(), Some("gemini-2.5-pro"));
+    result["stats"]["models"]["gemini-2.5-pro"].as_object_mut().unwrap().remove("costUSD");
+    let event = parse_stream_event(&TaskId::generate(), &result, Local::now()).unwrap();
+    assert_eq!(event.metadata.unwrap()["model"], "gemini-2.5-flash");
+    assert_eq!(GeminiAgent.parse_completion(&result.to_string()).model.as_deref(), Some("gemini-2.5-flash"));
+    result["stats"]["models"]["gemini-2.5-pro"]["total_tokens"] = serde_json::json!(900);
+    assert_eq!(extract_model(&result).as_deref(), Some("gemini-2.5-flash"));
+}
+
+#[test]
+fn picks_gemini_array_model_by_tokens_and_sums_all_usage() {
+    let mut result = serde_json::json!({
+        "type": "turn_complete",
+        "stats": {
+            "models": [
+                {"model": "gemini-2.5-flash", "tokens": {"total": 100, "input": 60, "output": 40}},
+                {"model": "gemini-2.5-pro", "tokens": {"total": 900, "input": 500, "output": 400}}
+            ]
+        }
+    });
+    let event = parse_stream_event(&TaskId::generate(), &result, Local::now()).unwrap();
+    assert_eq!(event.metadata.as_ref().unwrap()["tokens"], 1000);
+    assert_eq!(event.metadata.unwrap()["model"], "gemini-2.5-pro");
+    let info = GeminiAgent.parse_completion(&result.to_string());
+    assert_eq!(info.tokens, Some(1000));
+    assert_eq!(info.model.as_deref(), Some("gemini-2.5-pro"));
+    result["stats"]["models"][0]["costUSD"] = serde_json::json!(0.2);
+    result["stats"]["models"][1]["costUSD"] = serde_json::json!(0.01);
+    let event = parse_stream_event(&TaskId::generate(), &result, Local::now()).unwrap();
+    assert_eq!(event.metadata.unwrap()["model"], "gemini-2.5-flash");
+    assert_eq!(GeminiAgent.parse_completion(&result.to_string()).model.as_deref(), Some("gemini-2.5-flash"));
+}

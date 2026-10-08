@@ -258,6 +258,8 @@ When dispatches are executed, `aid` isolates the agent process's `HOME` director
 - **Isolated Per-Task HOME**: At dispatch time, `HOME` is set to an isolated directory created under the task directory (`<task_dir>/home`).
 - **Default-Allow Symlink Policy**: Every top-level entry in the host `$HOME` (e.g. `.cargo`, `.rustup`, `.gitconfig`, `.ssh`, `.gemini`, `.grok`, `.cursor`, `.codex`, etc.) is symlinked into the isolated `HOME` so development toolchains and CLI auth directories function without interruption.
 - **Orchestrator Surface Denylist**: Orchestrator-scoped instruction files and permission configurations (such as `.claude` and `.claude.json`) are denylisted and excluded from the symlinked environment.
+- **Config Redirect Variables Removed**: Inherited per-CLI variables that move an agent's config or state away from `$HOME` (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GEMINI_CLI_HOME`, `OPENCODE_CONFIG_DIR`, `GROK_HOME`, `FACTORY_HOME_OVERRIDE` and the rest of `CONFIG_REDIRECT_VARS` in `src/agent/env_redirects.rs`) are removed from the agent environment. Durable Codex home still applies, and a value named with `--env` or `--env-forward` is kept.
+- **Forwarded Values Stay Off Disk**: `--env-forward` and batch `env_forward` names are resolved when the agent launches; only the names are saved. Background job specs, which hold inline `--env` values, are written owner-only (`0600`).
 - **Automatic Lifecycle Cleanup**: The isolated `HOME` directory is created per task and automatically cleaned up upon task execution completion.
 
 ## Preview routing without dispatch

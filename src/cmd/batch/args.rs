@@ -44,7 +44,7 @@ pub(crate) fn task_to_run_args(
                 .collect()
         })
         .unwrap_or_default();
-    let env = merged_env(task.env.as_ref(), task.env_forward.as_ref(), shared_dir_path);
+    let env = merged_env(task.env.as_ref(), shared_dir_path);
     let skills = if task.no_skill {
         vec![NO_SKILL_SENTINEL.to_string()]
     } else {
@@ -135,21 +135,15 @@ fn scope_filename(path: &str, suffix: &str) -> String {
     }
 }
 
+/// Inline task env plus the shared dir. `env_forward` names travel separately
+/// and are resolved at agent launch, so their values never enter a saved spec.
 pub(super) fn merged_env(
     env: Option<&HashMap<String, String>>,
-    env_forward: Option<&Vec<String>>,
     shared_dir_path: Option<&str>,
 ) -> Option<HashMap<String, String>> {
     let mut merged = env.cloned().unwrap_or_default();
     if let Some(shared_dir_path) = shared_dir_path {
         merged.insert("AID_SHARED_DIR".to_string(), shared_dir_path.to_string());
-    }
-    if let Some(env_forward) = env_forward {
-        for name in env_forward {
-            if let Ok(value) = std::env::var(name) {
-                merged.insert(name.clone(), value);
-            }
-        }
     }
     (!merged.is_empty()).then_some(merged)
 }
@@ -163,6 +157,21 @@ mod tests {
         let guard = crate::paths::AidHomeGuard::set(home.path());
         let task: batch::BatchTask = toml::from_str(toml).expect("valid batch task");
         (home, guard, task)
+    }
+
+    #[test]
+    fn batch_env_forward_keeps_names_without_resolving_values() {
+        let (_home, _guard, task) = batch_task(
+            r#"
+            agent = "gemini"
+            prompt = "say hi"
+            env_forward = ["PATH"]
+            "#,
+        );
+        let store = Arc::new(Store::open_memory().expect("in-memory store"));
+        let args = task_to_run_args(&task, &[], false, &store, None);
+        assert!(args.env.as_ref().is_none_or(|env| !env.contains_key("PATH")));
+        assert_eq!(args.env_forward, Some(vec!["PATH".to_string()]));
     }
 
     #[test]

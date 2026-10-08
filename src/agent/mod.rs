@@ -42,6 +42,7 @@ pub mod home_isolation;
 pub(crate) mod env;
 pub(crate) mod scratch;
 pub(crate) mod env_identity;
+pub(crate) mod env_redirects;
 #[path = "binary.rs"]
 mod binary;
 pub(crate) use binary::{

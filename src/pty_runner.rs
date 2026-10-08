@@ -201,10 +201,7 @@ fn record_completion(
     // estimate — and with both values now stored, a reader can tell which basis
     // any given row used instead of having to assume.
     let costing_model = observed_model.as_deref().or(model);
-    let cost_usd = info.cost_usd.or_else(|| {
-        info.tokens
-            .and_then(|tokens| cost::estimate_cost(tokens, costing_model, agent.kind()))
-    });
+    let cost_usd = cost::completion_cost(store, task_id, info, costing_model, agent.kind())?;
     let event = crate::types::TaskEvent {
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),
@@ -268,3 +265,7 @@ fn format_duration(ms: i64) -> String {
 #[cfg(test)]
 #[path = "pty_runner_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "pty_runner_cost_tests.rs"]
+mod cost_tests;

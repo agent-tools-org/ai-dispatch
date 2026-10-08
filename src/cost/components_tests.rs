@@ -3,109 +3,8 @@
 
 use super::*;
 use crate::agent::{Agent, claude::ClaudeAgent, codex::CodexAgent};
-use crate::cost::{
-    clear_feed_for_tests,
-    price_feed::{Feed, FeedModel},
-    set_feed_for_tests,
-};
-use crate::paths::AidHomeGuard;
-use crate::types::{TaskId, TaskStatus, VerifyStatus};
-
-const CODEX_USAGE: &str = concat!(
-    r#"{"type":"turn.completed","usage":{"input_tokens":232452,"cached_input_tokens":211968,"#,
-    r#""output_tokens":5988}}"#,
-);
-
-const CLAUDE_USAGE: &str = concat!(
-    r#"{"type":"result","subtype":"success","result":"Hello!","total_cost_usd":0.14359275,"s"#,
-    r#"ession_id":"session-1","usage":{"input_tokens":4,"cache_creation_input_tokens":18821,"#,
-    r#""cache_read_input_tokens":44733,"output_tokens":143},"modelUsage":{"claude-opus-4-6[1"#,
-    r#"m]":{"inputTokens":4}}}"#,
-);
-
-fn seed_prices(cached: Option<f64>) -> (tempfile::TempDir, AidHomeGuard) {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let guard = AidHomeGuard::set(dir.path());
-    clear_feed_for_tests();
-    set_feed_for_tests(Feed {
-        built_at: "2026-10-08T00:00:00Z".to_string(),
-        age_seconds: Some(0),
-        stale: Some(false),
-        count: Some(1),
-        models: vec![FeedModel {
-            id: "component-test-model".to_string(),
-            aliases: vec![],
-            input_per_mtok: 1.25,
-            output_per_mtok: 10.0,
-            cached_input_per_mtok: cached,
-            context_length: None,
-            source: None,
-        }],
-    });
-    (dir, guard)
-}
-
-fn task(agent: AgentKind, tokens: i64, stored_cost: Option<f64>) -> Task {
-    Task {
-        id: TaskId("t-components".to_string()),
-        agent,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None,
-        project_id: None,
-        worktree_path: None,
-        effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: Some(tokens),
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: Some("component-test-model".to_string()),
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: stored_cost,
-        exit_code: None,
-        created_at: chrono::Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
-    }
-}
-
-fn sample_usage() -> TokenUsage {
-    TokenUsage {
-        uncached_input: 200_000,
-        cached_input: 1_800_000,
-        output: 20_000,
-        cache_creation: 0,
-    }
-}
-
-fn assert_cost(actual: Option<f64>, expected: f64) {
-    let actual = actual.expect("known estimate");
-    assert!(
-        (actual - expected).abs() < 1e-9,
-        "cost {actual} != expected {expected}"
-    );
-}
+use crate::cost::test_support::*;
+use crate::types::TaskId;
 
 #[test]
 fn cost_components_price_cached_reads_separately() {
@@ -208,7 +107,7 @@ fn cost_components_claude_reported_cost_stays_authoritative() {
 }
 
 #[test]
-fn cost_components_claude_creation_uses_blend_when_rate_is_unknown() {
+fn cost_components_claude_creation_uses_input_multiplier_when_rate_is_unknown() {
     let _guard = seed_prices(Some(0.125));
     let event = ClaudeAgent
         .parse_event(&TaskId("t-components".to_string()), CLAUDE_USAGE)
@@ -218,7 +117,7 @@ fn cost_components_claude_creation_uses_blend_when_rate_is_unknown() {
     let usage = usage_from_metadata(metadata, AgentKind::Claude).expect("usage");
     assert_cost(
         estimate_usage_cost(usage, Some("component-test-model"), AgentKind::Claude),
-        (4.0 * 1.25 + 44_733.0 * 0.125 + 143.0 * 10.0 + 18_821.0 * 3.875) / 1_000_000.0,
+        (4.0 * 1.25 + 44_733.0 * 0.125 + 143.0 * 10.0 + 18_821.0 * 1.25 * 1.25) / 1_000_000.0,
     );
 }
 
@@ -241,5 +140,95 @@ fn cost_components_catalog_precedence_keeps_unknown_cached_rate() {
     assert_cost(
         estimate_usage_cost(usage, Some("gpt-5.6-sol"), AgentKind::Codex),
         0.2 * 2.5 + 1.8 * (0.7 * 2.5 + 0.3 * 15.0) + 0.02 * 15.0,
+    );
+}
+
+#[test]
+fn cost_components_explicit_creation_price_wins_over_input_multiplier() {
+    let _guard = seed_prices(Some(0.125));
+    crate::cost::TEST_PRICING_OVERRIDES.with(|cell| {
+        *cell.borrow_mut() = Some(std::collections::HashMap::from([(
+            (AgentKind::Claude, "component-test-model".to_string()),
+            crate::cost::ModelPricing {
+                input_per_m: 1.25,
+                output_per_m: 10.0,
+                cached_input_per_m: Some(0.125),
+                cache_creation_per_m: Some(3.0),
+            },
+        )]));
+    });
+    let usage = TokenUsage {
+        uncached_input: 0,
+        cached_input: 0,
+        output: 0,
+        cache_creation: 1_000_000,
+    };
+    assert_cost(
+        estimate_usage_cost(usage, Some("component-test-model"), AgentKind::Claude),
+        3.0,
+    );
+}
+
+#[test]
+fn watcher_completion_components_set_cost_and_replace_previous_totals() {
+    use crate::types::{CompletionInfo, TaskStatus};
+    use crate::watcher::{
+        StreamLineContext, SyntheticMilestoneTracker, handle_streaming_line_with_session,
+    };
+    let _guard = seed_prices(Some(0.125));
+    let store = std::sync::Arc::new(Store::open_memory().expect("store"));
+    let mut task = task(AgentKind::Codex, 238_440, None);
+    task.observed_model = Some("previous-run-model".to_string());
+    store.insert_task(&task).expect("task");
+    let mut info = CompletionInfo {
+        tokens: None,
+        model: None,
+        status: TaskStatus::Done,
+        cost_usd: None,
+        exit_code: None,
+    };
+    let (mut count, mut saved) = (0, false);
+    let mut tracker = SyntheticMilestoneTracker::new();
+    for _ in 0..2 {
+        handle_streaming_line_with_session(
+            StreamLineContext {
+                agent: &CodexAgent,
+                task_id: &task.id,
+                store: &store,
+                workgroup_id: None,
+                synthetic_tracker: &mut tracker,
+            },
+            &mut info,
+            &mut count,
+            CODEX_USAGE,
+            &mut saved,
+        )
+        .expect("streaming completion");
+        assert_eq!(info.tokens, Some(238_440));
+        assert_cost(info.cost_usd, 0.111981);
+    }
+}
+
+#[test]
+fn cost_completion_reprices_stream_estimate_using_final_model() {
+    let _guard = seed_prices(Some(0.125));
+    let store = Store::open_memory().expect("store");
+    let task = task(AgentKind::Codex, 238_440, None);
+    let event = CodexAgent
+        .parse_event(&task.id, CODEX_USAGE)
+        .expect("capture");
+    store.insert_task(&task).expect("task");
+    store.insert_event(&event).expect("event");
+    let info = crate::types::CompletionInfo {
+        tokens: task.tokens,
+        model: None,
+        status: crate::types::TaskStatus::Done,
+        cost_usd: Some(0.111981),
+        exit_code: Some(0),
+    };
+    assert_eq!(
+        completion_cost(&store, &task.id, &info, Some("missing"), AgentKind::Codex)
+            .expect("unknown final model"),
+        None
     );
 }

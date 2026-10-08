@@ -190,10 +190,7 @@ fn handle_success(
         agent, store.as_ref(), task_id, &info, model,
     );
     let costing_model = observed_model.as_deref().or(model);
-    let cost_usd = info.cost_usd.or_else(|| {
-        info.tokens
-            .and_then(|tokens| crate::cost::estimate_cost(tokens, costing_model, agent.kind()))
-    });
+    let cost_usd = crate::cost::completion_cost(store, task_id, &info, costing_model, agent.kind())?;
     crate::task_lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
         id: task_id.as_str(),
         status: info.status,

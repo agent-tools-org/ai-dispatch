@@ -3,7 +3,7 @@
 
 use super::{estimate_cost, resolve_pricing};
 use crate::store::Store;
-use crate::types::{AgentKind, EventKind, Task};
+use crate::types::{AgentKind, CompletionInfo, EventKind, Task, TaskEvent, TaskId};
 use serde_json::Value;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -25,7 +25,10 @@ pub(crate) fn estimate_usage_cost(
         (usage.uncached_input as f64 * pricing.input_per_m
             + usage.cached_input as f64 * pricing.cached_input_per_m.unwrap_or(blended)
             + usage.output as f64 * pricing.output_per_m
-            + usage.cache_creation as f64 * blended)
+            + usage.cache_creation as f64
+                * pricing
+                    .cache_creation_per_m
+                    .unwrap_or(pricing.input_per_m * 1.25))
             / 1_000_000.0,
     )
 }
@@ -61,25 +64,96 @@ fn usage_from_metadata(metadata: &Value, agent: AgentKind) -> Option<TokenUsage>
 }
 
 pub(crate) fn task_cost(store: &Store, task: &Task) -> anyhow::Result<Option<f64>> {
-    if matches!(task.agent, AgentKind::Codex | AgentKind::Claude) {
-        let events = store.get_events(task.id.as_str())?;
-        if let Some(metadata) = events
-            .iter()
-            .rev()
-            .find(|event| event.event_kind == EventKind::Completion)
-            .and_then(|event| event.metadata.as_ref())
-        {
-            if let Some(cost) = metadata.get("cost_usd").and_then(Value::as_f64) {
-                return Ok(Some(cost));
-            }
-            if let Some(usage) = usage_from_metadata(metadata, task.agent) {
-                return Ok(estimate_usage_cost(usage, task.costing_model(), task.agent));
-            }
-        }
+    if let Some(cost) = recorded_component_cost(
+        store,
+        &task.id,
+        task.tokens,
+        task.costing_model(),
+        task.agent,
+    )? {
+        return Ok(cost);
     }
     Ok(task
         .cost_usd
         .or_else(|| estimate_cost(task.tokens.unwrap_or(0), task.costing_model(), task.agent)))
+}
+
+fn recorded_component_cost(
+    store: &Store,
+    task_id: &TaskId,
+    tokens: Option<i64>,
+    model: Option<&str>,
+    agent: AgentKind,
+) -> anyhow::Result<Option<Option<f64>>> {
+    if !matches!(agent, AgentKind::Codex | AgentKind::Claude) {
+        return Ok(None);
+    }
+    let events = store.get_events(task_id.as_str())?;
+    let metadata = events
+        .iter()
+        .rev()
+        .filter(|event| event.event_kind == EventKind::Completion)
+        .find_map(|event| {
+            event.metadata.as_ref().filter(|metadata| {
+                metadata.get("tokens").is_some() || metadata.get("cost_usd").is_some()
+            })
+        });
+    let Some(metadata) = metadata else {
+        return Ok(None);
+    };
+    if tokens.is_none() || token_count(metadata, "tokens") != tokens {
+        return Ok(None);
+    }
+    if let Some(cost) = metadata.get("cost_usd").and_then(Value::as_f64) {
+        return Ok(Some(Some(cost)));
+    }
+    Ok(usage_from_metadata(metadata, agent).map(|usage| estimate_usage_cost(usage, model, agent)))
+}
+
+pub(crate) fn completion_cost(
+    store: &Store,
+    task_id: &TaskId,
+    info: &CompletionInfo,
+    model: Option<&str>,
+    agent: AgentKind,
+) -> anyhow::Result<Option<f64>> {
+    if let Some(cost) = recorded_component_cost(store, task_id, info.tokens, model, agent)? {
+        return Ok(cost);
+    }
+    if let Some(cost) = info.cost_usd {
+        return Ok(Some(cost));
+    }
+    Ok(info
+        .tokens
+        .and_then(|tokens| estimate_cost(tokens, model, agent)))
+}
+
+pub(crate) fn apply_completion_usage_cost(
+    store: &Store,
+    task_id: &TaskId,
+    info: &mut CompletionInfo,
+    event: &TaskEvent,
+    agent: AgentKind,
+) -> anyhow::Result<()> {
+    if event.event_kind != EventKind::Completion {
+        return Ok(());
+    }
+    let Some(metadata) = event.metadata.as_ref() else {
+        return Ok(());
+    };
+    if metadata.get("cost_usd").and_then(Value::as_f64).is_some() {
+        return Ok(());
+    }
+    let Some(usage) = usage_from_metadata(metadata, agent) else {
+        return Ok(());
+    };
+    let task = store.get_task(task_id.as_str())?;
+    let model = info.model.as_deref().or_else(|| {
+        task.as_ref()
+            .and_then(|task| task.requested_model.as_deref())
+    });
+    info.cost_usd = estimate_usage_cost(usage, model, agent);
+    Ok(())
 }
 
 #[cfg(test)]

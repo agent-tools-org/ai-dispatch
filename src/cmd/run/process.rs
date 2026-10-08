@@ -193,8 +193,10 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
             return Err(err);
         }
     };
-    if info.cost_usd.is_some_and(|cost| max_task_cost.is_some_and(|max| cost > max)) {
-        let current_cost = info.cost_usd.unwrap_or_default();
+    let costing_model = info.model.as_deref().or(model);
+    let cost_usd = crate::cost::completion_cost(store, task_id, &info, costing_model, agent.kind())?;
+    if cost_usd.is_some_and(|cost| max_task_cost.is_some_and(|max| cost > max)) {
+        let current_cost = cost_usd.unwrap_or_default();
         let max_cost = max_task_cost.unwrap_or_default();
         let _ = store.insert_event(&TaskEvent {
             task_id: task_id.clone(),
@@ -231,7 +233,7 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
         agent, store.as_ref(), task_id, &info, model,
     );
     let costing_model = observed_model.as_deref().or(model);
-    let cost_usd = info.cost_usd.or_else(|| info.tokens.and_then(|tokens| crate::cost::estimate_cost(tokens, costing_model, agent.kind())));
+    let cost_usd = crate::cost::completion_cost(store, task_id, &info, costing_model, agent.kind())?;
     crate::task_lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
         id: task_id.as_str(),
         status: info.status,

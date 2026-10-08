@@ -111,6 +111,7 @@ pub(crate) fn handle_streaming_line_with_session(
 
     if let Some(event) = agent.parse_event(task_id, line) {
         apply_completion_event(info, &event);
+        crate::cost::apply_completion_usage_cost(store, task_id, info, &event, agent.kind())?;
         synthetic_tracker.observe(&event);
         save_session_id(store, task_id, &event, session_saved)?;
         // The raw line, never `event.detail`. An adapter's detail is a rendering

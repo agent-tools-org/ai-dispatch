@@ -7,7 +7,7 @@ use super::*;
 use crate::live_quota::CacheDirGuard;
 use crate::paths::AidHomeGuard;
 use crate::agent::run_model::RunModelSource;
-use crate::types::{TaskRigor, TaskUrgency};
+use crate::types::{TaskDifficulty, TaskRigor, TaskUrgency};
 
 fn isolated() -> (tempfile::TempDir, AidHomeGuard, CacheDirGuard) {
     let temp = tempfile::tempdir().expect("temp dir");

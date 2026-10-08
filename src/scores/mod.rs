@@ -98,17 +98,18 @@ fn evidence_from(
         })
         .cloned();
     let capability = selected.as_ref().and_then(|score| rescale(feed, score));
+    let harness = if terminal.is_some() {
+        "measured"
+    } else {
+        "harness unmeasured"
+    }
+    .into();
     Evidence {
         canonical_id: Some(id.into()),
         scores,
         selected,
         capability,
-        harness: if terminal.is_some() {
-            "measured"
-        } else {
-            "harness unmeasured"
-        }
-        .into(),
+        harness,
     }
 }
 

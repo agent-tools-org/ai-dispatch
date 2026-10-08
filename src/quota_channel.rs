@@ -111,7 +111,8 @@ pub(crate) fn provider_attributable(
             .and_then(|value| value.as_object().cloned())
         {
             Some(object) => keep_envelope_strings(&object, agent, &mut kept),
-            None => push_line(&mut kept.unsplit, line),
+            None if agent != AgentKind::Claude => push_line(&mut kept.unsplit, line),
+            None => {}
         }
     }
     kept

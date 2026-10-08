@@ -6,13 +6,16 @@ use super::{format_recovery, parse_iso_recovery_time};
 use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, TimeZone, Utc};
 
 pub(crate) fn parse_recovery_time(message: &str) -> Option<String> {
-    // Claude's older refusal appends |<unix seconds>. The same suffix is
-    // attached to a parsed rejected event when its structured resetsAt exists.
+    // Only Claude's refusal carries this suffix, not unrelated trace IDs.
+    // A rejected event is synthesized with the same prefix.
     if let Some((_, seconds)) = message.rsplit_once('|')
+        && (message.starts_with("Claude AI usage limit reached")
+            || message.starts_with("You've hit your limit"))
         && seconds.len() == 10
         && seconds.bytes().all(|byte| byte.is_ascii_digit())
         && let Ok(seconds) = seconds.parse::<i64>()
         && let Some(at) = DateTime::from_timestamp(seconds, 0)
+        && at <= Utc::now() + chrono::Duration::days(8)
     {
         return Some(format_recovery(at.with_timezone(&Local).naive_local()));
     }
@@ -71,3 +74,7 @@ pub(crate) fn claude_rejected_limit(object: &serde_json::Map<String, serde_json:
         }
     })
 }
+
+#[cfg(test)]
+#[path = "rate_limit_claude_tests.rs"]
+mod tests;

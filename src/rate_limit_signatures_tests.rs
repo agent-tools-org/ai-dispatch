@@ -1,6 +1,5 @@
-// Tests for per-CLI quota signatures. Every message below is verbatim captured
-// CLI output, not an invented shape — inventing the envelope is what let the
-// previous adapter fix pass its own tests while doing nothing in production.
+// Tests for per-CLI quota signatures. Messages below are captured CLI output,
+// not invented envelopes that let an adapter fix miss production.
 
 use super::*;
 
@@ -284,14 +283,15 @@ fn claude_error_result_is_a_refusal_but_assistant_prose_is_not() {
 
 #[test]
 fn claude_reset_order_prefers_unix_then_zoned_clock_then_fallback() {
+    let reset = chrono::Utc::now().timestamp() + 7200;
     let unix = crate::rate_limit::parse_recovery_time(
-        "Claude AI usage limit reached|1893456000"
+        &format!("Claude AI usage limit reached|{reset}")
     ).expect("unix reset");
     assert_eq!(unix, crate::rate_limit::format_recovery(
-        chrono::DateTime::from_timestamp(1893456000, 0)
+        chrono::DateTime::from_timestamp(reset, 0)
             .expect("timestamp").with_timezone(&Local).naive_local()
     ));
-    assert_eq!(crate::rate_limit::parse_recovery_time("You've hit your limit · resets 5pm (Asia/Shanghai)|1893456000"), Some(unix));
+    assert_eq!(crate::rate_limit::parse_recovery_time(&format!("You've hit your limit · resets 5pm (Asia/Shanghai)|{reset}")), Some(unix));
     let clock = parse_relative_recovery("You've hit your limit · resets 5pm (Asia/Shanghai)")
         .expect("zoned reset");
     let delta = clock - Local::now().naive_local();

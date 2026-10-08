@@ -81,5 +81,10 @@ pub(super) fn availability_notes(
             }
         })
         .collect();
-    selection_quota::notes_for(&targets, urgency, recommended.map(|item| item.agent.as_str()))
+    let mut notes = selection_quota::notes_for(
+        &targets, urgency, recommended.map(|item| item.agent.as_str()),
+    );
+    notes.extend(ranked.iter().filter_map(|item| item.capability_note.as_ref()
+        .map(|note| format!("{}: {note}", item.report.agent))));
+    notes
 }

@@ -100,6 +100,8 @@ fn same_pool_is_demoted_not_excluded_with_unknown_caller_model() {
     let (_temp, _home, _cache) = isolated();
     let fleet = vec![AgentKind::Claude, AgentKind::Codex, AgentKind::Droid, AgentKind::Copilot];
     let _fleet = crate::agent::DetectAgentsGuard::set(fleet);
+    // Use model evidence to establish the baseline before testing pool demotion.
+    crate::agent_config::save_agent_default_model("claude", Some("opus")).expect("model");
     let baseline = run(None);
     assert_eq!(baseline.candidates[0].agent, "claude", "claude must outrank others without a caller");
     let report = run(Some(anthropic_caller(None)));
@@ -139,7 +141,7 @@ fn standard_budget_advises_the_codex_cli_configured_default() {
     assert_eq!(codex.model.as_deref(), Some("gpt-6-sol"));
     assert!(!codex.pinned, "the CLI runs its own default; aid passes no -m");
     assert_eq!(codex.source, RunModelSource::CliConfig);
-    assert_eq!(codex.breakdown.model_capability, 0.0, "unrated model: agent-level base only");
+    assert_eq!(codex.breakdown.model_capability, 0.0, "unrated model: neutral base only");
     assert!(codex.eligible);
     assert!(codex.unrated_served_models.is_empty());
 }
@@ -237,17 +239,21 @@ fn research_and_frontend_advice_recommend_the_expected_installed_agent() {
         ("Create a responsive React component layout for the settings UI", [AgentKind::Cursor, AgentKind::Codex], "cursor"),
     ] {
         let _fleet = crate::agent::DetectAgentsGuard::set(fleet.to_vec());
+        // Expected preferences now come from rated models, not CLI category scores.
+        let model = match expected { "gemini" => "pro", "agy" => "gemini-3.1-pro-high", _ => "composer-2.5" };
+        crate::agent_config::save_agent_default_model(expected, Some(model)).expect("model");
         let report = advise(prompt, declared(TaskDifficulty::Moderate, TaskBudget::Standard), None, None, None, 0, None);
         assert_eq!(report.recommended.expect("recommendation").agent, expected);
     }
 }
 
 #[test]
-fn budget_simple_edit_advice_launches_opencode_or_kilo_budget_model() {
+fn budget_simple_edit_advice_launches_eligible_budget_model() {
     let (_temp, _home, _cache) = isolated();
     for (fleet, expected) in [
         (vec![AgentKind::OpenCode, AgentKind::Kilo, AgentKind::Codex], AgentKind::OpenCode),
-        (vec![AgentKind::Kilo, AgentKind::Codex], AgentKind::Kilo),
+        // Kilo's rated 3.8 is below floor 4; Codex's 7.2 minus budget 3 remains eligible.
+        (vec![AgentKind::Kilo, AgentKind::Codex], AgentKind::Codex),
     ] {
         let _fleet = crate::agent::DetectAgentsGuard::set(fleet);
         let report = advise("rename src/types.rs field name", declared(TaskDifficulty::Simple, TaskBudget::Free),

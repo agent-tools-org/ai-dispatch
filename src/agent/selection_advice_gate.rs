@@ -30,17 +30,19 @@ impl Exclusions {
         self.reasons.push(reason);
     }
 
-    /// Floor check. A missing capability row defaults the base to 1; that is
-    /// absent data, not a measured shortfall, so it gets its own reason.
-    pub(super) fn floor(&mut self, base: Option<i32>, floor: i32, difficulty: TaskDifficulty, category: TaskCategory) {
+    /// Exclude only an evidenced shortfall; absent evidence is a non-excluding note.
+    pub(super) fn floor(
+        &mut self, base: Option<f64>, floor: i32, difficulty: TaskDifficulty, category: TaskCategory,
+    ) -> Option<String> {
         match base {
-            None => self.push("no_capability_data", format!("no capability data for {}", category.label())),
-            Some(base) if base < floor => self.push(
+            None => return Some(format!("unrated: no measured or model capability for {}", category.label())),
+            Some(base) if base < f64::from(floor) => self.push(
                 "below_floor",
                 format!("base {base} < floor {floor} for {}", difficulty.label()),
             ),
             Some(_) => {}
         }
+        None
     }
 
     pub(super) fn budget(&mut self, budget_ok: bool, budget: TaskBudget) {

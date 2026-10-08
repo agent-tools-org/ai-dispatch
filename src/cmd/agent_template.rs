@@ -1,10 +1,8 @@
 // Agent TOML template builders for `aid agent add` and `aid agent fork`.
 // Exports: custom_agent_template, build_builtin_agent_toml, title_case.
-// Deps: agent selection capabilities, custom CapabilityScores, AgentKind.
+// Deps: custom CapabilityScores defaults and AgentKind.
 
 use crate::agent::custom::CapabilityScores;
-use crate::agent::selection::AGENT_CAPABILITIES;
-use crate::agent::classifier::TaskCategory;
 use crate::types::AgentKind;
 
 const AGENT_TEMPLATE: &str = r#"# Custom agent definition for aid.
@@ -66,7 +64,6 @@ pub(super) fn build_builtin_agent_toml(target_name: &str, kind: AgentKind) -> St
     let Some((command, _, _, _, streaming)) = kind.profile() else {
         return String::new();
     };
-    let caps = capability_scores_for(kind);
     let mut toml = String::new();
     toml.push_str(&format!(
         "# Forked from the built-in `{}` agent. Edit the entries below to customize this clone.\n",
@@ -97,6 +94,12 @@ pub(super) fn build_builtin_agent_toml(target_name: &str, kind: AgentKind) -> St
     toml.push_str("# base_url = \"http://127.0.0.1:11434/v1\"\n\n");
     toml.push_str("# Strength categories for auto-selection boosts\n");
     toml.push_str("strengths = []\n\n");
+    append_capabilities(&mut toml);
+    toml
+}
+
+fn append_capabilities(toml: &mut String) {
+    let caps = CapabilityScores::default();
     toml.push_str("# Capability scores (0-10) guide auto-selection\n");
     toml.push_str("[agent.capabilities]\n");
     toml.push_str(&format!("research = {}\n", caps.research));
@@ -108,26 +111,6 @@ pub(super) fn build_builtin_agent_toml(target_name: &str, kind: AgentKind) -> St
     toml.push_str(&format!("refactoring = {}\n", caps.refactoring));
     toml.push_str(&format!("documentation = {}\n", caps.documentation));
     toml.push('\n');
-    toml
-}
-
-fn capability_scores_for(kind: AgentKind) -> CapabilityScores {
-    let mut scores = CapabilityScores::default();
-    if let Some((_, entries)) = AGENT_CAPABILITIES.iter().find(|(k, _)| *k == kind) {
-        for &(category, value) in *entries {
-            match category {
-                TaskCategory::Research => scores.research = value,
-                TaskCategory::SimpleEdit => scores.simple_edit = value,
-                TaskCategory::ComplexImpl => scores.complex_impl = value,
-                TaskCategory::Frontend => scores.frontend = value,
-                TaskCategory::Debugging => scores.debugging = value,
-                TaskCategory::Testing => scores.testing = value,
-                TaskCategory::Refactoring => scores.refactoring = value,
-                TaskCategory::Documentation => scores.documentation = value,
-            }
-        }
-    }
-    scores
 }
 
 pub(super) fn title_case(name: &str) -> String {
@@ -147,4 +130,18 @@ pub(super) fn title_case(name: &str) -> String {
         return name.to_string();
     }
     pieces.join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builtin_template_uses_custom_defaults_without_cli_scores() {
+        let defaults = toml::Value::try_from(CapabilityScores::default()).expect("default capabilities");
+        for kind in [AgentKind::Gemini, AgentKind::Antigravity, AgentKind::Codex] {
+            let template: toml::Value = build_builtin_agent_toml("custom", kind).parse().expect("template");
+            assert_eq!(template["agent"]["capabilities"], defaults);
+        }
+    }
 }

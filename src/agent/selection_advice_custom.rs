@@ -39,7 +39,9 @@ pub(super) fn custom_candidates(
             if let Some(blocker) = &blocker {
                 exclusions.push(blocker.code(), blocker.reason());
             }
-            exclusions.floor(Some(total), floor, declared.difficulty, context.profile.category);
+            let _ = exclusions.floor(
+                Some(f64::from(total)), floor, declared.difficulty, context.profile.category,
+            );
             exclusions.budget(custom_budget_allows(model.as_deref(), declared.budget), declared.budget);
             let eligible = exclusions.is_empty();
             let (exclusion_reason, exclusion_codes) = exclusions.into_parts();

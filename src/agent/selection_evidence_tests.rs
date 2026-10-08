@@ -2,7 +2,11 @@
 // Covers resolved advice and the serialized agent-list contract.
 // Deps: advice isolation helpers, team overrides, registry, agent JSON.
 
+use super::super::super::selection_scoring::{
+    CandidateContext, NEUTRAL_BASE, model_capability_score, score_breakdown,
+};
 use super::*;
+use tempfile::TempDir;
 
 fn testing_advice(difficulty: TaskDifficulty, team: Option<&TeamConfig>) -> AdviceReport {
     advise(
@@ -67,7 +71,8 @@ fn matrix_removal_team_override_wins_over_rated_model() {
     crate::agent_config::save_agent_default_model("codex", Some("gpt-5.4-mini")).expect("model");
     for (score, eligible) in [(10, true), (4, false)] {
         let team: TeamConfig = toml::from_str(&format!(
-            "id = 'override'\ndisplay_name = 'Override'\npreferred_agents = []\n[overrides.codex]\ntesting = {score}\n"
+            "id = 'override'\ndisplay_name = 'Override'\npreferred_agents = []\n\
+                 [overrides.codex]\ntesting = {score}\n"
         ))
         .expect("team");
         let report = testing_advice(TaskDifficulty::Complex, Some(&team));
@@ -120,10 +125,18 @@ fn matrix_removal_custom_floor_keeps_declared_capability_and_strength() {
 #[test]
 fn matrix_removal_agent_list_json_has_no_agent_capability_map() {
     let (_temp, _home, _cache) = isolated();
+    crate::paths::ensure_dirs().expect("aid dirs");
+    let dir = crate::paths::aid_dir().join("agents");
+    std::fs::create_dir_all(&dir).expect("agents dir");
+    std::fs::write(
+        dir.join("custom-json.toml"),
+        "[agent]\nid = 'custom-json'\ndisplay_name = 'Custom'\ncommand = 'bash'\n",
+    )
+    .expect("custom config");
     let store = crate::store::Store::open_memory().expect("store");
     let list = crate::cmd::agent_json::agents_list_value(&store).expect("agent list");
     let agents = list["agents"].as_array().expect("agents");
-    assert!(!agents.is_empty());
+    assert!(agents.iter().any(|agent| agent["name"] == "custom-json"));
     for agent in agents {
         assert!(
             agent.get("capabilities").is_none(),
@@ -131,4 +144,45 @@ fn matrix_removal_agent_list_json_has_no_agent_capability_map() {
             agent["name"]
         );
     }
+}
+
+#[test]
+fn discovered_agy_model_uses_neutral_base_when_capability_is_unknown() {
+    let temp = TempDir::new().expect("temp dir");
+    let _home = AidHomeGuard::set(temp.path());
+    crate::paths::ensure_dirs().expect("aid dirs");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("current time")
+        .as_secs();
+    let cache = serde_json::json!({
+        "agy": {"models": ["gemini-3.7-flash-high"], "updated_at_secs": now}
+    });
+    std::fs::write(
+        crate::paths::aid_dir().join("served_models_cache.json"),
+        cache.to_string(),
+    )
+    .expect("served-model cache");
+
+    let capability = model_capability_score(AgentKind::Antigravity, "gemini-3.7-flash-high");
+    assert_eq!(capability, None);
+    let profile = TaskProfile {
+        category: TaskCategory::SimpleEdit,
+        complexity: Complexity::Low,
+    };
+    let history = HashMap::new();
+    let costs = HashMap::new();
+    let ctx = CandidateContext {
+        profile: &profile,
+        team: None,
+        history_map: &history,
+        avg_cost_map: &costs,
+        team_default: None,
+        budget: false,
+        penalize_rate_limit: false,
+    };
+    assert_eq!(
+        score_breakdown(&ctx, AgentKind::Antigravity, Some("gemini-3.7-flash-high")).base,
+        NEUTRAL_BASE
+    );
 }

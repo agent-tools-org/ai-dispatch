@@ -31,7 +31,8 @@ detached) is sanitized to letters, digits, `_`, and `-`. All worktrees share
 Use `--jobs N` (default 4, or `AID_BUILD_JOBS`), `--timeout S` (5400),
 `--lock-timeout S` (3600), `-- <extra cargo test args>`, or `--dry-run` to print the command.
 Exit 124 means the wait timed out and the job continues; 75 means the box lock was not
-acquired. Diagnostics name the job ID when assigned (sync lock failure has no job yet).
+acquired; 66 means no tests matched the filter. Diagnostics name the job ID when
+assigned (sync lock failure has no job yet).
 Completed test exits retain their status and are identified by rbox's completion marker.
 If the agent sandbox cannot reach Tailscale, stop at dry-run/fake-rbox checks; the
 operator runs the live release-test path. Never fall back to local compilation.

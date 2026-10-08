@@ -39,6 +39,7 @@ with open(os.environ['CAPTURE'], 'a') as capture:
     capture.write(json.dumps(sys.argv[1:]) + '\\n')
 if os.environ.get('FAKE_JOB', 'yes') == 'yes':
     print('rbox: job fixture-job', file=sys.stderr, flush=True)
+print(os.environ.get('FAKE_TEST_OUTPUT', ''), end='', flush=True)
 status = int(os.environ.get('FAKE_STATUS', '0'))
 if os.environ.get('FAKE_COMPLETE') == 'yes':
     print(f'rbox: job fixture-job exited with code {status}', flush=True)
@@ -164,6 +165,41 @@ sys.exit(status)
         result = self.run_script()
         self.assertEqual(result.returncode, 1)
         self.assertIn("rbox failed before any test ran (exit 1)", result.stderr)
+
+    def test_zero_matched_tests_fail_with_clear_message(self) -> None:
+        self.env["FAKE_TEST_OUTPUT"] = (
+            "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2936 filtered out\n"
+        )
+        result = self.run_script("--", "--bin", "aid", "--", "a b")
+        self.assertEqual(result.returncode, 66)
+        self.assertIn("[remote-test] no tests matched the filter", result.stderr)
+
+    def test_matching_tests_preserve_success(self) -> None:
+        for counts in ["1 passed; 0 failed; 0 ignored", "0 passed; 0 failed; 1 ignored"]:
+            with self.subTest(counts=counts):
+                self.env["FAKE_TEST_OUTPUT"] = f"test result: ok. {counts}; 2935 filtered out\n"
+                result = self.run_script()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertNotIn("no tests matched", result.stderr)
+
+    def test_zero_doc_tests_do_not_fail_when_other_tests_run(self) -> None:
+        self.env["FAKE_TEST_OUTPUT"] = (
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 filtered out\n"
+            "   Doc-tests aid\n"
+            "test result: ok. 0 passed; 0 failed; 0 ignored; 0 filtered out\n"
+        )
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("no tests matched", result.stderr)
+
+    def test_failed_tests_keep_original_status(self) -> None:
+        self.env.update(
+            FAKE_STATUS="1",
+            FAKE_TEST_OUTPUT="test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 filtered out\n",
+        )
+        result = self.run_script()
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn("no tests matched", result.stderr)
 
     def test_completed_test_status_is_not_misreported_as_timeout(self) -> None:
         for status in [0, 1, 75, 124]:

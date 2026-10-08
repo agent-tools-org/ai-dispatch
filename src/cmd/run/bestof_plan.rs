@@ -136,7 +136,8 @@ mod tests {
         let (temp, _home, _cache) = isolated();
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid]);
         crate::agent_config::save_agent_default_model("codex", Some("gpt-5.6-sol")).expect("model");
-        let mut caller = caller_advice("codex", Some("gpt-5.6-sol")).expect("caller");
+        crate::scores::test_support::seed_catalog_aliases();
+        let mut caller = caller_advice("codex", Some("gpt-5.6-sol"), crate::agent::classifier::TaskCategory::ComplexImpl).expect("caller");
         caller.capability = Some(99.0);
         let report = advise("refactor scheduler", profile(), Some(TaskCategory::Refactoring), None, None, 0, Some(caller));
         assert!(report.candidates.iter().any(|c| c.agent == "codex" && c.exclusion_codes.contains(&"weaker_on_caller_pool".into())));

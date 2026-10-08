@@ -96,6 +96,7 @@ mod compaction;
 pub mod claudemd;
 mod tui;
 mod system_resources;
+mod scores;
 mod types;
 mod update_check;
 mod usage;

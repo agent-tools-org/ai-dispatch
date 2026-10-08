@@ -26,7 +26,7 @@ pub(crate) fn served_only_models(agent: AgentKind) -> Vec<ResolvedAgentModel> {
     }
     let known = static_models_for_agent(&agent);
     let description = format!(
-        "Served by {}; unrated (capability and pricing unknown)",
+        "Served by {}; leaderboard evidence and prices resolve separately",
         agent.as_str()
     );
     crate::agent::model_validation::load_from_disk_cache(agent)
@@ -38,7 +38,6 @@ pub(crate) fn served_only_models(agent: AgentKind) -> Vec<ResolvedAgentModel> {
             model,
             tier: "unknown".to_string(),
             description: description.clone(),
-            capability: None,
             origin: ModelOrigin::Served,
         })
         .collect()
@@ -51,6 +50,8 @@ pub(crate) fn unrated_served_newer_than(agent: AgentKind, model: &str) -> Vec<St
     };
     served_only_models(agent)
         .into_iter()
+        .filter(|row| crate::scores::capability_score(agent, &row.model,
+            crate::agent::classifier::TaskCategory::ComplexImpl).is_none())
         .filter(|row| {
             family_version(&row.model)
                 .is_some_and(|(f, v)| f.eq_ignore_ascii_case(family) && v > version)

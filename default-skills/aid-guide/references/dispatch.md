@@ -315,12 +315,43 @@ claude `Please run /login` / `Not logged in`, oz `credentials are invalid`),
 otherwise `unknown`. A successful run clears it; aid never reports `ok` and
 never marks auth failed from a run or probe that could not start.
 
+Leaderboard evidence: `aid advise` (text and JSON) shows each candidate's
+`capability_evidence`: `canonical_id`, all raw `scores`, the `selected` score,
+`capability` (0–10 or `null`), and `harness` (`measured` or `harness unmeasured`).
+Each score preserves `source`, `board`, `cli`, `effort`, `value`, `unit`, `rank`,
+`of`, `ci_low`, `ci_high`, and `date`; missing effort/rank/CI stays `null`.
+The report's `sources` block preserves each source's `ok`, `count`, `updated_at`,
+`url`, `licence`, `attribution`, and optional `error` (`null` when absent).
+Custom candidates also expose raw evidence; their configured scoring scale stays separate.
+
+Scoring chooses one source, never a blend: simple-edit/complex-impl/debugging/
+testing/refactoring use Terminal-Bench 4.0 accuracy for the exact canonical model,
+CLI, and configured effort, falling back to Epoch ECI. Frontend uses LMArena
+webdev; research/documentation use Epoch ECI. Price-feed exact IDs and aliases
+provide the canonical mapping; there is no fuzzy model matching. Terminal-Bench
+results from another CLI or effort do not rate this harness: fallback evidence
+is labelled `harness unmeasured`. Codex effort comes from `model_reasoning_effort`
+in its configured home; Claude uses `CLAUDE_CODE_EFFORT_LEVEL` then `effortLevel`
+in its user settings. Unobserved effort matches only an effort-less benchmark row.
+No applicable data (including a failed source) is unknown, never a fabricated zero.
+
+The sole linear rescale is `10 * (value - min) / (max - min)`: Terminal-Bench
+accuracy uses its 0–100 percent (or 0–1 rate) range; ECI and webdev use the
+observed model-level min/max of their own source, board, and unit in the snapshot.
+A degenerate range is unknown. A measured minimum may legitimately score zero.
+Free/cheap budget selection keeps the lowest-price rule; standard/premium
+compare model-level ECI within each preferred tier, with unknown ties keeping catalog order.
+`breakdown.complexity_bonus` was removed; no CLI gets an automatic +2 for complexity.
+`scores.json` shares the price cache directory and 24-hour TTL. Refresh is
+out of band; failed, malformed, empty, or server-stale fetches preserve the old
+cache, which remains usable offline. Without a valid cache, evidence is unknown.
+
 Caller pool: advise reads the calling session (`AID_CALLER_KIND`, Claude Code,
 Codex; see `aid board --mine`) and the caller's own model from
 `--caller-model <model>` (wins) or `AID_CALLER_MODEL`. Claude Code maps to the
 `anthropic` pool and Codex to `openai-chatgpt-plan`. The JSON report adds
 `caller` (`session`, `agent`, `provider`, `model`, `capability`). A candidate on
-the same pool whose recommended model has a lower catalog capability than the
+the same pool whose recommended model has a lower leaderboard capability than the
 caller's model is excluded as `weaker model on caller's pool`. When either
 capability is unknown, same-pool candidates stay eligible but carry
 `demotion_reason` and rank below every eligible other-pool candidate. This is
@@ -610,17 +641,21 @@ qwen, agy, and opencode (so providers such as `opencode-go` appear beside the
 built-in `opencode/*` rows). For Codex, a changed source-file stamp refreshes
 the cache from its local model list. Other agents read the cache only and never probe;
 an absent or expired cache adds nothing. Each `models.available` row carries
-`rated` and `source` (`catalog`, `served`, or `pricing_override`). A served-only
-row has `rated: false`, `source: "served"`, and `null` `capability`. Every
+`rated`, `capability` (the complex-impl rule, or `null`), `capability_evidence`
+(the same raw/selected/harness structure as advice), and `source` (`catalog`,
+`served`, or `pricing_override`). The agent-list response has the same `sources`
+metadata block as advice. A served-only
+row keeps `source: "served"`; `rated` reflects applicable leaderboard evidence, and
+`capability` is `null` when unknown. Every
 displayed price (`input_per_m`/`output_per_m` in the JSON, `aid config pricing`,
 the `aid config agents` model lines) is the price cost estimation resolves below;
 with none known the JSON carries `null` and the text prints `unknown`. aid never
-invents ratings for served-only models, and routing never auto-selects one.
+invents ratings for models without leaderboard evidence, and routing never auto-selects one.
 Cost estimation prices a model only from an exact match, in this order: an
 explicit `pricing.json` override for the agent and model, subscription
 inclusion, its static catalog row, or an exact price-feed id or alias.
 An explicit override also replaces a listed row's tier and description while
-preserving its catalog rating and source.
+preserving its origin; ratings resolve independently from the leaderboard feed.
 The price feed carries each vendor's own per-token API rate, so it prices only
 the vendor's own CLI (codex, claude, gemini, grok); on a reseller route (droid,
 oz, opencode, and the others) a model without a catalog figure or override

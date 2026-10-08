@@ -20,7 +20,11 @@ pub(super) fn recommendation_hint(
     }
     let model = crate::session::caller_model(None);
     let caller = crate::session::current_caller()
-        .and_then(|session| caller_advice(&session.kind, model.as_deref()));
+        .and_then(|session| caller_advice(&session.kind, model.as_deref(), kind.unwrap_or_else(|| {
+            let normalized = prompt.trim().to_lowercase();
+            crate::agent::classifier::classify(prompt,
+                crate::agent::classifier::count_file_mentions(&normalized), prompt.chars().count()).category
+        })));
     let recommended_agent = advise(prompt, declared, kind, team, Some(store), 0, caller)
         .recommended?.agent;
     if user_agent.eq_ignore_ascii_case(&recommended_agent) {

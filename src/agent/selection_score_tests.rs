@@ -122,12 +122,9 @@ fn breakdown_is_bit_identical_to_pre_decomposition_value() {
     let context = score_ctx(&profile, &history_map, &avg_cost_map, Some(&team), true);
     let breakdown = hint_breakdown(&context, AgentKind::Codex);
 
-    // Absolute pin, so an unintended scoring change cannot slip through: floating
-    // addition is not associative and a reordered sum can flip a tie silently.
-    // It is derived from the model catalog, so a legitimate catalog refresh moves
-    // it — re-pin deliberately and say why. 2026-08-05: 16.3 -> 16.35 when the
-    // refresh made gpt-5.6-sol codex's default.
-    assert_eq!(breakdown.total.to_bits(), 0x4030_5999_9999_999a);
+    // With no leaderboard cache, no capability or complexity term is invented.
+    assert_eq!(breakdown.total, 14.0);
+    assert_eq!(breakdown.model_capability, 0.0);
     assert_eq!(breakdown.headroom_penalty, 0.0);
 }
 #[test]
@@ -148,7 +145,7 @@ fn discovered_agy_model_keeps_base_score_when_capability_is_unknown() {
     )
     .expect("served-model cache");
 
-    let capability = model_capability_score(AgentKind::Antigravity, "gemini-3.7-flash-high");
+    let capability = model_capability_score(AgentKind::Antigravity, "gemini-3.7-flash-high", TaskCategory::Research);
     assert_eq!(capability, None);
     assert_eq!(model_quality_score(8, capability), 8.0);
 }

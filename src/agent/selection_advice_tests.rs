@@ -85,6 +85,7 @@ fn same_pool_weaker_model_is_excluded_with_known_caller_model() {
     let (_temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Claude, AgentKind::Codex]);
     crate::agent_config::save_agent_default_model("claude", Some("sonnet")).expect("sticky");
+    crate::scores::test_support::seed_catalog_aliases();
     let report = run(Some(anthropic_caller(Some(99.0))));
     let claude = find(&report, "claude");
     assert_eq!(claude.model.as_deref(), Some("sonnet"), "a known model makes the comparison real");
@@ -221,7 +222,8 @@ fn no_installed_routes_or_only_weaker_caller_pool_routes_have_no_recommendation(
     assert!(run(None).recommended.is_none());
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
     crate::agent_config::save_agent_default_model("codex", Some("gpt-5.6-sol")).expect("model");
-    let caller = caller_advice("codex", Some("gpt-5.6-sol")).expect("caller");
+    crate::scores::test_support::seed_catalog_aliases();
+    let caller = caller_advice("codex", Some("gpt-5.6-sol"), crate::agent::classifier::TaskCategory::ComplexImpl).expect("caller");
     let caller = CallerAdvice { capability: Some(99.0), ..caller };
     let report = run(Some(caller));
     assert!(find(&report, "codex").exclusion_codes.contains(&"weaker_on_caller_pool".into()));

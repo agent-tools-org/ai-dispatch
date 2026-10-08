@@ -1,0 +1,176 @@
+{
+ "built_at": "2026-10-08T10:58:50.199Z",
+ "sources": {
+  "terminal_bench": {
+   "ok": true,
+   "count": 35,
+   "updated_at": "2026-10-06T23:20:25.572485+00:00",
+   "url": "https://tbench.ai",
+   "licence": "unverified",
+   "attribution": "Terminal-Bench 4.0 / Harbor Framework"
+  },
+  "epoch": {
+   "ok": true,
+   "count": 464,
+   "updated_at": "2026-09-29",
+   "url": "https://epoch.ai/data/benchmark_data.zip",
+   "licence": "CC BY 4.0",
+   "attribution": "Epoch AI"
+  },
+  "lmarena": {
+   "ok": true,
+   "count": 150,
+   "updated_at": "2026-10-06",
+   "url": "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset",
+   "licence": "CC BY 4.0",
+   "attribution": "LMSYS / LMArena"
+  }
+ },
+ "models": [
+  {
+   "id": "302ai/gemini-3-pro-preview",
+   "scores": [
+    {
+     "source": "epoch",
+     "board": "swe-bench-verified",
+     "cli": null,
+     "effort": null,
+     "value": 0.7293388429752066,
+     "unit": "rate",
+     "rank": 28,
+     "of": 43,
+     "ci_low": 0.6897,
+     "ci_high": 0.769,
+     "date": "2025-11-18"
+    }
+   ]
+  },
+  {
+   "id": "302ai/grok-4.20-beta-0309-reasoning",
+   "scores": [
+    {
+     "source": "lmarena",
+     "board": "webdev",
+     "cli": null,
+     "effort": null,
+     "value": 1374.5959253902797,
+     "unit": "elo",
+     "rank": 98,
+     "of": 595,
+     "ci_low": 1368.5393248115938,
+     "ci_high": 1380.6525259689656,
+     "date": "2026-10-06"
+    }
+   ]
+  },
+  {
+   "id": "302ai/kimi-k2-thinking",
+   "scores": [
+    {
+     "source": "epoch",
+     "board": "eci",
+     "cli": null,
+     "effort": null,
+     "value": 146.01,
+     "unit": "index",
+     "rank": 79,
+     "of": 274,
+     "ci_low": 143.36,
+     "ci_high": 147.52,
+     "date": "2025-11-06"
+    }
+   ]
+  },
+  {
+   "id": "302ai/qwen3-30b-a3b",
+   "scores": [
+    {
+     "source": "epoch",
+     "board": "eci",
+     "cli": null,
+     "effort": null,
+     "value": 136.18,
+     "unit": "index",
+     "rank": 135,
+     "of": 274,
+     "ci_low": 129.7,
+     "ci_high": 138.62,
+     "date": "2025-04-29"
+    }
+   ]
+  },
+  {
+   "id": "abacus/claude-3-7-sonnet-20250219",
+   "scores": [
+    {
+     "source": "epoch",
+     "board": "swe-bench-verified",
+     "cli": null,
+     "effort": null,
+     "value": 0.609504132231405,
+     "unit": "rate",
+     "rank": 42,
+     "of": 43,
+     "ci_low": 0.566,
+     "ci_high": 0.653,
+     "date": "2025-02-24"
+    }
+   ]
+  },
+  {
+   "id": "abacus/claude-opus-4-1-20250805",
+   "scores": [
+    {
+     "source": "epoch",
+     "board": "swe-bench-verified",
+     "cli": null,
+     "effort": null,
+     "value": 0.7334710743801653,
+     "unit": "rate",
+     "rank": 31,
+     "of": 43,
+     "ci_low": 0.694,
+     "ci_high": 0.7729,
+     "date": "2025-08-05"
+    },
+    {
+     "source": "lmarena",
+     "board": "webdev",
+     "cli": null,
+     "effort": null,
+     "value": 1390.1926892646768,
+     "unit": "elo",
+     "rank": 93,
+     "of": 595,
+     "ci_low": 1379.4933025917237,
+     "ci_high": 1400.8920759376297,
+     "date": "2026-10-06"
+    }
+   ]
+  }
+ ],
+ "unmapped": [
+  {
+   "source": "epoch",
+   "label": ",0.02122974956319103,https://logs.epoch.ai/inspect-viewer/36231d6d/viewer.html?log_file=https%3A%2F%2Flogs.epoch.ai%2Finspect_ai_logs%2FYoHtZpMNdsRE6qdj2K4Ucj.eval,https://epoch-benchmarks-staging-public.s3.us-east-2.amazonaws.com/inspect_ai"
+  },
+  {
+   "source": "epoch",
+   "label": ",0.021568422716496703,https://logs.epoch.ai/inspect-viewer/36231d6d/viewer.html?log_file=https%3A%2F%2Flogs.epoch.ai%2Finspect_ai_logs%2FG5hTYKeE5buuWzwRQK7EgS.eval,https://epoch-benchmarks-staging-public.s3.us-east-2.amazonaws.com/inspect_ai"
+  },
+  {
+   "source": "epoch",
+   "label": "30e12 tokens * 32B parameters * 6 = 5.76e24 FLOP"
+  },
+  {
+   "source": "epoch",
+   "label": "Baichuan 2-7B"
+  },
+  {
+   "source": "epoch",
+   "label": "Baichuan1-7B"
+  }
+ ],
+ "age_seconds": 1,
+ "stale": false
+}

@@ -48,7 +48,11 @@ pub(crate) fn build_report(
     let team = team.and_then(crate::team::resolve_team);
     let model = crate::session::caller_model(caller_model);
     let caller = crate::session::current_caller()
-        .and_then(|session| caller_advice(&session.kind, model.as_deref()));
+        .and_then(|session| caller_advice(&session.kind, model.as_deref(), kind.unwrap_or_else(|| {
+            let normalized = prompt.trim().to_lowercase();
+            crate::agent::classifier::classify(prompt,
+                crate::agent::classifier::count_file_mentions(&normalized), prompt.chars().count()).category
+        })));
     advise(prompt, declared, kind, team.as_ref(), store, top, caller)
 }
 
@@ -63,74 +67,16 @@ fn print_human(report: &AdviceReport, kind_was_overridden: bool) {
         report.inferred.kind.label(),
         source,
     );
-    if let Some(recommended) = &report.recommended {
-        // The recommendation names a route, not an agent id. `codex` alone
-        // cannot say which quota pool the work will draw on, and that was the
-        // question that mattered every time routing broke on 2026-08-05: an
-        // exhausted route says nothing about a different provider that reaches
-        // a model of the same class.
-        let route = recommended_route(&recommended.agent, recommended.model.clone());
-        println!(
-            "Recommended: {}   score {:.1}   {}  {}{}",
-            route,
-            recommended.score,
-            cost_label(recommended.est_cost_usd),
-            duration_label(recommended.est_duration_secs),
-            recommended_quota_suffix(&recommended.reason),
-        );
-        println!("Model: {}", crate::agent::run_model::model_label(
-            recommended.model.as_deref(), recommended.pinned, recommended.source,
-        ));
-    } else {
-        println!("Recommended: none (no installed agents)");
-    }
+    print_recommendation(report);
     if let Some(caller) = &report.caller {
         println!(
             "Caller: {} → {} pool (model {})",
             caller.session, caller.provider, caller.model.as_deref().unwrap_or("unknown"),
         );
     }
-    for (index, candidate) in report.candidates.iter().enumerate() {
-        let availability = candidate_mark(
-            candidate.exclusion_reason.as_deref().or(candidate.demotion_reason.as_deref()),
-        );
-        let item = &candidate.breakdown;
-        println!(
-            "  {}. {:<10} {:>5.1}  base {:.1}  {:+.1} model  {:+.1} budget  {:+.1} limit  {:+.1} history  {:+.1} complexity  {:+.1} team  {:+.1} headroom  model {}{}",
-            index + 1,
-            candidate.agent,
-            candidate.score,
-            item.base,
-            item.model_capability,
-            item.budget_penalty,
-            item.rate_limit_penalty,
-            item.history_bonus,
-            item.complexity_bonus,
-            item.team_bonus,
-            item.headroom_penalty,
-            crate::agent::run_model::model_label(
-                candidate.model.as_deref(), candidate.pinned, candidate.source,
-            ),
-            availability,
-        );
-        if let Some(line) = unrated_served_line(candidate) {
-            println!("{line}");
-        }
-    }
-    if !report.custom_candidates.is_empty() {
-        println!("Custom agents (separate capability scale):");
-        for candidate in &report.custom_candidates {
-            let availability = candidate_mark(candidate.exclusion_reason.as_deref());
-            let preference = if candidate.team_preferred { "  team preferred" } else { "" };
-            println!(
-                "  {:<20} capability {}  +{} strength{}{}",
-                candidate.agent,
-                candidate.category_capability,
-                candidate.strength_bonus,
-                preference,
-                availability,
-            );
-        }
+    leaderboard::print_candidates(report);
+    for (name, source) in &report.sources {
+        println!("Source {name}: {} | {} | {}", source.licence, source.attribution, source.url);
     }
     if !report.notes.is_empty() {
         println!("Notes: {}", report.notes.join("; "));
@@ -288,3 +234,30 @@ fn unrated_served_line(candidate: &crate::agent::selection::AdviceCandidate) -> 
 #[cfg(test)]
 #[path = "advise_unrated_tests.rs"]
 mod unrated_served_tests;
+
+#[path = "advise_leaderboard.rs"]
+mod leaderboard;
+
+fn print_recommendation(report: &AdviceReport) {
+    if let Some(recommended) = &report.recommended {
+        // The recommendation names a route, not an agent id. `codex` alone
+        // cannot say which quota pool the work will draw on, and that was the
+        // question that mattered every time routing broke on 2026-08-05: an
+        // exhausted route says nothing about a different provider that reaches
+        // a model of the same class.
+        let route = recommended_route(&recommended.agent, recommended.model.clone());
+        println!(
+            "Recommended: {}   score {:.1}   {}  {}{}",
+            route,
+            recommended.score,
+            cost_label(recommended.est_cost_usd),
+            duration_label(recommended.est_duration_secs),
+            recommended_quota_suffix(&recommended.reason),
+        );
+        println!("Model: {}", crate::agent::run_model::model_label(
+            recommended.model.as_deref(), recommended.pinned, recommended.source,
+        ));
+    } else {
+        println!("Recommended: none (no installed agents)");
+    }
+}

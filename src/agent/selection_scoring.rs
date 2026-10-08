@@ -2,8 +2,7 @@
 // Exports: Candidate, CandidateContext, ScoreBreakdown, comparison helpers.
 // Deps: classifier, capability matrix, model catalog, rate limits, task profiles.
 
-use crate::agent::classifier::{self, Complexity};
-use crate::model_catalog::models_for_agent;
+use crate::agent::classifier::{self, TaskCategory};
 use crate::route_availability::{availability_for_model, RouteStatus};
 use crate::team::TeamConfig;
 use crate::types::AgentKind;
@@ -43,11 +42,8 @@ pub(super) fn model_quality_score(base_score: i32, capability: Option<f64>) -> f
     }
 }
 
-pub(super) fn model_capability_score(agent: AgentKind, model: &str) -> Option<f64> {
-    models_for_agent(&agent)
-        .into_iter()
-        .find(|candidate| candidate.model == model)
-        .and_then(|candidate| candidate.capability)
+pub(super) fn model_capability_score(agent: AgentKind, model: &str, category: TaskCategory) -> Option<f64> {
+    crate::scores::capability_score(agent, model, category)
 }
 
 /// True when the model has a non-zero price. Used to bias budget mode toward
@@ -84,7 +80,6 @@ pub(crate) struct ScoreBreakdown {
     pub budget_penalty: f64,
     pub rate_limit_penalty: f64,
     pub history_bonus: f64,
-    pub complexity_bonus: f64,
     pub team_bonus: f64,
     #[serde(default)]
     pub headroom_penalty: f64,
@@ -117,11 +112,6 @@ pub(super) fn score_breakdown(
         s += bonus;
         history_bonus = bonus;
     }
-    let mut complexity_bonus = 0.0;
-    if has_complexity_bonus(ctx, kind) {
-        s += 2.0;
-        complexity_bonus = 2.0;
-    }
     // Boost preferred agents from team (soft preference, not hard filter)
     let mut team_bonus = 0.0;
     if has_team_bonus(ctx, kind) {
@@ -136,7 +126,6 @@ pub(super) fn score_breakdown(
         budget_penalty,
         rate_limit_penalty,
         history_bonus,
-        complexity_bonus,
         team_bonus,
         headroom_penalty,
         total: s,
@@ -147,19 +136,13 @@ fn initial_score(ctx: &CandidateContext<'_>, kind: AgentKind, model: Option<&str
     let base = ctx.team
         .and_then(|team| team_override_score(team, kind.as_str(), ctx.profile.category))
         .unwrap_or_else(|| base_score(kind, ctx.profile.category));
-    let capability = model.and_then(|value| model_capability_score(kind, value));
+    let capability = model.and_then(|value| model_capability_score(kind, value, ctx.profile.category));
     (base, model_quality_score(base, capability))
 }
 
 fn history_score_bonus(ctx: &CandidateContext<'_>, kind: AgentKind) -> Option<f64> {
     let (rate, count) = ctx.history_map.get(&kind)?;
     (*count >= 5).then(|| ((*rate - 0.75) * 16.0).round().clamp(-5.0, 4.0))
-}
-
-fn has_complexity_bonus(ctx: &CandidateContext<'_>, kind: AgentKind) -> bool {
-    matches!(ctx.profile.complexity, Complexity::High)
-        && matches!(kind, AgentKind::Codex | AgentKind::Copilot | AgentKind::Cursor
-            | AgentKind::Droid | AgentKind::Oz | AgentKind::Claude)
 }
 
 fn has_team_bonus(ctx: &CandidateContext<'_>, kind: AgentKind) -> bool {

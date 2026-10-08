@@ -45,6 +45,7 @@ pub(super) fn custom_candidates(
             let (exclusion_reason, exclusion_codes) = exclusions.into_parts();
             CustomAdviceCandidate {
                 agent: config.id, installed: blocker.is_none(), eligible,
+                capability_evidence: crate::scores::evidence(AgentKind::Custom, model.as_deref(), context.profile.category),
                 model, category_capability, strength_bonus, team_preferred,
                 exclusion_reason, exclusion_codes,
             }

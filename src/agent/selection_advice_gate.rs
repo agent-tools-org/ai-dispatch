@@ -82,20 +82,17 @@ pub(crate) struct CallerAdvice {
     pub agent: String,
     pub provider: String,
     pub model: Option<String>,
-    /// Catalog capability of `model`; `None` when the model is not known.
+    /// Leaderboard capability of `model`; `None` without applicable evidence.
     pub capability: Option<f64>,
 }
 
 /// Resolve a caller session kind (`claude-code`, `codex`) to its pool.
-pub(crate) fn caller_advice(session: &str, model: Option<&str>) -> Option<CallerAdvice> {
+pub(crate) fn caller_advice(session: &str, model: Option<&str>, category: TaskCategory) -> Option<CallerAdvice> {
     let agent = crate::session::caller_agent(session)?;
     let (provider, _) = provider_for_cli(agent);
     let model = model.map(str::trim).filter(|value| !value.is_empty()).map(str::to_string);
     let capability = model.as_deref().and_then(|name| {
-        crate::model_catalog::models_for_agent(&agent)
-            .into_iter()
-            .find(|item| item.model.eq_ignore_ascii_case(name))
-            .and_then(|item| item.capability)
+        crate::scores::capability_score(agent, name, category)
     });
     Some(CallerAdvice {
         session: session.to_string(),

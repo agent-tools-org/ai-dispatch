@@ -43,7 +43,8 @@ fn served_only_rows_are_unrated_and_skip_catalog_rows() {
     assert_eq!(rows.len(), 1, "catalog row gpt-5.6-sol is not repeated");
     let row = &rows[0];
     assert_eq!(row.model, "gpt-6-sol");
-    assert_eq!(row.capability, None);
+    assert_eq!(crate::scores::capability_score(row.agent, &row.model,
+        crate::agent::classifier::TaskCategory::Research), None);
     assert_eq!(row.origin, ModelOrigin::Served);
 }
 
@@ -94,4 +95,20 @@ fn agents_outside_probe_list_use_the_default_served_models() {
             "{kind:?} probes served models; add it to SERVED_PROBE_AGENTS"
         );
     }
+}
+
+#[test]
+fn newer_served_model_with_leaderboard_evidence_is_not_labelled_unrated() {
+    let home = tempfile::tempdir().expect("home");
+    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    write_served_cache("codex", &["gpt-6-sol"]);
+    crate::scores::test_support::seed();
+    let mut prices: crate::cost::price_feed::Feed = serde_json::from_value(serde_json::json!({
+        "built_at": "2026-10-08T00:00:00Z", "age_seconds": 0, "stale": false,
+        "models": [{"id": "302ai/kimi-k2-thinking", "aliases": ["gpt-6-sol"],
+            "input_per_mtok": 1.0, "output_per_mtok": 1.0}]
+    })).expect("prices");
+    prices.count = Some(1);
+    crate::cost::set_feed_for_tests(prices);
+    assert!(unrated_served_newer_than(AgentKind::Codex, "gpt-5.6-sol").is_empty());
 }

@@ -108,6 +108,7 @@ pub(crate) fn get_agents_list_with_installed(
     Ok(AgentListJson {
         generated_at: Local::now().to_rfc3339(),
         agents,
+        sources: crate::scores::sources(),
     })
 }
 
@@ -199,13 +200,16 @@ fn build_agent_json(
                 .filter(|m| m.agent == kind)
                 .map(|m| {
                     let price = crate::cost::resolve_pricing(Some(&m.model), kind);
+                    let evidence = crate::scores::evidence(kind, Some(&m.model),
+                        crate::agent::classifier::TaskCategory::ComplexImpl);
                     AvailableModelJson {
                         model: m.model,
                         tier: m.tier,
                         input_per_m: price.map(|p| p.input_per_m),
                         output_per_m: price.map(|p| p.output_per_m),
-                        rated: m.capability.is_some(),
-                        capability: m.capability,
+                        rated: evidence.capability.is_some(),
+                        capability: evidence.capability,
+                        capability_evidence: evidence,
                         source: m.origin.label().to_string(),
                     }
                 })

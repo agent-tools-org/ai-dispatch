@@ -2,7 +2,7 @@
 // Maps model names to per-token pricing, computes task cost from token counts.
 // Deps: model_catalog, store::Store, types::AgentKind, price_feed
 
-mod price_feed;
+pub(crate) mod price_feed;
 mod pricing_resolution;
 mod components;
 pub(crate) use components::{apply_completion_usage_cost, completion_cost, task_cost};
@@ -45,6 +45,13 @@ pub fn warm_gemini_default_from_store(store: &Store) {
 /// network failure keeps the old cache.
 pub fn maybe_refresh_prices() {
     price_feed::maybe_refresh();
+    crate::scores::feed::maybe_refresh();
+}
+
+/// The price feed's exact canonical-ID/alias resolver, shared by score evidence.
+pub(crate) fn canonical_feed_id(model: &str) -> Option<String> {
+    let (feed, index) = feed_index()?;
+    price_feed::feed_lookup(&feed, &index, model).map(|entry| entry.id.clone())
 }
 
 /// Estimate cost in USD from total token count and model name.
@@ -157,7 +164,7 @@ fn feed_index() -> Option<FeedIndex> {
 /// cache lives under the aid home, which tests redirect, so this is how feed
 /// precedence gets exercised deterministically.
 #[cfg(test)]
-fn set_feed_for_tests(feed: price_feed::Feed) {
+pub(crate) fn set_feed_for_tests(feed: price_feed::Feed) {
     let index = feed.index();
     TEST_FEED_INDEX.with(|cell| {
         *cell.borrow_mut() = Some(Some((Arc::new(feed), Arc::new(index))));

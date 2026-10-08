@@ -109,7 +109,6 @@ fn get_qwen_models() -> &'static [AgentModel] {
                 output_per_m: 0.0,
                 tier: "free",
                 description: "Default Qwen Code model",
-                capability: 7.4,
             })
             .collect()
     })
@@ -147,22 +146,19 @@ fn total_price(model: &AgentModel) -> f64 {
     model.input_per_m + model.output_per_m
 }
 
-/// Free/Cheap: lowest price (capability ties). Standard/Premium: highest capability.
+/// Free/Cheap: lowest price. Standard/Premium: measured ECI; unknown ties keep catalog order.
 fn better_budget_candidate(budget: TaskBudget, left: &AgentModel, right: &AgentModel) -> Ordering {
-    match budget {
-        TaskBudget::Free | TaskBudget::Cheap => total_price(left)
-            .partial_cmp(&total_price(right))
-            .unwrap_or(Ordering::Equal)
-            .then_with(|| {
-                right
-                    .capability
-                    .partial_cmp(&left.capability)
-                    .unwrap_or(Ordering::Equal)
-            }),
-        TaskBudget::Standard | TaskBudget::Premium => right
-            .capability
-            .partial_cmp(&left.capability)
-            .unwrap_or(Ordering::Equal),
+    if matches!(budget, TaskBudget::Free | TaskBudget::Cheap) {
+        return total_price(left).partial_cmp(&total_price(right)).unwrap_or(Ordering::Equal);
+    }
+    let category = crate::agent::classifier::TaskCategory::Research;
+    let left_score = crate::scores::capability_score(left.agent, left.model, category);
+    let right_score = crate::scores::capability_score(right.agent, right.model, category);
+    match (left_score, right_score) {
+        (Some(left), Some(right)) => right.partial_cmp(&left).unwrap_or(Ordering::Equal),
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => Ordering::Equal,
     }
 }
 

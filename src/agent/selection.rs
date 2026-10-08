@@ -39,3 +39,7 @@ mod selection_score_tests;
 #[cfg(test)]
 #[path = "selection_price_tests.rs"]
 mod selection_price_tests;
+
+#[cfg(test)]
+#[path = "selection_leaderboard_tests.rs"]
+mod selection_leaderboard_tests;

@@ -138,10 +138,19 @@ mod tests {
 
     #[test]
     fn builtin_template_uses_custom_defaults_without_cli_scores() {
-        let defaults = toml::Value::try_from(CapabilityScores::default()).expect("default capabilities");
+        let capabilities = "[agent.capabilities]\n\
+            research = 0\n\
+            simple_edit = 0\n\
+            complex_impl = 0\n\
+            frontend = 0\n\
+            debugging = 0\n\
+            testing = 0\n\
+            refactoring = 0\n\
+            documentation = 0\n\n";
         for kind in [AgentKind::Gemini, AgentKind::Antigravity, AgentKind::Codex] {
-            let template: toml::Value = build_builtin_agent_toml("custom", kind).parse().expect("template");
-            assert_eq!(template["agent"]["capabilities"], defaults);
+            let template = build_builtin_agent_toml("custom", kind);
+            let _: toml::Value = template.parse().expect("template");
+            assert!(template.ends_with(capabilities), "{kind:?}: {template}");
         }
     }
 }

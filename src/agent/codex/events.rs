@@ -231,6 +231,10 @@ fn completion_metadata(
     let mut map = Map::from_iter([
         ("tokens".to_string(), json!(total_tokens)),
         ("input_tokens".to_string(), json!(input_tokens)),
+        (
+            "uncached_input_tokens".to_string(),
+            json!(input_tokens.saturating_sub(cached_input_tokens)),
+        ),
         ("output_tokens".to_string(), json!(output_tokens)),
         (
             "cached_input_tokens".to_string(),

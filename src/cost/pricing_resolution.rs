@@ -22,6 +22,8 @@ pub(super) fn subscription_pricing(agent: AgentKind) -> Option<ModelPricing> {
     matches!(provider_for_cli(agent).1, MeteringShape::Subscription).then_some(ModelPricing {
         input_per_m: 0.0,
         output_per_m: 0.0,
+        cached_input_per_m: Some(0.0),
+        cache_creation_per_m: Some(0.0),
     })
 }
 
@@ -41,6 +43,8 @@ fn exact_feed_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
     Some(ModelPricing {
         input_per_m: entry.input_per_mtok,
         output_per_m: entry.output_per_mtok,
+        cached_input_per_m: entry.cached_input_per_mtok,
+        cache_creation_per_m: None,
     })
 }
 
@@ -56,6 +60,8 @@ fn static_catalog_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing>
     Some(ModelPricing {
         input_per_m: row.input_per_m,
         output_per_m: row.output_per_m,
+        cached_input_per_m: (row.tier == "free").then_some(0.0),
+        cache_creation_per_m: (row.tier == "free").then_some(0.0),
     })
 }
 

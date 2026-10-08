@@ -236,3 +236,44 @@ fn task(task_id: &TaskId, status: TaskStatus) -> Task {
         delivery_assessment: None,
     }
 }
+
+#[test]
+fn process_foreground_completion_records_component_usage() {
+    let _guard = crate::cost::test_support::seed_prices(Some(0.125));
+    crate::paths::ensure_dirs().expect("aid dirs");
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut task = crate::cost::test_support::task(crate::types::AgentKind::Codex, 238_440, None);
+    task.status = TaskStatus::Running;
+    store.insert_task(&task).expect("task");
+    let agent = crate::agent::codex::CodexAgent;
+    let event = agent
+        .parse_event(&task.id, crate::cost::test_support::CODEX_USAGE)
+        .expect("capture");
+    store.insert_event(&event).expect("event");
+    let info = CompletionInfo {
+        tokens: task.tokens,
+        status: TaskStatus::Done,
+        model: task.requested_model.clone(),
+        cost_usd: None,
+        exit_code: Some(0),
+    };
+    let context = run_prompt::capture_failure_context(&store, &task.id, &Command::new("true"));
+    handle_success(
+        &agent,
+        &store,
+        &task.id,
+        &crate::paths::log_path(task.id.as_str()),
+        None,
+        task.requested_model.as_deref(),
+        true,
+        Instant::now(),
+        info,
+        &context,
+    )
+    .expect("record completion");
+    let stored = store
+        .get_task(task.id.as_str())
+        .expect("query")
+        .expect("stored task");
+    crate::cost::test_support::assert_cost(stored.cost_usd, 0.111981);
+}

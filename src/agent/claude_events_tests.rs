@@ -92,3 +92,14 @@ fn picks_claude_model_by_tokens_when_cost_missing_or_tied() {
     }
     assert_eq!(extract_result_model(&result).as_deref(), Some("claude-haiku-4-5-20251001"));
 }
+
+#[test]
+fn regression_picks_larger_claude_model_with_huge_token_counts() {
+    let result = json!({
+        "modelUsage": {
+            "a-large": {"inputTokens": i64::MAX, "outputTokens": i64::MAX},
+            "z-small": {"inputTokens": i64::MAX, "outputTokens": 1}
+        }
+    });
+    assert_eq!(extract_result_model(&result).as_deref(), Some("a-large"));
+}

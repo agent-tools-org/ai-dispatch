@@ -86,6 +86,36 @@ fn selection_headroom_short_window_counts_when_distant_or_nearly_exhausted() {
 }
 
 #[test]
+fn regression_headroom_ignores_expired_weekly_window() {
+    let (temp, _home, _cache) = isolated();
+    let expired = (Utc::now() - Duration::minutes(5)).to_rfc3339();
+    write_snapshot(&temp, "codex", vec![
+        json!({"label": "Weekly", "used_percent": 100.0, "resets_at": expired}),
+    ], true, 1);
+    assert_eq!(headroom_penalty(AgentKind::Codex, None), 0.0);
+}
+
+#[test]
+fn regression_headroom_ignores_expired_nearly_exhausted_short_window() {
+    let (temp, _home, _cache) = isolated();
+    let expired = (Utc::now() - Duration::minutes(5)).to_rfc3339();
+    write_snapshot(&temp, "codex", vec![
+        json!({"label": "5h", "used_percent": 99.0, "resets_at": expired}),
+    ], true, 1);
+    assert_eq!(headroom_penalty(AgentKind::Codex, None), 0.0);
+}
+
+#[test]
+fn regression_headroom_keeps_future_weekly_window() {
+    let (temp, _home, _cache) = isolated();
+    let future = (Utc::now() + Duration::hours(5)).to_rfc3339();
+    write_snapshot(&temp, "codex", vec![
+        json!({"label": "Weekly", "used_percent": 85.0, "resets_at": future}),
+    ], true, 1);
+    assert_eq!(headroom_penalty(AgentKind::Codex, None), -3.0);
+}
+
+#[test]
 fn selection_headroom_short_undated_window_does_not_hide_weekly_penalty() {
     let (temp, _home, _cache) = isolated();
     write_snapshot(&temp, "codex", vec![

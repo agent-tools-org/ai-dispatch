@@ -269,7 +269,7 @@ fn extract_result_model(payload: &Value) -> Option<String> {
         .and_then(|models| {
             let use_cost = models.values().all(|v| v.get("costUSD").and_then(Value::as_f64).is_some());
             let tokens = |v: &Value| ["inputTokens", "outputTokens", "cacheReadInputTokens", "cacheCreationInputTokens"]
-                .iter().filter_map(|key| v.get(*key).and_then(Value::as_i64)).sum::<i64>();
+                .iter().filter_map(|key| v.get(*key).and_then(Value::as_i64)).map(i128::from).sum::<i128>();
             models.iter().rev().max_by(|(_, a), (_, b)| {
                 let cost = || a["costUSD"].as_f64().zip(b["costUSD"].as_f64()).and_then(|(a, b)| a.partial_cmp(&b));
                 let cost_order = if use_cost { cost() } else { None };

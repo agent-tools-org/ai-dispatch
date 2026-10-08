@@ -35,6 +35,9 @@ pub(super) fn headroom_penalty(kind: AgentKind, model: Option<&str>) -> f64 {
 }
 
 fn counts_for_headroom(window: &WindowView, now: chrono::DateTime<chrono::Utc>) -> bool {
+    if window.resets_at.is_some_and(|reset| reset <= now) {
+        return false;
+    }
     let short = window.label.split_whitespace().any(|part| {
         part.strip_suffix('h')
             .and_then(|hours| hours.parse::<u64>().ok())

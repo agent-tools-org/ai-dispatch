@@ -260,7 +260,10 @@ fn budget_simple_edit_advice_launches_eligible_budget_model() {
             None, None, None, 0, None);
         let picked = report.recommended.expect("recommendation");
         assert_eq!(picked.agent, expected.as_str());
-        assert_eq!(picked.model.as_deref(), crate::model_catalog::model_for_task_budget(expected, TaskBudget::Free));
+        // Codex has no free catalog row; the resolver falls back to its cheap budget model.
+        let model = crate::model_catalog::budget_model(&expected).expect("catalog budget model");
+        assert_eq!(picked.model.as_deref(), Some(model));
+        assert_eq!(picked.source, RunModelSource::BudgetRoute);
         assert!(picked.pinned);
     }
 }

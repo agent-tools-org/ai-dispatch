@@ -90,7 +90,11 @@ mod tests {
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid, AgentKind::Qwen, AgentKind::Grok]);
         crate::agent_config::save_agent_disabled("grok", true).expect("disable");
         crate::auth_marker::record_failure_at(AgentKind::Droid, "Not signed in.", chrono::Local::now());
-        let all = candidates();
+        // Rated Qwen (7.4) is below the complex floor (8); an unrated route stays eligible.
+        crate::agent_config::save_agent_default_model("qwen", Some("coder-model")).expect("model");
+        let declared = DeclaredTaskProfile { difficulty: TaskDifficulty::Complex, ..profile() };
+        let all = advise("refactor the scheduler", declared,
+            Some(TaskCategory::Refactoring), None, None, 0, None).candidates;
         let item = |agent: &str| all.iter().find(|c| c.agent == agent).expect("candidate");
         assert!(item("agy").exclusion_codes.contains(&"not_installed".into()));
         assert!(item("droid").exclusion_codes.contains(&"auth_failed".into()));

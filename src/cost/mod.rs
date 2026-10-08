@@ -4,6 +4,8 @@
 
 mod price_feed;
 mod pricing_resolution;
+mod components;
+pub(crate) use components::task_cost;
 
 use crate::model_catalog;
 use crate::store::Store;
@@ -16,6 +18,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 pub(crate) struct ModelPricing {
     pub(crate) input_per_m: f64,
     pub(crate) output_per_m: f64,
+    pub(crate) cached_input_per_m: Option<f64>,
 }
 
 type PricingOverrides = HashMap<(AgentKind, String), ModelPricing>;
@@ -202,6 +205,7 @@ fn load_pricing_overrides() -> PricingOverrides {
             let pricing = ModelPricing {
                 input_per_m: model.input_per_m,
                 output_per_m: model.output_per_m,
+                cached_input_per_m: None,
             };
             Some(((agent, model.model.to_lowercase()), pricing))
         })

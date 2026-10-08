@@ -32,7 +32,10 @@ pub fn run(
     if mode_count != 1 {
         bail!("Select exactly one of --group, --summary, or --agent");
     }
-    let tasks = store.list_tasks(TaskFilter::All)?;
+    let mut tasks = store.list_tasks(TaskFilter::All)?;
+    for task in &mut tasks {
+        task.cost_usd = cost::task_cost(store, task)?;
+    }
     let window = UsageWindow::parse(&period)?;
     let output = match (group, agent) {
         (Some(group_id), None) => render_task_report(

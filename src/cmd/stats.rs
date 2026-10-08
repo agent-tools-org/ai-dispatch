@@ -34,7 +34,7 @@ fn collect(store: &Store, window: UsageWindow, agent: Option<&str>, now: DateTim
     let (mut day_counts, mut hour_counts, mut total_cost, mut total_tokens, mut total_tasks) = (HashMap::new(), [0usize; 24], None, 0, 0);
     let (mut longest, mut most_tokens, mut highest_cost) = (None, None, None);
     for task in &tasks {
-        let cost_usd = task_cost(task);
+        let cost_usd = task_cost(store, task)?;
         let row = agents.entry(task.agent_display_name().to_string()).or_insert((task.agent, 0, 0, 0, 0, 0, None));
         row.1 += 1;
         let outcome = task.outcome();
@@ -174,14 +174,16 @@ fn add_known_cost(total: &mut Option<f64>, cost: Option<f64>) {
     }
 }
 
-fn task_cost(task: &Task) -> Option<f64> {
+fn task_cost(store: &Store, task: &Task) -> Result<Option<f64>> {
     if let Some(cost) = task.cost_usd {
-        return Some(cost);
+        if !matches!(task.agent, AgentKind::Codex | AgentKind::Claude) {
+            return Ok(Some(cost));
+        }
     }
     if matches!(task.agent, AgentKind::Cursor | AgentKind::Copilot) {
-        return Some(0.0);
+        return Ok(Some(0.0));
     }
-    cost::estimate_cost(task.tokens.unwrap_or(0), task.costing_model(), task.agent)
+    cost::task_cost(store, task)
 }
 
 #[cfg(test)]

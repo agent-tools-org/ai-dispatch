@@ -211,3 +211,90 @@ fn cursor_out_of_usage_is_windowed() {
     assert_eq!(agent, AgentKind::Cursor);
     assert_eq!(recovery, QuotaRecovery::Windowed);
 }
+
+#[test]
+fn claude_limit_wording_has_a_clock_ended_signature() {
+    for message in ["You've hit your limit", "Claude AI usage limit reached|1893456000"] {
+        assert_eq!(
+            match_quota_signature_for_agent(message, AgentKind::Claude),
+            Some(QuotaRecovery::After(300)),
+            "{message}"
+        );
+    }
+}
+
+#[test]
+fn claude_allowed_event_with_rejected_overage_does_not_hold() {
+    // Captured Claude stream-json line; overageStatus is not the limit status.
+    let allowed = r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1790750400,"rateLimitType":"five_hour","overageStatus":"rejected","overageDisabledReason":"org_level_disabled_until","isUsingOverage":false,"unifiedWindows":{"five_hour":{"utilization":0.76,"resetsAt":1790750400},"seven_day":{"utilization":0.7,"resetsAt":1790748000}}},"uuid":"0433b702-fa48-4e68-ae32-414ffeee1b33","session_id":"3eaf9e7b-31e3-482c-bb96-66e14f3bf04a"}"#;
+    let temp = tempfile::tempdir().expect("temp dir");
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    assert_eq!(
+        crate::rate_limit::refusal_on_channel(
+            allowed,
+            AgentKind::Claude,
+            crate::quota_channel::Channel::CliStream,
+        ),
+        None
+    );
+    assert!(!crate::agent::stream_completion::record_quota_exhaustion(
+        allowed, AgentKind::Claude, None, None
+    ).recorded());
+    assert!(crate::rate_limit::get_rate_limit_info(&AgentKind::Claude, None).is_none());
+}
+
+#[test]
+fn claude_rejected_status_uses_the_structured_reset() {
+    let allowed = r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1790750400,"rateLimitType":"five_hour","overageStatus":"rejected","overageDisabledReason":"org_level_disabled_until","isUsingOverage":false,"unifiedWindows":{"five_hour":{"utilization":0.76,"resetsAt":1790750400},"seven_day":{"utilization":0.7,"resetsAt":1790748000}}},"uuid":"0433b702-fa48-4e68-ae32-414ffeee1b33","session_id":"3eaf9e7b-31e3-482c-bb96-66e14f3bf04a"}"#;
+    let mut event: serde_json::Value = serde_json::from_str(allowed).expect("captured JSON");
+    event["rate_limit_info"]["status"] = serde_json::json!("rejected");
+    let reset = chrono::Utc::now().timestamp() + 7200;
+    event["rate_limit_info"]["resetsAt"] = serde_json::json!(reset);
+    let temp = tempfile::tempdir().expect("temp dir");
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    assert!(crate::rate_limit::refusal_on_channel(&event.to_string(), AgentKind::Claude, crate::quota_channel::Channel::CliStream).is_some());
+    let outcome = crate::agent::stream_completion::record_quota_exhaustion(
+        &event.to_string(), AgentKind::Claude, None, None
+    );
+    assert!(outcome.should_fail(), "rejected event must take quota continuation");
+    let info = crate::rate_limit::get_rate_limit_info(&AgentKind::Claude, None).expect("marker");
+    let at = crate::rate_limit::parse_recovery_datetime(
+        info.recovery_at.as_deref().expect("stated reset")
+    ).expect("parse marker");
+    assert!((at - chrono::Local::now().naive_local()).num_minutes() >= 119);
+    assert!(crate::rate_limit::is_rate_limited(&AgentKind::Claude, None));
+}
+#[test]
+fn claude_error_result_is_a_refusal_but_assistant_prose_is_not() {
+    use crate::quota_channel::Channel;
+    let result = r#"{"type":"result","is_error":true,"result":"You've hit your limit"}"#;
+    assert_eq!(
+        crate::rate_limit::refusal_on_channel(result, AgentKind::Claude, Channel::CliStream),
+        Some("You've hit your limit".to_string())
+    );
+    let prose = serde_json::json!({
+        "type": "assistant",
+        "message": {"content": [{"type": "text", "text": "You've hit your limit"}]}
+    }).to_string();
+    assert_eq!(
+        crate::rate_limit::refusal_on_channel(&prose, AgentKind::Claude, Channel::CliStream),
+        None
+    );
+}
+
+#[test]
+fn claude_reset_order_prefers_unix_then_zoned_clock_then_fallback() {
+    let unix = crate::rate_limit::parse_recovery_time(
+        "Claude AI usage limit reached|1893456000"
+    ).expect("unix reset");
+    assert_eq!(unix, crate::rate_limit::format_recovery(
+        chrono::DateTime::from_timestamp(1893456000, 0)
+            .expect("timestamp").with_timezone(&Local).naive_local()
+    ));
+    assert_eq!(crate::rate_limit::parse_recovery_time("You've hit your limit · resets 5pm (Asia/Shanghai)|1893456000"), Some(unix));
+    let clock = parse_relative_recovery("You've hit your limit · resets 5pm (Asia/Shanghai)")
+        .expect("zoned reset");
+    let delta = clock - Local::now().naive_local();
+    assert!(delta.num_hours() >= 0 && delta.num_hours() <= 24);
+    assert_eq!(parse_relative_recovery("You've hit your limit"), None);
+}

@@ -154,7 +154,19 @@ pub(crate) fn mark_stream_refusal(agent: AgentKind, custom_name: Option<&str>, r
 }
 
 fn keep_envelope_strings(object: &Map<String, Value>, agent: AgentKind, kept: &mut Attributable) {
+    if agent == AgentKind::Claude && object.get("type").and_then(Value::as_str) == Some("rate_limit_event") {
+        // The captured allowed event has overageStatus:"rejected". Only the
+        // parsed status of the subscription window can report a refusal.
+        if let Some(limit) = crate::rate_limit::claude_rejected_limit(object) {
+            push_line(&mut kept.cli_diagnostic, &limit);
+        }
+        return;
+    }
     if is_error_envelope(object) {
+        if agent == AgentKind::Claude
+            && let Some(limit) = crate::rate_limit::claude_rejected_limit(object) {
+            push_line(&mut kept.cli_diagnostic, &limit);
+        }
         collect_strings(
             &Value::Object(object.clone()),
             MAX_DEPTH,

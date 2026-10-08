@@ -50,6 +50,8 @@ pub(crate) enum QuotaRecovery {
 }
 
 pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
+    QuotaSignature { agent: AgentKind::Claude, needle: "you've hit your limit", recovery: QuotaRecovery::After(300) },
+    QuotaSignature { agent: AgentKind::Claude, needle: "claude ai usage limit reached", recovery: QuotaRecovery::After(300) },
     // qwen 0.21.5, ModelStudio token plan, captured 2026-08-05:
     // "Quota exhausted: Your token-plan 5-hour quota has been exhausted."
     QuotaSignature { agent: AgentKind::Qwen, needle: "quota has been exhausted", recovery: QuotaRecovery::After(300) },
@@ -194,6 +196,7 @@ pub(crate) fn match_quota_signature_with_agent(
 pub(crate) fn parse_relative_recovery(message: &str) -> Option<NaiveDateTime> {
     let lower = message.to_lowercase();
     let now = Local::now().naive_local();
+    if let Some(at) = crate::rate_limit::parse_claude_reset_clock(&lower) { return Some(at); }
     if let Some(at) = cursor::cycle_end(&lower) {
         return Some(at);
     }

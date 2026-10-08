@@ -17,6 +17,10 @@ use chrono::{Datelike, Timelike};
 use std::fs;
 use std::path::PathBuf;
 
+#[path = "rate_limit_claude.rs"]
+mod claude;
+pub(crate) use claude::{claude_rejected_limit, parse_claude_reset_clock, parse_recovery_time};
+
 /// Cooldown for a refusal that named no reset time and matched no signature —
 /// a bare 429 or 402 seen on stderr. All we know is that it just happened, so
 /// the route is stepped over briefly and then tried again. Anything longer
@@ -513,18 +517,6 @@ pub(crate) fn refusal_on_channel(
     let refusal: String = generic.chars().take(240).collect();
     let refusal = refusal.trim();
     (!refusal.is_empty()).then(|| refusal.to_string())
-}
-
-pub(crate) fn parse_recovery_time(message: &str) -> Option<String> {
-    let prefix = "try again at ";
-    if let Some(start) = message.find(prefix) {
-        let start = start + prefix.len();
-        let remainder = &message[start..];
-        let end = remainder.find('.').unwrap_or(remainder.len());
-        Some(remainder[..end].trim().to_string())
-    } else {
-        parse_iso_recovery_time(message)
-    }
 }
 
 fn parse_iso_recovery_time(message: &str) -> Option<String> {

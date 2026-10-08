@@ -44,7 +44,10 @@ fn matrix_removal_unknown_agy_testing_is_eligible_and_unrated() {
 fn matrix_removal_rated_codex_below_floor_is_excluded() {
     let (_temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
-    crate::agent_config::save_agent_default_model("codex", Some("gpt-5.4-mini")).expect("model");
+    crate::scores::test_support::seed_catalog_aliases();
+    // sonnet maps to 302ai/qwen3-30b-a3b (Epoch ECI 136.18, rescaled to 0.0).
+    // An evidenced shortfall (base 0 < floor 8 for complex) excludes codex.
+    crate::agent_config::save_agent_default_model("codex", Some("sonnet")).expect("model");
     let report = advise(
         "refactor",
         declared(TaskDifficulty::Complex, TaskBudget::Standard),
@@ -59,16 +62,18 @@ fn matrix_removal_rated_codex_below_floor_is_excluded() {
     assert_eq!(codex.exclusion_codes, vec!["below_floor"]);
     assert_eq!(
         codex.exclusion_reason.as_deref(),
-        Some("base 7 < floor 8 for complex")
+        Some("base 0 < floor 8 for complex")
     );
-    assert_eq!(codex.breakdown.base, 7.0);
+    assert_eq!(codex.breakdown.base, 0.0);
 }
 
 #[test]
 fn matrix_removal_team_override_wins_over_rated_model() {
     let (_temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
-    crate::agent_config::save_agent_default_model("codex", Some("gpt-5.4-mini")).expect("model");
+    crate::scores::test_support::seed_catalog_aliases();
+    // gpt-5.6-sol maps to 302ai/kimi-k2-thinking (Epoch ECI 146.01, rescaled to 10.0).
+    crate::agent_config::save_agent_default_model("codex", Some("gpt-5.6-sol")).expect("model");
     for (score, eligible) in [(10, true), (4, false)] {
         let team: TeamConfig = toml::from_str(&format!(
             "id = 'override'\ndisplay_name = 'Override'\npreferred_agents = []\n\
@@ -80,7 +85,8 @@ fn matrix_removal_team_override_wins_over_rated_model() {
         assert_eq!(codex.eligible, eligible);
         assert_eq!(codex.breakdown.base, f64::from(score));
         assert_eq!(codex.breakdown.model_capability, 0.0);
-        assert_eq!(codex.score, f64::from(score) + 2.0);
+        // Team override wins over rated model capability; total equals base with no complexity bonus.
+        assert_eq!(codex.score, f64::from(score));
         assert!(!report.notes.iter().any(|note| note.starts_with("codex: unrated")));
     }
 }

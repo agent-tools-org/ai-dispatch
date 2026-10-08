@@ -122,8 +122,10 @@ fn breakdown_is_bit_identical_to_pre_decomposition_value() {
     let context = score_ctx(&profile, &history_map, &avg_cost_map, Some(&team), true);
     let breakdown = hint_breakdown(&context, AgentKind::Codex);
 
-    // With no leaderboard cache, no capability or complexity term is invented.
-    assert_eq!(breakdown.total, -1.0);
+    // Base is NEUTRAL_BASE (6.0), model_capability 0.0, budget/rate penalties 0.0,
+    // history bonus +2.0, team bonus +3.0. Total is 11.0 with no complexity bonus.
+    assert_eq!(breakdown.total, 11.0);
+    assert_eq!(breakdown.base, 6.0);
     assert_eq!(breakdown.model_capability, 0.0);
     assert_eq!(breakdown.headroom_penalty, 0.0);
 }

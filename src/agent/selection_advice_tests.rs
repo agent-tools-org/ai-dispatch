@@ -281,3 +281,6 @@ fn advice_skips_disabled_installed_agents() {
     assert_eq!(report.recommended.expect("recommendation").agent, "qwen");
     assert!(report.candidates.iter().all(|candidate| candidate.agent != "gemini"));
 }
+
+#[path = "selection_evidence_tests.rs"]
+mod evidence_tests;

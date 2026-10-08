@@ -172,6 +172,7 @@ fn advised_model_group_hold_switches_route_but_other_group_does_not() {
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Droid, AgentKind::Codex]);
     crate::agent_config::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
     crate::agent_config::save_agent_default_model("codex", Some("gpt-6-sol")).expect("model");
+    crate::scores::test_support::seed_catalog_aliases();
     let baseline = run(None).recommended.expect("recommendation");
     assert_eq!((&*baseline.agent, baseline.model.as_deref()), ("droid", Some("gpt-5.3-codex")));
     let hold = "hold: manual\nmessage: quota exhausted\n";

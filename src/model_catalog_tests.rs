@@ -145,10 +145,10 @@ fn budget_preferred_tiers_beat_unknown() {
 
 #[test]
 fn droid_budget_picks_core_and_default_stays_opus() {
-    assert_eq!(budget_model(&AgentKind::Droid), Some("glm-5.2"));
+    assert_eq!(budget_model(&AgentKind::Droid), Some("inkling"));
     assert_eq!(
         model_for_task_budget(AgentKind::Droid, TaskBudget::Cheap),
-        Some("glm-5.2")
+        Some("inkling")
     );
     assert_eq!(
         model_for_task_budget(AgentKind::Droid, TaskBudget::Standard),

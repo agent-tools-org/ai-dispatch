@@ -339,7 +339,8 @@ The sole linear rescale is `10 * (value - min) / (max - min)`: Terminal-Bench
 accuracy uses its 0–100 percent (or 0–1 rate) range; ECI and webdev use the
 observed model-level min/max of their own source, board, and unit in the snapshot.
 A degenerate range is unknown. A measured minimum may legitimately score zero.
-Free/cheap budget selection keeps the lowest-price rule; standard/premium
+Free/cheap budget selection keeps the lowest-price rule and catalog order for
+price ties; standard/premium
 compare model-level ECI within each preferred tier, with unknown ties keeping catalog order.
 `breakdown.complexity_bonus` was removed; no CLI gets an automatic +2 for complexity.
 `scores.json` shares the price cache directory and 24-hour TTL. Refresh is

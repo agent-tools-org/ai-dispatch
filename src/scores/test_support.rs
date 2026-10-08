@@ -70,7 +70,10 @@ pub(crate) fn seed_catalog_aliases() {
         models: vec![],
     };
     for (id, aliases) in [
-        ("302ai/kimi-k2-thinking", vec!["opus", "gpt-5.6-sol"]),
+        (
+            "302ai/kimi-k2-thinking",
+            vec!["opus", "gpt-5.6-sol", "gpt-5.3-codex"],
+        ),
         ("302ai/qwen3-30b-a3b", vec!["sonnet"]),
     ] {
         prices.models.push(crate::cost::price_feed::FeedModel {

@@ -197,13 +197,15 @@ pub(super) fn extract_tokens(value: &Value) -> Option<i64> {
         return Some(total);
     }
     if let Some(models) = value.pointer("/stats/models").and_then(Value::as_array) {
-        let total: i64 = models.iter().filter_map(|model| model.pointer("/tokens/total").and_then(Value::as_i64)).sum();
+        let total = models.iter().filter_map(|model| model.pointer("/tokens/total").and_then(Value::as_i64))
+            .fold(0_i64, i64::saturating_add);
         if total > 0 {
             return Some(total);
         }
     }
     if let Some(models) = value.pointer("/stats/models").and_then(Value::as_object) {
-        let total: i64 = models.values().filter_map(|model| model.get("total_tokens").and_then(Value::as_i64)).sum();
+        let total = models.values().filter_map(|model| model.get("total_tokens").and_then(Value::as_i64))
+            .fold(0_i64, i64::saturating_add);
         if total > 0 {
             return Some(total);
         }
@@ -288,3 +290,7 @@ fn should_include_directory(dir: &Path, run_dir: Option<&Path>) -> bool {
         None => true,
     }
 }
+
+#[cfg(test)]
+#[path = "gemini_support_tests.rs"]
+mod tests;

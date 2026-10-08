@@ -1,3 +1,14 @@
+## v10.51.0 (2026-10-08)
+- Recognize Claude Code subscription quota refusals (rejected `rate_limit_event`, error results) and hold the claude route until the stated reset; unrelated `|<unix>` suffixes and plain prose no longer create holds
+- Remove inherited per-CLI config redirect variables (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GEMINI_CLI_HOME`, ...) from task launches, including PTY launches
+- Resolve batch `env_forward` values at launch so they never enter saved specs; write background job specs owner-only
+- Sum OpenCode-format step usage (OpenCode, Kilo, MiMo Code, custom parser delegates) instead of keeping the last step
+- Price Codex and Claude completions by token component (uncached input, cached input, output, cache writes at 1.25x input) when recording task cost
+- Record the dominant model from Claude `modelUsage` and Gemini stats instead of the alphabetically first entry
+- Scope quota headroom penalties to windows that cover the requested model; ignore expired and soon-resetting short windows
+- `scripts/remote-test.sh` exits 66 when a test filter matches no tests
+
+
 ## v10.50.0 (2026-09-30)
 - BREAKING: duplicate CLI paths are removed; each operation has one command. `aid kill <id>` is now `aid stop <id> --force`; `aid output <id>` is `aid show <id> --output --full`; top-level `aid summary`, `aid finding` and `aid broadcast` are `aid group summary <wg>`, `aid group finding add|list|get|update <wg> ...` and `aid group broadcast <wg> <message>`. The removed verbs fail as unrecognized subcommands.
 - BREAKING: `aid config add-agent` (a stub that printed "not yet implemented") is removed; register a custom agent with `aid agent add <name>`.

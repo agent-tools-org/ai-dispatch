@@ -10,7 +10,7 @@ use tempfile::TempDir;
 
 use super::selection_quota::{headroom_penalty, penalty_from_used};
 use super::selection_scoring::{
-    CandidateContext, model_capability_score, model_quality_score, score_breakdown,
+    CandidateContext, score_breakdown,
 };
 use super::advise;
 use crate::agent::classifier::{Complexity, TaskCategory, TaskProfile};
@@ -124,35 +124,11 @@ fn breakdown_is_bit_identical_to_pre_decomposition_value() {
 
     // Absolute pin, so an unintended scoring change cannot slip through: floating
     // addition is not associative and a reordered sum can flip a tie silently.
-    // It is derived from the model catalog, so a legitimate catalog refresh moves
-    // it — re-pin deliberately and say why. 2026-08-05: 16.3 -> 16.35 when the
-    // refresh made gpt-5.6-sol codex's default.
-    assert_eq!(breakdown.total.to_bits(), 0x4030_5999_9999_999a);
+    // The model capability (9.7) now supplies the base instead of averaging
+    // with the CLI base (9): 16.35 -> 16.7; history/complexity/team stay +2/+2/+3.
+    assert_eq!(breakdown.total.to_bits(), 0x4030_b333_3333_3333);
     assert_eq!(breakdown.headroom_penalty, 0.0);
 }
-#[test]
-fn discovered_agy_model_keeps_base_score_when_capability_is_unknown() {
-    let temp = TempDir::new().expect("temp dir");
-    let _home = AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().expect("aid dirs");
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("current time")
-        .as_secs();
-    let cache = serde_json::json!({
-        "agy": {"models": ["gemini-3.7-flash-high"], "updated_at_secs": now}
-    });
-    std::fs::write(
-        crate::paths::aid_dir().join("served_models_cache.json"),
-        cache.to_string(),
-    )
-    .expect("served-model cache");
-
-    let capability = model_capability_score(AgentKind::Antigravity, "gemini-3.7-flash-high");
-    assert_eq!(capability, None);
-    assert_eq!(model_quality_score(8, capability), 8.0);
-}
-
 #[test]
 fn headroom_schedule_never_boosts() {
     assert_eq!(penalty_from_used(0.0), 0.0);

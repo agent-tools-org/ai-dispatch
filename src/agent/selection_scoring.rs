@@ -1,6 +1,6 @@
 // Scoring internals for agent auto-selection.
 // Exports: Candidate, CandidateContext, ScoreBreakdown, comparison helpers.
-// Deps: classifier, capability matrix, model catalog, rate limits, task profiles.
+// Deps: classifier, user-declared capabilities, model catalog, rate limits, task profiles.
 
 use crate::agent::classifier::{self, Complexity};
 use crate::model_catalog::models_for_agent;
@@ -10,9 +10,9 @@ use crate::types::AgentKind;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
-pub(super) use super::selection_capabilities::{
-    base_score, team_override_score,
-};
+use super::selection_capabilities::team_override_score;
+
+pub(super) const NEUTRAL_BASE: f64 = 6.0; // no evidence: neither penalise nor favour
 
 pub(super) fn priority(kind: AgentKind) -> i32 {
     match kind {
@@ -32,15 +32,6 @@ pub(super) fn priority(kind: AgentKind) -> i32 {
 pub(super) fn cost_efficiency(quality_score: f64, avg_cost: f64) -> f64 {
     let normalized_cost = avg_cost.max(0.0);
     quality_score / (1.0 + normalized_cost)
-}
-
-pub(super) fn model_quality_score(base_score: i32, capability: Option<f64>) -> f64 {
-    let base = base_score.max(0) as f64;
-    if let Some(cap) = capability {
-        (base + cap) * 0.5
-    } else {
-        base
-    }
 }
 
 pub(super) fn model_capability_score(agent: AgentKind, model: &str) -> Option<f64> {
@@ -91,15 +82,14 @@ pub(crate) struct ScoreBreakdown {
     pub total: f64,
 }
 
-/// Score for `kind` running `model`. An unknown or unrated model scores the
-/// agent-level base with no model capability term.
+/// Score for `kind` running `model`, with a neutral base when evidence is absent.
 pub(super) fn score_breakdown(
     ctx: &CandidateContext<'_>,
     kind: AgentKind,
     model: Option<&str>,
 ) -> ScoreBreakdown {
-    let (base, initial) = initial_score(ctx, kind, model);
-    let mut s = initial;
+    let base = capability_evidence(ctx, kind, model).unwrap_or(NEUTRAL_BASE);
+    let mut s = base;
     let mut budget_penalty = 0.0;
     // Budget mode favors free models: a paid agent must be clearly stronger to
     // win, so trivial tasks route to free agents (kilo/qwen/free opencode).
@@ -131,8 +121,8 @@ pub(super) fn score_breakdown(
     let headroom_penalty = super::selection_quota::headroom_penalty(kind, model);
     if headroom_penalty != 0.0 { s += headroom_penalty; } // 0.0 would change bits
     ScoreBreakdown {
-        base: base as f64,
-        model_capability: initial - base as f64,
+        base,
+        model_capability: 0.0,
         budget_penalty,
         rate_limit_penalty,
         history_bonus,
@@ -143,12 +133,13 @@ pub(super) fn score_breakdown(
     }
 }
 
-fn initial_score(ctx: &CandidateContext<'_>, kind: AgentKind, model: Option<&str>) -> (i32, f64) {
-    let base = ctx.team
+pub(super) fn capability_evidence(
+    ctx: &CandidateContext<'_>, kind: AgentKind, model: Option<&str>,
+) -> Option<f64> {
+    ctx.team
         .and_then(|team| team_override_score(team, kind.as_str(), ctx.profile.category))
-        .unwrap_or_else(|| base_score(kind, ctx.profile.category));
-    let capability = model.and_then(|value| model_capability_score(kind, value));
-    (base, model_quality_score(base, capability))
+        .map(f64::from)
+        .or_else(|| model.and_then(|value| model_capability_score(kind, value)))
 }
 
 fn history_score_bonus(ctx: &CandidateContext<'_>, kind: AgentKind) -> Option<f64> {

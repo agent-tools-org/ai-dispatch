@@ -14,16 +14,12 @@ use crate::cmd::agent_json_helpers::custom_has_endpoint;
 
 #[test]
 fn test_agent_json_serialization_roundtrip() {
-    let mut capabilities = HashMap::new();
-    capabilities.insert("research".to_string(), 9);
-    capabilities.insert("simple-edit".to_string(), 2);
     let mut by_category = HashMap::new();
     by_category.insert("simple-edit".to_string(), CategoryHistoryJson {
         tasks: 210,
         success_rate: 0.83,
         avg_duration_secs: Some(402.0),
     });
-
     let agent = AgentJson {
         name: "codex".to_string(),
         kind: "builtin".to_string(),
@@ -42,7 +38,6 @@ fn test_agent_json_serialization_roundtrip() {
             groups: vec![], used_percent: None, resets_at: None, window: None, stale: false,
         },
         auth: crate::auth_marker::AuthStatus::default(),
-        capabilities,
         models: ModelsJson {
             default: None, default_source: None,
             budget: Some("gpt-5.4-mini".to_string()),
@@ -64,7 +59,6 @@ fn test_agent_json_serialization_roundtrip() {
         }),
         load: LoadJson { running: 2 },
     };
-
     let json_str = serde_json::to_string(&agent).unwrap();
     let deserialized: AgentJson = serde_json::from_str(&json_str).unwrap();
     assert_eq!(agent, deserialized);

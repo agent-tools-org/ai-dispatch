@@ -1,52 +1,13 @@
 // Agent metadata helpers for JSON command and web responses.
-// Exports: capability lookup, quota/model helpers, and command checks.
+// Exports: quota/model helpers and command checks.
 // Deps: agent registry types, model catalog, rate limits, and selection scores.
 
-use std::collections::HashMap;
-
-use crate::agent::classifier::TaskCategory;
 use crate::agent::custom::CustomAgentConfig;
 use crate::cmd::agent_json_types::{GroupHoldJson, QuotaJson};
 use crate::types::AgentKind;
 
 pub fn command_installed(command: &str) -> bool {
     crate::agent::custom_route_blocker(command).is_none()
-}
-
-pub fn get_agent_capabilities(
-    kind: AgentKind,
-    custom_config: Option<&CustomAgentConfig>,
-) -> HashMap<String, i32> {
-    let mut caps = HashMap::new();
-    if let Some(config) = custom_config {
-        caps.insert(TaskCategory::Research.label().to_string(), config.capabilities.research);
-        caps.insert(TaskCategory::SimpleEdit.label().to_string(), config.capabilities.simple_edit);
-        caps.insert(TaskCategory::ComplexImpl.label().to_string(), config.capabilities.complex_impl);
-        caps.insert(TaskCategory::Frontend.label().to_string(), config.capabilities.frontend);
-        caps.insert(TaskCategory::Debugging.label().to_string(), config.capabilities.debugging);
-        caps.insert(TaskCategory::Testing.label().to_string(), config.capabilities.testing);
-        caps.insert(TaskCategory::Refactoring.label().to_string(), config.capabilities.refactoring);
-        caps.insert(TaskCategory::Documentation.label().to_string(), config.capabilities.documentation);
-    } else {
-        for category in &[
-            TaskCategory::Research,
-            TaskCategory::SimpleEdit,
-            TaskCategory::ComplexImpl,
-            TaskCategory::Frontend,
-            TaskCategory::Debugging,
-            TaskCategory::Testing,
-            TaskCategory::Refactoring,
-            TaskCategory::Documentation,
-        ] {
-            let score = crate::agent::selection::AGENT_CAPABILITIES.iter()
-                .find(|(candidate, _)| *candidate == kind)
-                .and_then(|(_, scores)| scores.iter().find(|(candidate, _)| *candidate == *category))
-                .map(|(_, score)| *score)
-                .unwrap_or(1);
-            caps.insert(category.label().to_string(), score);
-        }
-    }
-    caps
 }
 
 pub(crate) fn build_quota_json(rlk: &AgentKind, custom_name: Option<&str>) -> QuotaJson {
@@ -130,3 +91,36 @@ pub(crate) fn metering_label(shape: crate::types::MeteringShape) -> String {
 #[cfg(test)]
 #[path = "agent_json_helpers_tests.rs"]
 mod quota_probe_tests;
+
+pub(super) fn agent_metadata(
+    kind: AgentKind, custom_config: Option<&CustomAgentConfig>,
+) -> (String, String, String, String) {
+    // `trust_tier` keeps the JSON field name for callers; the value is the
+    // provider-derived egress label (local | private-network | third-party | unknown).
+    let result = if let Some(config) = custom_config {
+        (
+            config.display_name.clone(),
+            crate::agent::egress::resolve_agent_egress(&config.id)
+                .label()
+                .to_string(),
+        )
+    } else if let Some((_, desc, _, _, _)) = kind.profile() {
+        (
+            desc.to_string(),
+            crate::types::egress_for_cli(kind).label().to_string(),
+        )
+    } else {
+        ("".to_string(), crate::types::EgressTier::Unknown.label().to_string())
+    };
+
+    let (provider, metering) = if let Some(config) = custom_config {
+        crate::types::provider_for_custom(
+            config.provider.as_deref(),
+            config.metering.as_deref(),
+        )
+    } else {
+        crate::types::provider_for_cli(kind)
+    };
+
+    (result.0, result.1, provider.as_str().to_string(), metering_label(metering))
+}

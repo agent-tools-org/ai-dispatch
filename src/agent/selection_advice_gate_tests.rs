@@ -1,5 +1,5 @@
 // Unit tests for advise exclusion codes and caller-pool verdicts.
-// Covers: missing capability row, floor shortfall, weaker/demote/clear on the caller's pool.
+// Covers: absent capability evidence, floor shortfall, weaker/demote/clear on the caller's pool.
 // Deps: selection_advice_gate, AgentKind, TaskCategory.
 
 use super::*;
@@ -15,18 +15,20 @@ fn caller(capability: Option<f64>) -> CallerAdvice {
 }
 
 #[test]
-fn missing_capability_row_is_reported_as_no_data() {
+fn missing_capability_is_not_excluded_and_noted_unrated() {
     let mut exclusions = Exclusions::default();
-    exclusions.floor(None, 6, TaskDifficulty::Moderate, TaskCategory::Frontend);
+    let note = exclusions.floor(None, 6, TaskDifficulty::Moderate, TaskCategory::Frontend);
+    assert_eq!(note.as_deref(), Some("unrated: no measured or model capability for frontend"));
+    assert!(exclusions.is_empty());
     let (reason, codes) = exclusions.into_parts();
-    assert_eq!(reason.as_deref(), Some("no capability data for frontend"));
-    assert_eq!(codes, vec!["no_capability_data"]);
+    assert_eq!(reason, None);
+    assert!(codes.is_empty());
 }
 
 #[test]
 fn measured_shortfall_keeps_floor_reason() {
     let mut exclusions = Exclusions::default();
-    exclusions.floor(Some(4), 6, TaskDifficulty::Moderate, TaskCategory::Frontend);
+    assert_eq!(exclusions.floor(Some(4.0), 6, TaskDifficulty::Moderate, TaskCategory::Frontend), None);
     exclusions.budget(false, TaskBudget::Free);
     let (reason, codes) = exclusions.into_parts();
     assert_eq!(reason.as_deref(), Some("base 4 < floor 6 for moderate; no model for budget free"));

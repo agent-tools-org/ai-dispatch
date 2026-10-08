@@ -15,12 +15,6 @@ mod explicit_model;
 pub(crate) use explicit_model::declared_budget_warning;
 pub(crate) use selection_advice::{AdviceCandidate, AdviceReport, advise, caller_advice};
 pub(crate) use selection_quota::{observed_ok, quota_from, tightest_window};
-use super::classifier::{self, TaskCategory};
-use crate::types::AgentKind;
-
-pub(crate) const AGENT_CAPABILITIES: &[(AgentKind, &[(TaskCategory, i32)])] =
-    selection_capabilities::AGENT_CAPABILITIES;
-
 /// Hard-error text when callers pass `auto` or leave agent empty.
 pub(crate) const AUTO_AGENT_REMOVED_MSG: &str =
     "agent 'auto' was removed; declare a task profile and use `aid advise` to choose an agent";

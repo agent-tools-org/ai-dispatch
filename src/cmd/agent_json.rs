@@ -26,7 +26,7 @@ use crate::cmd::agent_json_types::{
 };
 use crate::cmd::agent_json_helpers::{
     build_quota_json, builtin_profile, command_installed,
-    get_agent_capabilities, metering_label, rate_limit_kind,
+    agent_metadata, rate_limit_kind,
 };
 
 pub fn print_agents_json(store: &Store) -> Result<()> {
@@ -145,95 +145,16 @@ fn build_agent_json(
     };
     let disabled = crate::agent_config::is_agent_disabled(&name);
     
-    // `trust_tier` keeps the JSON field name for callers; the value is the
-    // provider-derived egress label (local | private-network | third-party | unknown).
-    let (description, trust_tier) = if let Some(config) = custom_config {
-        (
-            config.display_name.clone(),
-            crate::agent::egress::resolve_agent_egress(&config.id)
-                .label()
-                .to_string(),
-        )
-    } else if let Some((_, desc, _, _, _)) = kind.profile() {
-        (
-            desc.to_string(),
-            crate::types::egress_for_cli(kind).label().to_string(),
-        )
-    } else {
-        ("".to_string(), crate::types::EgressTier::Unknown.label().to_string())
-    };
-    
-    let supports_session_resume = if is_custom {
-        false
-    } else {
-        kind.supports_session_resume()
-    };
-    let (provider, metering) = if let Some(config) = custom_config {
-        crate::types::provider_for_custom(
-            config.provider.as_deref(),
-            config.metering.as_deref(),
-        )
-    } else {
-        crate::types::provider_for_cli(kind)
-    };
-
+    let (description, trust_tier, provider, metering) = agent_metadata(kind, custom_config);
+    let supports_session_resume = !is_custom && kind.supports_session_resume();
     let quota = build_quota_json(
         &rate_limit_kind(kind, custom_config),
         custom_config.map(|c| c.id.as_str()),
     );
     
     let auth = crate::auth_marker::auth_status(kind, custom_config.map(|c| c.id.as_str()));
-    let capabilities = get_agent_capabilities(kind, custom_config);
-    
-    let models = {
-        let run_model = default_run_model(&name, kind, custom_config);
-        let budget_model = if is_custom {
-            None
-        } else {
-            crate::model_catalog::budget_model(&kind).map(|s| s.to_string())
-        };
-        let available = if is_custom {
-            Vec::new()
-        } else {
-            let available_models = crate::cmd::config::merged_agent_models()?;
-            available_models.into_iter()
-                .filter(|m| m.agent == kind)
-                .map(|m| {
-                    let price = crate::cost::resolve_pricing(Some(&m.model), kind);
-                    let evidence = crate::scores::evidence(kind, Some(&m.model),
-                        crate::agent::classifier::TaskCategory::ComplexImpl);
-                    AvailableModelJson {
-                        model: m.model,
-                        tier: m.tier,
-                        input_per_m: price.map(|p| p.input_per_m),
-                        output_per_m: price.map(|p| p.output_per_m),
-                        rated: evidence.capability.is_some(),
-                        capability: evidence.capability,
-                        capability_evidence: evidence,
-                        source: m.origin.label().to_string(),
-                    }
-                })
-                .collect()
-        };
-        ModelsJson {
-            default_source: run_model.model.as_ref().map(|_| run_model.source.as_str().to_string()),
-            default: run_model.model,
-            budget: budget_model,
-            available,
-        }
-    };
-    
-    let running = if is_custom {
-        running_tasks.iter()
-            .filter(|t| t.agent == AgentKind::Custom && t.custom_agent_name.as_deref() == Some(&name))
-            .count() as u64
-    } else {
-        running_tasks.iter()
-            .filter(|t| t.agent == kind)
-            .count() as u64
-    };
-    let load = LoadJson { running };
-    
+
+    let models = build_models_json(&name, kind, custom_config)?;
     Ok(AgentJson {
         name,
         kind: if is_custom { "custom".to_string() } else { "builtin".to_string() },
@@ -242,13 +163,69 @@ fn build_agent_json(
         trust_tier,
         description,
         supports_session_resume,
-        provider: provider.as_str().to_string(),
-        metering: metering_label(metering),
+        provider,
+        metering,
         quota,
         auth,
-        capabilities,
         models,
         history,
-        load,
+        load: agent_load(kind, custom_config, running_tasks),
     })
+}
+
+fn build_models_json(
+    name: &str, kind: AgentKind, custom_config: Option<&CustomAgentConfig>,
+) -> Result<ModelsJson> {
+    let is_custom = custom_config.is_some();
+    let run_model = default_run_model(name, kind, custom_config);
+    let budget_model = if is_custom {
+        None
+    } else {
+        crate::model_catalog::budget_model(&kind).map(|s| s.to_string())
+    };
+    let available = if is_custom {
+        Vec::new()
+    } else {
+        let available_models = crate::cmd::config::merged_agent_models()?;
+        available_models.into_iter()
+            .filter(|m| m.agent == kind)
+            .map(|m| {
+                let price = crate::cost::resolve_pricing(Some(&m.model), kind);
+                let evidence = crate::scores::evidence(kind, Some(&m.model),
+                    crate::agent::classifier::TaskCategory::ComplexImpl);
+                AvailableModelJson {
+                    model: m.model,
+                    tier: m.tier,
+                    input_per_m: price.map(|p| p.input_per_m),
+                    output_per_m: price.map(|p| p.output_per_m),
+                    rated: evidence.capability.is_some(),
+                    capability: evidence.capability,
+                    capability_evidence: evidence,
+                    source: m.origin.label().to_string(),
+                }
+            })
+            .collect()
+    };
+    Ok(ModelsJson {
+        default_source: run_model.model.as_ref().map(|_| run_model.source.as_str().to_string()),
+        default: run_model.model,
+        budget: budget_model,
+        available,
+    })
+}
+
+fn agent_load(
+    kind: AgentKind, custom_config: Option<&CustomAgentConfig>, running_tasks: &[Task],
+) -> LoadJson {
+    let running = if let Some(config) = custom_config {
+        running_tasks.iter()
+            .filter(|t| t.agent == AgentKind::Custom
+                && t.custom_agent_name.as_deref() == Some(config.id.as_str()))
+            .count() as u64
+    } else {
+        running_tasks.iter()
+            .filter(|t| t.agent == kind)
+            .count() as u64
+    };
+    LoadJson { running }
 }

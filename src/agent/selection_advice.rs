@@ -6,12 +6,11 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::classifier::{TaskCategory, TaskProfile};
-use super::selection_capabilities::{capability_row, team_override_score};
+use crate::agent::classifier::{self, Complexity, TaskCategory, TaskProfile};
 use super::selection_quota::{self, CandidateQuota};
 use super::selection_scoring::{
     Candidate, CandidateContext, ScoreBreakdown, compare_candidates, cost_efficiency,
-    model_capability_score, priority, score_breakdown,
+    capability_evidence, model_capability_score, priority, score_breakdown,
 };
 use crate::agent::RouteBlocker;
 use crate::agent::run_model::{RunModel, RunModelInput, RunModelSource, resolve_run_model};
@@ -119,6 +118,7 @@ struct RankedCandidate {
     report: AdviceCandidate,
     order: Candidate,
     pool_excluded: bool,
+    capability_note: Option<String>,
 }
 
 pub(crate) fn advise(
@@ -220,8 +220,7 @@ fn builtin_candidates(
         .collect()
 }
 
-/// Scored and gated on the resolved model: an unknown or unrated model gets
-/// the agent-level base and no model capability term.
+/// Scored and gated on team overrides or the resolved model capability.
 fn builtin_candidate(
     context: &CandidateContext<'_>, declared: DeclaredTaskProfile, caller: Option<&CallerAdvice>,
     run_model: RunModel, (kind, blocker): (AgentKind, Option<RouteBlocker>),
@@ -234,8 +233,8 @@ fn builtin_candidate(
     if let Some(blocker) = &blocker {
         exclusions.push(blocker.code(), blocker.reason());
     }
-    exclusions.floor(
-        team_base(context, kind), declared.difficulty.capability_floor(),
+    let capability_note = exclusions.floor(
+        capability_evidence(context, kind, model.as_deref()), declared.difficulty.capability_floor(),
         declared.difficulty, context.profile.category,
     );
     exclusions.budget(budget_allows(declared.budget, model.as_deref()), declared.budget);
@@ -268,15 +267,7 @@ fn builtin_candidate(
         demotion_reason, auth,
         unrated_served_models,
     };
-    RankedCandidate { report, order, pool_excluded: verdict == PoolVerdict::Weaker }
-}
-
-/// The measured base for the floor check: a team override, else the matrix
-/// row. `None` means there is no capability data for this category.
-fn team_base(context: &CandidateContext<'_>, kind: AgentKind) -> Option<i32> {
-    context.team
-        .and_then(|team| team_override_score(team, kind.as_str(), context.profile.category))
-        .or_else(|| capability_row(kind, context.profile.category))
+    RankedCandidate { report, order, pool_excluded: verdict == PoolVerdict::Weaker, capability_note }
 }
 
 fn budget_allows(budget: TaskBudget, model: Option<&str>) -> bool {

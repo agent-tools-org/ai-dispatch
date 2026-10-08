@@ -154,6 +154,8 @@ mod tests {
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![
             AgentKind::Codex, AgentKind::Droid, AgentKind::Claude, AgentKind::Cursor,
         ]);
+        // Pin rated evidence: the floor no longer reads Cursor's CLI score (6).
+        crate::agent_config::save_agent_default_model("cursor", Some("auto")).expect("cursor model");
         let declared = DeclaredTaskProfile {
             difficulty: crate::types::TaskDifficulty::Complex,
             budget: crate::types::TaskBudget::Premium,
@@ -176,7 +178,7 @@ mod tests {
         if let Some(cursor) = cursor {
             let reason = cursor.exclusion_reason.as_deref().unwrap_or("");
             assert!(
-                reason.contains("base 6 < floor 8 for complex"),
+                reason.contains("base 7 < floor 8 for complex"),
                 "expected floor shortfall, got {reason:?}"
             );
         }

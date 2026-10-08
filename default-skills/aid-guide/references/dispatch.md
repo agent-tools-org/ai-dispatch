@@ -296,8 +296,7 @@ carries `exclusion_reason` (human text, `; `-joined) and `exclusion_codes`
 | Code | Reason text |
 |---|---|
 | `not_installed` | `not installed: binary '<bin>' missing from PATH` |
-| `below_floor` | `base 6 < floor 8 for complex` (measured shortfall) |
-| `no_capability_data` | `no capability data for <category>` (no matrix row; base defaults to 1 and is still excluded by the floor) |
+| `below_floor` | `base 6 < floor 8 for complex` (team override or rated model capability below the floor) |
 | `no_budget_model` | `no model for budget <budget>` |
 | `auth_failed` | `auth failed (observed <time>)` |
 | `weaker_on_caller_pool` | `weaker model on caller's pool` |
@@ -366,9 +365,13 @@ catalog budget model (`source: "budget_route"`, `pinned: true`). A codex
 `pinned: false` and `source: "cli_config"`. With no readable CLI default,
 `model` is `null`, `source` is `agent_default`, and the human output says
 `agent default (unknown)`; advise never names a catalog model it will not
-launch. A candidate whose model is unknown or unrated is scored with the
-agent-level base and no model capability term; the caller-pool comparison
-then treats its capability as unknown. When a candidate's model is older
+launch. A built-in candidate's base is its team override, else its rated model
+catalog capability, else a neutral `6.0`. Model capability is the base, not an
+averaged adjustment. Without either source of evidence, the floor does not
+exclude it and report `notes` includes `unrated: no measured or model capability
+for <category>`. Custom agents keep their configured capabilities and floor.
+The caller-pool comparison treats unknown model capability as unknown.
+When a candidate's model is older
 than a served-only model of the same family (for example catalog `gpt-5.6-sol`,
 served `gpt-6-sol`), the candidate carries `unrated_served_models` (omitted
 when empty) and the human output adds one `note:` line. Those models stay

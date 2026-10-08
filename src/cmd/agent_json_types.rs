@@ -29,7 +29,6 @@ pub struct AgentJson {
     /// `failed` (a run hit a not-signed-in refusal within the last hour, with
     /// `observed_at`) or `unknown` (no evidence). Never `ok`.
     pub auth: crate::auth_marker::AuthStatus,
-    pub capabilities: HashMap<String, i32>,
     pub models: ModelsJson,
     pub history: Option<HistoryJson>,
     pub load: LoadJson,

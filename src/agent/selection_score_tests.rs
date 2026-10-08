@@ -10,7 +10,7 @@ use tempfile::TempDir;
 
 use super::selection_quota::{headroom_penalty, penalty_from_used};
 use super::selection_scoring::{
-    CandidateContext, model_capability_score, model_quality_score, score_breakdown,
+    CandidateContext, model_capability_score, score_breakdown,
 };
 use super::advise;
 use crate::agent::classifier::{Complexity, TaskCategory, TaskProfile};
@@ -123,7 +123,7 @@ fn breakdown_is_bit_identical_to_pre_decomposition_value() {
     let breakdown = hint_breakdown(&context, AgentKind::Codex);
 
     // With no leaderboard cache, no capability or complexity term is invented.
-    assert_eq!(breakdown.total, 14.0);
+    assert_eq!(breakdown.total, -1.0);
     assert_eq!(breakdown.model_capability, 0.0);
     assert_eq!(breakdown.headroom_penalty, 0.0);
 }
@@ -147,7 +147,6 @@ fn discovered_agy_model_keeps_base_score_when_capability_is_unknown() {
 
     let capability = model_capability_score(AgentKind::Antigravity, "gemini-3.7-flash-high", TaskCategory::Research);
     assert_eq!(capability, None);
-    assert_eq!(model_quality_score(8, capability), 8.0);
 }
 
 #[test]

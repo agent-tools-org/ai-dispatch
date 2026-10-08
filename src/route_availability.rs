@@ -14,10 +14,9 @@ use crate::types::AgentKind;
 mod policy;
 
 pub(crate) use policy::{
-    classify_hold, format_hold_end_for, overrides_marker_at, snapshot_overrides, stored_hold,
-    wall_of, Hold, StoredHold, MANUAL_HOLD,
+    classify_hold, format_hold_end_for, overrides_marker_at, relevant_windows, snapshot_overrides,
+    stored_hold, wall_of, Hold, StoredHold, MANUAL_HOLD,
 };
-
 #[cfg(test)]
 pub(crate) use policy::overrides_marker_at_in_cache;
 

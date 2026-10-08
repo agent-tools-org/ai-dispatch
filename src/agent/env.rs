@@ -212,6 +212,7 @@ pub fn apply_run_env(
     opts: &RunOpts,
     guard: &super::home_isolation::IsolatedHomeGuard,
 ) {
+    super::env_redirects::strip_inherited_config_redirects(cmd);
     cmd.env("AID_HOME", crate::paths::aid_dir());
     if let Some(env) = opts.env.as_ref() {
         for (key, value) in env {

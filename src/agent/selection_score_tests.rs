@@ -51,8 +51,9 @@ fn isolated() -> (TempDir, PathBuf, AidHomeGuard, CacheDirGuard) {
 fn write_snapshot(cache: &Path, provider: &str, used: f64, age_secs: i64) {
     let fetched = Utc::now() - ChronoDuration::seconds(age_secs);
     let fetched_at = fetched.to_rfc3339_opts(SecondsFormat::Secs, true);
+    let resets_at = (fetched + ChronoDuration::hours(5)).to_rfc3339();
     let body = format!(
-        r#"{{"ok":true,"snapshot":{{"provider":"{provider}","windows":[{{"label":"5h","used_percent":{used},"resets_at":"2026-08-18T00:55:28Z"}}],"fetched_at":"{fetched_at}"}}}}"#
+        r#"{{"ok":true,"snapshot":{{"provider":"{provider}","windows":[{{"label":"5h","used_percent":{used},"resets_at":"{resets_at}"}}],"fetched_at":"{fetched_at}"}}}}"#
     );
     std::fs::write(cache.join(format!("{provider}.json")), body).expect("snapshot");
 }
@@ -129,7 +130,6 @@ fn breakdown_is_bit_identical_to_pre_decomposition_value() {
     assert_eq!(breakdown.total.to_bits(), 0x4030_5999_9999_999a);
     assert_eq!(breakdown.headroom_penalty, 0.0);
 }
-
 #[test]
 fn discovered_agy_model_keeps_base_score_when_capability_is_unknown() {
     let temp = TempDir::new().expect("temp dir");

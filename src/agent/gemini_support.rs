@@ -161,24 +161,35 @@ pub(super) fn classify_tool_result(name: &str, output: &str) -> (crate::types::E
 }
 
 pub(super) fn extract_completion_stats(value: &Value) -> (Option<i64>, Option<String>) {
-    let stats = match value.get("stats") {
-        Some(stats) => stats,
-        None => return (None, None),
+    if value.get("stats").is_none() {
+        return (None, None);
+    }
+    (extract_tokens(value), extract_model(value))
+}
+
+fn model_tokens(model: &Value) -> i64 {
+    model.get("total_tokens").or_else(|| model.pointer("/tokens/total"))
+        .and_then(Value::as_i64).unwrap_or(0)
+}
+
+fn dominant_model<'a>(models: &'a Value) -> Option<&'a str> {
+    let use_cost = match models {
+        Value::Object(obj) => obj.values().all(|v| v.get("costUSD").and_then(Value::as_f64).is_some()),
+        Value::Array(items) => items.iter().all(|v| v.get("costUSD").and_then(Value::as_f64).is_some()),
+        _ => return None,
     };
-    if let Some(total) = stats.get("total_tokens").and_then(Value::as_i64) {
-        let model = stats.get("models").and_then(Value::as_object).and_then(|obj| obj.keys().next().cloned());
-        return (Some(total), model);
+    let better = |a: &Value, b: &Value| {
+        let cost = if use_cost {
+            a["costUSD"].as_f64().zip(b["costUSD"].as_f64()).and_then(|(a, b)| a.partial_cmp(&b))
+        } else { None };
+        cost.filter(|order| !order.is_eq())
+            .unwrap_or_else(|| model_tokens(a).cmp(&model_tokens(b)))
+    };
+    if let Some(obj) = models.as_object() {
+        return obj.iter().rev().max_by(|(_, a), (_, b)| better(a, b)).map(|(name, _)| name.as_str());
     }
-    if let Some(models) = stats.get("models").and_then(Value::as_array) {
-        let first = match models.first() {
-            Some(first) => first,
-            None => return (None, None),
-        };
-        let tokens = first.pointer("/tokens/total").and_then(Value::as_i64);
-        let model = first.get("model").and_then(Value::as_str).map(ToOwned::to_owned);
-        return (tokens, model);
-    }
-    (None, None)
+    models.as_array()?.iter().rev().filter_map(|model| Some((model.get("model")?.as_str()?, model)))
+        .max_by(|(_, a), (_, b)| better(a, b)).map(|(name, _)| name)
 }
 
 pub(super) fn extract_tokens(value: &Value) -> Option<i64> {
@@ -214,12 +225,15 @@ pub(super) fn extract_error_detail(value: &Value) -> Option<String> {
 }
 
 pub(super) fn extract_model(value: &Value) -> Option<String> {
-    for path in ["/modelVersion", "/model", "/stats/models/0/model"] {
+    if let Some(model) = value.pointer("/stats/models").and_then(dominant_model) {
+        return Some(model.to_string());
+    }
+    for path in ["/modelVersion", "/model"] {
         if let Some(model) = value.pointer(path).and_then(Value::as_str) {
             return Some(model.to_string());
         }
     }
-    value.pointer("/stats/models").and_then(Value::as_object).and_then(|obj| obj.keys().next().cloned())
+    None
 }
 
 pub(super) fn extract_text_payload(value: Option<&Value>) -> Option<String> {

@@ -113,7 +113,7 @@ pub(super) async fn maybe_dispatch_auto_fallback(
         return Ok(None);
     };
     let spec = &tasks[task_idx];
-    run_args.env = super::batch_args::merged_env(spec.env.as_ref(), spec.env_forward.as_ref(), shared_dir_path);
+    run_args.env = super::batch_args::merged_env(spec.env.as_ref(), shared_dir_path);
     run_args.env_forward = spec.env_forward.clone();
     let fallback_agent = run_args.agent_name.clone();
     run_args.repo_root = repo_root.map(str::to_string);

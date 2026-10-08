@@ -66,6 +66,7 @@ pub(crate) fn parse_json_event(
                     "input_tokens": input,
                     "output_tokens": output,
                     "cost_usd": cost,
+                    "usage_is_delta": marker_kind == AgentKind::OpenCode,
                 })),
             )
         }

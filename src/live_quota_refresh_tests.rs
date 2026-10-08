@@ -3,6 +3,12 @@
 use super::*;
 
 #[test]
+fn live_quota_refresh_includes_droid_provider() {
+    assert!(MAPPED.contains(&AgentKind::Droid));
+    assert_eq!(live_quota::provider_name(&AgentKind::Droid), Some("droid"));
+}
+
+#[test]
 fn live_quota_refresh_disabled_by_env() {
     assert!(!refresh_allowed(Some("0")));
     assert!(refresh_allowed(None));

@@ -4,6 +4,9 @@
 use super::*;
 use crate::{paths, rate_limit};
 
+// modelUsage copied verbatim from a real two-model result in ~/.aid/logs/t-73b769ce.jsonl.
+const CAPTURED_RESULT: &str = r#"{"type":"result","modelUsage":{"claude-opus-5-5":{"inputTokens":146,"outputTokens":58023,"cacheReadInputTokens":9931249,"cacheCreationInputTokens":188174,"webSearchRequests":0,"costUSD":4.6526858,"contextWindow":1000000,"maxOutputTokens":128000,"thinkingTokens":25274,"canonicalModel":"claude-opus-5-5","provider":"firstParty","costBasis":"list"},"claude-haiku-4-5-20251001":{"inputTokens":65614,"outputTokens":835,"cacheReadInputTokens":0,"cacheCreationInputTokens":0,"webSearchRequests":1,"costUSD":0.079789,"contextWindow":200000,"maxOutputTokens":32000,"thinkingTokens":0,"canonicalModel":"claude-haiku-4-5","provider":"firstParty","costBasis":"list"}}}"#;
+
 #[test]
 fn marks_claude_rate_limits_from_error_and_user_events() {
     let temp = tempfile::tempdir().unwrap();
@@ -65,4 +68,27 @@ fn short_assistant_text_has_no_full_metadata() {
     let event = parse_event_line(&task_id, &line).unwrap();
     assert_eq!(event.detail, "brief note");
     assert!(event.metadata.is_none());
+}
+
+#[test]
+fn picks_claude_model_with_highest_cost_from_captured_result() {
+    let event = parse_event_line(&TaskId("t-multi-model".to_string()), CAPTURED_RESULT).unwrap();
+    assert_eq!(event.metadata.unwrap()["model"], "claude-opus-5-5");
+}
+
+#[test]
+fn picks_claude_model_by_tokens_when_cost_missing_or_tied() {
+    let mut result: Value = serde_json::from_str(CAPTURED_RESULT).unwrap();
+    result["modelUsage"]["claude-haiku-4-5-20251001"]["costUSD"] =
+        result["modelUsage"]["claude-opus-5-5"]["costUSD"].clone();
+    assert_eq!(extract_result_model(&result).as_deref(), Some("claude-opus-5-5"));
+    result["modelUsage"]["claude-haiku-4-5-20251001"].as_object_mut().unwrap().remove("costUSD");
+    assert_eq!(extract_result_model(&result).as_deref(), Some("claude-opus-5-5"));
+    result["modelUsage"]["claude-opus-5-5"].as_object_mut().unwrap().remove("costUSD");
+    assert_eq!(extract_result_model(&result).as_deref(), Some("claude-opus-5-5"));
+    for key in ["inputTokens", "outputTokens", "cacheReadInputTokens", "cacheCreationInputTokens"] {
+        result["modelUsage"]["claude-haiku-4-5-20251001"][key] =
+            result["modelUsage"]["claude-opus-5-5"][key].clone();
+    }
+    assert_eq!(extract_result_model(&result).as_deref(), Some("claude-haiku-4-5-20251001"));
 }

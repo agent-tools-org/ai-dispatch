@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::rate_limit;
 use crate::route_availability::{
-    availability, availability_for_model, ProbeEvidence, QuotaWall, RouteAvailability, RouteStatus, WindowView,
+    availability, availability_for_model, relevant_windows, ProbeEvidence, QuotaWall,
+    RouteAvailability, RouteStatus, WindowView,
 };
 use crate::types::{AgentKind, TaskUrgency};
 
@@ -21,10 +22,30 @@ pub(super) fn headroom_penalty(kind: AgentKind, model: Option<&str>) -> f64 {
     if !probe.ok || probe.stale {
         return 0.0;
     }
-    match tightest_window(&probe.windows) {
+    let group = super::super::model_group::model_group(kind, model);
+    let now = chrono::Utc::now();
+    let windows: Vec<_> = relevant_windows(probe, &kind, group)
+        .into_iter()
+        .filter(|window| counts_for_headroom(window, now))
+        .collect();
+    match tightest_window(&windows) {
         Some(window) => penalty_from_used(window.used_percent),
         None => 0.0,
     }
+}
+
+fn counts_for_headroom(window: &WindowView, now: chrono::DateTime<chrono::Utc>) -> bool {
+    let short = window.label.split_whitespace().any(|part| {
+        part.strip_suffix('h')
+            .and_then(|hours| hours.parse::<u64>().ok())
+            .is_some_and(|hours| hours < 24)
+            || part.strip_suffix('m')
+                .and_then(|minutes| minutes.parse::<u64>().ok())
+                .is_some_and(|minutes| minutes < 24 * 60)
+    });
+    // A sub-24h window counts only if reset is over 60 minutes away or usage is at least 98%.
+    !short || window.used_percent >= 98.0
+        || window.resets_at.is_some_and(|reset| reset > now + chrono::Duration::minutes(60))
 }
 
 pub(super) fn penalty_from_used(used: f64) -> f64 {
@@ -265,3 +286,7 @@ fn source_of(avail: &RouteAvailability) -> &'static str {
         "none"
     }
 }
+
+#[cfg(test)]
+#[path = "selection_quota_tests.rs"]
+mod tests;

@@ -241,9 +241,12 @@ fn task_to_run_args_applies_forwarded_env_after_explicit_env() {
         None,
     );
 
+    // The forwarded value is resolved at launch (apply_run_env applies
+    // env_forward after env), so run args keep only the name.
     assert_eq!(
         run_args.env.as_ref().and_then(|env| env.get("PATH")).map(String::as_str),
-        Some(forwarded_path.as_str())
+        Some("explicit")
     );
+    assert_ne!(forwarded_path, "explicit");
     assert_eq!(run_args.env_forward, Some(vec!["PATH".to_string()]));
 }

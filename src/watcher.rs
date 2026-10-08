@@ -266,11 +266,16 @@ fn apply_completion_event(info: &mut CompletionInfo, event: &TaskEvent) {
     if event.event_kind != EventKind::Completion {
         return;
     }
+    let incremental = metadata.get("usage_is_delta").and_then(|value| value.as_bool()) == Some(true);
     if let Some(tokens) = metadata.get("tokens").and_then(|value| value.as_i64()) {
-        info.tokens = Some(tokens);
+        info.tokens = Some(if incremental { info.tokens.unwrap_or_default() + tokens } else { tokens });
     }
     if let Some(cost_usd) = metadata.get("cost_usd").and_then(|value| value.as_f64()) {
-        info.cost_usd = Some(cost_usd);
+        info.cost_usd = Some(if incremental {
+            info.cost_usd.unwrap_or_default() + cost_usd
+        } else {
+            cost_usd
+        });
     }
 }
 

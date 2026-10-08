@@ -56,3 +56,16 @@ fn actual_pre_upgrade_spec_from_jobs_loads_without_detached_field() {
     assert_eq!(spec.agent_name, "grok");
     assert!(spec.interactive);
 }
+
+#[cfg(unix)]
+#[test]
+fn saved_spec_is_readable_only_by_owner() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = paths::AidHomeGuard::set(temp.path());
+    let spec: super::BackgroundRunSpec = serde_json::from_str(
+        include_str!("../testdata/legacy-background-spec.json")).unwrap();
+    super::save_spec(&spec).unwrap();
+    let mode = std::fs::metadata(paths::job_path(&spec.task_id)).unwrap().permissions().mode();
+    assert_eq!(mode & 0o777, 0o600);
+}

@@ -50,6 +50,17 @@ log="$(mktemp)"
 trap 'rm -f "$log"' EXIT
 status=0
 "${command[@]}" 2>&1 | tee "$log" || status=${PIPESTATUS[0]}
+if [[ $status -eq 0 ]] && awk '
+  /^test result: / && match($0, /[0-9]+ passed; [0-9]+ failed; [0-9]+ ignored;/) {
+    split(substr($0, RSTART, RLENGTH), counts, /[^0-9]+/)
+    total += counts[1] + counts[2] + counts[3]
+    found = 1
+  }
+  END { exit !(found && total == 0) }
+' "$log"; then
+  echo "[remote-test] no tests matched the filter" >&2
+  exit 66
+fi
 job="$(awk '/^rbox: job / { print $3; exit }' "$log")"
 job="${job:-not started (no job id assigned)}"
 if grep -q '^rbox: job .* exited with code ' "$log" && [[ $status -ne 0 ]]; then

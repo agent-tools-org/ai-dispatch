@@ -28,6 +28,7 @@ const MAPPED: &[AgentKind] = &[
     AgentKind::Antigravity,
     AgentKind::Grok,
     AgentKind::Qwen,
+    AgentKind::Droid,
 ];
 
 pub(crate) fn refresh_allowed(env_value: Option<&str>) -> bool {

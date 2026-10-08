@@ -111,12 +111,22 @@ pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
     let content = serde_json::to_string_pretty(spec)?;
     // Pollers must see a complete old or new spec, never a truncated PID update.
     let temp = path.with_extension(format!("{:032x}.tmp", rand::random::<u128>()));
-    let result = std::fs::write(&temp, content).and_then(|()| std::fs::rename(&temp, &path));
+    let result = write_private(&temp, content.as_bytes()).and_then(|()| std::fs::rename(&temp, &path));
     if result.is_err() {
         let _ = std::fs::remove_file(&temp);
     }
     result?;
     Ok(())
+}
+
+/// A spec carries the task's inline env values, so only the owner may read it.
+fn write_private(path: &std::path::Path, content: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    options.open(path)?.write_all(content)
 }
 
 pub(crate) fn load_spec(task_id: &str) -> Result<BackgroundRunSpec> {

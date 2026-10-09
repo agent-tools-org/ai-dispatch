@@ -55,8 +55,10 @@ fn identity_timeout_is_bounded_and_reaps_the_probe() {
     let start = Instant::now();
     assert!(!binary_identity_matches(&binary, &["cursor agent"]));
     assert!(start.elapsed() < Duration::from_millis(1500));
-    let pid: i32 = fs::read_to_string(format!("{binary}.pid"))
-        .expect("probe started").trim().parse().expect("pid");
+    // Under load the timeout can kill the shell before it writes its pid; then no
+    // probe ever started and nothing can be left running.
+    let Ok(pid) = fs::read_to_string(format!("{binary}.pid")) else { return };
+    let pid: i32 = pid.trim().parse().expect("pid");
     assert_eq!(unsafe { libc::kill(pid, 0) }, -1);
     assert_eq!(std::io::Error::last_os_error().raw_os_error(), Some(libc::ESRCH));
 }

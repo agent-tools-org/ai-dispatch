@@ -1,3 +1,10 @@
+## v10.52.0 (2026-10-09)
+- Score models from third-party leaderboards (Terminal-Bench 4.0, Epoch, LMArena) served by the price relay at `/v1/scores.json`; aid no longer assigns capability scores of its own
+- Remove the per-CLI capability matrix, the hand-written catalog `capability` field and the complexity bonus; `aid agent list --json` drops the per-agent capability map and carries leaderboard evidence per model
+- Routes without leaderboard evidence score a neutral base and are never excluded by the capability floor; only an evidenced shortfall is `below_floor`
+- A Terminal-Bench result applies only to the exact CLI and effort it measured; other CLIs use the model-level source and are marked harness unmeasured
+
+
 ## v10.51.0 (2026-10-08)
 - Recognize Claude Code subscription quota refusals (rejected `rate_limit_event`, error results) and hold the claude route until the stated reset; unrelated `|<unix>` suffixes and plain prose no longer create holds
 - Remove inherited per-CLI config redirect variables (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GEMINI_CLI_HOME`, ...) from task launches, including PTY launches

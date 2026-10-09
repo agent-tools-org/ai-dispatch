@@ -60,7 +60,8 @@ fn models_for_agent_merges_cached_agy_model_as_unknown() {
         .expect("discovered model");
     crate::cost::clear_feed_for_tests();
     assert!(!crate::cost::has_known_price(Some(&discovered.model), AgentKind::Antigravity));
-    assert_eq!(discovered.capability, None);
+    assert_eq!(crate::scores::capability_score(discovered.agent, &discovered.model,
+        crate::agent::classifier::TaskCategory::Research), None);
 }
 
 #[test]
@@ -88,7 +89,8 @@ fn models_for_agent_merges_cached_opencode_model_as_unknown() {
         .expect("discovered model");
     crate::cost::clear_feed_for_tests();
     assert!(!crate::cost::has_known_price(Some(&discovered.model), AgentKind::OpenCode));
-    assert_eq!(discovered.capability, None);
+    assert_eq!(crate::scores::capability_score(discovered.agent, &discovered.model,
+        crate::agent::classifier::TaskCategory::Research), None);
 }
 
 #[test]
@@ -143,10 +145,10 @@ fn budget_preferred_tiers_beat_unknown() {
 
 #[test]
 fn droid_budget_picks_core_and_default_stays_opus() {
-    assert_eq!(budget_model(&AgentKind::Droid), Some("glm-5.2"));
+    assert_eq!(budget_model(&AgentKind::Droid), Some("inkling"));
     assert_eq!(
         model_for_task_budget(AgentKind::Droid, TaskBudget::Cheap),
-        Some("glm-5.2")
+        Some("inkling")
     );
     assert_eq!(
         model_for_task_budget(AgentKind::Droid, TaskBudget::Standard),
@@ -235,4 +237,14 @@ fn budget_cheap_picks_lowest_price_across_preferred_tiers() {
         budget_model(&AgentKind::OpenCode),
         Some("opencode/deepseek-v4-flash-free")
     );
+}
+
+#[test]
+fn premium_budget_prefers_the_rated_row_over_unrated_premium_rows() {
+    let home = tempfile::tempdir().expect("home");
+    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    crate::scores::test_support::seed_live();
+    // Live capture: openai/gpt-5.6-sol has Epoch ECI 161.66; gpt-5.6-terra, gpt-5.5 and
+    // gpt-5.4 are not in the trimmed capture, so they are unrated and never preferred.
+    assert_eq!(model_for_task_budget(AgentKind::Codex, TaskBudget::Premium), Some("gpt-5.6-sol"));
 }

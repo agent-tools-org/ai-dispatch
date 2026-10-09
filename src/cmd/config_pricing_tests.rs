@@ -46,7 +46,7 @@ fn shown(displays: &Displays, agent: AgentKind, model: &str) -> Shown {
         .unwrap_or_else(|| panic!("{agent:?}/{model} missing from agent JSON"));
     let profile = render_models_line(agent, &HashMap::new()).lines()
         .find(|line| line.split_whitespace().next() == Some(model))
-        .map(|line| line.split(", ").nth(2).expect("price cell").split(')').next().expect("price").to_string());
+        .map(|line| line.split(", ").nth(1).expect("price cell").split(')').next().expect("price").to_string());
     Shown {
         table: (cells[3].to_string(), cells[4].to_string()),
         json: (row.input_per_m, row.output_per_m),
@@ -123,7 +123,8 @@ fn pricing_override_is_what_every_display_shows() {
             .models.available.iter().find(|row| row.model == model).expect("JSON row");
         assert_eq!(row.tier, "premium");
         let catalogued = AGENT_MODELS.iter().any(|row| row.agent == agent && row.model == model);
-        assert_eq!(row.rated, catalogued);
+        assert!(!row.rated, "no score cache means every rating is unknown");
+        assert_eq!(row.capability, None);
         assert_eq!(row.source, if catalogued { "catalog" } else { "pricing_override" });
         assert_eq!(shown.profile.is_some(), catalogued, "{agent:?}/{model}");
     }

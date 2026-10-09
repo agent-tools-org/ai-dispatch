@@ -7,7 +7,7 @@ use super::*;
 use crate::live_quota::CacheDirGuard;
 use crate::paths::AidHomeGuard;
 use crate::agent::run_model::RunModelSource;
-use crate::types::{TaskRigor, TaskUrgency};
+use crate::types::{TaskDifficulty, TaskRigor, TaskUrgency};
 
 fn isolated() -> (tempfile::TempDir, AidHomeGuard, CacheDirGuard) {
     let temp = tempfile::tempdir().expect("temp dir");
@@ -85,6 +85,7 @@ fn same_pool_weaker_model_is_excluded_with_known_caller_model() {
     let (_temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Claude, AgentKind::Codex]);
     crate::agent_config::save_agent_default_model("claude", Some("sonnet")).expect("sticky");
+    crate::scores::test_support::seed_live();
     let report = run(Some(anthropic_caller(Some(99.0))));
     let claude = find(&report, "claude");
     assert_eq!(claude.model.as_deref(), Some("sonnet"), "a known model makes the comparison real");
@@ -100,7 +101,7 @@ fn same_pool_is_demoted_not_excluded_with_unknown_caller_model() {
     let (_temp, _home, _cache) = isolated();
     let fleet = vec![AgentKind::Claude, AgentKind::Codex, AgentKind::Droid, AgentKind::Copilot];
     let _fleet = crate::agent::DetectAgentsGuard::set(fleet);
-    // Use model evidence to establish the baseline before testing pool demotion.
+    crate::scores::test_support::seed_live();
     crate::agent_config::save_agent_default_model("claude", Some("opus")).expect("model");
     let baseline = run(None);
     assert_eq!(baseline.candidates[0].agent, "claude", "claude must outrank others without a caller");
@@ -172,7 +173,10 @@ fn advised_model_group_hold_switches_route_but_other_group_does_not() {
     let (temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Droid, AgentKind::Codex]);
     crate::agent_config::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
-    crate::agent_config::save_agent_default_model("codex", Some("gpt-6-sol")).expect("model");
+    // Live capture: droid's gpt-5.3-codex has Epoch ECI 156.77 (about 7.4 after rescale);
+    // gpt-5.6-terra is absent from the trimmed capture, so codex is unrated (neutral 6.0).
+    crate::agent_config::save_agent_default_model("codex", Some("gpt-5.6-terra")).expect("model");
+    crate::scores::test_support::seed_live();
     let baseline = run(None).recommended.expect("recommendation");
     assert_eq!((&*baseline.agent, baseline.model.as_deref()), ("droid", Some("gpt-5.3-codex")));
     let hold = "hold: manual\nmessage: quota exhausted\n";
@@ -189,7 +193,7 @@ fn advised_model_group_hold_switches_route_but_other_group_does_not() {
     assert!(find(&held, "droid").eligible);
     assert!(!find(&held, "droid").launchable(None));
     let recommended = held.recommended.expect("recommendation");
-    assert_eq!((&*recommended.agent, recommended.model.as_deref()), ("codex", Some("gpt-6-sol")));
+    assert_eq!((&*recommended.agent, recommended.model.as_deref()), ("codex", Some("gpt-5.6-terra")));
 }
 
 #[path = "selection_advice_launch_tests.rs"]
@@ -222,8 +226,9 @@ fn no_installed_routes_or_only_weaker_caller_pool_routes_have_no_recommendation(
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![]);
     assert!(run(None).recommended.is_none());
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
-    crate::agent_config::save_agent_default_model("codex", Some("gpt-5.6-sol")).expect("model");
-    let caller = caller_advice("codex", Some("gpt-5.6-sol")).expect("caller");
+    crate::agent_config::save_agent_default_model("codex", Some("openai/gpt-5.6-sol")).expect("model");
+    crate::scores::test_support::seed_live();
+    let caller = caller_advice("codex", Some("openai/gpt-5.6-sol"), TaskCategory::ComplexImpl).expect("caller");
     let caller = CallerAdvice { capability: Some(99.0), ..caller };
     let report = run(Some(caller));
     assert!(find(&report, "codex").exclusion_codes.contains(&"weaker_on_caller_pool".into()));
@@ -233,14 +238,14 @@ fn no_installed_routes_or_only_weaker_caller_pool_routes_have_no_recommendation(
 #[test]
 fn research_and_frontend_advice_recommend_the_expected_installed_agent() {
     let (_temp, _home, _cache) = isolated();
+    crate::scores::test_support::seed_live();
     for (prompt, fleet, expected) in [
         ("Explain the authentication flow and compare the docs?", [AgentKind::Gemini, AgentKind::Qwen], "gemini"),
         ("Explain the authentication flow and compare the docs?", [AgentKind::Antigravity, AgentKind::Qwen], "agy"),
         ("Create a responsive React component layout for the settings UI", [AgentKind::Cursor, AgentKind::Codex], "cursor"),
     ] {
         let _fleet = crate::agent::DetectAgentsGuard::set(fleet.to_vec());
-        // Expected preferences now come from rated models, not CLI category scores.
-        let model = match expected { "gemini" => "pro", "agy" => "gemini-3.1-pro-high", _ => "composer-2.5" };
+        let model = match expected { "gemini" | "agy" => "gemini-3.7-flash-high", _ => "opus" };
         crate::agent_config::save_agent_default_model(expected, Some(model)).expect("model");
         let report = advise(prompt, declared(TaskDifficulty::Moderate, TaskBudget::Standard), None, None, None, 0, None);
         assert_eq!(report.recommended.expect("recommendation").agent, expected);
@@ -252,15 +257,14 @@ fn budget_simple_edit_advice_launches_eligible_budget_model() {
     let (_temp, _home, _cache) = isolated();
     for (fleet, expected) in [
         (vec![AgentKind::OpenCode, AgentKind::Kilo, AgentKind::Codex], AgentKind::OpenCode),
-        // Kilo's rated 3.8 is below floor 4; Codex's 7.2 minus budget 3 remains eligible.
-        (vec![AgentKind::Kilo, AgentKind::Codex], AgentKind::Codex),
+        // Kilo is unrated -> neutral base 6.0 >= floor 4; its free budget model wins over paid Codex (-3 penalty).
+        (vec![AgentKind::Kilo, AgentKind::Codex], AgentKind::Kilo),
     ] {
         let _fleet = crate::agent::DetectAgentsGuard::set(fleet);
         let report = advise("rename src/types.rs field name", declared(TaskDifficulty::Simple, TaskBudget::Free),
             None, None, None, 0, None);
         let picked = report.recommended.expect("recommendation");
         assert_eq!(picked.agent, expected.as_str());
-        // Codex has no free catalog row; the resolver falls back to its cheap budget model.
         let model = crate::model_catalog::budget_model(&expected).expect("catalog budget model");
         assert_eq!(picked.model.as_deref(), Some(model));
         assert_eq!(picked.source, RunModelSource::BudgetRoute);

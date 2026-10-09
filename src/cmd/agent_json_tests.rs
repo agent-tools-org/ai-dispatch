@@ -45,7 +45,7 @@ fn test_agent_json_serialization_roundtrip() {
                 model: "gpt-5.5".to_string(),
                 tier: "paid".to_string(),
                 input_per_m: Some(1.25), output_per_m: Some(10.0),
-                capability: Some(9.6),
+                capability: Some(9.6), capability_evidence: Default::default(),
                 rated: true, source: "catalog".to_string(),
             }],
         },
@@ -68,7 +68,7 @@ fn test_agent_json_serialization_roundtrip() {
 fn test_agent_list_json_serialization_roundtrip() {
     let list = AgentListJson {
         generated_at: "2026-08-05T14:02:11+08:00".to_string(),
-        agents: vec![],
+        agents: vec![], sources: Default::default(),
     };
     let json_str = serde_json::to_string(&list).unwrap();
     let deserialized: AgentListJson = serde_json::from_str(&json_str).unwrap();

@@ -130,10 +130,9 @@ pub(super) fn render_models_line(
             None => "unknown".to_string(),
         };
         lines.push_str(&format!(
-            "    {:<15} ({}, cap:{:.1}, {})  {}{}\n",
+            "    {:<15} ({}, {})  {}{}\n",
             model.model,
             model.tier,
-            model.capability,
             price,
             model.description,
             history_suffix

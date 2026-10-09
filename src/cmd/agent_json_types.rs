@@ -9,6 +9,7 @@ use std::collections::HashMap;
 pub struct AgentListJson {
     pub generated_at: String,
     pub agents: Vec<AgentJson>,
+    pub sources: std::collections::BTreeMap<String, crate::scores::Source>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -79,6 +80,7 @@ pub struct AvailableModelJson {
     pub input_per_m: Option<f64>,
     pub output_per_m: Option<f64>,
     pub capability: Option<f64>,
+    pub capability_evidence: crate::scores::Evidence,
     /// False when aid has no measured capability for this model.
     pub rated: bool,
     /// `"catalog"` | `"served"` (CLI reports it, no catalog row) | `"pricing_override"`.

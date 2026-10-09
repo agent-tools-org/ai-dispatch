@@ -107,8 +107,9 @@ fn automatic_excludes_missing_disabled_auth_failed_below_floor_and_exhausted() {
         AgentKind::Qwen,
         AgentKind::Grok,
     ]);
+    crate::scores::test_support::seed_live();
     // Keep a below-floor route with model evidence instead of the removed CLI score.
-    crate::agent_config::save_agent_default_model("qwen", Some("coder-model")).expect("model");
+    crate::agent_config::save_agent_default_model("qwen", Some("openai/gpt-4o-mini")).expect("model");
     crate::agent_config::save_agent_disabled("grok", true).expect("disable");
     crate::auth_marker::record_failure_at(AgentKind::Droid, "Not signed in.", chrono::Local::now());
     let args = RunArgs {

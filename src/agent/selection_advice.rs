@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::agent::classifier::{self, Complexity, TaskCategory, TaskProfile};
+use crate::agent::classifier::{TaskCategory, TaskProfile};
 use super::selection_quota::{self, CandidateQuota};
 use super::selection_scoring::{
     Candidate, CandidateContext, ScoreBreakdown, compare_candidates, cost_efficiency,
@@ -19,7 +19,7 @@ use crate::agent_config;
 use crate::auth_marker::AuthStatus;
 use crate::store::Store;
 use crate::team::TeamConfig;
-use crate::types::{AgentKind, DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskUrgency};
+use crate::types::{AgentKind, DeclaredTaskProfile, TaskBudget, TaskUrgency};
 
 #[path = "selection_advice_custom.rs"]
 mod custom;
@@ -27,6 +27,9 @@ mod custom;
 mod gate;
 #[path = "selection_advice_recommend.rs"]
 mod recommend;
+#[path = "selection_advice_profile.rs"]
+mod profile;
+use profile::{inferred_advice, complexity_for};
 pub(crate) use gate::{CallerAdvice, caller_advice};
 use gate::{Exclusions, PoolVerdict};
 
@@ -41,6 +44,7 @@ pub(crate) struct AdviceReport {
     pub candidates: Vec<AdviceCandidate>,
     pub custom_candidates: Vec<CustomAdviceCandidate>,
     pub notes: Vec<String>,
+    pub sources: std::collections::BTreeMap<String, crate::scores::Source>,
     /// The calling session's provider pool, when detected.
     #[serde(default)]
     pub caller: Option<CallerAdvice>,
@@ -78,6 +82,7 @@ pub(crate) struct AdviceCandidate {
     pub pinned: bool,
     pub source: RunModelSource,
     pub breakdown: ScoreBreakdown,
+    pub capability_evidence: crate::scores::Evidence,
     pub exclusion_reason: Option<String>,
     /// Stable codes for `exclusion_reason`, one per reason.
     #[serde(default)]
@@ -101,6 +106,7 @@ pub(crate) struct CustomAdviceCandidate {
     pub eligible: bool,
     pub model: Option<String>,
     pub category_capability: i32,
+    pub capability_evidence: crate::scores::Evidence,
     pub strength_bonus: i32,
     pub team_preferred: bool,
     pub exclusion_reason: Option<String>,
@@ -159,7 +165,8 @@ pub(crate) fn advise(
         candidates.truncate(top);
         custom_candidates.truncate(top);
     }
-    AdviceReport { declared, inferred, recommended, candidates, custom_candidates, notes, caller }
+    AdviceReport { declared, inferred, recommended, candidates, custom_candidates, notes, caller,
+        sources: crate::scores::sources() }
 }
 
 /// Eligible first, then eligible-but-demoted (caller's pool), then the rest.
@@ -176,23 +183,6 @@ fn ranking_score(candidate: &RankedCandidate) -> f64 {
     if !candidate.report.installed { score -= NOT_INSTALLED_PENALTY; }
     if !candidate.report.eligible { score -= ELIGIBILITY_PENALTY; }
     score
-}
-
-fn inferred_advice(prompt: &str, kind_override: Option<TaskCategory>) -> InferredAdvice {
-    let normalized = prompt.trim().to_lowercase();
-    let chars = prompt.chars().count();
-    let file_mentions = classifier::count_file_mentions(&normalized);
-    let kind = kind_override
-        .unwrap_or_else(|| classifier::classify(prompt, file_mentions, chars).category);
-    InferredAdvice { kind, file_mentions, chars }
-}
-
-fn complexity_for(difficulty: TaskDifficulty) -> Complexity {
-    match difficulty {
-        TaskDifficulty::Trivial | TaskDifficulty::Simple => Complexity::Low,
-        TaskDifficulty::Moderate => Complexity::Medium,
-        TaskDifficulty::Complex => Complexity::High,
-    }
 }
 
 type HistoryMaps = (
@@ -253,7 +243,7 @@ fn builtin_candidate(
         let at = auth.observed_at.as_deref().unwrap_or("unknown time");
         exclusions.push("auth_failed", format!("auth failed (observed {at})"));
     }
-    let capability = model.as_deref().and_then(|name| model_capability_score(kind, name));
+    let capability = model.as_deref().and_then(|name| model_capability_score(kind, name, context.profile.category));
     let verdict = gate::pool_verdict(caller, kind, capability);
     if verdict == PoolVerdict::Weaker {
         exclusions.push("weaker_on_caller_pool", gate::WEAKER_ON_CALLER_POOL.to_string());
@@ -272,6 +262,7 @@ fn builtin_candidate(
     let report = AdviceCandidate {
         agent: kind.as_str().to_string(), installed: blocker.is_none(), eligible,
         quota: selection_quota::candidate_quota(kind, None, model.as_deref()),
+        capability_evidence: crate::scores::evidence(kind, model.as_deref(), context.profile.category),
         score: breakdown.total, model, pinned, source, breakdown, exclusion_reason, exclusion_codes,
         demotion_reason, auth,
         unrated_served_models,

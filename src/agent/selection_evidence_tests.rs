@@ -6,6 +6,7 @@ use super::super::super::selection_scoring::{
     CandidateContext, NEUTRAL_BASE, model_capability_score, score_breakdown,
 };
 use super::*;
+use crate::agent::classifier::Complexity;
 use tempfile::TempDir;
 
 fn testing_advice(difficulty: TaskDifficulty, team: Option<&TeamConfig>) -> AdviceReport {
@@ -44,7 +45,10 @@ fn matrix_removal_unknown_agy_testing_is_eligible_and_unrated() {
 fn matrix_removal_rated_codex_below_floor_is_excluded() {
     let (_temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
-    crate::agent_config::save_agent_default_model("codex", Some("gpt-5.4-mini")).expect("model");
+    crate::scores::test_support::seed_live();
+    // The captured gpt-4o-mini ECI is the snapshot minimum (126.56 -> 0.0).
+    // An evidenced shortfall (base 0 < floor 8 for complex) excludes codex.
+    crate::agent_config::save_agent_default_model("codex", Some("openai/gpt-4o-mini")).expect("model");
     let report = advise(
         "refactor",
         declared(TaskDifficulty::Complex, TaskBudget::Standard),
@@ -59,16 +63,18 @@ fn matrix_removal_rated_codex_below_floor_is_excluded() {
     assert_eq!(codex.exclusion_codes, vec!["below_floor"]);
     assert_eq!(
         codex.exclusion_reason.as_deref(),
-        Some("base 7 < floor 8 for complex")
+        Some("base 0 < floor 8 for complex")
     );
-    assert_eq!(codex.breakdown.base, 7.0);
+    assert_eq!(codex.breakdown.base, 0.0);
 }
 
 #[test]
 fn matrix_removal_team_override_wins_over_rated_model() {
     let (_temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
-    crate::agent_config::save_agent_default_model("codex", Some("gpt-5.4-mini")).expect("model");
+    crate::scores::test_support::seed_live();
+    // Opus has measured model-level ECI; the team override takes precedence.
+    crate::agent_config::save_agent_default_model("codex", Some("opus")).expect("model");
     for (score, eligible) in [(10, true), (4, false)] {
         let team: TeamConfig = toml::from_str(&format!(
             "id = 'override'\ndisplay_name = 'Override'\npreferred_agents = []\n\
@@ -80,7 +86,8 @@ fn matrix_removal_team_override_wins_over_rated_model() {
         assert_eq!(codex.eligible, eligible);
         assert_eq!(codex.breakdown.base, f64::from(score));
         assert_eq!(codex.breakdown.model_capability, 0.0);
-        assert_eq!(codex.score, f64::from(score) + 2.0);
+        // Team override wins over rated model capability; total equals base with no complexity bonus.
+        assert_eq!(codex.score, f64::from(score));
         assert!(!report.notes.iter().any(|note| note.starts_with("codex: unrated")));
     }
 }
@@ -164,7 +171,7 @@ fn discovered_agy_model_uses_neutral_base_when_capability_is_unknown() {
     )
     .expect("served-model cache");
 
-    let capability = model_capability_score(AgentKind::Antigravity, "gemini-3.7-flash-high");
+    let capability = model_capability_score(AgentKind::Antigravity, "gemini-3.7-flash-high", TaskCategory::SimpleEdit);
     assert_eq!(capability, None);
     let profile = TaskProfile {
         category: TaskCategory::SimpleEdit,

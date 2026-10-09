@@ -9,7 +9,7 @@ use super::model_catalog_served::{served_only_models, SERVED_PROBE_AGENTS};
 use super::{static_models_for_agent, AgentModel, AGENT_MODELS};
 use crate::types::AgentKind;
 
-/// Where a catalog row came from. Only `Catalog` rows carry a rating.
+/// Where a catalog row came from; leaderboard evidence is resolved separately.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelOrigin {
     Catalog,
@@ -44,7 +44,6 @@ pub struct ResolvedAgentModel {
     pub model: String,
     pub tier: String,
     pub description: String,
-    pub capability: Option<f64>,
     pub origin: ModelOrigin,
 }
 
@@ -55,7 +54,6 @@ impl From<&AgentModel> for ResolvedAgentModel {
             model: model.model.to_string(),
             tier: model.tier.to_string(),
             description: model.description.to_string(),
-            capability: Some(model.capability),
             origin: ModelOrigin::Catalog,
         }
     }
@@ -69,7 +67,6 @@ impl ResolvedAgentModel {
             model,
             tier,
             description,
-            capability: None,
             origin: ModelOrigin::PricingOverride,
         }
     }

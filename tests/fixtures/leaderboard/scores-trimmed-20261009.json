@@ -1,0 +1,767 @@
+{
+ "built_at": "2026-10-09T02:34:35.801Z",
+ "sources": {
+  "terminal_bench": {
+   "ok": true,
+   "count": 35,
+   "updated_at": "2026-10-06T23:20:25.572485+00:00",
+   "url": "https://tbench.ai",
+   "licence": "unverified",
+   "attribution": "Terminal-Bench 4.0 / Harbor Framework"
+  },
+  "epoch": {
+   "ok": true,
+   "count": 464,
+   "updated_at": "2026-09-29",
+   "url": "https://epoch.ai/data/benchmark_data.zip",
+   "licence": "CC BY 4.0",
+   "attribution": "Epoch AI"
+  },
+  "lmarena": {
+   "ok": true,
+   "count": 150,
+   "updated_at": "2026-10-06",
+   "url": "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset",
+   "licence": "CC BY 4.0",
+   "attribution": "LMSYS / LMArena"
+  }
+ },
+ "age_seconds": 1,
+ "stale": false,
+ "models": [
+  {
+   "id": "anthropic/claude-opus-5.5",
+   "scores": [
+    {
+     "source": "terminal_bench",
+     "board": "terminal-bench-4.0",
+     "cli": "claude",
+     "effort": "max",
+     "value": 64.85,
+     "unit": "percent",
+     "rank": 1,
+     "of": 35,
+     "ci_low": 61.74,
+     "ci_high": 67.96,
+     "date": "2026-09-22"
+    },
+    {
+     "source": "epoch",
+     "board": "eci",
+     "cli": null,
+     "effort": null,
+     "value": 167.33,
+     "unit": "index",
+     "rank": 1,
+     "of": 274,
+     "ci_low": 164.06,
+     "ci_high": 171.68,
+     "date": "2026-09-22"
+    },
+    {
+     "source": "epoch",
+     "board": "cursorbench",
+     "cli": "cursor",
+     "effort": "max",
+     "value": 0.578,
+     "unit": "rate",
+     "rank": 1,
+     "of": 66,
+     "date": "2026-09-22"
+    },
+    {
+     "source": "epoch",
+     "board": "cursorbench",
+     "cli": "cursor",
+     "effort": "extra high",
+     "value": 0.56,
+     "unit": "rate",
+     "rank": 2,
+     "of": 66,
+     "date": "2026-09-22"
+    },
+    {
+     "source": "epoch",
+     "board": "cursorbench",
+     "cli": "cursor",
+     "effort": "high",
+     "value": 0.56,
+     "unit": "rate",
+     "rank": 3,
+     "of": 66,
+     "date": "2026-09-22"
+    },
+    {
+     "source": "epoch",
+     "board": "cursorbench",
+     "cli": "cursor",
+     "effort": "medium",
+     "value": 0.525,
+     "unit": "rate",
+     "rank": 6,
+     "of": 66,
+     "date": "2026-09-22"
+    },
+    {
+     "source": "epoch",
+     "board": "cursorbench",
+     "cli": "cursor",
+     "effort": "low",
+     "value": 0.43700000000000006,
+     "unit": "rate",
+     "rank": 18,
+     "of": 66,
+     "date": "2026-09-22"
+    },
+    {
+     "source": "lmarena",
+     "board": "webdev",
+     "cli": null,
+     "effort": "max",
+     "value": 1813.6003351106383,
+     "unit": "elo",
+     "rank": 1,
+     "of": 595,
+     "ci_low": 1798.078141177708,
+     "ci_high": 1829.1225290435686,
+     "date": "2026-10-06"
+    },
+    {
+     "source": "lmarena",
+     "board": "agent",
+     "cli": null,
+     "effort": "high",
+     "value": 0.13817012143011934,
+     "unit": "ips",
+     "rank": 2,
+     "of": 50,
+     "ci_low": 0.11645483256257871,
+     "ci_high": 0.15988541029765996,
+     "date": "2026-10-02"
+    }
+   ]
+  },
+  {
+   "id": "anthropic/claude-sonnet-5.5",
+   "scores": [
+    {
+     "source": "terminal_bench",
+     "board": "terminal-bench-4.0",
+     "cli": "claude",
+     "effort": "max",
+     "value": 61.82,
+     "unit": "percent",
+     "rank": 2,
+     "of": 35,
+     "ci_low": 58.88,
+     "ci_high": 64.76,
+     "date": "2026-09-28"
+    },
+    {
+     "source": "epoch",
+     "board": "eci",
+     "cli": null,
+     "effort": null,
+     "value": 165.03,
+     "unit": "index",
+     "rank": 4,
+     "of": 274,
+     "ci_low": 161.68,
+     "ci_high": 169.06,
+     "date": "2026-09-28"
+    },
+    {
+     "source": "epoch",
+     "board": "cursorbench",
+     "cli": "cursor",
+     "effort": "max",
+     "value": 0.555,
+     "unit": "rate",
+     "rank": 4,
+     "of": 66,
+     "date": "2026-09-28"
+    },
+    {
+     "source": "epoch",
+     "board": "cursorbench",
+     "cli": "cursor",
+     "effort": "extra high",
+     "value": 0.531,
+     "unit": "rate",
+     "rank": 5,
+     "of": 66,
+     "date": "2026-09-28"
+    },
+    {
+     "source": "epoch",
+     "board": "cursorbench",
+     "cli": "cursor",
+     "effort": "high",
+     "value": 0.478,
+     "unit": "rate",
+     "rank": 10,
+     "of": 66,
+     "date": "2026-09-28"
+    },
+    {
+     "source": "epoch",
+     "board": "cursorbench",
+     "cli": "cursor",
+     "effort": "medium",
+     "value": 0.392,
+     "unit": "rate",
+     "rank": 29,
+     "of": 66,
+     "date": "2026-09-28"
+    },
+    {
+     "source": "epoch",
+     "board": "cursorbench",
+     "cli": "cursor",
+     "effort": "low",
+     "value": 0.358,
+     "unit": "rate",
+     "rank": 37,
+     "of": 66,
+     "date": "2026-09-28"
+    },
+    {
+     "source": "lmarena",
+     "board": "webdev",
+     "cli": null,
+     "effort": "xhigh",
+     "value": 1772.7521327760383,
+     "unit": "elo",
+     "rank": 3,
+     "of": 595,
+     "ci_low": 1757.3240426950283,
+     "ci_high": 1788.1802228570486,
+     "date": "2026-10-06"
+    },
+    {
+     "source": "lmarena",
+     "board": "webdev",
+     "cli": null,
+     "effort": "high",
+     "value": 1716.018700416681,
+     "unit": "elo",
+     "rank": 6,
+     "of": 595,
+     "ci_low": 1704.827834667998,
+     "ci_high": 1727.2095661653639,
+     "date": "2026-10-06"
+    },
+    {
+     "source": "lmarena",
+     "board": "agent",
+     "cli": null,
+     "effort": "max",
+     "value": 0.12520807893993158,
+     "unit": "ips",
+     "rank": 3,
+     "of": 50,
+     "ci_low": 0.09428887464329698,
+     "ci_high": 0.15612728323656616,
+     "date": "2026-10-02"
+    }
+   ]
+  },
+  {
+   "id": "openai/gpt-5.6-sol",
+   "scores": [
+    {
+     "source": "terminal_bench",
+     "board": "terminal-bench-4.0",
+     "cli": "codex",
+     "effort": "max",
+     "value": 37.27,
+     "unit": "percent",
+     "rank": 22,
+     "of": 35,
+     "ci_low": 33.49,
+     "ci_high": 41.05,
+     "date": "2026-06-26"
+    },
+    {
+     "source": "epoch",
+     "board": "eci",
+     "cli": null,
+     "effort": null,
+     "value": 161.66,
+     "unit": "index",
+     "rank": 10,
+     "of": 274,
+     "ci_low": 159.27,
+     "ci_high": 165.1,
+     "date": "2026-07-09"
+    },
+    {
+     "source": "epoch",
+     "board": "deepswe",
+     "cli": "mini-swe-agent",
+     "effort": "max",
+     "value": 0.7266666666666667,
+     "unit": "rate",
+     "rank": 1,
+     "of": 81,
+     "ci_low": 0.6984,
+     "ci_high": 0.755,
+     "date": "2026-07-09"
+    },
+    {
+     "source": "epoch",
+     "board": "deepswe",
+     "cli": "mini-swe-agent",
+     "effort": "xhigh",
+     "value": 0.7073170731707318,
+     "unit": "rate",
+     "rank": 2,
+     "of": 81,
+     "ci_low": 0.6991,
+     "ci_high": 0.7155,
+     "date": "2026-07-09"
+    },
+    {
+     "source": "epoch",
+     "board": "deepswe",
+     "cli": "mini-swe-agent",
+     "effort": "high",
+     "value": 0.6940133037694013,
+     "unit": "rate",
+     "rank": 6,
+     "of": 81,
+     "ci_low": 0.6797,
+     "ci_high": 0.7083,
+     "date": "2026-07-09"
+    },
+    {
+     "source": "epoch",
+     "board": "deepswe",
+     "cli": "mini-swe-agent",
+     "effort": "medium",
+     "value": 0.6106194690265486,
+     "unit": "rate",
+     "rank": 11,
+     "of": 81,
+     "ci_low": 0.5948,
+     "ci_high": 0.6265,
+     "date": "2026-07-09"
+    },
+    {
+     "source": "epoch",
+     "board": "deepswe",
+     "cli": "mini-swe-agent",
+     "effort": "low",
+     "value": 0.45353982300884954,
+     "unit": "rate",
+     "rank": 25,
+     "of": 81,
+     "ci_low": 0.4297,
+     "ci_high": 0.4774,
+     "date": "2026-07-09"
+    },
+    {
+     "source": "epoch",
+     "board": "cursorbench",
+     "cli": "cursor",
+     "effort": "max",
+     "value": 0.41700000000000004,
+     "unit": "rate",
+     "rank": 12,
+     "of": 66,
+     "date": "2026-07-09"
+    },
+    {
+     "source": "epoch",
+     "board": "cursorbench",
+     "cli": "cursor",
+     "effort": "extra high",
+     "value": 0.37700000000000006,
+     "unit": "rate",
+     "rank": 20,
+     "of": 66,
+     "date": "2026-07-09"
+    },
+    {
+     "source": "epoch",
+     "board": "cursorbench",
+     "cli": "cursor",
+     "effort": "high",
+     "value": 0.35700000000000004,
+     "unit": "rate",
+     "rank": 25,
+     "of": 66,
+     "date": "2026-07-09"
+    },
+    {
+     "source": "epoch",
+     "board": "cursorbench",
+     "cli": "cursor",
+     "effort": "medium",
+     "value": 0.311,
+     "unit": "rate",
+     "rank": 34,
+     "of": 66,
+     "date": "2026-07-09"
+    },
+    {
+     "source": "epoch",
+     "board": "cursorbench",
+     "cli": "cursor",
+     "effort": "low",
+     "value": 0.24600000000000002,
+     "unit": "rate",
+     "rank": 43,
+     "of": 66,
+     "date": "2026-07-09"
+    },
+    {
+     "source": "lmarena",
+     "board": "agent",
+     "cli": null,
+     "effort": "xhigh",
+     "value": 0.06450039456435545,
+     "unit": "ips",
+     "rank": 12,
+     "of": 50,
+     "ci_low": 0.051676213416725576,
+     "ci_high": 0.07732457571198534,
+     "date": "2026-10-02"
+    }
+   ]
+  },
+  {
+   "id": "openai/gpt-5.3-codex",
+   "scores": [
+    {
+     "source": "epoch",
+     "board": "eci",
+     "cli": null,
+     "effort": null,
+     "value": 156.77,
+     "unit": "index",
+     "rank": 18,
+     "of": 274,
+     "ci_low": 152.76,
+     "ci_high": 160.7,
+     "date": "2026-02-05"
+    },
+    {
+     "source": "epoch",
+     "board": "swe-bench-verified",
+     "cli": null,
+     "effort": "high",
+     "value": 0.7479338842975206,
+     "unit": "rate",
+     "rank": 12,
+     "of": 43,
+     "ci_low": 0.7092,
+     "ci_high": 0.7867,
+     "date": "2026-02-05"
+    }
+   ]
+  },
+  {
+   "id": "google/gemini-3.1-pro-preview",
+   "scores": [
+    {
+     "source": "epoch",
+     "board": "deepswe",
+     "cli": "mini-swe-agent",
+     "effort": "high",
+     "value": 0.1172566371681416,
+     "unit": "rate",
+     "rank": 35,
+     "of": 81,
+     "ci_low": 0.1024,
+     "ci_high": 0.1321,
+     "date": "2026-02-19"
+    },
+    {
+     "source": "lmarena",
+     "board": "webdev",
+     "cli": null,
+     "effort": null,
+     "value": 1446.5703748835622,
+     "unit": "elo",
+     "rank": 68,
+     "of": 595,
+     "ci_low": 1441.5221026518914,
+     "ci_high": 1451.6186471152332,
+     "date": "2026-10-06"
+    },
+    {
+     "source": "lmarena",
+     "board": "agent",
+     "cli": null,
+     "effort": null,
+     "value": -0.07711672238819436,
+     "unit": "ips",
+     "rank": 46,
+     "of": 50,
+     "ci_low": -0.08690533911564136,
+     "ci_high": -0.06732810566074737,
+     "date": "2026-10-02"
+    }
+   ]
+  },
+  {
+   "id": "google/gemini-3.7-flash",
+   "scores": [
+    {
+     "source": "terminal_bench",
+     "board": "terminal-bench-4.0",
+     "cli": "mini-swe-agent",
+     "effort": "high",
+     "value": 11.21,
+     "unit": "percent",
+     "rank": 35,
+     "of": 35,
+     "ci_low": 8.76,
+     "ci_high": 13.66,
+     "date": "2026-08-13"
+    },
+    {
+     "source": "epoch",
+     "board": "eci",
+     "cli": null,
+     "effort": null,
+     "value": 157.27,
+     "unit": "index",
+     "rank": 16,
+     "of": 274,
+     "ci_low": 155.37,
+     "ci_high": 159.87,
+     "date": "2026-08-13"
+    },
+    {
+     "source": "epoch",
+     "board": "deepswe",
+     "cli": "mini-swe-agent",
+     "effort": "medium",
+     "value": 0.6548672566371682,
+     "unit": "rate",
+     "rank": 58,
+     "of": 81,
+     "ci_low": 0.624,
+     "ci_high": 0.6857,
+     "date": "2026-08-13"
+    },
+    {
+     "source": "epoch",
+     "board": "deepswe",
+     "cli": "mini-swe-agent",
+     "effort": "high",
+     "value": 0.6526548672566371,
+     "unit": "rate",
+     "rank": 59,
+     "of": 81,
+     "ci_low": 0.6348,
+     "ci_high": 0.6705,
+     "date": "2026-08-13"
+    },
+    {
+     "source": "epoch",
+     "board": "deepswe",
+     "cli": "mini-swe-agent",
+     "effort": "low",
+     "value": 0.5376106194690266,
+     "unit": "rate",
+     "rank": 60,
+     "of": 81,
+     "ci_low": 0.5117,
+     "ci_high": 0.5635,
+     "date": "2026-08-13"
+    },
+    {
+     "source": "lmarena",
+     "board": "webdev",
+     "cli": null,
+     "effort": "high",
+     "value": 1591.9489097821838,
+     "unit": "elo",
+     "rank": 29,
+     "of": 595,
+     "ci_low": 1584.7201627192326,
+     "ci_high": 1599.177656845135,
+     "date": "2026-10-06"
+    },
+    {
+     "source": "lmarena",
+     "board": "agent",
+     "cli": null,
+     "effort": "high",
+     "value": -0.014851314462290235,
+     "unit": "ips",
+     "rank": 36,
+     "of": 50,
+     "ci_low": -0.022204972726663337,
+     "ci_high": -0.007497656197917133,
+     "date": "2026-10-02"
+    }
+   ]
+  },
+  {
+   "id": "x-ai/grok-4.5",
+   "scores": [
+    {
+     "source": "terminal_bench",
+     "board": "terminal-bench-4.0",
+     "cli": "grok",
+     "effort": "high",
+     "value": 12.42,
+     "unit": "percent",
+     "rank": 33,
+     "of": 35,
+     "ci_low": 9.8,
+     "ci_high": 15.04,
+     "date": "2026-07-16"
+    },
+    {
+     "source": "epoch",
+     "board": "eci",
+     "cli": null,
+     "effort": null,
+     "value": 153.92,
+     "unit": "index",
+     "rank": 39,
+     "of": 274,
+     "ci_low": 152.21,
+     "ci_high": 155.63,
+     "date": "2026-07-08"
+    },
+    {
+     "source": "epoch",
+     "board": "deepswe",
+     "cli": "mini-swe-agent",
+     "effort": "high",
+     "value": 0.5376106194690266,
+     "unit": "rate",
+     "rank": 47,
+     "of": 81,
+     "ci_low": 0.5148,
+     "ci_high": 0.5604,
+     "date": "2026-07-08"
+    },
+    {
+     "source": "lmarena",
+     "board": "webdev",
+     "cli": null,
+     "effort": null,
+     "value": 1552.8532294847132,
+     "unit": "elo",
+     "rank": 38,
+     "of": 595,
+     "ci_low": 1546.166077875871,
+     "ci_high": 1559.5403810935554,
+     "date": "2026-10-06"
+    },
+    {
+     "source": "lmarena",
+     "board": "agent",
+     "cli": null,
+     "effort": null,
+     "value": 0.01208390746446243,
+     "unit": "ips",
+     "rank": 26,
+     "of": 50,
+     "ci_low": 0.0019617931260805486,
+     "ci_high": 0.02220602180284431,
+     "date": "2026-10-02"
+    }
+   ]
+  },
+  {
+   "id": "openai/gpt-4o-mini",
+   "scores": [
+    {
+     "source": "epoch",
+     "board": "eci",
+     "cli": null,
+     "effort": null,
+     "value": 126.56,
+     "unit": "index",
+     "rank": 178,
+     "of": 274,
+     "ci_low": 119.1,
+     "ci_high": 128.7,
+     "date": "2024-07-18"
+    }
+   ]
+  },
+  {
+   "id": "openai/gpt-6-sol",
+   "scores": [
+    {
+     "source": "terminal_bench",
+     "board": "terminal-bench-4.0",
+     "cli": "codex",
+     "effort": "max",
+     "value": 49.39,
+     "unit": "percent",
+     "rank": 16,
+     "of": 35,
+     "ci_low": 46.16,
+     "ci_high": 52.62,
+     "date": "2026-09-22"
+    },
+    {
+     "source": "epoch",
+     "board": "eci",
+     "cli": null,
+     "effort": null,
+     "value": 162.72,
+     "unit": "index",
+     "rank": 7,
+     "of": 274,
+     "ci_low": 160.07,
+     "ci_high": 166.57,
+     "date": "2026-09-22"
+    },
+    {
+     "source": "lmarena",
+     "board": "webdev",
+     "cli": null,
+     "effort": "max",
+     "value": 1687.4891811929338,
+     "unit": "elo",
+     "rank": 8,
+     "of": 595,
+     "ci_low": 1675.5252804038541,
+     "ci_high": 1699.4530819820134,
+     "date": "2026-10-06"
+    },
+    {
+     "source": "lmarena",
+     "board": "agent",
+     "cli": null,
+     "effort": "max",
+     "value": 0.09711069971200803,
+     "unit": "ips",
+     "rank": 6,
+     "of": 50,
+     "ci_low": 0.07344719892801793,
+     "ci_high": 0.12077420049599813,
+     "date": "2026-10-02"
+    }
+   ]
+  }
+ ],
+ "unmapped": [
+  {
+   "source": "epoch",
+   "label": ",0.02122974956319103,https://logs.epoch.ai/inspect-viewer/36231d6d/viewer.html?log_file=https%3A%2F%2Flogs.epoch.ai%2Finspect_ai_logs%2FYoHtZpMNdsRE6qdj2K4Ucj.eval,https://epoch-benchmarks-staging-public.s3.us-east-2.amazonaws.com/inspect_ai",
+   "reason": "no_price_id"
+  },
+  {
+   "source": "epoch",
+   "label": ",0.021568422716496703,https://logs.epoch.ai/inspect-viewer/36231d6d/viewer.html?log_file=https%3A%2F%2Flogs.epoch.ai%2Finspect_ai_logs%2FG5hTYKeE5buuWzwRQK7EgS.eval,https://epoch-benchmarks-staging-public.s3.us-east-2.amazonaws.com/inspect_ai",
+   "reason": "no_price_id"
+  },
+  {
+   "source": "epoch",
+   "label": "30e12 tokens * 32B parameters * 6 = 5.76e24 FLOP",
+   "reason": "unknown_model"
+  }
+ ]
+}

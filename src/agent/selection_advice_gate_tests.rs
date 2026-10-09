@@ -53,14 +53,15 @@ fn same_pool_is_demoted_when_caller_model_unknown() {
 }
 
 #[test]
-fn caller_advice_resolves_pool_and_catalog_capability() {
+fn caller_advice_resolves_pool_and_leaderboard_capability() {
     let home = tempfile::tempdir().expect("home");
     let _guard = crate::paths::AidHomeGuard::set(home.path());
-    let advice = caller_advice("claude-code", Some("opus")).expect("claude pool");
+    crate::scores::test_support::seed_live();
+    let advice = caller_advice("claude-code", Some("opus"), crate::agent::classifier::TaskCategory::ComplexImpl).expect("claude pool");
     assert_eq!(advice.provider, "anthropic");
     assert!(advice.capability.is_some());
-    let unknown = caller_advice("codex", Some("no-such-model")).expect("codex pool");
+    let unknown = caller_advice("codex", Some("no-such-model"), crate::agent::classifier::TaskCategory::ComplexImpl).expect("codex pool");
     assert_eq!(unknown.provider, "openai-chatgpt-plan");
     assert_eq!(unknown.capability, None);
-    assert!(caller_advice("terminal", None).is_none());
+    assert!(caller_advice("terminal", None, crate::agent::classifier::TaskCategory::ComplexImpl).is_none());
 }

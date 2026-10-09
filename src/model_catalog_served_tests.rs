@@ -43,7 +43,8 @@ fn served_only_rows_are_unrated_and_skip_catalog_rows() {
     assert_eq!(rows.len(), 1, "catalog row gpt-5.6-sol is not repeated");
     let row = &rows[0];
     assert_eq!(row.model, "gpt-6-sol");
-    assert_eq!(row.capability, None);
+    assert_eq!(crate::scores::capability_score(row.agent, &row.model,
+        crate::agent::classifier::TaskCategory::Research), None);
     assert_eq!(row.origin, ModelOrigin::Served);
 }
 
@@ -94,4 +95,15 @@ fn agents_outside_probe_list_use_the_default_served_models() {
             "{kind:?} probes served models; add it to SERVED_PROBE_AGENTS"
         );
     }
+}
+
+#[test]
+fn newer_served_model_with_leaderboard_evidence_is_not_labelled_unrated() {
+    let home = tempfile::tempdir().expect("home");
+    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    write_served_cache("codex", &["gpt-6-sol"]);
+    // Live capture: gpt-6-sol resolves through its bare price alias to openai/gpt-6-sol,
+    // which has Epoch ECI 162.72 and a codex Terminal-Bench 4.0 row (49.39).
+    crate::scores::test_support::seed_live();
+    assert!(unrated_served_newer_than(AgentKind::Codex, "gpt-5.6-sol").is_empty());
 }

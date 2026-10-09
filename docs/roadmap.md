@@ -1,6 +1,6 @@
 # aid Roadmap
 
-Updated 2026-10-09 after the third-party capability evidence work (unreleased).
+Updated 2026-10-09 after v10.52.1 (`cb1ee7b2`).
 This document owns execution order and acceptance gates; [CHANGELOG](../CHANGELOG.md)
 owns release history. The [takeover inventory](project-status-2026-09-22.md) records
 source evidence and verification limits. Release validation is recorded separately from historical audit results.
@@ -11,7 +11,9 @@ does not assert board closure. New slices need board IDs before implementation.
 
 ## Current baseline
 
-- The current release is **v10.51.0** (2026-10-08): quota, cost and isolation fixes from
+- The current release is **v10.52.1** (2026-10-09): third-party capability evidence
+  and detached feed refresh; see "Third-party capability evidence" below.
+- v10.51.0 (2026-10-08): quota, cost and isolation fixes from
   [the magpie comparison](investigation-magpie-absorption.md); see the section below.
   The release candidate passed the full `--bin aid` suite on the build box (2,982 passed,
   0 failed, 11 ignored), `aid_guide_e2e`/`init_e2e`, and `scripts/release.sh --dry-run`.
@@ -26,7 +28,10 @@ does not assert board closure. New slices need board IDs before implementation.
   re-run for this release.
 - Earlier baseline notes (v10.47.x custody and budget work) remain below for reconciliation.
 
-## Third-party capability evidence (unreleased)
+## Third-party capability evidence (v10.52.0, v10.52.1)
+
+Released in v10.52.0; v10.52.1 made the price and score feeds refresh in a detached
+download (a refresh thread died with short commands, and `aid advise` never refreshed).
 
 aid assigns no capability scores of its own. The per-CLI capability matrix, the
 hand-written `capability` field of catalog rows and the complexity bonus are removed.

@@ -1,6 +1,6 @@
 # aid Roadmap
 
-Updated 2026-10-08 after v10.51.0 (`7626ee86`).
+Updated 2026-10-09 after the third-party capability evidence work (unreleased).
 This document owns execution order and acceptance gates; [CHANGELOG](../CHANGELOG.md)
 owns release history. The [takeover inventory](project-status-2026-09-22.md) records
 source evidence and verification limits. Release validation is recorded separately from historical audit results.
@@ -25,6 +25,26 @@ does not assert board closure. New slices need board IDs before implementation.
   the CLI module reorganisation. Web-feature help and the live API/Swift gates were not
   re-run for this release.
 - Earlier baseline notes (v10.47.x custody and budget work) remain below for reconciliation.
+
+## Third-party capability evidence (unreleased)
+
+aid assigns no capability scores of its own. The per-CLI capability matrix, the
+hand-written `capability` field of catalog rows and the complexity bonus are removed.
+Model capability comes from third-party leaderboards served by the price relay at
+`/v1/scores.json` (Terminal-Bench 4.0, Epoch ECI and SWE-bench Verified, LMArena
+webdev/agent), keyed by the same ids as `/v1/prices.json`. One source per task category,
+never blended; a Terminal-Bench row applies only to its exact CLI and effort. A route
+with no evidence scores a neutral 6.0 and is never excluded by the capability floor.
+
+Known limits found by review:
+- Sources use different 0-10 rescales (Terminal-Bench fixed 0-100, ECI min-max over the
+  current snapshot), so the lowest-ECI model rescales to 0 and routes rated by different
+  sources are not strictly comparable.
+- `harness: measured` is reported whenever a Terminal-Bench row exists, even when the
+  task category scored from another source.
+- Effort strings must match exactly; a mismatch falls back to the model-level source.
+- A model the relay lists under two price ids (e.g. `claude-opus-5-5` and
+  `anthropic/claude-opus-5.5`) scores only under the one the scores feed uses.
 
 ## Quota, cost and isolation (v10.51.0)
 

@@ -131,8 +131,13 @@ fn agent_fork_creates_builtin_toml() {
     assert!(contents.contains("command = \"codex\""));
     assert!(contents.contains("prompt_mode = \"arg\""));
     assert!(contents.contains("[agent.capabilities]"));
-    assert!(contents.contains("research = 1"));
-    assert!(contents.contains("complex_impl = 9"));
+    // The fork carries user-declared capability keys, not the removed per-CLI matrix row
+    // (codex was research = 1, complex_impl = 9 there).
+    for key in ["research = ", "simple_edit = ", "complex_impl = ", "frontend = ",
+        "debugging = ", "testing = ", "refactoring = ", "documentation = "] {
+        assert!(contents.contains(key), "missing {key}");
+    }
+    assert!(!contents.contains("complex_impl = 9"));
 }
 
 #[test]

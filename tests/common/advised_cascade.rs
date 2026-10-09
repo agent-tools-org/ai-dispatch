@@ -68,6 +68,7 @@ impl Harness {
             h.served(model);
         }
         std::fs::write(h.home.path().join("agent_config.toml"), config).expect("agents");
+        crate::common::seed_codex_leaderboard(h.home.path());
         std::fs::create_dir(h.home.path().join("teams")).expect("teams");
         std::fs::write(h.home.path().join("teams/routes.toml"),
             "[team]\nid = 'routes'\ndisplay_name = 'Routes'\npreferred_agents = ['claude']\ndefault_agent = 'claude'\n").expect("team");

@@ -50,3 +50,16 @@ pub(crate) fn aid_cmd_with_cwd(aid_home: &Path, cwd: &Path) -> Command {
     cmd.current_dir(cwd);
     cmd
 }
+
+/// Live relay rows (2026-10-09) for gpt-5.6-sol/luna, stamped fresh so the score and
+/// price feeds never refresh from the network during a test.
+#[allow(dead_code)]
+pub fn seed_codex_leaderboard(home: &Path) {
+    let scores = include_str!("../fixtures/leaderboard/e2e-codex-scores.json");
+    let prices = include_str!("../fixtures/leaderboard/e2e-codex-prices.json");
+    for (file, body) in [("scores.json", scores), ("prices.json", prices)] {
+        let mut feed: serde_json::Value = serde_json::from_str(body).expect("leaderboard fixture");
+        feed["built_at"] = serde_json::Value::String(chrono::Utc::now().to_rfc3339());
+        std::fs::write(home.join(file), feed.to_string()).expect("leaderboard cache");
+    }
+}

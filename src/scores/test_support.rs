@@ -1,9 +1,10 @@
-// Shared hermetic leaderboard setup using the unmodified captured relay sample.
-// Exports: sample, seed, add_terminal; tests only.
-// Deps: typed score feed and the existing price-feed test seam.
+// Hermetic leaderboard setup from captured relay output only; tests only.
+// Exports: sample, seed, seed_feed, live, live_prices, seed_live.
+// Deps: typed score feed and the existing price-feed test seam. No hand-written ids or scores.
 
-use super::feed::{Feed, Score};
+use super::feed::Feed;
 
+/// The relay sample captured 2026-10-08 (pre id-namespace unification).
 pub(crate) fn sample() -> Feed {
     serde_json::from_str(include_str!("../../tests/fixtures/scores-sample.json")).expect("sample")
 }
@@ -14,14 +15,9 @@ pub(crate) fn seed() -> Feed {
     feed
 }
 
+/// Writes `feed` as the scores cache and a price feed holding exactly its ids.
 pub(crate) fn seed_feed(feed: &Feed) {
-    crate::paths::ensure_dirs().expect("dirs");
-    std::fs::write(
-        crate::paths::aid_dir().join("scores.json"),
-        serde_json::to_vec(feed).expect("scores JSON"),
-    )
-    .expect("scores");
-    crate::cost::clear_feed_for_tests();
+    write_scores(feed);
     let prices = crate::cost::price_feed::Feed {
         built_at: feed.built_at.clone(),
         age_seconds: Some(0),
@@ -44,54 +40,34 @@ pub(crate) fn seed_feed(feed: &Feed) {
     crate::cost::set_feed_for_tests(prices);
 }
 
-pub(crate) fn add_terminal(feed: &mut Feed, cli: &str, effort: Option<&str>) {
-    feed.models[2].scores.push(Score {
-        source: "terminal_bench".into(),
-        board: "terminal-bench-4.0".into(),
-        cli: Some(cli.into()),
-        effort: effort.map(str::to_string),
-        value: 72.0,
-        unit: "percent".into(),
-        rank: Some(4),
-        of: Some(35),
-        ci_low: Some(70.0),
-        ci_high: Some(74.0),
-        date: "2026-10-06".into(),
-    });
+/// Rows of the live /v1/scores.json captured 2026-10-09 02:34Z, trimmed to eight
+/// models; ids and values are unchanged from the capture.
+pub(crate) fn live() -> Feed {
+    serde_json::from_str(include_str!("../../tests/fixtures/leaderboard/scores-trimmed-20261009.json"))
+        .expect("live scores")
 }
 
-pub(crate) fn seed_catalog_aliases() {
-    let feed = seed();
-    let mut prices = crate::cost::price_feed::Feed {
-        built_at: feed.built_at,
-        age_seconds: Some(0),
-        stale: Some(false),
-        count: None,
-        models: vec![],
-    };
-    for (id, aliases) in [
-        (
-            "302ai/kimi-k2-thinking",
-            vec![
-                "opus",
-                "gpt-5.6-sol",
-                "gpt-5.3-codex",
-                "pro",
-                "gemini-3.1-pro-high",
-            ],
-        ),
-        ("302ai/qwen3-30b-a3b", vec!["sonnet", "coder-model"]),
-        ("abacus/claude-opus-4-1-20250805", vec!["composer-2.5"]),
-    ] {
-        prices.models.push(crate::cost::price_feed::FeedModel {
-            id: id.into(),
-            aliases: aliases.into_iter().map(str::to_string).collect(),
-            input_per_mtok: 1.0,
-            output_per_mtok: 1.0,
-            cached_input_per_mtok: None,
-            context_length: None,
-            source: None,
-        });
-    }
-    crate::cost::set_feed_for_tests(prices);
+/// The matching rows of the live /v1/prices.json, with their real aliases.
+pub(crate) fn live_prices() -> crate::cost::price_feed::Feed {
+    serde_json::from_str(include_str!("../../tests/fixtures/leaderboard/prices-trimmed-20261009.json"))
+        .expect("live prices")
+}
+
+/// Seeds both caches from the live captures, so model names resolve through the
+/// real price-feed aliases (e.g. `opus` -> anthropic/claude-opus-5.5).
+pub(crate) fn seed_live() -> Feed {
+    let feed = live();
+    write_scores(&feed);
+    crate::cost::set_feed_for_tests(live_prices());
+    feed
+}
+
+fn write_scores(feed: &Feed) {
+    crate::paths::ensure_dirs().expect("dirs");
+    std::fs::write(
+        crate::paths::aid_dir().join("scores.json"),
+        serde_json::to_vec(feed).expect("scores JSON"),
+    )
+    .expect("scores");
+    crate::cost::clear_feed_for_tests();
 }

@@ -32,6 +32,9 @@ struct Fixture {
     baseline: Vec<String>,
     head: Vec<u8>,
     capture: PathBuf,
+    // The upload runs off the test thread, where the thread-local AidHomeGuard does not
+    // apply, so tests sharing the fallback config must not run concurrently.
+    _serial: std::sync::MutexGuard<'static, ()>,
     log: PathBuf,
 }
 
@@ -116,6 +119,8 @@ impl Fixture {
             .unwrap()
             .unwrap();
         let head = git_output(&wt, &["rev-parse", "HEAD"]);
+        static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let serial = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let capture = home.join("capture");
         fs::create_dir(&capture).unwrap();
         let log = fake_gws(home, &capture, fail_upload);
@@ -129,6 +134,7 @@ impl Fixture {
             head,
             capture,
             log,
+            _serial: serial,
         }
     }
 

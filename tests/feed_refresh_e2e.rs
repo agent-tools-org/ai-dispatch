@@ -85,15 +85,19 @@ fn completions(home: &Path) -> mpsc::Receiver<String> {
 }
 
 fn board(home: &Path) {
+    aid(home, &["board", "--json"]);
+}
+
+fn aid(home: &Path, args: &[&str]) {
     let mut paths = vec![home.join("bin")];
     paths.extend(std::env::split_paths(
         &std::env::var_os("PATH").expect("PATH"),
     ));
     let output = common::aid_cmd_in(home)
         .env("PATH", std::env::join_paths(paths).expect("PATH"))
-        .args(["board", "--json"])
+        .args(args)
         .output()
-        .expect("board");
+        .expect("aid");
     assert!(
         output.status.success(),
         "{}",
@@ -143,5 +147,24 @@ fn short_command_refreshes_both_feeds_after_parent_exit() {
             unsafe { libc::getsid(0) },
             "download must own its session"
         );
+    }
+}
+
+#[test]
+fn advise_alone_refreshes_both_feeds() {
+    let home = tempfile::tempdir().expect("home");
+    setup(home.path());
+    let done = completions(home.path());
+    let advise = ["advise", "refactor the scheduler", "--json", "--difficulty", "moderate",
+        "--budget", "standard", "--urgency", "normal", "--rigor", "standard"];
+    aid(home.path(), &advise);
+    for _ in 0..2 {
+        done.recv_timeout(std::time::Duration::from_secs(15)).expect("fake curl finished");
+    }
+    aid(home.path(), &advise);
+    for file in ["scores.json", "prices.json"] {
+        let bytes = fs::read(home.path().join(file))
+            .unwrap_or_else(|error| panic!("{file} missing after advise refresh: {error}"));
+        assert_eq!(bytes, fs::read(home.path().join("fixtures").join(file)).expect("fixture"));
     }
 }

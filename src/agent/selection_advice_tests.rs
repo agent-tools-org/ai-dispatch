@@ -173,7 +173,9 @@ fn advised_model_group_hold_switches_route_but_other_group_does_not() {
     let (temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Droid, AgentKind::Codex]);
     crate::agent_config::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
-    crate::agent_config::save_agent_default_model("codex", Some("gpt-6-sol")).expect("model");
+    // Live capture: droid's gpt-5.3-codex has Epoch ECI 156.77 (about 7.4 after rescale);
+    // gpt-5.6-terra is absent from the trimmed capture, so codex is unrated (neutral 6.0).
+    crate::agent_config::save_agent_default_model("codex", Some("gpt-5.6-terra")).expect("model");
     crate::scores::test_support::seed_live();
     let baseline = run(None).recommended.expect("recommendation");
     assert_eq!((&*baseline.agent, baseline.model.as_deref()), ("droid", Some("gpt-5.3-codex")));
@@ -191,7 +193,7 @@ fn advised_model_group_hold_switches_route_but_other_group_does_not() {
     assert!(find(&held, "droid").eligible);
     assert!(!find(&held, "droid").launchable(None));
     let recommended = held.recommended.expect("recommendation");
-    assert_eq!((&*recommended.agent, recommended.model.as_deref()), ("codex", Some("gpt-6-sol")));
+    assert_eq!((&*recommended.agent, recommended.model.as_deref()), ("codex", Some("gpt-5.6-terra")));
 }
 
 #[path = "selection_advice_launch_tests.rs"]

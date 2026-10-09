@@ -32,8 +32,8 @@ struct Fixture {
     baseline: Vec<String>,
     head: Vec<u8>,
     capture: PathBuf,
-    // The upload runs off the test thread, where the thread-local AidHomeGuard does not
-    // apply, so tests sharing the fallback config must not run concurrently.
+    // Every fixture uses task id t-read-only-backup in one process, so their backup
+    // staging dirs (temp_dir/aid-backup-{task}-{pid}) collide; fixtures run one at a time.
     _serial: std::sync::MutexGuard<'static, ()>,
     log: PathBuf,
 }

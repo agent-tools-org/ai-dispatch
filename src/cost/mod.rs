@@ -11,7 +11,9 @@ use crate::model_catalog;
 use crate::store::Store;
 use crate::types::AgentKind;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
+#[cfg(not(test))]
+use std::sync::Mutex;
 
 /// Price per 1M tokens (input, output) in USD
 #[derive(Clone, Copy)]

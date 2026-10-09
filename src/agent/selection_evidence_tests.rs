@@ -6,6 +6,7 @@ use super::super::super::selection_scoring::{
     CandidateContext, NEUTRAL_BASE, model_capability_score, score_breakdown,
 };
 use super::*;
+use crate::agent::classifier::Complexity;
 use tempfile::TempDir;
 
 fn testing_advice(difficulty: TaskDifficulty, team: Option<&TeamConfig>) -> AdviceReport {

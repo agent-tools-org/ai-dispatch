@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::agent::classifier::{self, Complexity, TaskCategory, TaskProfile};
+use crate::agent::classifier::{TaskCategory, TaskProfile};
 use super::selection_quota::{self, CandidateQuota};
 use super::selection_scoring::{
     Candidate, CandidateContext, ScoreBreakdown, compare_candidates, cost_efficiency,

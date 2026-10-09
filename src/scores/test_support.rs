@@ -72,9 +72,16 @@ pub(crate) fn seed_catalog_aliases() {
     for (id, aliases) in [
         (
             "302ai/kimi-k2-thinking",
-            vec!["opus", "gpt-5.6-sol", "gpt-5.3-codex"],
+            vec![
+                "opus",
+                "gpt-5.6-sol",
+                "gpt-5.3-codex",
+                "pro",
+                "gemini-3.1-pro-high",
+            ],
         ),
-        ("302ai/qwen3-30b-a3b", vec!["sonnet"]),
+        ("302ai/qwen3-30b-a3b", vec!["sonnet", "coder-model"]),
+        ("abacus/claude-opus-4-1-20250805", vec!["composer-2.5"]),
     ] {
         prices.models.push(crate::cost::price_feed::FeedModel {
             id: id.into(),

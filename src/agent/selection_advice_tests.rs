@@ -100,6 +100,7 @@ fn same_pool_weaker_model_is_excluded_with_known_caller_model() {
 fn same_pool_is_demoted_not_excluded_with_unknown_caller_model() {
     let (_temp, _home, _cache) = isolated();
     let fleet = vec![AgentKind::Claude, AgentKind::Codex, AgentKind::Droid, AgentKind::Copilot];
+    let _fleet = crate::agent::DetectAgentsGuard::set(fleet);
     crate::scores::test_support::seed_catalog_aliases();
     crate::agent_config::save_agent_default_model("claude", Some("opus")).expect("model");
     let baseline = run(None);
@@ -235,14 +236,14 @@ fn no_installed_routes_or_only_weaker_caller_pool_routes_have_no_recommendation(
 #[test]
 fn research_and_frontend_advice_recommend_the_expected_installed_agent() {
     let (_temp, _home, _cache) = isolated();
+    crate::scores::test_support::seed_catalog_aliases();
     for (prompt, fleet, expected) in [
         ("Explain the authentication flow and compare the docs?", [AgentKind::Gemini, AgentKind::Qwen], "gemini"),
         ("Explain the authentication flow and compare the docs?", [AgentKind::Antigravity, AgentKind::Qwen], "agy"),
-        ("Create a responsive React component layout for the settings UI", [AgentKind::Cursor, AgentKind::Codex], "codex"),
+        ("Create a responsive React component layout for the settings UI", [AgentKind::Cursor, AgentKind::Codex], "cursor"),
     ] {
         let _fleet = crate::agent::DetectAgentsGuard::set(fleet.to_vec());
-        // Without self-assigned capability, both Cursor and Codex are unrated -> neutral (6.0); priority tie-breaking recommends codex. Fleet order tie-breaks research cases.
-        let model = match expected { "gemini" => "pro", "agy" => "gemini-3.1-pro-high", _ => "gpt-5.6-sol" };
+        let model = match expected { "gemini" => "pro", "agy" => "gemini-3.1-pro-high", _ => "composer-2.5" };
         crate::agent_config::save_agent_default_model(expected, Some(model)).expect("model");
         let report = advise(prompt, declared(TaskDifficulty::Moderate, TaskBudget::Standard), None, None, None, 0, None);
         assert_eq!(report.recommended.expect("recommendation").agent, expected);

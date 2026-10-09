@@ -151,10 +151,11 @@ async fn async_main(cli: Cli) -> Result<()> {
 
     let command = match cli.command {
         Some(Commands::Advise(args)) => {
-            // Advise reads the score feed, so it starts the detached refresh too; the
-            // download never touches the store and never delays the advice.
-            paths::ensure_dirs()?;
-            cost::maybe_refresh_prices();
+            // Advise reads the score feed, so it starts the detached refresh too, but only
+            // in an initialised aid home: advise must not create state in a fresh one.
+            if paths::db_path().exists() {
+                cost::maybe_refresh_prices();
+            }
             let store = store::Store::open_read_only(&paths::db_path())?;
             cmd::advise::run(store.as_ref(), args)?;
             return Ok(());

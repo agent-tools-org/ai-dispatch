@@ -155,6 +155,16 @@ fn advise_alone_refreshes_both_feeds() {
     let home = tempfile::tempdir().expect("home");
     setup(home.path());
     let done = completions(home.path());
+    board(home.path()); // initialises the aid home (aid.db), as any real install has
+    for _ in 0..2 {
+        done.recv_timeout(std::time::Duration::from_secs(15)).expect("board refresh finished");
+    }
+    for file in ["scores.json", "prices.json"] {
+        for suffix in ["", ".ready", ".part", ".done"] {
+            let _ = fs::remove_file(home.path().join(format!("{file}{suffix}")));
+        }
+    }
+    let done = completions(home.path()); // the completion FIFOs are one-shot
     let advise = ["advise", "refactor the scheduler", "--json", "--difficulty", "moderate",
         "--budget", "standard", "--urgency", "normal", "--rigor", "standard"];
     aid(home.path(), &advise);

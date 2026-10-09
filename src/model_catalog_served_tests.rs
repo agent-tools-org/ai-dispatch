@@ -102,13 +102,8 @@ fn newer_served_model_with_leaderboard_evidence_is_not_labelled_unrated() {
     let home = tempfile::tempdir().expect("home");
     let _guard = crate::paths::AidHomeGuard::set(home.path());
     write_served_cache("codex", &["gpt-6-sol"]);
-    crate::scores::test_support::seed();
-    let mut prices: crate::cost::price_feed::Feed = serde_json::from_value(serde_json::json!({
-        "built_at": "2026-10-08T00:00:00Z", "age_seconds": 0, "stale": false,
-        "models": [{"id": "302ai/kimi-k2-thinking", "aliases": ["gpt-6-sol"],
-            "input_per_mtok": 1.0, "output_per_mtok": 1.0}]
-    })).expect("prices");
-    prices.count = Some(1);
-    crate::cost::set_feed_for_tests(prices);
+    // Live capture: gpt-6-sol resolves through its bare price alias to openai/gpt-6-sol,
+    // which has Epoch ECI 162.72 and a codex Terminal-Bench 4.0 row (49.39).
+    crate::scores::test_support::seed_live();
     assert!(unrated_served_newer_than(AgentKind::Codex, "gpt-5.6-sol").is_empty());
 }

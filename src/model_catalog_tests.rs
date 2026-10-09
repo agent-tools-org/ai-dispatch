@@ -240,19 +240,11 @@ fn budget_cheap_picks_lowest_price_across_preferred_tiers() {
 }
 
 #[test]
-fn premium_budget_uses_epoch_evidence_instead_of_catalog_order() {
+fn premium_budget_prefers_the_rated_row_over_unrated_premium_rows() {
     let home = tempfile::tempdir().expect("home");
     let _guard = crate::paths::AidHomeGuard::set(home.path());
-    crate::scores::test_support::seed();
-    let prices = serde_json::from_value(serde_json::json!({
-        "built_at": "2026-10-08T00:00:00Z", "age_seconds": 0, "stale": false,
-        "models": [
-            {"id": "302ai/kimi-k2-thinking", "aliases": ["gpt-5.6-terra"],
-             "input_per_mtok": 1.0, "output_per_mtok": 1.0},
-            {"id": "302ai/qwen3-30b-a3b", "aliases": ["gpt-5.6-sol"],
-             "input_per_mtok": 1.0, "output_per_mtok": 1.0}
-        ]
-    })).expect("prices");
-    crate::cost::set_feed_for_tests(prices);
-    assert_eq!(model_for_task_budget(AgentKind::Codex, TaskBudget::Premium), Some("gpt-5.6-terra"));
+    crate::scores::test_support::seed_live();
+    // Live capture: openai/gpt-5.6-sol has Epoch ECI 161.66; gpt-5.6-terra, gpt-5.5 and
+    // gpt-5.4 are not in the trimmed capture, so they are unrated and never preferred.
+    assert_eq!(model_for_task_budget(AgentKind::Codex, TaskBudget::Premium), Some("gpt-5.6-sol"));
 }

@@ -688,6 +688,63 @@
      "date": "2024-07-18"
     }
    ]
+  },
+  {
+   "id": "openai/gpt-6-sol",
+   "scores": [
+    {
+     "source": "terminal_bench",
+     "board": "terminal-bench-4.0",
+     "cli": "codex",
+     "effort": "max",
+     "value": 49.39,
+     "unit": "percent",
+     "rank": 16,
+     "of": 35,
+     "ci_low": 46.16,
+     "ci_high": 52.62,
+     "date": "2026-09-22"
+    },
+    {
+     "source": "epoch",
+     "board": "eci",
+     "cli": null,
+     "effort": null,
+     "value": 162.72,
+     "unit": "index",
+     "rank": 7,
+     "of": 274,
+     "ci_low": 160.07,
+     "ci_high": 166.57,
+     "date": "2026-09-22"
+    },
+    {
+     "source": "lmarena",
+     "board": "webdev",
+     "cli": null,
+     "effort": "max",
+     "value": 1687.4891811929338,
+     "unit": "elo",
+     "rank": 8,
+     "of": 595,
+     "ci_low": 1675.5252804038541,
+     "ci_high": 1699.4530819820134,
+     "date": "2026-10-06"
+    },
+    {
+     "source": "lmarena",
+     "board": "agent",
+     "cli": null,
+     "effort": "max",
+     "value": 0.09711069971200803,
+     "unit": "ips",
+     "rank": 6,
+     "of": 50,
+     "ci_low": 0.07344719892801793,
+     "ci_high": 0.12077420049599813,
+     "date": "2026-10-02"
+    }
+   ]
   }
  ],
  "unmapped": [

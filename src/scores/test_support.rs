@@ -40,14 +40,15 @@ pub(crate) fn seed_feed(feed: &Feed) {
     crate::cost::set_feed_for_tests(prices);
 }
 
-/// Rows of the live /v1/scores.json captured 2026-10-09 02:34Z, trimmed to eight
+/// Rows of the live /v1/scores.json captured 2026-10-09 02:34Z, trimmed to nine
 /// models; ids and values are unchanged from the capture.
 pub(crate) fn live() -> Feed {
     serde_json::from_str(include_str!("../../tests/fixtures/leaderboard/scores-trimmed-20261009.json"))
         .expect("live scores")
 }
 
-/// The matching rows of the live /v1/prices.json, with their real aliases.
+/// The matching rows of the live /v1/prices.json (captured 04:50Z, after bare
+/// maker aliases were added), with their real aliases.
 pub(crate) fn live_prices() -> crate::cost::price_feed::Feed {
     serde_json::from_str(include_str!("../../tests/fixtures/leaderboard/prices-trimmed-20261009.json"))
         .expect("live prices")

@@ -45,6 +45,11 @@ Known limits found by review:
 - Effort strings must match exactly; a mismatch falls back to the model-level source.
 - A model the relay lists under two price ids (e.g. `claude-opus-5-5` and
   `anthropic/claude-opus-5.5`) scores only under the one the scores feed uses.
+- Feed refresh (`src/feed_refresh.rs`): the detached `sh` is not reaped, so a
+  long-running aid process keeps up to two defunct children until it exits; `.ready`
+  is validated then renamed by path (claiming it under a per-process name first would
+  close a narrow swap window); the script's `mv` takes no `--` and curl has no
+  `--max-filesize`.
 
 ## Quota, cost and isolation (v10.51.0)
 

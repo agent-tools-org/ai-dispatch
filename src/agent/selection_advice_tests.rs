@@ -85,7 +85,7 @@ fn same_pool_weaker_model_is_excluded_with_known_caller_model() {
     let (_temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Claude, AgentKind::Codex]);
     crate::agent_config::save_agent_default_model("claude", Some("sonnet")).expect("sticky");
-    crate::scores::test_support::seed_catalog_aliases();
+    crate::scores::test_support::seed_live();
     let report = run(Some(anthropic_caller(Some(99.0))));
     let claude = find(&report, "claude");
     assert_eq!(claude.model.as_deref(), Some("sonnet"), "a known model makes the comparison real");
@@ -101,7 +101,7 @@ fn same_pool_is_demoted_not_excluded_with_unknown_caller_model() {
     let (_temp, _home, _cache) = isolated();
     let fleet = vec![AgentKind::Claude, AgentKind::Codex, AgentKind::Droid, AgentKind::Copilot];
     let _fleet = crate::agent::DetectAgentsGuard::set(fleet);
-    crate::scores::test_support::seed_catalog_aliases();
+    crate::scores::test_support::seed_live();
     crate::agent_config::save_agent_default_model("claude", Some("opus")).expect("model");
     let baseline = run(None);
     assert_eq!(baseline.candidates[0].agent, "claude", "claude must outrank others without a caller");
@@ -174,7 +174,7 @@ fn advised_model_group_hold_switches_route_but_other_group_does_not() {
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Droid, AgentKind::Codex]);
     crate::agent_config::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
     crate::agent_config::save_agent_default_model("codex", Some("gpt-6-sol")).expect("model");
-    crate::scores::test_support::seed_catalog_aliases();
+    crate::scores::test_support::seed_live();
     let baseline = run(None).recommended.expect("recommendation");
     assert_eq!((&*baseline.agent, baseline.model.as_deref()), ("droid", Some("gpt-5.3-codex")));
     let hold = "hold: manual\nmessage: quota exhausted\n";
@@ -224,9 +224,9 @@ fn no_installed_routes_or_only_weaker_caller_pool_routes_have_no_recommendation(
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![]);
     assert!(run(None).recommended.is_none());
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
-    crate::agent_config::save_agent_default_model("codex", Some("gpt-5.6-sol")).expect("model");
-    crate::scores::test_support::seed_catalog_aliases();
-    let caller = caller_advice("codex", Some("gpt-5.6-sol"), crate::agent::classifier::TaskCategory::ComplexImpl).expect("caller");
+    crate::agent_config::save_agent_default_model("codex", Some("openai/gpt-5.6-sol")).expect("model");
+    crate::scores::test_support::seed_live();
+    let caller = caller_advice("codex", Some("openai/gpt-5.6-sol"), TaskCategory::ComplexImpl).expect("caller");
     let caller = CallerAdvice { capability: Some(99.0), ..caller };
     let report = run(Some(caller));
     assert!(find(&report, "codex").exclusion_codes.contains(&"weaker_on_caller_pool".into()));
@@ -236,14 +236,14 @@ fn no_installed_routes_or_only_weaker_caller_pool_routes_have_no_recommendation(
 #[test]
 fn research_and_frontend_advice_recommend_the_expected_installed_agent() {
     let (_temp, _home, _cache) = isolated();
-    crate::scores::test_support::seed_catalog_aliases();
+    crate::scores::test_support::seed_live();
     for (prompt, fleet, expected) in [
         ("Explain the authentication flow and compare the docs?", [AgentKind::Gemini, AgentKind::Qwen], "gemini"),
         ("Explain the authentication flow and compare the docs?", [AgentKind::Antigravity, AgentKind::Qwen], "agy"),
         ("Create a responsive React component layout for the settings UI", [AgentKind::Cursor, AgentKind::Codex], "cursor"),
     ] {
         let _fleet = crate::agent::DetectAgentsGuard::set(fleet.to_vec());
-        let model = match expected { "gemini" => "pro", "agy" => "gemini-3.1-pro-high", _ => "composer-2.5" };
+        let model = match expected { "gemini" | "agy" => "gemini-3.7-flash-high", _ => "opus" };
         crate::agent_config::save_agent_default_model(expected, Some(model)).expect("model");
         let report = advise(prompt, declared(TaskDifficulty::Moderate, TaskBudget::Standard), None, None, None, 0, None);
         assert_eq!(report.recommended.expect("recommendation").agent, expected);

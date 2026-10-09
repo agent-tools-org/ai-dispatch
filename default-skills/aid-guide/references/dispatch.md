@@ -326,7 +326,8 @@ Custom candidates also expose raw evidence; their configured scoring scale stays
 Scoring chooses one source, never a blend: simple-edit/complex-impl/debugging/
 testing/refactoring use Terminal-Bench 4.0 accuracy for the exact canonical model,
 CLI, and configured effort, falling back to Epoch ECI. Frontend uses LMArena
-webdev; research/documentation use Epoch ECI. Price-feed exact IDs and aliases
+webdev, preferring the configured effort when available, otherwise the highest
+raw webdev value; research/documentation use Epoch ECI. Price-feed exact IDs and aliases
 provide the canonical mapping; there is no fuzzy model matching. Terminal-Bench
 results from another CLI or effort do not rate this harness: fallback evidence
 is labelled `harness unmeasured`. Codex effort comes from `model_reasoning_effort`
@@ -336,7 +337,8 @@ No applicable data (including a failed source) is unknown, never a fabricated ze
 
 The sole linear rescale is `10 * (value - min) / (max - min)`: Terminal-Bench
 accuracy uses its 0–100 percent (or 0–1 rate) range; ECI and webdev use the
-observed model-level min/max of their own source, board, and unit in the snapshot.
+observed model-level min/max of their own source, board, and unit in the snapshot
+(including effort-tagged webdev rows).
 A degenerate range is unknown. A measured minimum may legitimately score zero.
 Free/cheap budget selection keeps the lowest-price rule and catalog order for
 price ties; standard/premium

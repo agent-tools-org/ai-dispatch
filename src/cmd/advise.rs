@@ -154,9 +154,10 @@ mod tests {
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![
             AgentKind::Codex, AgentKind::Droid, AgentKind::Claude, AgentKind::Cursor,
         ]);
-        crate::scores::test_support::seed_catalog_aliases();
+        crate::scores::test_support::seed_live();
         // Pin rated evidence: the floor no longer reads Cursor's CLI score (6).
-        crate::agent_config::save_agent_default_model("cursor", Some("coder-model")).expect("cursor model");
+        crate::agent_config::save_agent_default_model("cursor", Some("openai/gpt-4o-mini"))
+            .expect("cursor model");
         let declared = DeclaredTaskProfile {
             difficulty: crate::types::TaskDifficulty::Complex,
             budget: crate::types::TaskBudget::Premium,

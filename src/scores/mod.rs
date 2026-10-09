@@ -78,24 +78,9 @@ fn evidence_from(
     let terminal = terminal_score(feed, &scores, cli, effort);
     // Agentic (including simple edits): exact CLI+effort Terminal-Bench 4.0, else ECI.
     // Frontend: webdev only. Research/documentation: ECI only. Never blend sources.
-    let (source, board) = if category == TaskCategory::Frontend {
-        ("lmarena", "webdev")
-    } else {
-        ("epoch", "eci")
-    };
     let selected = terminal
         .filter(|_| agentic(category))
-        .or_else(|| {
-            scores
-                .iter()
-                .filter(|score| valid_score(feed, score))
-                .find(|score| {
-                    score.source == source
-                        && score.board == board
-                        && score.cli.is_none()
-                        && score.effort.is_none()
-                })
-        })
+        .or_else(|| model_score(feed, &scores, effort, category))
         .cloned();
     let capability = selected.as_ref().and_then(|score| rescale(feed, score));
     let harness = if terminal.is_some() {
@@ -111,6 +96,35 @@ fn evidence_from(
         capability,
         harness,
     }
+}
+
+fn model_score<'a>(
+    feed: &feed::Feed,
+    scores: &'a [Score],
+    effort: Option<&str>,
+    category: TaskCategory,
+) -> Option<&'a Score> {
+    let frontend = category == TaskCategory::Frontend;
+    let (source, board) = if frontend {
+        ("lmarena", "webdev")
+    } else {
+        ("epoch", "eci")
+    };
+    let applicable = scores.iter().filter(|score| {
+        valid_score(feed, score)
+            && score.source == source
+            && score.board == board
+            && score.cli.is_none()
+            && (frontend || score.effort.is_none())
+    });
+    // Webdev is model-level even with effort: prefer configured effort when available,
+    // otherwise its highest raw value. ECI has one model-level, effort-less row.
+    applicable.max_by(|left, right| {
+        let matches = |score: &Score| effort.is_some() && score.effort.as_deref() == effort;
+        matches(left)
+            .cmp(&matches(right))
+            .then_with(|| left.value.total_cmp(&right.value))
+    })
 }
 
 fn valid_score(feed: &feed::Feed, score: &Score) -> bool {
@@ -155,7 +169,7 @@ fn rescale(feed: &feed::Feed, selected: &Score) -> Option<f64> {
                     && score.board == selected.board
                     && score.unit == selected.unit
                     && score.cli.is_none()
-                    && score.effort.is_none()
+                    && (selected.board == "webdev" || score.effort.is_none())
                     && score.value.is_finite()
             })
             .fold((f64::INFINITY, f64::NEG_INFINITY), |(min, max), score| {

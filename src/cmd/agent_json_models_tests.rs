@@ -92,11 +92,11 @@ fn served_only_models_appear_unrated_for_every_probe_agent() {
         codex_rows, 1,
         "a served model with a catalog row is not duplicated"
     );
-    crate::scores::test_support::seed_catalog_aliases();
+    crate::scores::test_support::seed_live();
     let measured = crate::cmd::agent_json::agents_list_value(&store).expect("measured list");
     let model = measured["agents"].as_array().expect("agents").iter()
-        .find(|row| row["name"] == "codex").expect("codex")["models"]["available"]
-        .as_array().expect("models").iter().find(|row| row["model"] == "gpt-5.6-sol")
+        .find(|row| row["name"] == "claude").expect("claude")["models"]["available"]
+        .as_array().expect("models").iter().find(|row| row["model"] == "opus")
         .expect("model");
     assert_eq!(model["rated"], true, "the relay, not catalog membership, supplies a rating");
     assert_eq!(model["capability"], 10.0);

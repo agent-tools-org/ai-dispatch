@@ -90,9 +90,9 @@ mod tests {
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid, AgentKind::Qwen, AgentKind::Grok]);
         crate::agent_config::save_agent_disabled("grok", true).expect("disable");
         crate::auth_marker::record_failure_at(AgentKind::Droid, "Not signed in.", chrono::Local::now());
-        crate::scores::test_support::seed_catalog_aliases();
+        crate::scores::test_support::seed_live();
         // Rated Qwen (0.0) is below the complex floor (8); an unrated route stays eligible.
-        crate::agent_config::save_agent_default_model("qwen", Some("coder-model")).expect("model");
+        crate::agent_config::save_agent_default_model("qwen", Some("openai/gpt-4o-mini")).expect("model");
         let declared = DeclaredTaskProfile { difficulty: TaskDifficulty::Complex, ..profile() };
         let all = advise("refactor the scheduler", declared,
             Some(TaskCategory::Refactoring), None, None, 0, None).candidates;
@@ -140,9 +140,9 @@ mod tests {
     fn plan_excludes_weaker_caller_pool_and_rejects_ineligible_recommendation_fallback() {
         let (temp, _home, _cache) = isolated();
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid]);
-        crate::agent_config::save_agent_default_model("codex", Some("gpt-5.6-sol")).expect("model");
-        crate::scores::test_support::seed_catalog_aliases();
-        let mut caller = caller_advice("codex", Some("gpt-5.6-sol"), crate::agent::classifier::TaskCategory::ComplexImpl).expect("caller");
+        crate::agent_config::save_agent_default_model("codex", Some("openai/gpt-5.6-sol")).expect("model");
+        crate::scores::test_support::seed_live();
+        let mut caller = caller_advice("codex", Some("openai/gpt-5.6-sol"), TaskCategory::ComplexImpl).expect("caller");
         caller.capability = Some(99.0);
         let report = advise("refactor scheduler", profile(), Some(TaskCategory::Refactoring), None, None, 0, Some(caller));
         assert!(report.candidates.iter().any(|c| c.agent == "codex" && c.exclusion_codes.contains(&"weaker_on_caller_pool".into())));

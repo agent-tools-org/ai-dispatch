@@ -45,10 +45,10 @@ fn matrix_removal_unknown_agy_testing_is_eligible_and_unrated() {
 fn matrix_removal_rated_codex_below_floor_is_excluded() {
     let (_temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
-    crate::scores::test_support::seed_catalog_aliases();
-    // sonnet maps to 302ai/qwen3-30b-a3b (Epoch ECI 136.18, rescaled to 0.0).
+    crate::scores::test_support::seed_live();
+    // The captured gpt-4o-mini ECI is the snapshot minimum (126.56 -> 0.0).
     // An evidenced shortfall (base 0 < floor 8 for complex) excludes codex.
-    crate::agent_config::save_agent_default_model("codex", Some("sonnet")).expect("model");
+    crate::agent_config::save_agent_default_model("codex", Some("openai/gpt-4o-mini")).expect("model");
     let report = advise(
         "refactor",
         declared(TaskDifficulty::Complex, TaskBudget::Standard),
@@ -72,9 +72,9 @@ fn matrix_removal_rated_codex_below_floor_is_excluded() {
 fn matrix_removal_team_override_wins_over_rated_model() {
     let (_temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
-    crate::scores::test_support::seed_catalog_aliases();
-    // gpt-5.6-sol maps to 302ai/kimi-k2-thinking (Epoch ECI 146.01, rescaled to 10.0).
-    crate::agent_config::save_agent_default_model("codex", Some("gpt-5.6-sol")).expect("model");
+    crate::scores::test_support::seed_live();
+    // Opus has measured model-level ECI; the team override takes precedence.
+    crate::agent_config::save_agent_default_model("codex", Some("opus")).expect("model");
     for (score, eligible) in [(10, true), (4, false)] {
         let team: TeamConfig = toml::from_str(&format!(
             "id = 'override'\ndisplay_name = 'Override'\npreferred_agents = []\n\

@@ -24,7 +24,7 @@ fn leaderboard_rule_uses_epoch_eci_instead_of_catalog_rating() {
 fn leaderboard_alias_resolution_is_shared_and_unmapped_models_are_unrated() {
     let home = tempfile::tempdir().expect("home");
     let _guard = crate::paths::AidHomeGuard::set(home.path());
-    crate::scores::test_support::seed_catalog_aliases();
+    crate::scores::test_support::seed_live();
     use crate::agent::classifier::TaskCategory;
     assert_eq!(
         model_capability_score(AgentKind::Claude, "opus", TaskCategory::Research),
@@ -89,20 +89,18 @@ fn leaderboard_uses_configured_codex_effort_for_exact_harness() {
     use crate::agent::classifier::TaskCategory;
     let home = tempfile::tempdir().expect("home");
     let _guard = crate::paths::AidHomeGuard::set(home.path());
-    let mut feed = crate::scores::test_support::sample();
-    crate::scores::test_support::add_terminal(&mut feed, "codex", Some("high"));
-    crate::scores::test_support::seed_feed(&feed);
+    crate::scores::test_support::seed_live();
     let codex = home.path().join("codex");
     std::fs::create_dir_all(&codex).expect("codex home");
     crate::agent::codex::cli_config::set_test_codex_home(Some(codex.clone()));
     std::fs::write(
         codex.join("config.toml"),
-        "model_reasoning_effort = 'high'\n",
+        "model_reasoning_effort = 'max'\n",
     )
     .expect("config");
     let measured = crate::scores::evidence(
         AgentKind::Codex,
-        Some("302ai/kimi-k2-thinking"),
+        Some("openai/gpt-5.6-sol"),
         TaskCategory::Testing,
     );
     std::fs::write(
@@ -112,12 +110,13 @@ fn leaderboard_uses_configured_codex_effort_for_exact_harness() {
     .expect("config");
     let fallback = crate::scores::evidence(
         AgentKind::Codex,
-        Some("302ai/kimi-k2-thinking"),
+        Some("openai/gpt-5.6-sol"),
         TaskCategory::Testing,
     );
     crate::agent::codex::cli_config::set_test_codex_home(None);
-    assert_eq!(measured.capability, Some(7.2));
+    assert!((measured.capability.expect("accuracy") - 3.727).abs() < 1e-10);
     assert_eq!(measured.harness, "measured");
-    assert_eq!(fallback.capability, Some(10.0));
+    let expected = 10.0 * (161.66 - 126.56) / (167.33 - 126.56);
+    assert!((fallback.capability.expect("ECI") - expected).abs() < 1e-10);
     assert_eq!(fallback.harness, "harness unmeasured");
 }

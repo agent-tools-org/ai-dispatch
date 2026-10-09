@@ -2,13 +2,12 @@
 // cached under the aid home. Only exact ids and aliases price a model; the
 // cache is refreshed out of band so the dispatch path never blocks on the network.
 // Exports: Feed, feed_lookup, maybe_refresh
-// Deps: crate::paths, chrono, serde, serde_json, std::process::Command (curl)
+// Deps: crate::paths, crate::feed_refresh, chrono, serde, serde_json
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::process::Command;
 use std::time::Duration;
 
 const FEED_URL: &str = "https://llm-prices.agent-tools.org/v1/prices.json";
@@ -102,43 +101,15 @@ pub fn cache_fresh(feed: &Feed) -> bool {
 /// feed is fresh. A network failure keeps the old cache ("keep the old cache",
 /// never "no prices"). Never blocks or fails a run.
 pub fn maybe_refresh() {
-    if load_cache().is_some_and(|feed| cache_fresh(&feed)) {
-        return;
-    }
-    let _ = std::thread::Builder::new()
-        .name("aid-price-feed".into())
-        .spawn(|| {
-            let Ok(output) = Command::new("curl").args(["-sfL", "--max-time", "15", FEED_URL]).output() else {
-                eprintln!("[price-feed] curl spawn failed");
-                return;
-            };
-            if !output.status.success() {
-                eprintln!("[price-feed] curl status {}", output.status);
-                return;
-            }
-            let Ok(body) = String::from_utf8(output.stdout) else {
-                eprintln!("[price-feed] utf8 failed");
-                return;
-            };
-            let Ok(feed) = serde_json::from_str::<Feed>(&body) else {
-                eprintln!("[price-feed] json parse failed, len {}", body.len());
-                return;
-            };
-            if !feed.usable() {
-                eprintln!("[price-feed] not usable: stale={:?} age={:?}", feed.stale, feed.age_seconds);
-                return;
-            }
-            let Ok(()) = std::fs::create_dir_all(crate::paths::aid_dir()) else {
-                eprintln!("[price-feed] create_dir_all failed");
-                return;
-            };
-            let Ok(encoded) = serde_json::to_vec(&feed) else {
-                eprintln!("[price-feed] serialize failed");
-                return;
-            };
-            let write_res = fs::write(cache_path(), encoded);
-            eprintln!("[price-feed] write result: {:?}", write_res);
-        });
+    crate::feed_refresh::maybe_refresh(
+        &cache_path(),
+        FEED_URL,
+        |body| {
+            serde_json::from_slice::<Feed>(body)
+                .is_ok_and(|feed| !feed.models.is_empty() && feed.usable())
+        },
+        || load_cache().is_some_and(|feed| cache_fresh(&feed)),
+    );
 }
 
 #[cfg(test)]
@@ -234,7 +205,49 @@ mod tests {
         let _guard = AidHomeGuard::set(temp.path());
         maybe_refresh();
         std::thread::sleep(std::time::Duration::from_secs(20));
-        let feed = load_cache().expect("cache should be written after live refresh");
+        maybe_refresh();
+        let feed = load_cache().expect("cache should be adopted after live refresh");
         assert!(feed.usable());
+    }
+
+    #[test]
+    fn ready_refresh_preserves_cache_on_invalid_empty_or_server_stale_feed() {
+        let temp = tempfile::tempdir().expect("home");
+        let _guard = AidHomeGuard::set(temp.path());
+        let old = sample_feed();
+        let bytes = serde_json::to_vec(&old).expect("old");
+        fs::write(cache_path(), &bytes).expect("cache");
+        let ready = cache_path().with_extension("json.ready");
+        let mut empty = old.clone();
+        empty.models.clear();
+        let mut stale = old.clone();
+        stale.stale = Some(true);
+        let mut aged = old;
+        aged.age_seconds = Some(MAX_SERVER_AGE + 1);
+        for response in [
+            b"invalid JSON".to_vec(),
+            serde_json::to_vec(&empty).expect("empty"),
+            serde_json::to_vec(&stale).expect("stale"),
+            serde_json::to_vec(&aged).expect("aged"),
+        ] {
+            fs::write(&ready, response).expect("ready");
+            maybe_refresh();
+            assert!(!ready.exists());
+            assert_eq!(fs::read(cache_path()).expect("cache"), bytes);
+        }
+    }
+
+    #[test]
+    fn valid_ready_replaces_even_fresh_price_cache() {
+        let temp = tempfile::tempdir().expect("home");
+        let _guard = AidHomeGuard::set(temp.path());
+        let mut feed = sample_feed();
+        fs::write(cache_path(), serde_json::to_vec(&feed).expect("feed")).expect("cache");
+        feed.models[0].input_per_mtok = 9.0;
+        let ready = cache_path().with_extension("json.ready");
+        fs::write(&ready, serde_json::to_vec(&feed).expect("feed")).expect("ready");
+        maybe_refresh();
+        assert_eq!(load_cache(), Some(feed));
+        assert!(!ready.exists());
     }
 }

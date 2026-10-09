@@ -344,9 +344,13 @@ Free/cheap budget selection keeps the lowest-price rule and catalog order for
 price ties; standard/premium
 compare model-level ECI within each preferred tier, with unknown ties keeping catalog order.
 `breakdown.complexity_bonus` was removed; no CLI gets an automatic +2 for complexity.
-`scores.json` shares the price cache directory and 24-hour TTL. Refresh is
-out of band; failed, malformed, empty, or server-stale fetches preserve the old
-cache, which remains usable offline. Without a valid cache, evidence is unknown.
+`scores.json` and `prices.json` share the aid home directory and 24-hour TTL.
+Refresh starts a detached download that survives a short command's exit and
+terminal signals. A `.part` file younger than 60 seconds suppresses another
+download. The next refresh check validates the completed `.ready` file and
+atomically replaces the cache; malformed, empty, or server-stale downloads are
+deleted and preserve the old cache, which remains usable offline. Failed downloads
+also preserve the cache. Without a valid scores cache, evidence is unknown.
 
 Caller pool: advise reads the calling session (`AID_CALLER_KIND`, Claude Code,
 Codex; see `aid board --mine`) and the caller's own model from

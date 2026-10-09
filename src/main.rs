@@ -39,6 +39,7 @@ mod cost;
 pub mod credential_pool;
 mod explore;
 mod failure_salvage;
+mod feed_refresh;
 mod delivery_guard;
 pub mod gitbutler;
 mod hooks;

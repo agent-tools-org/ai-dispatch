@@ -4,7 +4,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fs, path::Path, process::Command};
+use std::{collections::BTreeMap, fs};
 
 const URL: &str = "https://llm-prices.agent-tools.org/v1/scores.json";
 const TTL_SECONDS: i64 = 24 * 60 * 60;
@@ -79,43 +79,14 @@ fn usable(feed: &Feed) -> bool {
             .is_some_and(|age| (0..=TTL_SECONDS).contains(&age))
 }
 
-// Failed, malformed, empty, or server-stale responses never replace an old cache.
-fn store_response(path: &Path, body: Option<&[u8]>) -> anyhow::Result<()> {
-    let Some(body) = body else { return Ok(()) };
-    let feed: Feed = serde_json::from_slice(body)?;
-    if !usable(&feed) {
-        return Ok(());
-    }
-    let parent = path
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("cache has no parent"))?;
-    fs::create_dir_all(parent)?;
-    let temp = path.with_extension(format!("{}.tmp", std::process::id()));
-    fs::write(&temp, serde_json::to_vec(&feed)?)?;
-    if let Err(error) = fs::rename(&temp, path) {
-        let _ = fs::remove_file(&temp);
-        return Err(error.into());
-    }
-    Ok(())
-}
-
 pub(crate) fn maybe_refresh() {
-    if load_cache().is_some_and(|feed| fresh(&feed)) {
-        return;
-    }
     let path = crate::paths::aid_dir().join("scores.json");
-    let _ = std::thread::Builder::new()
-        .name("aid-scores-feed".into())
-        .spawn(move || {
-            let response = Command::new("curl")
-                .args(["-sfL", "--max-time", "15", URL])
-                .output();
-            let body = response
-                .ok()
-                .filter(|out| out.status.success())
-                .map(|out| out.stdout);
-            let _ = store_response(&path, body.as_deref());
-        });
+    crate::feed_refresh::maybe_refresh(
+        &path,
+        URL,
+        |body| serde_json::from_slice::<Feed>(body).is_ok_and(|feed| usable(&feed)),
+        || load_cache().is_some_and(|feed| fresh(&feed)),
+    );
 }
 
 #[cfg(test)]

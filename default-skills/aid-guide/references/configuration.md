@@ -92,6 +92,15 @@ into the global configuration; this identity fix does not change synchronization
 or configuration precedence. The model preference `--budget` is separate from
 these enforced usage caps.
 
+### Model feed caches
+
+Model feed caches live at `~/.aid/prices.json` and `~/.aid/scores.json`, or directly
+under `AID_HOME` when set. At startup's refresh check, missing or 24-hour-old caches
+start a detached download with a 15-second curl timeout. Short commands can exit
+while it runs. A `.part` younger than 60 seconds prevents a duplicate download;
+the next refresh check validates `.ready` and atomically adopts it. Invalid, empty,
+or server-stale responses are deleted without replacing the previous cache.
+
 ### Artifact backup
 
 A `[backup]` table in `.aid/project.toml` uploads a bundle of a task's artifacts

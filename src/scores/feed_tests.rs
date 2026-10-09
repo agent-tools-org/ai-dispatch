@@ -4,6 +4,18 @@
 
 use super::*;
 use crate::{paths::AidHomeGuard, scores::test_support::sample};
+use std::path::Path;
+
+fn store_response(path: &Path, body: Option<&[u8]>) -> anyhow::Result<()> {
+    fs::create_dir_all(crate::paths::aid_dir())?;
+    fs::write(path.with_extension("json.part"), b"reserved")?;
+    if let Some(body) = body {
+        fs::write(path.with_extension("json.ready"), body)?;
+    }
+    maybe_refresh();
+    assert!(!path.with_extension("json.ready").exists());
+    Ok(())
+}
 
 #[test]
 fn cache_refresh_keeps_old_sample_on_failure_empty_stale_or_malformed() {

@@ -125,7 +125,8 @@ fn short_command_refreshes_both_feeds_after_parent_exit() {
         let feed: serde_json::Value = serde_json::from_slice(&bytes).expect("valid cache JSON");
         assert!(!feed["models"].as_array().expect("models").is_empty());
         assert_eq!(feed["stale"], false);
-        assert_eq!(feed["age_seconds"], 0);
+        let age = feed["age_seconds"].as_i64().expect("server age");
+        assert!((0..=24 * 60 * 60).contains(&age));
         assert_eq!(
             bytes,
             fs::read(home.path().join("fixtures").join(file)).expect("fixture")

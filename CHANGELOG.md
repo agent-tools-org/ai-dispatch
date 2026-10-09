@@ -1,3 +1,8 @@
+## v10.52.1 (2026-10-09)
+- Price and score feeds refresh in a detached download that survives short commands; a download is validated before it replaces the cache, so a failed or partial fetch never overwrites good data
+- `aid advise` starts the feed refresh too (it previously never fetched the score feed); it still creates nothing in a fresh aid home
+
+
 ## v10.52.0 (2026-10-09)
 - Score models from third-party leaderboards (Terminal-Bench 4.0, Epoch, LMArena) served by the price relay at `/v1/scores.json`; aid no longer assigns capability scores of its own
 - Remove the per-CLI capability matrix, the hand-written catalog `capability` field and the complexity bonus; `aid agent list --json` drops the per-agent capability map and carries leaderboard evidence per model

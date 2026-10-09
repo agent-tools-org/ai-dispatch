@@ -122,17 +122,28 @@ fn degenerate_source_range_is_unknown_and_accuracy_uses_its_own_range() {
 fn webdev_prefers_configured_effort_else_highest_raw_value() {
     let feed = live();
     let id = "anthropic/claude-sonnet-5.5";
-    for (effort, value) in [
-        (Some("high"), 1716.018700416681),
-        (None, 1772.7521327760383),
-        (Some("unmeasured"), 1772.7521327760383),
+    for (effort, selected_effort) in [
+        (Some("high"), "high"),
+        (None, "xhigh"),
+        (Some("unmeasured"), "xhigh"),
     ] {
         let evidence = evidence_from(&feed, id, "cursor", effort, TaskCategory::Frontend);
         let score = evidence.selected.expect("webdev");
-        assert_eq!(score.value, value);
-        assert_eq!(score.source, "lmarena");
+        let captured = feed.models[1]
+            .scores
+            .iter()
+            .find(|row| {
+                row.source == "lmarena"
+                    && row.board == "webdev"
+                    && row.effort.as_deref() == Some(selected_effort)
+            })
+            .expect("captured webdev row");
+        assert_eq!(
+            &score, captured,
+            "preserve the exact captured value and metadata"
+        );
         let expected =
-            10.0 * (value - 1446.5703748835622) / (1813.6003351106383 - 1446.5703748835622);
+            10.0 * (score.value - 1446.5703748835622) / (1813.6003351106383 - 1446.5703748835622);
         assert!((evidence.capability.expect("webdev range") - expected).abs() < 1e-10);
         assert_eq!(evidence.harness, "harness unmeasured");
     }

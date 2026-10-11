@@ -52,9 +52,9 @@ fn resolve_with(requested: &str, repo: &Path, command: &mut Command) -> Result<S
 fn pick(command: &mut Command, start_dir: &Path, exclude: Option<&str>) -> Result<String> {
     let repo = crate::project::worktree::main_working_tree(start_dir)
         .unwrap_or_else(|| start_dir.to_path_buf());
-    command.args(["pick", "--role", "rust-build", "--repo"]).arg(repo);
+    command.args(["pick", "--tool", "rust", "--repo"]).arg(repo);
     if let Some(excluded) = exclude { command.args(["--exclude", excluded]); }
-    let output = command.output().context("Failed to run rbox pick --role rust-build")?;
+    let output = command.output().context("Failed to run rbox pick --tool rust")?;
     if !output.status.success() {
         bail!("Remote build box selection failed: {}", String::from_utf8_lossy(&output.stderr).trim());
     }

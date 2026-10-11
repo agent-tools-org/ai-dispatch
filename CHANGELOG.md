@@ -1,3 +1,7 @@
+## Unreleased
+- Remote build auto-selection uses `rbox pick --tool rust --repo <main-working-tree>`.
+
+
 ## v10.52.1 (2026-10-09)
 - Price and score feeds refresh in a detached download that survives short commands; a download is validated before it replaces the cache, so a failed or partial fetch never overwrites good data
 - `aid advise` starts the feed refresh too (it previously never fetched the score feed); it still creates nothing in a fresh aid home
@@ -98,7 +102,7 @@
 
 
 ## v10.45.0 (2026-09-12)
-- `aid run --remote-build [<box>]` routes the agent's `cargo build/check/test/clippy/bench/doc` to an rbox build box through a `cargo` PATH shim; the agent, its PTY, steer/respond and idle detection stay local. Bare flag or `auto` picks a box with `rbox pick --role rust-build` once at task start; the box is stored on the task, reused by `aid retry`, and exported as `AID_BUILD_BOX`.
+- `aid run --remote-build [<box>]` routes the agent's `cargo build/check/test/clippy/bench/doc` to an rbox build box through a `cargo` PATH shim; the agent, its PTY, steer/respond and idle detection stay local. Bare flag or `auto` picks a box with `rbox pick --tool rust` once at task start; the box is stored on the task, reused by `aid retry`, and exported as `AID_BUILD_BOX`.
 - The verify command of a remote-build task runs with the same shim and box, so a plain `cargo test` verify also runs remotely.
 - Project key `remote_build = "auto" | "<box>"` in `.aid/project.toml` and batch TOML; CLI wins. `--remote-build` rejects `--sandbox` and `--container`.
 - The shim preserves the caller's workspace-member directory remotely (creating it if sync omitted it), passes global cargo options, explains rbox exit codes 75 and 124, and prints a heartbeat during silent phases.

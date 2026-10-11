@@ -22,9 +22,12 @@ fn cli_optional_box_and_conflicts() {
 fn selection_uses_explicit_name_or_one_pick_and_retains_stderr() {
     let temp = tempfile::tempdir().expect("temp");
     let rbox = temp.path().join("rbox");
-    executable(&rbox, "#!/bin/bash\n[[ \"$*\" == \"pick --role rust-build\"* ]] || exit 9\necho picked-box\n");
+    executable(&rbox, "#!/bin/bash\n[[ \"$*\" == \"pick --tool rust\"* ]] || exit 9\necho picked-box\n");
     assert_eq!(resolve_with("auto", Path::new(""), &mut Command::new(&rbox)).expect("pick"), "picked-box");
     assert_eq!(resolve_with("literal name", Path::new(""), &mut Command::new("missing-command")).expect("explicit"), "literal name");
+    let error = resolve_with("auto", Path::new(""), &mut Command::new(temp.path().join("missing-rbox")))
+        .expect_err("missing rbox");
+    assert_eq!(error.to_string(), "Failed to run rbox pick --tool rust");
     executable(&rbox, "#!/bin/bash\necho 'none free: all rust builders busy' >&2\nexit 1\n");
     let error = resolve_with("auto", Path::new(""), &mut Command::new(&rbox)).expect_err("busy");
     assert!(error.to_string().contains("none free: all rust builders busy"));
@@ -165,11 +168,11 @@ fn pick_passes_repo_and_exclude_to_rbox() {
     executable(&rbox, &format!("#!/bin/bash\nprintf '%s\\n' \"$@\" > '{}'\necho second-box\n", argv.display()));
     let picked = pick(&mut Command::new(&rbox), Path::new("/repos/wt"), Some("grok-bot-chief")).expect("pick");
     assert_eq!(picked, "second-box");
-    assert_eq!(std::fs::read_to_string(&argv).expect("argv"), "pick\n--role\nrust-build\n--repo\n/repos/wt\n--exclude\ngrok-bot-chief\n");
+    assert_eq!(std::fs::read_to_string(&argv).expect("argv"), "pick\n--tool\nrust\n--repo\n/repos/wt\n--exclude\ngrok-bot-chief\n");
     let mut args = RunArgs { remote_build: Some("auto".into()), dir: Some("/repos/main".into()), ..Default::default() };
     resolve_in(&mut args, true, &mut Command::new(&rbox)).expect("resolve");
     assert_eq!(args.remote_build.as_deref(), Some("second-box"));
-    assert_eq!(std::fs::read_to_string(&argv).expect("argv"), "pick\n--role\nrust-build\n--repo\n/repos/main\n");
+    assert_eq!(std::fs::read_to_string(&argv).expect("argv"), "pick\n--tool\nrust\n--repo\n/repos/main\n");
 }
 
 pub(super) fn refusing_verify(dir: &Path, refusing: &str) {
@@ -188,7 +191,7 @@ fn refused_verify_repicks_once_persists_box_and_reruns() {
     let result = verify_with(&store, id.as_str(), temp.path(), Some("./verify"), None, None, &mut Command::new(&rbox)).expect("verify");
     assert!(result.success, "{}", result.output);
     assert_eq!(result.output, "ran on second-box\n");
-    assert_eq!(std::fs::read_to_string(&argv).expect("argv"), format!("pick\n--role\nrust-build\n--repo\n{}\n--exclude\nchosen-box\n", temp.path().display()));
+    assert_eq!(std::fs::read_to_string(&argv).expect("argv"), format!("pick\n--tool\nrust\n--repo\n{}\n--exclude\nchosen-box\n", temp.path().display()));
     assert_eq!(saved_box(&store, id.as_str()).expect("saved").as_deref(), Some("second-box"));
     let events = store.get_events(id.as_str()).expect("events");
     assert_eq!(events.len(), 1);

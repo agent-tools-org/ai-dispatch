@@ -228,7 +228,7 @@ fn record_completion(
         ),
         metadata: None,
     };
-    crate::task_lifecycle::complete_task_atomic(
+    if !crate::task_lifecycle::complete_task_atomic(
         store.as_ref(),
         TaskCompletionUpdate {
             id: task_id.as_str(),
@@ -241,7 +241,9 @@ fn record_completion(
             exit_code: info.exit_code,
         },
         &event,
-    )?;
+    )? {
+        return Ok(());
+    }
     crate::state::refresh_project_state(store.as_ref(), task_id);
     println!(
         "Task {} {} ({}{}{})",

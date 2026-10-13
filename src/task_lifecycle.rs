@@ -89,24 +89,24 @@ pub(crate) fn fail_waiting_with_reason(
 pub(crate) fn update_task_completion(
     store: &Store,
     payload: TaskCompletionUpdate<'_>,
-) -> Result<()> {
+) -> Result<bool> {
     let task_id = TaskId(payload.id.to_string());
     let status = payload.status;
     let changed = store.record_agent_completion(payload, None)?;
     salvage_failed_transition(store, &task_id, status, changed);
-    Ok(())
+    Ok(changed)
 }
 
 pub(crate) fn complete_task_atomic(
     store: &Store,
     payload: TaskCompletionUpdate<'_>,
     event: &TaskEvent,
-) -> Result<()> {
+) -> Result<bool> {
     let task_id = TaskId(payload.id.to_string());
     let status = payload.status;
     let changed = store.record_agent_completion(payload, Some(event))?;
     salvage_failed_transition(store, &task_id, status, changed);
-    Ok(())
+    Ok(changed)
 }
 
 fn salvage_failed_id(store: &Store, task_id: &str, changed: bool) {

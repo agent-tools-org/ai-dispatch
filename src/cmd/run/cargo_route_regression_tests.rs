@@ -17,7 +17,7 @@ fn task(id: &str, dir: &str) -> Task {
         final_branch: None, start_sha: None, log_path: None, output_path: None,
         tokens: None, prompt_tokens: None, duration_ms: Some(10), requested_model: None,
         observed_model: None, attribution_source: None, cost_usd: None, exit_code: Some(0),
-        created_at: Local::now(), completed_at: Some(Local::now()), verify: Some("cargo test".to_string()),
+        created_at: Local::now(), completed_at: None, verify: Some("cargo test".to_string()),
         verify_status: VerifyStatus::Skipped, pending_reason: None, read_only: false,
         budget: false, audit_verdict: None, audit_report_path: None, delivery_assessment: None,
     }

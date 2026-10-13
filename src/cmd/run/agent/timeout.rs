@@ -175,6 +175,25 @@ fn handle_success(
     }
     let duration_ms = start.elapsed().as_millis() as i64;
     let exit_code = run_prompt::resolve_failure_exit_code(store.as_ref(), task_id, info.exit_code);
+    // Same split as pty_runner::record_completion: the observation stands alone,
+    // only the cost estimate may fall back to what was requested.
+    let (observed_model, attribution_source) = crate::agent::codex::grade_completion_observation(
+        agent, store.as_ref(), task_id, &info, model,
+    );
+    let costing_model = observed_model.as_deref().or(model);
+    let cost_usd = crate::cost::completion_cost(store, task_id, &info, costing_model, agent.kind())?;
+    if !crate::task_lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
+        id: task_id.as_str(),
+        status: info.status,
+        tokens: info.tokens,
+        duration_ms,
+        observed_model: observed_model.as_deref(),
+        attribution_source,
+        cost_usd,
+        exit_code,
+    })? {
+        return Ok(());
+    }
     if info.status == TaskStatus::Failed {
         run_prompt::record_execution_failure(
             store.as_ref(),
@@ -184,23 +203,6 @@ fn handle_success(
             failure_context,
         );
     }
-    // Same split as pty_runner::record_completion: the observation stands alone,
-    // only the cost estimate may fall back to what was requested.
-    let (observed_model, attribution_source) = crate::agent::codex::grade_completion_observation(
-        agent, store.as_ref(), task_id, &info, model,
-    );
-    let costing_model = observed_model.as_deref().or(model);
-    let cost_usd = crate::cost::completion_cost(store, task_id, &info, costing_model, agent.kind())?;
-    crate::task_lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
-        id: task_id.as_str(),
-        status: info.status,
-        tokens: info.tokens,
-        duration_ms,
-        observed_model: observed_model.as_deref(),
-        attribution_source,
-        cost_usd,
-        exit_code,
-    })?;
     crate::state::refresh_project_state(store.as_ref(), task_id);
     let duration_str = format_duration(duration_ms);
     let tokens_str = info.tokens.map(|t| format!(", {t} tokens")).unwrap_or_default();
@@ -221,7 +223,8 @@ fn handle_timeout(
     idle_timeout: Duration,
 ) -> Result<()> {
     let duration_ms = start.elapsed().as_millis() as i64;
-    crate::task_lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
+    let event = super::timeout_event(task_id, timeout_mins, idle_timeout);
+    if crate::task_lifecycle::complete_task_atomic(store.as_ref(), TaskCompletionUpdate {
         id: task_id.as_str(),
         status: TaskStatus::Failed,
         tokens: None,
@@ -232,21 +235,10 @@ fn handle_timeout(
         attribution_source: None,
         cost_usd: None,
         exit_code: None,
-    })?;
-    crate::state::refresh_project_state(store.as_ref(), task_id);
-    let detail = format!(
-        "exceeded {timeout_mins}m timeout after {}s without parsed activity",
-        idle_timeout.as_secs()
-    );
-    let event = TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: format!("Failed during execution: {detail}"),
-        metadata: None,
-    };
-    let _ = store.insert_event(&event);
-    aid_error!("[aid] {detail}");
+    }, &event)? {
+        crate::state::refresh_project_state(store.as_ref(), task_id);
+        aid_error!("[aid] {}", event.detail);
+    }
     Ok(())
 }
 

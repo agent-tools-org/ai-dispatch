@@ -184,3 +184,6 @@ async fn continue_capacity(store: &Arc<Store>, args: &RunArgs, id: &TaskId) -> R
     }
     crate::cmd::run::run_lifecycle::retry_or_cascade(store, args, id).await
 }
+
+#[path = "capacity_scope_cut_tests.rs"]
+mod scope_cut;

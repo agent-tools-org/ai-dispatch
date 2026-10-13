@@ -56,7 +56,8 @@ fn task(id: &str, dir: &std::path::Path) -> Task {
 async fn provider_capacity_ordinary_retry_reuses_codex_session_and_consumes_budget() {
     let dir = tempfile::tempdir().expect("dir");
     let store = Store::open_memory().expect("store");
-    let row = task("t-capacity-args", dir.path());
+    let mut row = task("t-capacity-args", dir.path());
+    row.repo_path = row.effective_dir.clone();
     store.insert_task(&row).expect("task");
     let args = RunArgs {
         retry: 3,
@@ -117,7 +118,10 @@ async fn provider_capacity_refusal_keeps_hold_without_automatic_recovery() {
     let detail = rate_limit::dispatch_blocking_hold_for_model(
         &row.agent, None, row.requested_model.as_deref()).expect("hold");
     assert!(detail.contains("provider capacity held until"));
-    assert!(detail.contains(CAPACITY));
+    let marker = std::fs::read_to_string(rate_limit::group_marker_path(
+        &row.agent, None, &provider_capacity::group(row.requested_model.as_deref())))
+        .expect("capacity marker");
+    assert!(marker.contains(CAPACITY));
     assert_eq!(store.get_retry_tree(row.id.as_str()).expect("tree").len(), 1);
     let events = store.get_events(row.id.as_str()).expect("events");
     let rendered = crate::board::render_task_detail(&row, &events, None);

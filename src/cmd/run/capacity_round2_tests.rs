@@ -79,7 +79,8 @@ async fn provider_capacity_ordinary_retry_refreshed_hold_never_substitutes_or_cl
     crate::agent_config::save_agent_default_model("droid", Some("gpt-5.3-codex"))
         .expect("peer model");
     let store = Arc::new(Store::open_memory().expect("store"));
-    let row = task("t-round2-refresh", home.path());
+    let mut row = task("t-round2-refresh", home.path());
+    row.repo_path = row.effective_dir.clone();
     store.insert_task(&row).expect("parent");
     seed_stdout(&store, &row.id,
         &serde_json::json!({"type": "error", "message": CAPACITY}).to_string());

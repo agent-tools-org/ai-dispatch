@@ -20,7 +20,7 @@ fn insert_task(store: &Store, id: &str, output: Option<&str>, group: Option<&str
         .unwrap();
     let mut task = store.get_task(id).unwrap().unwrap();
     task.output_path = output.map(str::to_string);
-    store.update_task(&task).unwrap();
+    store.replace_waiting_task(&task).unwrap();
 }
 
 fn bundle(store: &Store, args: &RunArgs, skills: &[String]) -> PromptBundle {

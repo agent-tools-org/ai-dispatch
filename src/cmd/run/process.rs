@@ -160,19 +160,22 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
     #[cfg(unix)]
     cmd.process_group(0);
     crate::cmd::noninteractive_stdio::configure(&mut cmd);
-    let mut child = match cmd.spawn() {
+    let mut child = match store.with_running_task(task_id.as_str(), || {
+        let child = cmd.spawn()?;
+        if let Some(pid) = child.id() {
+            let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
+        }
+        Ok(child)
+    }) {
         Ok(child) => child,
         Err(err) => {
-            let err = anyhow::Error::new(err).context("Failed to spawn agent process");
+            let err = err.context("Failed to spawn agent process");
             let stderr = stderr_excerpt(task_id)
                 .or_else(|| Some("unavailable (process did not start)".to_string()));
             fail_task_on_agent_spawn(store.as_ref(), task_id, &err, stderr.as_deref());
             return Err(err);
         }
     };
-    if let Some(pid) = child.id() {
-        let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
-    }
     let info = if streaming {
         watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id, idle_timeout, max_task_cost).await
     } else {

@@ -26,6 +26,13 @@ or Qwen `[API Error: ...]`) are recorded as `Failed`. Ambiguous envelopes stay
 `Merged` means code was integrated. Neither `Done` nor `Merged` means that the
 task succeeded or that the principal accepted the result.
 
+`aid stop` records `Stopped`, terminal timing, and its completion event in one
+transaction before signalling the worker and agent. A worker can still run until
+the signal lands. If stop is interrupted before signalling, run `aid stop` again;
+a stopped task with a live stored worker PID receives the signal again. If another
+terminal result already won, stop reports its status and reason and exits non-zero
+without writing a stop event.
+
 `aid wait` waits for the worker's post-run delivery and verification checks before
 reporting a terminal result, including for group or implicit active-task selection.
 A provisional `Done` cannot bypass a required result-file failure. `--exit-on-await`

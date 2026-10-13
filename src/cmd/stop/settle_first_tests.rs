@@ -9,9 +9,8 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 
 pub(super) fn save_worker(id: &str, pid: u32) {
-    let mut spec: background::BackgroundRunSpec = serde_json::from_str(include_str!(
-        "../../../testdata/legacy-background-spec.json"
-    )).expect("spec");
+    let mut spec: background::BackgroundRunSpec =
+        serde_json::from_str(include_str!("../../../testdata/legacy-background-spec.json")).expect("spec");
     spec.task_id = id.to_string();
     spec.worker_pid = Some(pid);
     spec.agent_pid = None;
@@ -26,10 +25,17 @@ fn signal_observation(reap: bool) {
     let _guard = paths::AidHomeGuard::set(home.path());
     paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
-    store.insert_task(&make_task("t-stop-signal", TaskStatus::Running)).expect("insert");
-    let mut worker = Command::new("sh").args([
-        "-c", "trap 'echo signalled; exit 0' TERM; echo ready; while :; do sleep 0.1; done",
-    ]).stdout(Stdio::piped()).spawn().expect("worker");
+    store
+        .insert_task(&make_task("t-stop-signal", TaskStatus::Running))
+        .expect("insert");
+    let mut worker = Command::new("sh")
+        .args([
+            "-c",
+            "trap 'echo signalled; exit 0' TERM; echo ready; while :; do sleep 0.1; done",
+        ])
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("worker");
     let mut output = BufReader::new(worker.stdout.take().expect("stdout"));
     let mut line = String::new();
     output.read_line(&mut line).expect("ready");
@@ -41,7 +47,10 @@ fn signal_observation(reap: bool) {
         let _guard = paths::AidHomeGuard::set(&observer_home);
         line.clear();
         output.read_line(&mut line).expect("signal");
-        let snapshot = observer_store.get_task("t-stop-signal").expect("get").expect("task");
+        let snapshot = observer_store
+            .get_task("t-stop-signal")
+            .expect("get")
+            .expect("task");
         let events = observer_store.get_events("t-stop-signal").expect("events");
         worker.wait().expect("reap worker");
         if reap {
@@ -57,8 +66,14 @@ fn signal_observation(reap: bool) {
     assert!(snapshot.duration_ms.is_some());
     assert_eq!(events.len(), 1, "event committed before signal");
     assert_eq!(events[0].detail, "Task stopped by user");
-    assert_eq!(store.get_task("t-stop-signal").expect("get").expect("task").status,
-        TaskStatus::Stopped);
+    assert_eq!(
+        store
+            .get_task("t-stop-signal")
+            .expect("get")
+            .expect("task")
+            .status,
+        TaskStatus::Stopped
+    );
     assert_eq!(store.get_events("t-stop-signal").expect("events").len(), 1);
 }
 
@@ -78,12 +93,15 @@ fn settle_first_reaper_snapshot_before_stop_cannot_record_failure() {
     let _guard = paths::AidHomeGuard::set(home.path());
     paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
-    store.insert_task(&make_task("t-stop-reaper", TaskStatus::Running)).expect("insert");
+    store
+        .insert_task(&make_task("t-stop-reaper", TaskStatus::Running))
+        .expect("insert");
     save_worker("t-stop-reaper", 999999);
     let cleaned = background::check_zombie_tasks_with(&store, |_| {
         stop(&store, "t-stop-reaper").expect("stop before reaper write");
         false
-    }).expect("reaper");
+    })
+    .expect("reaper");
     assert!(cleaned.is_empty());
     let task = store.get_task("t-stop-reaper").expect("get").expect("task");
     assert_eq!(task.status, TaskStatus::Stopped);
@@ -99,7 +117,9 @@ fn settle_first_restop_signals_live_worker_without_duplicate_event() {
     let _guard = paths::AidHomeGuard::set(home.path());
     paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
-    store.insert_task(&make_task("t-stop-interrupted", TaskStatus::Pending)).expect("insert");
+    store
+        .insert_task(&make_task("t-stop-interrupted", TaskStatus::Pending))
+        .expect("insert");
     stop(&store, "t-stop-interrupted").expect("settle");
     let before = store.get_task("t-stop-interrupted").expect("get").expect("task");
     let mut worker = Command::new("sleep").arg("30").spawn().expect("worker");

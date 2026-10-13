@@ -41,31 +41,11 @@ impl Store {
     }
 
     pub fn fail_completed_verify_gate(&self, id: &str) -> Result<bool> {
-        let rows = self.db().execute(
-            "UPDATE tasks SET status = 'failed',
-             exit_code = CASE WHEN exit_code IS NULL OR exit_code = 0 THEN 1 ELSE exit_code END
-             WHERE id = ?1 AND status = 'done'",
-            params![id],
-        )?;
-        Ok(rows > 0)
+        self.settle_task_status(id, TaskStatus::Failed, Some(&[TaskStatus::Done]), None, None)
     }
 
     pub fn fail_active_execution(&self, id: &str) -> Result<bool> {
-        if !self.guard_current_status(id, &ACTIVE_EXECUTION_FAILURE_STATUSES, TaskStatus::Failed)? {
-            return Ok(false);
-        }
-        let rows = self.db().execute(
-            "UPDATE tasks SET status = 'failed' WHERE id = ?1
-             AND status IN (?2, ?3, ?4, ?5)",
-            params![
-                id,
-                ACTIVE_EXECUTION_FAILURE_STATUSES[0].as_str(),
-                ACTIVE_EXECUTION_FAILURE_STATUSES[1].as_str(),
-                ACTIVE_EXECUTION_FAILURE_STATUSES[2].as_str(),
-                ACTIVE_EXECUTION_FAILURE_STATUSES[3].as_str()
-            ],
-        )?;
-        Ok(rows > 0)
+        self.settle_task_status(id, TaskStatus::Failed, Some(&ACTIVE_EXECUTION_FAILURE_STATUSES), None, None)
     }
 }
 

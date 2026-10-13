@@ -71,7 +71,7 @@ fn stop_done_task_returns_error() {
         let task = make_task("t-done", TaskStatus::Done);
         store.insert_task(&task).unwrap();
         let err = stop(&store, "t-done").unwrap_err();
-        assert!(err.to_string().contains("already terminal"));
+        assert!(err.to_string().contains("task already done: no terminal reason recorded"));
         let reloaded = store.get_task("t-done").unwrap().unwrap();
         assert_eq!(reloaded.status, TaskStatus::Done);
     });

@@ -1,5 +1,5 @@
 // Handlers for `aid stop` and `aid stop --force` — graceful and forced task termination.
-// Sends signals to worker processes, saves partial output, and updates task status.
+// Records stopped before signalling, then preserves output and releases task resources.
 
 use anyhow::{anyhow, bail, Result};
 use chrono::Local;
@@ -85,44 +85,27 @@ fn terminate(
     preserve_label: &'static str,
     print_label: Option<&'static str>,
 ) -> Result<()> {
-    let task = ensure_non_terminal_task(store, task_id)?;
-    if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled) {
-        if let Some(pid) = background::load_worker_pid(task_id)? {
-            if graceful {
-                background::kill_process(pid);
-                if wait_for_exit(pid) {
-                    background::sigkill_process(pid);
-                }
-            } else {
-                background::sigkill_process(pid);
-                let _ = wait_for_exit(pid);
-            }
+    let task = store.get_task(task_id)?.ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
+    let recover_signal = task.status == TaskStatus::Stopped
+        && background::load_worker_pid(task_id)?.is_some_and(background::is_process_running);
+    if !recover_signal {
+        let event = TaskEvent {
+            task_id: task.id.clone(), timestamp: Local::now(), event_kind: EventKind::Completion,
+            detail: detail.to_string(), metadata: None,
+        };
+        if task.status.is_terminal()
+            || !store.settle_task_status(task_id, TaskStatus::Stopped, None, None, Some(&event))?
+        {
+            return already_terminal(store, task_id);
         }
-        if let Some(agent_pid) = background::load_agent_pid(task_id)? {
-            if graceful {
-                background::kill_process(agent_pid);
-            } else {
-                background::sigkill_process(agent_pid);
-            }
-        }
-        crate::sandbox::kill_container(task_id);
-        preserve_worktree(task_id, &task, preserve_label);
     }
+    signal_task(task_id, &task, graceful, preserve_label)?;
     capture_final_worktree_state(store.as_ref(), &TaskId(task_id.to_string()))?;
     if let Some(ref path) = task.worktree_path
         && let Err(err) = crate::worktree::clear_worktree_lock(Path::new(path), task_id)
     {
         aid_warn!("[aid] Warning: failed to release worktree lock for task {task_id}: {err}");
     }
-    crate::task_lifecycle::mark_stopped(store.as_ref(), task_id)?;
-    store.insert_event(&TaskEvent {
-        task_id: TaskId(task_id.to_string()),
-        timestamp: Local::now(),
-        // Completion is the existing terminal kind; the TUI dashboard counts it as a completion.
-        event_kind: EventKind::Completion,
-        detail: detail.to_string(),
-        metadata: None,
-    })?;
     background::clear_spec(task_id)?;
     if let Some(print_label) = print_label {
         println!("{print_label} {task_id}");
@@ -130,17 +113,34 @@ fn terminate(
     Ok(())
 }
 
-fn ensure_non_terminal_task(store: &Arc<Store>, task_id: &str) -> Result<Task> {
-    let task = store
-        .get_task(task_id)?
-        .ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
-    if task.status.is_terminal() {
-        bail!(
-            "Task '{task_id}' is already terminal (status: {})",
-            task.status.as_str()
-        );
+fn already_terminal(store: &Store, task_id: &str) -> Result<()> {
+    let task = store.get_task(task_id)?.ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
+    let reason = store.get_events(task_id)?.into_iter().rev()
+        .find(|event| matches!(event.event_kind, EventKind::Completion | EventKind::Error))
+        .map(|event| event.detail).unwrap_or_else(|| "no terminal reason recorded".to_string());
+    bail!("task already {}: {}", task.status.as_str(), reason)
+}
+
+fn signal_task(task_id: &str, task: &Task, graceful: bool, preserve_label: &str) -> Result<()> {
+    if let Some(pid) = background::load_worker_pid(task_id)? {
+        if graceful {
+            background::kill_process(pid);
+            if wait_for_exit(pid) { background::sigkill_process(pid); }
+        } else {
+            background::sigkill_process(pid);
+            let _ = wait_for_exit(pid);
+        }
     }
-    Ok(task)
+    if let Some(pid) = background::load_agent_pid(task_id)? {
+        if graceful { background::kill_process(pid); } else { background::sigkill_process(pid); }
+    }
+    crate::sandbox::kill_container(task_id);
+    if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput
+        | TaskStatus::Stalled | TaskStatus::Stopped)
+    {
+        preserve_worktree(task_id, task, preserve_label);
+    }
+    Ok(())
 }
 
 fn wait_for_exit(pid: u32) -> bool {

@@ -9,15 +9,7 @@ async fn round2_preservation_recovery_keeps_brief_feedback_and_missing_rollout()
     let temp = TempDir::new().unwrap();
     let _home = paths::AidHomeGuard::set(temp.path());
     let store = Arc::new(Store::open_memory().unwrap());
-    let mut task = make_failed_task("t-recovery");
-    task.prompt = format!(
-        "[Previous attempt feedback]\nKeep citations\n\n[Original task]\n{}",
-        "Complete caller brief é\n".repeat(1000)
-    );
-    task.resolved_prompt = Some("Old injected context".into());
-    task.read_only = true;
-    task.delivery_assessment = Some(DeliveryAssessment::MissingFinalDelivery);
-    task.agent_session_id = Some(format!("missing-{}", uuid::Uuid::new_v4()));
+    let task = recovery_task(temp.path());
     store.insert_task(&task).unwrap();
     let args = RunArgs {
         agent_name: "codex".into(),
@@ -43,10 +35,44 @@ async fn round2_preservation_recovery_keeps_brief_feedback_and_missing_rollout()
     assert!(!child.prompt.contains("Old injected context"));
     assert!(!child.prompt.contains("Stale arguments"));
     assert_eq!(child.parent_task_id.as_deref(), Some(task.id.as_str()));
+    assert_fresh_command(&child);
+    assert!(
+        RunArgs::for_retry(&store, &child)
+            .unwrap()
+            .prompt
+            .ends_with(&task.prompt)
+    );
+}
+
+fn recovery_task(root: &std::path::Path) -> Task {
+    let mut task = make_failed_task("t-recovery");
+    task.prompt = format!(
+        "[Previous attempt feedback]\nKeep citations\n\n[Original task]\n{}",
+        "Complete caller brief é\n".repeat(1000)
+    );
+    task.resolved_prompt = Some("Old injected context".into());
+    task.read_only = true;
+    task.delivery_assessment = Some(DeliveryAssessment::MissingFinalDelivery);
+    task.agent_session_id = Some(format!(
+        "missing-{}",
+        root.file_name().unwrap().to_string_lossy()
+    ));
+    task
+}
+
+fn assert_fresh_command(child: &Task) {
     let opts = RunOpts {
-        session_id: task.agent_session_id.clone(),
-        dir: None, output: None, result_file: None, model: None, budget: false,
-        read_only: false, sandbox: false, context_files: vec![], env: None, env_forward: None
+        session_id: child.agent_session_id.clone(),
+        dir: None,
+        output: None,
+        result_file: None,
+        model: None,
+        budget: false,
+        read_only: false,
+        sandbox: false,
+        context_files: vec![],
+        env: None,
+        env_forward: None,
     };
     let command = crate::agent::codex::CodexAgent
         .build_command(child.resolved_prompt.as_deref().unwrap(), &opts)
@@ -57,10 +83,4 @@ async fn round2_preservation_recovery_keeps_brief_feedback_and_missing_rollout()
         .collect();
     assert!(!argv.iter().any(|arg| arg == "resume"));
     assert!(argv.iter().any(|arg| arg.contains(&child.prompt)));
-    assert!(
-        RunArgs::for_retry(&store, &child)
-            .unwrap()
-            .prompt
-            .ends_with(&task.prompt)
-    );
 }

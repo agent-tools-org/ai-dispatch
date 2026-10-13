@@ -36,7 +36,10 @@ fn bundle(store: &Store, args: &RunArgs, root: &std::path::Path) -> PromptBundle
         None,
         &[],
         "t-round2",
-        None,
+        Some(&project::ProjectConfig {
+            id: "round2".into(),
+            ..Default::default()
+        }),
         Some(root),
     )
     .unwrap()
@@ -85,25 +88,7 @@ fn round2_preservation_knowledge_and_memory_caps_share_warning() {
     std::fs::write(team.join("KNOWLEDGE.md"), index).unwrap();
     let store = Store::open_memory().unwrap();
     for n in 0..11 {
-        store
-            .insert_memory(&Memory {
-                id: MemoryId(format!("m-{n}")),
-                memory_type: MemoryType::Fact,
-                tier: MemoryTier::Identity,
-                content: format!("Identity {n}"),
-                source_task_id: None,
-                agent: None,
-                project_path: Some(temp.path().to_str().unwrap().into()),
-                content_hash: format!("hash-{n}"),
-                created_at: chrono::Local::now(),
-                expires_at: None,
-                supersedes: None,
-                version: 1,
-                inject_count: 0,
-                last_injected_at: None,
-                success_count: 0,
-            })
-            .unwrap();
+        insert_memory(&store, temp.path(), n, MemoryTier::Identity, "Identity");
     }
     let args = RunArgs {
         prompt: "rust memory Caller brief".into(),
@@ -117,4 +102,77 @@ fn round2_preservation_knowledge_and_memory_caps_share_warning() {
     let event = warning(&store);
     assert!(event.contains("Knowledge: 1 eligible entries omitted"));
     assert!(event.contains("Memory: 1 eligible entries omitted"));
+}
+
+fn insert_memory(store: &Store, root: &std::path::Path, n: usize, tier: MemoryTier, text: &str) {
+    store
+        .insert_memory(&Memory {
+            id: MemoryId(format!("m-{n}")),
+            memory_type: MemoryType::Fact,
+            tier,
+            content: format!("{text} {n}"),
+            source_task_id: None,
+            agent: None,
+            project_path: Some(root.to_str().unwrap().into()),
+            content_hash: format!("hash-{n}"),
+            created_at: chrono::Local::now(),
+            expires_at: None,
+            supersedes: None,
+            version: 1,
+            inject_count: 0,
+            last_injected_at: None,
+            success_count: 0,
+        })
+        .unwrap();
+}
+
+#[test]
+fn round2_preservation_remaining_memory_slots_report_omissions() {
+    let temp = tempfile::tempdir().unwrap();
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().unwrap();
+    for n in 0..10 {
+        insert_memory(&store, temp.path(), n, MemoryTier::Identity, "Identity");
+    }
+    for n in 10..12 {
+        insert_memory(
+            &store,
+            temp.path(),
+            n,
+            MemoryTier::OnDemand,
+            "rust memory Caller brief",
+        );
+    }
+    let args = RunArgs {
+        prompt: "rust memory Caller brief".into(),
+        ..Default::default()
+    };
+    let prompt = bundle(&store, &args, temp.path()).effective_prompt;
+    assert!(prompt.contains(&args.prompt));
+    assert!(prompt.contains("Memory: 2 eligible entries omitted"));
+    assert!(warning(&store).contains("Memory: 2 eligible entries omitted"));
+}
+
+#[test]
+fn round2_preservation_project_knowledge_caps_warn() {
+    let temp = tempfile::tempdir().unwrap();
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let knowledge = project::project_knowledge_dir(temp.path());
+    std::fs::create_dir_all(&knowledge).unwrap();
+    std::fs::write(
+        knowledge.join("KNOWLEDGE.md"),
+        (0..6)
+            .map(|n| format!("- [rust memory {n}] — rust memory reference\n"))
+            .collect::<String>(),
+    )
+    .unwrap();
+    let store = Store::open_memory().unwrap();
+    let args = RunArgs {
+        prompt: "rust memory Caller brief".into(),
+        ..Default::default()
+    };
+    let prompt = bundle(&store, &args, temp.path()).effective_prompt;
+    assert!(prompt.contains(&args.prompt));
+    assert!(prompt.contains("Knowledge: 1 eligible entries omitted"));
+    assert!(warning(&store).contains("Knowledge: 1 eligible entries omitted"));
 }

@@ -29,6 +29,7 @@ fn setup() -> (
 ) {
     let home = tempfile::tempdir().unwrap();
     let guard = paths::AidHomeGuard::set(home.path());
+    paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let dir = home.path().to_str().unwrap();
     let mut parent = fixture::task("t-parent", TaskStatus::Done, None, None);
@@ -50,7 +51,7 @@ fn setup() -> (
 
 fn assert_refused(store: &Store, result: Result<Option<TaskId>>) {
     assert_eq!(
-        store.list_tasks(TaskFilter::default()).unwrap().len(),
+        store.list_tasks(TaskFilter::All).unwrap().len(),
         1,
         "no child row"
     );

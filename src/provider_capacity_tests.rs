@@ -5,6 +5,18 @@ use super::*;
 const CAPACITY: &str = "Selected model is at capacity. Please try a different model.";
 
 #[test]
+fn provider_capacity_regression_rejects_provider_shaped_tool_stderr() {
+    let error = serde_json::json!({"type": "error", "message": CAPACITY});
+    assert!(classify(&error.to_string(), AgentKind::Codex, Channel::CliStderr).is_none());
+    let home = tempfile::tempdir().expect("home");
+    let _home = paths::AidHomeGuard::set(home.path());
+    paths::ensure_dirs().expect("dirs");
+    let id = TaskId("t-capacity-tool-stderr".into());
+    std::fs::write(paths::stderr_path(id.as_str()), error.to_string()).expect("stderr");
+    assert!(read(&id, AgentKind::Codex).is_none());
+}
+
+#[test]
 fn provider_capacity_regression_rejects_raw_quotes_on_both_channels() {
     let reconnect = "Reconnecting... 5/5 (unexpected status 503 Service Unavailable)\n\
                      Error: stream disconnected before completion";

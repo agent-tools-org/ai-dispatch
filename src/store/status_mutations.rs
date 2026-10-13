@@ -106,7 +106,9 @@ impl Store {
         let Some(current) = self.current_task_status(id)? else {
             return Ok(false);
         };
-        if matches!(current, TaskStatus::Failed | TaskStatus::Stopped | TaskStatus::Skipped | TaskStatus::Merged) {
+        if matches!(current,
+            TaskStatus::Failed | TaskStatus::Stopped | TaskStatus::Skipped | TaskStatus::Merged)
+        {
             return Ok(false);
         }
         self.guard_known_status_transition(id, current, next, false)
@@ -147,7 +149,8 @@ impl Store {
         allow_rescue: bool,
     ) -> Result<bool> {
         if current.is_terminal() && next == TaskStatus::Stopped
-            || matches!(current, TaskStatus::Failed | TaskStatus::Stopped | TaskStatus::Skipped | TaskStatus::Merged)
+            || matches!(current,
+                TaskStatus::Failed | TaskStatus::Stopped | TaskStatus::Skipped | TaskStatus::Merged)
                 && next.is_terminal() && next != TaskStatus::Merged && !allow_rescue
         {
             return Ok(false);

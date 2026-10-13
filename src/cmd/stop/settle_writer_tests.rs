@@ -48,45 +48,49 @@ fn settle_first_every_failed_stopped_writer_records_terminal_timing() {
     .into_iter()
     .enumerate()
     {
-        let id = format!("t-settle-timing-{index}");
-        let mut task = make_task(&id, status);
-        task.created_at = Local::now() - Duration::seconds(60);
-        store.insert_task(&task).expect("insert");
-        if index == 0 {
-            store
-                .db()
-                .execute(
-                    "UPDATE tasks SET started_at = ?2 WHERE id = ?1",
-                    rusqlite::params![id, (Local::now() - Duration::seconds(3)).to_rfc3339()],
-                )
-                .expect("started_at");
-        }
-        let changed = match index {
-            0 => store.update_task_status(&id, TaskStatus::Failed),
-            1 => store.update_task_status(&id, TaskStatus::Stopped),
-            2 => store.fail_if_running(&id),
-            3 => store.fail_pending_with_reason(&id, PendingReason::Unknown),
-            4 => store.fail_waiting_with_reason(&id, "timeout"),
-            5 => store.fail_active_execution(&id),
-            6 => store.update_task_completion(payload(&id, TaskStatus::Failed)),
-            7 => store.complete_task_atomic(payload(&id, TaskStatus::Stopped), &event(&id)),
-            _ => store.fail_completed_verify_gate(&id),
-        }
-        .expect("write");
-        assert!(changed, "writer {index}");
-        let task = store.get_task(&id).expect("get").expect("task");
-        assert!(task.completed_at.is_some(), "writer {index} completed_at");
-        let duration = task.duration_ms.expect("terminal duration");
-        if index == 0 {
-            assert!(
-                (2900..10000).contains(&duration),
-                "duration from started_at: {duration}"
-            );
-        } else if matches!(index, 6 | 7) {
-            assert_eq!(duration, 1234, "worker-measured duration");
-        } else {
-            assert!(duration >= 59000, "writer {index}: duration {duration}");
-        }
+        assert_writer_timing(&store, index, status);
+    }
+}
+
+fn assert_writer_timing(store: &Store, index: usize, status: TaskStatus) {
+    let id = format!("t-settle-timing-{index}");
+    let mut task = make_task(&id, status);
+    task.created_at = Local::now() - Duration::seconds(60);
+    store.insert_task(&task).expect("insert");
+    if index == 0 {
+        store
+            .db()
+            .execute(
+                "UPDATE tasks SET started_at = ?2 WHERE id = ?1",
+                rusqlite::params![id, (Local::now() - Duration::seconds(3)).to_rfc3339()],
+            )
+            .expect("started_at");
+    }
+    let changed = match index {
+        0 => store.update_task_status(&id, TaskStatus::Failed),
+        1 => store.update_task_status(&id, TaskStatus::Stopped),
+        2 => store.fail_if_running(&id),
+        3 => store.fail_pending_with_reason(&id, PendingReason::Unknown),
+        4 => store.fail_waiting_with_reason(&id, "timeout"),
+        5 => store.fail_active_execution(&id),
+        6 => store.update_task_completion(payload(&id, TaskStatus::Failed)),
+        7 => store.complete_task_atomic(payload(&id, TaskStatus::Stopped), &event(&id)),
+        _ => store.fail_completed_verify_gate(&id),
+    }
+    .expect("write");
+    assert!(changed, "writer {index}");
+    let task = store.get_task(&id).expect("get").expect("task");
+    assert!(task.completed_at.is_some(), "writer {index} completed_at");
+    let duration = task.duration_ms.expect("terminal duration");
+    if index == 0 {
+        assert!(
+            (2900..10000).contains(&duration),
+            "duration from started_at: {duration}"
+        );
+    } else if matches!(index, 6 | 7) {
+        assert_eq!(duration, 1234, "worker-measured duration");
+    } else {
+        assert!(duration >= 59000, "writer {index}: duration {duration}");
     }
 }
 

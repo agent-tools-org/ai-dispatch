@@ -26,23 +26,7 @@ fn busy_after_read(_: i32) -> bool {
 }
 
 fn race_stopped_write(replace: bool) {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
-    let path = home.path().join("race.db");
-    let writer = Arc::new(Store::open(&path).expect("writer"));
-    let dispatch = Store::open(&path).expect("dispatch");
-    let status = if replace {
-        TaskStatus::Waiting
-    } else {
-        TaskStatus::Pending
-    };
-    writer
-        .insert_task(&make_task("t-stop-dispatch", status))
-        .expect("insert");
-    writer
-        .db()
-        .execute_batch("BEGIN IMMEDIATE")
-        .expect("hold writer lock");
+    let (home, _guard, writer, dispatch) = setup_race(replace);
     let (ready_tx, ready_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();
     let dispatch_home = home.path().to_path_buf();
@@ -87,6 +71,27 @@ fn race_stopped_write(replace: bool) {
     let events = writer.get_events("t-stop-dispatch").expect("events");
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].detail, "Task stopped by user");
+}
+
+fn setup_race(replace: bool) -> (tempfile::TempDir, crate::paths::AidHomeGuard, Arc<Store>, Store) {
+    let home = tempfile::tempdir().expect("home");
+    let guard = crate::paths::AidHomeGuard::set(home.path());
+    let path = home.path().join("race.db");
+    let writer = Arc::new(Store::open(&path).expect("writer"));
+    let dispatch = Store::open(&path).expect("dispatch");
+    let status = if replace {
+        TaskStatus::Waiting
+    } else {
+        TaskStatus::Pending
+    };
+    writer
+        .insert_task(&make_task("t-stop-dispatch", status))
+        .expect("insert");
+    writer
+        .db()
+        .execute_batch("BEGIN IMMEDIATE")
+        .expect("hold writer lock");
+    (home, guard, writer, dispatch)
 }
 
 #[test]

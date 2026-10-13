@@ -28,18 +28,8 @@ fn signal_observation(reap: bool) {
     store
         .insert_task(&make_task("t-stop-signal", TaskStatus::Running))
         .expect("insert");
-    let mut worker = Command::new("sh")
-        .args([
-            "-c",
-            "trap 'echo signalled; exit 0' TERM; echo ready; while :; do sleep 0.1; done",
-        ])
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("worker");
-    let mut output = BufReader::new(worker.stdout.take().expect("stdout"));
+    let (mut worker, mut output) = waiting_worker();
     let mut line = String::new();
-    output.read_line(&mut line).expect("ready");
-    assert_eq!(line.trim(), "ready");
     save_worker("t-stop-signal", worker.id());
     let observer_store = Arc::clone(&store);
     let observer_home = home.path().to_path_buf();
@@ -77,6 +67,22 @@ fn signal_observation(reap: bool) {
         TaskStatus::Stopped
     );
     assert_eq!(store.get_events("t-stop-signal").expect("events").len(), 1);
+}
+
+fn waiting_worker() -> (std::process::Child, BufReader<std::process::ChildStdout>) {
+    let mut worker = Command::new("sh")
+        .args([
+            "-c",
+            "trap 'echo signalled; exit 0' TERM; echo ready; while :; do sleep 0.1; done",
+        ])
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("worker");
+    let mut output = BufReader::new(worker.stdout.take().expect("stdout"));
+    let mut line = String::new();
+    output.read_line(&mut line).expect("ready");
+    assert_eq!(line.trim(), "ready");
+    (worker, output)
 }
 
 #[test]

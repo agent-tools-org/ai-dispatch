@@ -34,11 +34,12 @@ and Claude remain allowed when
 agy is installed. Cross-agent switches clear the source model and session before
 applying the selected route.
 
-A hold diverts dispatch whenever it is still live, whether it ends on a stated
+A live hold blocks the requested route; an explicit `--cascade` can divert dispatch.
+A held model never triggers automatic agent substitution. A hold may end on a stated
 time, a dated aidbar window, or only when a person runs
 `aid config clear-limit <agent>` (see `references/configuration.md` for the
 four hold classes). A marker whose stated
-time has already passed does not divert anything, and neither does the short
+time has already passed does not block anything, and neither does the short
 cooldown left by an unrecognised refusal — that window is shorter than the cost
 of moving off the agent you asked for. Where a tiered agent has only one tier
 held — cursor's premium pool, or droid's standard or Core pool — dispatch stays on the
@@ -138,7 +139,7 @@ percentages: used-percent readings say nothing about a spend or balance hold
 probes, and unrecognized providers do not release it. `aid advise` continues
 to score and report the marker state rather than this one-round dispatch view.
 
-The held route is **not spawned**. Substitution happens before dispatch, so no
+The held route is **not spawned**. Explicit cascade substitution happens before dispatch, so no
 task row is recorded for the agent that was never run, and the fallback carries
 none of the held route's model: a model name means something only inside one
 CLI. The substitution is announced on stderr and recorded as an event on the

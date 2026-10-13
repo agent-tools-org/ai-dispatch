@@ -120,7 +120,7 @@ the idle window.
 Hung events distinguish `no first output` from `no output or descendant progress`.
 The first-token timeout still requires agent output; child activity does not extend it.
 
-`--timeout SECS` caps agent execution in wall-clock time, including CPU work and remote waits.
+`--timeout SECS` sets an absolute wall-clock cap, even during CPU work or remote waits.
 The detached worker enforces the smaller of maximum duration and hard cap without
 `aid` polling. Without `--timeout`, the default maximum duration is 60 minutes
 and the hard cap is 24 hours; project configuration can change either bound.

@@ -104,7 +104,11 @@ pub(super) async fn maybe_dispatch_auto_fallback(
     shared_dir_path: Option<&str>,
     repo_root: Option<&str>,
 ) -> Result<Option<String>> {
-    if !should_auto_fallback(auto_fallback, retried[task_idx], outcome) {
+    if !should_auto_fallback(
+        auto_fallback || tasks[task_idx].fallback.is_some(),
+        retried[task_idx],
+        outcome,
+    ) {
         return Ok(None);
     }
     let Some((original_agent, mut run_args)) =

@@ -12,6 +12,8 @@ fn provider_capacity_explicit_waiting_stop_preserves_completed_child() {
     let mut child = task("t-capacity-existing-child", home.path());
     child.parent_task_id = Some(row.id.to_string());
     child.status = TaskStatus::Done;
+    child.completed_at = Some(chrono::Local::now());
+    child.duration_ms = Some(1);
     store.insert_task(&row).expect("parent");
     store.insert_task(&child).expect("child");
     let mut waiting = task("t-capacity-waiting-child", home.path());

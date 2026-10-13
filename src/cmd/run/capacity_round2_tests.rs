@@ -145,7 +145,8 @@ fn provider_capacity_round2_classifies_decoded_turn_failure_and_reconnect_sequen
         let home = tempfile::tempdir().expect("home");
         let _home = paths::AidHomeGuard::set(home.path());
         let store = Arc::new(Store::open_memory().expect("store"));
-        let row = task("t-round2-decoded", home.path());
+        let mut row = task("t-round2-decoded", home.path());
+        row.status = TaskStatus::Running;
         store.insert_task(&row).expect("task");
         let mut info = crate::agent::Agent::parse_completion(&crate::agent::codex::CodexAgent, "");
         let mut tracker = crate::watcher::SyntheticMilestoneTracker::new();

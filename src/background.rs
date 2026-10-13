@@ -41,7 +41,9 @@ use crate::types::{AgentKind, TaskFilter, TaskId};
 const MAX_WORKERS: usize = 32;
 
 pub use self::background_process::{is_process_running, kill_process, load_agent_pid, sigkill_process, update_agent_pid};
-pub(crate) use self::background_spawn::{daemonize_worker_if_requested, spawn_worker};
+pub(crate) use self::background_spawn::daemonize_worker_if_requested;
+#[cfg(not(test))]
+pub(crate) use self::background_spawn::spawn_worker;
 pub use self::background_spec::{load_spec_if_exists, load_worker_pid, save_spec, BackgroundRunSpec};
 pub(crate) use self::background_process::update_worker_pid;
 pub(crate) use self::background_reaper::{check_zombie_tasks_with, record_failure};

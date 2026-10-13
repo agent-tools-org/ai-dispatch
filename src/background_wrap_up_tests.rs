@@ -91,3 +91,46 @@ fn wrap_up_skips_early_short_and_unsupported_runs_refusal_regression() {
         );
     }
 }
+
+#[test]
+fn read_only_reaper_never_queues_wrap_up_fix_regression() {
+    let _home = setup_home();
+    let store = Store::open_memory().expect("store");
+    let mut task = task("t-read-only-wrap", TaskStatus::Running);
+    task.agent = AgentKind::Codex;
+    task.read_only = true;
+    task.created_at = Local::now() - Duration::seconds(540);
+    store.insert_task(&task).expect("task");
+    let mut spec = spec(task.id.as_str());
+    spec.read_only = true;
+    spec.max_duration_secs = Some(600);
+    spec.idle_timeout_secs = Some(10_000);
+    save_spec(&spec).expect("spec");
+    check_zombie_tasks_with(&store, |_| true).expect("reap");
+    assert!(store.get_events(task.id.as_str()).expect("events").is_empty());
+    assert!(store.list_messages_for_task(task.id.as_str()).expect("messages").is_empty());
+    assert!(!crate::paths::steer_signal_path(task.id.as_str()).exists());
+}
+
+#[test]
+fn wrap_up_delivery_failure_can_recover_once_fix_regression() {
+    let _home = setup_home();
+    let store = Store::open_memory().expect("store");
+    let mut task = task("t-wrap-recovery", TaskStatus::Running);
+    task.agent = AgentKind::Codex;
+    store.insert_task(&task).expect("task");
+    let signal = crate::paths::steer_signal_path(task.id.as_str());
+    let parent = signal.parent().expect("parent");
+    std::fs::remove_dir_all(parent).expect("remove jobs");
+    std::fs::write(parent, "block steer delivery").expect("blocked parent");
+    assert!(crate::cmd::steer::wrap_up_before_timeout(&store, task.id.as_str(), 540, 600).is_err());
+    std::fs::remove_file(parent).expect("unblock");
+    assert!(crate::cmd::steer::wrap_up_before_timeout(&store, task.id.as_str(), 541, 600)
+        .expect("retry"));
+    assert!(crate::input_signal::take_steer(task.id.as_str()).expect("steer").is_some());
+    assert!(!crate::cmd::steer::wrap_up_before_timeout(&store, task.id.as_str(), 542, 600)
+        .expect("duplicate poll"));
+    assert_eq!(store.get_events(task.id.as_str()).expect("events").len(), 1);
+    assert_eq!(store.list_messages_for_task(task.id.as_str()).expect("messages").len(), 1);
+    assert!(!signal.exists());
+}

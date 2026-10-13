@@ -128,6 +128,58 @@ async fn stderr_drain_times_out_continuously_ready_reader() {
 
 struct ReadyStderr;
 
+const CORE_FIXTURE: &str = "Fixture: You've reached your monthly Droid Core usage limit (resets in 2 days).";
+
+fn assert_stderr_cannot_hold_core(output: &str) {
+    let home = tempfile::tempdir().expect("home");
+    let _guard = paths::AidHomeGuard::set(home.path());
+    paths::ensure_dirs().expect("directories");
+    let id = TaskId("t-core-fixture".into());
+    std::fs::write(paths::stderr_path(id.as_str()), output).expect("stderr");
+    super::failure_stderr_note(
+        crate::types::TaskStatus::Failed, &id, &crate::agent::droid::DroidAgent, None,
+    );
+    assert!(!crate::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core").exists());
+    std::fs::write(paths::log_path(id.as_str()), format!("{output}\n")).expect("stderr replay");
+    assert_eq!(crate::cmd::run::read_quota_error_message(&id, &crate::types::AgentKind::Droid), None);
+}
+
+#[test]
+fn raw_monthly_core_stderr_does_not_hold_pool_fix_regression() {
+    assert_stderr_cannot_hold_core(CORE_FIXTURE);
+}
+
+#[test]
+fn printed_core_json_stderr_does_not_hold_pool_fix_regression() {
+    let error = serde_json::json!({"type": "error", "message": CORE_FIXTURE}).to_string();
+    assert_stderr_cannot_hold_core(&error);
+}
+
+#[test]
+fn raw_core_stream_does_not_hold_pool_fix_regression() {
+    let home = tempfile::tempdir().expect("home");
+    let _guard = paths::AidHomeGuard::set(home.path());
+    assert!(!crate::agent::stream_completion::record_quota_exhaustion(
+        CORE_FIXTURE, crate::types::AgentKind::Droid, None, None,
+    ).recorded());
+    assert!(!crate::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core").exists());
+}
+
+#[test]
+fn assistant_and_tool_core_errors_do_not_hold_pool_fix_regression() {
+    let home = tempfile::tempdir().expect("home");
+    let _guard = paths::AidHomeGuard::set(home.path());
+    for value in [
+        serde_json::json!({"type": "error", "tool_call": {}, "message": CORE_FIXTURE}),
+        serde_json::json!({"type": "assistant", "error": CORE_FIXTURE}),
+    ] {
+        assert!(!crate::agent::stream_completion::record_quota_exhaustion(
+            &value.to_string(), crate::types::AgentKind::Droid, None, None,
+        ).recorded());
+    }
+    assert!(!crate::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core").exists());
+}
+
 impl tokio::io::AsyncRead for ReadyStderr {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,

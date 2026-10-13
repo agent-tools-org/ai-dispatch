@@ -64,3 +64,38 @@ fn opencode_401_billing_and_tool_errors_do_not_set_auth_markers() {
         }
     }
 }
+
+fn assert_run_has_no_auth_marker(output: &str, stderr: bool) {
+    let home = tempfile::tempdir().expect("home");
+    let _guard = AidHomeGuard::set(home.path());
+    crate::paths::ensure_dirs().expect("directories");
+    std::fs::write(crate::paths::log_path("t-fixture"), output).expect("log");
+    if stderr {
+        std::fs::write(crate::paths::stderr_path("t-fixture"), output).expect("stderr");
+    }
+    assert!(!record_from_run("t-fixture", AgentKind::OpenCode));
+    assert!(!marker_path(AgentKind::OpenCode).exists());
+}
+
+#[test]
+fn tool_scoped_401_run_does_not_mark_auth_fix_regression() {
+    for field in ["tool_call", "tool_use_id", "toolCallId"] {
+        let mut error = serde_json::json!({"type": "error", "error": {"name": "APIError",
+            "data": {"statusCode": 401, "message": "Unauthorized"}}});
+        error[field] = serde_json::json!({});
+        assert_run_has_no_auth_marker(&error.to_string(), false);
+    }
+}
+
+#[test]
+fn stderr_401_fixture_and_replayed_log_do_not_mark_auth_fix_regression() {
+    let error = r#"{"type":"error","error":{"name":"APIError","data":{"statusCode":401,"message":"Unauthorized"}}}"#;
+    assert_run_has_no_auth_marker(error, true);
+}
+
+#[test]
+fn assistant_401_error_run_does_not_mark_auth_fix_regression() {
+    let error = serde_json::json!({"type": "assistant", "error": {"name": "APIError",
+        "data": {"statusCode": 401, "message": "Unauthorized"}}});
+    assert_run_has_no_auth_marker(&error.to_string(), false);
+}

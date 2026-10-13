@@ -105,15 +105,16 @@ fn update_task_status_rejects_illegal_failed_to_done() {
 }
 
 #[test]
-fn rescue_task_to_done_allows_named_failed_to_done_exception() {
+fn terminal_failure_cannot_be_refined_to_success() {
     let store = Store::open_memory().unwrap();
     insert_task_status(&store, "t-rescue", TaskStatus::Failed);
 
-    let changed = store.rescue_task_to_done("t-rescue").unwrap();
+    let changed = store.update_task_status("t-rescue", TaskStatus::Done).unwrap();
 
     let task = store.get_task("t-rescue").unwrap().unwrap();
-    assert!(changed);
-    assert_eq!(task.status, TaskStatus::Done);
+    assert!(!changed);
+    assert_eq!(task.status, TaskStatus::Failed);
+    assert!(store.get_events("t-rescue").unwrap().is_empty());
 }
 
 #[test]

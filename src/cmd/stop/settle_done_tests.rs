@@ -153,9 +153,10 @@ fn settle_done_quota_refinement_cannot_reverse_terminal_failure() {
         .update_verify_status(id.as_str(), VerifyStatus::Passed)
         .expect("verify passed");
     let before = store.get_task(id.as_str()).expect("get").expect("task");
-    crate::cmd::run::rescue_quota_failed_task(&store, &id, Some("quota refusal"));
+    assert!(!store.update_task_status(id.as_str(), TaskStatus::Done).expect("refinement"));
     let after = store.get_task(id.as_str()).expect("get").expect("task");
     assert_eq!(after.status, TaskStatus::Failed);
     assert_eq!(after.completed_at, before.completed_at);
     assert_eq!(after.duration_ms, before.duration_ms);
+    assert!(store.get_events(id.as_str()).expect("events").is_empty());
 }

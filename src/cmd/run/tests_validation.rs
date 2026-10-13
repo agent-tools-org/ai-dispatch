@@ -3,19 +3,12 @@
 use super::*;
 
 #[test]
-fn rescue_quota_failed_task_rescues_committed_work_non_standard_branch() {
+fn terminal_failure_preserves_committed_work_non_standard_branch() {
     let dir = TempDir::new().unwrap();
     let _guard = paths::AidHomeGuard::set(dir.path());
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
 
-    let wt_dir = dir.path().join("wt");
-    std::fs::create_dir_all(&wt_dir).unwrap();
-    git(&wt_dir, &["init", "-b", "feature-custom"]);
-    git(&wt_dir, &["config", "user.email", "aid@example.com"]);
-    git(&wt_dir, &["config", "user.name", "Aid Tester"]);
-    std::fs::write(wt_dir.join("file.txt"), "initial").unwrap();
-    git(&wt_dir, &["add", "file.txt"]);
-    git(&wt_dir, &["commit", "-m", "initial"]);
+    let wt_dir = quota_worktree(dir.path(), Some("feature-custom"));
 
     let start_sha = crate::commit::head_sha(wt_dir.to_str().unwrap()).unwrap();
 
@@ -32,8 +25,8 @@ fn rescue_quota_failed_task_rescues_committed_work_non_standard_branch() {
     task.verify_status = VerifyStatus::Passed;
     store.insert_task(&task).unwrap();
 
-    // Untouched: guard refuses rescue even on non-standard branch with base_branch=None.
-    rescue_quota_failed_task(
+    // A terminal failure stays failed before and after new work is committed.
+    assert_terminal_failure_preserved(
         &store,
         &task.id,
         read_quota_error_message(&task.id, &task.agent).as_deref(),
@@ -46,17 +39,18 @@ fn rescue_quota_failed_task_rescues_committed_work_non_standard_branch() {
     git(&wt_dir, &["add", "file.txt"]);
     git(&wt_dir, &["commit", "-m", "agent commit"]);
 
-    rescue_quota_failed_task(
+    assert_terminal_failure_preserved(
         &store,
         &task.id,
         read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
     let rescued = store.get_task("t-custom-branch").unwrap().unwrap();
-    assert_eq!(rescued.status, TaskStatus::Done);
+    assert_eq!(rescued.status, TaskStatus::Failed);
+    assert_eq!(std::fs::read_to_string(wt_dir.join("file.txt")).unwrap(), "agent commit");
 }
 
 #[test]
-fn rescue_quota_failed_task_marks_passed_verify_as_done() {
+fn terminal_failure_survives_passing_verification() {
     let dir = TempDir::new().unwrap();
     let _guard = paths::AidHomeGuard::set(dir.path());
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
@@ -70,17 +64,17 @@ fn rescue_quota_failed_task_marks_passed_verify_as_done() {
     task.verify_status = VerifyStatus::Passed;
     store.insert_task(&task).unwrap();
 
-    rescue_quota_failed_task(
+    assert_terminal_failure_preserved(
         &store,
         &task.id,
         read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
     let task = store.get_task("t-rescue-pass").unwrap().unwrap();
-    assert_eq!(task.status, TaskStatus::Done);
+    assert_eq!(task.status, TaskStatus::Failed);
 }
 
 #[test]
-fn rescue_quota_failed_task_keeps_failed_verify_failed() {
+fn terminal_failure_keeps_failed_verify_failed() {
     let dir = TempDir::new().unwrap();
     let _guard = paths::AidHomeGuard::set(dir.path());
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
@@ -92,7 +86,7 @@ fn rescue_quota_failed_task_keeps_failed_verify_failed() {
     let store = Store::open_memory().unwrap();
     let task = make_failed_task("t-rescue-fail");
     store.insert_task(&task).unwrap();
-    rescue_quota_failed_task(
+    assert_terminal_failure_preserved(
         &store,
         &task.id,
         read_quota_error_message(&task.id, &task.agent).as_deref(),

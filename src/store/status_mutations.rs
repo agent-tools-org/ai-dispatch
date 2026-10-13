@@ -19,7 +19,7 @@ impl Store {
     ) -> Result<bool> {
         let Some(current) = self.current_task_status(id)? else { return Ok(false) };
         if expected.is_some_and(|states| !states.contains(&current))
-            || !self.guard_known_status_transition(id, current, status, false)?
+            || !self.guard_known_status_transition(id, current, status)?
         {
             return Ok(false);
         }
@@ -65,17 +65,6 @@ impl Store {
         Ok(result)
     }
 
-    pub(crate) fn rescue_task_to_done(&self, id: &str) -> Result<bool> {
-        if !self.guard_status_transition(id, TaskStatus::Done, true)? {
-            return Ok(false);
-        }
-        let rows = self.db().execute(
-            "UPDATE tasks SET status = 'done' WHERE id = ?1 AND status = 'failed'",
-            params![id],
-        )?;
-        Ok(rows > 0)
-    }
-
     /// Set status to Failed only if currently Running or Waiting.
     /// Prevents zombie cleanup from clobbering a real completion status.
     pub fn fail_if_running(&self, id: &str) -> Result<bool> {
@@ -113,7 +102,7 @@ impl Store {
         {
             return Ok(false);
         }
-        self.guard_known_status_transition(id, current, next, false)
+        self.guard_known_status_transition(id, current, next)
     }
 
     pub(crate) fn guard_current_status(
@@ -128,19 +117,7 @@ impl Store {
         if !expected.contains(&current) {
             return Ok(false);
         }
-        self.guard_known_status_transition(id, current, next, false)
-    }
-
-    fn guard_status_transition(
-        &self,
-        id: &str,
-        next: TaskStatus,
-        allow_rescue: bool,
-    ) -> Result<bool> {
-        let Some(current) = self.current_task_status(id)? else {
-            return Ok(false);
-        };
-        self.guard_known_status_transition(id, current, next, allow_rescue)
+        self.guard_known_status_transition(id, current, next)
     }
 
     fn guard_known_status_transition(
@@ -148,15 +125,14 @@ impl Store {
         id: &str,
         current: TaskStatus,
         next: TaskStatus,
-        allow_rescue: bool,
     ) -> Result<bool> {
-        if current.is_terminal() && next.is_terminal() && next != TaskStatus::Merged && !allow_rescue
+        if current.is_terminal() && next.is_terminal() && next != TaskStatus::Merged
             && !(current == TaskStatus::Done && self.provisional_done(id)?)
         {
             return Ok(false);
         }
         if current == TaskStatus::Done && next == TaskStatus::Stopped { return Ok(true); }
-        if current.can_transition_to(next) || (allow_rescue && current.can_rescue_to_done(next)) {
+        if current.can_transition_to(next) {
             return Ok(true);
         }
         aid_warn!(

@@ -114,19 +114,12 @@ fn read_quota_error_message_ignores_agent_grep_in_log() {
 }
 
 #[test]
-fn rescue_quota_failed_task_refuses_empty_worktree_rescue() {
+fn terminal_failure_refuses_empty_worktree_rescue() {
     let dir = TempDir::new().unwrap();
     let _guard = paths::AidHomeGuard::set(dir.path());
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
 
-    let wt_dir = dir.path().join("wt");
-    std::fs::create_dir_all(&wt_dir).unwrap();
-    git(&wt_dir, &["init"]);
-    git(&wt_dir, &["config", "user.email", "aid@example.com"]);
-    git(&wt_dir, &["config", "user.name", "Aid Tester"]);
-    std::fs::write(wt_dir.join("file.txt"), "initial").unwrap();
-    git(&wt_dir, &["add", "file.txt"]);
-    git(&wt_dir, &["commit", "-m", "initial"]);
+    let wt_dir = quota_worktree(dir.path(), None);
 
     std::fs::write(
         paths::stderr_path("t-empty-wt"),
@@ -140,7 +133,7 @@ fn rescue_quota_failed_task_refuses_empty_worktree_rescue() {
     task.verify_status = VerifyStatus::Passed;
     store.insert_task(&task).unwrap();
 
-    rescue_quota_failed_task(
+    assert_terminal_failure_preserved(
         &store,
         &task.id,
         read_quota_error_message(&task.id, &task.agent).as_deref(),
@@ -151,19 +144,12 @@ fn rescue_quota_failed_task_refuses_empty_worktree_rescue() {
 }
 
 #[test]
-fn rescue_quota_failed_task_rescues_worktree_with_modified_code() {
+fn terminal_failure_preserves_worktree_with_modified_code() {
     let dir = TempDir::new().unwrap();
     let _guard = paths::AidHomeGuard::set(dir.path());
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
 
-    let wt_dir = dir.path().join("wt");
-    std::fs::create_dir_all(&wt_dir).unwrap();
-    git(&wt_dir, &["init"]);
-    git(&wt_dir, &["config", "user.email", "aid@example.com"]);
-    git(&wt_dir, &["config", "user.name", "Aid Tester"]);
-    std::fs::write(wt_dir.join("file.txt"), "initial").unwrap();
-    git(&wt_dir, &["add", "file.txt"]);
-    git(&wt_dir, &["commit", "-m", "initial"]);
+    let wt_dir = quota_worktree(dir.path(), None);
 
     std::fs::write(
         paths::stderr_path("t-work-wt"),
@@ -177,8 +163,8 @@ fn rescue_quota_failed_task_rescues_worktree_with_modified_code() {
     task.verify_status = VerifyStatus::Passed;
     store.insert_task(&task).unwrap();
 
-    // Clean worktree: guard must refuse rescue so task stays Failed.
-    rescue_quota_failed_task(
+    // The terminal failure is preserved with a clean worktree.
+    assert_terminal_failure_preserved(
         &store,
         &task.id,
         read_quota_error_message(&task.id, &task.agent).as_deref(),
@@ -186,32 +172,26 @@ fn rescue_quota_failed_task_rescues_worktree_with_modified_code() {
     let checked_task = store.get_task("t-work-wt").unwrap().unwrap();
     assert_eq!(checked_task.status, TaskStatus::Failed);
 
-    // Modify file: guard allows rescue to Done.
+    // Modifying a file does not reopen the terminal result.
     std::fs::write(wt_dir.join("file.txt"), "modified").unwrap();
-    rescue_quota_failed_task(
+    assert_terminal_failure_preserved(
         &store,
         &task.id,
         read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
 
     let task = store.get_task("t-work-wt").unwrap().unwrap();
-    assert_eq!(task.status, TaskStatus::Done);
+    assert_eq!(task.status, TaskStatus::Failed);
+    assert_eq!(std::fs::read_to_string(wt_dir.join("file.txt")).unwrap(), "modified");
 }
 
 #[test]
-fn rescue_quota_failed_task_rescues_untracked_source_files() {
+fn terminal_failure_preserves_untracked_source_files() {
     let dir = TempDir::new().unwrap();
     let _guard = paths::AidHomeGuard::set(dir.path());
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
 
-    let wt_dir = dir.path().join("wt");
-    std::fs::create_dir_all(&wt_dir).unwrap();
-    git(&wt_dir, &["init"]);
-    git(&wt_dir, &["config", "user.email", "aid@example.com"]);
-    git(&wt_dir, &["config", "user.name", "Aid Tester"]);
-    std::fs::write(wt_dir.join("file.txt"), "initial").unwrap();
-    git(&wt_dir, &["add", "file.txt"]);
-    git(&wt_dir, &["commit", "-m", "initial"]);
+    let wt_dir = quota_worktree(dir.path(), None);
 
     std::fs::write(
         paths::stderr_path("t-untracked-wt"),
@@ -225,10 +205,8 @@ fn rescue_quota_failed_task_rescues_untracked_source_files() {
     task.verify_status = VerifyStatus::Passed;
     store.insert_task(&task).unwrap();
 
-    // Nothing written yet, so the guard must refuse. Without this half the test
-    // passes even when `produced_work` is forced to return true — a cross-audit
-    // caught it doing exactly that, and a mutation run confirmed it.
-    rescue_quota_failed_task(
+    // Both an untouched and a changed worktree preserve the terminal result.
+    assert_terminal_failure_preserved(
         &store,
         &task.id,
         read_quota_error_message(&task.id, &task.agent).as_deref(),
@@ -240,12 +218,13 @@ fn rescue_quota_failed_task_rescues_untracked_source_files() {
     // which is how the first version of this guard threw such work away.
     std::fs::write(wt_dir.join("new_file.txt"), "untracked work").unwrap();
 
-    rescue_quota_failed_task(
+    assert_terminal_failure_preserved(
         &store,
         &task.id,
         read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
 
     let task = store.get_task("t-untracked-wt").unwrap().unwrap();
-    assert_eq!(task.status, TaskStatus::Done);
+    assert_eq!(task.status, TaskStatus::Failed);
+    assert_eq!(std::fs::read_to_string(wt_dir.join("new_file.txt")).unwrap(), "untracked work");
 }

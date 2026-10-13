@@ -117,3 +117,7 @@ impl fmt::Display for WorkgroupId {
 #[cfg(test)]
 #[path = "types/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "types/status_transition_tests.rs"]
+mod status_transition_tests;

@@ -39,10 +39,6 @@ pub(crate) fn restore_after_merge_failure(
     store.update_task_status(task_id, status)
 }
 
-pub(crate) fn rescue_to_done(store: &Store, task_id: &TaskId) -> Result<bool> {
-    store.rescue_task_to_done(task_id.as_str())
-}
-
 pub(crate) fn mark_failed(store: &Store, task_id: &TaskId) -> Result<bool> {
     let changed = store.update_task_status(task_id.as_str(), TaskStatus::Failed)?;
     if !changed {

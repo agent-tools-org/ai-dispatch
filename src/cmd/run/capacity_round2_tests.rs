@@ -176,3 +176,27 @@ fn provider_capacity_round2_classifies_decoded_turn_failure_and_reconnect_sequen
         assert_eq!(provider_capacity::read(&store, &row.id, row.agent).is_some(), capacity);
     }
 }
+
+#[tokio::test]
+async fn provider_capacity_round2_ordinary_cascade_preserves_prompt_and_completion_hook() {
+    let home = tempfile::tempdir().expect("home");
+    let _home = paths::AidHomeGuard::set(home.path());
+    paths::ensure_dirs().expect("dirs");
+    install_agent(home.path(), "ordinary-cascade", "echo completed");
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let row = task("t-round2-ordinary", home.path());
+    store.insert_task(&row).expect("parent");
+    let marker = home.path().join("cascade-hook");
+    let args = RunArgs {
+        agent_name: "codex".into(), prompt: "Normal cascade feedback".into(),
+        dir: row.effective_dir.clone(), cascade: vec!["ordinary-cascade".into()],
+        on_done: Some(format!("touch '{}'", marker.display())), foreground: true, no_audit: true,
+        skills: vec![crate::cmd::run::NO_SKILL_SENTINEL.into()], ..Default::default()
+    };
+    let id = crate::cmd::run::run_lifecycle::retry_or_cascade(&store, &args, &row.id)
+        .await.expect("cascade").expect("child");
+    let saved = RunArgs::saved_for_task(&store, id.as_str()).expect("saved").expect("args");
+    assert_eq!(saved.prompt, args.prompt);
+    assert_eq!(saved.on_done, args.on_done);
+    assert!(marker.exists(), "ordinary cascade must keep its completion hook");
+}

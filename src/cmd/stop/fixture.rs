@@ -44,4 +44,3 @@ pub(crate) fn make_task(id: &str, status: TaskStatus) -> Task {
         delivery_assessment: None,
     }
 }
-

@@ -44,4 +44,3 @@ pub(super) fn task(id: &str, status: TaskStatus, dir: Option<&str>, verify: Opti
         delivery_assessment: None,
     }
 }
-

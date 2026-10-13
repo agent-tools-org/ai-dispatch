@@ -198,7 +198,10 @@ async fn truncated_stderr_replay_cannot_mark_auth_fix_regression() {
         .expect("stderr");
     let mut log = tokio::fs::File::create(paths::log_path(id.as_str())).await.expect("log");
     append_stderr_to_log(&mut log, &id).await.expect("replay");
-    assert!(!crate::auth_marker::record_from_run(id.as_str(), crate::types::AgentKind::OpenCode));
+    assert!(!crate::auth_marker::record_from_run(
+        id.as_str(), crate::types::AgentKind::OpenCode,
+        &crate::store::Store::open_memory().expect("store"),
+    ));
     assert_eq!(crate::auth_marker::auth_status(crate::types::AgentKind::OpenCode, None).state, "unknown");
 }
 

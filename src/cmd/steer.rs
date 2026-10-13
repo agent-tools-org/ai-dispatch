@@ -70,7 +70,6 @@ fn queue_wrap_up(store: &Store, task_id: &str) -> Result<bool> {
          VALUES (?1, 'in', ?2, 'steer', ?3)",
         rusqlite::params![task_id, message, chrono::Local::now().to_rfc3339()],
     )?;
-    crate::input_signal::write_steer(task_id, message)?;
     tx.commit()?;
     Ok(true)
 }

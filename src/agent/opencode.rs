@@ -47,10 +47,11 @@ pub(crate) fn parse_json_event(
                 .and_then(|t| t.as_str())
                 .unwrap_or("")
                 .to_string();
-            (detail, None)
+            (detail, Some(json!({ "assistant_output": true })))
         }
         "text" => {
-            (v.pointer("/part/text").and_then(|t| t.as_str()).unwrap_or("").to_string(), None)
+            (v.pointer("/part/text").and_then(|t| t.as_str()).unwrap_or("").to_string(),
+                Some(json!({ "assistant_output": true })))
         }
         "auto_compact" | "git_snapshot" => (milestone_detail(v, event_type), None),
         "step_start" => return None,
@@ -84,7 +85,10 @@ pub(crate) fn parse_json_event(
                     rate_limit::mark_rate_limited_for_message(&marker_kind, custom_name, &message);
                 }
             }
-            (detail.to_string(), None)
+            let auth = crate::auth_marker::auth_failure_line(
+                &v.to_string(), marker_kind, crate::quota_channel::Channel::CliStream,
+            );
+            (detail.to_string(), auth.map(|message| json!({ "opencode_auth_failure": message })))
         }
         _ => return None,
     };

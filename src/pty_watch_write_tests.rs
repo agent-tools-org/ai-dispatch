@@ -295,3 +295,6 @@ fn grok_output_file_contains_markdown_instead_of_json_envelope() {
         "# Findings\n\nThe report is rendered markdown."
     );
 }
+
+#[path = "pty_watch/refusal_round2_tests.rs"]
+mod refusal_round2_tests;

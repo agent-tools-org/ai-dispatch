@@ -219,7 +219,7 @@ pub(super) fn persist_result_file(
 }
 
 pub(super) fn handle_failed_postprocess(
-    _store: &Arc<Store>,
+    store: &Arc<Store>,
     task_id: &TaskId,
     task: &Task,
     agent_kind: AgentKind,
@@ -229,7 +229,7 @@ pub(super) fn handle_failed_postprocess(
     runtime_hooks: &[hooks::Hook],
 ) -> Option<String> {
     let quota_error_message = read_quota_error_message(task_id, &agent_kind);
-    crate::auth_marker::record_from_run(task_id.as_str(), agent_kind);
+    crate::auth_marker::record_from_run(task_id.as_str(), agent_kind, store);
     if let Some(message) = quota_error_message.as_deref() {
         let model = task
             .requested_model

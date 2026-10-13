@@ -15,7 +15,12 @@ fn opencode_structured_401_sets_auth_marker_refusal_regression() {
     }}})
     .to_string();
     std::fs::write(crate::paths::log_path("t-auth"), &error).expect("log");
-    assert!(record_from_run("t-auth", AgentKind::OpenCode));
+    let store = failed_opencode_store("t-auth");
+    let task = store.get_task("t-auth").expect("task").expect("task");
+    let event = crate::agent::get_agent(AgentKind::OpenCode)
+        .parse_event(&task.id, &error).expect("decoded provider event");
+    store.insert_event(&event).expect("event");
+    assert!(record_from_run("t-auth", AgentKind::OpenCode, &store));
     assert!(auth_status(AgentKind::OpenCode, None).failed());
     for channel in [Channel::CliStream, Channel::CliStderr] {
         assert_eq!(auth_failure_line(&error, AgentKind::OpenCode, channel).is_some(),
@@ -74,7 +79,14 @@ fn assert_run_has_no_auth_marker(output: &str, stderr: bool) {
     if stderr {
         std::fs::write(crate::paths::stderr_path("t-fixture"), output).expect("stderr");
     }
-    assert!(!record_from_run("t-fixture", AgentKind::OpenCode));
+    let store = failed_opencode_store("t-fixture");
+    let task = store.get_task("t-fixture").expect("task").expect("task");
+    if !stderr {
+        if let Some(event) = crate::agent::get_agent(AgentKind::OpenCode).parse_event(&task.id, output) {
+            store.insert_event(&event).expect("event");
+        }
+    }
+    assert!(!record_from_run("t-fixture", AgentKind::OpenCode, &store));
     assert!(!marker_path(AgentKind::OpenCode).exists());
 }
 
@@ -100,4 +112,14 @@ fn assistant_401_error_run_does_not_mark_auth_fix_regression() {
     let error = serde_json::json!({"type": "assistant", "error": {"name": "APIError",
         "data": {"statusCode": 401, "message": "Unauthorized"}}});
     assert_run_has_no_auth_marker(&error.to_string(), false);
+}
+
+fn failed_opencode_store(task_id: &str) -> crate::store::Store {
+    let store = crate::store::Store::open_memory().expect("store");
+    store.db().execute(
+        "INSERT INTO tasks (id, agent, prompt, status, exit_code, created_at)
+         VALUES (?1, 'opencode', 'auth fixture', 'failed', 1, ?2)",
+        rusqlite::params![task_id, Local::now().to_rfc3339()],
+    ).expect("task");
+    store
 }

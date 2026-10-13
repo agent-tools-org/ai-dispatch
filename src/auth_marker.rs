@@ -8,7 +8,8 @@ use chrono::{DateTime, Duration, Local};
 use serde::{Deserialize, Serialize};
 
 use crate::quota_channel::{provider_attributable, Channel};
-use crate::types::AgentKind;
+use crate::store::Store;
+use crate::types::{AgentKind, TaskStatus};
 
 /// Auth observations without credential stamps expire after this interval.
 pub(crate) const AUTH_FAILED_TTL_SECS: i64 = 3600;
@@ -129,20 +130,45 @@ pub(crate) fn auth_failure_line(raw: &str, agent: AgentKind, channel: Channel) -
         .map(|line| line.trim().chars().take(240).collect())
 }
 
-/// Read a failed run's stderr and stream log; write the marker on a match.
-pub(crate) fn record_from_run(task_id: &str, agent: AgentKind) -> bool {
-    let sources = [
-        (crate::paths::stderr_path(task_id), Channel::CliStderr),
-        (crate::paths::log_path(task_id), Channel::CliStream),
-    ];
-    let line = sources.iter().find_map(|(path, channel)| {
-        let raw = if *channel == Channel::CliStream {
-            crate::quota_channel::read_run_stream(task_id)?
-        } else {
-            std::fs::read_to_string(path).ok()?
+/// Read failed-run evidence; OpenCode requires decoded events and a failed process exit.
+pub(crate) fn record_from_run(task_id: &str, agent: AgentKind, store: &Store) -> bool {
+    let line = if agent == AgentKind::OpenCode {
+        let Ok(Some(task)) = store.get_task(task_id) else {
+            return false;
         };
-        auth_failure_line(&raw, agent, *channel)
-    });
+        if task.status != TaskStatus::Failed || !task.exit_code.is_some_and(|code| code != 0) {
+            return false;
+        }
+        store.get_events(task_id).ok().and_then(|events| {
+            events
+                .iter()
+                .rev()
+                .filter(|event| event.timestamp >= task.created_at)
+                .filter_map(|event| event.metadata.as_ref())
+                .find(|metadata| {
+                    metadata.get("opencode_auth_failure").is_some()
+                        || metadata["assistant_output"] == true
+                })
+                .and_then(|metadata| {
+                    metadata["opencode_auth_failure"]
+                        .as_str()
+                        .map(str::to_owned)
+                })
+        })
+    } else {
+        let sources = [
+            (crate::paths::stderr_path(task_id), Channel::CliStderr),
+            (crate::paths::log_path(task_id), Channel::CliStream),
+        ];
+        sources.iter().find_map(|(path, channel)| {
+            let raw = if *channel == Channel::CliStream {
+                crate::quota_channel::read_run_stream(task_id)?
+            } else {
+                std::fs::read_to_string(path).ok()?
+            };
+            auth_failure_line(&raw, agent, *channel)
+        })
+    };
     match line {
         Some(line) => {
             record_failure_at(agent, &line, Local::now());
@@ -220,70 +246,8 @@ fn opencode_credential_stamp() -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::paths::AidHomeGuard;
-
-    const GROK_ERROR: &str = r#"{"type":"error","message":"Not signed in. To authenticate without a browser, run:\n  grok login --device-code"}"#;
-
-    #[test]
-    fn no_evidence_is_unknown() {
-        let home = tempfile::tempdir().expect("home");
-        let _guard = AidHomeGuard::set(home.path());
-        let status = auth_status(AgentKind::Grok, None);
-        assert_eq!(status.state, "unknown");
-        assert_eq!(status.observed_at, None);
-    }
-
-    #[test]
-    fn not_signed_in_run_sets_failed_with_observed_time() {
-        let home = tempfile::tempdir().expect("home");
-        let _guard = AidHomeGuard::set(home.path());
-        std::fs::create_dir_all(crate::paths::logs_dir()).expect("logs");
-        std::fs::write(crate::paths::log_path("t-auth"), format!("{GROK_ERROR}\n")).expect("log");
-        assert!(record_from_run("t-auth", AgentKind::Grok));
-        let status = auth_status(AgentKind::Grok, None);
-        assert_eq!(status.state, "failed");
-        assert!(status.observed_at.is_some());
-        assert!(status.message.as_deref().is_some_and(|m| m.starts_with("Not signed in")));
-        assert_eq!(auth_status(AgentKind::Codex, None).state, "unknown");
-    }
-
-    #[test]
-    fn failed_verdict_expires_after_ttl() {
-        let home = tempfile::tempdir().expect("home");
-        let _guard = AidHomeGuard::set(home.path());
-        let at = Local::now() - Duration::seconds(AUTH_FAILED_TTL_SECS + 5);
-        record_failure_at(AgentKind::Grok, "Not signed in.", at);
-        assert_eq!(auth_status(AgentKind::Grok, None).state, "unknown");
-        let fresh = Local::now() - Duration::seconds(AUTH_FAILED_TTL_SECS - 60);
-        record_failure_at(AgentKind::Grok, "Not signed in.", fresh);
-        assert_eq!(auth_status(AgentKind::Grok, None).state, "failed");
-        let later = fresh + Duration::seconds(AUTH_FAILED_TTL_SECS);
-        assert_eq!(auth_status_at(AgentKind::Grok, None, later).state, "unknown");
-    }
-
-    #[test]
-    fn successful_run_clears_failed_verdict() {
-        let home = tempfile::tempdir().expect("home");
-        let _guard = AidHomeGuard::set(home.path());
-        record_failure_at(AgentKind::Claude, "Invalid API key · Please run /login", Local::now());
-        assert!(auth_status(AgentKind::Claude, None).failed());
-        clear_on_success(AgentKind::Claude);
-        assert_eq!(auth_status(AgentKind::Claude, None).state, "unknown");
-    }
-
-    #[test]
-    fn unmatched_or_missing_output_never_marks_failed() {
-        let home = tempfile::tempdir().expect("home");
-        let _guard = AidHomeGuard::set(home.path());
-        assert!(!record_from_run("t-missing", AgentKind::Grok));
-        let quoted = r#"{"type":"assistant","message":{"content":[{"text":"Not signed in"}]}}"#;
-        assert_eq!(auth_failure_line(quoted, AgentKind::Grok, Channel::CliStream), None);
-        assert_eq!(auth_failure_line("Not signed in", AgentKind::Codex, Channel::CliStderr), None);
-        assert_eq!(auth_status(AgentKind::Grok, None).state, "unknown");
-    }
-}
+#[path = "auth_marker_tests.rs"]
+mod tests;
 
 #[cfg(test)]
 #[path = "auth_marker_refusal_tests.rs"]

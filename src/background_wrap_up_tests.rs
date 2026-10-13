@@ -39,9 +39,9 @@ fn ninety_percent_cap_steers_commit_and_report_once_refusal_regression() {
     assert!(messages[0].content.contains("commit"));
     assert!(messages[0].content.contains("report"));
     assert!(
-        crate::input_signal::take_steer(task.id.as_str())
-            .expect("steer")
-            .is_some()
+        store.pending_inbound_for_task(task.id.as_str())
+            .expect("pending steer")
+            .len() == 1
     );
     check_zombie_tasks_with(&store, |_| true).expect("reap again");
     assert_eq!(
@@ -125,14 +125,15 @@ fn wrap_up_delivery_failure_can_recover_once_fix_regression() {
     task.read_only = false;
     store.insert_task(&task).expect("task");
     let signal = crate::paths::steer_signal_path(task.id.as_str());
-    let parent = signal.parent().expect("parent");
-    std::fs::remove_dir_all(parent).expect("remove jobs");
-    std::fs::write(parent, "block steer delivery").expect("blocked parent");
+    store.db().execute_batch(
+        "CREATE TRIGGER fail_wrap_insert BEFORE INSERT ON task_messages BEGIN
+           SELECT RAISE(ABORT, 'synthetic publication failure'); END;",
+    ).expect("blocked publication");
     assert!(crate::cmd::steer::wrap_up_before_timeout(&store, task.id.as_str(), 540, 600).is_err());
-    std::fs::remove_file(parent).expect("unblock");
+    store.db().execute_batch("DROP TRIGGER fail_wrap_insert;").expect("unblock");
     assert!(crate::cmd::steer::wrap_up_before_timeout(&store, task.id.as_str(), 541, 600)
         .expect("retry"));
-    assert!(crate::input_signal::take_steer(task.id.as_str()).expect("steer").is_some());
+    assert_eq!(store.pending_inbound_for_task(task.id.as_str()).expect("pending steer").len(), 1);
     assert!(!crate::cmd::steer::wrap_up_before_timeout(&store, task.id.as_str(), 542, 600)
         .expect("duplicate poll"));
     assert_eq!(store.get_events(task.id.as_str()).expect("events").len(), 1);

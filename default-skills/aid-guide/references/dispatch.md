@@ -318,10 +318,13 @@ without changing the hint’s advice profile. Each candidate also carries `auth`
 `failed` (with `observed_at` and `message`) when a run of that agent ended on a
 recognised not-signed-in refusal within the last hour (grok `Not signed in`,
 claude `Please run /login` / `Not logged in`, oz `credentials are invalid`).
-OpenCode's provider error envelope on the stream with `APIError` and `statusCode:401` sets an auth hold until
-its credential/config file metadata changes or an explicit successful run clears it.
-Billing refusals, assistant/tool output, and raw stderr fixtures cannot set that auth hold. Environment-only
-credential changes require an explicit successful run. Otherwise auth is `unknown`.
+OpenCode sets an auth hold only after a failed process exit with a decoded stream error event carrying
+`APIError` and `statusCode:401`, with no later decoded assistant output. The hold lasts until credential/config
+file metadata changes or an explicit successful run clears it. Billing refusals, assistant/tool envelopes,
+and raw log lines that were never decoded as error events cannot set it. OpenCode's PTY merges stdout and
+stderr: a tool printing an exact standalone error event and then failing before further assistant output is
+indistinguishable from a provider failure and can still set the hold. Environment-only credential changes
+require an explicit successful run. Otherwise auth is `unknown`.
 Droid Core dated holds also require provider error envelopes on the stream;
 raw stderr and assistant/tool output cannot set them.
 A successful run clears it; aid never reports `ok` and

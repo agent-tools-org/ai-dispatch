@@ -25,6 +25,7 @@ fn inject_skill_includes_gotchas_scripts_and_references_for_folder_skill() {
         &AgentKind::Codex,
         &["implementer".to_string()],
         true,
+        &mut Vec::new(),
     )
     .unwrap();
 
@@ -51,6 +52,7 @@ fn inject_skill_includes_methodology_for_short_prompts() {
         &AgentKind::Codex,
         &["implementer".to_string()],
         true,
+        &mut Vec::new(),
     )
     .unwrap();
 

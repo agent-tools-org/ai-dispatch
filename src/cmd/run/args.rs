@@ -129,7 +129,7 @@ impl RunArgs {
         let task = store.get_task(task_id)?.with_context(|| format!("Task {task_id} not found"))?;
         args.agent_name = task.agent_display_name().to_string();
         args.dir = spec.dir.clone();
-        args.prompt = task.resolved_prompt.unwrap_or(task.prompt);
+        args.prompt = task.prompt;
         args.budget = spec.budget;
         args.on_done = None;
         args.origin = DispatchOrigin::Automatic;

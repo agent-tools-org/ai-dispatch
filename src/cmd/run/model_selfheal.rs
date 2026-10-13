@@ -5,7 +5,6 @@
 use anyhow::Result;
 use std::sync::Arc;
 
-use crate::cmd::retry_logic;
 use crate::{store::Store, types::*};
 
 use super::{RunArgs, apply_retry_target, inherit_retry_base_branch, run};
@@ -40,15 +39,13 @@ pub(crate) async fn maybe_auto_retry_after_model_unavailable(
         task.agent
     );
 
-    let root_prompt =
-        retry_logic::root_prompt(store.as_ref(), &task).unwrap_or_else(|| args.prompt.clone());
     let mut retry_args = RunArgs::for_retry(store, &task)?;
     retry_args.dir = args.dir.clone();
     retry_args.env = args.env.clone();
     retry_args.foreground = args.foreground;
     retry_args.announce = args.announce;
     retry_args.on_done = None;
-    retry_args.prompt = root_prompt;
+    retry_args.prompt = task.prompt.clone();
     retry_args.force_default_model = true;
     retry_args.model_source = crate::agent::model_validation::ModelSource::AidResolved;
     retry_args.model = None;

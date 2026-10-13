@@ -42,7 +42,7 @@ fn worker_rebuild_keeps_every_saved_field() {
     for (key, value) in [
         ("agent_name", json!("resolved-agent")),
         ("dir", json!("/tmp/spec")),
-        ("prompt", json!("resolved prompt")),
+        ("prompt", json!(row.prompt)),
         ("budget", json!(false)),
         ("on_done", Value::Null),
         ("origin", json!("automatic")),

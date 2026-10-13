@@ -1,8 +1,6 @@
-// Shared helpers for `aid show` — task loading, context reconstruction, diff stats,
-// change detection, research output, and stderr tailing.
-// Exports: `load_task` (pub(crate)). Private helpers used by `show.rs` via `pub(super)`.
-// Deps: `crate::cmd`, `crate::paths`, `crate::skills`, `crate::store`, `crate::types`,
-// `crate::workgroup`, `crate::templates`; uses `super::extract_messages_from_log`.
+// Shared task and output helpers for aid show.
+// Loads stored tasks, detects changes, and renders failure/research details.
+// Depends on Store, paths, Task, and output parsing.
 
 use anyhow::Result;
 use std::path::Path;
@@ -18,40 +16,6 @@ pub(crate) fn load_task(store: &Arc<Store>, task_id: &str) -> Result<Task> {
     store
         .get_task(task_id)?
         .ok_or_else(|| anyhow::anyhow!("Task '{task_id}' not found"))
-}
-
-pub(super) fn reconstruct_context(store: &Arc<Store>, task: &Task) -> Result<(String, String)> {
-    let workgroup = if let Some(group_id) = task.workgroup_id.as_deref() {
-        store.get_workgroup(group_id)?
-    } else {
-        None
-    };
-    let milestones = if let Some(group_id) = task.workgroup_id.as_deref() {
-        store.get_workgroup_milestones(group_id)?
-    } else {
-        vec![]
-    };
-    let skill_names = crate::skills::dispatched_skills(store, task.id.as_str());
-    let skill_parts = skill_names
-        .iter()
-        .map(|skill| {
-            crate::skills::resolve_skill_content(skill)
-                .unwrap_or_else(|err| format!("[missing skill: {skill}: {err}]"))
-        })
-        .collect::<Vec<_>>();
-    let skill_content = skill_parts.join("\n\n");
-    let mut resolved_prompt = crate::workgroup::compose_prompt(
-        &task.prompt,
-        None,
-        workgroup.as_ref(),
-        &milestones,
-        &[],
-    );
-    if !skill_content.is_empty() {
-        resolved_prompt = format!("{resolved_prompt}\n\n--- Methodology ---\n{skill_content}");
-    }
-    resolved_prompt = crate::templates::inject_milestone_prompt(&resolved_prompt);
-    Ok((skill_content, resolved_prompt))
 }
 
 pub(super) fn inplace_diff_stat(repo_path: &str) -> Option<String> {

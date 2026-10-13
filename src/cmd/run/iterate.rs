@@ -66,9 +66,20 @@ pub async fn maybe_iterate(
         .unwrap_or(".");
     let eval_result = run_eval_command(&iterate_config.eval_command, working_dir)?;
 
+    if record_terminal_iteration(store, task_id, iterate_config, iteration, &eval_result) {
+        return Ok(None);
+    }
+    run_iteration_retry(store, task_id, args, iterate_config, &task, iteration, &eval_result).await
+
+}
+
+fn record_terminal_iteration(
+    store: &Store, task_id: &TaskId, iterate_config: &IterateConfig,
+    iteration: u32, eval_result: &EvalResult,
+) -> bool {
     if eval_result.exit_code == 0 {
         insert_iteration_event(
-            store.as_ref(),
+            store,
             task_id,
             format!("Iteration {iteration}/{}: eval passed", iterate_config.max_iterations),
             iteration,
@@ -76,12 +87,12 @@ pub async fn maybe_iterate(
             "passed",
             None,
         );
-        return Ok(None);
+        return true;
     }
 
     if iteration >= iterate_config.max_iterations {
         insert_iteration_event(
-            store.as_ref(),
+            store,
             task_id,
             format!(
                 "Iteration {iteration}/{}: eval failed (exit {}), max iterations reached",
@@ -92,12 +103,17 @@ pub async fn maybe_iterate(
             "max_reached",
             Some(&eval_result.output),
         );
-        return Ok(None);
+        return true;
     }
 
+    false
+}
+
+async fn run_iteration_retry(
+    store: &Arc<Store>, task_id: &TaskId, args: &RunArgs, iterate_config: &IterateConfig,
+    task: &Task, iteration: u32, eval_result: &EvalResult,
+) -> Result<Option<TaskId>> {
     let next_iteration = iteration + 1;
-    let root_prompt =
-        crate::cmd::retry_logic::root_prompt(store.as_ref(), &task).unwrap_or_else(|| args.prompt.clone());
     let feedback = build_feedback_prompt(
         iterate_config.feedback_template.as_deref(),
         next_iteration,
@@ -118,17 +134,7 @@ pub async fn maybe_iterate(
         Some(&eval_result.output),
     );
 
-    let mut retry_args = RunArgs::for_retry(store, &task)?;
-    retry_args.dir = args.dir.clone();
-    retry_args.env = args.env.clone();
-    retry_args.foreground = args.foreground;
-    retry_args.announce = args.announce;
-    retry_args.on_done = None;
-    retry_args.prompt = format!("[Iteration feedback]\n{feedback}\n\n[Original task]\n{root_prompt}");
-    retry_args.parent_task_id = Some(task_id.as_str().to_string());
-    retry_args.background = false;
-    retry_args.existing_task_id = Some(retry_task_id.clone());
-    apply_retry_target(&task, &mut retry_args)?;
+    let retry_args = iteration_retry_args(store, task, args, &feedback, &retry_task_id)?;
 
     let final_task_id = Box::pin(super::run(store.clone(), retry_args)).await?;
     insert_iteration_event(
@@ -141,6 +147,24 @@ pub async fn maybe_iterate(
         None,
     );
     Ok(Some(final_task_id))
+}
+
+fn iteration_retry_args(
+    store: &Store, task: &Task, args: &RunArgs, feedback: &str, retry_task_id: &TaskId,
+) -> Result<RunArgs> {
+    let mut retry_args = RunArgs::for_retry(store, &task)?;
+    retry_args.dir = args.dir.clone();
+    retry_args.env = args.env.clone();
+    retry_args.foreground = args.foreground;
+    retry_args.announce = args.announce;
+    retry_args.on_done = None;
+    retry_args.prompt = format!("[Iteration feedback]\n{feedback}\n\n[Original task]\n{}", task.prompt);
+    retry_args.parent_task_id = Some(task.id.as_str().to_string());
+    retry_args.background = false;
+    retry_args.existing_task_id = Some(retry_task_id.clone());
+    apply_retry_target(task, &mut retry_args)?;
+
+    Ok(retry_args)
 }
 
 fn run_eval_command(eval_cmd: &str, working_dir: &str) -> Result<EvalResult> {

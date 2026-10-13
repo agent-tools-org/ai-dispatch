@@ -444,6 +444,29 @@ dispatch an explicit agent.
 ## Context and instructions
 
 Use `--context <path>...` for source material, not extra positional arguments.
+
+The task brief is always delivered whole, including retry feedback before the
+original task on session resume. Shared context, file context, findings, peer
+milestones, parent/sibling summaries (including file lists), prior/shared output,
+methodology, memories, project/team context, toolbox instructions, and batch
+sibling previews are bounded independently with in-place omission notes. When prompt
+composition drops auxiliary content through byte bounds or entry caps, `aid run` prints one `Prompt context bounded:`
+warning and records a setup event with the omitted sections. `aid show --context`
+and ShareGPT export use the stored resolved prompt without reconstruction. For
+legacy tasks without it, show reports that launch context was not stored and
+ShareGPT uses the raw caller prompt. Large task briefs may
+exceed an agent's context window; aid does not shorten them to fit.
+Retries prepend new feedback to the failed task's own raw caller brief, preserving
+all existing correction, checklist, and iteration blocks. Missing-delivery
+recovery does the same, including when a missing Codex rollout starts a fresh session. Parent linkage never
+replaces that brief. Background cascades reuse the raw brief and assemble fresh
+launch context; workers launch the separately stored resolved prompt.
+A template without `{{prompt}}` gets the caller brief appended after it.
+OpenCode, Kilo and MiMoCode take plain `--context` file paths as native file
+arguments, which the worker does not pass, so those files do not reach them.
+On-demand memory search stops at the memory cap per query; matches beyond it
+are not counted as omitted.
+
 Use `--context-from <task>...` to inject prior task output. If that task
 declared `-o` and the owned file is missing, aid reports the absence and does
 not substitute the task log. Use `--scope` to state intended files. Use

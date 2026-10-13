@@ -30,7 +30,7 @@ fn resolve_context_from_prefers_extracted_log_messages() {
     task.log_path = Some(log.path().display().to_string());
     store.insert_task(&task).unwrap();
 
-    let context = resolve_context_from(&store, &[task.id.as_str().to_string()])
+    let context = resolve_context_from(&store, &[task.id.as_str().to_string()], &mut Vec::new())
         .unwrap()
         .unwrap();
 
@@ -49,7 +49,7 @@ fn resolve_context_from_reads_shared_file() {
     )
     .unwrap();
 
-    let context = resolve_context_from(&store, &["shared:summary.txt".to_string()])
+    let context = resolve_context_from(&store, &["shared:summary.txt".to_string()], &mut Vec::new())
         .unwrap()
         .unwrap();
 
@@ -72,7 +72,7 @@ fn resolve_context_from_reports_missing_owned_output_instead_of_log() {
     task.log_path = Some(log.path().display().to_string());
     store.insert_task(&task).unwrap();
 
-    let context = resolve_context_from(&store, &[task.id.as_str().to_string()])
+    let context = resolve_context_from(&store, &[task.id.as_str().to_string()], &mut Vec::new())
         .unwrap()
         .unwrap();
 

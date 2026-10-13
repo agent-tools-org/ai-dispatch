@@ -11,7 +11,10 @@ pub(super) fn prepare_launch(
     agent: &dyn agent::Agent, home_guard: &agent::home_isolation::IsolatedHomeGuard,
 ) -> Result<(std::process::Command, Option<String>)> {
     let opts = run_opts(spec, args);
-    let worktree_branch = store.get_task(&spec.task_id)?.and_then(|task| task.worktree_branch);
+    let task = store.get_task(&spec.task_id)?;
+    let launch_prompt = task.as_ref().and_then(|task| task.resolved_prompt.as_deref())
+        .unwrap_or(&spec.prompt);
+    let worktree_branch = task.as_ref().and_then(|task| task.worktree_branch.clone());
     let mut cargo_target_dir = agent::rust_build_cache_target_dir(args.dir.as_deref(), worktree_branch.as_deref());
     let uses_durable_codex_home = agent::should_use_durable_codex_home(agent.kind(), args.sandbox, args.container.is_some());
     let mut temp_dir = None;
@@ -30,7 +33,7 @@ pub(super) fn prepare_launch(
     }
     let mut std_cmd = agent
         .build_command_with_context(
-            &args.prompt,
+            launch_prompt,
             &opts,
             agent::CommandContext { durable_codex_home: uses_durable_codex_home, writable_roots },
         )
@@ -118,4 +121,60 @@ fn wrap_command(
         cmd
     };
     Ok((cmd, container_name))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn worker_launch_preservation_uses_resolved_prompt_with_raw_lifecycle_args() {
+        let home = tempfile::tempdir().unwrap();
+        let _guard = crate::paths::AidHomeGuard::set(home.path());
+        crate::paths::ensure_dirs().unwrap();
+        let store = Arc::new(Store::open_memory().unwrap());
+        let id = "t-launch-preservation";
+        let resolved = "Resolved launch context\nCaller brief";
+        store
+            .insert_waiting_task(
+                id,
+                "codex",
+                "Caller brief",
+                Some(resolved),
+                None,
+                None,
+                None,
+                None,
+                None,
+                false,
+                false,
+            )
+            .unwrap();
+        store
+            .update_task_dispatch_args(id, &RunArgs::default().dispatch_args_json().unwrap())
+            .unwrap();
+        let spec = serde_json::from_value(serde_json::json!({
+            "task_id": id, "worker_pid": null, "agent_name": "codex", "prompt": "Stale spec",
+            "dir": home.path().to_str(), "output": null, "model": null, "verify": null,
+            "retry": 0, "group": null, "interactive": false,
+        }))
+        .unwrap();
+        let args = RunArgs::for_worker(&store, &spec).unwrap();
+        let agent = capture_agent();
+        let isolated =
+            agent::home_isolation::IsolatedHomeGuard::create_from_home(Some(home.path()), Some(id))
+                .unwrap();
+        let (command, _) = prepare_launch(&store, &spec, &args, &agent, &isolated).unwrap();
+        assert_eq!(args.prompt, "Caller brief");
+        assert_eq!(command.get_args().last().unwrap(), resolved);
+    }
+    fn capture_agent() -> agent::custom::CustomAgent {
+        agent::custom::CustomAgent {
+            config: agent::custom::parse_config(concat!(
+                "[agent]\nid = \"capture\"\ndisplay_name = \"Capture\"\n",
+                "command = \"/bin/echo\"\nprompt_mode = \"arg\"\n"
+            ))
+            .unwrap(),
+        }
+    }
 }

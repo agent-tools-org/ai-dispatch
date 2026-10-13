@@ -1,9 +1,9 @@
-// Prompt resolution, context flags, skills, worktree paths, compaction.
+// Prompt resolution, context flags, skills, worktree paths, omission events.
 // Deps: RunArgs, explicit project config, agents, templates, and store.
 use anyhow::{Context, Result};
 
 use crate::{
-    agent, compaction, skills, store::Store, templates, types::*,
+    agent, skills, store::Store, templates, types::*,
 };
 use crate::cmd::run::{RunArgs, NO_SKILL_SENTINEL};
 
@@ -42,15 +42,20 @@ pub(crate) fn sanitize_injected_text(text: &str) -> String {
     result.join("\n")
 }
 
-fn truncate_batch_sibling_prompt(prompt: &str) -> String {
+fn truncate_batch_sibling_prompt(prompt: &str, omissions: &mut Vec<String>) -> String {
     let mut preview: String = prompt.chars().take(BATCH_SIBLING_PROMPT_LIMIT).collect();
     if prompt.chars().count() > BATCH_SIBLING_PROMPT_LIMIT {
-        preview.push_str("...");
+        let count = prompt.chars().count() - BATCH_SIBLING_PROMPT_LIMIT;
+        let note = format!("Batch Siblings: {count} characters of entry omitted");
+        omissions.push(note.clone());
+        preview.push_str(&format!("... [{note}]"));
     }
     preview
 }
 
-pub(super) fn format_batch_siblings(siblings: &[(String, String, String)]) -> String {
+pub(super) fn format_batch_siblings(
+    siblings: &[(String, String, String)], omissions: &mut Vec<String>,
+) -> String {
     let shown = siblings
         .iter()
         .take(BATCH_SIBLING_LIMIT)
@@ -59,7 +64,7 @@ pub(super) fn format_batch_siblings(siblings: &[(String, String, String)]) -> St
                 "- \"{}\" ({}): {}",
                 name,
                 agent,
-                truncate_batch_sibling_prompt(prompt)
+                truncate_batch_sibling_prompt(prompt, omissions)
             )
         })
         .collect::<Vec<_>>();
@@ -70,10 +75,12 @@ pub(super) fn format_batch_siblings(siblings: &[(String, String, String)]) -> St
     ];
     lines.extend(shown);
     if remaining > 0 {
-        lines.push(format!("+ {remaining} more"));
+        let note = format!("Batch Siblings: {remaining} siblings omitted");
+        omissions.push(note.clone());
+        lines.push(format!("+ {remaining} more [{note}]"));
     }
     lines.push("</aid-batch-siblings>".to_string());
-    lines.join("\n")
+    crate::workgroup::bound_auxiliary(&lines.join("\n"), "Batch Siblings", omissions)
 }
 
 pub(crate) fn inject_skill(
@@ -81,6 +88,7 @@ pub(crate) fn inject_skill(
     agent_kind: &AgentKind,
     requested_skills: &[String],
     required: bool,
+    omissions: &mut Vec<String>,
 ) -> Result<String> {
     if requested_skills.is_empty() { return Ok(prompt.to_string()); }
     let mut sections = Vec::new();
@@ -97,34 +105,41 @@ pub(crate) fn inject_skill(
             sections.push(format!("--- Gotchas ---\n{gotchas}"));
         }
         sections.push(format!("--- Methodology ---\n{skill_text}"));
-        let scripts = skills::load_skill_scripts(name);
-        if !scripts.is_empty() {
-            sections.push(
-                format!(
-                    "{}\n{}",
-                    skills::format_script_instructions(&scripts)
-                        .replacen("--- Available Tools ---", "--- Available Scripts ---", 1),
-                    scripts
-                        .iter()
-                        .map(|script| format!("- {}", script.path.display()))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                ),
-            );
-        }
-        let references = skills::list_skill_references(name);
-        if !references.is_empty() {
-            sections.push(format!(
-                "--- References (read on demand) ---\nFor detailed reference, read these files when needed:\n{}",
-                references
+        append_skill_resources(name, &mut sections);
+    }
+    let context = crate::workgroup::bound_auxiliary(
+        &sections.join("\n\n"), "Methodology", omissions,
+    );
+    Ok(format!("{prompt}\n\n{context}"))
+}
+
+fn append_skill_resources(name: &str, sections: &mut Vec<String>) {
+    let scripts = skills::load_skill_scripts(name);
+    if !scripts.is_empty() {
+        sections.push(
+            format!(
+                "{}\n{}",
+                skills::format_script_instructions(&scripts)
+                    .replacen("--- Available Tools ---", "--- Available Scripts ---", 1),
+                scripts
                     .iter()
-                    .map(|path| format!("- {path}"))
+                    .map(|script| format!("- {}", script.path.display()))
                     .collect::<Vec<_>>()
                     .join("\n")
-            ));
-        }
+            ),
+        );
     }
-    Ok(format!("{prompt}\n\n{}", sections.join("\n\n")))
+    let references = skills::list_skill_references(name);
+    if !references.is_empty() {
+        sections.push(format!(
+            "--- References (read on demand) ---\nFor detailed reference, read these files when needed:\n{}",
+            references
+                .iter()
+                .map(|path| format!("- {path}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ));
+    }
 }
 
 pub(crate) fn build_context_flags(agent_kind: &AgentKind, context_args: &[String]) -> Result<(Option<String>, Vec<String>)> {
@@ -228,36 +243,18 @@ pub(crate) fn load_workgroup(store: &Store, group_id: Option<&str>) -> Result<Op
     Ok(Some(store.create_workgroup(group_id, "", Some("auto"), Some(group_id))?))
 }
 
-pub(crate) fn maybe_compact_prompt(prompt: &str, max_tokens: usize) -> String {
-    let before = templates::estimate_tokens(prompt);
-    if before <= max_tokens {
-        return prompt.to_string();
+pub(super) fn record_prompt_omissions(store: &Store, task_id: &str, omissions: &[String]) -> Result<()> {
+    if omissions.is_empty() {
+        return Ok(());
     }
-    let candidate = prompt
-        .split("\n\n")
-        .filter_map(|section| {
-            let trimmed = section.trim_start();
-            if trimmed.is_empty() || trimmed.starts_with("[Task]") {
-                return None;
-            }
-            if trimmed.starts_with('[') || trimmed.starts_with("---") {
-                Some((section, templates::estimate_tokens(section)))
-            } else {
-                None
-            }
-        })
-        .max_by_key(|(_, tokens)| *tokens);
-    let Some((section, section_tokens)) = candidate else {
-        return prompt.to_string();
-    };
-    let excess = before.saturating_sub(max_tokens);
-    let target_tokens = section_tokens.saturating_sub(excess);
-    let compacted = compaction::compact_text(section, target_tokens);
-    if compacted == section {
-        return prompt.to_string();
-    }
-    let result = prompt.replacen(section, &compacted, 1);
-    let after = templates::estimate_tokens(&result);
-    aid_info!("[aid] Compacted prompt from ~{before} to ~{after} tokens");
-    result
+    let detail = format!("Prompt context bounded: {}", omissions.join("; "));
+    store.insert_event(&TaskEvent {
+        task_id: TaskId(task_id.to_string()),
+        timestamp: chrono::Local::now(),
+        event_kind: EventKind::Setup,
+        detail: detail.clone(),
+        metadata: Some(serde_json::json!({"type": "prompt_context_bounded", "omissions": omissions})),
+    })?;
+    aid_warn!("[aid] Warning: {detail}");
+    Ok(())
 }

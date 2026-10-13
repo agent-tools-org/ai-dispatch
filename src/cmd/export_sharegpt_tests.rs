@@ -9,6 +9,36 @@ use chrono::Local;
 use tempfile::TempDir;
 
 #[test]
+fn prompt_preservation_matches_show_and_sharegpt_stored_context() {
+    let temp = TempDir::new().unwrap();
+    let _aid_home = AidHomeGuard::set(temp.path());
+    let store = std::sync::Arc::new(Store::open_memory().unwrap());
+    let group = store
+        .create_workgroup("context", &"shared line\n".repeat(2000), None, None)
+        .unwrap();
+    let mut task = done_task("t-long-prompt", None);
+    task.prompt = format!(
+        "[Previous attempt feedback]\nfix everything\n\n[Original task]\n{}",
+        "original task line\n".repeat(1000)
+    );
+    task.workgroup_id = Some(group.id.to_string());
+    task.resolved_prompt = Some(crate::workgroup::compose_prompt(
+        &task.prompt, None, Some(&group), &[], &[],
+    ).text);
+    store.insert_task(&task).unwrap();
+    let output = temp.path().join("long-prompt.jsonl");
+    export_sharegpt(&store, task.id.as_str(), Some(output.to_str().unwrap())).unwrap();
+    let record = read_record(&output);
+    let shown = crate::cmd::show::context_text(&store, task.id.as_str()).unwrap();
+    assert!(shown.contains(&record.conversations[0].value));
+    assert!(record.conversations[0].value.contains(&task.prompt));
+    assert!(record.conversations[0].value.contains("Shared Context: "));
+    assert!(record.conversations[0].value.contains("characters omitted"));
+    assert_eq!(record.conversations[1].value, task.prompt);
+    assert!(store.get_events(task.id.as_str()).unwrap().is_empty());
+}
+
+#[test]
 fn export_sharegpt_writes_system_human_gpt_messages() {
     let temp = TempDir::new().unwrap();
     let _aid_home = AidHomeGuard::set(temp.path());
@@ -201,4 +231,29 @@ fn write_transcript(task_id: &str, content: &str) {
 
 fn read_record(path: &std::path::Path) -> ShareGptRecord {
     serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+#[test]
+fn round2_preservation_show_export_use_stored_context_or_raw_legacy_prompt() {
+    let temp = TempDir::new().unwrap();
+    let _home = AidHomeGuard::set(temp.path());
+    let store = std::sync::Arc::new(Store::open_memory().unwrap());
+    let group = store.create_workgroup("context", "Context added after dispatch", None, None).unwrap();
+    for (id, resolved) in [("t-stored", Some("Exact stored launch\né\n")), ("t-legacy", None)] {
+        let mut task = done_task(id, resolved);
+        task.prompt = "Caller brief with feedback\né\n".into();
+        task.workgroup_id = Some(group.id.to_string());
+        store.insert_task(&task).unwrap();
+        let output = temp.path().join(format!("{id}.jsonl"));
+        export_sharegpt(&store, id, Some(output.to_str().unwrap())).unwrap();
+        let record = read_record(&output);
+        let expected = resolved.unwrap_or(&task.prompt);
+        assert_eq!(record.conversations[0].value, expected);
+        assert_eq!(record.conversations[1].value, task.prompt);
+        let shown = crate::cmd::show::context_text(&store, id).unwrap();
+        assert!(shown.contains(expected));
+        assert!(!shown.contains("Context added after dispatch"));
+        assert!(!shown.contains("reconstructed"));
+        assert!(store.get_events(id).unwrap().is_empty());
+    }
 }

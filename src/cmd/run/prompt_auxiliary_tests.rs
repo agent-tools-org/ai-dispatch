@@ -18,9 +18,9 @@ fn insert_task(store: &Store, id: &str, output: Option<&str>, group: Option<&str
             false,
         )
         .unwrap();
-    let mut task = store.get_task(id).unwrap().unwrap();
-    task.output_path = output.map(str::to_string);
-    store.replace_waiting_task(&task).unwrap();
+    if let Some(output) = output {
+        store.update_output_path(id, output).unwrap();
+    }
 }
 
 fn bundle(store: &Store, args: &RunArgs, skills: &[String]) -> PromptBundle {
@@ -64,8 +64,8 @@ fn sibling_file_list_preservation_bounds_auxiliary_and_warns_once() {
     let _guard = crate::paths::AidHomeGuard::set(home.path());
     let store = Store::open_memory().unwrap();
     let group = store.create_workgroup("siblings", "", None, None).unwrap();
-    insert_task(&store, "t-current", None, Some(&group.id));
-    insert_task(&store, "t-sibling", None, Some(&group.id));
+    insert_task(&store, "t-current", None, Some(group.id.as_str()));
+    insert_task(&store, "t-sibling", None, Some(group.id.as_str()));
     store
         .update_task_status("t-sibling", TaskStatus::Skipped)
         .unwrap();
@@ -86,7 +86,7 @@ fn sibling_file_list_preservation_bounds_auxiliary_and_warns_once() {
         .unwrap();
     let args = RunArgs {
         prompt: "Caller brief".into(),
-        group: Some(group.id),
+        group: Some(group.id.to_string()),
         ..Default::default()
     };
     assert_bounded(

@@ -1,7 +1,3 @@
-## Unreleased
-- Remote build auto-selection uses `rbox pick --tool rust --repo <main-working-tree>`.
-
-
 ## v10.52.1 (2026-10-09)
 - Price and score feeds refresh in a detached download that survives short commands; a download is validated before it replaces the cache, so a failed or partial fetch never overwrites good data
 - `aid advise` starts the feed refresh too (it previously never fetched the score feed); it still creates nothing in a fresh aid home

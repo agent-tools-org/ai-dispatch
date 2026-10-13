@@ -30,8 +30,6 @@ does not assert board closure. New slices need board IDs before implementation.
 
 ## Failure truthfulness (next release, from the 2026-10-13 failed-task review)
 
-Open item: bound generic and Cargo verification output draining when surviving descendants retain pipes.
-
 [The review](investigation-failed-tasks-20261013.md) found
 two state bugs and three handling gaps that cost the most agent time. Order:
 
@@ -47,6 +45,41 @@ two state bugs and three handling gaps that cost the most agent time. Order:
 | 8 | Capture tasks | No `empty_diff` flag when no repository change is declared |
 
 Release copy: [site and README refresh](site-refresh-2026-10.md).
+
+Slices 1–7 are implemented for v11.0.0, plus a fix found during the work: the caller's
+brief and retry feedback are never compressed with auxiliary context
+([§8](investigation-failed-tasks-20261013.md)). Slice 8 is open. Each fix has a
+regression test and an independent read-only audit.
+
+Known limits found by review (open):
+- `aid stop` and the reaper signal recorded worker and descendant PIDs; the descendant
+  path does not re-check process identity, so a recycled PID can be signalled.
+- The streaming first-token gate (`progress_count() <= 1`) runs before descendant
+  activity is considered, so a silent first command can still be killed as idle.
+- Generic and Cargo verification output is drained without a bound while surviving
+  descendants keep its pipes open.
+- Piped idle failures and PTY deadline or idle failures record a duration that includes
+  process cleanup (a 3 s kill grace) and output finalization.
+- `verify_status` and delivery assessments are observational metadata and can still
+  change after a task settles.
+- OpenCode's merged PTY stream cannot prove an error line came from the provider: an
+  exact 401 text printed by the task plus a nonzero exit can set an auth hold.
+- Wrap-up delivery is not crash-safe exactly-once, and an operator steer can race it.
+- Time spent waiting for a build-box lock counts against `--timeout`.
+- `aid wait` reports "worker exited before settlement completed" when a task reaches its
+  hard cap, and counts finished read-only audits as not succeeded (`[VNORESULT]`).
+- Auto-verify does not check build-box reachability; it can select an offline box.
+- Read-only delivery: aid's own `AID_HOME` writers (`output.md`, transcript) use path
+  writes, so `AID_HOME` inside a repository or with planted links is unsupported;
+  `aid show --result` ignores the missing-delivery assessment; a later delivery under
+  the same task ID does not clear it.
+- The native Codex permission-transition test is opt-in and needs a box with the
+  Codex CLI installed.
+- Batch fallback authorization is per task, but held-agent dispatch, worker quota
+  continuation and `aid batch retry` on a held agent can still select an advised peer
+  without opt-in, and worker and coordinator can each launch one fallback child.
+- `lifecycle_read_only_backup_tests` can fail with `ETXTBSY` when it executes a fake
+  agent script immediately after writing it.
 
 ## Third-party capability evidence (v10.52.0, v10.52.1)
 

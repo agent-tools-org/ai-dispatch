@@ -145,6 +145,23 @@ but noise in `board --json`.
 
 ---
 
+## 8. Retry feedback dropped by prompt compression — found during the fixes
+
+Found while dispatching the fixes for this review, not in the reviewed window.
+`workgroup::compose_prompt` compressed the whole prompt, task brief included, to
+6000 characters whenever `--context` or workgroup sections were present. Retry feedback
+sits at the top of a retry prompt, so it was cut silently: one retry re-did the original
+task instead of the requested correction. Nothing recorded that text was dropped.
+
+Fix (v11): the caller's brief and retry feedback are never shortened; only auxiliary
+sections (context files, findings, milestones, summaries, memories, team and toolbox
+text, sibling previews) are bounded, each with an in-place omission note, one
+`Prompt context bounded:` warning and a setup event. Retries prepend feedback to the
+failed task's raw brief; `aid show --context` and export read the stored resolved prompt.
+A brief larger than the agent's context window is passed as is.
+
+---
+
 ## Work items for the next release
 
 Ordered by state correctness first, then lost agent time.
@@ -159,6 +176,7 @@ Ordered by state correctness first, then lost agent time.
 | 6 | Codex read-only at launch | `--read-only` codex runs in a read-only sandbox with only the task directory writable (needs roadmap slice "Read-only report location"); a violation no longer adds a "verification did not run" error |
 | 7 | Refusal signatures | opencode 401 sets an auth marker; droid "monthly … usage limit" is a dated hold; a `seven_day` Claude fixture exists |
 | 8 | Capture tasks | A task that declares no repository change is not flagged `empty_diff` |
+| 9 | Brief never compressed | Retry feedback and the caller brief reach the agent whole; only auxiliary context is bounded, with a recorded warning (§8) |
 
 Items 1–3 are bug fixes and need a failing regression test plus an independent audit
 before release. Items 1 and 3 overlap the roadmap's "Task settlement" and "Idle timeout

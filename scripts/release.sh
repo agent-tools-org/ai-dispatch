@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Prepares an ai-dispatch release from a curated Markdown notes file.
-# Runs tests, updates Cargo.toml and CHANGELOG.md, validates metadata, then commits/tags/pushes.
+# Runs tests, updates Cargo.toml, CHANGELOG.md and the README badge, validates metadata, then commits/tags/pushes.
 # Dependencies: bash, git, awk, grep, date, cargo.
 
 set -euo pipefail
@@ -129,6 +129,18 @@ prepend_changelog_entry() {
   mv "${tmp_file}" "${changelog_file}"
 }
 
+update_readme_badge() {
+  local version="$1"
+  local readme_file="${repo_root}/README.md"
+  local tmp_file
+  grep -Eq 'img\.shields\.io/badge/version-[0-9]+\.[0-9]+\.[0-9]+-blue' "${readme_file}" \
+    || fail "README.md has no version badge to update"
+  tmp_file="$(mktemp "${TMPDIR:-/tmp}/readme-release.XXXXXX")"
+  sed -E "s#(img\.shields\.io/badge/version-)[0-9]+\.[0-9]+\.[0-9]+(-blue)#\1${version}\2#" \
+    "${readme_file}" > "${tmp_file}" || fail "failed to update README.md version badge"
+  mv "${tmp_file}" "${readme_file}"
+}
+
 main() {
   require_cmd git
   require_cmd awk
@@ -178,12 +190,13 @@ main() {
   # validation step fails. The worktree is verified clean above, so a plain
   # checkout restores the pre-run state.
   if [[ "${dry_run}" == "true" ]]; then
-    trap 'git -C "${repo_root}" checkout -- Cargo.toml Cargo.lock CHANGELOG.md' EXIT
+    trap 'git -C "${repo_root}" checkout -- Cargo.toml Cargo.lock CHANGELOG.md README.md' EXIT
   fi
 
   run_release_tests
   update_cargo_version "${version}"
   sync_cargo_lock
+  update_readme_badge "${version}"
   prepend_changelog_entry "${version}" "${notes_file}"
   bash "${repo_root}/.github/scripts/check-changelog.sh" "${tag}"
 
@@ -193,6 +206,7 @@ main() {
   if [[ "${dry_run}" == "true" ]]; then
     echo "dry-run: validated Cargo.toml bump to ${version} (reverted)"
     echo "dry-run: validated Cargo.lock sync (reverted)"
+    echo "dry-run: validated README.md version badge (reverted)"
     echo "dry-run: validated CHANGELOG.md entry for ${tag} (reverted)"
     echo "dry-run: would commit with message: feat: release ${tag} — ${headline}"
     echo "dry-run: would create tag ${tag}"
@@ -200,7 +214,7 @@ main() {
     exit 0
   fi
 
-  git -C "${repo_root}" add Cargo.toml Cargo.lock CHANGELOG.md
+  git -C "${repo_root}" add Cargo.toml Cargo.lock CHANGELOG.md README.md
   git -C "${repo_root}" commit -m "feat: release ${tag} — ${headline}"
   git -C "${repo_root}" tag "${tag}"
   git -C "${repo_root}" push origin "${branch}"

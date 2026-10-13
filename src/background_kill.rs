@@ -160,6 +160,41 @@ mod tests {
         assert_eq!(targets.pids(), vec![11]);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn detached_kill_rejects_reused_or_missing_agent_identity() {
+        let _permit = crate::test_subprocess::acquire();
+        for started in [Some("previous-launch".to_string()), None] {
+            let (mut parent, child) = spawn_tree(&["sh"]);
+            let mut spec = spec(Some(parent.id()));
+            spec.agent_started = started;
+            let targets = kill_targets(None, &spec);
+            signal_targets(&targets, &spec.task_id);
+            let survived = parent.try_wait().expect("wait").is_none() && is_live(child);
+            unsafe { libc::kill(child, libc::SIGKILL) };
+            let _ = parent.kill();
+            let _ = parent.wait();
+            assert!(survived, "unverified agent root and child must survive settlement");
+            assert!(targets.pids().is_empty(), "unverified agent must not be a kill target");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn detached_timeout_kills_agent_with_matching_launch_identity() {
+        let _permit = crate::test_subprocess::acquire();
+        let mut command = std::process::Command::new("sleep");
+        command.arg("60");
+        let mut root = crate::process_guard::ProcessGuard::spawn(&mut command).expect("agent");
+        let mut spec = spec(Some(root.id()));
+        spec.agent_started = crate::process_monitor::activity::root_started(root.id());
+        assert!(spec.agent_started.is_some());
+        let targets = kill_targets(None, &spec);
+        assert_eq!(targets.pids(), vec![root.id()]);
+        signal_targets(&targets, &spec.task_id);
+        assert!(!root.child_mut().wait().expect("wait").success(), "owned agent must be killed");
+    }
+
     #[test]
     fn worker_identity_needs_the_run_task_and_task_id_pair() {
         assert!(names_worker("/Users/x/My Apps/aid __run-task t-kill", "t-kill"));

@@ -152,8 +152,9 @@ fn include_child_activity(
 ) {
     if !has_agent_progress(activity) { return; }
     let pid = spec.and_then(|spec| spec.agent_pid);
-    if let Some(at) = process_monitor::activity::latest(
-        task_id, pid, std::time::Duration::from_secs(idle_secs),
+    if let Some(at) = process_monitor::activity::latest_owned(
+        task_id, pid, spec.and_then(|spec| spec.agent_started.as_deref()),
+        std::time::Duration::from_secs(idle_secs),
     ) {
         activity.timestamp = activity.timestamp.max(DateTime::<Local>::from(at));
     }

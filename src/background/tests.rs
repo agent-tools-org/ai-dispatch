@@ -59,6 +59,7 @@ fn serializes_spec_to_json() {
         env: None,
         env_forward: None,
         agent_pid: None,
+        agent_started: None,
         sandbox: false,
         read_only: false,
         audit_report_mode: false,
@@ -655,6 +656,7 @@ fn stale_pending_timeout_uses_agent_starting_reason_when_agent_pid_exists() {
     store.insert_task(&task).unwrap();
     save_spec(&BackgroundRunSpec {
         agent_pid: Some(12345),
+        agent_started: None,
         ..make_spec("t-a11e")
     })
     .unwrap();
@@ -835,6 +837,7 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         env: None,
         env_forward: None,
         agent_pid: None,
+        agent_started: None,
         sandbox: false,
         read_only: false,
         audit_report_mode: false,
@@ -1075,6 +1078,7 @@ fn reaper_kills_processes_even_when_row_is_already_terminal() {
     let spec = BackgroundRunSpec {
         worker_pid: Some(303),
         agent_pid: Some(404),
+        agent_started: None,
         ..make_spec("t-race")
     };
     save_spec(&spec).unwrap();

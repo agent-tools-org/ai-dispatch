@@ -25,12 +25,24 @@ struct Sample {
 }
 
 pub(crate) fn latest(task_id: &str, root: Option<u32>, window: Duration) -> Option<SystemTime> {
+    let root = root?;
+    let started = root_started(root)?;
+    latest_owned(task_id, Some(root), Some(&started), window)
+}
+
+pub(crate) fn latest_owned(
+    task_id: &str, root: Option<u32>, started: Option<&str>, window: Duration,
+) -> Option<SystemTime> {
     let root = root.filter(|pid| *pid > 1)?;
+    let started = started?;
+    if root_started(root)? != started {
+        return None;
+    }
     let path = crate::paths::task_dir(task_id).join("child-activity.json");
     let previous = std::fs::read(&path)
         .ok()
         .and_then(|bytes| serde_json::from_slice::<Sample>(&bytes).ok())
-        .filter(|sample| sample.root == root);
+        .filter(|sample| sample.root == root && sample.started == started);
     let now = SystemTime::now();
     let interval = (window / 4).min(Duration::from_secs(1));
     if let Some(sample) = previous.as_ref()
@@ -40,6 +52,9 @@ pub(crate) fn latest(task_id: &str, root: Option<u32>, window: Duration) -> Opti
     }
     let table = process_table()?;
     let leader = table.iter().find(|process| process.pid == root)?;
+    if leader.started != started {
+        return None;
+    }
     let children = descendants(root, &table);
     let previous = previous.filter(|sample| sample.started == leader.started);
     if children.is_empty() {
@@ -55,6 +70,24 @@ pub(crate) fn latest(task_id: &str, root: Option<u32>, window: Duration) -> Opti
     };
     persist(&path, &sample)?;
     Some(progress_at)
+}
+
+pub(crate) fn root_started(pid: u32) -> Option<String> {
+    if pid <= 1 { return None; }
+    #[cfg(target_os = "linux")]
+    {
+        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+        return Some(proc_cpu(&stat)?.1.to_string());
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let output = std::process::Command::new("ps")
+            .args(["-p", &pid.to_string(), "-o", "lstart="])
+            .output().ok().filter(|output| output.status.success())?;
+        let started = String::from_utf8(output.stdout).ok()?
+            .split_whitespace().collect::<Vec<_>>().join(" ");
+        (!started.is_empty()).then_some(started)
+    }
 }
 
 fn advance(

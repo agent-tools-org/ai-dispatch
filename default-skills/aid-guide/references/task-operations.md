@@ -121,6 +121,11 @@ Hung events distinguish `no first output` from `no output or descendant progress
 The first-token timeout still requires agent output; child activity does not extend it.
 
 `--timeout SECS` is an absolute wall-clock cap, even during CPU work or remote waits.
+The detached worker enforces the smaller of maximum duration and hard cap without
+`aid` polling. Without `--timeout`, the default maximum duration is 60 minutes
+and the hard cap is 24 hours; project configuration can change either bound.
+Descendant activity requires the agent root's recorded launch identity; a reused
+root PID or an older job without that identity cannot extend reaper liveness.
 Recognized rbox lock-queue time is excluded from a duration-based verification
 timeout, up to the lock notice's timeout. Remote verification's absolute task
 deadline still includes queue time.

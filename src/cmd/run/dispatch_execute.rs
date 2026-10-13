@@ -105,6 +105,7 @@ pub(super) fn run_background_task(
         env: args.env.clone(),
         env_forward: args.env_forward.clone(),
         agent_pid: None,
+        agent_started: None,
         sandbox: args.sandbox,
         read_only: args.read_only,
         audit_report_mode: args.audit_report_mode,

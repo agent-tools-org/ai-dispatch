@@ -366,6 +366,7 @@ fn reconcile_and_poll_completed_tasks_marks_zombies_failed() {
         env: None,
         env_forward: None,
         agent_pid: None,
+        agent_started: None,
         sandbox: false,
         read_only: false,
         audit_report_mode: false,

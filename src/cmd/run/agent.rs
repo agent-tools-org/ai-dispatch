@@ -2,7 +2,9 @@
 // Exports run_agent_process and streaming/output helpers.
 // Depends on run_prompt, watcher, cost estimation, and store/event types.
 use anyhow::Result;
+#[cfg(test)]
 use chrono::Local;
+#[cfg(test)]
 use serde_json::Value;
 use std::path::Path;
 use std::process;
@@ -12,8 +14,6 @@ use crate::store::Store;
 use crate::types::TaskId;
 
 use super::run_prompt;
-#[path = "agent/timeout.rs"]
-mod timeout;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_agent_process(
@@ -63,6 +63,7 @@ pub(crate) async fn run_agent_process_with_cost(
     .await
 }
 
+#[cfg(test)]
 fn spawn_child_with_log(cmd: &mut Command, log_path: &Path) -> Result<tokio::process::Child> {
     crate::cmd::noninteractive_stdio::configure(cmd);
     match cmd.spawn() {
@@ -76,6 +77,7 @@ fn spawn_child_with_log(cmd: &mut Command, log_path: &Path) -> Result<tokio::pro
     }
 }
 
+#[cfg(test)]
 fn write_spawn_error_log(log_path: &Path, message: &str) {
     let event = serde_json::json!({
         "type": "error",
@@ -86,6 +88,7 @@ fn write_spawn_error_log(log_path: &Path, message: &str) {
     let _ = std::fs::write(log_path, format!("{event}\n"));
 }
 
+#[cfg(test)]
 fn write_streaming_output(log_path: &Path, out_path: &Path) {
     let Ok(log_content) = std::fs::read_to_string(log_path) else { return };
     let mut messages = Vec::new();
@@ -203,12 +206,3 @@ pub(crate) fn check_scope_violations(store: &Store, task_id: &TaskId, scope: &[S
 #[cfg(test)]
 #[path = "agent/tests.rs"]
 mod tests;
-
-fn format_duration(ms: i64) -> String {
-    let secs = ms / 1000;
-    if secs < 60 {
-        format!("{secs}s")
-    } else {
-        format!("{}m {:02}s", secs / 60, secs % 60)
-    }
-}

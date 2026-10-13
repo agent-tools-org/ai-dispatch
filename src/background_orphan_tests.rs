@@ -82,6 +82,7 @@ pub(super) fn make_spec(task_id: &str, worker_pid: Option<u32>, idle_timeout_sec
         env: None,
         env_forward: None,
         agent_pid: None,
+        agent_started: None,
         sandbox: false,
         read_only: false,
         audit_report_mode: false,

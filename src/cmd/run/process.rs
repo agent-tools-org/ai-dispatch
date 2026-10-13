@@ -4,12 +4,15 @@ use chrono::Local;
 use std::sync::Arc;
 use tokio::process::Command;
 
-use crate::{store::Store, types::*, watcher};
+use crate::{store::Store, types::*};
 use crate::cmd::run::RunArgs;
 use crate::process_group::cleanup_process_group;
 use crate::store::TaskCompletionUpdate;
 
 use super::{clean_output_if_jsonl, fill_empty_output_from_log};
+
+#[path = "process_watch.rs"]
+mod execution;
 
 #[path = "retry_target.rs"]
 mod run_retry_target;
@@ -138,84 +141,27 @@ fn agent_log_label(agent: &dyn crate::agent::Agent) -> &str {
     agent.rate_limit_name().unwrap_or_else(|| agent.kind().as_str())
 }
 
-pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<()> {
-    let RunProcessArgs {
-        agent,
-        mut cmd,
-        task_id,
-        store,
-        log_path,
-        output_path,
-        model,
-        streaming,
-        workgroup_id,
-        timeout_policy,
-        max_task_cost,
-    } = args;
+pub(crate) async fn run_agent_process_impl(mut args: RunProcessArgs<'_>) -> Result<()> {
     let start = std::time::Instant::now();
-    // No max-duration monitor here: background reaping owns that policy using
-    // the persisted spec, while foreground runs use run_agent_process_with_timeout.
-    let idle_timeout = timeout_policy.idle;
-    let failure_context = capture_failure_context(store.as_ref(), task_id, &cmd);
-    #[cfg(unix)]
-    cmd.process_group(0);
-    crate::cmd::noninteractive_stdio::configure(&mut cmd);
-    let mut child = match cmd.spawn() {
-        Ok(child) => child,
-        Err(err) => {
-            let err = anyhow::Error::new(err).context("Failed to spawn agent process");
-            let stderr = stderr_excerpt(task_id)
-                .or_else(|| Some("unavailable (process did not start)".to_string()));
-            fail_task_on_agent_spawn(store.as_ref(), task_id, &err, stderr.as_deref());
-            return Err(err);
-        }
-    };
-    if let Some(pid) = child.id() {
-        let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
-    }
-    let info = if streaming {
-        watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id, idle_timeout, max_task_cost).await
-    } else {
-        let out = output_path.map(std::path::Path::new);
-        watcher::watch_buffered(agent, &mut child, task_id, store, log_path, out, workgroup_id).await
-    };
-    let mut info = match info {
-        Ok(info) => info,
-        Err(err) => {
-            let stderr = stderr_excerpt(task_id);
-            insert_phase_error_event(
-                store.as_ref(),
-                task_id,
-                "execution",
-                &err.to_string(),
-                stderr.as_deref(),
-            );
-            return Err(err);
-        }
-    };
-    let costing_model = info.model.as_deref().or(model);
-    let cost_usd = crate::cost::completion_cost(store, task_id, &info, costing_model, agent.kind())?;
-    if cost_usd.is_some_and(|cost| max_task_cost.is_some_and(|max| cost > max)) {
-        let current_cost = cost_usd.unwrap_or_default();
-        let max_cost = max_task_cost.unwrap_or_default();
-        let _ = store.insert_event(&TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Error,
-            detail: format!("Task killed: cost ${current_cost:.2} exceeded ceiling ${max_cost:.2}"),
-            metadata: None,
-        });
-        info.status = TaskStatus::Failed;
-    }
-    // SIGTERM orphaned child processes — no sleep needed on normal exit
+    let failure_context = capture_failure_context(args.store.as_ref(), args.task_id, &args.cmd);
+    let mut child = execution::spawn_agent(&mut args)?;
+    let mut info = execution::watch_agent(&args, &mut child, start).await?;
     cleanup_process_group(&child);
     let _ = child.kill().await;
     let _ = child.wait().await;
-    let output_path = output_path.map(std::path::Path::new);
-    fill_empty_output_from_log(log_path, output_path, Some(agent_log_label(agent)))?;
-    if let Some(out_path) = output_path {
-        clean_output_if_jsonl(out_path)?;
-    }
+    complete_agent(&args, &mut info, start, &failure_context)
+}
+
+fn complete_agent(
+    args: &RunProcessArgs<'_>, info: &mut CompletionInfo,
+    start: std::time::Instant, failure_context: &FailureContext,
+) -> Result<()> {
+    apply_cost_ceiling(args, info)?;
+    finish_output(args)?;
+    let agent = args.agent;
+    let task_id = args.task_id;
+    let store = args.store;
+    let model = args.model;
     let duration_ms = start.elapsed().as_millis() as i64;
     let exit_code = resolve_failure_exit_code(store.as_ref(), task_id, info.exit_code);
     if info.status == TaskStatus::Failed && exit_code != Some(0) {
@@ -244,6 +190,49 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
         cost_usd,
         exit_code,
     })?;
+    print_completion(store, task_id, info, duration_ms, cost_usd);
+    Ok(())
+}
+
+fn apply_cost_ceiling(args: &RunProcessArgs<'_>, info: &mut CompletionInfo) -> Result<()> {
+    let agent = args.agent;
+    let task_id = args.task_id;
+    let store = args.store;
+    let model = args.model;
+    let max_task_cost = args.max_task_cost;
+    let costing_model = info.model.as_deref().or(model);
+    let cost_usd = crate::cost::completion_cost(store, task_id, &info, costing_model, agent.kind())?;
+    if cost_usd.is_some_and(|cost| max_task_cost.is_some_and(|max| cost > max)) {
+        let current_cost = cost_usd.unwrap_or_default();
+        let max_cost = max_task_cost.unwrap_or_default();
+        let _ = store.insert_event(&TaskEvent {
+            task_id: task_id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::Error,
+            detail: format!("Task killed: cost ${current_cost:.2} exceeded ceiling ${max_cost:.2}"),
+            metadata: None,
+        });
+        info.status = TaskStatus::Failed;
+    }
+    Ok(())
+}
+
+fn finish_output(args: &RunProcessArgs<'_>) -> Result<()> {
+    let agent = args.agent;
+    let log_path = args.log_path;
+    let output_path = args.output_path;
+    let output_path = output_path.map(std::path::Path::new);
+    fill_empty_output_from_log(log_path, output_path, Some(agent_log_label(agent)))?;
+    if let Some(out_path) = output_path {
+        clean_output_if_jsonl(out_path)?;
+    }
+    Ok(())
+}
+
+fn print_completion(
+    store: &Store, task_id: &TaskId, info: &CompletionInfo,
+    duration_ms: i64, cost_usd: Option<f64>,
+) {
     let duration_str = format_duration(duration_ms);
     let tokens_str = info.tokens.map(|t| format!(", {} tokens", t)).unwrap_or_default();
     let cost_str = if cost_usd.is_some() { format!(", {}", crate::cost::format_cost(cost_usd)) } else { String::new() };
@@ -255,7 +244,6 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
         String::new()
     };
     println!("Task {} {} ({}{}{}){}", task_id, info.status.label(), duration_str, tokens_str, cost_str, fail_reason);
-    Ok(())
 }
 
 pub(crate) fn notify_task_completion(store: &Store, task_id: &TaskId) -> Result<()> {
@@ -289,3 +277,7 @@ fn format_duration(ms: i64) -> String {
     let secs = ms / 1000;
     if secs < 60 { format!("{secs}s") } else { format!("{}m {:02}s", secs / 60, secs % 60) }
 }
+
+#[cfg(test)]
+#[path = "agent/timeout_tests.rs"]
+mod timeout_tests;

@@ -132,6 +132,7 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
         task_id: "t-3010".to_string(),
         worker_pid: Some(999999),
         agent_pid: Some(888888),
+        agent_started: None,
         agent_name: "codex".to_string(),
         prompt: "test".to_string(),
         dir: None,

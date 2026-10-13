@@ -21,11 +21,12 @@ pub(crate) fn monitor_bridge(
     let mut decoder = utf8::Utf8Chunks::default();
     let mut last_child_activity = std::time::UNIX_EPOCH;
     while !drained(bridge, reader_done, &mut child_exited_at) {
+        if deadline_elapsed(state, store, task_id)? {
+            break;
+        }
         match rx.recv_timeout(INPUT_POLL_INTERVAL) {
             Ok(bytes) => {
-                state.received_raw_bytes = true;
-                state.last_raw_chunk_time = Instant::now();
-                state.handle_chunk(agent, task_id, store, log_file, decoder.push(bytes))?;
+                handle_bytes(state, agent, task_id, store, log_file, &mut decoder, bytes)?;
                 if cost_exceeded(state, store, task_id, bridge, max_task_cost) {
                     break;
                 }
@@ -51,8 +52,31 @@ pub(crate) fn monitor_bridge(
         }
         forward_input(state, agent, bridge, store, task_id)?;
     }
-
     state.flush_trailing_output(agent, task_id, store)
+}
+
+fn deadline_elapsed(state: &mut MonitorState, store: &Store, task_id: &TaskId) -> Result<bool> {
+    if Instant::now() < state.absolute_deadline {
+        return Ok(false);
+    }
+    state.info.status = TaskStatus::Failed;
+    store.insert_event(&TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: Local::now(),
+        event_kind: EventKind::Error,
+        detail: "Failed during execution: exceeded hard timeout".into(),
+        metadata: None,
+    })?;
+    Ok(true)
+}
+
+fn handle_bytes(
+    state: &mut MonitorState, agent: &dyn Agent, task_id: &TaskId, store: &Arc<Store>,
+    log_file: &mut std::fs::File, decoder: &mut utf8::Utf8Chunks, bytes: Vec<u8>,
+) -> Result<()> {
+    state.received_raw_bytes = true;
+    state.last_raw_chunk_time = Instant::now();
+    state.handle_chunk(agent, task_id, store, log_file, decoder.push(bytes))
 }
 
 fn refresh_child_activity(

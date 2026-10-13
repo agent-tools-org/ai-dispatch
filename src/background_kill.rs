@@ -135,6 +135,7 @@ mod tests {
             env: None,
             env_forward: None,
             agent_pid,
+            agent_started: None,
             sandbox: false,
             read_only: false,
             audit_report_mode: false,

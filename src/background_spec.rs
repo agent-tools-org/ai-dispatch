@@ -85,6 +85,8 @@ pub struct BackgroundRunSpec {
     #[serde(default)]
     pub agent_pid: Option<u32>,
     #[serde(default)]
+    pub agent_started: Option<String>,
+    #[serde(default)]
     pub sandbox: bool,
     #[serde(default)]
     pub read_only: bool,

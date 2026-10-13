@@ -45,6 +45,7 @@ const INPUT_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 pub(crate) struct MonitorState {
     pub(crate) info: CompletionInfo,
+    pub(crate) absolute_deadline: Instant,
     full_output: String,
     line_buffer: String,
     event_count: u32,
@@ -91,6 +92,7 @@ impl MonitorState {
         timeout_policy: crate::timeout_policy::TimeoutPolicy,
     ) -> Self {
         Self {
+            absolute_deadline: Instant::now() + timeout_policy.max_duration.min(timeout_policy.hard_cap),
             info: CompletionInfo {
                 tokens: None,
                 status: TaskStatus::Done,

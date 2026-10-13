@@ -19,6 +19,8 @@ use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 #[path = "pty_runner_command.rs"]
 mod command;
 use command::spawn_bridge;
+#[path = "pty_runner_execution.rs"]
+mod execution;
 
 #[allow(clippy::too_many_arguments)]
 pub fn run_agent_process(
@@ -61,71 +63,12 @@ pub(crate) fn run_agent_process_with_control(
     control: Option<PtyRunControl>,
 ) -> Result<()> {
     let start = std::time::Instant::now();
-    let mut bridge = match spawn_bridge(cmd, log_path) {
-        Ok(bridge) => bridge,
-        Err(err) => {
-            fail_task_on_spawn_error(
-                store,
-                task_id,
-                start.elapsed().as_millis() as i64,
-                &err.to_string(),
-            );
-            return Err(err);
-        }
-    };
-    if let Some(pid) = bridge.child_pid() {
-        if let Some(control) = &control {
-            control.set_agent_pid(pid);
-        }
-        let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
-    }
-    if control.as_ref().is_some_and(PtyRunControl::is_interrupted) {
-        let _ = bridge.kill_group();
-    }
-    let rx = spawn_reader_thread(bridge.take_reader()?);
-    let mut log_file = std::fs::File::create(log_path)?;
-    let workgroup_id = store.get_task(task_id.as_str())?.and_then(|task| task.workgroup_id);
-    let mut state = MonitorState::with_policy(streaming, workgroup_id, timeout_policy);
-    monitor_bridge(
-        agent,
-        task_id,
-        store,
-        &mut bridge,
-        &rx,
-        &mut log_file,
-        &mut state,
-        Some(timeout_policy.first_token),
-        Some(timeout_policy.idle),
-        max_task_cost,
+    let mut bridge = execution::spawn_for_task(cmd, log_path, store, task_id, start, control.as_ref())?;
+    let mut state = execution::monitor_process(
+        agent, task_id, store, &mut bridge, log_path, streaming, timeout_policy, max_task_cost, start,
     )?;
-    if bridge.is_alive() {
-        let _ = bridge.kill_group();
-    } else {
-        if let Some(pid) = bridge.child_pid() {
-            #[cfg(unix)]
-            unsafe {
-                libc::kill(-(pid as i32), libc::SIGTERM);
-            }
-        }
-    }
-    let exit_status = bridge.wait()?;
-    finalize_output(
-        agent,
-        task_id,
-        store,
-        output_path,
-        log_path,
-        streaming,
-        &exit_status,
-        &mut state,
-    )?;
-    record_completion(
-        agent,
-        task_id,
-        store,
-        model,
-        start.elapsed().as_millis() as i64,
-        &state.info,
+    execution::finish_process(
+        agent, task_id, store, &mut bridge, output_path, log_path, model, streaming, start, &mut state,
     )
 }
 
@@ -269,3 +212,7 @@ mod tests;
 #[cfg(test)]
 #[path = "pty_runner_cost_tests.rs"]
 mod cost_tests;
+
+#[cfg(test)]
+#[path = "worker_deadline_tests.rs"]
+mod deadline_tests;

@@ -18,6 +18,7 @@ mod phases;
 #[path = "lifecycle/steps.rs"]
 mod steps;
 use phases::run_lifecycle_phases;
+#[cfg(test)]
 pub(super) use phases::retry_or_cascade;
 use steps::*;
 use super::run_dirty::{DirtyWorktreeAction, post_agent_dirty_worktree_cleanup};

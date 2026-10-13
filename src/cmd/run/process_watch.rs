@@ -72,19 +72,20 @@ async fn settle_result(
     result: std::result::Result<Result<CompletionInfo>, tokio::time::error::Elapsed>,
 ) -> Result<CompletionInfo> {
     let limit = args.timeout_policy.max_duration.min(args.timeout_policy.hard_cap);
+    let duration_ms = start.elapsed().as_millis() as i64;
     match result {
         Ok(Ok(info)) => Ok(info),
         Ok(Err(err)) => {
             crate::process_group::force_kill_process_group(child);
             let _ = child.kill().await;
             let _ = child.wait().await;
-            settle_execution_failure(args, start, &err.to_string());
+            settle_execution_failure(args, duration_ms, &err.to_string());
             Err(err)
         }
         Err(_) => {
             crate::process_group::force_kill_process_group(child);
             settle_execution_failure(
-                args, start, &format!("exceeded hard timeout of {} seconds", limit.as_secs()),
+                args, duration_ms, &format!("exceeded hard timeout of {} seconds", limit.as_secs()),
             );
             Ok(CompletionInfo {
                 status: TaskStatus::Failed,
@@ -97,7 +98,7 @@ async fn settle_result(
     }
 }
 
-fn settle_execution_failure(args: &RunProcessArgs<'_>, start: Instant, detail: &str) {
+fn settle_execution_failure(args: &RunProcessArgs<'_>, duration_ms: i64, detail: &str) {
     let event = TaskEvent {
         task_id: args.task_id.clone(),
         timestamp: Local::now(),
@@ -111,7 +112,7 @@ fn settle_execution_failure(args: &RunProcessArgs<'_>, start: Instant, detail: &
             id: args.task_id.as_str(),
             status: TaskStatus::Failed,
             tokens: None,
-            duration_ms: start.elapsed().as_millis() as i64,
+            duration_ms,
             observed_model: None,
             attribution_source: None,
             cost_usd: None,

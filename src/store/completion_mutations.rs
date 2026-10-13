@@ -47,7 +47,9 @@ impl Store {
             // has no business rewriting what was asked for.
             "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3,
              completed_at = CASE WHEN ?1 = 'done' AND ?10 = 0 THEN NULL ELSE ?4 END,
-             observed_model = COALESCE(?5, observed_model), attribution_source = COALESCE(?9, attribution_source), cost_usd = ?6, exit_code = ?7 WHERE id = ?8
+             observed_model = COALESCE(?5, observed_model),
+             attribution_source = COALESCE(?9, attribution_source), cost_usd = ?6, exit_code = ?7
+             WHERE id = ?8
              AND (status NOT IN ('done', 'failed', 'stopped', 'skipped', 'merged')
                   OR (status = 'done' AND completed_at IS NULL))",
             params![

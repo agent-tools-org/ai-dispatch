@@ -131,7 +131,9 @@ impl Store {
         {
             return Ok(false);
         }
-        if current == TaskStatus::Done && next == TaskStatus::Stopped { return Ok(true); }
+        if current == TaskStatus::Done && next == TaskStatus::Stopped {
+            return Ok(true);
+        }
         if current.can_transition_to(next) {
             return Ok(true);
         }

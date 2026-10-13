@@ -67,8 +67,11 @@ mod run_async_tests;
 fn quota_worktree(dir: &std::path::Path, branch: Option<&str>) -> std::path::PathBuf {
     let wt_dir = dir.join("wt");
     std::fs::create_dir_all(&wt_dir).unwrap();
-    if let Some(branch) = branch { git(&wt_dir, &["init", "-b", branch]); }
-    else { git(&wt_dir, &["init"]); }
+    if let Some(branch) = branch {
+        git(&wt_dir, &["init", "-b", branch]);
+    } else {
+        git(&wt_dir, &["init"]);
+    }
     git(&wt_dir, &["config", "user.email", "aid@example.com"]);
     git(&wt_dir, &["config", "user.name", "Aid Tester"]);
     std::fs::write(wt_dir.join("file.txt"), "initial").unwrap();

@@ -5,10 +5,10 @@
 use anyhow::Result;
 
 use crate::store::{Store, TaskCompletionUpdate};
-use crate::types::{PendingReason, TaskEvent, TaskId, TaskStatus};
+use crate::types::{ACTIVE_TASK_STATUSES, PendingReason, TaskEvent, TaskId, TaskStatus};
 
 pub(crate) fn mark_running(store: &Store, task_id: &TaskId) -> Result<bool> {
-    store.update_task_status(task_id.as_str(), TaskStatus::Running)
+    store.settle_task_status(task_id.as_str(), TaskStatus::Running, Some(&ACTIVE_TASK_STATUSES), None, None)
 }
 
 pub(crate) fn mark_awaiting_input(store: &Store, task_id: &TaskId) -> Result<bool> {

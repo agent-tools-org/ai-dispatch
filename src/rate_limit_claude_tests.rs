@@ -26,7 +26,7 @@ fn droid_default_can_launch_with_only_core_held_refusal_regression() {
 }
 
 #[test]
-fn monthly_droid_core_stdout_and_stderr_hold_until_reset_refusal_regression() {
+fn monthly_droid_core_provider_error_holds_until_reset_refusal_regression() {
     let message = "402 You've reached your monthly Droid Core usage limit (resets in 2 days).";
     assert!(
         crate::rate_limit_signatures::match_quota_signature_for_agent(message, AgentKind::Droid).is_some()
@@ -35,6 +35,10 @@ fn monthly_droid_core_stdout_and_stderr_hold_until_reset_refusal_regression() {
         let temp = tempfile::tempdir().expect("home");
         let _home = crate::paths::AidHomeGuard::set(temp.path());
         let event = serde_json::json!({"type": "error", "message": message}).to_string();
+        if channel == Channel::CliStderr {
+            assert_eq!(refusal_on_channel(&event, AgentKind::Droid, channel), None);
+            continue;
+        }
         let refusal = refusal_on_channel(&event, AgentKind::Droid, channel).expect("refusal");
         rate_limit::mark_rate_limited_for_message(&AgentKind::Droid, None, &refusal);
         let marker = rate_limit::group_marker_path(&AgentKind::Droid, None, "core");

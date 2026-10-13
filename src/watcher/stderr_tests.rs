@@ -128,7 +128,8 @@ async fn stderr_drain_times_out_continuously_ready_reader() {
 
 struct ReadyStderr;
 
-const CORE_FIXTURE: &str = "Fixture: You've reached your monthly Droid Core usage limit (resets in 2 days).";
+const CORE_FIXTURE: &str =
+    "Fixture: You've reached your monthly Droid Core usage limit (resets in 2 days).";
 
 fn assert_stderr_cannot_hold_core(output: &str) {
     let home = tempfile::tempdir().expect("home");
@@ -139,9 +140,12 @@ fn assert_stderr_cannot_hold_core(output: &str) {
     super::failure_stderr_note(
         crate::types::TaskStatus::Failed, &id, &crate::agent::droid::DroidAgent, None,
     );
-    assert!(!crate::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core").exists());
+    let marker = crate::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core");
+    assert!(!marker.exists());
     std::fs::write(paths::log_path(id.as_str()), format!("{output}\n")).expect("stderr replay");
-    assert_eq!(crate::cmd::run::read_quota_error_message(&id, &crate::types::AgentKind::Droid), None);
+    assert_eq!(
+        crate::cmd::run::read_quota_error_message(&id, &crate::types::AgentKind::Droid), None,
+    );
 }
 
 #[test]
@@ -162,7 +166,8 @@ fn raw_core_stream_does_not_hold_pool_fix_regression() {
     assert!(!crate::agent::stream_completion::record_quota_exhaustion(
         CORE_FIXTURE, crate::types::AgentKind::Droid, None, None,
     ).recorded());
-    assert!(!crate::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core").exists());
+    let marker = crate::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core");
+    assert!(!marker.exists());
 }
 
 #[test]
@@ -177,7 +182,24 @@ fn assistant_and_tool_core_errors_do_not_hold_pool_fix_regression() {
             &value.to_string(), crate::types::AgentKind::Droid, None, None,
         ).recorded());
     }
-    assert!(!crate::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core").exists());
+    let marker = crate::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core");
+    assert!(!marker.exists());
+}
+
+#[tokio::test]
+async fn truncated_stderr_replay_cannot_mark_auth_fix_regression() {
+    let home = tempfile::tempdir().expect("home");
+    let _guard = paths::AidHomeGuard::set(home.path());
+    paths::ensure_dirs().expect("directories");
+    let id = TaskId("t-auth-replay".into());
+    let error = serde_json::json!({"type": "error", "error": {"name": "APIError",
+        "data": {"statusCode": 401, "message": "Unauthorized"}}});
+    std::fs::write(paths::stderr_path(id.as_str()), format!("{error}\n{}", "x".repeat(70_000)))
+        .expect("stderr");
+    let mut log = tokio::fs::File::create(paths::log_path(id.as_str())).await.expect("log");
+    append_stderr_to_log(&mut log, &id).await.expect("replay");
+    assert!(!crate::auth_marker::record_from_run(id.as_str(), crate::types::AgentKind::OpenCode));
+    assert_eq!(crate::auth_marker::auth_status(crate::types::AgentKind::OpenCode, None).state, "unknown");
 }
 
 impl tokio::io::AsyncRead for ReadyStderr {

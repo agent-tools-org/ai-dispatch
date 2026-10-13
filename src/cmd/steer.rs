@@ -34,17 +34,26 @@ pub(crate) fn wrap_up_before_timeout(
     let Some(task) = store.get_task(task_id)? else {
         return Ok(false);
     };
-    if reply::ensure_interactive_input(&task, InputCommand::Steer).is_err()
+    if task.read_only || reply::ensure_interactive_input(&task, InputCommand::Steer).is_err()
         || crate::paths::steer_signal_path(task_id).exists()
     {
         return Ok(false);
     }
+    queue_wrap_up(store, task_id)
+}
+
+fn queue_wrap_up(store: &Store, task_id: &str) -> Result<bool> {
+    let mut conn = store.db();
+    let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+    if crate::paths::steer_signal_path(task_id).exists() {
+        return Ok(false);
+    }
     let message = "Hard timeout is approaching: please commit work in progress if changes are permitted, \
                    and write the report now.";
-    let rows = store.db().execute(
+    let rows = tx.execute(
         "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
          SELECT id, ?2, 'milestone', ?3, ?4 FROM tasks WHERE id = ?1
-         AND status IN ('running', 'awaiting_input', 'stalled')
+         AND status IN ('running', 'awaiting_input', 'stalled') AND read_only = 0
          AND NOT EXISTS (SELECT 1 FROM events WHERE task_id = ?1 AND detail = ?3)",
         rusqlite::params![
             task_id,
@@ -56,16 +65,13 @@ pub(crate) fn wrap_up_before_timeout(
     if rows == 0 {
         return Ok(false);
     }
-    reply::run_with_source(
-        store,
-        task_id,
-        Some(message),
-        None,
-        true,
-        30,
-        MessageSource::Steer,
-        InputCommand::Steer,
+    tx.execute(
+        "INSERT INTO task_messages (task_id, direction, content, source, created_at)
+         VALUES (?1, 'in', ?2, 'steer', ?3)",
+        rusqlite::params![task_id, message, chrono::Local::now().to_rfc3339()],
     )?;
+    crate::input_signal::write_steer(task_id, message)?;
+    tx.commit()?;
     Ok(true)
 }
 

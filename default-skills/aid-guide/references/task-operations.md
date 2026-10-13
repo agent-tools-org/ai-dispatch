@@ -116,7 +116,8 @@ Values below 300 seconds warn without rejecting the run. For caps of at least
 600 seconds, hard-cap reconciliation requests one wrap-up at 90%: commit work
 in progress when changes are permitted, and write the report now. The request
 uses normal steer delivery, records a milestone, and skips agents without steer
-support. A pending operator steer is preserved and the cap is unchanged.
+support and read-only tasks. Failed signal publication releases the request for retry.
+A pending operator steer is preserved and the cap is unchanged.
 
 Repeated activity is not itself a stop condition.
 

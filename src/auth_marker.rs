@@ -93,9 +93,15 @@ fn auth_status_at(agent: AgentKind, custom_name: Option<&str>, now: DateTime<Loc
 /// The CLI's own not-signed-in line in this run output, if any.
 pub(crate) fn auth_failure_line(raw: &str, agent: AgentKind, channel: Channel) -> Option<String> {
     if agent == AgentKind::OpenCode {
+        if channel != Channel::CliStream {
+            return None;
+        }
         return raw.lines().find_map(|line| {
             let cleaned = crate::watcher::strip_terminal_escapes(line);
             let value: serde_json::Value = serde_json::from_str(cleaned.trim()).ok()?;
+            if !crate::quota_channel::is_error_envelope(value.as_object()?) {
+                return None;
+            }
             let data = &value["error"]["data"];
             (value["type"] == "error"
                 && value["error"]["name"] == "APIError"
@@ -130,7 +136,11 @@ pub(crate) fn record_from_run(task_id: &str, agent: AgentKind) -> bool {
         (crate::paths::log_path(task_id), Channel::CliStream),
     ];
     let line = sources.iter().find_map(|(path, channel)| {
-        let raw = std::fs::read_to_string(path).ok()?;
+        let raw = if *channel == Channel::CliStream {
+            crate::quota_channel::read_run_stream(task_id)?
+        } else {
+            std::fs::read_to_string(path).ok()?
+        };
         auth_failure_line(&raw, agent, *channel)
     });
     match line {

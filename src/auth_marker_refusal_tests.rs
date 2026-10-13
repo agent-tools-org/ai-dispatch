@@ -18,7 +18,8 @@ fn opencode_structured_401_sets_auth_marker_refusal_regression() {
     assert!(record_from_run("t-auth", AgentKind::OpenCode));
     assert!(auth_status(AgentKind::OpenCode, None).failed());
     for channel in [Channel::CliStream, Channel::CliStderr] {
-        assert!(auth_failure_line(&error, AgentKind::OpenCode, channel).is_some());
+        assert_eq!(auth_failure_line(&error, AgentKind::OpenCode, channel).is_some(),
+            channel == Channel::CliStream);
         let prose = serde_json::json!({"type": "assistant", "text": error}).to_string();
         assert_eq!(auth_failure_line(&prose, AgentKind::OpenCode, channel), None);
         assert_eq!(
@@ -89,8 +90,9 @@ fn tool_scoped_401_run_does_not_mark_auth_fix_regression() {
 
 #[test]
 fn stderr_401_fixture_and_replayed_log_do_not_mark_auth_fix_regression() {
-    let error = r#"{"type":"error","error":{"name":"APIError","data":{"statusCode":401,"message":"Unauthorized"}}}"#;
-    assert_run_has_no_auth_marker(error, true);
+    let error = serde_json::json!({"type": "error", "error": {"name": "APIError",
+        "data": {"statusCode": 401, "message": "Unauthorized"}}});
+    assert_run_has_no_auth_marker(&error.to_string(), true);
 }
 
 #[test]

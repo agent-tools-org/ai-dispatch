@@ -236,8 +236,7 @@ pub(crate) fn read_quota_error_message(task_id: &TaskId, agent: &crate::types::A
     {
         return Some(line);
     }
-    let log_path = crate::paths::log_path(task_id.as_str());
-    if let Ok(log) = std::fs::read_to_string(&log_path)
+    if let Some(log) = crate::quota_channel::read_run_stream(task_id.as_str())
         && let Some(line) = find_rate_limit_line_in_agent_log(&log, agent)
     {
         return Some(line);

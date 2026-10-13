@@ -179,7 +179,8 @@ Important controls:
   For caps of at least 600 seconds, the first hard-cap reconciliation poll at
   90% queues one steer asking the agent to commit permitted work in progress
   and write its report. A milestone records the request. Agents without steer
-  support receive nothing; a pending operator steer is preserved. The cap stays unchanged.
+  support and read-only tasks receive nothing; a pending operator steer is preserved.
+  Failed signal publication releases the request for retry. The cap stays unchanged.
 - `--idle-timeout SECS` stops a task whose stream goes quiet. Meaningful raw
   output refreshes the clock even when aid cannot parse it into an event; aid's
   own idle nudges, PTY echoes of those nudges, reply/ack bookkeeping, and pure
@@ -317,10 +318,12 @@ without changing the hint’s advice profile. Each candidate also carries `auth`
 `failed` (with `observed_at` and `message`) when a run of that agent ended on a
 recognised not-signed-in refusal within the last hour (grok `Not signed in`,
 claude `Please run /login` / `Not logged in`, oz `credentials are invalid`).
-OpenCode's structured `APIError` with `statusCode:401` sets an auth hold until
+OpenCode's provider error envelope on the stream with `APIError` and `statusCode:401` sets an auth hold until
 its credential/config file metadata changes or an explicit successful run clears it.
-Billing refusals and assistant text cannot set that auth hold. Environment-only
+Billing refusals, assistant/tool output, and raw stderr fixtures cannot set that auth hold. Environment-only
 credential changes require an explicit successful run. Otherwise auth is `unknown`.
+Droid Core dated holds also require provider error envelopes on the stream;
+raw stderr and assistant/tool output cannot set them.
 A successful run clears it; aid never reports `ok` and
 never marks auth failed from a run or probe that could not start.
 
@@ -611,7 +614,7 @@ of moving off the agent you asked for. Where a tiered agent has only one tier
 held — cursor's premium pool, or droid's standard or Core pool — dispatch stays on the
 agent and switches to a tier that still serves, reporting the swap rather than
 making it silently. A droid refusal that names neither `standard usage` nor
-`weekly Droid Core usage limit` holds the whole agent.
+`Droid Core usage limit` holds the whole agent.
 
 Cursor's `ActionRequiredError: You've hit your usage limit` monthly refusal
 holds the dispatched model group, including Auto when Auto refused. Its

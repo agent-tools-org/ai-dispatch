@@ -21,6 +21,8 @@ for current sequencing and acceptance gates.
 | Historical architecture findings | [July audit](audit-architecture-2026-07.md) |
 | Historical release candidate evidence | [August handoff](audit-handoff-2026-08-23.md) |
 | UX candidates needing re-triage | [UX debt](ux-debt.md) |
+| Latest failed-task review | [2026-10-13 review](investigation-failed-tasks-20261013.md) |
+| Website and README refresh | [Stale facts and story](site-refresh-2026-10.md) |
 
 Files named `audit-*`, `investigation-*`, `triage-*`, and dated research reports preserve
 incident evidence at their recorded baseline. Design documents describe intent and may

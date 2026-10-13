@@ -28,6 +28,24 @@ does not assert board closure. New slices need board IDs before implementation.
   re-run for this release.
 - Earlier baseline notes (v10.47.x custody and budget work) remain below for reconciliation.
 
+## Failure truthfulness (next release, from the 2026-10-13 failed-task review)
+
+[The review](investigation-failed-tasks-20261013.md) found
+two state bugs and three handling gaps that cost the most agent time. Order:
+
+| Order | Slice | Acceptance contract |
+| --- | --- | --- |
+| 1 | Stop wins over the reaper | `aid stop` racing another `aid` process ends `stopped`, never "worker died" |
+| 2 | Terminal rows carry duration | Reaper and stop paths write `completed_at` and `duration_ms` |
+| 3 | Live child is activity | Merges "Idle timeout during box waits" below: a silent descendant command accruing CPU is not idle |
+| 4 | Capacity is transient | Codex "at capacity" / exhausted 503 reconnects: short model hold, one automatic continuation from the salvage commit |
+| 5 | Wrap-up before the hard cap | Steer at 90 % of `--timeout`; warn when `--timeout` < 300 s |
+| 6 | Codex read-only at launch | Depends on slice "Read-only report location" below |
+| 7 | Refusal signatures | opencode 401 auth marker; droid monthly hold; Claude `seven_day` fixture |
+| 8 | Capture tasks | No `empty_diff` flag when no repository change is declared |
+
+Release copy: [site and README refresh](site-refresh-2026-10.md).
+
 ## Third-party capability evidence (v10.52.0, v10.52.1)
 
 Released in v10.52.0; v10.52.1 made the price and score feeds refresh in a detached

@@ -138,6 +138,9 @@ mod flow;
 #[path = "capacity_cancellation_tests.rs"]
 mod cancellation;
 
+#[path = "capacity_round2_tests.rs"]
+mod round2;
+
 #[test]
 fn provider_capacity_regression_never_selects_automatic_advice_fallback() {
     let home = tempfile::tempdir().expect("home");

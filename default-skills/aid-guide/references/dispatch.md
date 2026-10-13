@@ -426,7 +426,11 @@ all existing correction, checklist, and iteration blocks. Missing-delivery
 recovery does the same, including when a missing Codex rollout starts a fresh session. Parent linkage never
 replaces that brief. Background cascades reuse the raw brief and assemble fresh
 launch context; workers launch the separately stored resolved prompt.
-Templates must contain `{{prompt}}`; otherwise dispatch fails explicitly.
+A template without `{{prompt}}` gets the caller brief appended after it.
+The worker launches OpenCode, Kilo and MiMoCode without their native
+context-file arguments, so `--context` files reach them only as prompt text.
+On-demand memory search stops at the memory cap per query; matches beyond it
+are not counted as omitted.
 
 Use `--context-from <task>...` to inject prior task output. If that task
 declared `-o` and the owned file is missing, aid reports the absence and does

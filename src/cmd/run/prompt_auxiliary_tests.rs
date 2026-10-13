@@ -241,7 +241,7 @@ fn background_cascade_preservation_does_not_accumulate_launch_context() {
 }
 
 #[test]
-fn template_preservation_rejects_missing_placeholder_on_dispatch_and_retry() {
+fn template_preservation_appends_brief_without_placeholder_on_dispatch_and_retry() {
     let home = tempfile::tempdir().unwrap();
     let _guard = crate::paths::AidHomeGuard::set(home.path());
     let templates = crate::paths::aid_dir().join("templates");
@@ -257,7 +257,7 @@ fn template_preservation_rejects_missing_placeholder_on_dispatch_and_retry() {
             template: Some("broken".into()),
             ..Default::default()
         };
-        let result = build_prompt_bundle(
+        let bundle = build_prompt_bundle(
             &store,
             &args,
             &AgentKind::Codex,
@@ -266,11 +266,9 @@ fn template_preservation_rejects_missing_placeholder_on_dispatch_and_retry() {
             "t-template",
             None,
             None,
-        );
-        assert!(
-            result.is_err(),
-            "template silently dropped the caller brief"
-        );
-        assert!(result.err().unwrap().to_string().contains("{{prompt}}"));
+        )
+        .unwrap();
+        assert!(bundle.effective_prompt.contains("Unrelated task"));
+        assert!(bundle.effective_prompt.contains(prompt), "template dropped the caller brief");
     }
 }

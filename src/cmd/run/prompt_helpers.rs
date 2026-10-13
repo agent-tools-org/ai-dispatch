@@ -13,8 +13,6 @@ pub(crate) fn resolve_prompt(prompt: &str, template: Option<&str>) -> Result<Str
     let raw = prompt.to_string();
     if let Some(template) = template {
         let template_content = templates::load_template(template)?;
-        anyhow::ensure!(template_content.contains("{{prompt}}"),
-            "Template '{template}' must contain {{{{prompt}}}} to preserve the caller brief");
         Ok(templates::apply_template(&template_content, &raw))
     } else { Ok(raw) }
 }

@@ -13,6 +13,8 @@ pub(crate) fn resolve_prompt(prompt: &str, template: Option<&str>) -> Result<Str
     let raw = prompt.to_string();
     if let Some(template) = template {
         let template_content = templates::load_template(template)?;
+        anyhow::ensure!(template_content.contains("{{prompt}}"),
+            "Template '{template}' must contain {{{{prompt}}}} to preserve the caller brief");
         Ok(templates::apply_template(&template_content, &raw))
     } else { Ok(raw) }
 }
@@ -42,15 +44,20 @@ pub(crate) fn sanitize_injected_text(text: &str) -> String {
     result.join("\n")
 }
 
-fn truncate_batch_sibling_prompt(prompt: &str) -> String {
+fn truncate_batch_sibling_prompt(prompt: &str, omissions: &mut Vec<String>) -> String {
     let mut preview: String = prompt.chars().take(BATCH_SIBLING_PROMPT_LIMIT).collect();
     if prompt.chars().count() > BATCH_SIBLING_PROMPT_LIMIT {
-        preview.push_str("...");
+        let count = prompt.chars().count() - BATCH_SIBLING_PROMPT_LIMIT;
+        let note = format!("Batch Siblings: {count} characters of entry omitted");
+        omissions.push(note.clone());
+        preview.push_str(&format!("... [{note}]"));
     }
     preview
 }
 
-pub(super) fn format_batch_siblings(siblings: &[(String, String, String)]) -> String {
+pub(super) fn format_batch_siblings(
+    siblings: &[(String, String, String)], omissions: &mut Vec<String>,
+) -> String {
     let shown = siblings
         .iter()
         .take(BATCH_SIBLING_LIMIT)
@@ -59,7 +66,7 @@ pub(super) fn format_batch_siblings(siblings: &[(String, String, String)]) -> St
                 "- \"{}\" ({}): {}",
                 name,
                 agent,
-                truncate_batch_sibling_prompt(prompt)
+                truncate_batch_sibling_prompt(prompt, omissions)
             )
         })
         .collect::<Vec<_>>();
@@ -70,10 +77,12 @@ pub(super) fn format_batch_siblings(siblings: &[(String, String, String)]) -> St
     ];
     lines.extend(shown);
     if remaining > 0 {
-        lines.push(format!("+ {remaining} more"));
+        let note = format!("Batch Siblings: {remaining} siblings omitted");
+        omissions.push(note.clone());
+        lines.push(format!("+ {remaining} more [{note}]"));
     }
     lines.push("</aid-batch-siblings>".to_string());
-    lines.join("\n")
+    crate::workgroup::bound_auxiliary(&lines.join("\n"), "Batch Siblings", omissions)
 }
 
 pub(crate) fn inject_skill(
@@ -81,6 +90,7 @@ pub(crate) fn inject_skill(
     agent_kind: &AgentKind,
     requested_skills: &[String],
     required: bool,
+    omissions: &mut Vec<String>,
 ) -> Result<String> {
     if requested_skills.is_empty() { return Ok(prompt.to_string()); }
     let mut sections = Vec::new();
@@ -97,34 +107,41 @@ pub(crate) fn inject_skill(
             sections.push(format!("--- Gotchas ---\n{gotchas}"));
         }
         sections.push(format!("--- Methodology ---\n{skill_text}"));
-        let scripts = skills::load_skill_scripts(name);
-        if !scripts.is_empty() {
-            sections.push(
-                format!(
-                    "{}\n{}",
-                    skills::format_script_instructions(&scripts)
-                        .replacen("--- Available Tools ---", "--- Available Scripts ---", 1),
-                    scripts
-                        .iter()
-                        .map(|script| format!("- {}", script.path.display()))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                ),
-            );
-        }
-        let references = skills::list_skill_references(name);
-        if !references.is_empty() {
-            sections.push(format!(
-                "--- References (read on demand) ---\nFor detailed reference, read these files when needed:\n{}",
-                references
+        append_skill_resources(name, &mut sections);
+    }
+    let context = crate::workgroup::bound_auxiliary(
+        &sections.join("\n\n"), "Methodology", omissions,
+    );
+    Ok(format!("{prompt}\n\n{context}"))
+}
+
+fn append_skill_resources(name: &str, sections: &mut Vec<String>) {
+    let scripts = skills::load_skill_scripts(name);
+    if !scripts.is_empty() {
+        sections.push(
+            format!(
+                "{}\n{}",
+                skills::format_script_instructions(&scripts)
+                    .replacen("--- Available Tools ---", "--- Available Scripts ---", 1),
+                scripts
                     .iter()
-                    .map(|path| format!("- {path}"))
+                    .map(|script| format!("- {}", script.path.display()))
                     .collect::<Vec<_>>()
                     .join("\n")
-            ));
-        }
+            ),
+        );
     }
-    Ok(format!("{prompt}\n\n{}", sections.join("\n\n")))
+    let references = skills::list_skill_references(name);
+    if !references.is_empty() {
+        sections.push(format!(
+            "--- References (read on demand) ---\nFor detailed reference, read these files when needed:\n{}",
+            references
+                .iter()
+                .map(|path| format!("- {path}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ));
+    }
 }
 
 pub(crate) fn build_context_flags(agent_kind: &AgentKind, context_args: &[String]) -> Result<(Option<String>, Vec<String>)> {

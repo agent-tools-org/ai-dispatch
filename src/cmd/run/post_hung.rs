@@ -3,7 +3,7 @@
 use anyhow::Result;
 use std::sync::Arc;
 use crate::{process_monitor, store::Store, types::*};
-use crate::cmd::{retry_logic, run_hung_recovery};
+use crate::cmd::run_hung_recovery;
 use super::{switch_agent, take_next_cascade_agent};
 use super::super::{RunArgs, inherit_retry_base_branch, run, apply_retry_target};
 
@@ -39,9 +39,7 @@ pub(crate) async fn maybe_auto_retry_after_hang(
 
     let feedback =
         run_hung_recovery::build_hung_retry_feedback(&hung_task, context.hung_duration_secs);
-    let root_prompt = retry_logic::root_prompt(store.as_ref(), &task)
-        .unwrap_or_else(|| args.prompt.clone());
-    let retry_args = build_hung_retry_args(store, args, &task, &context, &feedback, &root_prompt)?;
+    let retry_args = build_hung_retry_args(store, args, &task, &context, &feedback, &task.prompt)?;
 
     process_monitor::insert_hung_retry_event(store.as_ref(), task_id)?;
     let retry_id = Box::pin(run(store.clone(), retry_args)).await?;
@@ -72,7 +70,7 @@ fn build_hung_retry_args(
     task: &Task,
     context: &process_monitor::HungContext,
     feedback: &str,
-    root_prompt: &str,
+    prompt: &str,
 ) -> Result<RunArgs> {
     let mut retry_args = RunArgs::for_retry(store, task)?;
     retry_args.dir = args.dir.clone();
@@ -81,7 +79,7 @@ fn build_hung_retry_args(
     retry_args.announce = args.announce;
     retry_args.on_done = None;
     retry_args.prompt =
-        format!("[Previous attempt feedback]\n{feedback}\n\n[Original task]\n{root_prompt}");
+        format!("[Previous attempt feedback]\n{feedback}\n\n[Original task]\n{prompt}");
     retry_args.retry = if context.transient {
         args.retry
     } else {

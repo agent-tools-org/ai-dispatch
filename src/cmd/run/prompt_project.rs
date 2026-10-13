@@ -4,7 +4,10 @@
 use super::{project, prompt_context, sanitize_injected_text};
 use std::collections::HashSet;
 
-pub(super) fn inject_project_context(mut effective_prompt: String, prompt: &str, project: Option<&project::ProjectConfig>, project_root: Option<&std::path::Path>) -> (String, HashSet<String>) {
+pub(super) fn inject_project_context(
+    mut effective_prompt: String, prompt: &str, project: Option<&project::ProjectConfig>,
+    project_root: Option<&std::path::Path>, omissions: &mut Vec<String>,
+) -> (String, HashSet<String>) {
     let mut project_topics: HashSet<String> = HashSet::new();
 
     // Inject project rules + knowledge if a project was detected
@@ -15,10 +18,12 @@ pub(super) fn inject_project_context(mut effective_prompt: String, prompt: &str,
                 .map(|r| format!("- {r}"))
                 .collect::<Vec<_>>()
                 .join("\n");
+            let rules_block = crate::workgroup::bound_auxiliary(&rules_block, "Project Rules", omissions);
             effective_prompt = format!("<aid-project-rules>\n{rules_block}\n</aid-project-rules>\n\n{effective_prompt}");
         }
         if let Some(state_block) = project_root.and_then(|root| prompt_context::inject_project_state(pc, root)) {
             let state_block = sanitize_injected_text(&state_block);
+            let state_block = crate::workgroup::bound_auxiliary(&state_block, "Project State", omissions);
             effective_prompt = format!("{state_block}\n\n{effective_prompt}");
             aid_info!("[aid] Injected project state");
         }
@@ -32,7 +37,12 @@ pub(super) fn inject_project_context(mut effective_prompt: String, prompt: &str,
                 for entry in &relevant {
                     project_topics.extend(prompt_context::extract_words(&entry.topic));
                 }
-                let knowledge_block = sanitize_injected_text(&prompt_context::format_knowledge_block(&pc.id, &relevant));
+                let knowledge_block = sanitize_injected_text(
+                    &prompt_context::format_knowledge_block(&pc.id, &relevant, omissions),
+                );
+                let knowledge_block = crate::workgroup::bound_auxiliary(
+                    &knowledge_block, "Project Knowledge", omissions,
+                );
                 effective_prompt = format!("{knowledge_block}\n\n{effective_prompt}");
             }
             aid_info!("[aid] Project '{}' detected: {} rule(s), {}/{} knowledge entries", pc.id, rules_count, relevant.len(), total_knowledge);

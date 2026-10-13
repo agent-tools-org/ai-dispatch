@@ -223,9 +223,9 @@ pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_i
         if feedback.is_empty() { "no feedback provided" } else { feedback }
     );
     let mut retry_args = args.clone();
-    let root_prompt = retry_logic::root_prompt(store, &task).unwrap_or_else(|| args.prompt.clone());
+    let prompt = &task.prompt;
     retry_args.prompt = format!(
-        "[Judge feedback]\n{}\n\n[Original task]\n{root_prompt}",
+        "[Judge feedback]\n{}\n\n[Original task]\n{prompt}",
         if feedback.is_empty() { "Judge requested retry without feedback" } else { feedback }
     );
     retry_args.judge_retry = true;

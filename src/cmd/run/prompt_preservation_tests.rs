@@ -150,3 +150,60 @@ fn task_over_6500_chars_is_delivered_whole_with_context_flag_without_a_warning()
     );
     assert!(store.get_events("task-context").unwrap().is_empty());
 }
+
+#[test]
+fn stored_context_preservation_bounds_memory_and_rules_with_one_warning() {
+    let home = tempfile::tempdir().unwrap();
+    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    let store = Store::open_memory().unwrap();
+    insert_prompt_task(&store, "task-warning");
+    store.insert_memory(&large_memory(home.path())).unwrap();
+    let project = project::ProjectConfig {
+        id: "test".into(),
+        rules: vec!["Project rule é\n".repeat(2000)],
+        ..Default::default()
+    };
+    let args = RunArgs {
+        prompt: "complete task".into(),
+        ..Default::default()
+    };
+    let prompt = build_prompt_bundle(
+        &store,
+        &args,
+        &AgentKind::Codex,
+        None,
+        &[],
+        "task-warning",
+        Some(&project),
+        Some(home.path()),
+    )
+    .unwrap()
+    .effective_prompt;
+    assert!(prompt.contains("complete task"));
+    assert!(prompt.len() < 15_000);
+    let events = store.get_events("task-warning").unwrap();
+    assert_eq!(events.len(), 1);
+    assert!(events[0].detail.contains("Memory"));
+    assert!(events[0].detail.contains("Project Rules"));
+    assert!(prompt.matches("characters omitted").count() >= 2);
+}
+
+fn large_memory(root: &std::path::Path) -> Memory {
+    Memory {
+        id: MemoryId("m-bounded".into()),
+        memory_type: MemoryType::Fact,
+        tier: MemoryTier::Critical,
+        content: "Memory fact é\n".repeat(2000),
+        source_task_id: None,
+        agent: None,
+        project_path: Some(root.display().to_string()),
+        content_hash: "bounded-memory".into(),
+        created_at: chrono::Local::now(),
+        expires_at: None,
+        supersedes: None,
+        version: 1,
+        inject_count: 0,
+        last_injected_at: None,
+        success_count: 0,
+    }
+}

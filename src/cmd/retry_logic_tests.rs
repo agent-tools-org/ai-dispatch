@@ -136,7 +136,7 @@ fn failed_retry_errors_when_recorded_branch_is_gone() {
 }
 
 #[test]
-fn failed_retry_keeps_saved_configuration_and_uses_root_feedback() {
+fn failed_retry_keeps_saved_configuration_and_uses_own_feedback() {
     let store = Store::open_memory().unwrap();
     let repo = tempfile::tempdir().unwrap();
     let mut root = failed_task("t-config-root");
@@ -154,7 +154,7 @@ fn failed_retry_keeps_saved_configuration_and_uses_root_feedback() {
     };
     store.update_task_dispatch_args(child.id.as_str(), &saved.dispatch_args_json().unwrap()).unwrap();
     let args = retry_args_for(&store, &child).unwrap();
-    assert_eq!(args.prompt, "[Previous attempt failed]\nError: agent failed\n\n[Original task]\nroot prompt");
+    assert_eq!(args.prompt, "[Previous attempt failed]\nError: agent failed\n\n[Original task]\nprompt");
     assert_eq!(args.verify, saved.verify);
     assert_eq!(args.output, saved.output);
     assert_eq!(args.on_done, saved.on_done);

@@ -63,7 +63,7 @@ const MAX_CONTEXT_BYTES: usize = 6000;
 #[path = "workgroup_prompt_tests.rs"]
 mod prompt_preservation;
 
-fn bound_auxiliary(context: &str, label: &str, omissions: &mut Vec<String>) -> String {
+pub(crate) fn bound_auxiliary(context: &str, label: &str, omissions: &mut Vec<String>) -> String {
     if context.len() <= MAX_CONTEXT_BYTES {
         return context.to_string();
     }

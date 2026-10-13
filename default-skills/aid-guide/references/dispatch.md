@@ -411,14 +411,19 @@ dispatch an explicit agent.
 Use `--context <path>...` for source material, not extra positional arguments.
 
 The task brief is always delivered whole, including retry feedback before the
-original task on session resume. Shared context, file context, findings, and peer
-milestones are bounded independently with in-place omission notes. When prompt
+original task on session resume. Shared context, file context, findings, peer
+milestones, parent/sibling summaries (including file lists), prior/shared output,
+methodology, memories, project/team context, toolbox instructions, and batch
+sibling previews are bounded independently with in-place omission notes. When prompt
 composition drops auxiliary content, `aid run` prints one `Prompt context bounded:`
 warning and records a setup event with the omitted sections. `aid show --context`
 and ShareGPT reconstruction use the same composition rules. Large task briefs may
 exceed an agent's context window; aid does not shorten them to fit.
-Automatic retries retain the latest manual correction when resolving the original
-task through its ancestors.
+Retries prepend new feedback to the failed task's own raw caller brief, preserving
+all existing correction, checklist, and iteration blocks. Parent linkage never
+replaces that brief. Background cascades reuse the raw brief and assemble fresh
+launch context; workers launch the separately stored resolved prompt.
+Templates must contain `{{prompt}}`; otherwise dispatch fails explicitly.
 
 Use `--context-from <task>...` to inject prior task output. If that task
 declared `-o` and the owned file is missing, aid reports the absence and does

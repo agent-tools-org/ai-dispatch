@@ -190,7 +190,7 @@ async fn provider_capacity_round2_ordinary_cascade_preserves_prompt_and_completi
     let args = RunArgs {
         agent_name: "codex".into(), prompt: "Normal cascade feedback".into(),
         dir: row.effective_dir.clone(), cascade: vec!["ordinary-cascade".into()],
-        on_done: Some(format!("touch '{}'", marker.display())), foreground: true, no_audit: true,
+        on_done: Some(format!("printf done > '{}'", marker.display())), foreground: true, no_audit: true,
         skills: vec![crate::cmd::run::NO_SKILL_SENTINEL.into()], ..Default::default()
     };
     let id = crate::cmd::run::run_lifecycle::retry_or_cascade(&store, &args, &row.id)
@@ -198,5 +198,10 @@ async fn provider_capacity_round2_ordinary_cascade_preserves_prompt_and_completi
     let saved = RunArgs::saved_for_task(&store, id.as_str()).expect("saved").expect("args");
     assert_eq!(saved.prompt, args.prompt);
     assert_eq!(saved.on_done, args.on_done);
-    assert!(marker.exists(), "ordinary cascade must keep its completion hook");
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while !marker.exists() {
+            tokio::task::yield_now().await;
+        }
+    }).await.expect("ordinary cascade completion hook");
+    assert_eq!(std::fs::read_to_string(marker).expect("hook output"), "done");
 }

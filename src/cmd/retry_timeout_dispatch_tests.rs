@@ -2,6 +2,111 @@
 // Shares retry fixtures; fake custom agent avoids external provider calls.
 use super::*;
 
+fn explicit_retry_setup(
+    status: TaskStatus,
+) -> (
+    tempfile::TempDir,
+    crate::paths::AidHomeGuard,
+    std::sync::Arc<Store>,
+    Task,
+) {
+    let home = tempfile::tempdir().unwrap();
+    let guard = crate::paths::AidHomeGuard::set(home.path());
+    crate::paths::ensure_dirs().unwrap();
+    std::fs::create_dir_all(crate::paths::aid_dir().join("agents")).unwrap();
+    std::fs::write(
+        crate::paths::aid_dir().join("agents/explicit-retry.toml"),
+        concat!(
+            "[agent]\nid = \"explicit-retry\"\ndisplay_name = \"Explicit Retry\"\n",
+            "command = \"/bin/sh\"\nprompt_mode = \"arg\"\n",
+            "fixed_args = [\"-c\", \"echo retried-with-feedback\"]\ninteractive_input = false\n"
+        ),
+    )
+    .unwrap();
+    let store = std::sync::Arc::new(Store::open_memory().unwrap());
+    let mut task = failed_task("t-explicit-parent");
+    task.status = status;
+    task.agent = AgentKind::Custom;
+    task.custom_agent_name = Some("explicit-retry".into());
+    task.requested_model = None;
+    task.effective_dir = Some(home.path().display().to_string());
+    (home, guard, store, task)
+}
+
+async fn assert_explicit_retry_launched(store: std::sync::Arc<Store>, task: &Task) {
+    let saved = RunArgs {
+        agent_name: "explicit-retry".into(),
+        prompt: task.prompt.clone(),
+        read_only: true,
+        dir: task.effective_dir.clone(),
+        ..Default::default()
+    };
+    insert_with_saved(&store, task, &saved);
+    let retry_id =
+        crate::cmd::retry::retry_task(store.clone(), base_retry(task.id.as_str()), false)
+            .await
+            .expect("explicit retry with feedback must launch");
+    let child = store.get_task(retry_id.as_str()).unwrap().unwrap();
+    assert_eq!(child.status, TaskStatus::Done);
+    assert_eq!(child.parent_task_id.as_deref(), Some(task.id.as_str()));
+    assert!(child.prompt.contains("fix it"));
+    assert_eq!(
+        store.get_task(task.id.as_str()).unwrap().unwrap().status,
+        TaskStatus::Stopped
+    );
+    let log = std::fs::read_to_string(crate::paths::log_path(retry_id.as_str())).unwrap();
+    assert!(
+        log.contains("retried-with-feedback"),
+        "worker must run the fake agent: {log}"
+    );
+}
+
+#[tokio::test]
+async fn explicit_retry_stopped_parent_with_feedback_launches() {
+    let (_home, _guard, store, task) = explicit_retry_setup(TaskStatus::Stopped);
+    assert_explicit_retry_launched(store, &task).await;
+}
+
+#[tokio::test]
+async fn explicit_retry_supersedes_running_parent_and_launches() {
+    let (home, _guard, store, mut task) = explicit_retry_setup(TaskStatus::Running);
+    task.worktree_path = Some(home.path().display().to_string());
+    std::fs::write(
+        home.path().join(".aid-lock"),
+        format!(
+            "version=1\ntask_id={}\nowner_pid={}\nworker_pid=\n",
+            task.id,
+            std::process::id()
+        ),
+    )
+    .unwrap();
+    let mut retry = base_retry(task.id.as_str());
+    retry.dir = task.effective_dir.clone();
+    // The directory override avoids Git setup; supersede still checks the recorded lease.
+    let saved = RunArgs {
+        agent_name: "explicit-retry".into(),
+        prompt: task.prompt.clone(),
+        read_only: true,
+        dir: task.effective_dir.clone(),
+        ..Default::default()
+    };
+    insert_with_saved(&store, &task, &saved);
+    let child_id = crate::cmd::retry::retry_task(store.clone(), retry, false)
+        .await
+        .expect("retry must launch after stopping its own running parent");
+    assert_eq!(
+        store.get_task(task.id.as_str()).unwrap().unwrap().status,
+        TaskStatus::Stopped
+    );
+    assert!(!home.path().join(".aid-lock").exists());
+    assert_eq!(
+        store.get_task(child_id.as_str()).unwrap().unwrap().status,
+        TaskStatus::Done
+    );
+    let log = std::fs::read_to_string(crate::paths::log_path(child_id.as_str())).unwrap();
+    assert!(log.contains("retried-with-feedback"));
+}
+
 #[tokio::test]
 async fn idle_override_recomputes_first_token_and_preserves_exact_hard_timeout() {
     let home = tempfile::tempdir().unwrap();
@@ -16,9 +121,15 @@ async fn idle_override_recomputes_first_token_and_preserves_exact_hard_timeout()
     task.custom_agent_name = Some("retry-policy".into());
     task.requested_model = None;
     let mut saved = RunArgs {
-        agent_name: "retry-policy".into(), prompt: task.prompt.clone(),
-        idle_timeout_secs: Some(300), timeout: Some(71), read_only: true,
-        env: Some(std::collections::HashMap::from([("TOKEN".into(), "do-not-replay".into())])),
+        agent_name: "retry-policy".into(),
+        prompt: task.prompt.clone(),
+        idle_timeout_secs: Some(300),
+        timeout: Some(71),
+        read_only: true,
+        env: Some(std::collections::HashMap::from([(
+            "TOKEN".into(),
+            "do-not-replay".into(),
+        )])),
         ..Default::default()
     };
     saved.timeout_policy.idle = std::time::Duration::from_secs(300);
@@ -27,11 +138,18 @@ async fn idle_override_recomputes_first_token_and_preserves_exact_hard_timeout()
     insert_with_saved(&store, &task, &saved);
     let mut retry = base_retry(task.id.as_str());
     retry.idle_timeout_secs = Some(900);
-    let retry_id = crate::cmd::retry::retry_task(store.clone(), retry, false).await.unwrap();
-    let actual = RunArgs::saved_for_task(&store, retry_id.as_str()).unwrap().unwrap();
+    let retry_id = crate::cmd::retry::retry_task(store.clone(), retry, false)
+        .await
+        .unwrap();
+    let actual = RunArgs::saved_for_task(&store, retry_id.as_str())
+        .unwrap()
+        .unwrap();
     assert_eq!(actual.timeout_policy.idle.as_secs(), 900);
     assert_eq!(actual.timeout_policy.first_token.as_secs(), 900);
     assert_eq!(actual.timeout_policy.max_duration.as_secs(), 71);
     assert!(actual.env.is_none());
-    assert_eq!(store.get_task(retry_id.as_str()).unwrap().unwrap().status, TaskStatus::Done);
+    assert_eq!(
+        store.get_task(retry_id.as_str()).unwrap().unwrap().status,
+        TaskStatus::Done
+    );
 }

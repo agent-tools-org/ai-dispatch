@@ -2,6 +2,10 @@
 // Exports phase helpers; deps: parent run lifecycle context and task storage.
 use super::*;
 
+#[cfg(test)]
+#[path = "settlement_winner_tests.rs"]
+mod settlement_winner_tests;
+
 pub(super) fn run_teardown_phase(task_id: &TaskId, args: &RunArgs, wt_path: Option<&String>) {
     if args.sandbox {
         crate::sandbox::kill_container(task_id.as_str());
@@ -225,14 +229,12 @@ pub(super) fn persist_result_file(
 }
 
 fn record_artifact_failure(store: &Store, task: &Task, native: bool, err: &anyhow::Error) {
-    let event_kind = if task.status == TaskStatus::Failed
-        && store.latest_error(task.id.as_str()).is_some() {
-        EventKind::Milestone
-    } else { EventKind::Error };
     let _ = store.update_delivery_assessment(
         task.id.as_str(), Some(DeliveryAssessment::MissingFinalDelivery),
     );
-    let _ = crate::task_lifecycle::mark_failed(store, &task.id);
+    let event_kind = if crate::task_lifecycle::mark_failed(store, &task.id).unwrap_or(false) {
+        EventKind::Error
+    } else { EventKind::Milestone };
     let label = if native { "Read-only artifact delivery failed" }
         else { "Failed to persist result file" };
     let _ = store.insert_event(&TaskEvent {

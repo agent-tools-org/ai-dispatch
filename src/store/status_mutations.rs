@@ -189,7 +189,7 @@ impl Store {
         self.insert_event(&TaskEvent {
             task_id: TaskId(id.to_string()),
             timestamp: Local::now(),
-            event_kind: EventKind::Error,
+            event_kind: EventKind::Milestone,
             detail: format!(
                 "rejected illegal status transition: {} -> {}",
                 current.as_str(),

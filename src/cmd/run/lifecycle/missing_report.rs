@@ -31,13 +31,18 @@ pub(crate) fn record_missing_report(
     if suppress_missing_report_event(store, task_id) {
         return;
     }
-    if let Err(err) = crate::task_lifecycle::mark_failed(store, task_id) {
-        aid_warn!("[aid] Failed to mark missing required result file: {err}");
-    }
+    let event_kind = match crate::task_lifecycle::mark_failed(store, task_id) {
+        Ok(true) => EventKind::Error,
+        Ok(false) => EventKind::Milestone,
+        Err(err) => {
+            aid_warn!("[aid] Failed to mark missing required result file: {err}");
+            EventKind::Milestone
+        }
+    };
     let _ = store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),
-        event_kind: EventKind::Error,
+        event_kind,
         detail: "Missing final delivery: the explicitly required result file was not written"
             .to_string(),
         metadata: Some(serde_json::json!({

@@ -118,7 +118,7 @@ impl MonitorState {
         store.insert_event(&TaskEvent {
             task_id: task_id.clone(),
             timestamp: Local::now(),
-            event_kind: EventKind::Error,
+            event_kind: EventKind::Milestone,
             detail: format!(
                 "{source} not delivered: {} — {error:#}",
                 message.chars().take(200).collect::<String>()

@@ -35,6 +35,11 @@ without writing a stop event.
 
 After settlement, later worker completions and failure diagnostics cannot append
 competing terminal events or change the task's status or terminal timing.
+Post-run failure Errors require an active task or that writer's winning settlement.
+Informational retry, input-delivery, scope and rejected-transition notices remain
+visible as Milestones and do not replace the terminal failure reason. Verification
+status and delivery assessments remain observational metadata and may update after
+settlement.
 
 A stopped parent refuses automatic child tasks and automatic child worker launches
 (verification retries, judge retries, iterations, `--retry`, cascades, and batch fallbacks).

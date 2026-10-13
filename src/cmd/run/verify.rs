@@ -133,7 +133,7 @@ pub(in crate::cmd) fn record_verify_not_run(store: &Store, task_id: &TaskId, rea
 
 fn record_verify_failed(store: &Store, task_id: &TaskId, detail: String) {
     let _ = store.update_verify_status(task_id.as_str(), VerifyStatus::Failed);
-    let _ = store.insert_event(&TaskEvent {
+    let _ = store.insert_agent_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
         event_kind: EventKind::Error,

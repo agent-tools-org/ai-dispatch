@@ -78,7 +78,7 @@ fn insert_unavailable_event(store: &Store, task_id: &TaskId) -> Result<()> {
     store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),
-        event_kind: EventKind::Error,
+        event_kind: EventKind::Milestone,
         detail: "Missing final delivery: Codex session ID unavailable; manual retry required"
             .to_string(),
         metadata: Some(serde_json::json!({

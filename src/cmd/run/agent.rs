@@ -196,7 +196,7 @@ pub(crate) fn check_scope_violations(store: &Store, task_id: &TaskId, scope: &[S
     let event = crate::types::TaskEvent {
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),
-        event_kind: crate::types::EventKind::Error,
+        event_kind: crate::types::EventKind::Milestone,
         detail: format!("Scope violation: {} file(s) outside scope", violations.len()),
         metadata: None,
     };

@@ -55,7 +55,7 @@ pub(super) fn settle(
         Err(err) => format!("Read-only enforcement failed in {dir}: {err:#}. Files left unchanged for review."),
     };
     aid_warn!("[aid] {detail}");
-    store.insert_event(&TaskEvent {
+    store.insert_agent_event(&TaskEvent {
         task_id: task_id.clone(), timestamp: chrono::Local::now(),
         event_kind: EventKind::Error, detail, metadata: None,
     })?;

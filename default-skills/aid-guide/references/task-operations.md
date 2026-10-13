@@ -96,8 +96,10 @@ Do not send repeated polling messages; inspect events first.
 AID enforces configured idle, hung-task, cost, and maximum-duration safeguards.
 
 Buffered runs that exceed a cost ceiling retain the ceiling reason even when the
-agent exits 0. Deadline failures record elapsed agent-execution time before process
-cleanup; later completions preserve that duration.
+agent exits 0. Piped absolute deadlines record elapsed time at watcher timeout,
+before runner cleanup. Piped watcher-error settlements snapshot at watcher return.
+Piped idle failures and PTY deadline or idle failures include process cleanup and
+output finalization in their durations. Later completions preserve the settled duration.
 
 A task that has produced zero progress since spawn is reaped on the shorter
 first-token budget (default 180s, `AID_FIRST_TOKEN_TIMEOUT_SECS`). For PTY

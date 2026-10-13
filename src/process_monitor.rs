@@ -60,7 +60,7 @@ pub(crate) fn insert_hung_retry_event(store: &Store, task_id: &TaskId) -> Result
     store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
-        event_kind: EventKind::Error,
+        event_kind: EventKind::Milestone,
         detail: "HUNG → retry".to_string(),
         metadata: Some(json!({ "hung_auto_retried": true })),
     })?;

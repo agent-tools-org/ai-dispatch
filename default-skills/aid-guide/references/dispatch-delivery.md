@@ -80,7 +80,7 @@ Codex CLI and its OS sandbox on an authorized build box; do not install Codex to
 On a box meeting those requirements, invoke it explicitly:
 
 ```bash
-AID_BUILD_BOX=<box-with-codex> scripts/remote-test.sh --lock-timeout 3600 -- --bin aid \
+AID_BUILD_BOX='<box-with-codex>' scripts/remote-test.sh --lock-timeout 3600 -- --bin aid \
   fix_round_one_native_codex_fresh_and_resumed_permission_transitions -- --ignored --nocapture
 ```
 

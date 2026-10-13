@@ -3,6 +3,7 @@
 // Deps: parent prepare_dispatch_with, AidHomeGuard and in-memory Store.
 
 use super::*;
+use crate::cmd::run::read_only_delivery;
 
 #[test]
 fn scope_cut_dispatch_rejects_repository_report_and_output_destinations() {
@@ -27,6 +28,7 @@ fn scope_cut_dispatch_rejects_repository_report_and_output_destinations() {
 #[test]
 fn scope_cut_publication_refuses_symlink_staged_report() {
     let home = tempfile::tempdir().unwrap();
+    let repo = tempfile::tempdir().unwrap();
     let _home = paths::AidHomeGuard::set(home.path());
     let destination = home.path().join("requested.md");
     let (args, prepared) = prepare(destination.to_str(), false);
@@ -37,7 +39,7 @@ fn scope_cut_publication_refuses_symlink_staged_report() {
     std::fs::write(&target, "must not be published").unwrap();
     std::os::unix::fs::symlink(&target, source).unwrap();
     assert!(read_only_delivery::publish(
-        &args, AgentKind::Codex, prepared.task_id.as_str(), Some(home.path().to_str().unwrap()),
+        &args, AgentKind::Codex, prepared.task_id.as_str(), repo.path().to_str(),
     ).is_err());
     assert!(!destination.exists());
     assert_eq!(std::fs::read_to_string(target).unwrap(), "must not be published");
@@ -46,13 +48,14 @@ fn scope_cut_publication_refuses_symlink_staged_report() {
 #[test]
 fn scope_cut_publication_refuses_directory_staged_report() {
     let home = tempfile::tempdir().unwrap();
+    let repo = tempfile::tempdir().unwrap();
     let _home = paths::AidHomeGuard::set(home.path());
     let destination = home.path().join("requested.md");
     let (args, prepared) = prepare(destination.to_str(), false);
     let (_, source) = read_only_delivery::agent_paths(&args, AgentKind::Codex, prepared.task_id.as_str());
     std::fs::create_dir_all(source.unwrap()).unwrap();
     assert!(read_only_delivery::publish(
-        &args, AgentKind::Codex, prepared.task_id.as_str(), Some(home.path().to_str().unwrap()),
+        &args, AgentKind::Codex, prepared.task_id.as_str(), repo.path().to_str(),
     ).is_err());
     assert!(!destination.exists());
 }

@@ -427,8 +427,8 @@ recovery does the same, including when a missing Codex rollout starts a fresh se
 replaces that brief. Background cascades reuse the raw brief and assemble fresh
 launch context; workers launch the separately stored resolved prompt.
 A template without `{{prompt}}` gets the caller brief appended after it.
-The worker launches OpenCode, Kilo and MiMoCode without their native
-context-file arguments, so `--context` files reach them only as prompt text.
+OpenCode, Kilo and MiMoCode take plain `--context` file paths as native file
+arguments, which the worker does not pass, so those files do not reach them.
 On-demand memory search stops at the memory cap per query; matches beyond it
 are not counted as omitted.
 

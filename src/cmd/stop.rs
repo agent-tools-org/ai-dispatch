@@ -174,3 +174,15 @@ mod final_state_tests;
 #[cfg(test)]
 #[path = "stop/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "stop/settle_first_tests.rs"]
+mod settle_first_tests;
+
+#[cfg(test)]
+#[path = "stop/settle_writer_tests.rs"]
+mod settle_writer_tests;
+
+#[cfg(test)]
+#[path = "stop/settle_dispatch_tests.rs"]
+mod settle_dispatch_tests;

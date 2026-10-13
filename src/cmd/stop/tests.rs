@@ -10,7 +10,7 @@ use chrono::Local;
 use std::sync::Arc;
 use tempfile::TempDir;
 
-fn make_task(id: &str, status: TaskStatus) -> Task {
+pub(super) fn make_task(id: &str, status: TaskStatus) -> Task {
     Task {
         id: TaskId(id.to_string()),
         agent: AgentKind::Codex,

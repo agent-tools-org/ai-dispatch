@@ -59,9 +59,11 @@ fn scope_cut_dispatch_rejects_repository_report_and_output_destinations() {
             agent_name: "codex".into(), prompt: "Read-only audit".into(), read_only: true,
             dir: Some(repo.display().to_string()),
             output: output.then(|| destination.clone()),
-            result_file: (!output).then_some(destination), ..Default::default()
+            result_file: (!output).then_some(destination),
+            existing_task_id: Some(TaskId("t-scope-rejected".into())), ..Default::default()
         };
         assert!(prepare_dispatch_with(&store, &mut args, |_| true).is_err());
+        assert_eq!(store.get_task("t-scope-rejected").unwrap().unwrap().status, TaskStatus::Failed);
         assert!(!repo.join("new").exists());
     }
 }

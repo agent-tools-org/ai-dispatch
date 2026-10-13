@@ -143,14 +143,14 @@ async fn fix_round_two_read_only_refuses_repository_destinations_at_dispatch() {
         let home = tempfile::tempdir().unwrap();
         let _guard = paths::AidHomeGuard::set(home.path());
         let mut f = Fixture::new(home.path(), false, false, false);
-        let dir = Path::new(f.args.dir.as_ref().unwrap());
+        let dir = PathBuf::from(f.args.dir.as_ref().unwrap());
         fs::write(dir.join("base.txt"), "base\n").unwrap();
         let config = f._repo.path().join(".git/config");
         let original_config = fs::read(&config).unwrap();
         let target = match destination {
             "git-config" => config.clone(),
             "parent-alias" => {
-                std::os::unix::fs::symlink(dir, home.path().join("alias")).unwrap();
+                std::os::unix::fs::symlink(&dir, home.path().join("alias")).unwrap();
                 home.path().join("alias/new/final.md")
             }
             path => dir.join(path),
@@ -172,7 +172,7 @@ async fn fix_round_two_read_only_refuses_destination_symlink_into_repository_at_
     let home = tempfile::tempdir().unwrap();
     let _guard = paths::AidHomeGuard::set(home.path());
     let mut f = Fixture::new(home.path(), false, false, false);
-    let dir = Path::new(f.args.dir.as_ref().unwrap());
+    let dir = PathBuf::from(f.args.dir.as_ref().unwrap());
     fs::write(dir.join("base.txt"), "base\n").unwrap();
     let destination = home.path().join("report.md");
     std::os::unix::fs::symlink(dir.join("base.txt"), &destination).unwrap();

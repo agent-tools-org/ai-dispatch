@@ -174,6 +174,12 @@ Important controls:
 - `--remote-build [BOX]` routes Cargo build/check/test/clippy/bench/doc through a PATH shim to rbox while the agent, PTY, isolated HOME, steer/respond, and idle detection stay local. Bare flag or `auto` runs `rbox pick --tool rust --repo <main-working-tree>` once before launch; an explicit name is used as-is. Missing rbox or no available box fails before launch, preserving selection stderr. CLI overrides project `remote_build`; batch defaults and tasks accept the same key. The chosen box is saved with the task, shown by `aid show`/`--json` and events, reused by `aid retry`, and exported as `AID_BUILD_BOX` to agent and verify, overriding ambient values. Verify receives the same PATH shim, so plain `cargo test` runs remotely too. If the pinned box refuses admission on disk space (exit 69), `aid` re-picks once excluding the old box, persists the new box, and re-runs verify once. A failed re-pick or a second refusal results in an `InfrastructureFailure`. Remote tasks also get a private `.cargo/bin/cargo` shim so login-shell profiles cannot bypass routing by prepending `$HOME/.cargo/bin`; the other Cargo entries link to the real home and `CARGO_HOME`/`RUSTUP_HOME` stay unchanged. Tasks without a box retain the plain `.cargo` symlink. Tasks without remote build omit `remote_build` from `aid show --json`. Expect sync/lock latency; do not bypass the shim. `cargo fmt` and other Cargo commands stay local. This flag conflicts with `--sandbox` and `--container`.
 - `--sandbox` requests sandboxed execution. Before native agent launch, aid creates and probes the Rust target (`_base` for tasks without `-w`) and private temporary directory under isolated HOME, exported as `TMPDIR`; failure aborts with an error naming the directory. Codex roots and Copilot's allowed directories include both scratch paths and writable Git metadata for regular repositories and linked worktrees. An unwritable Git directory is omitted with a task event naming the directory and reason. Capability preflight and `--dry-run` do not create or probe these directories.
 - `--timeout SECS` is a hard wall-clock cap in seconds.
+  Values below 300 seconds warn about the unit without rejecting the run:
+  `--timeout 90` suggests `--timeout 5400` if 90 minutes was intended.
+  For caps of at least 600 seconds, the first hard-cap reconciliation poll at
+  90% queues one steer asking the agent to commit permitted work in progress
+  and write its report. A milestone records the request. Agents without steer
+  support receive nothing; a pending operator steer is preserved. The cap stays unchanged.
 - `--idle-timeout SECS` stops a task whose stream goes quiet. Meaningful raw
   output refreshes the clock even when aid cannot parse it into an event; aid's
   own idle nudges, PTY echoes of those nudges, reply/ack bookkeeping, and pure
@@ -310,8 +316,12 @@ declared-agent field: explicit `aid run claude` selects Claude for execution
 without changing the hint’s advice profile. Each candidate also carries `auth`: `state` is
 `failed` (with `observed_at` and `message`) when a run of that agent ended on a
 recognised not-signed-in refusal within the last hour (grok `Not signed in`,
-claude `Please run /login` / `Not logged in`, oz `credentials are invalid`),
-otherwise `unknown`. A successful run clears it; aid never reports `ok` and
+claude `Please run /login` / `Not logged in`, oz `credentials are invalid`).
+OpenCode's structured `APIError` with `statusCode:401` sets an auth hold until
+its credential/config file metadata changes or an explicit successful run clears it.
+Billing refusals and assistant text cannot set that auth hold. Environment-only
+credential changes require an explicit successful run. Otherwise auth is `unknown`.
+A successful run clears it; aid never reports `ok` and
 never marks auth failed from a run or probe that could not start.
 
 Leaderboard evidence: `aid advise` (text and JSON) shows each candidate's

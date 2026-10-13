@@ -283,7 +283,10 @@ premium refusal holds those models while `auto` stays dispatchable;
 `aid config clear-limit cursor` clears both. Droid's Factory plan meters a
 weekly or 5-hour `standard` pool separately from Droid Core, so a standard 402
 holds those models while Core stays dispatchable, and a Core 402 holds Core
-while standard stays dispatchable. A droid 402 that names neither pool —
+while standard stays dispatchable. Weekly and monthly Droid Core refusals on
+stdout JSON error events or stderr use `resets in N days` as a dated hold.
+Claude rejected `seven_day` events use `resetsAt` up to eight days out.
+A droid 402 that names neither pool —
 including `reload your tokens` — holds the whole agent,
 even when a model was on the dispatched route.
 `aid config clear-limit droid` clears both. A group hold is not an agent hold:

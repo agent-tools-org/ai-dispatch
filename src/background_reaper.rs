@@ -97,6 +97,9 @@ where
                     .max(0) as u64
                     * 60
             });
+        crate::cmd::steer::wrap_up_before_timeout(
+            store, task_id, elapsed_secs.max(0) as u64, max_duration_secs,
+        )?;
         if elapsed_secs.max(0) as u64 > max_duration_secs {
             let detail = format!(
                 "Task exceeded max duration ({}s > {}s)",
@@ -110,12 +113,7 @@ where
         }
         return Ok(());
     }
-    preserve_zombie_changes(store, task_id, spec)?;
-    terminate_task_processes(Some(worker_pid), spec);
-    if record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)? {
-        cleaned.push(task_id.to_string());
-    }
-    Ok(())
+    cleanup_dead_worker(store, task_id, spec, Some(worker_pid), cleaned)
 }
 
 fn cleanup_missing_pid_task(
@@ -129,8 +127,18 @@ fn cleanup_missing_pid_task(
     if age_secs < 60 {
         return Ok(());
     }
+    cleanup_dead_worker(store, task_id, spec, None, cleaned)
+}
+
+fn cleanup_dead_worker(
+    store: &Store,
+    task_id: &str,
+    spec: &BackgroundRunSpec,
+    worker_pid: Option<u32>,
+    cleaned: &mut Vec<String>,
+) -> Result<()> {
     preserve_zombie_changes(store, task_id, spec)?;
-    terminate_task_processes(None, spec);
+    terminate_task_processes(worker_pid, spec);
     if record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)? {
         cleaned.push(task_id.to_string());
     }

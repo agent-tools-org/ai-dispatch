@@ -111,9 +111,12 @@ auto-nudges, their PTY echoes, and aid's own reply/ack bookkeeping do not count
 as agent progress, so a genuinely stalled or silent agent is still reaped after
 the idle window.
 
-`--timeout SECS` is activity-aware rather than a hard wall-clock cap: an active
-foreground run may continue past it, and the value is rounded up to whole
-minutes.
+`--timeout SECS` is a hard wall-clock cap in seconds, including foreground runs.
+Values below 300 seconds warn without rejecting the run. For caps of at least
+600 seconds, hard-cap reconciliation requests one wrap-up at 90%: commit work
+in progress when changes are permitted, and write the report now. The request
+uses normal steer delivery, records a milestone, and skips agents without steer
+support. A pending operator steer is preserved and the cap is unchanged.
 
 Repeated activity is not itself a stop condition.
 

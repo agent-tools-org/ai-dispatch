@@ -85,6 +85,8 @@ pub struct BackgroundRunSpec {
     #[serde(default)]
     pub agent_pid: Option<u32>,
     #[serde(default)]
+    pub agent_started: Option<String>,
+    #[serde(default)]
     pub sandbox: bool,
     #[serde(default)]
     pub read_only: bool,
@@ -98,6 +100,20 @@ pub struct BackgroundRunSpec {
     pub pre_task_dirty_paths: Option<Vec<String>>,
     #[serde(default)]
     pub foreground: bool,
+}
+
+impl BackgroundRunSpec {
+    pub(crate) fn agent_pid_for_signal(&self) -> Option<u32> {
+        let pid = self.agent_pid?;
+        if crate::process_monitor::activity::root_matches(pid, self.agent_started.as_deref()) {
+            return Some(pid);
+        }
+        aid_warn!(
+            "[aid] Skip agent signal for {} (pid {pid}): launch identity missing, unreadable or mismatched",
+            self.task_id,
+        );
+        None
+    }
 }
 
 fn default_link_deps() -> bool { true }

@@ -9,6 +9,9 @@ use serde_json::json;
 use crate::store::Store;
 use crate::types::{EventKind, TaskEvent, TaskId};
 
+#[path = "process_activity.rs"]
+pub(crate) mod activity;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct HungContext {
     pub(crate) hung_duration_secs: u64,
@@ -43,7 +46,11 @@ pub(crate) fn insert_hung_detected_events(
         task_id: task_id.clone(),
         timestamp: Local::now(),
         event_kind: EventKind::Error,
-        detail: format!("Agent hung: no output for {hung_duration_secs} seconds"),
+        detail: if transient {
+            format!("Agent hung: no first output for {hung_duration_secs} seconds")
+        } else {
+            format!("Agent hung: no output or descendant progress for {hung_duration_secs} seconds")
+        },
         metadata: Some(metadata),
     })?;
     Ok(())

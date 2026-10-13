@@ -94,6 +94,7 @@ fn spec(id: &str) -> BackgroundRunSpec {
         env: None,
         env_forward: None,
         agent_pid: Some(88),
+        agent_started: None,
         sandbox: false,
         read_only: false,
         audit_report_mode: false,

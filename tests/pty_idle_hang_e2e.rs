@@ -45,7 +45,7 @@ fn pty_csi_spinner_noise_does_not_reset_idle_timeout() {
 
     let events = event_details(aid_home.path(), TASK_ID);
     assert!(events.iter().any(|(_, detail, _)| {
-        detail.contains("Agent hung: no output for 2 seconds")
+        detail.contains("Agent hung: no output or descendant progress for 2 seconds")
     }));
     assert!(events.iter().any(|(_, _, metadata)| {
         metadata.as_deref().is_some_and(|text| text.contains("\"event_count\":0"))

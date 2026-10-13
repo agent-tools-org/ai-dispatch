@@ -175,7 +175,10 @@ Important controls:
 - `--sandbox` requests sandboxed execution. Before native agent launch, aid creates and probes the Rust target (`_base` for tasks without `-w`) and private temporary directory under isolated HOME, exported as `TMPDIR`; failure aborts with an error naming the directory. Codex roots and Copilot's allowed directories include both scratch paths and writable Git metadata for regular repositories and linked worktrees. An unwritable Git directory is omitted with a task event naming the directory and reason. Capability preflight and `--dry-run` do not create or probe these directories.
 - `--timeout SECS` is a hard wall-clock cap in seconds.
 - `--idle-timeout SECS` stops a task whose stream goes quiet. Meaningful raw
-  output refreshes the clock even when aid cannot parse it into an event; aid's
+  output refreshes the clock even when aid cannot parse it into an event.
+  After first output, growing descendant CPU time and live `ssh`/`rbox` waits
+  in the agent's process group also count. Sleeping children without CPU growth
+  remain idle; remote waits remain bounded by the absolute task deadline. Aid's
   own idle nudges, PTY echoes of those nudges, reply/ack bookkeeping, and pure
   terminal-control noise do not reset the idle clock.
 - `--audit` runs the configured cross-audit.
@@ -195,6 +198,9 @@ exhausted deadline records `timed_out` without launching a verification command
 or remote job. This wrapper deadline is separate from rbox's own wait timeout;
 a wrapper timeout does not establish the remote job's test result. Legacy tasks
 without a saved remote box and local verification retain the 120-second cap.
+Duration-based verification excludes recognized rbox lock notices until the
+sync/job-start marker, bounded by the lock notice's timeout. This exclusion does
+not extend the absolute deadline for tasks with a saved remote box.
 
 Run `aid run --help` for iteration, evaluation, judging, peer review, best-of,
 model, budget, context, scope, checklist, skill, template, hook, container, and cascade options.

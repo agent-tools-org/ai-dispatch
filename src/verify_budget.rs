@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use super::VerifyResult;
 use crate::process_guard::ProcessGuard;
+use crate::remote_build::LockQueue;
 
 #[derive(Clone, Copy)]
 pub(crate) enum VerifyBudget {
@@ -21,7 +22,11 @@ impl VerifyBudget {
         matches!(self, Self::Deadline(deadline) if Local::now() >= deadline)
     }
 
-    pub(super) fn wait(self, guard: &mut ProcessGuard) -> Result<(Option<ExitStatus>, Duration)> {
+    pub(super) fn wait(
+        self,
+        guard: &mut ProcessGuard,
+        queue: &LockQueue,
+    ) -> Result<(Option<ExitStatus>, Duration)> {
         let timeout = match self {
             Self::Duration(duration) => duration,
             Self::Deadline(deadline) => deadline
@@ -33,6 +38,8 @@ impl VerifyBudget {
             guard.force_kill();
             guard.wait()?;
             None
+        } else if matches!(self, Self::Duration(_)) {
+            wait_duration(guard, timeout, queue)?
         } else {
             guard.wait_with_timeout(timeout)?
         };
@@ -50,5 +57,25 @@ impl VerifyBudget {
             infrastructure_failure: false,
             exit_code: None,
         }
+    }
+}
+
+fn wait_duration(
+    guard: &mut ProcessGuard,
+    timeout: Duration,
+    queue: &LockQueue,
+) -> Result<Option<ExitStatus>> {
+    let start = std::time::Instant::now();
+    loop {
+        let expired = start.elapsed().saturating_sub(queue.elapsed()) >= timeout;
+        if guard.child_mut().try_wait()?.is_some() {
+            return Ok(Some(guard.wait()?).filter(|_| !expired));
+        }
+        if expired {
+            guard.force_kill();
+            guard.wait()?;
+            return Ok(None);
+        }
+        std::thread::sleep(Duration::from_millis(10));
     }
 }

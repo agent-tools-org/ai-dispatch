@@ -49,7 +49,7 @@ fn run_agent_process_marks_task_failed_when_spawn_fails() {
         .contains("Failed to spawn agent process"));
 }
 
-fn task_fixture(id: &TaskId, status: TaskStatus) -> Task {
+pub(super) fn task_fixture(id: &TaskId, status: TaskStatus) -> Task {
     Task {
         id: id.clone(),
         agent: AgentKind::Kilo,

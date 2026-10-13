@@ -146,3 +146,6 @@ fn tag_is_inside_code_string(line: &str, tag_pos: usize) -> bool {
     }
     false
 }
+pub(super) fn is_thinking_delta(line: &str) -> bool {
+    line.contains("\"type\":\"thinking\"")
+}

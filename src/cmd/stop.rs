@@ -122,7 +122,10 @@ fn already_terminal(store: &Store, task_id: &str) -> Result<()> {
 }
 
 fn signal_task(task_id: &str, task: &Task, graceful: bool, preserve_label: &str) -> Result<()> {
-    if let Some(pid) = background::load_worker_pid(task_id)? {
+    let spec = background::load_spec_if_exists(task_id)?;
+    if let Some(pid) = spec.as_ref().and_then(|spec| {
+        spec.worker_pid.filter(|pid| Some(*pid) != spec.agent_pid)
+    }) {
         if graceful {
             background::kill_process(pid);
             if wait_for_exit(pid) { background::sigkill_process(pid); }
@@ -131,7 +134,7 @@ fn signal_task(task_id: &str, task: &Task, graceful: bool, preserve_label: &str)
             let _ = wait_for_exit(pid);
         }
     }
-    if let Some(pid) = background::load_agent_pid(task_id)? {
+    if let Some(pid) = spec.as_ref().and_then(|spec| spec.agent_pid_for_signal()) {
         if graceful { background::kill_process(pid); } else { background::sigkill_process(pid); }
     }
     crate::sandbox::kill_container(task_id);

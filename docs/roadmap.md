@@ -30,6 +30,8 @@ does not assert board closure. New slices need board IDs before implementation.
 
 ## Failure truthfulness (next release, from the 2026-10-13 failed-task review)
 
+Open item: bound generic and Cargo verification output draining when surviving descendants retain pipes.
+
 [The review](investigation-failed-tasks-20261013.md) found
 two state bugs and three handling gaps that cost the most agent time. Order:
 

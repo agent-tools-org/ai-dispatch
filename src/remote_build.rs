@@ -113,6 +113,10 @@ fn configure(cmd: &mut Command, home: &Path, name: &str) -> Result<()> {
     Ok(())
 }
 
+#[path = "remote_build/lock.rs"]
+mod lock;
+pub(crate) use lock::LockQueue;
+
 const ADMISSION_REFUSED: i32 = 69;
 
 pub(crate) fn verify(

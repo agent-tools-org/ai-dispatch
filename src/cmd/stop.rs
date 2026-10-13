@@ -190,3 +190,7 @@ mod settle_dispatch_tests;
 #[cfg(test)]
 #[path = "stop/settle_launch_tests.rs"]
 mod settle_launch_tests;
+
+#[cfg(test)]
+#[path = "stop/settle_done_tests.rs"]
+mod settle_done_tests;

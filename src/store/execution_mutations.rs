@@ -9,9 +9,8 @@ use super::Store;
 use crate::types::{ACTIVE_EXECUTION_FAILURE_STATUSES, TaskStatus};
 
 const CAPACITY_BACKOFF: &str = "id = ?1 AND status = 'failed'
-    AND NOT EXISTS (SELECT 1 FROM tasks WHERE parent_task_id = ?1)
-    AND (SELECT json_extract(metadata, '$.capacity_continuation') FROM events
-         WHERE task_id = ?1 AND json_extract(metadata, '$.capacity_continuation') IS NOT NULL
+    AND (SELECT json_extract(metadata, '$.capacity_backoff_pending') FROM events
+         WHERE task_id = ?1 AND json_extract(metadata, '$.capacity_backoff_pending') IS NOT NULL
          ORDER BY timestamp DESC, rowid DESC LIMIT 1) = 1";
 
 impl Store {

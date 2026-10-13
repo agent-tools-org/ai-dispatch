@@ -182,7 +182,10 @@ fn record(store: &Store, task_id: &TaskId, detail: String, continuation: bool) -
         timestamp: chrono::Local::now(),
         event_kind: EventKind::Error,
         detail,
-        metadata: Some(serde_json::json!({"capacity_continuation": continuation})),
+        metadata: Some(serde_json::json!({
+            "capacity_continuation": continuation,
+            "capacity_backoff_pending": continuation,
+        })),
     })
 }
 

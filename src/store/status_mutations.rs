@@ -34,13 +34,14 @@ impl Store {
                  MAX(0, COALESCE(CAST(ROUND((julianday(?3) -
                      julianday(COALESCE(started_at, created_at))) * 86400000) AS INTEGER), 0))
                  ELSE duration_ms END,
-             exit_code = CASE WHEN ?1 = 'failed' AND ?4 = 'done'
+             exit_code = CASE WHEN ?1 = 'failed' AND ?4 = 'done' AND ?6
                  AND (exit_code IS NULL OR exit_code = 0) THEN 1 ELSE exit_code END,
              pending_reason = COALESCE(?5, pending_reason)
              WHERE id = ?2 AND status = ?4
              AND (?1 = 'merged' OR status != 'done' OR completed_at IS NULL)",
             params![status.as_str(), id, Local::now().to_rfc3339(), current.as_str(),
-                reason.map(|value| value.as_str())],
+                reason.map(|value| value.as_str()),
+                expected.is_some_and(|states| states == [TaskStatus::Done])],
         )?;
         if rows == 0 {
             return Ok(false);

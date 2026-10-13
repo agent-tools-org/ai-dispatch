@@ -38,8 +38,9 @@ reporting a terminal result, including for group or implicit active-task selecti
 `Done` is provisional while `completed_at` is absent; post-run checks can still
 record failure or stop. Successful settlement records `completed_at` after those
 checks. Execution completion writers preserve terminal results; later passing
-verification does not convert `Failed` back to `Done`. A provisional `Done` cannot bypass a required result-file failure. `--exit-on-await`
-still returns when input is requested; `--timeout` also covers post-run settlement.
+verification does not convert `Failed` back to `Done`. A provisional `Done` cannot
+bypass a required result-file failure. `--exit-on-await` still returns when input
+is requested; `--timeout` also covers post-run settlement.
 If a worker exits with an unfinished job spec, waiting reports an error instead of
 claiming success from its provisional status.
 

@@ -2,7 +2,6 @@
 // Exports run_agent_process_with_timeout plus small testable timeout helpers.
 // Depends on watcher activity events, process-group cleanup, and task store updates.
 use anyhow::Result;
-use chrono::Local;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -10,7 +9,7 @@ use tokio::process::Command;
 
 use crate::process_group::{cleanup_process_group, force_kill_process_group};
 use crate::store::{Store, TaskCompletionUpdate};
-use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
+use crate::types::{CompletionInfo, TaskId, TaskStatus};
 use crate::watcher;
 
 use super::{format_duration, run_prompt, spawn_child_with_log, write_streaming_output};
@@ -46,7 +45,13 @@ pub(crate) async fn run_agent_process_with_timeout(
     let failure_context = run_prompt::capture_failure_context(store.as_ref(), task_id, &cmd);
     #[cfg(unix)]
     cmd.process_group(0);
-    let mut child = match spawn_child_with_log(&mut cmd, log_path) {
+    let mut child = match store.with_running_task(task_id.as_str(), || {
+        let child = spawn_child_with_log(&mut cmd, log_path)?;
+        if let Some(pid) = child.id() {
+            let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
+        }
+        Ok(child)
+    }) {
         Ok(child) => child,
         Err(err) => {
             let err = err.context("Failed to spawn agent process");
@@ -57,9 +62,6 @@ pub(crate) async fn run_agent_process_with_timeout(
         }
     };
     let child_pid = child.id();
-    if let Some(pid) = child_pid {
-        let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
-    }
     let result = {
         let watch_future = async {
             let info = if streaming {

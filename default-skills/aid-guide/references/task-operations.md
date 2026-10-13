@@ -143,8 +143,7 @@ hangs, or unavailable models preserve the live directory and environment
 without inheriting the parent's completion hook; manual `aid retry` inherits
 that hook.
 
-Stopping records `Stopped` before signalling, then preserves the worktree and
-attempts to preserve in-flight changes.
+Stopping preserves the worktree and attempts to preserve in-flight changes.
 Inspect the artifact afterward. A retry creates linked history; use `tree` to
 understand the chain.
 

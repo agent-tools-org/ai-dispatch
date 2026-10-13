@@ -28,7 +28,6 @@ pub(super) use run_prompt_helpers::*;
 use super::RunArgs;
 const VERIFY_RETRY_FEEDBACK: &str =
     "Verification failed. Please fix the compilation/test errors and try again.";
-const PROMPT_TOKEN_LIMIT: usize = 30_000;
 
 pub(crate) struct PromptBundle { pub effective_prompt: String, pub context_files: Vec<String>, pub prompt_tokens: i64, pub injected_memory_ids: Vec<String> }
 
@@ -55,13 +54,15 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         &prompt, args.read_only, args.kind,
     );
     let task_category_label = task_profile.category.label();
-    let mut effective_prompt = crate::workgroup::compose_prompt(
+    let composed = crate::workgroup::compose_prompt(
         &prompt,
         file_context.as_deref(),
         workgroup,
         &milestones,
         &findings,
     );
+    record_prompt_omissions(store, current_task_id, &composed.omissions)?;
+    let mut effective_prompt = composed.text;
     let (edit_guard, milestone_instr) = templates::shared_system_fragments(&prompt);
     if let Some(guard) = edit_guard { effective_prompt = format!("{guard}{effective_prompt}"); }
     effective_prompt.push_str(milestone_instr);
@@ -242,8 +243,6 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
         effective_prompt = format!("{line}\n\n{effective_prompt}");
     }
 
-    // Compact prompt if it exceeds token budget
-    let effective_prompt = maybe_compact_prompt(&effective_prompt, PROMPT_TOKEN_LIMIT);
     let prompt_tokens = templates::estimate_tokens(&effective_prompt) as i64;
     Ok(PromptBundle { effective_prompt, context_files, prompt_tokens, injected_memory_ids })
 }

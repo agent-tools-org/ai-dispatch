@@ -1,10 +1,6 @@
 // Knowledge compaction helpers.
-// Exports: compact_text, compact_to_budget.
+// Exports: compact_to_budget.
 // Deps: crate::templates.
-
-pub fn compact_text(text: &str, max_tokens: usize) -> String {
-    compact_to_budget(text, max_tokens)
-}
 
 /// Truncate text to fit within a token budget, preserving structure.
 /// Keeps the first `budget` tokens worth of content, adding a truncation marker.

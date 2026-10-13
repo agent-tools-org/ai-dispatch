@@ -46,7 +46,7 @@ pub(super) fn reconstruct_context(store: &Arc<Store>, task: &Task) -> Result<(St
         workgroup.as_ref(),
         &milestones,
         &[],
-    );
+    ).text;
     if !skill_content.is_empty() {
         resolved_prompt = format!("{resolved_prompt}\n\n--- Methodology ---\n{skill_content}");
     }

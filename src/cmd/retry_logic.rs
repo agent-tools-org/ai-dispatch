@@ -83,6 +83,9 @@ pub(crate) fn root_prompt(store: &Store, task: &Task) -> Option<String> {
     let mut prompt = task.prompt.clone();
     let mut current = task.parent_task_id.clone();
     while let Some(task_id) = current {
+        if prompt.starts_with("[Previous attempt feedback]\n") {
+            break;
+        }
         let Some(parent) = store.get_task(&task_id).ok().flatten() else { break };
         prompt = parent.prompt;
         current = parent.parent_task_id;
@@ -161,6 +164,28 @@ mod tests {
 
         let r2_task = store.get_task("r2").unwrap().unwrap();
         assert_eq!(root_prompt(&store, &r2_task), Some("original".to_string()));
+    }
+
+    #[test]
+    fn retry_preservation_keeps_manual_feedback_when_an_automatic_retry_walks_ancestors() {
+        let store = Store::open_memory().unwrap();
+        let mut original = task("t-original");
+        original.prompt = "original task line\n".repeat(1000);
+        store.insert_task(&original).unwrap();
+        let mut manual = task("t-manual");
+        manual.prompt = format!(
+            "[Previous attempt feedback]\n{}\n\n[Original task]\n{}",
+            "keep the correction\n".repeat(300), original.prompt,
+        );
+        manual.parent_task_id = Some(original.id.to_string());
+        store.insert_task(&manual).unwrap();
+        let mut automatic = task("t-automatic");
+        automatic.prompt = "automatic failure feedback".into();
+        automatic.parent_task_id = Some(manual.id.to_string());
+        store.insert_task(&automatic).unwrap();
+        for previous in [&manual, &automatic] {
+            assert_eq!(root_prompt(&store, previous), Some(manual.prompt.clone()));
+        }
     }
 
     #[test]

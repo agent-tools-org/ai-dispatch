@@ -409,6 +409,17 @@ dispatch an explicit agent.
 ## Context and instructions
 
 Use `--context <path>...` for source material, not extra positional arguments.
+
+The task brief is always delivered whole, including retry feedback before the
+original task on session resume. Shared context, file context, findings, and peer
+milestones are bounded independently with in-place omission notes. When prompt
+composition drops auxiliary content, `aid run` prints one `Prompt context bounded:`
+warning and records a setup event with the omitted sections. `aid show --context`
+and ShareGPT reconstruction use the same composition rules. Large task briefs may
+exceed an agent's context window; aid does not shorten them to fit.
+Automatic retries retain the latest manual correction when resolving the original
+task through its ancestors.
+
 Use `--context-from <task>...` to inject prior task output. If that task
 declared `-o` and the owned file is missing, aid reports the absence and does
 not substitute the task log. Use `--scope` to state intended files. Use

@@ -1,9 +1,9 @@
-// Prompt resolution, context flags, skills, worktree paths, compaction.
+// Prompt resolution, context flags, skills, worktree paths, omission events.
 // Deps: RunArgs, explicit project config, agents, templates, and store.
 use anyhow::{Context, Result};
 
 use crate::{
-    agent, compaction, skills, store::Store, templates, types::*,
+    agent, skills, store::Store, templates, types::*,
 };
 use crate::cmd::run::{RunArgs, NO_SKILL_SENTINEL};
 
@@ -228,36 +228,18 @@ pub(crate) fn load_workgroup(store: &Store, group_id: Option<&str>) -> Result<Op
     Ok(Some(store.create_workgroup(group_id, "", Some("auto"), Some(group_id))?))
 }
 
-pub(crate) fn maybe_compact_prompt(prompt: &str, max_tokens: usize) -> String {
-    let before = templates::estimate_tokens(prompt);
-    if before <= max_tokens {
-        return prompt.to_string();
+pub(super) fn record_prompt_omissions(store: &Store, task_id: &str, omissions: &[String]) -> Result<()> {
+    if omissions.is_empty() {
+        return Ok(());
     }
-    let candidate = prompt
-        .split("\n\n")
-        .filter_map(|section| {
-            let trimmed = section.trim_start();
-            if trimmed.is_empty() || trimmed.starts_with("[Task]") {
-                return None;
-            }
-            if trimmed.starts_with('[') || trimmed.starts_with("---") {
-                Some((section, templates::estimate_tokens(section)))
-            } else {
-                None
-            }
-        })
-        .max_by_key(|(_, tokens)| *tokens);
-    let Some((section, section_tokens)) = candidate else {
-        return prompt.to_string();
-    };
-    let excess = before.saturating_sub(max_tokens);
-    let target_tokens = section_tokens.saturating_sub(excess);
-    let compacted = compaction::compact_text(section, target_tokens);
-    if compacted == section {
-        return prompt.to_string();
-    }
-    let result = prompt.replacen(section, &compacted, 1);
-    let after = templates::estimate_tokens(&result);
-    aid_info!("[aid] Compacted prompt from ~{before} to ~{after} tokens");
-    result
+    let detail = format!("Prompt context bounded: {}", omissions.join("; "));
+    store.insert_event(&TaskEvent {
+        task_id: TaskId(task_id.to_string()),
+        timestamp: chrono::Local::now(),
+        event_kind: EventKind::Setup,
+        detail: detail.clone(),
+        metadata: Some(serde_json::json!({"type": "prompt_context_bounded", "omissions": omissions})),
+    })?;
+    aid_warn!("[aid] Warning: {detail}");
+    Ok(())
 }

@@ -65,7 +65,7 @@ fn resolved_prompt(store: &Store, task: &Task) -> Result<String> {
         workgroup.as_ref(),
         &milestones,
         &[],
-    );
+    ).text;
     if !skills.is_empty() {
         prompt = format!("{prompt}\n\n--- Methodology ---\n{skills}");
     }

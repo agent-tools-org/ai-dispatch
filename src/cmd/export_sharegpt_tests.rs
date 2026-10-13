@@ -9,6 +9,33 @@ use chrono::Local;
 use tempfile::TempDir;
 
 #[test]
+fn prompt_preservation_matches_show_and_sharegpt_reconstruction() {
+    let temp = TempDir::new().unwrap();
+    let _aid_home = AidHomeGuard::set(temp.path());
+    let store = std::sync::Arc::new(Store::open_memory().unwrap());
+    let group = store
+        .create_workgroup("context", &"shared line\n".repeat(2000), None, None)
+        .unwrap();
+    let mut task = done_task("t-long-prompt", None);
+    task.prompt = format!(
+        "[Previous attempt feedback]\nfix everything\n\n[Original task]\n{}",
+        "original task line\n".repeat(1000)
+    );
+    task.workgroup_id = Some(group.id.to_string());
+    store.insert_task(&task).unwrap();
+    let output = temp.path().join("long-prompt.jsonl");
+    export_sharegpt(&store, task.id.as_str(), Some(output.to_str().unwrap())).unwrap();
+    let record = read_record(&output);
+    let shown = crate::cmd::show::context_text(&store, task.id.as_str()).unwrap();
+    assert!(shown.contains(&record.conversations[0].value));
+    assert!(record.conversations[0].value.contains(&task.prompt));
+    assert!(record.conversations[0].value.contains("Shared Context: "));
+    assert!(record.conversations[0].value.contains("characters omitted"));
+    assert_eq!(record.conversations[1].value, task.prompt);
+    assert!(store.get_events(task.id.as_str()).unwrap().is_empty());
+}
+
+#[test]
 fn export_sharegpt_writes_system_human_gpt_messages() {
     let temp = TempDir::new().unwrap();
     let _aid_home = AidHomeGuard::set(temp.path());

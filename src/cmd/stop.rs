@@ -39,25 +39,12 @@ pub fn stop_retry_tree(store: &Arc<Store>, task_id: &str, force: bool) -> Result
             skipped += 1;
             continue;
         }
-        let outcome = if force {
-            terminate(
-                store,
-                task.id.as_str(),
-                false,
-                "Task killed by user (--retry-tree)",
-                "killed",
-                None,
-            )
+        let (detail, label) = if force {
+            ("Task killed by user (--retry-tree)", "killed")
         } else {
-            terminate(
-                store,
-                task.id.as_str(),
-                true,
-                "Task stopped by user (--retry-tree)",
-                "stopped",
-                None,
-            )
+            ("Task stopped by user (--retry-tree)", "stopped")
         };
+        let outcome = terminate(store, task.id.as_str(), !force, detail, label, None);
         match outcome {
             Ok(()) => stopped += 1,
             Err(err) => failed.push(format!("{}: {err}", task.id.as_str())),

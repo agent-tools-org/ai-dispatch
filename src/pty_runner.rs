@@ -155,7 +155,7 @@ fn record_completion(
         },
         detail: format!(
             "{} ({}{}{})",
-            info.status.label(),
+            crate::provider_capacity::terminal_label(store, task_id, agent.kind(), info.status),
             format_duration(duration_ms),
             info.tokens
                 .map(|t| format!(", {} tokens", t))
@@ -186,7 +186,7 @@ fn record_completion(
     println!(
         "Task {} {} ({}{}{})",
         task_id,
-        info.status.label(),
+        crate::provider_capacity::terminal_label(store, task_id, agent.kind(), info.status),
         format_duration(duration_ms),
         info.tokens
             .map(|tokens| format!(", {} tokens", tokens))

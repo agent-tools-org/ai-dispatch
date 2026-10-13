@@ -236,7 +236,7 @@ pub async fn watch_streaming(
     );
     let detail = format!(
         "{} — {} events, exit code {}{}",
-        status.label(),
+        crate::provider_capacity::terminal_label(store, task_id, agent.kind(), status),
         event_count,
         exit_status.code().unwrap_or(-1),
         stderr_note,

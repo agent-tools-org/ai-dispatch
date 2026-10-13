@@ -109,7 +109,10 @@ pub(crate) fn handle_streaming_line_with_session(
         return Ok(Some(EventDetail::from_event(&event)));
     }
 
-    if let Some(event) = agent.parse_event(task_id, line) {
+    if let Some(mut event) = agent.parse_event(task_id, line) {
+        if let Some(metadata) = event.metadata.get_or_insert_with(|| serde_json::json!({})).as_object_mut() {
+            metadata.insert("provider_stdout".into(), serde_json::json!(line));
+        }
         apply_completion_event(info, &event);
         crate::cost::apply_completion_usage_cost(store, task_id, info, &event, agent.kind())?;
         synthetic_tracker.observe(&event);

@@ -18,6 +18,21 @@ use crate::types::AgentKind;
 
 use super::{ProbeEvidence, QuotaWall, WindowView};
 
+pub(super) fn stated_clock_why(content: Option<&str>, at: chrono::NaiveDateTime) -> String {
+    let stated = content
+        .and_then(|text| marker_field(text, "recovery_at: "))
+        .unwrap_or_else(|| at.format("%b %d, %Y %I:%M %p").to_string());
+    let capacity = content.and_then(|text| marker_field(text, "message: "))
+        .is_some_and(|message| crate::provider_capacity::is_capacity(&message));
+    format!("{}held until {stated}", if capacity { "provider capacity " } else { "" })
+}
+
+pub(super) fn cooldown_active(mtime: Option<SystemTime>) -> bool {
+    mtime
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|elapsed| elapsed.as_secs() < crate::rate_limit::RATE_LIMIT_WINDOW_SECS)
+}
+
 /// Marker field value for a hold that only a person (or a dated window) can end.
 pub(crate) const MANUAL_HOLD: &str = "manual";
 
@@ -43,6 +58,10 @@ pub(crate) enum StoredHold {
 
 /// A stated time always wins over the signature's class default.
 pub(crate) fn classify_hold(message: &str) -> Hold {
+    if crate::provider_capacity::is_capacity(message) {
+        return Hold::Until(format_recovery(chrono::Local::now().naive_local()
+            + chrono::Duration::minutes(crate::provider_capacity::HOLD_MINUTES)));
+    }
     if let Some(stated) = parse_recovery_time(message) {
         return Hold::Until(stated);
     }
@@ -93,6 +112,9 @@ fn stored_refusal_matches(content: &str, agent: &AgentKind, want: QuotaRecovery)
 }
 
 pub(crate) fn wall_of(agent: &AgentKind, content: &str) -> QuotaWall {
+    if marker_field(content, "message: ").is_some_and(|message| crate::provider_capacity::is_capacity(&message)) {
+        return QuotaWall::Transient;
+    }
     match stored_hold(content, agent) {
         StoredHold::Until(_) => QuotaWall::Clock,
         StoredHold::Windowed => QuotaWall::Windowed,

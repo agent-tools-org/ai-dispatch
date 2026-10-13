@@ -160,3 +160,26 @@ fn transient_cooldown_is_not_held() {
     );
     assert!(dispatch_blocking_hold_for_model(&AgentKind::Claude, None, None).is_none());
 }
+
+#[test]
+fn provider_capacity_holds_only_the_selected_model_for_minutes() {
+    let (_temp, _home, _cache) = isolated();
+    crate::rate_limit::mark_rate_limited_for_model(
+        &AgentKind::Codex,
+        None,
+        Some("gpt-6.1-sol"),
+        "Selected model is at capacity. Please try a different model.",
+    );
+    let held = availability_for_model(&AgentKind::Codex, None, Some("gpt-6.1-sol"));
+    assert_eq!(held.status, RouteStatus::Held);
+    assert_eq!(held.wall, QuotaWall::Transient);
+    let HoldEnd::At(expiry) = held.ends else { panic!("capacity needs a dated expiry") };
+    let seconds = (expiry - Local::now().naive_local()).num_seconds();
+    assert!((60..=300).contains(&seconds), "hold duration: {seconds}s");
+    assert!(held.why.contains("provider capacity"));
+    assert_ne!(
+        availability_for_model(&AgentKind::Codex, None, Some("gpt-6-sol")).status,
+        RouteStatus::Held,
+    );
+    assert!(!is_rate_limited(&AgentKind::Codex, None));
+}

@@ -17,10 +17,14 @@ fn timeout_returns_promptly_and_reaps_the_probe_pid() {
     let dir = tempfile::tempdir().expect("tempdir");
     let pid_file = dir.path().join("pid");
     let binary = fake_binary(dir.path(), "echo $$ > \"$1\"; exec sleep 60");
+    #[cfg(target_os = "linux")]
+    let _write_handle = fs::OpenOptions::new().write(true).open(&binary)
+        .expect("hold probe open for writing");
     let timeout = Duration::from_millis(200);
     let start = Instant::now();
-    let error = run_bounded(&binary, &[pid_file.to_str().expect("pid path")], timeout)
-        .expect_err("sleeping probe must time out");
+    let error = run_bounded(
+        "/bin/sh", &[binary.as_str(), pid_file.to_str().expect("pid path")], timeout,
+    ).expect_err("sleeping probe must time out");
     let elapsed = start.elapsed();
     assert!(error.to_string().contains("timed out"), "{error:#}");
     assert!(elapsed >= timeout && elapsed < timeout + Duration::from_secs(1), "{elapsed:?}");

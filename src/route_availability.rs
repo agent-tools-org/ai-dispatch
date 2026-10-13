@@ -7,7 +7,8 @@ use std::path::Path;
 use std::time::{Duration, SystemTime};
 
 use crate::live_quota;
-use crate::rate_limit::{group_marker_path, marker_field, marker_path, marker_slug};
+use crate::rate_limit::{group_marker_path, marker_path, marker_slug};
+use policy::{cooldown_active, stated_clock_why};
 use crate::types::AgentKind;
 
 #[path = "route_availability_policy.rs"]
@@ -85,7 +86,8 @@ pub fn availability(agent: &AgentKind, custom_name: Option<&str>) -> RouteAvaila
     from_path(agent, custom_name, None, &marker_path(agent, custom_name))
 }
 
-pub fn availability_for_model(
+pub use crate::provider_capacity::availability_for_model;
+pub(crate) fn quota_availability_for_model(
     agent: &AgentKind,
     custom_name: Option<&str>,
     model: Option<&str>,
@@ -272,19 +274,6 @@ fn max_used(snapshot: Option<&ProbeEvidence>) -> f64 {
     snapshot
         .map(|probe| probe.windows.iter().map(|w| w.used_percent).fold(0.0, f64::max))
         .unwrap_or(0.0)
-}
-
-fn stated_clock_why(content: Option<&str>, at: NaiveDateTime) -> String {
-    let stated = content
-        .and_then(|text| marker_field(text, "recovery_at: "))
-        .unwrap_or_else(|| at.format("%b %d, %Y %I:%M %p").to_string());
-    format!("held until {stated}")
-}
-
-fn cooldown_active(mtime: Option<SystemTime>) -> bool {
-    mtime
-        .and_then(|modified| modified.elapsed().ok())
-        .is_some_and(|elapsed| elapsed.as_secs() < crate::rate_limit::RATE_LIMIT_WINDOW_SECS)
 }
 
 #[cfg(test)]

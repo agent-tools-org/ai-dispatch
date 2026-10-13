@@ -36,19 +36,22 @@ impl Agent for TimeoutTestAgent {
 }
 
 #[test]
-fn active_streaming_task_past_old_boundary_does_not_timeout() {
+fn active_descendant_does_not_exempt_task_from_hard_timeout() {
+    let start = Instant::now();
+    let now = start + Duration::from_secs(2);
+    assert!(foreground_timeout_expired(
+        start, now, Duration::from_secs(1),
+    ));
+}
+
+#[test]
+fn active_streaming_task_times_out_at_hard_boundary() {
     let start = Instant::now();
     let old_boundary = Duration::from_millis(30);
     let now = start + old_boundary + Duration::from_millis(1);
-    let last_activity = now - Duration::from_millis(5);
 
-    assert!(!foreground_timeout_expired(
-        start,
-        last_activity,
-        now,
-        old_boundary,
-        Duration::from_millis(10),
-    ));
+    assert!(foreground_timeout_expired(start, now, old_boundary));
+    assert!(!foreground_timeout_expired(start, start, old_boundary));
 }
 
 #[test]
@@ -60,10 +63,8 @@ fn idle_task_past_deadline_times_out() {
 
     assert!(foreground_timeout_expired(
         start,
-        start,
         now,
         max_duration,
-        idle_timeout,
     ));
 }
 

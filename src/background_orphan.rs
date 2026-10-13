@@ -43,7 +43,8 @@ where
             .as_ref()
             .and_then(|spec| spec.idle_timeout_secs)
             .unwrap_or(DEFAULT_IDLE_TIMEOUT_SECS);
-        let activity = latest_activity(store, task)?;
+        let mut activity = latest_activity(store, task)?;
+        include_child_activity(task_id, spec.as_ref(), idle_secs, &mut activity);
         if !is_stale(activity.timestamp, now, idle_secs) {
             continue;
         }
@@ -146,13 +147,25 @@ fn has_agent_progress(activity: &TaskActivity) -> bool {
     activity.event_count > 0 || activity.has_agent_bytes
 }
 
+fn include_child_activity(
+    task_id: &str, spec: Option<&BackgroundRunSpec>, idle_secs: u64, activity: &mut TaskActivity,
+) {
+    if !has_agent_progress(activity) { return; }
+    let pid = spec.and_then(|spec| spec.agent_pid);
+    if let Some(at) = process_monitor::activity::latest(
+        task_id, pid, std::time::Duration::from_secs(idle_secs),
+    ) {
+        activity.timestamp = activity.timestamp.max(DateTime::<Local>::from(at));
+    }
+}
+
 fn record_orphaned_hung(
     store: &Store,
     task_id: &str,
     idle_secs: u64,
     activity: &TaskActivity,
 ) -> Result<bool> {
-    let detail = format!("hung detected (orphaned supervisor): no output for {idle_secs}s");
+    let detail = format!("hung detected (orphaned supervisor): no output or descendant progress for {idle_secs}s");
     record_hung_detected_failure(store, task_id, idle_secs, activity, &detail)
 }
 
@@ -191,9 +204,10 @@ pub(super) fn cleanup_wedged_live_worker(
         return Ok(false);
     }
     let idle_secs = spec.idle_timeout_secs.unwrap_or(DEFAULT_IDLE_TIMEOUT_SECS);
-    let activity = latest_activity(store, task)?;
+    let mut activity = latest_activity(store, task)?;
     let saw_progress = has_agent_progress(&activity);
     let stale_after_secs = wedged_stale_after_secs(saw_progress, idle_secs, spec);
+    include_child_activity(task.id.as_str(), Some(spec), idle_secs, &mut activity);
     if !is_stale(activity.timestamp, Local::now(), stale_after_secs) {
         return Ok(false);
     }
@@ -215,7 +229,7 @@ fn wedged_stale_after_secs(saw_progress: bool, idle_secs: u64, spec: &Background
 fn wedged_failure_detail(saw_progress: bool, stale_after_secs: u64, idle_secs: u64) -> String {
     if saw_progress {
         format!(
-            "hung detected (monitor wedged): no events for {stale_after_secs}s \
+            "hung detected (monitor wedged): no output or descendant progress for {stale_after_secs}s \
              (idle timeout {idle_secs}s, margin {LIVE_WORKER_IDLE_MARGIN}x)"
         )
     } else {
@@ -236,3 +250,6 @@ pub(super) struct TaskActivity {
 #[cfg(test)]
 #[path = "background_orphan_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "background_child_tests.rs"]
+mod child_tests;

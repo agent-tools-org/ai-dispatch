@@ -105,15 +105,25 @@ idle margin.
 `--idle-timeout SECS` stops a task whose stream goes quiet. Meaningful text
 output refreshes the liveness clock even when aid cannot parse it into an event
 (a Grok/agy-style CLI, for example), so unparseable output does not read as
-silence. This signal only sees what the agent emits: silent work is not
-observable by it. Pure terminal-control noise (spinners, cursor hides), idle
+silence. After first output, a live descendant's growing CPU time also refreshes
+activity. An `ssh` remote command or an `rbox` execution, sync, task wait or lock
+wait counts while it is a live descendant in the agent's process group. Other
+sleeping children with unchanged CPU time remain idle. Remote waits cannot prove
+remote progress; the absolute task deadline bounds them. The shared probe uses
+Linux CPU ticks or macOS fractional CPU time and keeps samples between reaper
+invocations. If process inspection fails, output remains the activity signal.
+Pure terminal-control noise (spinners, cursor hides), idle
 auto-nudges, their PTY echoes, and aid's own reply/ack bookkeeping do not count
 as agent progress, so a genuinely stalled or silent agent is still reaped after
 the idle window.
 
-`--timeout SECS` is activity-aware rather than a hard wall-clock cap: an active
-foreground run may continue past it, and the value is rounded up to whole
-minutes.
+Hung events distinguish `no first output` from `no output or descendant progress`.
+The first-token timeout still requires agent output; child activity does not extend it.
+
+`--timeout SECS` is an absolute wall-clock cap, even during CPU work or remote waits.
+Recognized rbox lock-queue time is excluded from a duration-based verification
+timeout, up to the lock notice's timeout. Remote verification's absolute task
+deadline still includes queue time.
 
 Repeated activity is not itself a stop condition.
 

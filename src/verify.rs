@@ -2,11 +2,9 @@
 // Supports auto-detect for Rust, Node, and Python projects.
 
 use anyhow::{Context, Result};
-use std::io::Read;
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
-use std::thread;
 use std::time::Duration;
 
 use crate::process_guard::ProcessGuard;
@@ -15,6 +13,10 @@ use crate::types::{TaskId, TaskStatus, VerifyStatus};
 
 #[path = "verify_budget.rs"]
 mod budget;
+#[path = "verify_output.rs"]
+mod output;
+use output::spawn_output_reader;
+use crate::remote_build::LockQueue;
 pub(crate) use budget::VerifyBudget;
 
 pub(crate) static VERIFY_LOCK: Mutex<()> = Mutex::new(());
@@ -117,8 +119,9 @@ fn execute_verify(
     }
     let mut guard = ProcessGuard::spawn(&mut cmd)
         .with_context(|| format!("Failed to run verify command: {cmd_str}"))?;
-    let reader = spawn_output_reader(guard.child_mut())?;
-    let (status, timeout) = budget.wait(&mut guard)?;
+    let queue = std::sync::Arc::new(LockQueue::default());
+    let reader = spawn_output_reader(guard.child_mut(), queue.clone())?;
+    let (status, timeout) = budget.wait(&mut guard, &queue)?;
     let timed_out = status.is_none();
     let combined = match reader.join() {
         Ok(result) => result?,
@@ -270,26 +273,9 @@ fn split_command(command: &str) -> Result<(String, Command)> {
     cmd.args(&args);
     Ok((command.to_string(), cmd))
 }
-fn spawn_output_reader(child: &mut Child) -> Result<thread::JoinHandle<Result<String>>> {
-    let stdout = child.stdout.take().context("verify stdout pipe missing")?;
-    let stderr = child.stderr.take().context("verify stderr pipe missing")?;
-    Ok(thread::spawn(move || {
-        let stdout_handle = thread::spawn(move || read_pipe(stdout));
-        let stderr_handle = thread::spawn(move || read_pipe(stderr));
-        let stdout = stdout_handle
-            .join()
-            .map_err(|_| anyhow::anyhow!("verify stdout reader thread panicked"))??;
-        let stderr = stderr_handle
-            .join()
-            .map_err(|_| anyhow::anyhow!("verify stderr reader thread panicked"))??;
-        Ok(format!("{stdout}{stderr}"))
-    }))
-}
-fn read_pipe<R: Read + Send + 'static>(mut reader: R) -> Result<String> {
-    let mut bytes = Vec::new();
-    reader.read_to_end(&mut bytes)?;
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
-}
 #[cfg(test)]
 #[path = "verify_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "verify_lock_tests.rs"]
+mod lock_tests;

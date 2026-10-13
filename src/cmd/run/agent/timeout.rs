@@ -15,11 +15,6 @@ use crate::watcher;
 
 use super::{format_duration, run_prompt, spawn_child_with_log, write_streaming_output};
 
-#[cfg(not(test))]
-const FOREGROUND_TIMEOUT_CHECK_INTERVAL: Duration = Duration::from_secs(30);
-#[cfg(test)]
-const FOREGROUND_TIMEOUT_CHECK_INTERVAL: Duration = Duration::from_millis(10);
-
 enum ForegroundRunResult {
     Completed(Result<CompletionInfo>),
     TimedOut,
@@ -39,8 +34,7 @@ pub(crate) async fn run_agent_process_with_timeout(
     timeout_policy: crate::timeout_policy::TimeoutPolicy,
     max_task_cost: Option<f64>,
 ) -> Result<()> {
-    let timeout_mins = timeout_policy.max_duration_mins();
-    let deadline = timeout_policy.max_duration;
+    let deadline = timeout_policy.max_duration.min(timeout_policy.hard_cap);
     let start = Instant::now();
     let idle_timeout = timeout_policy.idle;
     let failure_context = run_prompt::capture_failure_context(store.as_ref(), task_id, &cmd);
@@ -89,13 +83,7 @@ pub(crate) async fn run_agent_process_with_timeout(
             };
             Ok::<CompletionInfo, anyhow::Error>(info)
         };
-        let timeout_future = wait_for_activity_aware_timeout(
-            store,
-            task_id,
-            deadline,
-            idle_timeout,
-            FOREGROUND_TIMEOUT_CHECK_INTERVAL,
-        );
+        let timeout_future = wait_for_timeout(start, deadline);
         tokio::pin!(watch_future);
         tokio::pin!(timeout_future);
         tokio::select! {
@@ -143,7 +131,7 @@ pub(crate) async fn run_agent_process_with_timeout(
             Err(err)
         }
         ForegroundRunResult::TimedOut => {
-            handle_timeout(store, task_id, start, timeout_mins, idle_timeout)
+            handle_timeout(store, task_id, start, deadline)
         }
     }
 }
@@ -217,8 +205,7 @@ fn handle_timeout(
     store: &Arc<Store>,
     task_id: &TaskId,
     start: Instant,
-    timeout_mins: i64,
-    idle_timeout: Duration,
+    deadline: Duration,
 ) -> Result<()> {
     let duration_ms = start.elapsed().as_millis() as i64;
     crate::task_lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
@@ -235,8 +222,8 @@ fn handle_timeout(
     })?;
     crate::state::refresh_project_state(store.as_ref(), task_id);
     let detail = format!(
-        "exceeded {timeout_mins}m timeout after {}s without parsed activity",
-        idle_timeout.as_secs()
+        "exceeded hard timeout of {} seconds",
+        deadline.as_secs()
     );
     let event = TaskEvent {
         task_id: task_id.clone(),
@@ -250,48 +237,16 @@ fn handle_timeout(
     Ok(())
 }
 
-async fn wait_for_activity_aware_timeout(
-    store: &Arc<Store>,
-    task_id: &TaskId,
-    max_duration: Duration,
-    idle_timeout: Duration,
-    check_interval: Duration,
-) {
-    let start = Instant::now();
-    let mut last_activity = start;
-    let mut event_count = current_event_count(store, task_id);
-    let mut interval = tokio::time::interval(check_interval);
-    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+async fn wait_for_timeout(start: Instant, max_duration: Duration) {
     loop {
-        interval.tick().await;
-        let current_count = current_event_count(store, task_id);
-        if current_count > event_count {
-            event_count = current_count;
-            last_activity = Instant::now();
-        }
-        if foreground_timeout_expired(start, last_activity, Instant::now(), max_duration, idle_timeout) {
-            return;
-        }
+        let now = Instant::now();
+        if foreground_timeout_expired(start, now, max_duration) { return; }
+        tokio::time::sleep(max_duration.saturating_sub(now.duration_since(start))).await;
     }
 }
 
-fn current_event_count(store: &Arc<Store>, task_id: &TaskId) -> usize {
-    store
-        .get_events(task_id.as_str())
-        .map(|events| events.len())
-        .unwrap_or_default()
-}
-
-fn foreground_timeout_expired(
-    start: Instant,
-    last_activity: Instant,
-    now: Instant,
-    max_duration: Duration,
-    idle_timeout: Duration,
-) -> bool {
-    // The max-duration cap is a secondary guard: an active foreground run may
-    // continue past it, and is killed only after parsed output has also gone idle.
-    now.duration_since(start) >= max_duration && now.duration_since(last_activity) >= idle_timeout
+fn foreground_timeout_expired(start: Instant, now: Instant, max_duration: Duration) -> bool {
+    now.duration_since(start) >= max_duration
 }
 
 #[cfg(test)]

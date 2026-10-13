@@ -120,7 +120,7 @@ pub(crate) fn validate_read_only_roots(dir: Option<&str>, roots: &[PathBuf]) -> 
     Ok(canonical)
 }
 
-fn protected_roots(cwd: &Path) -> Result<Vec<PathBuf>> {
+pub(crate) fn protected_roots(cwd: &Path) -> Result<Vec<PathBuf>> {
     let mut protected = vec![cwd.to_path_buf()];
     for flag in ["--show-toplevel", "--git-common-dir"] {
         let output = Command::new("git").current_dir(cwd)

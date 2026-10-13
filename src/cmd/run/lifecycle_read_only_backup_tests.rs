@@ -109,7 +109,7 @@ impl Fixture {
             read_only: true,
             dir: Some(wt.display().to_string()),
             repo: Some(repo.path().display().to_string()),
-            result_file: Some("reports/explicit.md".into()),
+            result_file: Some(home.join("requested/report.md").display().to_string()),
             result_file_required: Some(write_report),
             verify: backup.then(|| format!("touch '{}'", home.join("verify-ran").display())),
             backup: backup.then(|| "gdrive:audits".into()),
@@ -200,7 +200,7 @@ impl Fixture {
             REPORT
         );
         assert_eq!(
-            fs::read_to_string(Path::new(self.args.dir.as_ref().unwrap()).join("reports/explicit.md")).unwrap(),
+            fs::read_to_string(self.args.result_file.as_ref().unwrap()).unwrap(),
             REPORT
         );
         let bundles: Vec<_> = fs::read_dir(&self.capture)

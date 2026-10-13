@@ -58,7 +58,7 @@ async fn read_only_settlement_detects_head_and_ref_changes_in_clean_checkout() {
 }
 
 #[tokio::test]
-async fn fix_round_one_read_only_delivers_staged_required_report_to_worktree() {
+async fn fix_round_one_read_only_delivers_staged_required_report_outside_repository() {
     let _permit = test_subprocess::acquire();
     let home = tempfile::tempdir().unwrap();
     let _guard = paths::AidHomeGuard::set(home.path());
@@ -71,7 +71,7 @@ async fn fix_round_one_read_only_delivers_staged_required_report_to_worktree() {
     fs::create_dir_all(&task_dir).unwrap();
     fs::write(task_dir.join("agent-result.md"), REPORT).unwrap();
     f.settle().await;
-    assert_eq!(fs::read_to_string(dir.join("reports/explicit.md")).unwrap(), REPORT);
+    assert_eq!(fs::read_to_string(f.args.result_file.as_ref().unwrap()).unwrap(), REPORT);
     assert_eq!(fs::read_to_string(task_dir.join("result.md")).unwrap(), REPORT);
     assert_eq!(f.store.get_task(f.id.as_str()).unwrap().unwrap().status, TaskStatus::Done);
 }
@@ -105,13 +105,14 @@ async fn fix_round_one_read_only_missing_staged_report_rejects_stale_destination
     let dir = Path::new(f.args.dir.as_ref().unwrap());
     fs::write(dir.join("base.txt"), "base\n").unwrap();
     fs::remove_file(paths::task_dir(f.id.as_str()).join("agent-result.md")).unwrap();
-    fs::create_dir_all(dir.join("reports")).unwrap();
-    fs::write(dir.join("reports/explicit.md"), REPORT).unwrap();
+    let destination = Path::new(f.args.result_file.as_ref().unwrap());
+    fs::create_dir_all(destination.parent().unwrap()).unwrap();
+    fs::write(destination, REPORT).unwrap();
     f.settle().await;
     let task = f.store.get_task(f.id.as_str()).unwrap().unwrap();
     assert_eq!(task.status, TaskStatus::Failed);
     assert_eq!(task.delivery_assessment, Some(crate::types::DeliveryAssessment::MissingFinalDelivery));
-    assert_eq!(fs::read_to_string(dir.join("reports/explicit.md")).unwrap(), REPORT);
+    assert_eq!(fs::read_to_string(destination).unwrap(), REPORT);
 }
 
 #[tokio::test]

@@ -10,9 +10,14 @@ forbids modifying the repository under test. AID auto-selects a task-specific
 result file at `~/.aid/tasks/<id>/result.md` for host launches and omits implementation
 methodology and Git staging instructions. Explicit `--result-file` paths remain delivery destinations.
 For native Codex read-only host runs, the agent writes `agent-result.md` and `agent-output.txt`
-under the task directory; aid copies them to the requested `--result-file` and `-o` paths after
-execution. A missing staged report cannot be satisfied by an old destination file. The requested
-parent directory receives no sandbox grant. Container launches retain their existing delivery path.
+under the task directory; aid publishes them to the requested `--result-file` and `-o` paths after
+execution. Delivery resolves the destination parent canonically and refuses paths inside the
+repository or its Git metadata, including symlinks targeting those paths. It writes a temporary
+file in the destination directory and renames it over the destination, replacing external
+symlinks without changing their targets. Rejected delivery marks the task Failed. Report and
+output paths resolving to the same destination are rejected at dispatch; choose separate paths
+or request one artifact. A missing staged report cannot be satisfied by an old destination file.
+The requested parent directory receives no sandbox grant. Container launches retain their existing delivery path.
 Container launches retain their checkout-relative automatic report path.
 This prompt formatting decision is independent of dirty-worktree enforcement.
 Implementation noun phrases such as `add an audit log` and write requests such as
@@ -67,6 +72,17 @@ Disjoint task, Cargo target, and scratch directories remain writable.
 Aid publishes staged artifacts after settlement and persists the staged report as the official
 result. Delivery failures mark the task Failed. Ref enforcement checks this run's HEAD and branch;
 updates to recovery refs, sibling branches, remote-tracking refs, or tags produce diagnostic events.
+
+### Native test notes
+
+The native permission-transition test is ignored by default. It requires an already installed
+Codex CLI and its OS sandbox on an authorized build box; do not install Codex to run this test.
+On a box meeting those requirements, invoke it explicitly:
+
+```bash
+AID_BUILD_BOX=<box-with-codex> scripts/remote-test.sh --lock-timeout 3600 -- --bin aid \
+  fix_round_one_native_codex_fresh_and_resumed_permission_transitions -- --ignored --nocapture
+```
 
 ## Worktree safety
 

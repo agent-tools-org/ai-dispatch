@@ -113,3 +113,80 @@ async fn fix_round_one_read_only_missing_staged_report_rejects_stale_destination
     assert_eq!(task.delivery_assessment, Some(crate::types::DeliveryAssessment::MissingFinalDelivery));
     assert_eq!(fs::read_to_string(dir.join("reports/explicit.md")).unwrap(), REPORT);
 }
+
+#[tokio::test]
+async fn fix_round_two_read_only_refuses_repository_destinations_after_settlement() {
+    let _permit = test_subprocess::acquire();
+    for destination in ["base.txt", "new/reports/final.md", "git-config", "parent-alias"] {
+        let home = tempfile::tempdir().unwrap();
+        let _guard = paths::AidHomeGuard::set(home.path());
+        let mut f = Fixture::new(home.path(), false, false, false);
+        let dir = Path::new(f.args.dir.as_ref().unwrap());
+        fs::write(dir.join("base.txt"), "base\n").unwrap();
+        let config = f._repo.path().join(".git/config");
+        let original_config = fs::read(&config).unwrap();
+        let target = match destination {
+            "git-config" => config.clone(),
+            "parent-alias" => {
+                std::os::unix::fs::symlink(dir, home.path().join("alias")).unwrap();
+                home.path().join("alias/new/final.md")
+            }
+            path => dir.join(path),
+        };
+        f.args.result_file = Some(target.display().to_string());
+        let task_dir = paths::task_dir(f.id.as_str());
+        fs::write(task_dir.join("agent-result.md"), REPORT).unwrap();
+        f.settle().await;
+        assert_eq!(fs::read_to_string(dir.join("base.txt")).unwrap(), "base\n");
+        assert_eq!(fs::read(config).unwrap(), original_config);
+        assert!(!dir.join("new").exists(), "refusal must not create repository directories");
+        assert_delivery_failed(&f);
+    }
+}
+
+#[tokio::test]
+async fn fix_round_two_read_only_refuses_destination_symlink_into_repository() {
+    let _permit = test_subprocess::acquire();
+    let home = tempfile::tempdir().unwrap();
+    let _guard = paths::AidHomeGuard::set(home.path());
+    let mut f = Fixture::new(home.path(), false, false, false);
+    let dir = Path::new(f.args.dir.as_ref().unwrap());
+    fs::write(dir.join("base.txt"), "base\n").unwrap();
+    let destination = home.path().join("report.md");
+    std::os::unix::fs::symlink(dir.join("base.txt"), &destination).unwrap();
+    f.args.result_file = Some(destination.display().to_string());
+    fs::write(paths::task_dir(f.id.as_str()).join("agent-result.md"), REPORT).unwrap();
+    f.settle().await;
+    assert_eq!(fs::read_to_string(dir.join("base.txt")).unwrap(), "base\n");
+    assert!(fs::symlink_metadata(destination).unwrap().file_type().is_symlink());
+    assert_delivery_failed(&f);
+}
+
+#[tokio::test]
+async fn fix_round_two_read_only_output_replaces_external_symlink_atomically() {
+    let _permit = test_subprocess::acquire();
+    let home = tempfile::tempdir().unwrap();
+    let _guard = paths::AidHomeGuard::set(home.path());
+    let mut f = Fixture::new(home.path(), false, false, false);
+    let dir = Path::new(f.args.dir.as_ref().unwrap());
+    fs::write(dir.join("base.txt"), "base\n").unwrap();
+    let target = home.path().join("other.txt");
+    fs::write(&target, "untouched\n").unwrap();
+    let destination = home.path().join("output.txt");
+    std::os::unix::fs::symlink(&target, &destination).unwrap();
+    f.args.result_file = None;
+    f.args.output = Some(destination.display().to_string());
+    fs::write(paths::task_dir(f.id.as_str()).join("agent-output.txt"), REPORT).unwrap();
+    f.settle().await;
+    assert_eq!(fs::read_to_string(target).unwrap(), "untouched\n");
+    assert_eq!(fs::read_to_string(&destination).unwrap(), REPORT);
+    assert!(!fs::symlink_metadata(destination).unwrap().file_type().is_symlink());
+    assert_eq!(f.store.get_task(f.id.as_str()).unwrap().unwrap().status, TaskStatus::Done);
+}
+
+fn assert_delivery_failed(f: &Fixture) {
+    assert_eq!(f.store.get_task(f.id.as_str()).unwrap().unwrap().status, TaskStatus::Failed);
+    let events = f.store.get_events(f.id.as_str()).unwrap();
+    assert!(events.iter().any(|event| event.event_kind == EventKind::Error
+        && event.detail.starts_with("Read-only artifact delivery failed:")), "{events:?}");
+}

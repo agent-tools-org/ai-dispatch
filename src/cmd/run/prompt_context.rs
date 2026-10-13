@@ -10,11 +10,14 @@ use crate::team::KnowledgeEntry;
 use crate::templates;
 use crate::types::*;
 
+#[path = "prompt_memory.rs"]
+mod memory;
+
 #[path = "prompt_prior.rs"]
 mod prior;
 pub(super) use prior::{collect_sibling_summaries, resolve_context_from};
 #[cfg(test)]
-use prior::{sanitize_injected_content, truncate_context_content};
+use prior::sanitize_injected_content;
 
 const STOP_WORDS: &[&str] = &[
     "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
@@ -27,49 +30,16 @@ const STOP_WORDS: &[&str] = &[
     "what", "which", "who", "where",
 ];
 
-pub(super) fn inject_memories(store: &Store, prompt: &str, max_memories: usize, project_path: Option<&str>) -> Result<Option<(String, Vec<String>)>> {
+pub(super) fn inject_memories(
+    store: &Store,
+    prompt: &str,
+    max_memories: usize,
+    project_path: Option<&str>,
+    omissions: &mut Vec<String>,
+) -> Result<Option<(String, Vec<String>)>> {
     let Some(project_path) = project_path else { return Ok(None) };
-    let mut always_memories = store.list_memories_by_tier(
-        Some(project_path),
-        &[MemoryTier::Identity, MemoryTier::Critical],
-    )?;
-    always_memories.sort_by(|a, b| {
-        memory_tier_rank(a.tier)
-            .cmp(&memory_tier_rank(b.tier))
-            .then_with(|| b.created_at.cmp(&a.created_at))
-    });
-    let always_memories: Vec<_> = always_memories.into_iter().take(max_memories).collect();
-    let keywords = extract_words(prompt);
-    let queries = build_memory_queries(prompt, &keywords);
-    let mut scored: HashMap<String, (Memory, usize)> = HashMap::new();
-    for query in queries {
-        for memory in store.search_memories(
-            &query,
-            Some(project_path),
-            max_memories,
-            Some(&[MemoryTier::OnDemand]),
-        )? {
-            let entry = scored
-                .entry(memory.id.as_str().to_string())
-                .or_insert((memory.clone(), 0));
-            entry.1 += 1;
-        }
-    }
-
-    let mut scored: Vec<_> = scored.into_values().collect();
-    scored.sort_by(|a, b| {
-        b.1.cmp(&a.1)
-            .then_with(|| b.0.created_at.cmp(&a.0.created_at))
-    });
-    let remaining_slots = max_memories.saturating_sub(always_memories.len());
-    let mut memories = always_memories;
-    memories.extend(
-        scored
-            .into_iter()
-            .take(remaining_slots)
-            .map(|(memory, _)| memory),
-    );
-    if memories.is_empty() {
+    let (memories, omitted) = memory::select_memories(store, prompt, max_memories, project_path)?;
+    if memories.is_empty() && omitted == 0 {
         return Ok(None);
     }
     for memory in &memories {
@@ -86,6 +56,11 @@ pub(super) fn inject_memories(store: &Store, prompt: &str, max_memories: usize, 
             _ => "",
         };
         lines.push(format!("[{}{} {}] {}", tier_prefix, compact_type_label(&mem.memory_type), age, mem.content));
+    }
+    if omitted > 0 {
+        let note = format!("Memory: {omitted} eligible entries omitted");
+        lines.push(format!("[... {note} ...]"));
+        omissions.push(note);
     }
     let memory_ids = memories.iter().map(|mem| mem.id.as_str().to_string()).collect();
     let token_count = templates::estimate_tokens(&lines.join("\n"));
@@ -218,12 +193,20 @@ fn compact_type_label(memory_type: &MemoryType) -> &'static str {
     }
 }
 
-pub(super) fn format_knowledge_block(team_id: &str, entries: &[&KnowledgeEntry]) -> String {
-    let blocks: Vec<String> = entries.iter().map(|entry| format_entry_block(entry)).collect();
+pub(super) fn format_knowledge_block(
+    team_id: &str, entries: &[&KnowledgeEntry], omitted: usize, omissions: &mut Vec<String>,
+) -> String {
+    let mut blocks: Vec<String> = entries.iter()
+        .map(|entry| format_entry_block(entry, omissions)).collect();
+    if omitted > 0 {
+        let note = format!("Knowledge: {omitted} eligible entries omitted");
+        blocks.push(format!("[... {note} ...]"));
+        omissions.push(note);
+    }
     format!("[Team Knowledge — {team_id}]\n{}", blocks.join("\n\n"))
 }
 
-pub(super) fn format_entry_block(entry: &KnowledgeEntry) -> String {
+pub(super) fn format_entry_block(entry: &KnowledgeEntry, omissions: &mut Vec<String>) -> String {
     let mut line = String::new();
     line.push_str("- [");
     line.push_str(&entry.topic);
@@ -240,7 +223,10 @@ pub(super) fn format_entry_block(entry: &KnowledgeEntry) -> String {
         if content.len() > 500 {
             let truncated = &content[..content.floor_char_boundary(500)];
             line.push_str(truncated);
-            line.push_str("...");
+            let count = content[content.floor_char_boundary(500)..].chars().count();
+            let note = format!("Knowledge: {count} characters of entry omitted");
+            omissions.push(note.clone());
+            line.push_str(&format!("... [{note}]..."));
         } else {
             line.push_str(content);
         }
@@ -248,7 +234,9 @@ pub(super) fn format_entry_block(entry: &KnowledgeEntry) -> String {
     line
 }
 
-pub(super) fn select_relevant_entries<'a>(entries: &'a [KnowledgeEntry], prompt: &str) -> Vec<&'a KnowledgeEntry> {
+pub(super) fn select_relevant_entries<'a>(
+    entries: &'a [KnowledgeEntry], prompt: &str,
+) -> (Vec<&'a KnowledgeEntry>, usize) {
     let prompt_words = extract_words(prompt);
     let mut scored: Vec<(usize, &KnowledgeEntry)> = entries
         .iter()
@@ -259,12 +247,14 @@ pub(super) fn select_relevant_entries<'a>(entries: &'a [KnowledgeEntry], prompt:
         })
         .collect();
     scored.sort_by_key(|(score, _)| std::cmp::Reverse(*score));
-    scored
+    scored.retain(|(score, _)| *score >= 2);
+    let omitted = scored.len().saturating_sub(5);
+    let selected = scored
         .into_iter()
-        .filter(|(score, _)| *score >= 2)
         .take(5)
         .map(|(_, entry)| entry)
-        .collect()
+        .collect();
+    (selected, omitted)
 }
 
 pub fn extract_words(value: &str) -> HashSet<String> {

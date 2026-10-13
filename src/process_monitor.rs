@@ -9,6 +9,9 @@ use serde_json::json;
 use crate::store::Store;
 use crate::types::{EventKind, TaskEvent, TaskId};
 
+#[path = "process_activity.rs"]
+pub(crate) mod activity;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct HungContext {
     pub(crate) hung_duration_secs: u64,
@@ -39,11 +42,15 @@ pub(crate) fn insert_hung_detected_events(
         detail: "hung_detected".to_string(),
         metadata: Some(metadata.clone()),
     })?;
-    store.insert_event(&TaskEvent {
+    store.insert_agent_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
         event_kind: EventKind::Error,
-        detail: format!("Agent hung: no output for {hung_duration_secs} seconds"),
+        detail: if transient {
+            format!("Agent hung: no first output for {hung_duration_secs} seconds")
+        } else {
+            format!("Agent hung: no output or descendant progress for {hung_duration_secs} seconds")
+        },
         metadata: Some(metadata),
     })?;
     Ok(())
@@ -53,7 +60,7 @@ pub(crate) fn insert_hung_retry_event(store: &Store, task_id: &TaskId) -> Result
     store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
-        event_kind: EventKind::Error,
+        event_kind: EventKind::Milestone,
         detail: "HUNG → retry".to_string(),
         metadata: Some(json!({ "hung_auto_retried": true })),
     })?;

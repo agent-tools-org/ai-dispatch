@@ -2,6 +2,7 @@
 // Exports: fail_task_on_agent_spawn, insert_phase_error_event.
 // Deps: Store, task lifecycle, event types.
 use chrono::Local;
+use super::{FailureContext, FAST_FAIL_SNAPSHOT_MS};
 use crate::store::{Store, TaskCompletionUpdate};
 use crate::types::{EventKind, TaskEvent, TaskId, TaskStatus};
 
@@ -62,4 +63,31 @@ pub(crate) fn fail_task_on_agent_spawn(
             metadata: None,
         },
     );
+}
+
+pub(super) fn insert_fast_fail_snapshot_event(store: &Store, task_id: &TaskId, duration_ms: i64, exit_code: Option<i32>, context: &FailureContext) {
+    if duration_ms >= FAST_FAIL_SNAPSHOT_MS || !matches!(exit_code, Some(code) if code != 0) {
+        return;
+    }
+    let detail = format!(
+        "Failure context: working directory: {}; agent binary: {}; worktree path: {}; worktree created: {}",
+        context
+            .working_dir
+            .as_deref()
+            .unwrap_or("(inherit current process directory)"),
+        if context.binary_path.is_empty() {
+            "(unknown)"
+        } else {
+            context.binary_path.as_str()
+        },
+        context.worktree_path.as_deref().unwrap_or("(none)"),
+        context.worktree_created,
+    );
+    let _ = store.insert_event(&TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: Local::now(),
+        event_kind: EventKind::Error,
+        detail,
+        metadata: None,
+    });
 }

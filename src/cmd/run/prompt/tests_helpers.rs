@@ -15,12 +15,15 @@ fn format_batch_siblings_truncates_and_limits_output() {
         })
         .collect::<Vec<_>>();
 
-    let formatted = format_batch_siblings(&siblings);
+    let mut omissions = Vec::new();
+    let formatted = format_batch_siblings(&siblings, &mut omissions);
 
     assert!(formatted.contains("- \"task-0\" (codex):"));
     assert!(formatted.contains(&format!("{}...", "a".repeat(80))));
     assert!(!formatted.contains("\"task-10\""));
     assert!(formatted.contains("+ 2 more"));
+    assert_eq!(omissions.len(), 11);
+    assert!(formatted.contains("siblings omitted"));
 }
 
 /// Omitting `--skill` means no skill, not a skill chosen from the agent kind.

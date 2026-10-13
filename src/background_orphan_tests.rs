@@ -13,7 +13,7 @@ use crate::types::{
 #[path = "background_orphan_input_tests.rs"]
 mod input;
 
-fn make_task(task_id: &str) -> Task {
+pub(super) fn make_task(task_id: &str) -> Task {
     Task {
         id: TaskId(task_id.to_string()),
         agent: AgentKind::Codex,
@@ -54,7 +54,7 @@ fn make_task(task_id: &str) -> Task {
     }
 }
 
-fn make_spec(task_id: &str, worker_pid: Option<u32>, idle_timeout_secs: Option<u64>) -> BackgroundRunSpec {
+pub(super) fn make_spec(task_id: &str, worker_pid: Option<u32>, idle_timeout_secs: Option<u64>) -> BackgroundRunSpec {
     BackgroundRunSpec {
         task_id: task_id.to_string(),
         worker_pid,
@@ -82,6 +82,7 @@ fn make_spec(task_id: &str, worker_pid: Option<u32>, idle_timeout_secs: Option<u
         env: None,
         env_forward: None,
         agent_pid: None,
+        agent_started: None,
         sandbox: false,
         read_only: false,
         audit_report_mode: false,
@@ -92,7 +93,7 @@ fn make_spec(task_id: &str, worker_pid: Option<u32>, idle_timeout_secs: Option<u
     }
 }
 
-fn insert_event(store: &Store, task_id: &str, age_secs: i64, event_kind: EventKind) {
+pub(super) fn insert_event(store: &Store, task_id: &str, age_secs: i64, event_kind: EventKind) {
     store
         .insert_event(&TaskEvent {
             task_id: TaskId(task_id.to_string()),

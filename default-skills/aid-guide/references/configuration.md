@@ -277,13 +277,24 @@ dispatches. Dispatch is not diverted. An on-disk
 Windowed needle written before this class existed still classifies as
 Windowed rather than as a person hold.
 
+Codex's “Selected model is at capacity” refusal and a final error after
+exhausted 503 reconnects create a two-minute model hold (minute precision).
+This is transient provider capacity, separate from quota or plan walls.
+`aid advise` identifies the held model and expiry. Expiry, successful use of
+that model, or `aid config clear-limit <agent>` clears the hold normally;
+quota snapshots do not release model-capacity holds.
+
 An agent whose plan splits one allowance into tiers is marked per tier. Cursor
 meters a single premium pool that every model except `auto` draws on, so a
 premium refusal holds those models while `auto` stays dispatchable;
 `aid config clear-limit cursor` clears both. Droid's Factory plan meters a
 weekly or 5-hour `standard` pool separately from Droid Core, so a standard 402
 holds those models while Core stays dispatchable, and a Core 402 holds Core
-while standard stays dispatchable. A droid 402 that names neither pool —
+while standard stays dispatchable. Weekly and monthly Droid Core refusals on
+provider JSON error events on stdout use `resets in N days` as a dated hold;
+raw stderr and assistant/tool output cannot set Core holds.
+Claude rejected `seven_day` events use `resetsAt` up to eight days out.
+A droid 402 that names neither pool —
 including `reload your tokens` — holds the whole agent,
 even when a model was on the dispatched route.
 `aid config clear-limit droid` clears both. A group hold is not an agent hold:

@@ -210,10 +210,11 @@ fn resolver_excludes_uppercase_and_alias_primary_by_builtin_kind() {
     for name in ["AGY", "antigravity", "ANTIGRAVITY"] {
         hold(dir.path(), "agy");
         let mut child = RunArgs { agent_name: name.into(), ..args() };
-        let setup = super::super::run_dispatch_resolve::resolve_agent_setup(&store, &mut child, None)
-            .expect("other builtin");
-        assert_eq!(setup.agent_kind, AgentKind::Codex, "{name}");
-        assert_eq!(child.model_source, ModelSource::Advised);
+        let error = super::super::run_dispatch_resolve::resolve_agent_setup(&store, &mut child, None)
+            .err().expect("held aliases must fail without an explicit cascade");
+        assert!(error.to_string().contains("is held"), "{name}: {error}");
+        assert_eq!(child.agent_name, name);
+        assert_ne!(child.model_source, ModelSource::Advised);
         std::fs::remove_file(dir.path().join("rate-limit-agy")).expect("clear");
     }
     // Exclusion is by identity even before a marker exists, not just quota filtering.

@@ -3,11 +3,15 @@
 // Deps: libc, the aid binary, task-id validation, and std process I/O.
 
 use anyhow::{Context, Result};
+#[cfg(not(test))]
 use std::io::Read;
+#[cfg(not(test))]
 use std::process::{Child, Command, Stdio};
 
+#[cfg(not(test))]
 use crate::sanitize;
 
+#[cfg(not(test))]
 pub(crate) fn spawn_worker(task_id: &str) -> Result<(Child, u32)> {
     sanitize::validate_task_id(task_id)?;
     let exe = std::env::current_exe().context("Failed to resolve current aid binary")?;

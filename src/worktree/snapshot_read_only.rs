@@ -3,9 +3,13 @@
 // Deps: git CLI, filesystem metadata, serde_json, and snapshot path ownership.
 
 use anyhow::{Context, Result};
-use std::{io::Write, os::unix::fs::PermissionsExt, path::Path, process::{Command, Stdio}};
+use std::{io::Write, os::unix::fs::{MetadataExt, PermissionsExt}, path::Path, process::{Command, Stdio}};
 
 pub(super) fn capture(dir: &Path) -> Result<Vec<String>> {
+    let root = Command::new("git").current_dir(dir).args(["rev-parse", "--show-toplevel"]).output()?;
+    anyhow::ensure!(root.status.success(), "Failed to resolve read-only repository root");
+    let root = String::from_utf8(root.stdout)?;
+    let dir = Path::new(root.trim_end_matches('\n'));
     let mut entries = Vec::new();
     for tracked in [true, false] {
         let args = if tracked { ["ls-files", "-z", "--stage", "--cached"] }
@@ -25,7 +29,7 @@ pub(super) fn capture(dir: &Path) -> Result<Vec<String>> {
     let paths: Vec<_> = entries.iter().filter(|entry| entry.2.is_empty()).map(|entry| entry.0.as_str()).collect();
     let hashes = hash_files(dir, &paths)?;
     let mut hashes = hashes.into_iter();
-    let mut state = Vec::new();
+    let mut state = git_state(dir)?;
     for (path, index, content, mode) in entries {
         let content = if content.is_empty() { hashes.next().context("Missing file hash")? } else { content };
         state.push(serde_json::to_string(&(path, index, content, mode))?);
@@ -43,15 +47,42 @@ fn file_state(dir: &Path, path: &str, index: &str) -> Result<(String, u32)> {
             if index.starts_with("160000 ") && !file.join(".git").exists() {
                 return Ok((format!("gitlink:{}", index.split_whitespace().nth(1).context("Missing gitlink commit")?), 0));
             }
-            anyhow::ensure!(file.join(".git").exists(), "Unsupported read-only snapshot directory: {path}");
-            let head = Command::new("git").current_dir(&file).args(["rev-parse", "--verify", "HEAD"]).output()?;
-            anyhow::ensure!(head.status.success(), "Failed to snapshot repository {path}: {}", String::from_utf8_lossy(&head.stderr));
-            Ok((format!("gitlink:{}", String::from_utf8(head.stdout)?.trim()), 0))
+            if file.join(".git").exists() {
+                Ok((format!("gitlink:{}", head_state(&file)?), 0))
+            } else {
+                Ok(("directory".into(), meta.permissions().mode()))
+            }
         }
-        Ok(_) => anyhow::bail!("Unsupported read-only snapshot path: {path}"),
+        Ok(meta) => Ok((format!("special:{}:{}:{}:{}:{}", meta.mode(), meta.rdev(),
+            meta.ino(), meta.mtime(), meta.mtime_nsec()), meta.permissions().mode())),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(("missing".into(), 0)),
         Err(err) => Err(err).with_context(|| format!("Failed to snapshot {path}")),
     }
+}
+
+fn head_state(dir: &Path) -> Result<String> {
+    let symbolic = Command::new("git").current_dir(dir).args(["symbolic-ref", "-q", "HEAD"]).output()?;
+    anyhow::ensure!(symbolic.status.success() || symbolic.status.code() == Some(1),
+        "Failed to snapshot symbolic HEAD: {}", String::from_utf8_lossy(&symbolic.stderr));
+    let head = Command::new("git").current_dir(dir)
+        .args(["rev-parse", "--verify", "--quiet", "HEAD"]).output()?;
+    anyhow::ensure!(head.status.success() || head.status.code() == Some(1),
+        "Failed to snapshot HEAD: {}", String::from_utf8_lossy(&head.stderr));
+    let oid = if head.status.success() { String::from_utf8(head.stdout)? } else { "unborn".into() };
+    Ok(format!("{}:{}", String::from_utf8(symbolic.stdout)?.trim(), oid.trim()))
+}
+
+fn git_state(dir: &Path) -> Result<Vec<String>> {
+    let mut state = vec![serde_json::to_string(&(".git/HEAD", "", head_state(dir)?, 0u32))?];
+    let refs = Command::new("git").current_dir(dir)
+        .args(["for-each-ref", "--format=%(refname) %(objectname) %(symref)"]).output()?;
+    anyhow::ensure!(refs.status.success(), "Failed to snapshot refs: {}",
+        String::from_utf8_lossy(&refs.stderr));
+    for entry in String::from_utf8(refs.stdout)?.lines() {
+        let (name, content) = entry.split_once(' ').context("Malformed read-only ref")?;
+        state.push(serde_json::to_string(&(format!(".git/{name}"), "", content, 0u32))?);
+    }
+    Ok(state)
 }
 
 fn hash_files(dir: &Path, paths: &[&str]) -> Result<Vec<String>> {
@@ -84,3 +115,7 @@ fn hash_files(dir: &Path, paths: &[&str]) -> Result<Vec<String>> {
     anyhow::ensure!(hashes.len() == paths.len(), "Read-only file hash count mismatch");
     Ok(hashes)
 }
+
+#[cfg(test)]
+#[path = "snapshot_read_only_tests.rs"]
+mod tests;

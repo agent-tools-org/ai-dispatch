@@ -46,6 +46,7 @@ fn sample_spec(read_only: bool) -> BackgroundRunSpec {
         env: Some(HashMap::from([("KEY".to_string(), "VALUE".to_string())])),
         env_forward: Some(vec!["HOME".to_string()]),
         agent_pid: Some(22),
+        agent_started: Some("launch-22".to_string()),
         sandbox: true,
         read_only,
         audit_report_mode: true,
@@ -85,6 +86,7 @@ fn background_run_spec_round_trips_read_only() {
     assert_eq!(decoded.session_id.as_deref(), Some("session-123"));
     assert_eq!(decoded.max_task_cost, Some(2.5));
     assert!(decoded.judge_retry);
+    assert_eq!(decoded.agent_started.as_deref(), Some("launch-22"));
 }
 
 #[test]

@@ -116,6 +116,7 @@ fn supersede_terminal_self_holder_refuses_without_worktree_hint() {
     let _permit = test_subprocess::acquire();
     let dir = TempDir::new().unwrap();
     let mut task = make_task("t-done-self", TaskStatus::Done);
+    task.completed_at = Some(Local::now());
     task.worktree_path = Some(dir.path().to_string_lossy().to_string());
     let (store, _guard) = isolated_store();
     store.insert_task(&task).unwrap();
@@ -123,7 +124,7 @@ fn supersede_terminal_self_holder_refuses_without_worktree_hint() {
 
     let err = supersede_live_holder(&store, &task).unwrap_err();
     let msg = err.to_string();
-    assert!(msg.contains("already terminal"), "msg: {msg}");
+    assert!(msg.contains("task already done:"), "msg: {msg}");
     assert!(!msg.contains("separate worktree names"), "msg: {msg}");
 }
 

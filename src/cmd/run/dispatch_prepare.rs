@@ -13,7 +13,7 @@ use super::run_dispatch_worktree::{
     persist_worktree_setup, prepare_worktree_deps, resolve_task_project_id, setup_worktree,
 };
 use super::run_task_profile::{
-    apply_category_and_result_defaults, persist_declaration, should_auto_result_file,
+    apply_category_and_result_defaults, persist_declaration, apply_automatic_result_file,
     validate_egress,
 };
 use super::run_validate::{validate_command_preflight_with, validate_dispatch};
@@ -70,7 +70,9 @@ where
     args.max_duration_mins = resolve_max_duration_mins(args.timeout, args.max_duration_mins);
     let context = resolve_dispatch_context(store, args)?;
     let claimed = claim_dispatch(store, args, &context, which)?;
-    finish_dispatch(store, args, context, claimed)
+    let prepared = finish_dispatch(store, args, context, claimed)?;
+    args.origin = DispatchOrigin::Automatic;
+    Ok(prepared)
 }
 
 fn resolve_dispatch_context(store: &Arc<Store>, args: &mut RunArgs) -> Result<DispatchContext> {
@@ -139,7 +141,10 @@ where
         context.agent_setup.effective_model.as_deref(),
         which,
     )?;
-    insert_task_claiming_id(store, &mut task, &mut task_id, &mut log_path, explicit_id)?;
+    insert_task_claiming_id(store, &mut task, &mut task_id, &mut log_path, explicit_id, args.origin)?;
+    if args.origin == DispatchOrigin::ExplicitRetry {
+        store.update_task_dispatch_args(task_id.as_str(), &args.dispatch_args_json()?)?;
+    }
     maybe_insert_held_route_event(store, &task_id, &context.agent_setup, args.dry_run);
     let setup = &context.agent_setup;
     let priced_model = setup.effective_model.clone().or_else(|| setup.agent.default_model());
@@ -204,15 +209,14 @@ fn finish_dispatch(
     mut claimed: ClaimedDispatch,
 ) -> Result<PreparedDispatch> {
     let setup = attach_worktree(store, args, &context, &mut claimed)?;
-    if should_auto_result_file(args, context.had_explicit_result_file) {
-        let result_file = crate::cmd::report_mode::task_result_file(claimed.task_id.as_str());
-        args.result_file = Some(result_file.clone());
-        args.result_file_required = Some(false);
-        aid_info!("[aid] Audit report mode: auto-set --result-file {result_file}");
-    }
+    apply_automatic_result_file(args, &claimed.task_id, context.had_explicit_result_file);
+    super::read_only_delivery::prepare(args, context.agent_setup.agent_kind, &claimed.task)
+        .or_else(|err| {
+            fail_claimed_task(store, &claimed.task_id, &err)?;
+            Err(err)
+        })?;
     let mut dispatch_args = args.clone();
     dispatch_args.model = context.agent_setup.effective_model.clone();
-    dispatch_args.model_source = args.model_source;
     store.update_task_dispatch_args(
         claimed.task_id.as_str(), &dispatch_args.dispatch_args_json()?,
     )?;
@@ -286,8 +290,9 @@ fn prepared_dispatch(
         repo_path: setup.repo_path, wt_path: setup.wt_path, effective_dir: setup.effective_dir,
     }
 }
-
 #[cfg(test)] #[path = "dispatch_prepare_tests.rs"] mod tests;
+#[cfg(test)] #[path = "dispatch_origin_tests.rs"] mod origin_tests;
 #[cfg(test)] #[path = "dispatch_verify_tests.rs"] mod verify_tests;
 #[cfg(test)] #[path = "dispatch_preflight_tests.rs"] mod preflight_tests;
 #[cfg(test)] #[path = "dispatch_backup_tests.rs"] mod backup_tests;
+#[cfg(test)] #[path = "dispatch_report_tests.rs"] mod report_tests;

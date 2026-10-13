@@ -152,7 +152,7 @@ fn cascading_to_the_same_agent_keeps_the_model() {
 }
 
 #[test]
-fn refused_quota_rescue_preserves_failed_status_for_cascade() {
+fn terminal_failure_preserves_failed_status_for_cascade() {
     let repo = init_repo();
     let linked_root = tempfile::tempdir().unwrap();
     let linked = linked_root.path().join("linked");
@@ -173,11 +173,8 @@ fn refused_quota_rescue_preserves_failed_status_for_cascade() {
     task.verify_status = VerifyStatus::Passed;
     store.insert_task(&task).unwrap();
 
-    super::run_post::rescue_quota_failed_task(
-        &store,
-        &task.id,
-        super::run_post::read_quota_error_message(&task.id, &task.agent).as_deref(),
-    );
+    assert!(!store.update_task_status(task.id.as_str(), TaskStatus::Done).unwrap());
+    assert!(store.get_events(task.id.as_str()).unwrap().is_empty());
 
     let saved_task = store.get_task("t-empty-cascade").unwrap().unwrap();
     assert_eq!(saved_task.status, TaskStatus::Failed);

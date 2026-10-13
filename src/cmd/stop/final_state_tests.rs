@@ -116,3 +116,65 @@ fn stop_and_kill_release_worktree_locks() {
         assert!(crate::worktree::check_worktree_lock(&info.path).is_none());
     }
 }
+
+#[cfg(unix)]
+#[test]
+fn detached_stop_and_force_kill_reject_unverified_agent_identity() {
+    let _permit = test_subprocess::acquire();
+    for action in [stop, kill] {
+        for started in [Some("previous-launch".to_string()), None] {
+            let home = tempfile::tempdir().expect("home");
+            let _home = crate::paths::AidHomeGuard::set(home.path());
+            let store = Arc::new(Store::open_memory().expect("store"));
+            let mut task = running_task("t-stop-identity", home.path(), home.path(), "unused");
+            task.worktree_path = None;
+            task.read_only = true;
+            store.insert_task(&task).expect("task");
+            let mut command = Command::new("sleep");
+            command.arg("60");
+            let mut root = crate::process_guard::ProcessGuard::spawn(&mut command).expect("agent");
+            let mut spec: crate::background::BackgroundRunSpec = serde_json::from_str(
+                include_str!("../../../testdata/legacy-background-spec.json"),
+            ).expect("spec");
+            spec.task_id = task.id.to_string();
+            spec.worker_pid = Some(root.id());
+            spec.agent_pid = Some(root.id());
+            spec.agent_started = started;
+            crate::background::save_spec(&spec).expect("save spec");
+            action(&store, task.id.as_str()).expect("stop");
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            let survived = root.child_mut().try_wait().expect("wait").is_none();
+            root.force_kill();
+            assert!(survived, "stop must reject a reused PID or missing launch identity");
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn detached_stop_and_force_kill_signal_matching_agent_identity() {
+    let _permit = test_subprocess::acquire();
+    for action in [stop, kill] {
+        let home = tempfile::tempdir().expect("home");
+        let _home = crate::paths::AidHomeGuard::set(home.path());
+        let store = Arc::new(Store::open_memory().expect("store"));
+        let mut task = running_task("t-stop-owned", home.path(), home.path(), "unused");
+        task.worktree_path = None;
+        task.read_only = true;
+        store.insert_task(&task).expect("task");
+        let mut command = Command::new("sleep");
+        command.arg("60");
+        let mut root = crate::process_guard::ProcessGuard::spawn(&mut command).expect("agent");
+        let mut spec: crate::background::BackgroundRunSpec = serde_json::from_str(
+            include_str!("../../../testdata/legacy-background-spec.json"),
+        ).expect("spec");
+        spec.task_id = task.id.to_string();
+        spec.worker_pid = None;
+        spec.agent_pid = Some(root.id());
+        spec.agent_started = crate::process_monitor::activity::root_started(root.id());
+        assert!(spec.agent_started.is_some());
+        crate::background::save_spec(&spec).expect("save spec");
+        action(&store, task.id.as_str()).expect("stop");
+        assert!(!root.child_mut().wait().expect("wait").success(), "owned agent must be killed");
+    }
+}

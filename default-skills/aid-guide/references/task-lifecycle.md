@@ -26,10 +26,36 @@ or Qwen `[API Error: ...]`) are recorded as `Failed`. Ambiguous envelopes stay
 `Merged` means code was integrated. Neither `Done` nor `Merged` means that the
 task succeeded or that the principal accepted the result.
 
+`aid stop` records `Stopped`, terminal timing, and its completion event in one
+transaction before signalling the worker and agent. A worker can still run until
+the signal lands. If stop is interrupted before signalling, run `aid stop` again;
+a stopped task with a live stored worker PID receives the signal again. If another
+terminal result already won, stop reports its status and reason and exits non-zero
+without writing a stop event.
+
+After settlement, later worker completions and failure diagnostics cannot append
+competing terminal events or change the task's status or terminal timing.
+Post-run failure Errors require an active task or that writer's winning settlement.
+Informational retry, input-delivery, scope and rejected-transition notices remain
+visible as Milestones and do not replace the terminal failure reason. Verification
+status and delivery assessments remain observational metadata and may update after
+settlement.
+
+A stopped parent refuses automatic child tasks and automatic child worker launches
+(verification retries, judge retries, iterations, `--retry`, cascades, and batch fallbacks).
+Explicit `aid retry <task-id> -f "feedback"` and `aid batch retry` can create and launch
+new attempts even when the parent is stopped, including when retry itself stops the prior run.
+A child launched before its parent's stop committed is independent: stop it by its own ID
+or with `aid stop --retry-tree`.
+
 `aid wait` waits for the worker's post-run delivery and verification checks before
 reporting a terminal result, including for group or implicit active-task selection.
-A provisional `Done` cannot bypass a required result-file failure. `--exit-on-await`
-still returns when input is requested; `--timeout` also covers post-run settlement.
+`Done` is provisional while `completed_at` is absent; post-run checks can still
+record failure or stop. Successful settlement records `completed_at` after those
+checks. Execution completion writers preserve terminal results; later passing
+verification does not convert `Failed` back to `Done`. A provisional `Done` cannot
+bypass a required result-file failure. `--exit-on-await` still returns when input
+is requested; `--timeout` also covers post-run settlement.
 If a worker exits with an unfinished job spec, waiting reports an error instead of
 claiming success from its provisional status.
 
@@ -60,7 +86,8 @@ after the post-run lifecycle of a task that ran: after verification, the verify
 gate, and result-file persistence, so the bundle carries the final status. Tasks
 stopped by read-only enforcement preserve the declared result through the same
 result-file persistence path before backup; their failure and read-only evidence
-remain, and configured verification that did not run is recorded as failed. Tasks
+remain, and verification is skipped without a second failure event. With `--audit`,
+a preserved report still receives audit post-processing. Tasks
 ended by `aid stop`, by the background reaper (dead worker, idle, timeout,
 pending or waiting timeout), or by a failure before the agent started are not
 backed up. The resulting URL is stored on the task (`aid show` prints `Backup:

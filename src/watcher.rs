@@ -3,6 +3,8 @@
 mod buffered;
 mod esc;
 mod extract;
+#[path = "watcher_idle.rs"]
+mod idle;
 mod progress;
 mod stderr;
 mod stream;
@@ -20,6 +22,9 @@ mod streaming_completion_tests;
 #[cfg(test)]
 #[path = "watcher/opencode_usage_tests.rs"]
 mod opencode_usage_tests;
+#[cfg(test)]
+#[path = "watcher_idle_tests.rs"]
+pub(crate) mod idle_tests;
 
 pub(crate) use buffered::watch_buffered;
 pub(crate) use esc::strip_terminal_escapes;
@@ -28,7 +33,7 @@ use chrono::Local;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Child;
-use tokio::time::{timeout, Duration};
+use tokio::time::Duration;
 use crate::agent::Agent;
 use crate::delivery_guard::{DeliveryEvidence, DeliveryOutcome};
 use crate::process_group::force_kill_process_group;
@@ -36,12 +41,13 @@ use crate::process_monitor;
 use crate::rate_limit;
 use crate::store::Store;
 use crate::types::*;
-use extract::is_standalone_milestone_line;
+use extract::{is_standalone_milestone_line, is_thinking_delta};
 #[cfg(test)]
 use extract::{
     extract_finding_detail, extract_milestone_detail, parse_milestone_event,
 };
 use stderr::{append_stderr_to_log, drain_stderr_capture, failure_stderr_note, spawn_stderr_capture};
+pub(crate) use stderr::read_capped_stderr;
 pub(crate) use progress::SyntheticMilestoneTracker;
 pub(crate) use stream::{
     StreamLineContext, apply_codex_delivery_guard, handle_streaming_line_with_session,
@@ -80,11 +86,13 @@ pub async fn watch_streaming(
     let mut full_output = String::new();
     let stderr_handle = spawn_stderr_capture(child, task_id);
     loop {
-        let line = match timeout(idle_timeout, lines.next_line()).await {
-            Ok(Ok(Some(line))) => line,
-            Ok(Ok(None)) => break,
-            Ok(Err(e)) => return Err(e.into()),
-            Err(_) => {
+        let line = match idle::next_line(
+            &mut lines, task_id.as_str(), child.id(), idle_timeout, last_event_detail.is_some(),
+        ).await {
+            Some(Ok(Some(line))) => line,
+            Some(Ok(None)) => break,
+            Some(Err(e)) => return Err(e.into()),
+            None => {
                 force_kill_process_group(child);
                 let _ = child.kill().await;
                 let _ = process_monitor::insert_hung_detected_events(
@@ -132,7 +140,7 @@ pub async fn watch_streaming(
             if exceeds_cost_ceiling(info.cost_usd, max_task_cost) {
                 let current_cost = info.cost_usd.unwrap_or_default();
                 let max_cost = max_task_cost.unwrap_or_default();
-                let _ = store.insert_event(&TaskEvent {
+                let _ = store.insert_agent_event(&TaskEvent {
                     task_id: task_id.clone(),
                     timestamp: Local::now(),
                     event_kind: EventKind::Error,
@@ -229,12 +237,12 @@ pub async fn watch_streaming(
     );
     let detail = format!(
         "{} — {} events, exit code {}{}",
-        status.label(),
+        crate::provider_capacity::terminal_label(store, task_id, agent.kind(), status),
         event_count,
         exit_status.code().unwrap_or(-1),
         stderr_note,
     );
-    store.insert_event(&TaskEvent {
+    store.insert_agent_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
         event_kind: if status == TaskStatus::Done {
@@ -287,8 +295,4 @@ fn exceeds_cost_ceiling(current_cost: Option<f64>, max_task_cost: Option<f64>) -
         (current_cost, max_task_cost),
         (Some(current_cost), Some(max_task_cost)) if current_cost > max_task_cost
     )
-}
-
-fn is_thinking_delta(line: &str) -> bool {
-    line.contains("\"type\":\"thinking\"")
 }

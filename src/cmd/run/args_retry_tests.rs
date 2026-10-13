@@ -33,6 +33,7 @@ fn retry_keeps_every_saved_field_except_resolved_task_facts() {
         ("agent_name", json!("row-agent")), ("model", json!("row-model")),
         ("session_id", Value::Null), ("existing_task_id", Value::Null),
         ("env", Value::Null), ("repo", json!("/tmp/repo")),
+        ("origin", json!("automatic")),
     ] {
         expected[key] = value;
     }
@@ -90,6 +91,7 @@ fn every_field_set() -> RunArgs {
         prompt_file: Some("prompt.md".into()), repo: Some("/tmp/repo".into()),
         repo_root: Some("/tmp/root".into()), dir: Some("/tmp/requested".into()),
         output: Some("out.md".into()), result_file: Some("result.md".into()),
+        artifact_staging: Some("/tmp/staging".into()),
         result_file_required: Some(true), model: Some("effective-model".into()),
         model_source: ModelSource::AidResolved,
         declared_difficulty: Some(TaskDifficulty::Complex), declared_budget: Some(TaskBudget::Premium),
@@ -104,6 +106,7 @@ fn every_field_set() -> RunArgs {
         hooks: vec!["on_fail:true".into()], template: Some("bug-fix".into()),
         background: true, dry_run: true, announce: true, foreground: true,
         parent_task_id: Some("t-parent".into()), on_done: Some("echo done".into()),
+        origin: DispatchOrigin::ExplicitRetry,
         cascade: vec!["opencode".into()], read_only: true, audit_report_mode: true, sandbox: true,
         container: Some("ubuntu:latest".into()), remote_build: Some("chosen-box".into()),
         backup: Some("gdrive:x".into()), no_backup: true, budget: true, best_of: Some(2),

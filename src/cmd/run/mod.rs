@@ -4,7 +4,7 @@
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use crate::cmd::{judge, retry_logic};
+use crate::cmd::judge;
 use crate::store::Store;
 use crate::types::*;
 #[cfg(test)]
@@ -24,6 +24,7 @@ mod run_bestof;
 mod run_lifecycle;
 #[path = "dirty.rs"]
 mod run_dirty;
+pub(crate) mod read_only_delivery;
 #[path = "iterate.rs"]
 mod run_iterate;
 #[path = "post.rs"]
@@ -116,6 +117,8 @@ impl Drop for WorkspaceSymlinkGuard {
 }
 
 #[cfg(test)] mod tests;
+#[cfg(test)] pub(crate) mod stop_followup_tests;
+#[cfg(test)] #[path = "capacity_continuation_tests.rs"] mod capacity_tests;
 #[cfg(test)] #[path = "dry_run_tests.rs"] mod run_dry_run_tests;
 #[cfg(test)] mod checklist_tests;
 #[cfg(test)] #[path = "lifecycle_tests.rs"] mod run_lifecycle_tests;
@@ -139,7 +142,6 @@ fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> { ru
 pub(crate) fn switch_agent(args: &mut RunArgs, next_agent: String) { run_post::switch_agent(args, next_agent) }
 #[cfg(test)]
 fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> { run_post::auto_save_task_output(store, task) }
-pub(crate) fn rescue_quota_failed_task(store: &Store, task_id: &TaskId, quota_error_message: Option<&str>) { run_post::rescue_quota_failed_task(store, task_id, quota_error_message); }
 pub(crate) fn read_quota_error_message(task_id: &TaskId, agent: &crate::types::AgentKind) -> Option<String> { run_post::read_quota_error_message(task_id, agent) }
 #[cfg(test)]
 fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> { run_post::worktree_is_empty_diff(worktree_dir) }
@@ -223,12 +225,13 @@ pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_i
         if feedback.is_empty() { "no feedback provided" } else { feedback }
     );
     let mut retry_args = args.clone();
-    let root_prompt = retry_logic::root_prompt(store, &task).unwrap_or_else(|| args.prompt.clone());
+    let prompt = &task.prompt;
     retry_args.prompt = format!(
-        "[Judge feedback]\n{}\n\n[Original task]\n{root_prompt}",
+        "[Judge feedback]\n{}\n\n[Original task]\n{prompt}",
         if feedback.is_empty() { "Judge requested retry without feedback" } else { feedback }
     );
     retry_args.judge_retry = true;
+    retry_args.parent_task_id = Some(task_id.to_string());
     let retry_id = Box::pin(run(store.clone(), retry_args)).await?;
     Ok(Some(retry_id))
 }

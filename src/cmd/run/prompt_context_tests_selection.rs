@@ -11,7 +11,7 @@ fn format_entry_block_with_content() {
         Some("Guide content"),
     );
     assert_eq!(
-        format_entry_block(&entry),
+        format_entry_block(&entry, &mut Vec::new()),
         "- [Topic A](knowledge/guide.md) — Useful guide\nGuide content",
     );
 }
@@ -19,22 +19,23 @@ fn format_entry_block_with_content() {
 #[test]
 fn format_entry_block_without_content() {
     let entry = make_entry("Topic B", None, "Only description", None);
-    assert_eq!(format_entry_block(&entry), "- [Topic B] — Only description");
+    assert_eq!(format_entry_block(&entry, &mut Vec::new()), "- [Topic B] — Only description");
 }
 
 #[test]
 fn format_entry_block_truncates_long_content() {
     let long_content: String = "x".repeat(1_000);
     let entry = make_entry("Topic Long", None, "Long desc", Some(&long_content));
-    let block = format_entry_block(&entry);
+    let block = format_entry_block(&entry, &mut Vec::new());
     assert!(block.ends_with("..."));
     assert!(block.len() < 600);
+    assert!(block.contains("500 characters of entry omitted"));
 }
 
 #[test]
 fn format_knowledge_block_header() {
     let entry = make_entry("Topic C", None, "Header desc", None);
-    let block = format_knowledge_block("dev", &[&entry]);
+    let block = format_knowledge_block("dev", &[&entry], 0, &mut Vec::new());
     assert!(block.starts_with("[Team Knowledge — dev]\n"));
 }
 
@@ -42,11 +43,13 @@ fn format_knowledge_block_header() {
 fn format_knowledge_block_multiple() {
     let first = make_entry("First", None, "One", None);
     let second = make_entry("Second", None, "Two", None);
-    let block = format_knowledge_block("dev", &[&first, &second]);
+    let block = format_knowledge_block("dev", &[&first, &second], 0, &mut Vec::new());
     let body = block
         .strip_prefix("[Team Knowledge — dev]\n")
         .expect("header present");
-    let expected = format!("{}\n\n{}", format_entry_block(&first), format_entry_block(&second));
+    let expected = format!("{}\n\n{}",
+        format_entry_block(&first, &mut Vec::new()),
+        format_entry_block(&second, &mut Vec::new()));
     assert_eq!(body, expected);
 }
 
@@ -56,7 +59,7 @@ fn select_relevant_entries_filters_zero_score() {
         make_entry("Python", None, "Scripting", None),
         make_entry("Release", None, "Notes", None),
     ];
-    let selected = select_relevant_entries(&entries, "rust memory");
+    let (selected, _) = select_relevant_entries(&entries, "rust memory");
     assert!(selected.is_empty());
 }
 
@@ -66,7 +69,7 @@ fn select_relevant_entries_ranks_by_overlap() {
         make_entry("Rust Guide", None, "Memory", None),
         make_entry("Memory Data Guide", None, "Rust", None),
     ];
-    let selected = select_relevant_entries(&entries, "rust data guide memory");
+    let (selected, _) = select_relevant_entries(&entries, "rust data guide memory");
     let topics: Vec<_> = selected.iter().map(|entry| entry.topic.as_str()).collect();
     assert_eq!(topics, vec!["Memory Data Guide", "Rust Guide"]);
 }
@@ -83,7 +86,7 @@ fn select_relevant_entries_caps_at_5() {
             make_entry(&topic, None, "desc", None)
         })
         .collect();
-    let selected = select_relevant_entries(&entries, &prompt);
+    let (selected, _) = select_relevant_entries(&entries, &prompt);
     assert_eq!(selected.len(), 5);
     let topics: Vec<_> = selected.iter().map(|entry| entry.topic.as_str()).collect();
     let expected: Vec<_> = (prompt_words.len() - 5..prompt_words.len())
@@ -99,10 +102,10 @@ fn select_relevant_entries_requires_two_word_overlap() {
         make_entry("Rust Guide", None, "rust feature reference", None),
         make_entry("Python Guide", None, "overview", None),
     ];
-    let selected = select_relevant_entries(&entries, "implement rust feature");
+    let (selected, _) = select_relevant_entries(&entries, "implement rust feature");
     assert_eq!(selected.len(), 1);
     assert_eq!(selected[0].topic, "Rust Guide");
-    let selected = select_relevant_entries(&entries, "implement feature");
+    let (selected, _) = select_relevant_entries(&entries, "implement feature");
     assert!(selected.is_empty());
 }
 
@@ -112,7 +115,7 @@ fn select_relevant_entries_empty_prompt() {
         make_entry("Rust", None, "Topics", None),
         make_entry("Memory", None, "Data", None),
     ];
-    let selected = select_relevant_entries(&entries, "");
+    let (selected, _) = select_relevant_entries(&entries, "");
     assert!(selected.is_empty());
 }
 
@@ -154,7 +157,7 @@ fn inject_memories_uses_compact_format() {
     );
     store.insert_memory(&memory).unwrap();
 
-    let (block, ids) = inject_memories(&store, &memory.content, 10, Some("/test-project")).unwrap().unwrap();
+    let (block, ids) = inject_memories(&store, &memory.content, 10, Some("/test-project"), &mut Vec::new()).unwrap().unwrap();
 
     assert_eq!(ids, vec!["m-compact".to_string()]);
     assert_eq!(block, "[Memory]\n[F 3d] cache miss in pool sync when pool is cold");
@@ -206,7 +209,7 @@ fn inject_memories_includes_identity_and_critical_without_keyword_matches() {
     store.insert_memory(&critical).unwrap();
     store.insert_memory(&on_demand).unwrap();
 
-    let injected = inject_memories(&store, "zebra pumpkin nebula", 10, Some("/test-project"))
+    let injected = inject_memories(&store, "zebra pumpkin nebula", 10, Some("/test-project"), &mut Vec::new())
         .unwrap()
         .unwrap();
 
@@ -231,7 +234,7 @@ fn resolve_context_from_wraps_in_fence() {
     task.output_path = Some(output.path().display().to_string());
     store.insert_task(&task).unwrap();
 
-    let context = resolve_context_from(&store, &[task.id.as_str().to_string()])
+    let context = resolve_context_from(&store, &[task.id.as_str().to_string()], &mut Vec::new())
         .unwrap()
         .unwrap();
 

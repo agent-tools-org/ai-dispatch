@@ -15,6 +15,7 @@ pub(crate) fn update_worker_pid(task_id: &str, worker_pid: u32) -> Result<()> {
 pub fn update_agent_pid(task_id: &str, agent_pid: u32) -> Result<()> {
     let mut spec = load_spec(task_id)?;
     spec.agent_pid = Some(agent_pid);
+    spec.agent_started = crate::process_monitor::activity::root_started(agent_pid);
     save_spec(&spec)
 }
 

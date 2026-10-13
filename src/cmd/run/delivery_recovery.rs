@@ -33,7 +33,7 @@ pub(crate) async fn maybe_auto_recover_missing_delivery(
 
     insert_started_event(store.as_ref(), task_id)?;
     let mut retry_args = args.clone();
-    retry_args.prompt = RECOVERY_PROMPT.to_string();
+    retry_args.prompt = crate::cmd::retry_logic::compose_retry_prompt(&task.prompt, RECOVERY_PROMPT);
     retry_args.parent_task_id = Some(task_id.as_str().to_string());
     retry_args.session_id = Some(session_id);
     retry_args.existing_task_id = None;
@@ -78,7 +78,7 @@ fn insert_unavailable_event(store: &Store, task_id: &TaskId) -> Result<()> {
     store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),
-        event_kind: EventKind::Error,
+        event_kind: EventKind::Milestone,
         detail: "Missing final delivery: Codex session ID unavailable; manual retry required"
             .to_string(),
         metadata: Some(serde_json::json!({

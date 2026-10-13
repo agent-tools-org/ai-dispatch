@@ -49,12 +49,22 @@ pub use self::memory::{Memory, MemoryId, MemoryTier, MemoryType};
 pub use self::outcome::{verify_required, TaskOutcome};
 pub use self::status::{EventKind, PendingReason, TaskStatus};
 pub use self::verify_status::VerifyStatus;
-pub use self::status_sets::{ACTIVE_EXECUTION_FAILURE_STATUSES, ACTIVE_TASK_STATUSES};
+pub use self::status_sets::ACTIVE_TASK_STATUSES;
+#[cfg(test)]
+pub use self::status_sets::ACTIVE_EXECUTION_FAILURE_STATUSES;
 pub use self::task::{CompletionInfo, Finding, Task, TaskEvent, TaskFilter, Workgroup};
 pub use self::task_profile::{
     DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskEgress, TaskProfileDeclaration, TaskRigor,
     TaskUrgency,
 };
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum DispatchOrigin {
+    #[default]
+    Automatic,
+    ExplicitRetry,
+}
 
 /// Short hex ID prefixed with "t-", e.g. "t-a3f1b2c4"
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -117,3 +127,7 @@ impl fmt::Display for WorkgroupId {
 #[cfg(test)]
 #[path = "types/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "types/status_transition_tests.rs"]
+mod status_transition_tests;

@@ -238,3 +238,6 @@ fn batch_retry_same_agent_resumes_current_session_and_keeps_saved_budget() {
     assert_eq!(args.session_id, task.agent_session_id);
     assert!(args.budget);
 }
+
+#[path = "retry_explicit_tests.rs"]
+mod explicit_tests;

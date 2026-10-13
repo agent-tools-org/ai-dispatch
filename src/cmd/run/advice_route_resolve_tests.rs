@@ -48,7 +48,7 @@ fn selected_defaults_are_exact_through_budget_pressure_and_cross_agent_reset() {
 }
 
 #[test]
-fn automatic_preserves_candidate_in_both_held_resolution_phases() {
+fn held_resolution_never_automatically_applies_advice_in_either_phase() {
     let (dir, _home, _cache) = isolated();
     let _fleet = DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::OpenCode]);
     crate::agent_config::save_agent_default_model("codex", Some("gpt-6-sol")).expect("model");
@@ -63,12 +63,13 @@ fn automatic_preserves_candidate_in_both_held_resolution_phases() {
             ..args()
         };
         let selected = expected(&store, &child).expect("peer");
-        let setup =
-            crate::cmd::run::run_dispatch_resolve::resolve_agent_setup(&store, &mut child, None)
-                .expect("substitute");
-        assert_eq!(child.agent_name, selected.agent);
-        assert_eq!(setup.effective_model, selected.model);
-        assert!(child.model_source == ModelSource::Advised && setup.substituted_from.is_some());
+        let error = crate::cmd::run::run_dispatch_resolve::resolve_agent_setup(&store, &mut child, None)
+            .err().expect("held route must fail without explicit cascade");
+        assert!(error.to_string().contains("is held"));
+        assert_ne!(child.agent_name, selected.agent);
+        assert_eq!(child.agent_name, "opencode");
+        assert_eq!(child.model.as_deref(), Some("nvidia/old"));
+        assert_ne!(child.model_source, ModelSource::Advised);
         std::fs::remove_file(dir.path().join(format!("rate-limit-{route}"))).expect("clear");
     }
 }

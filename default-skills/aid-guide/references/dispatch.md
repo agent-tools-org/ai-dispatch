@@ -147,10 +147,24 @@ Important controls:
   `infrastructure_failure`; both are inconclusive. A finished verify command
   with a non-zero diagnostic result is `failed`.
 - `--retry N` permits new attempts after failure.
+  A decoded provider-capacity refusal ends the task `failed`, naming the error
+  and selected model, and creates a short hold on that model. Capacity does not
+  create an automatic continuation or waiting child. Recovery uses the ordinary
+  `--retry N` budget or a manual `aid retry`; ordinary retries consume that budget.
+  Explicit `--cascade` retains its configured policy. Held-route dispatch never
+  automatically substitutes an advised agent; a capacity hold fails dispatch
+  with its reason, preserving agent, model and session.
+  Only decoded provider `error` and `turn.failed` envelopes persisted as events
+  count as capacity evidence. Raw text, assistant messages and tool envelopes do
+  not create a hold. Over the PTY transport stdout and stderr are merged, so a
+  provider-shaped capacity error printed by a tool can be classified as capacity.
+  Events and `aid show` identify provider capacity. Verification of the interrupted
+  attempt is skipped; an ordinary retry keeps the configured verification command.
 - `--bg` returns the task ID immediately.
-- `--read-only` compares the Git run directory with its dispatch snapshot after
+- `--read-only` compares the entire Git repository with its dispatch snapshot after
   the agent exits, including content changes to already dirty files, new untracked
-  files, deletions, and nested repository HEAD changes. Gitlinks also compare their
+  files, deletions, repository HEAD and its current branch, and nested repository HEAD changes.
+  Unrelated ref updates are recorded as diagnostics. Gitlinks compare their
   recorded index commit. Without `--dir`, aid captures and uses its current working
   directory. Any change outside the designated result file, `-o/--output` file,
   and aid-owned paths makes the task Failed with an error listing paths. Files
@@ -159,12 +173,16 @@ Important controls:
   symlink artifact does not exempt its destination. Enforcement covers Git run
   directories only: a non-Git directory proceeds with a warning event naming
   the reason. Git errors or unavailable Git snapshots fail enforcement. Ignored
-  untracked files and paths outside the run directory are outside this check;
-  from a repository subdirectory, only that subtree is compared. The run
-  repository's own HEAD, branches, and tags are not compared, so a commit of
-  already staged changes is not detected. An embedded repository without
-  commits fails the snapshot.
+  untracked files and paths outside the repository are outside this check.
+  Runs from a subdirectory still compare the repository top level. Repositories
+  without commits record an unborn HEAD; tracked paths replaced with special
+  files record metadata without opening them. A violation records one failure
+  reason and marks verification skipped. With `--audit`, a preserved report
+  still receives cross-audit post-processing and its verdict is recorded.
   Nested repositories compare commits, not their uncommitted files.
+  Codex uses one native permission profile for fresh and resumed sessions. Read-only grants
+  are canonicalized and rejected when they overlap the repository, worktree, or Git common directory.
+  See [native Codex permissions and artifact delivery](dispatch-delivery.md#native-codex-permissions).
   Claude retains Bash for audit commands, alongside Read, Glob, and Grep. Without
   a result file it uses plan mode and denies Write, Edit, MultiEdit, and
   NotebookEdit. With a result file it uses `dontAsk`, allows Write, and denies
@@ -174,8 +192,18 @@ Important controls:
 - `--remote-build [BOX]` routes Cargo build/check/test/clippy/bench/doc through a PATH shim to rbox while the agent, PTY, isolated HOME, steer/respond, and idle detection stay local. Bare flag or `auto` runs `rbox pick --tool rust --repo <main-working-tree>` once before launch; an explicit name is used as-is. Missing rbox or no available box fails before launch, preserving selection stderr. CLI overrides project `remote_build`; batch defaults and tasks accept the same key. The chosen box is saved with the task, shown by `aid show`/`--json` and events, reused by `aid retry`, and exported as `AID_BUILD_BOX` to agent and verify, overriding ambient values. Verify receives the same PATH shim, so plain `cargo test` runs remotely too. If the pinned box refuses admission on disk space (exit 69), `aid` re-picks once excluding the old box, persists the new box, and re-runs verify once. A failed re-pick or a second refusal results in an `InfrastructureFailure`. Remote tasks also get a private `.cargo/bin/cargo` shim so login-shell profiles cannot bypass routing by prepending `$HOME/.cargo/bin`; the other Cargo entries link to the real home and `CARGO_HOME`/`RUSTUP_HOME` stay unchanged. Tasks without a box retain the plain `.cargo` symlink. Tasks without remote build omit `remote_build` from `aid show --json`. Expect sync/lock latency; do not bypass the shim. `cargo fmt` and other Cargo commands stay local. This flag conflicts with `--sandbox` and `--container`.
 - `--sandbox` requests sandboxed execution. Before native agent launch, aid creates and probes the Rust target (`_base` for tasks without `-w`) and private temporary directory under isolated HOME, exported as `TMPDIR`; failure aborts with an error naming the directory. Codex roots and Copilot's allowed directories include both scratch paths and writable Git metadata for regular repositories and linked worktrees. An unwritable Git directory is omitted with a task event naming the directory and reason. Capability preflight and `--dry-run` do not create or probe these directories.
 - `--timeout SECS` is a hard wall-clock cap in seconds.
+  Values below 300 seconds warn about the unit without rejecting the run:
+  `--timeout 90` suggests `--timeout 5400` if 90 minutes was intended.
+  For caps of at least 600 seconds, the first hard-cap reconciliation poll at
+  90% queues one steer asking the agent to commit permitted work in progress
+  and write its report. A milestone records the request. Agents without steer
+  support and read-only tasks receive nothing; a pending operator steer is preserved.
+  Failed signal publication releases the request for retry. The cap stays unchanged.
 - `--idle-timeout SECS` stops a task whose stream goes quiet. Meaningful raw
-  output refreshes the clock even when aid cannot parse it into an event; aid's
+  output refreshes the clock even when aid cannot parse it into an event.
+  After first output, growing descendant CPU time and live `ssh`/`rbox` waits
+  in the agent's process group also count. Sleeping children without CPU growth
+  remain idle; remote waits remain bounded by the absolute task deadline. Aid's
   own idle nudges, PTY echoes of those nudges, reply/ack bookkeeping, and pure
   terminal-control noise do not reset the idle clock.
 - `--audit` runs the configured cross-audit.
@@ -195,6 +223,9 @@ exhausted deadline records `timed_out` without launching a verification command
 or remote job. This wrapper deadline is separate from rbox's own wait timeout;
 a wrapper timeout does not establish the remote job's test result. Legacy tasks
 without a saved remote box and local verification retain the 120-second cap.
+Duration-based verification excludes recognized rbox lock notices until the
+sync/job-start marker, bounded by the lock notice's timeout. This exclusion does
+not extend the absolute deadline for tasks with a saved remote box.
 
 Run `aid run --help` for iteration, evaluation, judging, peer review, best-of,
 model, budget, context, scope, checklist, skill, template, hook, container, and cascade options.
@@ -262,470 +293,8 @@ When dispatches are executed, `aid` isolates the agent process's `HOME` director
 - **Forwarded Values Resolved at Launch**: batch `env_forward` names are resolved when the agent launches, so aid saves only the names. Background job specs, which hold inline batch `env` values, are written owner-only (`0600`). Anything the agent itself prints, including an environment value, still reaches its task log.
 - **Automatic Lifecycle Cleanup**: The isolated `HOME` directory is created per task and automatically cleaned up upon task execution completion.
 
-## Preview routing without dispatch
+## Further execution references
 
-```bash
-aid advise "Refactor the scheduler" \
-  --difficulty complex --budget premium --urgency urgent --rigor critical \
-  --kind refactoring --top 5 --json
-```
-
-`aid advise` requires all four declared dimensions. It reads the live inventory,
-rate-limit markers, aidbar disk snapshots, team preferences, and task history,
-then runs the production selector without launching an agent or writing the task store.
-Fresh live used-percent ranks remaining headroom (a penalty as the window
-fills; unused quota never boosts). Held routes still take today's −10 when
-urgency is not `background`. Quota penalties and candidate quota use the resolved
-model’s metered group; a hold on another group does not penalize that route. Use `--top 0` for all candidates, `--team` for
-team preferences, and omit `--json` for a concise human-readable breakdown
-(including a headroom term). JSON candidates add a `quota` object (`status`,
-`wall`, `used_percent`, `resets_at`, `freshness_secs`, `stale`, `source`)
-without renaming existing keys. `quota.status` is `unknown` when no successful
-probe observed the quota (`source: "none"`, a failed probe, or an expired
-marker); it is never reported as dispatchable-by-evidence without one.
-
-Eligibility uses the same "can this route run" predicate as `aid agent list`
-and the `aid run` preflight: a candidate whose binary is missing from `PATH` is
-`installed: false, eligible: false` with reason
-`not installed: binary '<bin>' missing from PATH`. The binary is the one the
-adapter would spawn: Cursor counts an `agent` on `PATH` only when it identifies
-as Cursor, else it needs `cursor-agent`. Every ineligible candidate
-carries `exclusion_reason` (human text, `; `-joined) and `exclusion_codes`
-(one stable code per reason):
-
-| Code | Reason text |
-|---|---|
-| `not_installed` | `not installed: binary '<bin>' missing from PATH` |
-| `below_floor` | `base 6 < floor 8 for complex` (team override or rated model capability below the floor) |
-| `no_budget_model` | `no model for budget <budget>` |
-| `auth_failed` | `auth failed (observed <time>)` |
-| `weaker_on_caller_pool` | `weaker model on caller's pool` |
-
-Candidates rank eligible first, then eligible-but-demoted, then ineligible;
-ineligible alternatives still appear with their reasons. The recommendation is
-the first eligible installed route permitted for recommendation; fallback routes
-must also be installed, enabled, and outside weaker-caller-pool exclusions. When
-none remain, `recommended` is `null` and the run hint stays silent. Claude stays listed and requires team preference for advice. Advice has no
-declared-agent field: explicit `aid run claude` selects Claude for execution
-without changing the hint’s advice profile. Each candidate also carries `auth`: `state` is
-`failed` (with `observed_at` and `message`) when a run of that agent ended on a
-recognised not-signed-in refusal within the last hour (grok `Not signed in`,
-claude `Please run /login` / `Not logged in`, oz `credentials are invalid`),
-otherwise `unknown`. A successful run clears it; aid never reports `ok` and
-never marks auth failed from a run or probe that could not start.
-
-Leaderboard evidence: `aid advise` (text and JSON) shows each candidate's
-`capability_evidence`: `canonical_id`, all raw `scores`, the `selected` score,
-`capability` (0–10 or `null`), and `harness` (`measured` or `harness unmeasured`).
-Each score preserves `source`, `board`, `cli`, `effort`, `value`, `unit`, `rank`,
-`of`, `ci_low`, `ci_high`, and `date`; missing effort/rank/CI stays `null`.
-The report's `sources` block preserves each source's `ok`, `count`, `updated_at`,
-`url`, `licence`, `attribution`, and optional `error` (`null` when absent).
-Custom candidates also expose raw evidence; their configured scoring scale stays separate.
-
-Scoring chooses one source, never a blend: simple-edit/complex-impl/debugging/
-testing/refactoring use Terminal-Bench 4.0 accuracy for the exact canonical model,
-CLI, and configured effort, falling back to Epoch ECI. Frontend uses LMArena
-webdev, preferring the configured effort when available, otherwise the highest
-raw webdev value; research/documentation use Epoch ECI. Price-feed exact IDs and aliases
-provide the canonical mapping; there is no fuzzy model matching. Terminal-Bench
-results from another CLI or effort do not rate this harness: fallback evidence
-is labelled `harness unmeasured`. Codex effort comes from `model_reasoning_effort`
-in its configured home; Claude uses `CLAUDE_CODE_EFFORT_LEVEL` then `effortLevel`
-in its user settings. Unobserved effort matches only an effort-less benchmark row.
-No applicable data (including a failed source) is unknown, never a fabricated zero.
-
-The sole linear rescale is `10 * (value - min) / (max - min)`: Terminal-Bench
-accuracy uses its 0–100 percent (or 0–1 rate) range; ECI and webdev use the
-observed model-level min/max of their own source, board, and unit in the snapshot
-(including effort-tagged webdev rows).
-A degenerate range is unknown. A measured minimum may legitimately score zero.
-Free/cheap budget selection keeps the lowest-price rule and catalog order for
-price ties; standard/premium
-compare model-level ECI within each preferred tier, with unknown ties keeping catalog order.
-`breakdown.complexity_bonus` was removed; no CLI gets an automatic +2 for complexity.
-`scores.json` and `prices.json` share the aid home directory and 24-hour TTL.
-Refresh starts a detached download that survives a short command's exit and
-terminal signals. A `.part` file younger than 60 seconds suppresses another
-download. The next refresh check validates the completed `.ready` file and
-atomically replaces the cache; malformed, empty, or server-stale downloads are
-deleted and preserve the old cache, which remains usable offline. Failed downloads
-also preserve the cache. Without a valid scores cache, evidence is unknown.
-
-Caller pool: advise reads the calling session (`AID_CALLER_KIND`, Claude Code,
-Codex; see `aid board --mine`) and the caller's own model from
-`--caller-model <model>` (wins) or `AID_CALLER_MODEL`. Claude Code maps to the
-`anthropic` pool and Codex to `openai-chatgpt-plan`. The JSON report adds
-`caller` (`session`, `agent`, `provider`, `model`, `capability`). A candidate on
-the same pool whose recommended model has a lower leaderboard capability than the
-caller's model is excluded as `weaker model on caller's pool`. When either
-capability is unknown, same-pool candidates stay eligible but carry
-`demotion_reason` and rank below every eligible other-pool candidate. This is
-advice only: an explicit `aid run <agent>` is never blocked by it. Custom agents are
-reported separately because their configured capability values are not on the
-built-in score scale. A candidate's `model`, `pinned`, and `source` come from
-the same resolver `aid run` uses for that declared profile, so `model` is what
-`aid run` would launch. For a declared `free` or `cheap` budget it is the
-catalog budget model (`source: "budget_route"`, `pinned: true`). A codex
-`model = "gpt-6-sol"` in its config makes the candidate `gpt-6-sol` with
-`pinned: false` and `source: "cli_config"`. With no readable CLI default,
-`model` is `null`, `source` is `agent_default`, and the human output says
-`agent default (unknown)`; advise never names a catalog model it will not
-launch. A built-in candidate's base is its team override, else its rated model
-catalog capability, else a neutral `6.0`. Model capability is the base, not an
-averaged adjustment. Without either source of evidence, the floor does not
-exclude it and report `notes` includes `unrated: no measured or model capability
-for <category>`. Custom agents keep their configured capabilities and floor.
-The caller-pool comparison treats unknown model capability as unknown.
-When a candidate's model is older
-than a served-only model of the same family (for example catalog `gpt-5.6-sol`,
-served `gpt-6-sol`), the candidate carries `unrated_served_models` (omitted
-when empty) and the human output adds one `note:` line. Those models stay
-unrated and are not selected. Inferred kind is advisory; pass `--kind` when the
-caller knows the task kind. Advice exits successfully even when every agent
-is rate-limited. Advise does not spawn `aidbar`.
-
-For `free` and `cheap` profiles, `breakdown.budget_penalty` is `-3.0` only
-when the candidate's resolved model price has a positive input or output rate.
-Scoring uses the same price resolution as cost estimation: exact agent/model
-override (case-insensitive), subscription inclusion, catalog figure, then an
-exact vendor-CLI feed entry. Unknown prices and included subscription routes
-have no paid-model penalty, even when the catalog lists API-looking rates.
-A zero override removes the penalty from a paid route; a positive override
-adds it to a free, subscription, or previously unknown route. Vendor feed
-rates do not price reseller routes. `standard` and `premium` profiles have no
-paid-model penalty. These price rules do not change model eligibility or the
-other score terms.
-
-`aid run` hints use this ranker with the declared profile and task kind. Missing
-values default to `moderate` / `standard` / `normal` / `standard` and inferred kind;
-keywords never choose budget. Hints stay silent for prompts under 20 characters,
-`--no-hint`, or a recommendation matching the chosen agent.
-
-`aid run auto` and batch `agent = "auto"` (or an empty agent) are hard errors.
-There is no silent routing shim: declare a task profile, run `aid advise`, then
-dispatch an explicit agent.
-
-## Context and instructions
-
-Use `--context <path>...` for source material, not extra positional arguments.
-Use `--context-from <task>...` to inject prior task output. If that task
-declared `-o` and the owned file is missing, aid reports the absence and does
-not substitute the task log. Use `--scope` to state intended files. Use
-`--checklist` or `--checklist-file` for explicit acceptance criteria.
-
-Prefer a project verify command for consistent results:
-
-```toml
-[project]
-id = "example"
-verify = "cargo test --bin app"
-```
-
-## Result delivery
-
-Prompts expressing `read-only … audit`, including `read-only audit` and
-modifiers such as `read-only comparative audit`, `read-only cross-audit`, or
-`read-only re-audit`, are dispatched as report tasks from the prompt alone.
-`--read-only` still permits writing the task result file and audit report; it
-forbids modifying the repository under test. AID auto-selects a task-specific
-result file and omits implementation methodology and Git staging instructions.
-This prompt formatting decision is independent of dirty-worktree enforcement.
-Implementation noun phrases such as `add an audit log` and write requests such as
-`add tests for the read-only audit module` or
-`make changes to the read-only audit logic` remain normal writable tasks.
-Write verbs after the audit phrase also keep implementation scaffolding unless
-they are negated, as in `do not modify` or `without modifying`.
-An explicit `--result-file` controls report formatting and delivery; it does not
-by itself remove implementation methodology or Git staging instructions.
-A declared writable kind (`--kind simple-edit|complex-impl|frontend|testing|refactoring`
-without `--read-only`) is never turned into a report task by prompt wording.
-The kind carries over to `aid retry`, so a brief that discusses audits,
-reviews, or findings stays an implementation task on every attempt. To get a
-report, declare `--kind research|debugging|documentation` or pass `--read-only`.
-
-Unsupported agent and flag combinations are refused before a task row is created,
-with an error that names what to do instead. The same preflight resolves the agent
-command (built-in or custom) and refuses when the binary is missing from `PATH`,
-naming the missing binary. Qwen supports `--read-only` through its native plan
-approval mode.
-Unknown models that the agent CLI does not report as invalid are passed
-through.
-
-If the agent process still fails to start after preflight, the task ends in
-`failed` with an agent-spawn error — it is never left `running` with no worker.
-
-When `--result-file` is set (audit and review prompts set it automatically) and
-the agent never writes that file, AID salvages the captured agent output into
-the task's `result.md` so evidence is not lost. If that output is pre-tool
-narration rather than a report, AID records a `missing_final_delivery`
-assessment and an error event. `aid show` then prints the missing-result banner
-instead of presenting the tool log as findings. Treat that banner as "no audit
-happened" and re-dispatch.
-
-## Worktree safety
-
-```bash
-aid worktree create feat/change
-aid worktree list
-```
-
-AID task worktrees are custody containers, not disposable scratch directories.
-Completion, failure, stop, retry, and merge preserve them. Do not use raw
-`git worktree prune` or direct `git worktree remove` on them.
-
-If AID reports missing worktree registration or conflicting metadata, stop and
-identify the owning task. Automatic pruning is intentionally forbidden because
-linked-worktree Git metadata may contain unique submodule objects.
-
-Each worktree holds a `.aid-lock` lease for the active task. Unrelated tasks
-still collide and are refused. A nested child whose `parent_task_id` chain
-reaches the lease holder may re-enter the same worktree so edits stay on the
-parent branch.
-
-Creating a worktree also adds AID's own runtime files — `.aid-*`, `aid-batch-*`,
-`result-t-*.md` — to the repository's local `.git/info/exclude`. That file is never
-committed and the repository's `.gitignore` is left alone; it exists so an agent
-running `git add .` cannot commit AID's lease file. Dirty-worktree enforcement
-ignores those paths as well, so AID clearing its own lease at task end is not read
-as the agent leaving work uncommitted.
-
-## Recursive delegation
-
-Agents already receive `AID_TASK_ID` (and now `AID_TASK_DEPTH`) and can run
-`aid run` from inside a task. When `AID_TASK_ID` is set:
-
-- `aid run` fills `parent_task_id` from it so `aid tree` shows the child.
-- Depth is parent depth + 1 and dispatch beyond depth `2` is refused.
-- `--bg` is refused; the child must finish before the parent releases the lease.
-- Child `--difficulty` / `--budget` may not exceed the parent's declared values.
-
-```bash
-# inside an agent process (AID_TASK_ID already set):
-aid run opencode "Extract the parser helper" \
-  --dir . \
-  --worktree feat/request-validation \
-  --difficulty simple --budget cheap --urgency normal --rigor draft
-```
-
-## Build and test
-
-```bash
-aid build check
-aid build clippy -- --all-targets
-aid test --bin aid
-aid test --bin aid my_module::my_test -- --exact
-aid test -- my_filter
-aid test -- my_filter --exact
-aid test --isolated --bin aid
-```
-
-Use `aid build` for compile checks. It emits compact, deduplicated diagnostics
-and integrates progress into task events. `aid build` no longer accepts `test`
-as a command — use `aid test` so agents cannot mistake a zero-match filter or
-empty target set for a green suite.
-
-`aid build` guarantees:
-
-- A run that matched no build targets never looks like a pass (for example
-  `cargo check --lib` on a binary-only crate).
-- A cached no-op build (cargo exit 0, everything already fresh) is still success.
-- Task events say `succeeded` or `failed`, not an ambiguous `finished` line.
-
-`aid test` reuses the same cargo process supervision and diagnostic pipeline as
-`aid build`, then parses libtest stdout. Guarantees:
-
-- A filter that matches zero tests exits non-zero and names the filter.
-  Filters may be positional (`aid test name`) or free args after `--`
-  (`aid test -- name`), matching cargo muscle memory.
-- Target selectors are aid flags only: `--lib`, `--bin NAME`, `--test NAME`
-  (integration-test *target*, not a name filter). Do not put them after `--`.
-- A run with no test targets never looks like a pass
-- The digest lists which tests ran (not only a pass count)
-- Failure output stays compact (panics and assertion diffs)
-
-`--isolated` gives the cargo test process a temporary `AID_HOME` so the run
-cannot read or pollute the developer's `~/.aid/`. It also clears nested
-`AID_TASK_ID` / `AID_TASK_DEPTH` in that child so unit tests that call
-`prepare_dispatch` are not refused as over-depth when `aid test` itself runs
-inside a task. It is opt-in, not the default.
-
-Inherited `CARGO_TARGET_DIR` wins for the first attempt. If cargo cannot write
-that directory (common under agent OS sandboxes that only allow the worktree
-and temp dirs), `aid build` / `aid test` retries once under the system temp
-directory (`aid-build-target/<project-key>/`) and records the fallback paths in
-the digest. Do not preflight with a generic write probe — the fallback is keyed
-off cargo's real permission error.
-
-## Retry and fallback
-
-```bash
-aid retry <task-id> --feedback "Address the failed invariant"
-aid retry <task-id> --feedback-file notes.md --model gpt-5.4 --idle-timeout 900
-aid run codex "Task" --cascade opencode,cursor
-```
-
-A retry is a new attempt linked to its parent. It does not erase or rewrite the
-failed attempt. Inspect the tree with `aid tree <task-id>`. Unspecified
-`--model` / `--idle-timeout` keep the original task values; `--feedback` and
-`--feedback-file` cannot be combined.
-
-Automatic cascade takes the first launchable builtin candidate in `aid advise`'s
-ranked list, using the task's difficulty, budget, urgency, rigor, kind, team,
-history and detected caller. It excludes the exhausted agent and always excludes
-Claude, even when team-preferred. Advice gates exclude disabled, missing,
-auth-failed, below-floor, weaker same-pool and superseded Gemini routes, plus
-holds on the candidate's selected model group even under background urgency.
-An advisory `recommended` route never rescues an empty launchable set.
-
-The candidate's model is retained through dispatch: known CLI defaults are
-pinned, and unknown defaults cannot be replaced by later budget routing. A known
-unservable advice model fails before launch rather than running another default.
-When served-model evidence is unknown, the exact requested advice pin is allowed.
-Advice provenance is persisted for both model pins and unknown defaults.
-Explicit cascade/fallback lists keep their order, custom-name resolution,
-remaining entries and unknown-name errors. Failed-task batch `auto_fallback`
-never replaces an exhausted explicit list with advice. Explicit `aid batch retry`
-can use advice when the saved list is empty and the agent is held. Explicit Gemini
-and Claude remain allowed when
-agy is installed. Cross-agent switches clear the source model and session before
-applying the selected route.
-
-A hold diverts dispatch whenever it is still live, whether it ends on a stated
-time, a dated aidbar window, or only when a person runs
-`aid config clear-limit <agent>` (see `references/configuration.md` for the
-four hold classes). A marker whose stated
-time has already passed does not divert anything, and neither does the short
-cooldown left by an unrecognised refusal — that window is shorter than the cost
-of moving off the agent you asked for. Where a tiered agent has only one tier
-held — cursor's premium pool, or droid's standard or Core pool — dispatch stays on the
-agent and switches to a tier that still serves, reporting the swap rather than
-making it silently. A droid refusal that names neither `standard usage` nor
-`weekly Droid Core usage limit` holds the whole agent.
-
-Cursor's `ActionRequiredError: You've hit your usage limit` monthly refusal
-holds the dispatched model group, including Auto when Auto refused. Its
-`M/D/YYYY` cycle-end date holds through that entire UTC day (release at the
-following midnight UTC); a missing or invalid date uses a 30-day hold.
-Quoted prose and assistant/tool envelopes do not qualify as this error line.
-
-A hold is scoped to what actually refused. When a CLI serves several providers,
-a refusal is attributed to the provider of the route aid dispatched, so one
-provider running out of credit leaves its siblings dispatchable — an
-`opencode/` balance failure does not hold `opencode-go/`. When the refusing
-provider cannot be identified, the hold covers the whole agent rather than
-guessing a provider.
-
-Model validation distinguishes who chose the model. A model you named with
-`--model` that the CLI does not serve is a hard error listing the served
-models. A model aid resolved for you — from the catalog, the declared budget,
-or a stored per-agent default — is dropped with a warning and the agent's own
-default runs instead, because a stale catalog entry is aid's problem to absorb,
-not a reason to refuse your dispatch. Where the CLI cannot be asked what it
-serves, dispatch proceeds unvalidated and says so.
-
-For explicit fallback substitution — where a held agent was replaced by a
-caller-listed fallback before dispatch — an aid-resolved model survives a served-list miss
-rather than being dropped. The substitution already proved the requested
-family spent, and the fallback's own default can re-enter that exhausted
-family (agy's default is a gemini model, the group the hold just escaped), so
-the aid-resolved pin is retained through the cache lag. This covers any
-aid-resolved effective model on the substituted route, not only the healthy
-family pin: `switch_agent` clears `--model`, so a fallback's per-agent default
-or a budget-picked model arrives as aid-resolved too, and the same trade
-applies. A served-list miss is cache lag, not proof the CLI will reject the
-model.
-
-The served list is cached on disk for 24 hours, so a slow CLI is asked once
-rather than on every dispatch. When the model you asked for is absent from the
-cached list, aid re-probes once before rejecting it, so a model the CLI gained
-since the last probe is accepted rather than refused for a day. Codex cache
-entries also track the modification time and size of `$CODEX_HOME/models_cache.json`;
-when Codex refreshes that file, aid refreshes its disk and in-process model
-lists on the next lookup, including in a long-running `aid mcp` process.
-
-`aid agent list --json`, `aid config pricing`, and `aid advise` merge every
-model in the 24-hour served-model cache that has no catalog row into the
-catalog views, for each agent with a served-model probe: codex, grok, cursor,
-qwen, agy, and opencode (so providers such as `opencode-go` appear beside the
-built-in `opencode/*` rows). For Codex, a changed source-file stamp refreshes
-the cache from its local model list. Other agents read the cache only and never probe;
-an absent or expired cache adds nothing. Each `models.available` row carries
-`rated`, `capability` (the complex-impl rule, or `null`), `capability_evidence`
-(the same raw/selected/harness structure as advice), and `source` (`catalog`,
-`served`, or `pricing_override`). The agent-list response has the same `sources`
-metadata block as advice. A served-only
-row keeps `source: "served"`; `rated` reflects applicable leaderboard evidence, and
-`capability` is `null` when unknown. Every
-displayed price (`input_per_m`/`output_per_m` in the JSON, `aid config pricing`,
-the `aid config agents` model lines) is the price cost estimation resolves below;
-with none known the JSON carries `null` and the text prints `unknown`. aid never
-invents ratings for models without leaderboard evidence, and routing never auto-selects one.
-Cost estimation prices a model only from an exact match, in this order: an
-explicit `pricing.json` override for the agent and model, subscription
-inclusion, its static catalog row, or an exact price-feed id or alias.
-An explicit override also replaces a listed row's tier and description while
-preserving its origin; ratings resolve independently from the leaderboard feed.
-The price feed carries each vendor's own per-token API rate, so it prices only
-the vendor's own CLI (codex, claude, gemini, grok); on a reseller route (droid,
-oz, opencode, and the others) a model without a catalog figure or override
-costs `unknown`. It never uses a substring, vendor-prefix, family, or
-`-free`-suffix match, and never a fixed fallback model: a served-only model
-gets its price from an exact price-feed entry on its vendor's CLI, never from a
-similar-name rate. A task with neither a pinned nor an observed model (for
-example unpinned gemini or codex) costs `unknown`, stored as NULL. Subscription
-agents (Cursor, Copilot) cost 0.0 as included.
-
-A catalog row storing 0.0/0.0 is a price only when its tier is `free`; on any
-other tier (droid, oz, grok rows) it means "no figure on record" and costs
-`unknown`, never free, so a `max_task_cost` ceiling on that route warns that it
-cannot be enforced. An override outranks every other source, including
-subscription inclusion and the catalog row.
-
-For providers represented by aidbar, a successful cached snapshot can release a
-time-based, transient, or Windowed older marker for this dispatch decision only
-when its `fetched_at` is newer than the marker file's modification time and
-every relevant usage window has headroom. A Windowed hold also requires a
-dated `resets_at` on at least one of those windows. Cursor premium's relevant
-window is the one labelled `Plan`; On-demand is ignored. A `NeedsHuman` hold
-— prepaid, a plan change, or invalid credentials — is never released by
-percentages: used-percent readings say nothing about a spend or balance hold
-(opencode refused at $19.37 of a $20 window; oz logged-out stderr is
-`credentials are invalid`). The marker is not deleted, and aidbar errors, missing
-probes, and unrecognized providers do not release it. `aid advise` continues
-to score and report the marker state rather than this one-round dispatch view.
-
-The held route is **not spawned**. Substitution happens before dispatch, so no
-task row is recorded for the agent that was never run, and the fallback carries
-none of the held route's model: a model name means something only inside one
-CLI. The substitution is announced on stderr and recorded as an event on the
-dispatched task, both naming `aid config clear-limit <agent>`. When no usable
-aidbar snapshot can release the marker, that escape hatch is how a topped-up
-account or other changed provider state releases a stale hold.
-
-`--urgency background` keeps the agent you asked for when the hold is a clock
-or Windowed quota — those can clear before a background task runs. A NeedsHuman
-hold (logged-out credentials, prepaid, plan-change) still blocks and substitutes
-or errors exactly as under normal urgency. The wait itself blocks only on a
-clock or a dated mapped snapshot; prepaid, plan-change, and unmapped holds
-return immediately and tell you to `aid config clear-limit` or pick another
-agent.
-
-A dry-run substitution milestone says `would dispatch` and records JSON
-metadata naming both routes and whether the model class was preserved. It does
-not mean the substitute ran.
-
-A `--cascade` entry aid cannot resolve is an error, not a skipped entry. Custom
-agents are valid cascade targets and are checked against their own hold, not a
-shared one.
-
-## Verify before review
-
-```bash
-aid wait <task-id>
-aid show <task-id> --summary
-aid show <task-id> --diff
-aid show <task-id> --result
-```
-
-Agent success and verification are evidence for review, not acceptance.
+- [Routing previews and context](dispatch-routing.md)
+- [Result delivery, worktree safety, delegation, and builds](dispatch-delivery.md)
+- [Retries, fallback, and verification](dispatch-retry.md)

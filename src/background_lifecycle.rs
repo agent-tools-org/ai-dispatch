@@ -23,7 +23,7 @@ pub(super) async fn run_post_lifecycle(
         .map(|task| task.status)
         .unwrap_or(TaskStatus::Done);
     let runtime_hooks = load_background_runtime_hooks(lifecycle_args)?;
-    let prompt_bundle = prompt_bundle(lifecycle_args);
+    let prompt_bundle = prompt_bundle(store, spec)?;
     let (repo_path, wt_path) = task_lifecycle_paths(store, &task_id)?;
     crate::cmd::run::post_run_lifecycle(
         if spec.foreground {
@@ -49,13 +49,15 @@ pub(super) async fn run_post_lifecycle(
     Ok(())
 }
 
-fn prompt_bundle(args: &crate::cmd::run::RunArgs) -> crate::cmd::run::PromptBundle {
-    crate::cmd::run::PromptBundle {
-        effective_prompt: args.prompt.clone(),
+fn prompt_bundle(store: &Store, spec: &BackgroundRunSpec) -> Result<crate::cmd::run::PromptBundle> {
+    let prompt = store.get_task(&spec.task_id)?.and_then(|task| task.resolved_prompt)
+        .unwrap_or_else(|| spec.prompt.clone());
+    Ok(crate::cmd::run::PromptBundle {
+        effective_prompt: prompt,
         context_files: Vec::new(),
         prompt_tokens: 0,
         injected_memory_ids: Vec::new(),
-    }
+    })
 }
 
 fn load_background_runtime_hooks(args: &crate::cmd::run::RunArgs) -> Result<Vec<crate::hooks::Hook>> {
@@ -72,4 +74,24 @@ fn task_lifecycle_paths(
         return Ok((None, None));
     };
     Ok((task.repo_path, task.worktree_path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lifecycle_preservation_uses_the_stored_launch_prompt() {
+        let store = Store::open_memory().unwrap();
+        let id = "t-lifecycle-preservation";
+        store.insert_waiting_task(id, "codex", "Caller brief", Some("Resolved launch context"),
+            None, None, None, None, None, false, false).unwrap();
+        let spec = serde_json::from_value(serde_json::json!({
+            "task_id": id, "worker_pid": null, "agent_name": "codex", "prompt": "Stale spec",
+            "dir": null, "output": null, "model": null, "verify": null,
+            "retry": 0, "group": null, "interactive": false,
+        })).unwrap();
+        assert_eq!(prompt_bundle(&store, &spec).unwrap().effective_prompt, "Resolved launch context");
+        assert!(store.get_events(id).unwrap().is_empty());
+    }
 }

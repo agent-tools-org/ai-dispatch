@@ -83,7 +83,7 @@ pub(super) async fn append_stderr_to_log(
 
 const MAX_PRESERVED_STDERR_BYTES: usize = 64 * 1024;
 
-fn read_capped_stderr(task_id: &str) -> Option<String> {
+pub(crate) fn read_capped_stderr(task_id: &str) -> Option<String> {
     use std::io::Read;
     let file = std::fs::File::open(paths::stderr_path(task_id)).ok()?;
     let mut bytes = Vec::new();

@@ -264,7 +264,7 @@ fn preserve_shared_checkout(
         Err(error) => {
             let detail = format!("Shared checkout preservation failed; original files retained: {error:#}");
             aid_warn!("[aid] {detail}");
-            store.insert_event(&TaskEvent {
+            store.insert_agent_event(&TaskEvent {
                 task_id: task_id.clone(),
                 timestamp: chrono::Local::now(),
                 event_kind: EventKind::Error,

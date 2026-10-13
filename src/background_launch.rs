@@ -10,17 +10,26 @@ pub(super) fn prepare_launch(
     store: &Arc<Store>, spec: &BackgroundRunSpec, args: &RunArgs,
     agent: &dyn agent::Agent, home_guard: &agent::home_isolation::IsolatedHomeGuard,
 ) -> Result<(std::process::Command, Option<String>)> {
-    let opts = run_opts(spec, args);
-    let worktree_branch = store.get_task(&spec.task_id)?.and_then(|task| task.worktree_branch);
+    let opts = run_opts(spec, args, agent.kind());
+    let task = store.get_task(&spec.task_id)?;
+    let launch_prompt = task.as_ref().and_then(|task| task.resolved_prompt.as_deref())
+        .unwrap_or(&spec.prompt);
+    let worktree_branch = task.as_ref().and_then(|task| task.worktree_branch.clone());
     let mut cargo_target_dir = agent::rust_build_cache_target_dir(args.dir.as_deref(), worktree_branch.as_deref());
     let uses_durable_codex_home = agent::should_use_durable_codex_home(agent.kind(), args.sandbox, args.container.is_some());
     let mut temp_dir = None;
     let mut writable_roots = Vec::new();
     if args.container.is_none() && !args.sandbox {
-        cargo_target_dir = agent::scratch::prepare_cargo_target(cargo_target_dir.as_deref())?;
-        let temp = agent::scratch::create_temp_dir(home_guard.path())?;
+        let temp = if crate::cmd::run::read_only_delivery::enabled(args, agent.kind()) {
+            std::path::PathBuf::from(args.artifact_staging.as_deref()
+                .ok_or_else(|| anyhow::anyhow!("Read-only artifact staging is unavailable"))?)
+        } else {
+            cargo_target_dir = agent::scratch::prepare_cargo_target(cargo_target_dir.as_deref())?;
+            agent::scratch::create_temp_dir(home_guard.path())?
+        };
         let (roots, warnings) = agent::scratch::prepare_launch_roots(
             agent.kind(), args.dir.as_deref(), cargo_target_dir.as_deref(), &temp, &TaskId(spec.task_id.clone()),
+            args.read_only,
         )?;
         for warning in warnings {
             store.insert_event(&warning)?;
@@ -30,7 +39,7 @@ pub(super) fn prepare_launch(
     }
     let mut std_cmd = agent
         .build_command_with_context(
-            &args.prompt,
+            launch_prompt,
             &opts,
             agent::CommandContext { durable_codex_home: uses_durable_codex_home, writable_roots },
         )
@@ -46,11 +55,12 @@ pub(super) fn prepare_launch(
     wrap_command(spec, args, agent.kind(), std_cmd)
 }
 
-fn run_opts(spec: &BackgroundRunSpec, args: &RunArgs) -> agent::RunOpts {
+fn run_opts(spec: &BackgroundRunSpec, args: &RunArgs, kind: crate::types::AgentKind) -> agent::RunOpts {
+    let (output, result_file) = crate::cmd::run::read_only_delivery::agent_paths(args, kind);
     agent::RunOpts {
         dir: args.dir.clone(),
-        output: args.output.clone(),
-        result_file: args.result_file.clone(),
+        output,
+        result_file,
         model: args.model.clone(),
         budget: args.budget,
         read_only: args.read_only,
@@ -118,4 +128,83 @@ fn wrap_command(
         cmd
     };
     Ok((cmd, container_name))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn worker_launch_preservation_uses_resolved_prompt_with_raw_lifecycle_args() {
+        let home = tempfile::tempdir().unwrap();
+        let _guard = crate::paths::AidHomeGuard::set(home.path());
+        crate::paths::ensure_dirs().unwrap();
+        let store = Arc::new(Store::open_memory().unwrap());
+        let id = "t-launch-preservation";
+        let resolved = "Resolved launch context\nCaller brief";
+        store
+            .insert_waiting_task(
+                id,
+                "codex",
+                "Caller brief",
+                Some(resolved),
+                None,
+                None,
+                None,
+                None,
+                None,
+                false,
+                false,
+            )
+            .unwrap();
+        store
+            .update_task_dispatch_args(id, &RunArgs::default().dispatch_args_json().unwrap())
+            .unwrap();
+        let spec = serde_json::from_value(serde_json::json!({
+            "task_id": id, "worker_pid": null, "agent_name": "codex", "prompt": "Stale spec",
+            "dir": home.path().to_str(), "output": null, "model": null, "verify": null,
+            "retry": 0, "group": null, "interactive": false,
+        }))
+        .unwrap();
+        let args = RunArgs::for_worker(&store, &spec).unwrap();
+        let agent = capture_agent();
+        let isolated =
+            agent::home_isolation::IsolatedHomeGuard::create_from_home(Some(home.path()), Some(id))
+                .unwrap();
+        let (command, _) = prepare_launch(&store, &spec, &args, &agent, &isolated).unwrap();
+        assert_eq!(args.prompt, "Caller brief");
+        assert_eq!(command.get_args().last().unwrap(), resolved);
+    }
+    fn capture_agent() -> agent::custom::CustomAgent {
+        agent::custom::CustomAgent {
+            config: agent::custom::parse_config(concat!(
+                "[agent]\nid = \"capture\"\ndisplay_name = \"Capture\"\n",
+                "command = \"/bin/echo\"\nprompt_mode = \"arg\"\n"
+            ))
+            .unwrap(),
+        }
+    }
+
+    #[test]
+    fn fix_round_one_read_only_launch_stages_explicit_report_and_output_separately() {
+        let temp = tempfile::tempdir().unwrap();
+        let _home = crate::paths::AidHomeGuard::set(temp.path());
+        let spec: BackgroundRunSpec = serde_json::from_value(serde_json::json!({
+            "task_id": "t-routing", "agent_name": "codex", "prompt": "audit",
+            "dir": null, "output": null, "verify": null, "retry": 0, "group": null
+        })).unwrap();
+        let staging = agent::scratch::create_temp_dir(temp.path()).unwrap();
+        let args = RunArgs {
+            agent_name: "codex".into(), read_only: true,
+            artifact_staging: Some(staging.display().to_string()),
+            output: Some("/outside/final.txt".into()),
+            result_file: Some("reports/explicit.md".into()), ..Default::default()
+        };
+        let opts = run_opts(&spec, &args, crate::types::AgentKind::Codex);
+        let task = std::path::Path::new(args.artifact_staging.as_ref().unwrap());
+        assert_eq!(opts.result_file.as_deref(), task.join("agent-result.md").to_str());
+        assert_eq!(opts.output.as_deref(), task.join("agent-output.txt").to_str());
+        assert_eq!(args.result_file.as_deref(), Some("reports/explicit.md"));
+        assert_eq!(args.output.as_deref(), Some("/outside/final.txt"));
+    }
 }

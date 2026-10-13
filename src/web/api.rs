@@ -68,7 +68,10 @@ pub async fn get_task_result(
     Path(id): Path<String>,
     State(store): State<Arc<Store>>,
 ) -> Result<Json<ResultResponse>, StatusCode> {
-    ensure_task_exists(&store, &id)?;
+    let task = store.get_task(&id).map_err(internal_error)?.ok_or(StatusCode::NOT_FOUND)?;
+    if let Some(notice) = task.artifact_delivery_notice() {
+        return Ok(Json(ResultResponse { result: notice.to_string() }));
+    }
     let path = crate::paths::task_dir(&id).join("result.md");
     let result = std::fs::read_to_string(path).map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {

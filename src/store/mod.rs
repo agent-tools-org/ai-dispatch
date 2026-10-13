@@ -3,6 +3,13 @@
 // Deps: rusqlite, anyhow.
 
 mod mutations;
+mod task_insert_mutations;
+mod status_mutations;
+mod task_metadata_mutations;
+mod completion_mutations;
+mod memory_mutations;
+#[cfg(test)]
+mod mutation_tests;
 mod artifact_custody;
 pub use artifact_custody::{AcceptanceDecision, AcceptanceRecord};
 pub use mutations::TaskCompletionUpdate;

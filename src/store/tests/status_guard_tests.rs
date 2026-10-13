@@ -60,7 +60,7 @@ fn rejected_transition_is_recorded_on_the_event_log() {
 
     let events = rejection_events(&store, "t-rj1");
     assert_eq!(events.len(), 1);
-    assert_eq!(events[0].event_kind, EventKind::Error);
+    assert_eq!(events[0].event_kind, EventKind::Milestone);
     assert_eq!(events[0].detail, "rejected illegal status transition: done -> running");
     let metadata = events[0].metadata.as_ref().expect("transition metadata");
     assert_eq!(metadata["from"].as_str(), Some("done"));

@@ -6,51 +6,13 @@ use super::maybe_verify;
 use crate::test_subprocess;
 use crate::{
     store::Store,
-    types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus},
+    types::{TaskId, TaskStatus, VerifyStatus},
 };
-use chrono::Local;
 use std::sync::Arc;
 
-fn task(id: &str, status: TaskStatus, dir: Option<&str>, verify: Option<&str>) -> Task {
-    Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: dir.map(str::to_string), effective_dir: None,
-        worktree_branch: Some("fix/verify-gate".to_string()),
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: Some(10),
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: Some(0),
-        created_at: Local::now(),
-        completed_at: Some(Local::now()),
-        verify: verify.map(str::to_string),
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
-    }
-}
+#[path = "verify_gate_fixture.rs"]
+mod fixture;
+use fixture::task;
 
 #[test]
 fn configured_verify_without_working_dir_is_a_legitimate_skip() {
@@ -306,57 +268,5 @@ fn empty_diff_still_runs_configured_verify_and_fails_on_broken_tree() {
     assert_eq!(loaded.status, TaskStatus::Failed);
 }
 
-#[test]
-fn genuine_verify_failure_still_fails_task() {
-    let dir = tempfile::tempdir().unwrap();
-    let dir_str = dir.path().to_string_lossy().to_string();
-    let store = Store::open_memory().unwrap();
-    let task_id = TaskId("t-real-vfail".to_string());
-    store
-        .insert_task(&task(task_id.as_str(), TaskStatus::Done, Some(&dir_str), Some("false")))
-        .unwrap();
-
-    maybe_verify(&store, &task_id, Some("false"), Some(&dir_str), None);
-
-    let loaded = store.get_task(task_id.as_str()).unwrap().unwrap();
-    assert_eq!(loaded.verify_status, VerifyStatus::Failed);
-    assert_eq!(loaded.status, TaskStatus::Failed);
-}
-
-#[cfg(unix)]
-#[test]
-fn configured_verify_records_pending_before_command_finishes() {
-    let _permit = test_subprocess::acquire();
-    let dir = tempfile::tempdir().unwrap();
-    let dir_str = dir.path().to_string_lossy().to_string();
-    let store = Arc::new(Store::open_memory().unwrap());
-    let task_id = TaskId("t-verify-pending-start".to_string());
-    store
-        .insert_task(&task(task_id.as_str(), TaskStatus::Done, Some(&dir_str), Some("sleep 1")))
-        .unwrap();
-
-    let verify_store = store.clone();
-    let verify_id = task_id.clone();
-    let handle = std::thread::spawn(move || {
-        maybe_verify(&verify_store, &verify_id, Some("sleep 1"), Some(&dir_str), None);
-    });
-
-    let mut observed_pending = false;
-    for _ in 0..50 {
-        if store
-            .get_task(task_id.as_str())
-            .unwrap()
-            .is_some_and(|loaded| loaded.verify_status == VerifyStatus::Pending)
-        {
-            observed_pending = true;
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
-    assert!(observed_pending);
-    handle.join().unwrap();
-    assert_eq!(
-        store.get_task(task_id.as_str()).unwrap().unwrap().verify_status,
-        VerifyStatus::Passed
-    );
-}
+#[path = "verify_gate_pending_tests.rs"]
+mod pending;

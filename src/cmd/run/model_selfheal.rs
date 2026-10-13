@@ -5,7 +5,6 @@
 use anyhow::Result;
 use std::sync::Arc;
 
-use crate::cmd::retry_logic;
 use crate::{store::Store, types::*};
 
 use super::{RunArgs, apply_retry_target, inherit_retry_base_branch, run};
@@ -40,15 +39,13 @@ pub(crate) async fn maybe_auto_retry_after_model_unavailable(
         task.agent
     );
 
-    let root_prompt =
-        retry_logic::root_prompt(store.as_ref(), &task).unwrap_or_else(|| args.prompt.clone());
     let mut retry_args = RunArgs::for_retry(store, &task)?;
     retry_args.dir = args.dir.clone();
     retry_args.env = args.env.clone();
     retry_args.foreground = args.foreground;
     retry_args.announce = args.announce;
     retry_args.on_done = None;
-    retry_args.prompt = root_prompt;
+    retry_args.prompt = task.prompt.clone();
     retry_args.force_default_model = true;
     retry_args.model_source = crate::agent::model_validation::ModelSource::AidResolved;
     retry_args.model = None;
@@ -88,7 +85,7 @@ fn insert_model_selfheal_event(store: &Store, task_id: &TaskId, message: &str) -
     store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),
-        event_kind: EventKind::Error,
+        event_kind: EventKind::Milestone,
         detail: format!(
             "model unavailable → retry on default: {}",
             crate::agent::truncate::truncate_text(message, 120)
@@ -210,5 +207,18 @@ mod tests {
         store.insert_task(&task).unwrap();
         store.insert_event(&plain_event("t-fresh")).unwrap();
         assert!(!already_self_healed_model(&store, &task).unwrap());
+    }
+
+    #[test]
+    fn model_retry_notice_preserves_settlement_winner() {
+        let store = Store::open_memory().expect("store");
+        let task = failed_task("t-notice-winner");
+        store.insert_task(&task).expect("task");
+        store.insert_event(&plain_event(task.id.as_str())).expect("original failure");
+        insert_model_selfheal_event(&store, &task.id, "unavailable model").expect("notice");
+        assert_eq!(store.latest_error(task.id.as_str()).as_deref(), Some("some other failure"));
+        let events = store.get_events(task.id.as_str()).expect("events");
+        assert_eq!(events.last().expect("notice").event_kind, EventKind::Milestone);
+        assert!(was_model_self_healed(&events));
     }
 }

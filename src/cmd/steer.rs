@@ -22,9 +22,61 @@ pub fn run(store: &Store, task_id: &str, message: &str) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn wrap_up_before_timeout(
+    store: &Store,
+    task_id: &str,
+    elapsed_secs: u64,
+    cap_secs: u64,
+) -> Result<bool> {
+    if cap_secs < 600 || elapsed_secs < cap_secs - cap_secs / 10 || elapsed_secs > cap_secs {
+        return Ok(false);
+    }
+    let Some(task) = store.get_task(task_id)? else {
+        return Ok(false);
+    };
+    if task.read_only || reply::ensure_interactive_input(&task, InputCommand::Steer).is_err()
+        || crate::paths::steer_signal_path(task_id).exists()
+    {
+        return Ok(false);
+    }
+    queue_wrap_up(store, task_id)
+}
+
+fn queue_wrap_up(store: &Store, task_id: &str) -> Result<bool> {
+    let mut conn = store.db();
+    let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+    if crate::paths::steer_signal_path(task_id).exists() {
+        return Ok(false);
+    }
+    let message = "Hard timeout is approaching: please commit work in progress if changes are permitted, \
+                   and write the report now.";
+    let rows = tx.execute(
+        "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
+         SELECT id, ?2, 'milestone', ?3, ?4 FROM tasks WHERE id = ?1
+         AND status IN ('running', 'awaiting_input', 'stalled') AND read_only = 0
+         AND NOT EXISTS (SELECT 1 FROM events WHERE task_id = ?1 AND detail = ?3)",
+        rusqlite::params![
+            task_id,
+            chrono::Local::now().to_rfc3339(),
+            "Hard-cap wrap-up: committing work in progress and writing the report requested",
+            r#"{"steered":true,"hard_cap_wrap_up":true}"#
+        ],
+    )?;
+    if rows == 0 {
+        return Ok(false);
+    }
+    tx.execute(
+        "INSERT INTO task_messages (task_id, direction, content, source, created_at)
+         VALUES (?1, 'in', ?2, 'steer', ?3)",
+        rusqlite::params![task_id, message, chrono::Local::now().to_rfc3339()],
+    )?;
+    tx.commit()?;
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::run;
+    use super::{run, wrap_up_before_timeout};
     use crate::input_signal;
     use crate::paths::AidHomeGuard;
     use crate::store::Store;
@@ -70,6 +122,60 @@ mod tests {
             audit_report_path: None,
             delivery_assessment: None,
         }
+    }
+
+    #[test]
+    fn concurrent_wrap_up_pollers_queue_only_one_steer() {
+        let home = tempfile::tempdir().expect("home");
+        let store = Store::open(&home.path().join("aid.db")).expect("store");
+        store
+            .insert_task(&make_task("t-concurrent", TaskStatus::Running))
+            .expect("task");
+        let barrier = std::sync::Barrier::new(2);
+        std::thread::scope(|scope| {
+            for _ in 0..2 {
+                let barrier = &barrier;
+                let path = home.path();
+                scope.spawn(move || {
+                    let _home = AidHomeGuard::set(path);
+                    let store = Store::open(&path.join("aid.db")).expect("store");
+                    barrier.wait();
+                    wrap_up_before_timeout(&store, "t-concurrent", 540, 600).expect("wrap-up");
+                });
+            }
+        });
+        assert_eq!(
+            store
+                .list_messages_for_task("t-concurrent")
+                .expect("messages")
+                .len(),
+            1
+        );
+        assert_eq!(store.get_events("t-concurrent").expect("events").len(), 1);
+    }
+
+    #[test]
+    fn wrap_up_preserves_pending_operator_steer_and_skips_expired_cap() {
+        let home = tempfile::tempdir().expect("home");
+        let _home = AidHomeGuard::set(home.path());
+        let store = Store::open_memory().expect("store");
+        store
+            .insert_task(&make_task("t-pending", TaskStatus::Running))
+            .expect("task");
+        input_signal::write_steer("t-pending", "operator direction").expect("steer");
+        assert!(!wrap_up_before_timeout(&store, "t-pending", 540, 600).expect("wrap-up"));
+        assert_eq!(
+            input_signal::take_steer("t-pending").expect("steer").as_deref(),
+            Some("operator direction")
+        );
+        assert!(!wrap_up_before_timeout(&store, "t-pending", 601, 600).expect("expired cap"));
+        assert!(
+            store
+                .list_messages_for_task("t-pending")
+                .expect("messages")
+                .is_empty()
+        );
+        assert!(store.get_events("t-pending").expect("events").is_empty());
     }
 
     #[test]

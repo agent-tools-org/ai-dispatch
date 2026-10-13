@@ -1,34 +1,71 @@
-// Codex CLI contract validation for host-side dispatch preflight.
-// Exports: validate_installed_codex_with; rejects obsolete approval flag surfaces.
-// Deps: anyhow and the installed `codex exec --help` output.
+// Codex CLI options, explicit native permission profiles and dispatch preflight.
+// Exports option configuration and installed configuration-isolation validation.
+// Deps: RunOpts, TOML configuration and `codex exec --help` output.
 
 use anyhow::{Result, ensure};
 use crate::agent::env_identity::help_defines_flag;
 
 use crate::agent::CliCommandRunner;
 
-const APPROVE_FOR_ME_VERSION: (u32, u32, u32) = (0, 147, 0);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ApprovalFlag {
-    ApproveForMe,
-    FullAuto,
+fn configure_permissions(
+    cmd: &mut std::process::Command,
+    read_only: bool,
+    roots: &[std::path::PathBuf],
+) -> Result<()> {
+    let mut filesystem = toml::Table::new();
+    for path in roots {
+        let path = std::path::absolute(path)?;
+        let path = path.to_str().ok_or_else(|| anyhow::anyhow!("Non-UTF-8 sandbox root"))?;
+        filesystem.insert(path.to_string(), toml::Value::String("write".into()));
+    }
+    let (name, base) = if read_only { ("aid-read-only", ":read-only") }
+        else { ("aid-write", ":workspace") };
+    let profile = toml::Value::Table(toml::Table::from_iter([
+        ("extends".into(), toml::Value::String(base.into())),
+        ("filesystem".into(), toml::Value::Table(filesystem)),
+    ]));
+    let permissions = toml::Value::Table(toml::Table::from_iter([(name.into(), profile)]));
+    cmd.arg("--ignore-user-config");
+    cmd.args(["-c", &format!("permissions={permissions}")]);
+    cmd.args(["-c", &format!("default_permissions=\"{name}\"")]);
+    if read_only {
+        cmd.args(["-c", "approval_policy=\"never\""]);
+    } else {
+        cmd.args(["-c", "approval_policy=\"on-request\"", "-c", "approvals_reviewer=\"auto_review\""]);
+    }
+    Ok(())
 }
 
-impl ApprovalFlag {
-    pub(super) const fn as_str(self) -> &'static str {
-        match self {
-            Self::ApproveForMe => "--approve-for-me",
-            Self::FullAuto => "--full-auto",
+pub(super) fn configure_options(
+    cmd: &mut std::process::Command,
+    opts: &crate::agent::RunOpts,
+    resuming: bool,
+    roots: &[std::path::PathBuf],
+) -> Result<()> {
+    if let Some(ref model) = opts.model {
+        if super::has_native_model_flag() {
+            cmd.args(["-m", model]);
+        } else {
+            cmd.args(["-c", &format!("model=\"{model}\"")]);
         }
     }
-}
-
-pub(super) fn approval_flag_for_version(version: (u32, u32, u32)) -> ApprovalFlag {
-    if version >= APPROVE_FOR_ME_VERSION {
-        ApprovalFlag::ApproveForMe
+    if let Some(ref output) = opts.output {
+        cmd.args(["-o", output]);
+    }
+    if let Some(ref dir) = opts.dir {
+        if !std::path::Path::new(dir).exists() {
+            anyhow::bail!("codex working directory does not exist: {}", dir);
+        }
+        if !resuming {
+            cmd.args(["-C", dir]);
+        }
+        cmd.current_dir(dir);
+    }
+    if opts.read_only {
+        let roots = crate::agent::scratch::validate_read_only_roots(opts.dir.as_deref(), roots)?;
+        configure_permissions(cmd, true, &roots)
     } else {
-        ApprovalFlag::FullAuto
+        configure_permissions(cmd, false, roots)
     }
 }
 
@@ -55,7 +92,7 @@ pub(super) fn validate_installed_codex_with(
 }
 
 fn validate_exec_help(version: (u32, u32, u32), help: &str) -> Result<()> {
-    let required = approval_flag_for_version(version).as_str();
+    let required = "--ignore-user-config";
     ensure!(
         help_defines_flag(help, required),
         "Codex CLI {}.{}.{} does not define required flag {required}",
@@ -68,23 +105,23 @@ fn validate_exec_help(version: (u32, u32, u32), help: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ApprovalFlag, approval_flag_for_version, validate_exec_help, validate_installed_codex_with};
+    use super::{validate_exec_help, validate_installed_codex_with};
     use crate::agent::CliCommandOutput;
     use std::cell::RefCell;
 
     #[test]
     fn selects_flags_for_old_and_new_versions() {
-        assert_eq!(approval_flag_for_version((0, 146, 0)), ApprovalFlag::FullAuto);
-        assert_eq!(approval_flag_for_version((0, 147, 0)), ApprovalFlag::ApproveForMe);
-        assert_eq!(approval_flag_for_version((1, 0, 0)), ApprovalFlag::ApproveForMe);
+        for version in [(0, 146, 0), (0, 162, 1), (1, 0, 0)] {
+            assert!(validate_exec_help(version, "      --ignore-user-config\n").is_ok());
+        }
     }
 
     #[test]
     fn validates_the_flag_selected_for_each_version() {
-        assert!(validate_exec_help((0, 146, 0), "      --full-auto\n").is_ok());
-        assert!(validate_exec_help((0, 147, 0), "      --approve-for-me\n").is_ok());
+        assert!(validate_exec_help((0, 146, 0), "      --ignore-user-config\n").is_ok());
+        assert!(validate_exec_help((0, 147, 0), "      --ignore-user-config\n").is_ok());
         let error = validate_exec_help((0, 147, 0), "      --full-auto\n").unwrap_err();
-        assert!(error.to_string().contains("--approve-for-me"));
+        assert!(error.to_string().contains("--ignore-user-config"));
     }
 
     #[test]
@@ -97,7 +134,7 @@ mod tests {
             ));
             Ok(CliCommandOutput {
                 success: true,
-                stdout: "--approve-for-me\n".to_string(),
+                stdout: "--ignore-user-config\n".to_string(),
                 stderr: String::new(),
             })
         };
@@ -154,6 +191,6 @@ mod tests {
         };
 
         let error = validate_installed_codex_with(Some((0, 147, 0)), &runner).unwrap_err();
-        assert!(error.to_string().contains("--approve-for-me"));
+        assert!(error.to_string().contains("--ignore-user-config"));
     }
 }

@@ -35,8 +35,13 @@ pub fn load_template(name: &str) -> Result<String> {
     }
 }
 
+/// A template without `{{prompt}}` gets the caller brief appended, so it is never dropped.
 pub fn apply_template(template_content: &str, user_prompt: &str) -> String {
-    template_content.replace("{{prompt}}", user_prompt)
+    if template_content.contains("{{prompt}}") {
+        template_content.replace("{{prompt}}", user_prompt)
+    } else {
+        format!("{template_content}\n\n{user_prompt}")
+    }
 }
 
 pub fn estimate_tokens(text: &str) -> usize {
@@ -70,6 +75,11 @@ mod tests {
     #[test]
     fn apply_template_replaces_placeholder() {
         assert_eq!(apply_template("Task:\n{{prompt}}", "fix the failing test"), "Task:\nfix the failing test");
+    }
+
+    #[test]
+    fn apply_template_appends_brief_without_placeholder() {
+        assert_eq!(apply_template("Be terse.", "fix the failing test"), "Be terse.\n\nfix the failing test");
     }
 
     #[test]

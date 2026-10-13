@@ -95,6 +95,12 @@ Do not send repeated polling messages; inspect events first.
 
 AID enforces configured idle, hung-task, cost, and maximum-duration safeguards.
 
+Buffered runs that exceed a cost ceiling retain the ceiling reason even when the
+agent exits 0. Piped absolute deadlines record elapsed time at watcher timeout,
+before runner cleanup. Piped watcher-error settlements snapshot at watcher return.
+Piped idle failures and PTY deadline or idle failures include process cleanup and
+output finalization in their durations. Later completions preserve the settled duration.
+
 A task that has produced zero progress since spawn is reaped on the shorter
 first-token budget (default 180s, `AID_FIRST_TOKEN_TIMEOUT_SECS`). For PTY
 agents this is the first-token dead-stream detector; for buffered background
@@ -105,15 +111,45 @@ idle margin.
 `--idle-timeout SECS` stops a task whose stream goes quiet. Meaningful text
 output refreshes the liveness clock even when aid cannot parse it into an event
 (a Grok/agy-style CLI, for example), so unparseable output does not read as
-silence. This signal only sees what the agent emits: silent work is not
-observable by it. Pure terminal-control noise (spinners, cursor hides), idle
+silence. After first output, a live descendant's growing CPU time also refreshes
+activity. An `ssh` remote command or an `rbox` execution, sync, task wait or lock
+wait counts while it is a live descendant in the agent's process group. Other
+sleeping children with unchanged CPU time remain idle. Remote waits cannot prove
+remote progress; the absolute agent-execution deadline bounds them. The shared probe uses
+Linux CPU ticks or macOS fractional CPU time and keeps samples between reaper
+invocations. If process inspection fails, output remains the activity signal.
+Pure terminal-control noise (spinners, cursor hides), idle
 auto-nudges, their PTY echoes, and aid's own reply/ack bookkeeping do not count
 as agent progress, so a genuinely stalled or silent agent is still reaped after
 the idle window.
 
-`--timeout SECS` is activity-aware rather than a hard wall-clock cap: an active
-foreground run may continue past it, and the value is rounded up to whole
-minutes.
+Hung events distinguish `no first output` from `no output or descendant progress`.
+The first-token timeout still requires agent output; child activity does not extend it.
+
+`--timeout SECS` sets an absolute wall-clock cap, even during CPU work or remote waits.
+The detached worker enforces the smaller of maximum duration and hard cap without
+`aid` polling. Without `--timeout`, the default maximum duration is 60 minutes
+and the hard cap is 24 hours; project configuration can change either bound.
+The deadline does not cover quota waits and launch preparation before the agent
+starts, or post-run verification after it exits. Verification reads its output
+until the pipes close, so a surviving descendant that keeps them open delays settlement.
+Descendant activity requires the agent root's recorded launch identity; a reused
+root PID or an older job without that identity cannot extend reaper liveness.
+Missing or unreadable launch identity fails closed: no descendant activity or stored-agent signals.
+Only the stored agent root is checked against its launch identity before a signal;
+`aid stop` signals the stored worker PID, and reaper cleanup signals the descendant
+PIDs it listed, without that check.
+Recognized rbox lock-queue time is excluded from a duration-based verification
+timeout, up to the lock notice's timeout. Remote verification's absolute task
+deadline still includes queue time.
+Values below 300 seconds warn without rejecting the run. For caps of at least
+600 seconds, hard-cap reconciliation requests one wrap-up at 90%: commit work
+in progress when changes are permitted, and write the report now. The request
+uses the pending-message queue alone, atomically records its message and milestone,
+and skips agents without steer support and read-only tasks. Failed database publication
+leaves no signal or claim that blocks a retry. Operator-authored `aid steer` remains
+allowed on read-only tasks; only automatic wrap-up is excluded.
+A pending operator steer is preserved and the cap is unchanged.
 
 Repeated activity is not itself a stop condition.
 

@@ -20,6 +20,23 @@ pub(super) async fn run_lifecycle_phases(
 ) -> Result<Option<TaskId>> {
     run_teardown_phase(task_id, args, wt_path);
     run_escape_checks_phase(args, effective_dir, repo_path, wt_path);
+    if let Some(task) = store.get_task(task_id.as_str())?
+        && task.status == TaskStatus::Failed
+        && crate::provider_capacity::read(store, task_id, task.agent).is_some()
+    {
+        if task.verify_status == VerifyStatus::Pending {
+            store.update_verify_status(task_id.as_str(), VerifyStatus::Skipped)?;
+        }
+        if args.read_only
+            && run_worktree_settlement_phase(store, task_id, args, effective_dir, pre_task_dirty_paths)
+                .await? == LifecyclePhaseDecision::Stop
+        {
+            return Ok(None);
+        }
+        capture_final_worktree_state(store, task_id)?;
+        persist_result_file(store, task_id, args, &task, effective_dir);
+        return retry_or_cascade(store, args, task_id).await;
+    }
     match run_worktree_settlement_phase(
         store,
         task_id,
@@ -40,16 +57,16 @@ pub(super) async fn run_lifecycle_phases(
             return Ok(Some(retry_id));
         }
         LifecyclePhaseDecision::Stop => {
-            record_skipped_configured_verify(
-                store,
-                task_id,
-                args,
-                "dirty worktree settlement failed before verify".to_string(),
-            );
-            if args.read_only
-                && let Some(task) = store.get_task(task_id.as_str())?
-            {
-                persist_result_file(store, task_id, args, &task, effective_dir);
+            if args.read_only {
+                store.update_verify_status(task_id.as_str(), VerifyStatus::Skipped)?;
+                if let Some(task) = store.get_task(task_id.as_str())? {
+                    persist_result_file(store, task_id, args, &task, effective_dir);
+                }
+                maybe_run_post_done_audit(store, task_id, args,
+                    effective_dir.map(String::as_str), repo_path.map(String::as_str))?;
+            } else {
+                record_skipped_configured_verify(store, task_id, args,
+                    "dirty worktree settlement failed before verify".to_string());
             }
             return Ok(None);
         }
@@ -73,7 +90,6 @@ pub(super) async fn run_lifecycle_phases(
         runtime_hooks,
         prompt_bundle,
     )?;
-    rescue_quota_failed_task(store.as_ref(), task_id, quota_error_message.as_deref());
     if let Some(retry_id) = maybe_judge_retry(store, args, task_id).await? {
         return Ok(Some(retry_id));
     }
@@ -170,6 +186,33 @@ pub(super) async fn run_lifecycle_phases(
         return Ok(Some(retry_id));
     }
     crate::verify::enforce_verify_status(store, task_id);
+    if let Some(retry_id) = retry_or_cascade(store, args, task_id).await? {
+        return Ok(Some(retry_id));
+    }
+    if let Some(task) = store.get_task(task_id.as_str())?
+        && task.status == TaskStatus::Failed
+        && args.cascade.is_empty()
+        // Already the provider's own sentence: `read_quota_error_message` reads
+        // the stderr and stream channels through `quota_channel` and returns
+        // nothing else. Re-matching it here would only be a second opinion on
+        // text that has already passed the one gate.
+        && let Some(message) = quota_error_message.as_deref()
+    {
+        if let Some(retry_id) =
+            quota_continuation::continue_quota(store, args, &task, message).await?
+        {
+            return Ok(Some(retry_id));
+        }
+    }
+    if mode.is_foreground() && !args.background {
+        aid_info!("[aid] View in TUI: aid board");
+    }
+    Ok(None)
+}
+
+pub(in crate::cmd::run) async fn retry_or_cascade(
+    store: &Arc<Store>, args: &RunArgs, task_id: &TaskId,
+) -> Result<Option<TaskId>> {
     if let Some(mut retry_args) =
         retry_logic::prepare_retry(store.clone(), task_id, args).await?
     {
@@ -192,23 +235,6 @@ pub(super) async fn run_lifecycle_phases(
         cascade_args.parent_task_id = Some(task_id.as_str().to_string());
         inherit_cascade_target(&mut cascade_args, &task)?;
         return Box::pin(run(store.clone(), cascade_args)).await.map(Some);
-    } else if let Some(task) = store.get_task(task_id.as_str())?
-        && task.status == TaskStatus::Failed
-        && args.cascade.is_empty()
-        // Already the provider's own sentence: `read_quota_error_message` reads
-        // the stderr and stream channels through `quota_channel` and returns
-        // nothing else. Re-matching it here would only be a second opinion on
-        // text that has already passed the one gate.
-        && let Some(message) = quota_error_message.as_deref()
-    {
-        if let Some(retry_id) =
-            quota_continuation::continue_quota(store, args, &task, message).await?
-        {
-            return Ok(Some(retry_id));
-        }
-    }
-    if mode.is_foreground() && !args.background {
-        aid_info!("[aid] View in TUI: aid board");
     }
     Ok(None)
 }

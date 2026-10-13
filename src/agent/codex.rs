@@ -16,7 +16,7 @@ mod attribution;
 
 pub(crate) use attribution::grade_completion_observation;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use chrono::{Local, NaiveDateTime};
 use serde_json::{json, Map, Value};
 use std::fs;
@@ -91,32 +91,9 @@ impl CodexAgent {
             ]);
         } else {
             cmd.args(["exec", "--json", "--skip-git-repo-check"]);
-            if let Some(version) = codex_version() {
-                cmd.arg(capabilities::approval_flag_for_version(version).as_str());
-            }
             cmd.arg(&injected);
         }
-        if let Some(ref model) = opts.model {
-            if has_native_model_flag() {
-                cmd.args(["-m", model]);
-            } else {
-                cmd.args(["-c", &format!("model=\"{model}\"")]);
-            }
-        }
-        if let Some(ref output) = opts.output {
-            cmd.args(["-o", output]);
-        }
-        if let Some(ref dir) = opts.dir {
-            let dir_path = Path::new(dir);
-            if !dir_path.exists() {
-                bail!("codex working directory does not exist: {}", dir);
-            }
-            if resume_session_id.is_none() {
-                cmd.args(["-C", dir]);
-            }
-            cmd.current_dir(dir);
-        }
-        super::scratch::grant_codex_roots(&mut cmd, writable_roots)?;
+        capabilities::configure_options(&mut cmd, opts, resume_session_id.is_some(), writable_roots)?;
         Ok(cmd)
     }
 }
@@ -139,7 +116,8 @@ impl super::Agent for CodexAgent {
     }
 
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        let roots = super::scratch::writable_roots(opts.dir.as_deref());
+        let roots = if opts.read_only { Vec::new() }
+            else { super::scratch::writable_roots(opts.dir.as_deref()) };
         self.build_codex_command(prompt, opts, true, &roots)
     }
 
@@ -181,7 +159,7 @@ impl super::Agent for CodexAgent {
             "item.started" | "item.completed" => parse_item_event(task_id, &v, now),
             "turn.completed" => parse_turn_completed(task_id, &v, now),
             "thread.started" => parse_thread_started(task_id, &v, now),
-            "error" => parse_error_event(task_id, &v, now),
+            "error" | "turn.failed" => parse_error_event(task_id, &v, now),
             _ => None,
         }
     }
@@ -258,3 +236,7 @@ mod command_tests;
 
 #[cfg(test)]
 mod codex_nudge_tests;
+
+#[cfg(test)]
+#[path = "codex_native_policy_tests.rs"]
+mod native_policy_tests;

@@ -5,51 +5,13 @@
 use super::*;
 use crate::paths::AidHomeGuard;
 use crate::store::Store;
-use crate::types::{AgentKind, EventKind, TaskId, VerifyStatus};
-use chrono::Local;
+use crate::types::EventKind;
 use std::sync::Arc;
 use tempfile::TempDir;
 
-fn make_task(id: &str, status: TaskStatus) -> Task {
-    Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-    final_head_sha: None,
-    final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
-    }
-}
+#[path = "fixture.rs"]
+mod fixture;
+pub(super) use fixture::make_task;
 
 fn with_store<T>(f: impl FnOnce(Arc<Store>) -> T) -> T {
     let temp = TempDir::new().unwrap();
@@ -68,10 +30,11 @@ fn stop_missing_task_returns_error() {
 #[test]
 fn stop_done_task_returns_error() {
     with_store(|store| {
-        let task = make_task("t-done", TaskStatus::Done);
+        let mut task = make_task("t-done", TaskStatus::Done);
+        task.completed_at = Some(chrono::Local::now());
         store.insert_task(&task).unwrap();
         let err = stop(&store, "t-done").unwrap_err();
-        assert!(err.to_string().contains("already terminal"));
+        assert!(err.to_string().contains("task already done: no terminal reason recorded"));
         let reloaded = store.get_task("t-done").unwrap().unwrap();
         assert_eq!(reloaded.status, TaskStatus::Done);
     });
@@ -132,6 +95,7 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
         task_id: "t-3010".to_string(),
         worker_pid: Some(999999),
         agent_pid: Some(888888),
+        agent_started: None,
         agent_name: "codex".to_string(),
         prompt: "test".to_string(),
         dir: None,
@@ -237,6 +201,7 @@ fn preserve_worktree_attempts_commit_for_non_read_only() {
 fn make_child(id: &str, parent: &str, status: TaskStatus) -> Task {
     let mut t = make_task(id, status);
     t.parent_task_id = Some(parent.to_string());
+    if status == TaskStatus::Done { t.completed_at = Some(chrono::Local::now()); }
     t
 }
 

@@ -24,7 +24,9 @@ pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option
     let duration = task.duration_ms
         .map(format_duration)
         .unwrap_or_else(|| elapsed_since(task.created_at));
-    let status = task.status.label();
+    let status = if task.status == TaskStatus::Failed
+        && events.iter().any(|event| event.detail.starts_with("provider capacity"))
+    { "provider capacity" } else { task.status.label() };
     let verification = task
         .outcome()
         .verification_tag()

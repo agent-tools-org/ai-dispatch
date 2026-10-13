@@ -60,6 +60,7 @@ fn background_spec(checklist: Vec<String>) -> BackgroundRunSpec {
         env: None,
         env_forward: None,
         agent_pid: None,
+        agent_started: None,
         sandbox: false,
         read_only: false,
         audit_report_mode: false,

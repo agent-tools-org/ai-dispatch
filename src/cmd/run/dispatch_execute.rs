@@ -105,6 +105,7 @@ pub(super) fn run_background_task(
         env: args.env.clone(),
         env_forward: args.env_forward.clone(),
         agent_pid: None,
+        agent_started: None,
         sandbox: args.sandbox,
         read_only: args.read_only,
         audit_report_mode: args.audit_report_mode,
@@ -113,12 +114,20 @@ pub(super) fn run_background_task(
         pre_task_dirty_paths,
         foreground: args.foreground,
     };
-    background::save_spec(&spec)?;
-    #[cfg(test)]
-    let worker_pid = std::process::id();
-    #[cfg(not(test))]
-    let (_launcher, worker_pid) = match background::spawn_worker(prepared.task_id.as_str()) {
-        Ok(worker) => worker,
+    let worker_pid = store.with_worker_launch(prepared.task_id.as_str(), || {
+        background::save_spec(&spec)?;
+        #[cfg(test)]
+        let worker_pid = std::process::id();
+        #[cfg(not(test))]
+        let (_launcher, worker_pid) = background::spawn_worker(prepared.task_id.as_str())?;
+        if let Err(err) = background::update_worker_pid(prepared.task_id.as_str(), worker_pid) {
+            background::kill_process(worker_pid);
+            return Err(err);
+        }
+        Ok(worker_pid)
+    });
+    let worker_pid = match worker_pid {
+        Ok(pid) => pid,
         Err(err) => {
             let _ = background::clear_spec(prepared.task_id.as_str());
             crate::task_lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
@@ -126,13 +135,6 @@ pub(super) fn run_background_task(
             return Err(err);
         }
     };
-    if let Err(err) = background::update_worker_pid(prepared.task_id.as_str(), worker_pid) {
-        background::kill_process(worker_pid);
-        let _ = background::clear_spec(prepared.task_id.as_str());
-        crate::task_lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
-        run_prompt::notify_task_completion(store, &prepared.task_id)?;
-        return Err(err);
-    }
     if let Some(wt_path) = prepared.wt_path.as_deref()
         && let Err(holder) = crate::worktree::rekey_worktree_lock_to_worker(
             Path::new(wt_path),

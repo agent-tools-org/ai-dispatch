@@ -208,8 +208,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     }
     println!("Batch: dispatching {total} task(s) from {}", path.display());
     let start_time = Instant::now();
-    let auto_fallback = config.defaults.auto_fallback.unwrap_or(false)
-        || config.tasks.iter().any(|t| t.fallback.is_some());
+    let auto_fallback = config.defaults.auto_fallback.unwrap_or(false);
     let dispatch = if has_dependencies && args.parallel {
         batch_dispatch::dispatch_parallel_with_dependencies(
             store.clone(),

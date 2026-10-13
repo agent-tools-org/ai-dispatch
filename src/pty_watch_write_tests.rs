@@ -100,7 +100,7 @@ fn queued_message_after_child_exit_does_not_fail_monitor() {
                 == Some("failed")
         })
         .expect("failed PTY input must be visible as an event");
-    assert_eq!(event.event_kind, EventKind::Error);
+    assert_eq!(event.event_kind, EventKind::Milestone);
     assert!(event.detail.contains("Reply not delivered"));
     assert!(
         event.detail.contains("PTY child has already exited")
@@ -185,7 +185,7 @@ fn failed_pending_reply_is_reported_once_after_successful_steer() {
         })
         .collect::<Vec<_>>();
     assert_eq!(failed_events.len(), 1, "failed reply must produce one event");
-    assert_eq!(failed_events[0].event_kind, EventKind::Error);
+    assert_eq!(failed_events[0].event_kind, EventKind::Milestone);
 }
 
 #[test]
@@ -278,7 +278,7 @@ fn input_to_child_that_never_reads_does_not_wedge_monitor() {
     let survived = done_rx.recv_timeout(Duration::from_secs(10));
     assert_eq!(survived.ok(), Some(true), "monitor must finish and survive undelivered input");
     assert!(kept_reading, "monitor must keep reading output after a blocked input write");
-    assert_eq!(failed.map(|event| event.event_kind), Some(EventKind::Error));
+    assert_eq!(failed.map(|event| event.event_kind), Some(EventKind::Milestone));
     let messages = store.list_messages_for_task(task.id.as_str()).unwrap();
     assert!(messages[0].delivered_at.is_some() && messages[1].delivered_at.is_none());
 }
@@ -295,3 +295,6 @@ fn grok_output_file_contains_markdown_instead_of_json_envelope() {
         "# Findings\n\nThe report is rendered markdown."
     );
 }
+
+#[path = "pty_watch/refusal_round2_tests.rs"]
+mod refusal_round2_tests;

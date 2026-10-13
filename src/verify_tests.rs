@@ -9,6 +9,7 @@ use crate::types::{AgentKind, Task, TaskStatus};
 use chrono::Local;
 use std::fs;
 use std::io::Error;
+use std::thread;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;

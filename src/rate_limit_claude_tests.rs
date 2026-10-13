@@ -8,6 +8,107 @@ use crate::rate_limit::{self, get_rate_limit_info, mark_rate_limited, refusal_on
 use crate::types::AgentKind;
 
 #[test]
+fn droid_default_can_launch_with_only_core_held_refusal_regression() {
+    let temp = tempfile::tempdir().expect("home");
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let droid = AgentKind::Droid;
+    rate_limit::mark_rate_limited_for_message(
+        &droid,
+        None,
+        "You've reached your monthly Droid Core usage limit (resets in 2 days).",
+    );
+    assert_eq!(
+        crate::agent::model_group::model_group(droid, None),
+        Some("standard")
+    );
+    assert!(rate_limit::dispatch_blocking_hold_for_model(&droid, None, None).is_none());
+    assert!(rate_limit::dispatch_blocking_hold_for_model(&droid, None, Some("glm-5.2")).is_some());
+}
+
+#[test]
+fn monthly_droid_core_provider_error_holds_until_reset_refusal_regression() {
+    let message = "402 You've reached your monthly Droid Core usage limit (resets in 2 days).";
+    assert!(
+        crate::rate_limit_signatures::match_quota_signature_for_agent(message, AgentKind::Droid).is_some()
+    );
+    for channel in [Channel::CliStream, Channel::CliStderr] {
+        let temp = tempfile::tempdir().expect("home");
+        let _home = crate::paths::AidHomeGuard::set(temp.path());
+        let event = serde_json::json!({"type": "error", "message": message}).to_string();
+        if channel == Channel::CliStderr {
+            assert_eq!(refusal_on_channel(&event, AgentKind::Droid, channel), None);
+            continue;
+        }
+        let refusal = refusal_on_channel(&event, AgentKind::Droid, channel).expect("refusal");
+        rate_limit::mark_rate_limited_for_message(&AgentKind::Droid, None, &refusal);
+        let marker = rate_limit::group_marker_path(&AgentKind::Droid, None, "core");
+        let body = std::fs::read_to_string(marker).expect("Core marker");
+        let reset = body
+            .lines()
+            .find_map(|line| line.strip_prefix("recovery_at: "))
+            .expect("reset");
+        let at = rate_limit::parse_recovery_datetime(reset).expect("date");
+        assert!((47..=48).contains(&(at - Local::now().naive_local()).num_hours()));
+        assert!(rate_limit::is_group_rate_limited(&AgentKind::Droid, None, "core"));
+        assert!(!rate_limit::is_group_rate_limited(
+            &AgentKind::Droid,
+            None,
+            "standard"
+        ));
+        let prose = serde_json::json!({"type": "assistant_message", "content": message}).to_string();
+        assert_eq!(
+            refusal_on_channel(&prose, AgentKind::Droid, Channel::CliStream),
+            None
+        );
+    }
+}
+
+#[test]
+fn claude_seven_day_hold_lasts_until_structured_reset_refusal_regression() {
+    let temp = tempfile::tempdir().expect("home");
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let reset = Utc::now().timestamp().div_euclid(60) * 60 + 7 * 24 * 3600;
+    let event = serde_json::json!({
+        "type": "rate_limit_event",
+        "rate_limit_info": {"status": "rejected", "rateLimitType": "seven_day", "resetsAt": reset}
+    })
+    .to_string();
+    assert!(record_quota_exhaustion(&event, AgentKind::Claude, None, None).recorded());
+    let info = get_rate_limit_info(&AgentKind::Claude, None).expect("hold");
+    let expected = format_recovery(
+        DateTime::from_timestamp(reset, 0)
+            .expect("timestamp")
+            .with_timezone(&Local)
+            .naive_local(),
+    );
+    assert_eq!(info.recovery_at.as_deref(), Some(expected.as_str()));
+    assert_eq!(
+        rate_limit::parse_recovery_datetime(&expected),
+        Some(
+            DateTime::from_timestamp(reset, 0)
+                .expect("timestamp")
+                .with_timezone(&Local)
+                .naive_local()
+        )
+    );
+    assert!(rate_limit::is_rate_limited(&AgentKind::Claude, None));
+}
+
+#[test]
+fn expired_claude_seven_day_reset_releases_hold_refusal_regression() {
+    let temp = tempfile::tempdir().expect("home");
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let event = serde_json::json!({
+        "type": "rate_limit_event",
+        "rate_limit_info": {"status": "rejected", "rateLimitType": "seven_day",
+            "resetsAt": Utc::now().timestamp() - 60}
+    })
+    .to_string();
+    assert!(record_quota_exhaustion(&event, AgentKind::Claude, None, None).recorded());
+    assert!(!rate_limit::is_rate_limited(&AgentKind::Claude, None));
+}
+
+#[test]
 fn unrelated_429_with_unix_trace_does_not_create_a_dated_hold() {
     let message = "HTTP 429 downloading an artifact; trace|1893456000";
     assert_eq!(parse_recovery_time(message), None);

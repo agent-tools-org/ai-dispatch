@@ -65,7 +65,7 @@ pub async fn retry_failed(
 }
 
 pub(super) fn should_retry_task(status: TaskStatus, include_waiting: bool) -> bool {
-    matches!(status, TaskStatus::Failed | TaskStatus::Skipped)
+    matches!(status, TaskStatus::Failed | TaskStatus::Skipped | TaskStatus::Stopped)
         || (include_waiting && status == TaskStatus::Waiting)
 }
 
@@ -88,6 +88,7 @@ pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str,
     run_args.background = true;
     run_args.announce = true;
     run_args.parent_task_id = Some(task.id.to_string());
+    run_args.origin = crate::types::DispatchOrigin::ExplicitRetry;
     Ok(run_args)
 }
 

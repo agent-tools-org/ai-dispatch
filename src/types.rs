@@ -58,6 +58,14 @@ pub use self::task_profile::{
     TaskUrgency,
 };
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum DispatchOrigin {
+    #[default]
+    Automatic,
+    ExplicitRetry,
+}
+
 /// Short hex ID prefixed with "t-", e.g. "t-a3f1b2c4"
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TaskId(pub String);

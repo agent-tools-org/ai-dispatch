@@ -53,8 +53,10 @@ fn setup() -> (
         dry_run: true,
         ..Default::default()
     };
+    let mut saved = args.clone();
+    saved.origin = DispatchOrigin::ExplicitRetry;
     store
-        .update_task_dispatch_args(parent.id.as_str(), &args.dispatch_args_json().unwrap())
+        .update_task_dispatch_args(parent.id.as_str(), &saved.dispatch_args_json().unwrap())
         .unwrap();
     (home, guard, store, parent, args)
 }

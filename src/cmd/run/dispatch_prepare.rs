@@ -70,7 +70,9 @@ where
     args.max_duration_mins = resolve_max_duration_mins(args.timeout, args.max_duration_mins);
     let context = resolve_dispatch_context(store, args)?;
     let claimed = claim_dispatch(store, args, &context, which)?;
-    finish_dispatch(store, args, context, claimed)
+    let prepared = finish_dispatch(store, args, context, claimed)?;
+    args.origin = DispatchOrigin::Automatic;
+    Ok(prepared)
 }
 
 fn resolve_dispatch_context(store: &Arc<Store>, args: &mut RunArgs) -> Result<DispatchContext> {
@@ -139,7 +141,7 @@ where
         context.agent_setup.effective_model.as_deref(),
         which,
     )?;
-    insert_task_claiming_id(store, &mut task, &mut task_id, &mut log_path, explicit_id)?;
+    insert_task_claiming_id(store, &mut task, &mut task_id, &mut log_path, explicit_id, args.origin)?;
     maybe_insert_held_route_event(store, &task_id, &context.agent_setup, args.dry_run);
     let setup = &context.agent_setup;
     let priced_model = setup.effective_model.clone().or_else(|| setup.agent.default_model());

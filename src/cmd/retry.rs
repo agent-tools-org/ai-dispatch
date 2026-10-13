@@ -129,6 +129,7 @@ fn finish_retry_run_args(
     resume_pruned_worktree_at_tip(task, run_args)?;
     run_args.announce = announce;
     run_args.parent_task_id = Some(task.id.as_str().to_string());
+    run_args.origin = crate::types::DispatchOrigin::ExplicitRetry;
     run_args.background = args.bg;
     Ok(())
 }

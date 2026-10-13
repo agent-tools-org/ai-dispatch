@@ -33,7 +33,10 @@ a stopped task with a live stored worker PID receives the signal again. If anoth
 terminal result already won, stop reports its status and reason and exits non-zero
 without writing a stop event.
 
-A stopped parent refuses new child tasks and child worker launches.
+A stopped parent refuses automatic child tasks and automatic child worker launches
+(verification retries, judge retries, iterations, `--retry`, cascades, and batch fallbacks).
+Explicit `aid retry <task-id> -f "feedback"` and `aid batch retry` can create and launch
+new attempts even when the parent is stopped, including when retry itself stops the prior run.
 A child launched before its parent's stop committed is independent: stop it by its own ID
 or with `aid stop --retry-tree`.
 

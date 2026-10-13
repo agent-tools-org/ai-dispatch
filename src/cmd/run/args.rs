@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use crate::agent::classifier::TaskCategory;
 use crate::agent::model_validation::ModelSource;
 use crate::store::Store;
-use crate::types::{TaskBudget, TaskDifficulty, TaskEgress, TaskId, TaskRigor, TaskUrgency};
+use crate::types::{DispatchOrigin, TaskBudget, TaskDifficulty, TaskEgress, TaskId, TaskRigor, TaskUrgency};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -56,6 +56,7 @@ pub struct RunArgs {
     pub announce: bool,
     pub foreground: bool,
     pub parent_task_id: Option<String>,
+    pub(crate) origin: DispatchOrigin,
     pub on_done: Option<String>,
     pub cascade: Vec<String>,
     pub read_only: bool,
@@ -131,6 +132,7 @@ impl RunArgs {
         args.prompt = task.resolved_prompt.unwrap_or(task.prompt);
         args.budget = spec.budget;
         args.on_done = None;
+        args.origin = DispatchOrigin::Automatic;
         args.env = spec.env.clone();
         args.foreground = spec.foreground;
         args.announce = spec.foreground;
@@ -182,6 +184,7 @@ impl Default for RunArgs {
             announce: false,
             foreground: false,
             parent_task_id: None,
+            origin: DispatchOrigin::Automatic,
             on_done: None,
             cascade: Vec::new(),
             read_only: false,

@@ -41,6 +41,7 @@ impl RunArgs {
             None
         };
         args.existing_task_id = None;
+        args.origin = DispatchOrigin::Automatic;
         args.env = None;
         Ok(args)
     }

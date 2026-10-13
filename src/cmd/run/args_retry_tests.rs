@@ -33,6 +33,7 @@ fn retry_keeps_every_saved_field_except_resolved_task_facts() {
         ("agent_name", json!("row-agent")), ("model", json!("row-model")),
         ("session_id", Value::Null), ("existing_task_id", Value::Null),
         ("env", Value::Null), ("repo", json!("/tmp/repo")),
+        ("origin", json!("automatic")),
     ] {
         expected[key] = value;
     }
@@ -104,6 +105,7 @@ fn every_field_set() -> RunArgs {
         hooks: vec!["on_fail:true".into()], template: Some("bug-fix".into()),
         background: true, dry_run: true, announce: true, foreground: true,
         parent_task_id: Some("t-parent".into()), on_done: Some("echo done".into()),
+        origin: DispatchOrigin::ExplicitRetry,
         cascade: vec!["opencode".into()], read_only: true, audit_report_mode: true, sandbox: true,
         container: Some("ubuntu:latest".into()), remote_build: Some("chosen-box".into()),
         backup: Some("gdrive:x".into()), no_backup: true, budget: true, best_of: Some(2),

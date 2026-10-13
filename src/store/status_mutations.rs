@@ -79,7 +79,9 @@ impl Store {
         let tx = conn.unchecked_transaction()?;
         if tx.execute(
             "UPDATE tasks SET status = status WHERE id = ?1 AND status = 'running'
-             AND (?2 = 0 OR NOT EXISTS (
+             AND (?2 = 0 OR CASE WHEN json_valid(dispatch_args)
+                 THEN json_extract(dispatch_args, '$.origin') = 'explicit_retry' ELSE 0 END
+                 OR NOT EXISTS (
                  SELECT 1 FROM tasks parent WHERE parent.id = tasks.parent_task_id
                  AND parent.status = 'stopped'))",
             params![id, check_parent],

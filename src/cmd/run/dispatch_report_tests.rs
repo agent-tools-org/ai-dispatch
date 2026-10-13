@@ -6,6 +6,29 @@ use super::*;
 use crate::cmd::run::read_only_delivery;
 
 #[test]
+fn scope_cut_explicit_repository_cannot_alias_report_and_output() {
+    let home = tempfile::tempdir().unwrap();
+    let _home = paths::AidHomeGuard::set(home.path());
+    let repo = home.path().join("repo");
+    std::fs::create_dir(&repo).unwrap();
+    assert!(std::process::Command::new("git").args(["init", "-b", "main"])
+        .arg(&repo).output().unwrap().status.success());
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut args = RunArgs {
+        agent_name: "codex".into(), prompt: "Read-only audit".into(), read_only: true,
+        repo: Some(repo.display().to_string()),
+        output: Some(home.path().join("requested/final.md").display().to_string()),
+        result_file: Some("../requested/final.md".into()), ..Default::default()
+    };
+    let error = match prepare_dispatch_with(&store, &mut args, |_| true) {
+        Ok(_) => panic!("aliased destinations in the resolved run directory must be refused"),
+        Err(error) => error.to_string(),
+    };
+    assert!(error.contains("same destination"), "{error}");
+    assert!(!home.path().join("requested").exists());
+}
+
+#[test]
 fn scope_cut_dispatch_rejects_destinations_in_explicit_repository() {
     for output in [false, true] {
         let home = tempfile::tempdir().unwrap();
@@ -65,7 +88,8 @@ fn scope_cut_dispatch_destination_validation_rejects_every_writable_root() {
             let destination = root.join("new/final.md").display().to_string();
             args.output = output.then(|| destination.clone());
             args.result_file = (!output).then_some(destination);
-            let error = read_only_delivery::validate_destinations(&args, &roots).unwrap_err();
+            let error = read_only_delivery::validate_destinations(&args, &roots, args.dir.as_deref())
+                .unwrap_err();
             assert!(error.to_string().contains("Codex-writable root"), "{error}");
             assert!(!root.join("new").exists());
         }
@@ -215,4 +239,42 @@ fn fix_round_two_dispatch_rejects_same_report_and_output_destination() {
         assert!(store.get_task("t-duplicate-delivery").unwrap().is_none());
         assert_eq!(std::fs::read_to_string(output).unwrap(), "original\n");
     }
+}
+
+#[test]
+fn prepare_dispatch_uses_task_specific_audit_result_file() {
+    let home = tempfile::tempdir().unwrap();
+    let _guard = paths::AidHomeGuard::set(home.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut args = RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: "Read-only audit of branch X.".to_string(),
+        ..Default::default()
+    };
+
+    let prepared = prepare_dispatch_with(&store, &mut args, |_| true).unwrap();
+
+    assert_eq!(
+        args.result_file.as_deref(),
+        Some(crate::cmd::report_mode::task_result_file(prepared.task_id.as_str()).as_str())
+    );
+    assert!(!args.audit_report_mode);
+}
+
+#[test]
+fn prepare_dispatch_skips_auto_result_file_when_output_is_set() {
+    let home = tempfile::tempdir().unwrap();
+    let _guard = paths::AidHomeGuard::set(home.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut args = RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: "Review the implementation and list findings.".to_string(),
+        read_only: true,
+        output: Some(home.path().join("audit.md").display().to_string()),
+        ..Default::default()
+    };
+
+    prepare_dispatch_with(&store, &mut args, |_| true).unwrap();
+
+    assert_eq!(args.result_file, None);
 }

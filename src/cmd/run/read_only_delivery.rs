@@ -3,7 +3,7 @@
 // Deps: RunArgs, task paths, protected roots and filesystem operations.
 
 use super::RunArgs;
-use crate::types::AgentKind;
+use crate::types::{AgentKind, Task};
 use anyhow::{Context, Result};
 use std::{
     fs,
@@ -16,24 +16,25 @@ pub(crate) fn enabled(args: &RunArgs, kind: AgentKind) -> bool {
     args.read_only && kind == AgentKind::Codex && !args.sandbox && args.container.is_none()
 }
 
-pub(crate) fn prepare(args: &mut RunArgs, kind: AgentKind, task_id: &str) -> Result<()> {
+pub(crate) fn prepare(args: &mut RunArgs, kind: AgentKind, task: &Task) -> Result<()> {
     if !enabled(args, kind) { return Ok(()); }
     let staging = crate::agent::scratch::create_temp_dir(&std::env::temp_dir())?;
-    let task = canonical_path(&crate::paths::task_dir(task_id))?;
-    let cwd = resolve(".", args.dir.as_deref()).canonicalize()?;
+    let task_dir = canonical_path(&crate::paths::task_dir(task.id.as_str()))?;
+    let cwd = resolve(".", task.effective_dir.as_deref().or(args.dir.as_deref())).canonicalize()?;
+    anyhow::ensure!(!same_destination(args, task.effective_dir.as_deref())?, "result/-o: same destination");
     let mut forbidden = crate::agent::scratch::protected_roots(&cwd)?;
-    anyhow::ensure!(!forbidden.iter().chain([&task])
+    anyhow::ensure!(!forbidden.iter().chain([&task_dir])
         .any(|root| staging.starts_with(root) || root.starts_with(&staging)),
         "read-only staging directory overlaps repository or trusted task directory");
     forbidden.push(staging.clone());
-    validate_destinations(args, &forbidden)?;
+    validate_destinations(args, &forbidden, task.effective_dir.as_deref().or(args.dir.as_deref()))?;
     args.artifact_staging = Some(staging.display().to_string());
     Ok(())
 }
 
-pub(crate) fn validate_destinations(args: &RunArgs, forbidden: &[PathBuf]) -> Result<()> {
+pub(crate) fn validate_destinations(args: &RunArgs, forbidden: &[PathBuf], dir: Option<&str>) -> Result<()> {
     for destination in [args.output.as_deref(), args.result_file.as_deref()].into_iter().flatten() {
-        let path = canonical_path(&resolve(destination, args.dir.as_deref()))?;
+        let path = canonical_path(&resolve(destination, dir))?;
         anyhow::ensure!(!forbidden.iter().any(|root| path.starts_with(root)),
             "artifact destination '{}' is inside a repository or Codex-writable root", path.display());
     }
@@ -87,12 +88,12 @@ pub(crate) fn publish(
     Ok(())
 }
 
-pub(crate) fn same_destination(args: &RunArgs) -> Result<bool> {
+pub(crate) fn same_destination(args: &RunArgs, dir: Option<&str>) -> Result<bool> {
     let (Some(output), Some(report)) = (&args.output, &args.result_file) else {
         return Ok(false);
     };
     Ok(canonical_path(&resolve(output, None))?
-        == canonical_path(&resolve(report, args.dir.as_deref()))?)
+        == canonical_path(&resolve(report, dir))?)
 }
 
 fn deliver(content: &str, destination: &Path) -> Result<()> {

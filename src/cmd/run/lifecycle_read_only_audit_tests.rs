@@ -158,7 +158,7 @@ async fn fix_round_two_read_only_refuses_repository_destinations_at_dispatch() {
         f.args.result_file = Some(target.display().to_string());
         fs::write(staged(&f, "agent-result.md"), REPORT).unwrap();
         assert!(crate::cmd::run::read_only_delivery::prepare(
-            &mut f.args, AgentKind::Codex, f.id.as_str(),
+            &mut f.args, AgentKind::Codex, &f.store.get_task(f.id.as_str()).unwrap().unwrap(),
         ).is_err());
         assert_eq!(fs::read_to_string(dir.join("base.txt")).unwrap(), "base\n");
         assert_eq!(fs::read(config).unwrap(), original_config);
@@ -179,7 +179,7 @@ async fn fix_round_two_read_only_refuses_destination_symlink_into_repository_at_
     f.args.result_file = Some(destination.display().to_string());
     fs::write(staged(&f, "agent-result.md"), REPORT).unwrap();
     assert!(crate::cmd::run::read_only_delivery::prepare(
-        &mut f.args, AgentKind::Codex, f.id.as_str(),
+        &mut f.args, AgentKind::Codex, &f.store.get_task(f.id.as_str()).unwrap().unwrap(),
     ).is_err());
     assert_eq!(fs::read_to_string(dir.join("base.txt")).unwrap(), "base\n");
     assert!(fs::symlink_metadata(destination).unwrap().file_type().is_symlink());

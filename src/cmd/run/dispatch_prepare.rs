@@ -213,7 +213,7 @@ fn finish_dispatch(
         args.result_file = Some(result_file.clone());
         aid_info!("[aid] Audit report mode: auto-set --result-file {result_file}");
     }
-    super::read_only_delivery::prepare(args, context.agent_setup.agent_kind, claimed.task_id.as_str())
+    super::read_only_delivery::prepare(args, context.agent_setup.agent_kind, &claimed.task)
         .or_else(|err| {
             fail_claimed_task(store, &claimed.task_id, &err)?;
             Err(err)

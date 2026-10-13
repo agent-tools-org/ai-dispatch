@@ -16,6 +16,19 @@ fn provider_capacity_regression_rejects_raw_quotes_on_both_channels() {
             );
         }
     }
+    let home = tempfile::tempdir().expect("home");
+    let _home = paths::AidHomeGuard::set(home.path());
+    paths::ensure_dirs().expect("dirs");
+    let id = TaskId("t-capacity-raw-reconnect".into());
+    std::fs::write(
+        paths::stderr_path(id.as_str()),
+        reconnect.lines().next().expect("line"),
+    )
+    .expect("stderr");
+    let final_error = serde_json::json!({"type": "turn.failed",
+        "error": {"message": "stream disconnected before completion"}});
+    std::fs::write(paths::log_path(id.as_str()), final_error.to_string()).expect("log");
+    assert!(read(&id, AgentKind::Codex).is_none());
 }
 
 #[test]

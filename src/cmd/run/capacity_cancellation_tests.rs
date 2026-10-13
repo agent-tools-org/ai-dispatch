@@ -23,28 +23,7 @@ async fn cancel_waiting(mode: u8) {
         ..Default::default()
     };
     let worker = continue_capacity(&store, &args, &row.id);
-    let stopper = async {
-        while store
-            .get_events(row.id.as_str())
-            .expect("events")
-            .is_empty()
-        {
-            tokio::task::yield_now().await;
-        }
-        if mode == 2 {
-            store
-                .db()
-                .execute(
-                    "UPDATE tasks SET status = 'stopped' WHERE id = ?1",
-                    [row.id.as_str()],
-                )
-                .expect("persist cancellation");
-        } else if mode == 1 {
-            crate::cmd::stop::stop_retry_tree(&store, row.id.as_str(), false).expect("tree stop");
-        } else {
-            crate::cmd::stop::stop(&store, row.id.as_str()).expect("direct stop");
-        }
-    };
+    let stopper = stop_after_marker(&store, row.id.as_str(), mode);
     let (outcome, ()) = tokio::join!(worker, stopper);
     assert!(outcome.expect("worker").is_none());
     assert_eq!(
@@ -59,6 +38,25 @@ async fn cancel_waiting(mode: u8) {
         store.get_retry_tree(row.id.as_str()).expect("tree").len(),
         1
     );
+}
+
+async fn stop_after_marker(store: &Arc<Store>, task_id: &str, mode: u8) {
+    while store.get_events(task_id).expect("events").is_empty() {
+        tokio::task::yield_now().await;
+    }
+    if mode == 2 {
+        store
+            .db()
+            .execute(
+                "UPDATE tasks SET status = 'stopped' WHERE id = ?1",
+                [task_id],
+            )
+            .expect("persist cancellation");
+    } else if mode == 1 {
+        crate::cmd::stop::stop_retry_tree(store, task_id, false).expect("tree stop");
+    } else {
+        crate::cmd::stop::stop(store, task_id).expect("direct stop");
+    }
 }
 
 #[tokio::test]

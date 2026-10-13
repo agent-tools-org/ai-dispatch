@@ -150,7 +150,9 @@ fn missing_final_delivery_fails_parent_and_resumes_once() {
     );
 
     let home = home_with_seeded_rollout();
+    let workspace = TempDir::new().unwrap();
     let output = aid_cmd_in(aid_home.path())
+        .current_dir(workspace.path())
         .env("PATH", path)
         .env("HOME", home.path())
         .args([
@@ -186,7 +188,9 @@ fn repeated_missing_delivery_does_not_start_third_attempt() {
     write_fake_codex(bin_dir.path());
 
     let home = home_with_seeded_rollout();
+    let workspace = TempDir::new().unwrap();
     let output = aid_cmd_in(aid_home.path())
+        .current_dir(workspace.path())
         .env("PATH", test_path(bin_dir.path()))
         .env("HOME", home.path())
         .env("FAKE_CODEX_HOLLOW_RESUME", "1")

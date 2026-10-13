@@ -13,7 +13,11 @@ fn quota_continuation_launches_first_advised_peer_with_exact_model_profile_and_p
         let h = Harness::new(Some("gpt-6-sol"), sticky);
         let candidate = h.first_peer().expect("launchable peer");
         assert_eq!(candidate["agent"], "codex");
-        success(&h.run().output().expect("run"));
+        let output = h.run().output().expect("run");
+        let log = std::fs::read_to_string(h.home.path().join("logs/t-primary.jsonl"))
+            .expect("parent log");
+        assert!(log.contains("Error: Quota limit reached."), "{log}");
+        success(&output);
         let rows = h.rows();
         assert_eq!(rows.len(), 2);
         let child = rows
@@ -29,7 +33,7 @@ fn quota_continuation_launches_first_advised_peer_with_exact_model_profile_and_p
 }
 
 #[test]
-fn prelaunch_held_substitution_pins_known_cli_default_and_protects_unknown_under_budget_pressure() {
+fn prelaunch_hold_rejects_advised_known_and_unknown_defaults_under_budget_pressure() {
     for model in [Some("gpt-6-sol"), None] {
         let h = Harness::new(model, false);
         std::fs::write(h.home.path().join("agent_config.toml"), format!("{}\n[claude]\ndisabled = true\n", std::fs::read_to_string(h.home.path().join("agent_config.toml")).expect("agents"))).expect("fixed peer inventory");
@@ -38,12 +42,24 @@ fn prelaunch_held_substitution_pins_known_cli_default_and_protects_unknown_under
             "[[usage.budget]]\nname = 'synthetic'\nagent = 'codex'\ncost_limit_usd = 10.0\nexternal_cost_usd = 9.0\n").expect("near budget limit");
         let candidate = h.first_peer().expect("peer");
         assert_eq!(candidate["model"].as_str(), model);
-        success(&h.run().output().expect("held run"));
-        let rows = h.rows();
-        assert_eq!(rows.len(), 1);
-        assert!(rows[0].parent.is_none());
-        h.assert_route(&rows[0], &candidate);
+        let output = h.run().output().expect("held run");
+        assert!(!output.status.success());
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(error.contains("oz is held") && error.contains("Use --cascade <agent>"), "{error}");
+        assert!(h.rows().is_empty());
+        assert!(!h.home.path().join("codex.args").exists());
         assert!(!h.home.path().join("oz.args").exists());
+        std::fs::remove_file(h.home.path().join("rate-limit-oz")).expect("clear hold");
+        h.mode("failure");
+        let parent = h.run().args(["--group", "wg-budget"]).output().expect("parent");
+        assert!(!parent.status.success());
+        h.hold("oz");
+        success(&h.aid().args(["batch", "retry", "wg-budget"]).output().expect("retry"));
+        let rows = h.rows();
+        assert_eq!(rows.len(), 2);
+        let child = rows.iter().find(|r| r.parent.as_deref() == Some("t-primary")).expect("retry");
+        success(&h.aid().args(["wait", &child.id, "--timeout", "30"]).output().expect("wait"));
+        h.assert_route(child, &candidate);
     }
 }
 
@@ -128,12 +144,16 @@ fn no_automatic_launch_when_only_exhausted_held_or_team_preferred_claude_remain(
 #[test]
 fn known_unservable_candidate_fails_before_launch_instead_of_defaulting() {
     let h = Harness::new(Some("gpt-6-sol"), true);
+    h.mode("failure");
+    let parent = h.run().args(["--group", "wg-unservable"]).output().expect("parent");
+    assert!(!parent.status.success());
     h.hold("oz");
     h.served("another-model");
-    let output = h.run().output().expect("run");
+    let output = h.aid().args(["batch", "retry", "wg-unservable"]).output().expect("retry");
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("refusing a different default"));
-    assert!(h.rows().is_empty());
+    assert_eq!(h.rows().len(), 1);
+    assert_eq!(h.rows()[0].id, "t-primary");
     assert!(!h.home.path().join("codex.args").exists());
 }
 
@@ -236,19 +256,23 @@ fn failed_batch_with_consumed_explicit_fallback_does_not_launch_automatic_peer()
 }
 
 #[test]
-fn prelaunch_default_profile_dimensions_are_materialized_in_saved_dispatch() {
+fn stored_batch_retry_default_profile_dimensions_are_materialized_in_saved_dispatch() {
     let h = Harness::new(Some("gpt-6-sol"), false);
-    h.hold("oz");
-    success(&h.aid().args(["run", "oz", PROMPT, "--no-hint", "--no-skill", "--no-audit",
-        "--kind", "refactoring", "--team", "routes"])
+    h.mode("failure");
+    let parent = h.aid().args(["run", "oz", PROMPT, "--no-hint", "--no-skill", "--no-audit",
+        "--kind", "refactoring", "--team", "routes", "--group", "wg-default-profile"])
         .arg("--dir").arg(h.home.path()).arg("--output").arg(h.home.path().join("answer.md"))
-        .output().expect("default profile run"));
+        .output().expect("default profile run");
+    assert!(!parent.status.success());
+    h.hold("oz");
+    success(&h.aid().args(["batch", "retry", "wg-default-profile"]).output().expect("retry"));
     let rows = h.rows();
-    assert_eq!(rows.len(), 1);
-    let row = &rows[0];
+    assert_eq!(rows.len(), 2);
+    let parent = rows.iter().find(|r| r.parent.is_none()).expect("parent");
+    let row = rows.iter().find(|r| r.parent.as_deref() == Some(parent.id.as_str())).expect("retry");
+    success(&h.aid().args(["wait", &row.id, "--timeout", "30"]).output().expect("wait"));
     assert_eq!(row.agent, "codex");
     assert_eq!(row.model.as_deref(), Some("gpt-6-sol"));
-    assert!(row.parent.is_none());
     for (key, value) in [("declared_difficulty", "moderate"), ("declared_budget", "standard"),
         ("declared_urgency", "normal"), ("declared_rigor", "standard"), ("model_source", "Advised")] {
         assert_eq!(row.saved[key], value, "{key}");

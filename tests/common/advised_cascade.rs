@@ -221,6 +221,7 @@ impl Harness {
         let argv =
             std::fs::read_to_string(self.home.path().join("codex.args")).expect("actual argv");
         let args: Vec<_> = argv.lines().collect();
+        assert!(args.contains(&"--ignore-user-config"), "{argv}");
         assert_eq!(
             args.windows(2).find(|a| a[0] == "-m").map(|a| a[1]),
             candidate["model"].as_str(),
@@ -260,7 +261,10 @@ pub fn success(output: &Output) {
 
 const CODEX: &str = r#"#!/bin/sh
 if [ "$1" = '--version' ]; then echo 'codex-cli 0.147.0'; exit 0; fi
-if [ "$2" = '--help' ]; then echo '      --approve-for-me'; exit 0; fi
+if [ "$2" = '--help' ]; then
+  echo '      --ignore-user-config'
+  exit 0
+fi
 printf '%s\n' "$@" > "$CASCADE_CAPTURE_ROOT/codex.args"
 printf '%s\n' "$CASCADE_SYNTHETIC_INLINE" "$CASCADE_SYNTHETIC_FORWARDED" "$AID_SHARED_DIR" > "$CASCADE_CAPTURE_ROOT/codex.env"
 previous=''

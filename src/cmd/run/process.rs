@@ -16,6 +16,7 @@ mod run_retry_target;
 pub(crate) use run_retry_target::{apply_retry_target, retry_target};
 #[path = "spawn_fail.rs"]
 mod run_spawn_fail;
+use run_spawn_fail::insert_fast_fail_snapshot_event;
 pub(crate) use run_spawn_fail::{fail_task_on_agent_spawn, insert_phase_error_event};
 
 const FAST_FAIL_SNAPSHOT_MS: i64 = 5_000;
@@ -88,41 +89,20 @@ pub(crate) fn resolve_failure_exit_code(store: &Store, task_id: &TaskId, exit_co
 }
 
 pub(crate) fn record_execution_failure(store: &Store, task_id: &TaskId, duration_ms: i64, exit_code: Option<i32>, context: &FailureContext) {
-    let reason = match exit_code {
-        Some(code) => format!("agent exited with code {code}"),
-        None => "agent process failed".to_string(),
+    let capacity = store.get_task(task_id.as_str()).ok().flatten()
+        .and_then(|task| crate::provider_capacity::read(task_id, task.agent));
+    let reason = match (capacity, exit_code) {
+        (Some(message), _) => format!("provider capacity: {message}"),
+        (_, Some(code)) => format!("agent exited with code {code}"),
+        (_, None) => "agent process failed".to_string(),
     };
     let stderr = stderr_excerpt(task_id);
     insert_phase_error_event(store, task_id, "execution", &reason, stderr.as_deref());
-    insert_fast_fail_snapshot_event(store, task_id, duration_ms, exit_code, context);
+    if !reason.starts_with("provider capacity") {
+        insert_fast_fail_snapshot_event(store, task_id, duration_ms, exit_code, context);
+    }
 }
 
-fn insert_fast_fail_snapshot_event(store: &Store, task_id: &TaskId, duration_ms: i64, exit_code: Option<i32>, context: &FailureContext) {
-    if duration_ms >= FAST_FAIL_SNAPSHOT_MS || !matches!(exit_code, Some(code) if code != 0) {
-        return;
-    }
-    let detail = format!(
-        "Failure context: working directory: {}; agent binary: {}; worktree path: {}; worktree created: {}",
-        context
-            .working_dir
-            .as_deref()
-            .unwrap_or("(inherit current process directory)"),
-        if context.binary_path.is_empty() {
-            "(unknown)"
-        } else {
-            context.binary_path.as_str()
-        },
-        context.worktree_path.as_deref().unwrap_or("(none)"),
-        context.worktree_created,
-    );
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail,
-        metadata: None,
-    });
-}
 
 fn compact_excerpt(text: &str, max_chars: usize) -> String {
     let text = text.trim();
@@ -254,7 +234,8 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
     } else {
         String::new()
     };
-    println!("Task {} {} ({}{}{}){}", task_id, info.status.label(), duration_str, tokens_str, cost_str, fail_reason);
+    let label = crate::provider_capacity::terminal_label(task_id, agent.kind(), info.status);
+    println!("Task {} {} ({}{}{}){}", task_id, label, duration_str, tokens_str, cost_str, fail_reason);
     Ok(())
 }
 

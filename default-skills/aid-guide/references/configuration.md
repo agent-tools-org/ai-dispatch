@@ -277,6 +277,13 @@ dispatches. Dispatch is not diverted. An on-disk
 Windowed needle written before this class existed still classifies as
 Windowed rather than as a person hold.
 
+Codex's “Selected model is at capacity” refusal and a final error after
+exhausted 503 reconnects create a two-minute model hold (minute precision).
+This is transient provider capacity, separate from quota or plan walls.
+`aid advise` notes name the held model and expiry. Expiry, successful use of
+that model, or `aid config clear-limit <agent>` clears the hold normally;
+quota snapshots do not release model-capacity holds.
+
 An agent whose plan splits one allowance into tiers is marked per tier. Cursor
 meters a single premium pool that every model except `auto` draws on, so a
 premium refusal holds those models while `auto` stays dispatchable;

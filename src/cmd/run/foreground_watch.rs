@@ -121,7 +121,7 @@ fn print_completion(store: &Store, task: &Task) {
     println!(
         "Task {} {} ({}{}{}){}",
         task.id,
-        task.status.label(),
+        crate::provider_capacity::terminal_label(&task.id, task.agent, task.status),
         duration,
         tokens,
         cost,

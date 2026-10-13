@@ -127,14 +127,19 @@ pub(super) fn notes_for(
     urgency: TaskUrgency,
     recommended: Option<&str>,
 ) -> Vec<String> {
-    targets
+    let mut notes: Vec<String> = targets
         .iter()
         .filter_map(|target| {
             let avail = availability(&target.kind, target.custom_name);
             route_note(target.name, &avail, urgency, recommended)
                 .or_else(|| partial_note(target.name, target.kind, target.custom_name, &avail))
         })
-        .collect()
+        .collect();
+    for target in targets {
+        notes.extend(crate::provider_capacity::notes(&target.kind, target.custom_name)
+            .into_iter().map(|note| format!("{} {note}", target.name)));
+    }
+    notes
 }
 
 fn route_note(

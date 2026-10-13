@@ -12,6 +12,8 @@ pub(crate) use final_state::capture_final_worktree_state;
 mod missing_report;
 #[path = "quota_continuation.rs"]
 mod quota_continuation;
+#[path = "capacity_continuation.rs"]
+mod capacity_continuation;
 pub(crate) use missing_report::record_missing_report;
 #[path = "lifecycle/phases.rs"]
 mod phases;

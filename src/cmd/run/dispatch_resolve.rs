@@ -215,7 +215,8 @@ pub(super) fn resolve_agent_setup(
         }
     };
     // No-group for_model is agent-level; skip it or background keep is undone.
-    if agent::model_group::model_group(agent_kind, effective_model.as_deref()).is_some()
+    if (agent::model_group::model_group(agent_kind, effective_model.as_deref()).is_some()
+        || !crate::provider_capacity::notes(&agent_kind, custom_agent_name.as_deref()).is_empty())
         && let Some(hold) = rate_limit::dispatch_blocking_hold_for_model(
             &agent_kind,
             custom_agent_name.as_deref(),

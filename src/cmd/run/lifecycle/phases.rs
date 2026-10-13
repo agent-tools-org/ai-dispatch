@@ -20,6 +20,23 @@ pub(super) async fn run_lifecycle_phases(
 ) -> Result<Option<TaskId>> {
     run_teardown_phase(task_id, args, wt_path);
     run_escape_checks_phase(args, effective_dir, repo_path, wt_path);
+    if let Some(task) = store.get_task(task_id.as_str())?
+        && task.status == TaskStatus::Failed
+        && crate::provider_capacity::read(task_id, task.agent).is_some()
+    {
+        if task.verify_status == VerifyStatus::Pending {
+            store.update_verify_status(task_id.as_str(), VerifyStatus::Skipped)?;
+        }
+        if args.read_only
+            && run_worktree_settlement_phase(store, task_id, args, effective_dir, pre_task_dirty_paths)
+                .await? == LifecyclePhaseDecision::Stop
+        {
+            return Ok(None);
+        }
+        capture_final_worktree_state(store, task_id)?;
+        persist_result_file(store, task_id, args, &task, effective_dir);
+        return capacity_continuation::continue_capacity(store, args, task_id).await;
+    }
     match run_worktree_settlement_phase(
         store,
         task_id,

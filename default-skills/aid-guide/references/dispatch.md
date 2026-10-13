@@ -147,6 +147,13 @@ Important controls:
   `infrastructure_failure`; both are inconclusive. A finished verify command
   with a non-zero diagnostic result is `failed`.
 - `--retry N` permits new attempts after failure.
+  A provider-capacity refusal creates a short hold on the selected model. Aid
+  resumes the same session once after backoff and salvage, preserving `--retry`.
+  Read-only continuation does not commit. Repeated capacity uses cascade or
+  the next launchable advice route; if none remains, the error names the hold
+  and its expiry. Events and `aid show` identify provider capacity.
+  Verification of the interrupted attempt is skipped; the resumed attempt
+  keeps the configured verification command.
 - `--bg` returns the task ID immediately.
 - `--read-only` compares the Git run directory with its dispatch snapshot after
   the agent exits, including content changes to already dirty files, new untracked

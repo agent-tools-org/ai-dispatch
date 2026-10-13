@@ -50,6 +50,7 @@ mod route_availability;
 mod input_signal;
 mod model_catalog;
 mod model_health;
+mod provider_capacity;
 mod notify;
 mod paths;
 mod prompt;

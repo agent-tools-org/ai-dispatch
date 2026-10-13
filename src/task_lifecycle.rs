@@ -132,5 +132,13 @@ fn salvage_failed_transition(
 }
 
 fn salvage_failed_task(store: &Store, task_id: &TaskId) {
+    if let Ok(Some(task)) = store.get_task(task_id.as_str())
+        && let Some(message) = crate::provider_capacity::read(task_id, task.agent)
+    {
+        let model = task.requested_model.as_deref().or(task.observed_model.as_deref());
+        crate::rate_limit::mark_rate_limited_for_model(
+            &task.agent, task.custom_agent_name.as_deref(), model, &message,
+        );
+    }
     crate::failure_salvage::salvage_failed_task(store, task_id);
 }

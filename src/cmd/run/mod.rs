@@ -116,6 +116,7 @@ impl Drop for WorkspaceSymlinkGuard {
 }
 
 #[cfg(test)] mod tests;
+#[cfg(test)] pub(crate) mod stop_followup_tests;
 #[cfg(test)] #[path = "dry_run_tests.rs"] mod run_dry_run_tests;
 #[cfg(test)] mod checklist_tests;
 #[cfg(test)] #[path = "lifecycle_tests.rs"] mod run_lifecycle_tests;

@@ -1,13 +1,13 @@
 // ShareGPT JSONL exporter for fine-tuning data.
 // Exports: export_sharegpt().
-// Deps: paths, skills, store, templates, types, workgroup, serde_json.
+// Deps: paths, store, types, serde_json.
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::paths;
 use crate::store::Store;
-use crate::types::{EventKind, Task, TaskEvent};
+use crate::types::{EventKind, TaskEvent};
 
 pub fn export_sharegpt(store: &Store, task_id: &str, output: Option<&str>) -> Result<()> {
     let task = store
@@ -18,7 +18,9 @@ pub fn export_sharegpt(store: &Store, task_id: &str, output: Option<&str>) -> Re
     }
     let record = ShareGptRecord {
         conversations: vec![
-            ShareGptMessage::new("system", resolved_prompt(store, &task)?),
+            ShareGptMessage::new(
+                "system", task.resolved_prompt.clone().unwrap_or_else(|| task.prompt.clone()),
+            ),
             ShareGptMessage::new("human", task.prompt.clone()),
             ShareGptMessage::new("gpt", agent_response(&read_transcript(task_id)?, &store.get_events(task_id)?)),
         ],
@@ -33,43 +35,6 @@ pub fn export_sharegpt(store: &Store, task_id: &str, output: Option<&str>) -> Re
         print!("{body}");
     }
     Ok(())
-}
-
-fn resolved_prompt(store: &Store, task: &Task) -> Result<String> {
-    if let Some(prompt) = task.resolved_prompt.as_ref() {
-        return Ok(prompt.clone());
-    }
-    let workgroup = task
-        .workgroup_id
-        .as_deref()
-        .map(|id| store.get_workgroup(id))
-        .transpose()?
-        .flatten();
-    let milestones = task
-        .workgroup_id
-        .as_deref()
-        .map(|id| store.get_workgroup_milestones(id))
-        .transpose()?
-        .unwrap_or_default();
-    let skills = crate::skills::dispatched_skills(store, task.id.as_str())
-        .into_iter()
-        .map(|skill| {
-            crate::skills::resolve_skill_content(skill.as_ref())
-                .unwrap_or_else(|err| format!("[missing skill: {skill}: {err}]"))
-        })
-        .collect::<Vec<_>>()
-        .join("\n\n");
-    let mut prompt = crate::workgroup::compose_prompt(
-        &task.prompt,
-        None,
-        workgroup.as_ref(),
-        &milestones,
-        &[],
-    ).text;
-    if !skills.is_empty() {
-        prompt = format!("{prompt}\n\n--- Methodology ---\n{skills}");
-    }
-    Ok(crate::templates::inject_milestone_prompt(&prompt))
 }
 
 fn read_transcript(task_id: &str) -> Result<String> {

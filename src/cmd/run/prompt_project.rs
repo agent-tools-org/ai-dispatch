@@ -32,13 +32,13 @@ pub(super) fn inject_project_context(
             .unwrap_or_default();
         let total_knowledge = knowledge_entries.len();
         if total_knowledge > 0 {
-            let relevant = prompt_context::select_relevant_entries(&knowledge_entries, prompt);
-            if !relevant.is_empty() {
+            let (relevant, omitted) = prompt_context::select_relevant_entries(&knowledge_entries, prompt);
+            if !relevant.is_empty() || omitted > 0 {
                 for entry in &relevant {
                     project_topics.extend(prompt_context::extract_words(&entry.topic));
                 }
                 let knowledge_block = sanitize_injected_text(
-                    &prompt_context::format_knowledge_block(&pc.id, &relevant, omissions),
+                    &prompt_context::format_knowledge_block(&pc.id, &relevant, omitted, omissions),
                 );
                 let knowledge_block = crate::workgroup::bound_auxiliary(
                     &knowledge_block, "Project Knowledge", omissions,

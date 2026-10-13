@@ -9,7 +9,7 @@ use chrono::Local;
 use tempfile::TempDir;
 
 #[test]
-fn prompt_preservation_matches_show_and_sharegpt_reconstruction() {
+fn prompt_preservation_matches_show_and_sharegpt_stored_context() {
     let temp = TempDir::new().unwrap();
     let _aid_home = AidHomeGuard::set(temp.path());
     let store = std::sync::Arc::new(Store::open_memory().unwrap());
@@ -22,6 +22,9 @@ fn prompt_preservation_matches_show_and_sharegpt_reconstruction() {
         "original task line\n".repeat(1000)
     );
     task.workgroup_id = Some(group.id.to_string());
+    task.resolved_prompt = Some(crate::workgroup::compose_prompt(
+        &task.prompt, None, Some(&group), &[], &[],
+    ).text);
     store.insert_task(&task).unwrap();
     let output = temp.path().join("long-prompt.jsonl");
     export_sharegpt(&store, task.id.as_str(), Some(output.to_str().unwrap())).unwrap();

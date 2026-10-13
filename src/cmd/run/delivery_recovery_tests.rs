@@ -35,7 +35,8 @@ async fn round2_preservation_recovery_keeps_brief_feedback_and_missing_rollout()
     assert!(!child.prompt.contains("Old injected context"));
     assert!(!child.prompt.contains("Stale arguments"));
     assert_eq!(child.parent_task_id.as_deref(), Some(task.id.as_str()));
-    assert_fresh_command(&child);
+    assert_fresh_command(&child, task.agent_session_id.as_deref().unwrap());
+    assert_manual_retry(&store, &child).await;
     assert!(
         RunArgs::for_retry(&store, &child)
             .unwrap()
@@ -60,9 +61,9 @@ fn recovery_task(root: &std::path::Path) -> Task {
     task
 }
 
-fn assert_fresh_command(child: &Task) {
+fn assert_fresh_command(child: &Task, session_id: &str) {
     let opts = RunOpts {
-        session_id: child.agent_session_id.clone(),
+        session_id: Some(session_id.into()),
         dir: None,
         output: None,
         result_file: None,
@@ -83,4 +84,31 @@ fn assert_fresh_command(child: &Task) {
         .collect();
     assert!(!argv.iter().any(|arg| arg == "resume"));
     assert!(argv.iter().any(|arg| arg.contains(&child.prompt)));
+}
+
+async fn assert_manual_retry(store: &Arc<Store>, child: &Task) {
+    let id = crate::cmd::retry::retry_task(
+        store.clone(),
+        crate::cmd::retry::RetryArgs {
+            task_id: child.id.to_string(),
+            feedback: Some("Manual correction".into()),
+            feedback_file: None,
+            agent: None,
+            model: None,
+            idle_timeout_secs: None,
+            dir: None,
+            reset: false,
+            bg: false,
+        },
+        false,
+    )
+    .await
+    .unwrap();
+    let retried = store.get_task(id.as_str()).unwrap().unwrap();
+    assert!(retried.prompt.ends_with(&child.prompt));
+    assert!(
+        retried
+            .prompt
+            .starts_with("[Previous attempt feedback]\nManual correction")
+    );
 }

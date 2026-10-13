@@ -415,12 +415,15 @@ original task on session resume. Shared context, file context, findings, peer
 milestones, parent/sibling summaries (including file lists), prior/shared output,
 methodology, memories, project/team context, toolbox instructions, and batch
 sibling previews are bounded independently with in-place omission notes. When prompt
-composition drops auxiliary content, `aid run` prints one `Prompt context bounded:`
+composition drops auxiliary content through byte bounds or entry caps, `aid run` prints one `Prompt context bounded:`
 warning and records a setup event with the omitted sections. `aid show --context`
-and ShareGPT reconstruction use the same composition rules. Large task briefs may
+and ShareGPT export use the stored resolved prompt without reconstruction. For
+legacy tasks without it, show reports that launch context was not stored and
+ShareGPT uses the raw caller prompt. Large task briefs may
 exceed an agent's context window; aid does not shorten them to fit.
 Retries prepend new feedback to the failed task's own raw caller brief, preserving
-all existing correction, checklist, and iteration blocks. Parent linkage never
+all existing correction, checklist, and iteration blocks. Missing-delivery
+recovery does the same, including when a missing Codex rollout starts a fresh session. Parent linkage never
 replaces that brief. Background cascades reuse the raw brief and assemble fresh
 launch context; workers launch the separately stored resolved prompt.
 Templates must contain `{{prompt}}`; otherwise dispatch fails explicitly.

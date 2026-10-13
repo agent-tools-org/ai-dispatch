@@ -28,16 +28,16 @@ pub(super) fn inject_team_context(
         let entries = team::read_knowledge_entries(team_id);
         let total_entries = entries.len();
         if total_entries > 0 {
-            let relevant = prompt_context::select_relevant_entries(&entries, &args.prompt);
+            let (relevant, omitted) = prompt_context::select_relevant_entries(&entries, &args.prompt);
             let relevant = deduplicate_knowledge(relevant, project_topics);
             aid_info!(
                 "[aid] Injected {}/{} knowledge entries (relevance-filtered)",
                 relevant.len(),
                 total_entries
             );
-            if !relevant.is_empty() {
+            if !relevant.is_empty() || omitted > 0 {
                 let knowledge_block = sanitize_injected_text(
-                    &prompt_context::format_knowledge_block(team_id, &relevant, omissions),
+                    &prompt_context::format_knowledge_block(team_id, &relevant, omitted, omissions),
                 );
                 let knowledge_block = crate::workgroup::bound_auxiliary(
                     &knowledge_block,
@@ -91,7 +91,9 @@ pub(super) fn inject_toolbox(
         filter_note
     );
     if !tools.is_empty() {
-        let toolbox_block = toolbox::format_toolbox_instructions(&tools);
+        let toolbox_block = crate::workgroup::bound_auxiliary(
+            &toolbox::format_toolbox_instructions(&tools), "Toolbox", omissions,
+        );
         effective_prompt = format!("{effective_prompt}\n\n{toolbox_block}");
     }
     effective_prompt
@@ -191,6 +193,7 @@ pub(super) fn inject_stored_context(
         &args.prompt,
         10,
         project_root.and_then(|root| root.to_str()),
+        omissions,
     )? {
         let block = sanitize_injected_text(&memory_block);
         let block = crate::workgroup::bound_auxiliary(&block, "Memory", omissions);

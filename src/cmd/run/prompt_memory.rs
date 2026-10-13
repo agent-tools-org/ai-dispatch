@@ -1,5 +1,5 @@
 // Memory selection for prompt assembly, including tiers and relevance scoring.
-// Returns owned entries; rendering and bounds remain in the parent pipeline.
+// Returns owned entries and capacity omissions; rendering stays in the parent pipeline.
 use super::*;
 
 pub(super) fn select_memories(
@@ -7,7 +7,7 @@ pub(super) fn select_memories(
     prompt: &str,
     max_memories: usize,
     project_path: &str,
-) -> Result<Vec<Memory>> {
+) -> Result<(Vec<Memory>, usize)> {
     let mut always_memories = store.list_memories_by_tier(
         Some(project_path),
         &[MemoryTier::Identity, MemoryTier::Critical],
@@ -17,6 +17,7 @@ pub(super) fn select_memories(
             .cmp(&memory_tier_rank(b.tier))
             .then_with(|| b.created_at.cmp(&a.created_at))
     });
+    let mut omitted = always_memories.len().saturating_sub(max_memories);
     let always_memories: Vec<_> = always_memories.into_iter().take(max_memories).collect();
     let keywords = extract_words(prompt);
     let queries = build_memory_queries(prompt, &keywords);
@@ -34,13 +35,13 @@ pub(super) fn select_memories(
             entry.1 += 1;
         }
     }
-
     let mut scored: Vec<_> = scored.into_values().collect();
     scored.sort_by(|a, b| {
         b.1.cmp(&a.1)
             .then_with(|| b.0.created_at.cmp(&a.0.created_at))
     });
     let remaining_slots = max_memories.saturating_sub(always_memories.len());
+    omitted += scored.len().saturating_sub(remaining_slots);
     let mut memories = always_memories;
     memories.extend(
         scored
@@ -48,5 +49,5 @@ pub(super) fn select_memories(
             .take(remaining_slots)
             .map(|(memory, _)| memory),
     );
-    Ok(memories)
+    Ok((memories, omitted))
 }

@@ -69,6 +69,10 @@ fn supersede_live_holder(store: &Arc<Store>, task: &crate::types::Task) -> Resul
     Ok(())
 }
 
+pub(crate) fn compose_retry_prompt(prompt: &str, feedback: &str) -> String {
+    format!("[Previous attempt feedback]\n{feedback}\n\n[Original task]\n{prompt}")
+}
+
 fn retry_task_to_run_args(
     store: &Store,
     task: &crate::types::Task,
@@ -76,10 +80,7 @@ fn retry_task_to_run_args(
     announce: bool,
 ) -> Result<RunArgs> {
     let feedback = resolve_feedback(args.feedback.as_deref(), args.feedback_file.as_deref())?;
-    let prompt = format!(
-        "[Previous attempt feedback]\n{feedback}\n\n[Original task]\n{prompt}",
-        prompt = task.prompt,
-    );
+    let prompt = compose_retry_prompt(&task.prompt, &feedback);
     let worktree = reusable_worktree(task);
     let (dir, worktree_arg) = if args.dir.is_some() {
         (args.dir.clone(), None) // --dir override takes precedence

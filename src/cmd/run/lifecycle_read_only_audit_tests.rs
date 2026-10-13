@@ -15,7 +15,7 @@ async fn scope_cut_symlink_report_is_not_copied_by_official_persistence() {
     let target = home.path().join("protected.txt");
     fs::write(&target, "must not be published").unwrap();
     let (_, source) = crate::cmd::run::read_only_delivery::agent_paths(
-        &f.args, AgentKind::Codex, f.id.as_str(),
+        &f.args, AgentKind::Codex,
     );
     std::os::unix::fs::symlink(&target, source.unwrap()).unwrap();
     f.settle().await;
@@ -90,7 +90,7 @@ async fn fix_round_one_read_only_delivers_staged_required_report_outside_reposit
     fs::write(dir.join("base.txt"), "base\n").unwrap();
     let task_dir = paths::task_dir(f.id.as_str());
     fs::create_dir_all(&task_dir).unwrap();
-    fs::write(task_dir.join("agent-result.md"), REPORT).unwrap();
+    fs::write(staged(&f, "agent-result.md"), REPORT).unwrap();
     f.settle().await;
     assert_eq!(fs::read_to_string(f.args.result_file.as_ref().unwrap()).unwrap(), REPORT);
     assert_eq!(fs::read_to_string(task_dir.join("result.md")).unwrap(), REPORT);
@@ -111,7 +111,7 @@ async fn fix_round_one_read_only_delivers_staged_output_to_explicit_absolute_pat
     fs::write(dir.join("base.txt"), "base\n").unwrap();
     let task_dir = paths::task_dir(f.id.as_str());
     fs::create_dir_all(&task_dir).unwrap();
-    fs::write(task_dir.join("agent-output.txt"), "final findings\n").unwrap();
+    fs::write(staged(&f, "agent-output.txt"), "final findings\n").unwrap();
     f.settle().await;
     assert_eq!(fs::read_to_string(destination).unwrap(), "final findings\n");
 }
@@ -125,7 +125,7 @@ async fn fix_round_one_read_only_missing_staged_report_rejects_stale_destination
     f.args.agent_name = "codex".into();
     let dir = Path::new(f.args.dir.as_ref().unwrap());
     fs::write(dir.join("base.txt"), "base\n").unwrap();
-    fs::remove_file(paths::task_dir(f.id.as_str()).join("agent-result.md")).unwrap();
+    fs::remove_file(staged(&f, "agent-result.md")).unwrap();
     let destination = Path::new(f.args.result_file.as_ref().unwrap());
     fs::create_dir_all(destination.parent().unwrap()).unwrap();
     fs::write(destination, REPORT).unwrap();
@@ -137,7 +137,7 @@ async fn fix_round_one_read_only_missing_staged_report_rejects_stale_destination
 }
 
 #[tokio::test]
-async fn fix_round_two_read_only_refuses_repository_destinations_after_settlement() {
+async fn fix_round_two_read_only_refuses_repository_destinations_at_dispatch() {
     let _permit = test_subprocess::acquire();
     for destination in ["base.txt", "new/reports/final.md", "git-config", "parent-alias"] {
         let home = tempfile::tempdir().unwrap();
@@ -156,18 +156,18 @@ async fn fix_round_two_read_only_refuses_repository_destinations_after_settlemen
             path => dir.join(path),
         };
         f.args.result_file = Some(target.display().to_string());
-        let task_dir = paths::task_dir(f.id.as_str());
-        fs::write(task_dir.join("agent-result.md"), REPORT).unwrap();
-        f.settle().await;
+        fs::write(staged(&f, "agent-result.md"), REPORT).unwrap();
+        assert!(crate::cmd::run::read_only_delivery::prepare(
+            &mut f.args, AgentKind::Codex, f.id.as_str(),
+        ).is_err());
         assert_eq!(fs::read_to_string(dir.join("base.txt")).unwrap(), "base\n");
         assert_eq!(fs::read(config).unwrap(), original_config);
         assert!(!dir.join("new").exists(), "refusal must not create repository directories");
-        assert_delivery_failed(&f);
     }
 }
 
 #[tokio::test]
-async fn fix_round_two_read_only_refuses_destination_symlink_into_repository() {
+async fn fix_round_two_read_only_refuses_destination_symlink_into_repository_at_dispatch() {
     let _permit = test_subprocess::acquire();
     let home = tempfile::tempdir().unwrap();
     let _guard = paths::AidHomeGuard::set(home.path());
@@ -177,11 +177,12 @@ async fn fix_round_two_read_only_refuses_destination_symlink_into_repository() {
     let destination = home.path().join("report.md");
     std::os::unix::fs::symlink(dir.join("base.txt"), &destination).unwrap();
     f.args.result_file = Some(destination.display().to_string());
-    fs::write(paths::task_dir(f.id.as_str()).join("agent-result.md"), REPORT).unwrap();
-    f.settle().await;
+    fs::write(staged(&f, "agent-result.md"), REPORT).unwrap();
+    assert!(crate::cmd::run::read_only_delivery::prepare(
+        &mut f.args, AgentKind::Codex, f.id.as_str(),
+    ).is_err());
     assert_eq!(fs::read_to_string(dir.join("base.txt")).unwrap(), "base\n");
     assert!(fs::symlink_metadata(destination).unwrap().file_type().is_symlink());
-    assert_delivery_failed(&f);
 }
 
 #[tokio::test]
@@ -198,7 +199,7 @@ async fn fix_round_two_read_only_output_replaces_external_symlink_atomically() {
     std::os::unix::fs::symlink(&target, &destination).unwrap();
     f.args.result_file = None;
     f.args.output = Some(destination.display().to_string());
-    fs::write(paths::task_dir(f.id.as_str()).join("agent-output.txt"), REPORT).unwrap();
+    fs::write(staged(&f, "agent-output.txt"), REPORT).unwrap();
     f.settle().await;
     assert_eq!(fs::read_to_string(target).unwrap(), "untouched\n");
     assert_eq!(fs::read_to_string(&destination).unwrap(), REPORT);
@@ -211,4 +212,8 @@ fn assert_delivery_failed(f: &Fixture) {
     let events = f.store.get_events(f.id.as_str()).unwrap();
     assert!(events.iter().any(|event| event.event_kind == EventKind::Error
         && event.detail.starts_with("Read-only artifact delivery failed:")), "{events:?}");
+}
+
+fn staged(f: &Fixture, name: &str) -> PathBuf {
+    Path::new(f.args.artifact_staging.as_ref().unwrap()).join(name)
 }

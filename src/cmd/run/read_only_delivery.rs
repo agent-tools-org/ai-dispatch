@@ -1,4 +1,4 @@
-// Stage native Codex read-only artifacts inside the granted task directory.
+// Stage native Codex read-only artifacts separately from trusted task writers.
 // Exports staged paths, destination comparison and atomic delivery after exit.
 // Deps: RunArgs, task paths, protected roots and filesystem operations.
 
@@ -12,40 +12,61 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-fn enabled(args: &RunArgs, kind: AgentKind) -> bool {
+pub(crate) fn enabled(args: &RunArgs, kind: AgentKind) -> bool {
     args.read_only && kind == AgentKind::Codex && !args.sandbox && args.container.is_none()
+}
+
+pub(crate) fn prepare(args: &mut RunArgs, kind: AgentKind, task_id: &str) -> Result<()> {
+    if !enabled(args, kind) { return Ok(()); }
+    let staging = crate::agent::scratch::create_temp_dir(&std::env::temp_dir())?;
+    let task = canonical_path(&crate::paths::task_dir(task_id))?;
+    let cwd = resolve(".", args.dir.as_deref()).canonicalize()?;
+    let mut forbidden = crate::agent::scratch::protected_roots(&cwd)?;
+    anyhow::ensure!(!forbidden.iter().chain([&task])
+        .any(|root| staging.starts_with(root) || root.starts_with(&staging)),
+        "read-only staging directory overlaps repository or trusted task directory");
+    forbidden.push(staging.clone());
+    validate_destinations(args, &forbidden)?;
+    args.artifact_staging = Some(staging.display().to_string());
+    Ok(())
+}
+
+pub(crate) fn validate_destinations(args: &RunArgs, forbidden: &[PathBuf]) -> Result<()> {
+    for destination in [args.output.as_deref(), args.result_file.as_deref()].into_iter().flatten() {
+        let path = canonical_path(&resolve(destination, args.dir.as_deref()))?;
+        anyhow::ensure!(!forbidden.iter().any(|root| path.starts_with(root)),
+            "artifact destination '{}' is inside a repository or Codex-writable root", path.display());
+    }
+    Ok(())
 }
 
 pub(crate) fn agent_paths(
     args: &RunArgs,
     kind: AgentKind,
-    task_id: &str,
 ) -> (Option<String>, Option<String>) {
     if !enabled(args, kind) {
         return (args.output.clone(), args.result_file.clone());
     }
-    let task = crate::paths::task_dir(task_id);
+    let staging = args.artifact_staging.as_deref().map(Path::new);
     (
         args.output
-            .as_ref()
-            .map(|_| task.join("agent-output.txt").display().to_string()),
+            .as_ref().zip(staging)
+            .map(|(_, staging)| staging.join("agent-output.txt").display().to_string()),
         args.result_file
-            .as_ref()
-            .map(|_| task.join("agent-result.md").display().to_string()),
+            .as_ref().zip(staging)
+            .map(|(_, staging)| staging.join("agent-result.md").display().to_string()),
     )
 }
 
 pub(crate) fn publish(
     args: &RunArgs,
     kind: AgentKind,
-    task_id: &str,
     dir: Option<&str>,
 ) -> Result<()> {
     if !enabled(args, kind) {
         return Ok(());
     }
-    let protected = crate::agent::scratch::protected_roots(&resolve(".", dir).canonicalize()?)?;
-    let (output, result) = agent_paths(args, kind, task_id);
+    let (output, result) = agent_paths(args, kind);
     for (source, destination) in [
         (output.as_deref(), args.output.as_deref()),
         (result.as_deref(), args.result_file.as_deref()),
@@ -53,13 +74,14 @@ pub(crate) fn publish(
         let (Some(source), Some(destination)) = (source, destination) else {
             continue;
         };
-        let Ok(content) = fs::read_to_string(source) else {
-            continue;
+        let metadata = match fs::symlink_metadata(source) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error.into()),
         };
-        if content.trim().is_empty() {
-            continue;
-        }
-        deliver(&content, &resolve(destination, dir), &protected)
+        anyhow::ensure!(metadata.is_file(), "staged artifact '{}' is not a regular file", source);
+        let content = fs::read_to_string(source)?;
+        deliver(&content, &resolve(destination, dir))
             .with_context(|| format!("Cannot deliver read-only artifact to '{}'", destination))?;
     }
     Ok(())
@@ -73,30 +95,11 @@ pub(crate) fn same_destination(args: &RunArgs) -> Result<bool> {
         == canonical_path(&resolve(report, args.dir.as_deref()))?)
 }
 
-fn deliver(content: &str, destination: &Path, protected: &[PathBuf]) -> Result<()> {
+fn deliver(content: &str, destination: &Path) -> Result<()> {
     let parent = destination
         .parent()
         .context("Artifact destination needs a parent directory")?;
-    let name = destination
-        .file_name()
-        .context("Artifact destination needs a file name")?;
-    let parent = canonical_path(parent)?;
-    let destination = parent.join(name);
-    for path in [&destination, &canonical_path(&destination)?] {
-        anyhow::ensure!(
-            !protected.iter().any(|root| path.starts_with(root)),
-            "artifact destination '{}' is inside a protected repository path",
-            path.display()
-        );
-    }
-    fs::create_dir_all(&parent)?;
-    let parent = parent.canonicalize()?;
-    anyhow::ensure!(
-        !protected.iter().any(|root| parent.starts_with(root)),
-        "artifact parent '{}' is inside a protected repository path",
-        parent.display()
-    );
-    let destination = parent.join(name);
+    fs::create_dir_all(parent)?;
     let temporary = parent.join(format!(".aid-delivery-{:032x}", rand::random::<u128>()));
     let mut file = fs::OpenOptions::new()
         .write(true)
@@ -105,8 +108,7 @@ fn deliver(content: &str, destination: &Path, protected: &[PathBuf]) -> Result<(
         .open(&temporary)?;
     let result = (|| -> Result<()> {
         file.write_all(content.as_bytes())?;
-        drop(file);
-        fs::rename(&temporary, &destination)?;
+        fs::rename(&temporary, destination)?;
         Ok(())
     })();
     if result.is_err() {
@@ -127,14 +129,9 @@ fn canonical_path(path: &Path) -> Result<PathBuf> {
             }
             Component::Normal(name) => {
                 resolved.push(name);
-                match resolved.canonicalize() {
-                    Ok(path) => resolved = path,
-                    Err(error)
-                        if error.kind() == std::io::ErrorKind::NotFound
-                            && fs::symlink_metadata(&resolved).is_err_and(|error| {
-                                error.kind() == std::io::ErrorKind::NotFound
-                            }) => {}
-                    Err(error) => return Err(error.into()),
+                if !fs::symlink_metadata(&resolved)
+                    .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound) {
+                    resolved = resolved.canonicalize()?;
                 }
             }
         }
@@ -143,10 +140,5 @@ fn canonical_path(path: &Path) -> Result<PathBuf> {
 }
 
 fn resolve(path: &str, dir: Option<&str>) -> PathBuf {
-    let path = Path::new(path);
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        Path::new(dir.unwrap_or(".")).join(path)
-    }
+    Path::new(dir.unwrap_or(".")).join(path)
 }

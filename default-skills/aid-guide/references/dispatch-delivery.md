@@ -10,11 +10,13 @@ forbids modifying the repository under test. AID auto-selects a task-specific
 result file at `~/.aid/tasks/<id>/result.md` for host launches and omits implementation
 methodology and Git staging instructions. Explicit `--result-file` paths remain delivery destinations.
 For native Codex read-only host runs, the agent writes `agent-result.md` and `agent-output.txt`
-under the task directory; aid publishes them to the requested `--result-file` and `-o` paths after
-execution. Delivery resolves the destination parent canonically and refuses paths inside the
-repository or its Git metadata, including symlinks targeting those paths. It writes a temporary
-file in the destination directory and renames it over the destination, replacing external
-symlinks without changing their targets. Rejected delivery marks the task Failed. Report and
+in a fresh, empty staging directory outside the repository and the trusted task directory.
+That staging directory is the run's only writable grant. Dispatch refuses destinations inside
+the repository, its Git metadata, staging, or any other Codex-writable root, resolving existing
+symlinks and parent traversal. Aid publishes regular staged files after execution; staged
+symlinks and other file types are refused. It writes a temporary file in the destination
+directory and renames it over the destination, replacing external symlinks without changing
+their targets. Rejected publication marks the task Failed and skips official report copying. Report and
 output paths resolving to the same destination are rejected at dispatch; choose separate paths
 or request one artifact. A missing staged report cannot be satisfied by an old destination file.
 The requested parent directory receives no sandbox grant. Container launches retain their existing delivery path.
@@ -64,10 +66,10 @@ still uses `CODEX_HOME`; the requested model is passed explicitly when configure
 user config settings are not loaded for these launches. Project config layers require trust in
 Codex; absent user trust records, they remain inactive. Managed requirements can reject profiles.
 
-Every read-only writable root is resolved through symlinks and parent traversal. A root containing
-or contained by the repository top level, primary checkout, worktree, or Git common directory
-fails launch with an overlap error. Task directories nested inside a checkout are rejected too.
-Disjoint task, Cargo target, and scratch directories remain writable.
+The read-only staging root is resolved through symlinks and parent traversal. A root containing
+or contained by the repository top level, primary checkout, worktree, Git common directory,
+or trusted task directory is rejected. The task directory and Cargo target receive no write grant.
+Aid's official result persistence, automatic `output.md`, and transcript writers remain outside staging.
 
 Aid publishes staged artifacts after settlement and persists the staged report as the official
 result. Delivery failures mark the task Failed. Ref enforcement checks this run's HEAD and branch;

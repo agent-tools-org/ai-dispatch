@@ -211,12 +211,15 @@ fn finish_dispatch(
             crate::cmd::report_mode::task_result_file(claimed.task_id.as_str())
         };
         args.result_file = Some(result_file.clone());
-        args.result_file_required = Some(false);
         aid_info!("[aid] Audit report mode: auto-set --result-file {result_file}");
     }
+    super::read_only_delivery::prepare(args, context.agent_setup.agent_kind, claimed.task_id.as_str())
+        .or_else(|err| {
+            fail_claimed_task(store, &claimed.task_id, &err)?;
+            Err(err)
+        })?;
     let mut dispatch_args = args.clone();
     dispatch_args.model = context.agent_setup.effective_model.clone();
-    dispatch_args.model_source = args.model_source;
     store.update_task_dispatch_args(
         claimed.task_id.as_str(), &dispatch_args.dispatch_args_json()?,
     )?;
@@ -290,7 +293,6 @@ fn prepared_dispatch(
         repo_path: setup.repo_path, wt_path: setup.wt_path, effective_dir: setup.effective_dir,
     }
 }
-
 #[cfg(test)] #[path = "dispatch_prepare_tests.rs"] mod tests;
 #[cfg(test)] #[path = "dispatch_verify_tests.rs"] mod verify_tests;
 #[cfg(test)] #[path = "dispatch_preflight_tests.rs"] mod preflight_tests;

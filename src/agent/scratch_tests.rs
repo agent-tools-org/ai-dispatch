@@ -238,7 +238,7 @@ fn read_only_git_metadata_is_omitted_with_a_named_warning() {
 }
 
 #[test]
-fn read_only_launch_roots_include_task_and_scratch_without_git_grants() {
+fn read_only_launch_roots_include_only_staging_without_git_or_target_grants() {
     let temp = tempfile::tempdir().unwrap();
     let _home = crate::paths::AidHomeGuard::set(temp.path());
     let repo = temp.path().join("repo");
@@ -251,8 +251,7 @@ fn read_only_launch_roots_include_task_and_scratch_without_git_grants() {
         AgentKind::Codex, repo.to_str(), target.as_deref(), &scratch, &task, true,
     ).unwrap();
     assert!(warnings.is_empty());
-    assert_eq!(roots, vec![PathBuf::from(target.unwrap()), scratch,
-        crate::paths::task_dir(task.as_str()).canonicalize().unwrap()]);
+    assert_eq!(roots, vec![scratch]);
     assert!(!roots.contains(&repo));
     assert!(!roots.contains(&repo.join(".git")));
 }

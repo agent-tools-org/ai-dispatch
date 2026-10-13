@@ -227,7 +227,7 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
             format_batch_siblings(&args.batch_siblings)
         );
     }
-    let (output, result_file) = super::read_only_delivery::agent_paths(args, *agent_kind, current_task_id);
+    let (output, result_file) = super::read_only_delivery::agent_paths(args, *agent_kind);
     if let Some(block) = output_file_instruction(output.as_deref(), result_file.as_deref()) {
         effective_prompt = format!("{effective_prompt}\n\n{block}");
     }

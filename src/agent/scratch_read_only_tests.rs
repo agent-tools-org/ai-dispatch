@@ -40,35 +40,28 @@ fn repository(path: &Path) {
 }
 
 fn rejected(repo: &Path, target: Option<&Path>, scratch: &Path) {
-    let result = prepare_launch_roots(
-        AgentKind::Codex,
-        repo.to_str(),
-        target.and_then(Path::to_str),
-        scratch,
-        &TaskId("t-overlap".into()),
-        true,
-    );
+    let roots: Vec<_> = target.into_iter().chain(std::iter::once(scratch)).map(Path::to_path_buf).collect();
+    let result = validate_read_only_roots(repo.to_str(), &roots);
     let error = result.expect_err("overlapping roots must fail read-only launch");
     assert!(format!("{error:#}").contains("overlap"), "{error:#}");
 }
 
 #[test]
-fn fix_round_one_read_only_rejects_nested_task_directory() {
+fn fix_round_one_read_only_rejects_nested_staging_directory() {
     let temp = tempfile::tempdir().unwrap();
     let _home = crate::paths::AidHomeGuard::set(temp.path());
     repository(temp.path());
-    let scratch = tempfile::tempdir().unwrap();
-    rejected(temp.path(), None, scratch.path());
+    let scratch = create_temp_dir(temp.path()).unwrap();
+    rejected(temp.path(), None, &scratch);
 }
 
 #[test]
-fn fix_round_one_read_only_rejects_task_directory_containing_checkout() {
+fn fix_round_one_read_only_rejects_staging_directory_containing_checkout() {
     let temp = tempfile::tempdir().unwrap();
     let _home = crate::paths::AidHomeGuard::set(temp.path());
     let repo = crate::paths::task_dir("t-overlap").join("checkout");
     repository(&repo);
-    let scratch = tempfile::tempdir().unwrap();
-    rejected(&repo, None, scratch.path());
+    rejected(&repo, None, temp.path());
 }
 
 #[test]

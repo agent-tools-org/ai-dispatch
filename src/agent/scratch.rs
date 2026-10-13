@@ -70,9 +70,12 @@ pub(crate) fn prepare_launch_roots(
     kind: AgentKind, dir: Option<&str>, target: Option<&str>, temp: &Path, task_id: &TaskId,
     read_only: bool,
 ) -> Result<(Vec<PathBuf>, Vec<TaskEvent>)> {
+    if read_only && kind == AgentKind::Codex {
+        return Ok((validate_read_only_roots(dir, &[temp.to_path_buf()])?, Vec::new()));
+    }
     let mut roots = Vec::new();
     let mut warnings = Vec::new();
-    if !(read_only && kind == AgentKind::Codex) && matches!(kind, AgentKind::Codex | AgentKind::Copilot) {
+    if matches!(kind, AgentKind::Codex | AgentKind::Copilot) {
         let cwd = dir.map(PathBuf::from).map(Ok).unwrap_or_else(std::env::current_dir)?;
         for path in writable_roots(cwd.to_str()) {
             let prepared = path.canonicalize().map_err(anyhow::Error::from)
@@ -92,13 +95,6 @@ pub(crate) fn prepare_launch_roots(
     }
     for path in target.map(Path::new).into_iter().chain(std::iter::once(temp)) {
         if !roots.iter().any(|root| root == path) { roots.push(path.to_path_buf()); }
-    }
-    if read_only && kind == AgentKind::Codex {
-        let task = crate::paths::task_dir(task_id.as_str());
-        ensure_directory(&task)?;
-        probe_directory(&task)?;
-        roots.push(task.canonicalize()?);
-        roots = validate_read_only_roots(dir, &roots)?;
     }
     Ok((roots, warnings))
 }

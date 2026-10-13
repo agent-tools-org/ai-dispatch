@@ -52,9 +52,8 @@ fn git_output(dir: &Path, args: &[&str]) -> Vec<u8> {
     output.stdout
 }
 
-fn run_fake_agent(home: &Path, dir: &Path, write_report: bool) {
-    let report = paths::task_dir("t-read-only-backup").join("agent-result.md");
-    fs::create_dir_all(report.parent().unwrap()).unwrap();
+fn run_fake_agent(home: &Path, dir: &Path, write_report: bool, args: &RunArgs) {
+    let report = Path::new(args.artifact_staging.as_ref().unwrap()).join("agent-result.md");
     let agent = home.join("fake-agent");
     executable(
         &agent,
@@ -104,12 +103,14 @@ impl Fixture {
         let id = TaskId("t-read-only-backup".into());
         let mut task = task(id.as_str(), repo.path(), &wt, "fix/read-only-backup");
         task.read_only = true;
+        let staging = crate::agent::scratch::create_temp_dir(home).unwrap();
         let args = RunArgs {
             agent_name: "codex".into(),
             read_only: true,
             dir: Some(wt.display().to_string()),
             repo: Some(repo.path().display().to_string()),
             result_file: Some(home.join("requested/report.md").display().to_string()),
+            artifact_staging: Some(staging.display().to_string()),
             result_file_required: Some(write_report),
             verify: backup.then(|| format!("touch '{}'", home.join("verify-ran").display())),
             backup: backup.then(|| "gdrive:audits".into()),
@@ -130,7 +131,7 @@ impl Fixture {
         let capture = home.join("capture");
         fs::create_dir(&capture).unwrap();
         let log = fake_gws(home, &capture, fail_upload);
-        run_fake_agent(home, &wt, write_report);
+        run_fake_agent(home, &wt, write_report, &args);
         Self {
             _repo: repo,
             store,

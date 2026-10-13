@@ -197,15 +197,16 @@ pub(super) fn persist_result_file(
 ) {
     // Persist before failed-task worktree cleanup, otherwise the source file may disappear.
     if let Err(err) = super::super::read_only_delivery::publish(
-        args, task.agent, task_id.as_str(), effective_dir.map(String::as_str),
+        args, task.agent, effective_dir.map(String::as_str),
     ) {
         let _ = crate::task_lifecycle::mark_failed(store, task_id);
         let _ = store.insert_event(&TaskEvent {
             task_id: task_id.clone(), timestamp: chrono::Local::now(), event_kind: EventKind::Error,
             detail: format!("Read-only artifact delivery failed: {err:#}"), metadata: None,
         });
+        return;
     }
-    let (_, result_file) = super::super::read_only_delivery::agent_paths(args, task.agent, task_id.as_str());
+    let (_, result_file) = super::super::read_only_delivery::agent_paths(args, task.agent);
     let log_path = task
         .log_path
         .as_deref()

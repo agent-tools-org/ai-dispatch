@@ -2,9 +2,10 @@
 // Checks waiting replacement and launch cannot revive a stopped task.
 // Deps: two Store connections, SQLite busy callback and bounded channels.
 
-use super::tests::make_task;
+use super::{stop, tests::make_task};
 use crate::{store::Store, types::TaskStatus};
 use std::cell::RefCell;
+use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Duration;
 
@@ -28,7 +29,7 @@ fn race_stopped_write(replace: bool) {
     let home = tempfile::tempdir().expect("home");
     let _guard = crate::paths::AidHomeGuard::set(home.path());
     let path = home.path().join("race.db");
-    let writer = Store::open(&path).expect("writer");
+    let writer = Arc::new(Store::open(&path).expect("writer"));
     let dispatch = Store::open(&path).expect("dispatch");
     let status = if replace {
         TaskStatus::Waiting
@@ -66,9 +67,10 @@ fn race_stopped_write(replace: bool) {
         .recv_timeout(Duration::from_secs(10))
         .expect("dispatch read before stop");
     writer
-        .update_task_status("t-stop-dispatch", TaskStatus::Stopped)
-        .expect("settle stop");
-    writer.db().execute_batch("COMMIT").expect("commit stop");
+        .db()
+        .execute_batch("ROLLBACK")
+        .expect("release blocker lock");
+    stop(&writer, "t-stop-dispatch").expect("settle stop before dispatch resumes");
     release_tx.send(()).expect("release dispatch");
     assert!(
         !handle.join().expect("dispatch"),
@@ -82,7 +84,9 @@ fn race_stopped_write(replace: bool) {
             .status,
         TaskStatus::Stopped
     );
-    assert!(writer.get_events("t-stop-dispatch").expect("events").is_empty());
+    let events = writer.get_events("t-stop-dispatch").expect("events");
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].detail, "Task stopped by user");
 }
 
 #[test]

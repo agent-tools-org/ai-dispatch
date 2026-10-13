@@ -52,6 +52,15 @@ fn settle_first_every_failed_stopped_writer_records_terminal_timing() {
         let mut task = make_task(&id, status);
         task.created_at = Local::now() - Duration::seconds(60);
         store.insert_task(&task).expect("insert");
+        if index == 0 {
+            store
+                .db()
+                .execute(
+                    "UPDATE tasks SET started_at = ?2 WHERE id = ?1",
+                    rusqlite::params![id, (Local::now() - Duration::seconds(3)).to_rfc3339()],
+                )
+                .expect("started_at");
+        }
         let changed = match index {
             0 => store.update_task_status(&id, TaskStatus::Failed),
             1 => store.update_task_status(&id, TaskStatus::Stopped),
@@ -68,7 +77,12 @@ fn settle_first_every_failed_stopped_writer_records_terminal_timing() {
         let task = store.get_task(&id).expect("get").expect("task");
         assert!(task.completed_at.is_some(), "writer {index} completed_at");
         let duration = task.duration_ms.expect("terminal duration");
-        if matches!(index, 6 | 7) {
+        if index == 0 {
+            assert!(
+                (2900..10000).contains(&duration),
+                "duration from started_at: {duration}"
+            );
+        } else if matches!(index, 6 | 7) {
             assert_eq!(duration, 1234, "worker-measured duration");
         } else {
             assert!(duration >= 59000, "writer {index}: duration {duration}");

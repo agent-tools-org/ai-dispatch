@@ -152,10 +152,14 @@ Important controls:
   Read-only continuation does not commit. Repeated capacity fails with the
   selected model's hold and expiry; automatic advice fallback is disabled.
   Explicit `--cascade` and `--retry` keep their configured policies.
-  `aid stop <task>` and `aid stop <task> --retry-tree` cancel a continuation
-  waiting in backoff; the worker checks cancellation before launching it.
+  Automatic retries, including capacity recovery, create a linked `waiting`
+  child before backoff. `aid stop <child>` or `aid stop <parent> --retry-tree`
+  cancels that child; a cancelled retry cannot launch under a suffixed ID.
+  A refreshed capacity hold fails dispatch with its reason, preserving agent,
+  model and session. Held-route dispatch uses only explicit `--cascade` routes;
+  it never automatically substitutes an advised agent.
   Only provider `error` and `turn.failed` envelopes on the structured stdout
-  stream count as capacity evidence; stderr, raw output, assistant messages,
+  stream, decoded into persisted events, count as capacity evidence; stderr, raw output, assistant messages,
   and tool/command output do not create a hold.
   Events and `aid show` identify provider capacity.
   Verification of the interrupted attempt is skipped; the resumed attempt

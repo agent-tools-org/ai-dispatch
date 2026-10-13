@@ -90,7 +90,7 @@ pub(crate) fn resolve_failure_exit_code(store: &Store, task_id: &TaskId, exit_co
 
 pub(crate) fn record_execution_failure(store: &Store, task_id: &TaskId, duration_ms: i64, exit_code: Option<i32>, context: &FailureContext) {
     let capacity = store.get_task(task_id.as_str()).ok().flatten()
-        .and_then(|task| crate::provider_capacity::read(task_id, task.agent));
+        .and_then(|task| crate::provider_capacity::read(store, task_id, task.agent));
     let reason = match (capacity, exit_code) {
         (Some(message), _) => format!("provider capacity: {message}"),
         (_, Some(code)) => format!("agent exited with code {code}"),
@@ -234,7 +234,7 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
     } else {
         String::new()
     };
-    let label = crate::provider_capacity::terminal_label(task_id, agent.kind(), info.status);
+    let label = crate::provider_capacity::terminal_label(store, task_id, agent.kind(), info.status);
     println!("Task {} {} ({}{}{}){}", task_id, label, duration_str, tokens_str, cost_str, fail_reason);
     Ok(())
 }

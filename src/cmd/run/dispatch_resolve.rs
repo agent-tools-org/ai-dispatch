@@ -156,7 +156,7 @@ pub(super) fn resolve_agent_setup(
             .as_deref()
             .unwrap_or_else(|| agent_kind.as_str())
             .to_string();
-        let (next_kind, next_name) = held::skip_held_to_fallback(store, args, &original, &hold)?;
+        let (next_kind, next_name) = held::skip_held_to_fallback(args, &original, &hold)?;
         aid_warn!(
             "[aid] {} is held ({}) — dispatching to {} instead. Use `aid config clear-limit {}` to clear.",
             original, hold, next_name, original
@@ -223,8 +223,13 @@ pub(super) fn resolve_agent_setup(
             effective_model.as_deref(),
         )
     {
+        if crate::route_availability::availability_for_group(
+            &agent_kind, custom_agent_name.as_deref(),
+            &crate::provider_capacity::group(effective_model.as_deref()),
+        ).status == crate::route_availability::RouteStatus::Held {
+            anyhow::bail!("{} model is held ({hold})", args.agent_name);
+        }
         held::switch_model_held_route(
-            store,
             args,
             &mut agent_kind,
             &mut custom_agent_name,

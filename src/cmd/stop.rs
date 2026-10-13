@@ -35,7 +35,7 @@ pub fn stop_retry_tree(store: &Arc<Store>, task_id: &str, force: bool) -> Result
     let mut skipped = 0;
     let mut failed: Vec<String> = Vec::new();
     for task in &tree {
-        if task.status.is_terminal() && !store.capacity_backoff_pending(task.id.as_str())? {
+        if task.status.is_terminal() {
             skipped += 1;
             continue;
         }
@@ -73,12 +73,9 @@ fn terminate(
     print_label: Option<&'static str>,
 ) -> Result<()> {
     let task = ensure_non_terminal_task(store, task_id)?;
-    if task.status == TaskStatus::Failed && !store.cancel_capacity_continuation(task_id)? {
-        bail!("Task '{task_id}' no longer has a pending capacity continuation");
-    }
     if matches!(
         task.status,
-        TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled | TaskStatus::Failed
+        TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled
     ) {
         terminate_processes(task_id, graceful)?;
         preserve_worktree(task_id, &task, preserve_label);
@@ -132,7 +129,7 @@ fn ensure_non_terminal_task(store: &Arc<Store>, task_id: &str) -> Result<Task> {
     let task = store
         .get_task(task_id)?
         .ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
-    if task.status.is_terminal() && !store.capacity_backoff_pending(task_id)? {
+    if task.status.is_terminal() {
         bail!(
             "Task '{task_id}' is already terminal (status: {})",
             task.status.as_str()

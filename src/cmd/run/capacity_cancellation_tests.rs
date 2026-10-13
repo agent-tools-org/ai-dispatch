@@ -14,11 +14,14 @@ fn provider_capacity_regression_stop_cancels_backoff_with_existing_child() {
     child.status = TaskStatus::Done;
     store.insert_task(&row).expect("parent");
     store.insert_task(&child).expect("child");
-    record(&store, &row.id, "capacity backoff".into(), true).expect("pending");
-    crate::cmd::stop::stop(&store, row.id.as_str()).expect("cancel pending parent");
+    let mut waiting = task("t-capacity-waiting-child", home.path());
+    waiting.parent_task_id = Some(row.id.to_string());
+    waiting.status = TaskStatus::Waiting;
+    store.insert_task(&waiting).expect("waiting child");
+    crate::cmd::stop::stop_retry_tree(&store, row.id.as_str(), false).expect("cancel waiting child");
     assert_eq!(
         store
-            .get_task(row.id.as_str())
+            .get_task(waiting.id.as_str())
             .expect("task")
             .expect("row")
             .status,
@@ -43,11 +46,6 @@ fn provider_capacity_stop_rejects_backoff_that_already_ended() {
     store.insert_task(&row).expect("task");
     record(&store, &row.id, "capacity backoff".into(), true).expect("pending");
     record(&store, &row.id, "backoff ended".into(), false).expect("ended");
-    assert!(
-        !store
-            .cancel_capacity_continuation(row.id.as_str())
-            .expect("claim")
-    );
     assert!(crate::cmd::stop::stop(&store, row.id.as_str()).is_err());
     assert_eq!(
         store
@@ -70,7 +68,7 @@ async fn cancel_waiting(mode: u8) {
     row.custom_agent_name = Some("capacity-cancel".into());
     store.insert_task(&row).expect("task");
     let refusal = serde_json::json!({"type": "error", "message": CAPACITY});
-    std::fs::write(paths::log_path(row.id.as_str()), refusal.to_string()).expect("log");
+    seed_stdout(&store, &row.id, &refusal.to_string());
     let args = RunArgs {
         agent_name: "capacity-cancel".into(),
         dir: row.effective_dir.clone(),
@@ -81,10 +79,10 @@ async fn cancel_waiting(mode: u8) {
     let worker = continue_capacity(&store, &args, &row.id);
     let stopper = stop_after_marker(&store, row.id.as_str(), mode);
     let (outcome, ()) = tokio::join!(worker, stopper);
-    assert!(outcome.expect("worker").is_none());
+    let child_id = outcome.expect("worker").expect("waiting retry");
     assert_eq!(
         store
-            .get_task(row.id.as_str())
+            .get_task(child_id.as_str())
             .expect("task")
             .expect("row")
             .status,
@@ -92,26 +90,29 @@ async fn cancel_waiting(mode: u8) {
     );
     assert_eq!(
         store.get_retry_tree(row.id.as_str()).expect("tree").len(),
-        1
+        2
     );
 }
 
 async fn stop_after_marker(store: &Arc<Store>, task_id: &str, mode: u8) {
-    while store.get_events(task_id).expect("events").is_empty() {
+    let child = loop {
+        if let Some(child) = store.get_retry_tree(task_id).expect("tree").into_iter()
+            .find(|task| task.parent_task_id.as_deref() == Some(task_id))
+        { break child; }
         tokio::task::yield_now().await;
-    }
+    };
     if mode == 2 {
         store
             .db()
             .execute(
                 "UPDATE tasks SET status = 'stopped' WHERE id = ?1",
-                [task_id],
+                [child.id.as_str()],
             )
             .expect("persist cancellation");
     } else if mode == 1 {
         crate::cmd::stop::stop_retry_tree(store, task_id, false).expect("tree stop");
     } else {
-        crate::cmd::stop::stop(store, task_id).expect("direct stop");
+        crate::cmd::stop::stop(store, child.id.as_str()).expect("direct stop");
     }
 }
 

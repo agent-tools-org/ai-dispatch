@@ -2,7 +2,8 @@
 // Deps: lifecycle, in-memory Store, isolated aid home and custom shell agent.
 
 use super::*;
-use crate::paths;
+use crate::cmd::retry_logic::{capacity_args, prepare_retry};
+use crate::{paths, rate_limit, provider_capacity};
 
 const CAPACITY: &str = "Selected model is at capacity. Please try a different model.";
 
@@ -62,14 +63,14 @@ fn provider_capacity_continuation_reuses_codex_session_without_consuming_retry()
         dir: Some(dir.path().display().to_string()),
         ..Default::default()
     };
-    let child = continuation_args(&store, &args, &row).expect("continuation");
+    let child = capacity_args(&store, &args, &row).expect("continuation");
     assert_eq!(child.session_id.as_deref(), Some("capacity-session"));
     assert_eq!(child.retry, 3);
     assert_eq!(child.model, row.requested_model);
     assert_eq!(child.parent_task_id.as_deref(), Some(row.id.as_str()));
     let mut read_only = row;
     read_only.read_only = true;
-    let readonly = continuation_args(&store, &args, &read_only).expect("readonly");
+    let readonly = capacity_args(&store, &args, &read_only).expect("readonly");
     assert!(readonly.read_only);
     assert!(readonly.prompt.contains("read-only"));
     assert!(!readonly.prompt.contains("commit"));
@@ -82,7 +83,7 @@ fn install_agent(home: &std::path::Path, name: &str, command: &str) {
         home.join(format!("agents/{name}.toml")),
         format!(
             "[agent]\nid = '{name}'\ndisplay_name = '{name}'\ncommand = '/bin/sh'\n\
-         prompt_mode = 'arg'\nfixed_args = {args}\ninteractive_input = false\n"
+         prompt_mode = 'arg'\nstreaming = true\nfixed_args = {args}\ninteractive_input = false\n"
         ),
     )
     .expect("agent");
@@ -98,7 +99,7 @@ async fn provider_capacity_repeated_refusal_names_hold_expiry_when_no_route_is_l
     let row = task("t-capacity-no-route", home.path());
     store.insert_task(&row).expect("task");
     let error = serde_json::json!({"type":"error", "message":CAPACITY});
-    std::fs::write(paths::log_path(row.id.as_str()), error.to_string()).expect("refusal");
+    seed_stdout(&store, &row.id, &error.to_string());
     rate_limit::mark_rate_limited_for_model(
         &row.agent,
         None,
@@ -153,5 +154,33 @@ fn provider_capacity_regression_never_selects_automatic_advice_fallback() {
         agent_name: "codex".into(),
         ..Default::default()
     };
-    assert!(cascade_args(&store, &args, &row).expect("route").is_none());
+    rate_limit::mark_rate_limited_for_model(&row.agent, None, row.requested_model.as_deref(), CAPACITY);
+    let mut child = capacity_args(&store, &RunArgs { dir: row.effective_dir.clone(), ..args }, &row)
+        .expect("retry args");
+    assert!(crate::cmd::run::run_dispatch_resolve::resolve_agent_setup(&Arc::new(store), &mut child, None)
+        .is_err());
+    assert_eq!(child.agent_name, "codex");
+    assert_eq!(child.session_id, row.agent_session_id);
+}
+
+fn seed_stdout(store: &Store, id: &TaskId, raw: &str) {
+    store.insert_event(&TaskEvent {
+        task_id: id.clone(), timestamp: chrono::Local::now(), event_kind: EventKind::Error,
+        detail: CAPACITY.into(), metadata: Some(serde_json::json!({"provider_stdout": raw})),
+    }).expect("stdout event");
+}
+
+fn record(store: &Store, id: &TaskId, detail: String, continuation: bool) -> Result<()> {
+    store.insert_event(&TaskEvent {
+        task_id: id.clone(), timestamp: chrono::Local::now(), event_kind: EventKind::Error,
+        detail, metadata: Some(serde_json::json!({"capacity_continuation": continuation})),
+    })
+}
+
+async fn continue_capacity(store: &Arc<Store>, args: &RunArgs, id: &TaskId) -> Result<Option<TaskId>> {
+    let Some(task) = store.get_task(id.as_str())? else { return Ok(None) };
+    if task.status != TaskStatus::Failed || provider_capacity::read(store, id, task.agent).is_none() {
+        return Ok(None);
+    }
+    crate::cmd::run::run_lifecycle::retry_or_cascade(store, args, id).await
 }

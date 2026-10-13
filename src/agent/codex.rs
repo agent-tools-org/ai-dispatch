@@ -181,7 +181,7 @@ impl super::Agent for CodexAgent {
             "item.started" | "item.completed" => parse_item_event(task_id, &v, now),
             "turn.completed" => parse_turn_completed(task_id, &v, now),
             "thread.started" => parse_thread_started(task_id, &v, now),
-            "error" => parse_error_event(task_id, &v, now),
+            "error" | "turn.failed" => parse_error_event(task_id, &v, now),
             _ => None,
         }
     }

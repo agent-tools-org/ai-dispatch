@@ -12,14 +12,13 @@ pub(crate) use final_state::capture_final_worktree_state;
 mod missing_report;
 #[path = "quota_continuation.rs"]
 mod quota_continuation;
-#[path = "capacity_continuation.rs"]
-mod capacity_continuation;
 pub(crate) use missing_report::record_missing_report;
 #[path = "lifecycle/phases.rs"]
 mod phases;
 #[path = "lifecycle/steps.rs"]
 mod steps;
 use phases::run_lifecycle_phases;
+pub(super) use phases::retry_or_cascade;
 use steps::*;
 use super::run_dirty::{DirtyWorktreeAction, post_agent_dirty_worktree_cleanup};
 use super::run_model_selfheal::maybe_auto_retry_after_model_unavailable;

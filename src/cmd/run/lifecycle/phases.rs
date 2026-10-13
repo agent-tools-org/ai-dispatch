@@ -22,7 +22,7 @@ pub(super) async fn run_lifecycle_phases(
     run_escape_checks_phase(args, effective_dir, repo_path, wt_path);
     if let Some(task) = store.get_task(task_id.as_str())?
         && task.status == TaskStatus::Failed
-        && crate::provider_capacity::read(task_id, task.agent).is_some()
+        && crate::provider_capacity::read(store, task_id, task.agent).is_some()
     {
         if task.verify_status == VerifyStatus::Pending {
             store.update_verify_status(task_id.as_str(), VerifyStatus::Skipped)?;
@@ -35,7 +35,7 @@ pub(super) async fn run_lifecycle_phases(
         }
         capture_final_worktree_state(store, task_id)?;
         persist_result_file(store, task_id, args, &task, effective_dir);
-        return capacity_continuation::continue_capacity(store, args, task_id).await;
+        return retry_or_cascade(store, args, task_id).await;
     }
     match run_worktree_settlement_phase(
         store,
@@ -187,29 +187,10 @@ pub(super) async fn run_lifecycle_phases(
         return Ok(Some(retry_id));
     }
     crate::verify::enforce_verify_status(store, task_id);
-    if let Some(mut retry_args) =
-        retry_logic::prepare_retry(store.clone(), task_id, args).await?
-    {
-        if let Some(task) = store.get_task(task_id.as_str())? {
-            inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
-        }
-        return Box::pin(run(store.clone(), retry_args)).await.map(Some);
-    } else if let Some(task) = store.get_task(task_id.as_str())?
-        && task.status == TaskStatus::Failed
-        && let Some((next_agent, remaining_cascade)) = take_next_cascade_agent(args)
-    {
-        aid_info!(
-            "[aid] Cascade: trying {} after {} failed",
-            next_agent,
-            args.agent_name
-        );
-        let mut cascade_args = args.clone();
-        crate::cmd::run::switch_agent(&mut cascade_args, next_agent);
-        cascade_args.cascade = remaining_cascade;
-        cascade_args.parent_task_id = Some(task_id.as_str().to_string());
-        inherit_cascade_target(&mut cascade_args, &task)?;
-        return Box::pin(run(store.clone(), cascade_args)).await.map(Some);
-    } else if let Some(task) = store.get_task(task_id.as_str())?
+    if let Some(retry_id) = retry_or_cascade(store, args, task_id).await? {
+        return Ok(Some(retry_id));
+    }
+    if let Some(task) = store.get_task(task_id.as_str())?
         && task.status == TaskStatus::Failed
         && args.cascade.is_empty()
         // Already the provider's own sentence: `read_quota_error_message` reads
@@ -226,6 +207,48 @@ pub(super) async fn run_lifecycle_phases(
     }
     if mode.is_foreground() && !args.background {
         aid_info!("[aid] View in TUI: aid board");
+    }
+    Ok(None)
+}
+
+pub(in crate::cmd::run) async fn retry_or_cascade(
+    store: &Arc<Store>, args: &RunArgs, task_id: &TaskId,
+) -> Result<Option<TaskId>> {
+    if let Some(mut retry_args) =
+        retry_logic::prepare_retry(store.clone(), task_id, args).await?
+    {
+        if let Some(id) = retry_args.existing_task_id.as_ref()
+            && store.get_task(id.as_str())?.is_some_and(|task| task.status == TaskStatus::Stopped)
+        {
+            return Ok(Some(id.clone()));
+        }
+        if let Some(task) = store.get_task(task_id.as_str())? {
+            inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
+        }
+        return Box::pin(run(store.clone(), retry_args)).await.map(Some);
+    } else if let Some(task) = store.get_task(task_id.as_str())?
+        && task.status == TaskStatus::Failed
+        && let Some((next_agent, remaining_cascade)) = take_next_cascade_agent(args)
+    {
+        aid_info!(
+            "[aid] Cascade: trying {} after {} failed",
+            next_agent,
+            args.agent_name
+        );
+        let mut cascade_args = args.clone();
+        cascade_args.prompt = retry_logic::root_prompt(store, &task).unwrap_or_else(|| args.prompt.clone());
+        cascade_args.background = false;
+        cascade_args.on_done = None;
+        crate::cmd::run::switch_agent(&mut cascade_args, next_agent);
+        cascade_args.cascade = remaining_cascade;
+        cascade_args.parent_task_id = Some(task_id.as_str().to_string());
+        inherit_cascade_target(&mut cascade_args, &task)?;
+        if task.read_only {
+            cascade_args.dir = task.effective_dir.or(task.worktree_path).or(cascade_args.dir);
+            cascade_args.worktree = None;
+            cascade_args.base_branch = None;
+        }
+        return Box::pin(run(store.clone(), cascade_args)).await.map(Some);
     }
     Ok(None)
 }

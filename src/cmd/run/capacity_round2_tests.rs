@@ -16,7 +16,7 @@ async fn provider_capacity_round2_retry_tree_stop_sees_waiting_child_before_back
     row.custom_agent_name = Some("capacity-round2".into());
     store.insert_task(&row).expect("parent");
     let refusal = serde_json::json!({"type": "error", "message": CAPACITY});
-    std::fs::write(paths::log_path(row.id.as_str()), refusal.to_string()).expect("log");
+    seed_stdout(&store, &row.id, &refusal.to_string());
     let args = RunArgs {
         agent_name: "capacity-round2".into(),
         dir: row.effective_dir.clone(),
@@ -36,8 +36,16 @@ async fn provider_capacity_round2_retry_tree_stop_sees_waiting_child_before_back
             TaskStatus::Stopped
         );
     };
-    let (outcome, ()) = tokio::join!(continue_capacity(&store, &args, &row.id), stopper);
-    assert!(outcome.expect("worker").is_none());
+    let (outcome, ()) = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+        tokio::join!(continue_capacity(&store, &args, &row.id), stopper)
+    }).await.expect("bounded cancellation");
+    let child = outcome.expect("worker").expect("cancelled retry");
+    assert_eq!(store.get_task(child.as_str()).expect("lookup").expect("child").status,
+        TaskStatus::Stopped);
+    let mut stopped_args = RunArgs::for_retry(&store, &store.get_task(child.as_str())
+        .expect("lookup").expect("child")).expect("args");
+    stopped_args.existing_task_id = Some(child);
+    assert!(crate::cmd::run::run(store.clone(), stopped_args).await.is_err());
     assert_eq!(store.get_retry_tree(row.id.as_str()).expect("tree").len(), 2);
 }
 
@@ -83,11 +91,13 @@ async fn provider_capacity_round2_refreshed_hold_never_substitutes_or_clears_ses
     let store = Arc::new(Store::open_memory().expect("store"));
     let row = task("t-round2-refresh", home.path());
     store.insert_task(&row).expect("parent");
+    seed_stdout(&store, &row.id,
+        &serde_json::json!({"type": "error", "message": CAPACITY}).to_string());
     let args = RunArgs {
         agent_name: "codex".into(), dir: row.effective_dir.clone(), ..Default::default()
     };
     let refresh = async {
-        while store.get_events(row.id.as_str()).expect("events").is_empty() {
+        while store.get_retry_tree(row.id.as_str()).expect("tree").len() == 1 {
             tokio::task::yield_now().await;
         }
         rate_limit::mark_rate_limited_for_model(
@@ -95,14 +105,74 @@ async fn provider_capacity_round2_refreshed_hold_never_substitutes_or_clears_ses
     };
     let (child, ()) = tokio::time::timeout(std::time::Duration::from_secs(15), async {
         tokio::join!(
-            prepare_session(&store, &args, &row, row.requested_model.as_deref(), "expired hold"),
+            prepare_retry(store.clone(), &row.id, &args),
             refresh
         )
     }).await.expect("bounded backoff");
-    let mut child = child.expect("backoff");
+    let mut child = child.expect("backoff").expect("retry");
     let result = crate::cmd::run::run_dispatch_resolve::resolve_agent_setup(&store, &mut child, None);
     assert!(result.is_err(), "refreshed capacity must fail with its hold");
     assert_eq!(child.agent_name, "codex");
     assert_eq!(child.session_id, row.agent_session_id);
     assert!(result.err().expect("held").to_string().contains("provider capacity held until"));
+    child.cascade = vec!["droid".into()];
+    assert!(crate::cmd::run::run_dispatch_resolve::resolve_agent_setup(&store, &mut child, None).is_err());
+    assert_eq!(child.agent_name, "codex");
+    assert_eq!(child.session_id, row.agent_session_id);
+    assert_eq!(child.cascade, ["droid"]);
+    let id = child.existing_task_id.clone().expect("waiting child");
+    assert!(crate::cmd::run::run(store.clone(), child).await.is_err());
+    let failed = store.get_task(id.as_str()).expect("lookup").expect("child");
+    assert_eq!(failed.status, TaskStatus::Failed);
+    assert!(store.latest_error(id.as_str()).expect("reason").contains("provider capacity held until"));
+}
+
+#[test]
+fn provider_capacity_round2_pins_resolved_model_when_served_cache_changes() {
+    let home = tempfile::tempdir().expect("home");
+    let _home = paths::AidHomeGuard::set(home.path());
+    let _served = crate::agent::model_validation::MockServedModelsGuard::set(
+        AgentKind::Codex, Some(vec!["other-model".into()]),
+    );
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let row = task("t-round2-pin", home.path());
+    store.insert_task(&row).expect("task");
+    let args = RunArgs { dir: row.effective_dir.clone(), ..Default::default() };
+    let mut child = capacity_args(&store, &args, &row).expect("retry args");
+    let error = crate::cmd::run::run_dispatch_resolve::resolve_agent_setup(&store, &mut child, None)
+        .err().expect("unserved retained model must fail");
+    assert!(error.to_string().contains("does not serve model"));
+    assert_eq!(child.agent_name, "codex");
+    assert_eq!(child.model, row.requested_model);
+    assert_eq!(child.session_id, row.agent_session_id);
+}
+
+#[test]
+fn provider_capacity_round2_classifies_decoded_turn_failure_and_reconnect_sequence() {
+    let refusal = serde_json::json!({"type": "turn.failed", "error": {"message": CAPACITY}});
+    let reconnect = serde_json::json!({"type": "error", "message":
+        "Reconnecting... 5/5 (unexpected status 503 Service Unavailable)"});
+    let failure = serde_json::json!({"type": "turn.failed", "error": {"message": "stream disconnected"}});
+    let completed = serde_json::json!({"type": "turn.completed", "usage": {}});
+    for (lines, capacity) in [
+        (vec![refusal], true), (vec![reconnect.clone(), failure.clone()], true),
+        (vec![reconnect, completed, failure], false),
+    ] {
+        let home = tempfile::tempdir().expect("home");
+        let _home = paths::AidHomeGuard::set(home.path());
+        let store = Arc::new(Store::open_memory().expect("store"));
+        let row = task("t-round2-decoded", home.path());
+        store.insert_task(&row).expect("task");
+        let mut info = crate::agent::Agent::parse_completion(&crate::agent::codex::CodexAgent, "");
+        let mut tracker = crate::watcher::SyntheticMilestoneTracker::new();
+        let mut count = 0;
+        let mut session_saved = false;
+        for line in lines {
+            crate::watcher::handle_streaming_line_with_session(crate::watcher::StreamLineContext {
+                agent: &crate::agent::codex::CodexAgent, task_id: &row.id, store: &store,
+                workgroup_id: None, synthetic_tracker: &mut tracker,
+            }, &mut info, &mut count, &line.to_string(), &mut session_saved).expect("decode");
+        }
+        assert_eq!(provider_capacity::read(&store, &row.id, row.agent).is_some(), capacity);
+    }
 }

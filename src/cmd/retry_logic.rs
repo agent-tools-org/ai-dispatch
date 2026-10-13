@@ -8,34 +8,140 @@ use tokio::time::{Duration, sleep};
 use super::run::{RunArgs, apply_retry_target};
 use crate::paths;
 use crate::store::Store;
-use crate::types::{Task, TaskId, TaskStatus};
+use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
 
 pub(crate) async fn prepare_retry(
     store: Arc<Store>,
     task_id: &TaskId,
     args: &RunArgs,
 ) -> Result<Option<RunArgs>> {
-    if args.retry == 0 {
-        return Ok(None);
-    }
     let Some(task) = store.get_task(task_id.as_str())? else { return Ok(None) };
     if task.status != TaskStatus::Failed {
         return Ok(None);
     }
+    let capacity = crate::provider_capacity::read(&store, task_id, task.agent).is_some();
+    if (capacity && capacity_retried(&store, &task)?) || (!capacity && args.retry == 0) {
+        return Ok(None);
+    }
     let stderr_tail = read_stderr_tail(task_id.as_str(), 5);
-    if let Some(parent_id) = args.parent_task_id.as_deref()
+    if !capacity && let Some(parent_id) = args.parent_task_id.as_deref()
         && stderr_tail == read_stderr_tail(parent_id, 5)
     {
         println!("Retry stopped: identical stderr to previous attempt.");
         return Ok(None);
     }
-    let depth = retry_depth(&store, args.parent_task_id.as_deref())?;
-    let attempt = depth + 1;
-    let backoff_secs = backoff_for_attempt(attempt);
-    println!("Retry {attempt}/{}: re-dispatching after {backoff_secs}s...", depth + args.retry);
-    sleep(Duration::from_secs(backoff_secs)).await;
-    let retry_args = build_failed_retry_args(store.as_ref(), task_id, args, &task, &stderr_tail)?;
+    let attempt = retry_depth(&store, args.parent_task_id.as_deref())? + 1;
+    let delay = if capacity {
+        capacity_delay(&task)
+    } else {
+        Duration::from_secs(backoff_for_attempt(attempt))
+    };
+    let mut retry_args = if capacity {
+        capacity_args(&store, args, &task)?
+    } else {
+        build_failed_retry_args(&store, task_id, args, &task, &stderr_tail)?
+    };
+    queue_retry(&store, &task, &mut retry_args)?;
+    store.insert_event(&TaskEvent {
+        task_id: task.id.clone(), timestamp: chrono::Local::now(), event_kind: EventKind::Error,
+        detail: format!("{}retry {attempt}: {} waiting for {}s",
+            if capacity { "provider capacity — " } else { "" },
+            retry_args.existing_task_id.as_ref().map(TaskId::as_str).unwrap_or(""), delay.as_secs()),
+        metadata: Some(serde_json::json!({"capacity_continuation": capacity})),
+    })?;
+    sleep(delay).await;
     Ok(Some(retry_args))
+}
+
+fn queue_retry(store: &Store, task: &Task, args: &mut RunArgs) -> Result<()> {
+    let mut child = task.clone();
+    child.id = TaskId::generate();
+    child.status = TaskStatus::Waiting;
+    child.parent_task_id = Some(task.id.to_string());
+    child.prompt = args.prompt.clone();
+    child.resolved_prompt = None;
+    child.created_at = chrono::Local::now();
+    child.completed_at = None;
+    child.tokens = None;
+    child.prompt_tokens = None;
+    child.duration_ms = None;
+    child.cost_usd = None;
+    child.exit_code = None;
+    child.final_head_sha = None;
+    child.final_branch = None;
+    child.delivery_assessment = None;
+    child.audit_verdict = None;
+    child.audit_report_path = None;
+    child.requested_model = args.model.clone();
+    child.observed_model = None;
+    child.attribution_source = None;
+    child.log_path = Some(paths::log_path(child.id.as_str()).display().to_string());
+    store.insert_task(&child)?;
+    args.existing_task_id = Some(child.id.clone());
+    store.update_task_dispatch_args(child.id.as_str(), &args.dispatch_args_json()?)?;
+    Ok(())
+}
+
+pub(super) fn capacity_args(store: &Store, args: &RunArgs, task: &Task) -> Result<RunArgs> {
+    let mut child = RunArgs::for_retry(store, task)?;
+    child.dir = args.dir.clone();
+    child.env = args.env.clone();
+    child.foreground = args.foreground;
+    child.announce = args.announce;
+    child.retry = args.retry;
+    child.model = task.requested_model.clone().or(task.observed_model.clone());
+    child.model_source = crate::agent::model_validation::ModelSource::UserSupplied;
+    child.budget = false;
+    child.force_default_model = child.model.is_none();
+    child.on_done = None;
+    child.background = false;
+    child.parent_task_id = Some(task.id.to_string());
+    let prompt = root_prompt(store, task).unwrap_or_else(|| args.prompt.clone());
+    let mode = if task.read_only { "read-only " } else { "" };
+    child.prompt = format!(
+        "Provider capacity interrupted this task. Continue the original {mode}task in this session.\n\n\
+         [Original task]\n{prompt}"
+    );
+    apply_retry_target(task, &mut child)?;
+    if task.read_only {
+        child.dir = task.effective_dir.clone().or(task.worktree_path.clone()).or(child.dir);
+        child.worktree = None;
+        child.base_branch = None;
+    }
+    Ok(child)
+}
+
+fn capacity_delay(task: &Task) -> Duration {
+    let available = crate::provider_capacity::availability_for_model(
+        &task.agent, task.custom_agent_name.as_deref(),
+        task.requested_model.as_deref().or(task.observed_model.as_deref()),
+    );
+    let delay = match available.ends {
+        crate::route_availability::HoldEnd::At(expiry) =>
+            (expiry - chrono::Local::now().naive_local()).to_std().unwrap_or_default(),
+        _ => Duration::ZERO,
+    };
+    delay.max(Duration::from_secs(5))
+}
+
+fn capacity_retried(store: &Store, task: &Task) -> Result<bool> {
+    for ancestor in store.get_retry_chain(task.id.as_str())? {
+        if store.get_events(ancestor.id.as_str())?.iter().any(|event|
+            event.metadata.as_ref().and_then(|value| value.get("capacity_continuation"))
+                == Some(&serde_json::Value::Bool(true)))
+        {
+            let model = task.requested_model.as_deref().or(task.observed_model.as_deref());
+            let hold = crate::rate_limit::dispatch_blocking_hold_for_model(
+                &task.agent, task.custom_agent_name.as_deref(), model).unwrap_or_default();
+            store.insert_event(&TaskEvent {
+                task_id: task.id.clone(), timestamp: chrono::Local::now(), event_kind: EventKind::Error,
+                detail: format!("provider capacity for model {} — {hold}; continuation already used",
+                    model.unwrap_or("(default)")), metadata: None,
+            })?;
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn build_failed_retry_args(

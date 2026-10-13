@@ -55,17 +55,20 @@ fn final_error(raw: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-pub(crate) fn read(task_id: &TaskId, agent: AgentKind) -> Option<String> {
-    let log = std::fs::read_to_string(paths::log_path(task_id.as_str())).unwrap_or_default();
-    classify(&log, agent, Channel::CliStream)
+pub(crate) fn read(store: &crate::store::Store, task_id: &TaskId, agent: AgentKind) -> Option<String> {
+    let stdout = store.get_events(task_id.as_str()).ok()?.into_iter()
+        .filter_map(|event| event.metadata?.get("provider_stdout")?.as_str().map(str::to_string))
+        .collect::<Vec<_>>().join("\n");
+    classify(&stdout, agent, Channel::CliStream)
 }
 
 pub(crate) fn terminal_label(
+    store: &crate::store::Store,
     task_id: &TaskId,
     agent: AgentKind,
     status: TaskStatus,
 ) -> &'static str {
-    if status == TaskStatus::Failed && read(task_id, agent).is_some() {
+    if status == TaskStatus::Failed && read(store, task_id, agent).is_some() {
         "provider capacity"
     } else {
         status.label()

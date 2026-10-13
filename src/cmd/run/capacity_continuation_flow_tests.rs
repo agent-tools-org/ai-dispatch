@@ -135,7 +135,7 @@ impl Fixture {
             &paths::log_path(self.row.id.as_str()),
             None,
             self.row.requested_model.as_deref(),
-            false,
+            agent.streaming(),
             None,
             Default::default(),
         )

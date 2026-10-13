@@ -30,6 +30,13 @@ fn insert_explicit_task_id(
     task_id: &mut TaskId,
     log_path: &mut PathBuf,
 ) -> Result<()> {
+    if task.parent_task_id.is_some()
+        && let Some(existing) = store.get_task(task_id.as_str())?
+        && existing.parent_task_id == task.parent_task_id
+        && existing.status != crate::types::TaskStatus::Waiting
+    {
+        anyhow::bail!("Retry '{}' is {}; refusing to replace it", task_id, existing.status);
+    }
     match resolve_id_conflict(store, task_id.as_str())? {
         IdConflict::None => store.insert_task(task),
         IdConflict::ReplaceWaiting => store.replace_waiting_task(task),

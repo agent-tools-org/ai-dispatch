@@ -32,9 +32,10 @@ fn provider_capacity_regression_rejects_provider_shaped_tool_stderr() {
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());
     paths::ensure_dirs().expect("dirs");
+    let store = crate::store::Store::open_memory().expect("store");
     let id = TaskId("t-capacity-tool-stderr".into());
     std::fs::write(paths::stderr_path(id.as_str()), error.to_string()).expect("stderr");
-    assert!(read(&id, AgentKind::Codex).is_none());
+    assert!(read(&store, &id, AgentKind::Codex).is_none());
 }
 
 #[test]
@@ -52,6 +53,7 @@ fn provider_capacity_regression_rejects_raw_quotes_on_both_channels() {
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());
     paths::ensure_dirs().expect("dirs");
+    let store = crate::store::Store::open_memory().expect("store");
     let id = TaskId("t-capacity-raw-reconnect".into());
     std::fs::write(
         paths::stderr_path(id.as_str()),
@@ -61,7 +63,7 @@ fn provider_capacity_regression_rejects_raw_quotes_on_both_channels() {
     let final_error = serde_json::json!({"type": "turn.failed",
         "error": {"message": "stream disconnected before completion"}});
     std::fs::write(paths::log_path(id.as_str()), final_error.to_string()).expect("log");
-    assert!(read(&id, AgentKind::Codex).is_none());
+    assert!(read(&store, &id, AgentKind::Codex).is_none());
 }
 
 #[test]
@@ -214,12 +216,21 @@ fn provider_capacity_expiry_and_success_release_model_hold() {
             .iter()
             .any(|note| note.contains("gpt-6.1-sol: provider capacity held until"))
     );
+    let store = crate::store::Store::open_memory().expect("store");
     let id = TaskId("t-capacity-label".into());
     paths::ensure_dirs().expect("dirs");
     let error = serde_json::json!({"type":"error", "message":CAPACITY});
-    std::fs::write(paths::log_path(id.as_str()), error.to_string()).expect("log");
+    store.db().execute(
+        "INSERT INTO tasks (id, agent, prompt, status, created_at)
+         VALUES (?1, 'codex', 'task', 'failed', ?2)",
+        rusqlite::params![id.as_str(), chrono::Local::now().to_rfc3339()],
+    ).expect("task");
+    store.insert_event(&TaskEvent {
+        task_id: id.clone(), timestamp: chrono::Local::now(), event_kind: EventKind::Error,
+        detail: CAPACITY.into(), metadata: Some(serde_json::json!({"provider_stdout": error.to_string()})),
+    }).expect("stdout event");
     assert_eq!(
-        terminal_label(&id, agent, TaskStatus::Failed),
+        terminal_label(&store, &id, agent, TaskStatus::Failed),
         "provider capacity"
     );
     assert!(rate_limit::clear_rate_limit_for_model(&agent, None, model));

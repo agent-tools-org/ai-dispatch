@@ -20,7 +20,6 @@ pub(super) fn keep_aid_resolved_pin(
 }
 
 pub(super) fn switch_model_held_route(
-    store: &Store,
     args: &mut super::RunArgs,
     agent_kind: &mut AgentKind,
     custom_agent_name: &mut Option<String>,
@@ -32,7 +31,7 @@ pub(super) fn switch_model_held_route(
         .as_deref()
         .unwrap_or_else(|| agent_kind.as_str())
         .to_string();
-    let (next_kind, next_name) = skip_held_to_fallback(store, args, &original, &hold)?;
+    let (next_kind, next_name) = skip_held_to_fallback(args, &original, &hold)?;
     aid_warn!(
         "[aid] {} model provider is held ({}) — dispatching to {} instead. Use `aid config clear-limit {}` to clear.",
         original, hold, next_name, original
@@ -64,9 +63,8 @@ pub(super) fn background_keeps_hold(kind: AgentKind, custom_name: Option<&str>) 
         && !rate_limit::get_rate_limit_info(&kind, custom_name).is_some_and(|info| info.needs_human)
 }
 
-// Walk `cascade` (then auto-fallback) to the first non-held alternative. Unrecognised names error; custom agents are valid.
+// Walk `cascade` to the first non-held alternative. Unrecognised names error; custom agents are valid.
 pub(super) fn skip_held_to_fallback(
-    store: &Store,
     args: &mut super::RunArgs,
     held_name: &str,
     hold: &str,
@@ -86,14 +84,6 @@ pub(super) fn skip_held_to_fallback(
                 .collect();
             return Ok((*kind, name.clone()));
         }
-    }
-    if let Some(candidate) = super::super::advice_route::automatic_candidate(Some(store), args) {
-        let kind = candidate
-            .kind()
-            .ok_or_else(|| anyhow::anyhow!("advised route is not builtin"))?;
-        super::super::advice_route::apply_candidate(args, &candidate);
-        args.cascade.clear();
-        return Ok((kind, candidate.agent));
     }
     anyhow::bail!(
         "{held_name} is held ({hold}). Use --cascade <agent> or `aid config clear-limit {held_name}` to clear."

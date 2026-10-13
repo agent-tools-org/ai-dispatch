@@ -125,50 +125,6 @@ impl Store {
         Ok(())
     }
 
-    /// Replace a waiting task's row with full task data (called when dispatch begins).
-    /// The only legal move is the waiting row -> the dispatch status; anything else
-    /// is rejected by the status guard and aborts the dispatch.
-    pub fn replace_waiting_task(&self, task: &Task) -> Result<()> {
-        let id = task.id.as_str();
-        if !self.guard_current_status(id, &[TaskStatus::Waiting], task.status)? {
-            anyhow::bail!(
-                "Task '{id}' is not waiting; refusing to replace its row with status '{}'",
-                task.status.as_str()
-            );
-        }
-        let agent_value = if task.agent == AgentKind::Custom {
-            task.custom_agent_name.as_deref().unwrap_or("custom")
-        } else {
-            task.agent.as_str()
-        };
-        self.db().execute(
-            "UPDATE tasks SET agent=?2, prompt=?3, resolved_prompt=?4, status=?5,
-             parent_task_id=?6, workgroup_id=?7, caller_kind=?8, caller_session_id=?9,
-             agent_session_id=?10, repo_path=?11, project_id=?12, worktree_path=?13, worktree_branch=?14,
-             final_head_sha=?15, final_branch=?16, start_sha=?17, log_path=?18, output_path=?19, model=?20, verify=?21,
-             verify_status=?22, read_only=?23, budget=?24, custom_agent_name=?25,
-             category=?26, pending_reason=?27, audit_verdict=?28, audit_report_path=?29,
-             delivery_assessment=?30, effective_dir=?31
-             WHERE id=?1",
-            params![
-                task.id.as_str(), agent_value, task.prompt, task.resolved_prompt,
-                task.status.as_str(), task.parent_task_id, task.workgroup_id,
-                task.caller_kind, task.caller_session_id, task.agent_session_id,
-                task.repo_path, task.project_id, task.worktree_path, task.worktree_branch,
-                task.final_head_sha, task.final_branch,
-                task.start_sha, task.log_path, task.output_path, task.requested_model,
-                task.verify, task.verify_status.as_str(), task.read_only,
-                task.budget, task.custom_agent_name, task.category,
-                task.pending_reason,
-                task.audit_verdict,
-                task.audit_report_path,
-                task.delivery_assessment.map(|value| value.as_str()),
-                task.effective_dir,
-            ],
-        )?;
-        Ok(())
-    }
-
     pub fn create_workgroup(
         &self,
         name: &str,

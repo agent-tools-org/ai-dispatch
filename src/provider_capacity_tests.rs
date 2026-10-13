@@ -5,6 +5,57 @@ use super::*;
 const CAPACITY: &str = "Selected model is at capacity. Please try a different model.";
 
 #[test]
+fn provider_capacity_regression_rejects_raw_quotes_on_both_channels() {
+    let reconnect = "Reconnecting... 5/5 (unexpected status 503 Service Unavailable)\n\
+                     Error: stream disconnected before completion";
+    for channel in [Channel::CliStream, Channel::CliStderr] {
+        for raw in [CAPACITY, reconnect] {
+            assert!(
+                classify(raw, AgentKind::Codex, channel).is_none(),
+                "{channel:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn provider_capacity_regression_rejects_other_envelopes_and_reconnect_quotes() {
+    for kind in [
+        "tool.error",
+        "assistant",
+        "item.completed",
+        "turn.completed",
+    ] {
+        let refusal = serde_json::json!({"type": kind, "message": CAPACITY});
+        let reconnect = serde_json::json!({"type": kind,
+            "message": "Reconnecting... 5/5 (unexpected status 503 Service Unavailable)"});
+        let final_error = serde_json::json!({"type": "turn.failed",
+            "error": {"message": "stream disconnected before completion"}});
+        for channel in [Channel::CliStream, Channel::CliStderr] {
+            assert!(classify(&refusal.to_string(), AgentKind::Codex, channel).is_none());
+            assert!(
+                classify(
+                    &format!("{reconnect}\n{final_error}"),
+                    AgentKind::Codex,
+                    channel
+                )
+                .is_none(),
+                "{kind}"
+            );
+            assert!(
+                classify(
+                    &format!("{final_error}\n{reconnect}"),
+                    AgentKind::Codex,
+                    channel
+                )
+                .is_none(),
+                "{kind}"
+            );
+        }
+    }
+}
+
+#[test]
 fn provider_capacity_classifies_exact_codex_error_without_quota_or_model_unavailable() {
     let raw = serde_json::json!({"type":"turn.failed", "error":{"message":CAPACITY}}).to_string();
     assert_eq!(

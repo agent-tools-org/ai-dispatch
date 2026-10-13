@@ -132,3 +132,21 @@ async fn provider_capacity_repeated_refusal_names_hold_expiry_when_no_route_is_l
 
 #[path = "capacity_continuation_flow_tests.rs"]
 mod flow;
+
+#[path = "capacity_cancellation_tests.rs"]
+mod cancellation;
+
+#[test]
+fn provider_capacity_regression_never_selects_automatic_advice_fallback() {
+    let home = tempfile::tempdir().expect("home");
+    let _home = paths::AidHomeGuard::set(home.path());
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Gemini]);
+    let store = Store::open_memory().expect("store");
+    let row = task("t-capacity-advice", home.path());
+    store.insert_task(&row).expect("task");
+    let args = RunArgs {
+        agent_name: "codex".into(),
+        ..Default::default()
+    };
+    assert!(cascade_args(&store, &args, &row).expect("route").is_none());
+}

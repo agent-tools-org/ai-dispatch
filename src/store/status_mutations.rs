@@ -28,15 +28,17 @@ impl Store {
         let rows = tx.execute(
             "UPDATE tasks SET status = ?1,
              started_at = CASE WHEN ?1 = 'running' THEN COALESCE(started_at, ?3) ELSE started_at END,
-             completed_at = CASE WHEN ?1 IN ('failed', 'stopped') THEN ?3 ELSE completed_at END,
-             duration_ms = CASE WHEN ?1 IN ('failed', 'stopped') THEN
+             completed_at = CASE WHEN ?1 IN ('done', 'failed', 'stopped') THEN ?3 ELSE completed_at END,
+             duration_ms = CASE WHEN ?1 IN ('failed', 'stopped')
+                 OR (?1 = 'done' AND duration_ms IS NULL) THEN
                  MAX(0, COALESCE(CAST(ROUND((julianday(?3) -
                      julianday(COALESCE(started_at, created_at))) * 86400000) AS INTEGER), 0))
                  ELSE duration_ms END,
              exit_code = CASE WHEN ?1 = 'failed' AND ?4 = 'done'
                  AND (exit_code IS NULL OR exit_code = 0) THEN 1 ELSE exit_code END,
              pending_reason = COALESCE(?5, pending_reason)
-             WHERE id = ?2 AND status = ?4",
+             WHERE id = ?2 AND status = ?4
+             AND (?1 = 'merged' OR status != 'done' OR completed_at IS NULL)",
             params![status.as_str(), id, Local::now().to_rfc3339(), current.as_str(),
                 reason.map(|value| value.as_str())],
         )?;
@@ -148,13 +150,12 @@ impl Store {
         next: TaskStatus,
         allow_rescue: bool,
     ) -> Result<bool> {
-        if current.is_terminal() && next == TaskStatus::Stopped
-            || matches!(current,
-                TaskStatus::Failed | TaskStatus::Stopped | TaskStatus::Skipped | TaskStatus::Merged)
-                && next.is_terminal() && next != TaskStatus::Merged && !allow_rescue
+        if current.is_terminal() && next.is_terminal() && next != TaskStatus::Merged && !allow_rescue
+            && !(current == TaskStatus::Done && self.provisional_done(id)?)
         {
             return Ok(false);
         }
+        if current == TaskStatus::Done && next == TaskStatus::Stopped { return Ok(true); }
         if current.can_transition_to(next) || (allow_rescue && current.can_rescue_to_done(next)) {
             return Ok(true);
         }
@@ -188,6 +189,13 @@ impl Store {
                 "to": next.as_str(),
             })),
         })
+    }
+
+    fn provisional_done(&self, id: &str) -> Result<bool> {
+        Ok(self.db().query_row(
+            "SELECT status = 'done' AND completed_at IS NULL FROM tasks WHERE id = ?1",
+            params![id], |row| row.get::<_, bool>(0),
+        ).optional()?.unwrap_or(false))
     }
 
     fn current_task_status(&self, id: &str) -> Result<Option<TaskStatus>> {

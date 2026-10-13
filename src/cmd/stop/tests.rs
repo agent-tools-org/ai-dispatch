@@ -30,7 +30,8 @@ fn stop_missing_task_returns_error() {
 #[test]
 fn stop_done_task_returns_error() {
     with_store(|store| {
-        let task = make_task("t-done", TaskStatus::Done);
+        let mut task = make_task("t-done", TaskStatus::Done);
+        task.completed_at = Some(chrono::Local::now());
         store.insert_task(&task).unwrap();
         let err = stop(&store, "t-done").unwrap_err();
         assert!(err.to_string().contains("task already done: no terminal reason recorded"));
@@ -199,6 +200,7 @@ fn preserve_worktree_attempts_commit_for_non_read_only() {
 fn make_child(id: &str, parent: &str, status: TaskStatus) -> Task {
     let mut t = make_task(id, status);
     t.parent_task_id = Some(parent.to_string());
+    if status == TaskStatus::Done { t.completed_at = Some(chrono::Local::now()); }
     t
 }
 

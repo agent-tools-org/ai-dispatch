@@ -12,31 +12,7 @@ use super::TaskCompletionUpdate;
 
 impl Store {
     pub fn update_task_completion(&self, payload: TaskCompletionUpdate<'_>) -> Result<bool> {
-        if !self.guard_completion_transition(payload.id, payload.status)? {
-            return Ok(false);
-        }
-        let now = Local::now().to_rfc3339();
-        let rows = self.db().execute(
-            // COALESCE, not assignment: a second completion write that learned
-            // nothing must not erase a model the first one observed. The
-            // requested model in `model` is never touched here — a completion
-            // has no business rewriting what was asked for.
-            "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4,
-             observed_model = COALESCE(?5, observed_model), attribution_source = COALESCE(?9, attribution_source), cost_usd = ?6, exit_code = ?7 WHERE id = ?8
-             AND status NOT IN ('failed', 'stopped', 'skipped', 'merged')",
-            params![
-                payload.status.as_str(),
-                payload.tokens,
-                payload.duration_ms,
-                now,
-                payload.observed_model,
-                payload.cost_usd,
-                payload.exit_code,
-                payload.id,
-                payload.attribution_source.map(|value| value.as_str()),
-            ],
-        )?;
-        Ok(rows > 0)
+        self.write_completion(payload, None, true)
     }
 
     /// Atomically update task completion AND insert the completion event.
@@ -45,6 +21,18 @@ impl Store {
         &self,
         payload: TaskCompletionUpdate<'_>,
         event: &TaskEvent,
+    ) -> Result<bool> {
+        self.write_completion(payload, Some(event), true)
+    }
+
+    pub(crate) fn record_agent_completion(
+        &self, payload: TaskCompletionUpdate<'_>, event: Option<&TaskEvent>,
+    ) -> Result<bool> {
+        self.write_completion(payload, event, false)
+    }
+
+    fn write_completion(
+        &self, payload: TaskCompletionUpdate<'_>, event: Option<&TaskEvent>, settled: bool,
     ) -> Result<bool> {
         if !self.guard_completion_transition(payload.id, payload.status)? {
             return Ok(false);
@@ -57,9 +45,11 @@ impl Store {
             // nothing must not erase a model the first one observed. The
             // requested model in `model` is never touched here — a completion
             // has no business rewriting what was asked for.
-            "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3, completed_at = ?4,
+            "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3,
+             completed_at = CASE WHEN ?1 = 'done' AND ?10 = 0 THEN NULL ELSE ?4 END,
              observed_model = COALESCE(?5, observed_model), attribution_source = COALESCE(?9, attribution_source), cost_usd = ?6, exit_code = ?7 WHERE id = ?8
-             AND status NOT IN ('failed', 'stopped', 'skipped', 'merged')",
+             AND (status NOT IN ('done', 'failed', 'stopped', 'skipped', 'merged')
+                  OR (status = 'done' AND completed_at IS NULL))",
             params![
                 payload.status.as_str(),
                 payload.tokens,
@@ -70,14 +60,16 @@ impl Store {
                 payload.exit_code,
                 payload.id,
                 payload.attribution_source.map(|value| value.as_str()),
+                settled,
             ],
         )?;
         if rows == 0 {
             return Ok(false);
         }
-        super::mutations::insert_event_on(&tx, event)?;
+        if let Some(event) = event {
+            super::mutations::insert_event_on(&tx, event)?;
+        }
         tx.commit()?;
-        drop(conn);
-        Ok(rows > 0)
+        Ok(true)
     }
 }

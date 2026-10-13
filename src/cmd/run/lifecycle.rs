@@ -82,6 +82,9 @@ pub(crate) async fn post_run_lifecycle(
         pre_task_dirty_paths,
     )
     .await;
+    if outcome.is_ok() {
+        store.settle_task_status(task_id.as_str(), TaskStatus::Done, Some(&[TaskStatus::Done]), None, None)?;
+    }
     crate::backup::on_settled(store.as_ref(), task_id.as_str());
     outcome
 }

@@ -115,3 +115,28 @@ fn settle_done_provisional_success_still_fails_verification() {
     assert!(task.duration_ms.is_some());
     assert_eq!(task.exit_code, Some(1));
 }
+
+#[test]
+fn settle_done_worker_failure_can_win_before_success_settlement() {
+    let (_home, _guard, store, id) = setup();
+    assert!(
+        crate::background::record_failure(&store, id.as_str(), "worker failed", "worker failed")
+            .expect("worker failure")
+    );
+    let task = store.get_task(id.as_str()).expect("get").expect("task");
+    assert_eq!(task.status, TaskStatus::Failed);
+    assert!(task.completed_at.is_some());
+    assert!(task.duration_ms.is_some());
+    assert_eq!(store.get_events(id.as_str()).expect("events").len(), 1);
+}
+
+#[test]
+fn settle_done_retry_tree_includes_provisional_success() {
+    let (_home, _guard, store, id) = setup();
+    super::stop_retry_tree(&store, id.as_str(), false).expect("stop retry tree");
+    assert_eq!(
+        store.get_task(id.as_str()).expect("get").expect("task").status,
+        TaskStatus::Stopped
+    );
+    assert_eq!(store.get_events(id.as_str()).expect("events").len(), 1);
+}

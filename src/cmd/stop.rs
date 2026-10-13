@@ -35,7 +35,7 @@ pub fn stop_retry_tree(store: &Arc<Store>, task_id: &str, force: bool) -> Result
     let mut skipped = 0;
     let mut failed: Vec<String> = Vec::new();
     for task in &tree {
-        if task.status.is_terminal() {
+        if task.status.is_terminal() && !(task.status == TaskStatus::Done && task.completed_at.is_none()) {
             skipped += 1;
             continue;
         }
@@ -93,7 +93,7 @@ fn terminate(
             task_id: task.id.clone(), timestamp: Local::now(), event_kind: EventKind::Completion,
             detail: detail.to_string(), metadata: None,
         };
-        if task.status.is_terminal()
+        if task.status.is_terminal() && !(task.status == TaskStatus::Done && task.completed_at.is_none())
             || !store.settle_task_status(task_id, TaskStatus::Stopped, None, None, Some(&event))?
         {
             return already_terminal(store, task_id);
@@ -136,7 +136,7 @@ fn signal_task(task_id: &str, task: &Task, graceful: bool, preserve_label: &str)
     }
     crate::sandbox::kill_container(task_id);
     if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput
-        | TaskStatus::Stalled | TaskStatus::Stopped)
+        | TaskStatus::Stalled | TaskStatus::Stopped | TaskStatus::Done)
     {
         preserve_worktree(task_id, task, preserve_label);
     }

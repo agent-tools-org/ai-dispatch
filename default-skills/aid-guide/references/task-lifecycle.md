@@ -35,7 +35,9 @@ without writing a stop event.
 
 `aid wait` waits for the worker's post-run delivery and verification checks before
 reporting a terminal result, including for group or implicit active-task selection.
-A provisional `Done` cannot bypass a required result-file failure. `--exit-on-await`
+`Done` is provisional while `completed_at` is absent; post-run checks can still
+record failure or stop. Successful settlement records `completed_at` after those
+checks. A provisional `Done` cannot bypass a required result-file failure. `--exit-on-await`
 still returns when input is requested; `--timeout` also covers post-run settlement.
 If a worker exits with an unfinished job spec, waiting reports an error instead of
 claiming success from its provisional status.

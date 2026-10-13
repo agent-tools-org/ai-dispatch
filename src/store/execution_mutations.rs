@@ -6,7 +6,9 @@ use anyhow::Result;
 use rusqlite::{params, OptionalExtension};
 
 use super::Store;
-use crate::types::{ACTIVE_EXECUTION_FAILURE_STATUSES, TaskStatus};
+use crate::types::TaskStatus;
+#[cfg(test)]
+use crate::types::ACTIVE_EXECUTION_FAILURE_STATUSES;
 
 impl Store {
     pub fn set_backup_url(&self, id: &str, url: &str) -> Result<bool> {
@@ -45,7 +47,10 @@ impl Store {
     }
 
     pub fn fail_active_execution(&self, id: &str) -> Result<bool> {
-        self.settle_task_status(id, TaskStatus::Failed, Some(&ACTIVE_EXECUTION_FAILURE_STATUSES), None, None)
+        self.settle_task_status(id, TaskStatus::Failed, Some(&[
+            TaskStatus::Running, TaskStatus::AwaitingInput, TaskStatus::Stalled,
+            TaskStatus::Waiting, TaskStatus::Done,
+        ]), None, None)
     }
 }
 
@@ -85,6 +90,8 @@ mod tests {
         let store = Store::open_memory().expect("store");
         insert_task(&store, "t-pending", TaskStatus::Pending);
         insert_task(&store, "t-done", TaskStatus::Done);
+        store.db().execute("UPDATE tasks SET completed_at = created_at WHERE id = 't-done'", [])
+            .expect("settled success");
 
         assert!(!store.fail_active_execution("t-pending").expect("pending"));
         assert!(!store.fail_active_execution("t-done").expect("done"));

@@ -56,6 +56,9 @@ pub fn active_group_holds(
     groups
         .into_iter()
         .filter_map(|(group, path)| {
+            if group.starts_with("capacity-") {
+                return None;
+            }
             if !matches!(
                 availability_for_group(agent, custom_name, &group).status,
                 RouteStatus::Held

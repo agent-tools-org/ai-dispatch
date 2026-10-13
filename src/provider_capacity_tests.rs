@@ -98,6 +98,10 @@ fn provider_capacity_expiry_and_success_release_model_hold() {
     let model = Some("gpt-6.1-sol");
     rate_limit::mark_rate_limited_for_model(&agent, None, model, CAPACITY);
     assert!(notes(&agent, None)[0].contains("gpt-6.1-sol: provider capacity held until"));
+    assert!(
+        rate_limit::active_group_holds(&agent, None).is_empty(),
+        "capacity is separate from quota pools"
+    );
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![agent]);
     let declared = DeclaredTaskProfile {
         difficulty: Default::default(),

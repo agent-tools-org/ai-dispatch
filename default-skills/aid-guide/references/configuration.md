@@ -280,7 +280,7 @@ Windowed rather than as a person hold.
 Codex's “Selected model is at capacity” refusal and a final error after
 exhausted 503 reconnects create a two-minute model hold (minute precision).
 This is transient provider capacity, separate from quota or plan walls.
-`aid advise` notes name the held model and expiry. Expiry, successful use of
+`aid advise` identifies the held model and expiry. Expiry, successful use of
 that model, or `aid config clear-limit <agent>` clears the hold normally;
 quota snapshots do not release model-capacity holds.
 

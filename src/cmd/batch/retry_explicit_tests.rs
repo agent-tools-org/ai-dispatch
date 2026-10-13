@@ -7,14 +7,15 @@ async fn explicit_retry_batch_stopped_parent_launches() {
     let home = TempDir::new().unwrap();
     let _guard = paths::AidHomeGuard::set(home.path());
     paths::ensure_dirs().unwrap();
-    install_explicit_retry_agent(home.path());
+    let repo = TempDir::new().unwrap();
+    install_explicit_retry_agent(repo.path());
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = make_task("t-batch-stopped", AgentKind::Custom);
     task.custom_agent_name = Some("batch-explicit".into());
     task.status = TaskStatus::Stopped;
     task.workgroup_id = Some("wg-explicit".into());
     task.read_only = true;
-    set_repo(&mut task, &home);
+    set_repo(&mut task, &repo);
     store.insert_task(&task).unwrap();
 
     retry_failed(store.clone(), "wg-explicit", None, false)

@@ -142,6 +142,7 @@ where
         which,
     )?;
     insert_task_claiming_id(store, &mut task, &mut task_id, &mut log_path, explicit_id, args.origin)?;
+    store.update_task_dispatch_args(task_id.as_str(), &args.dispatch_args_json()?)?;
     maybe_insert_held_route_event(store, &task_id, &context.agent_setup, args.dry_run);
     let setup = &context.agent_setup;
     let priced_model = setup.effective_model.clone().or_else(|| setup.agent.default_model());
@@ -290,6 +291,7 @@ fn prepared_dispatch(
 }
 
 #[cfg(test)] #[path = "dispatch_prepare_tests.rs"] mod tests;
+#[cfg(test)] #[path = "dispatch_origin_tests.rs"] mod origin_tests;
 #[cfg(test)] #[path = "dispatch_verify_tests.rs"] mod verify_tests;
 #[cfg(test)] #[path = "dispatch_preflight_tests.rs"] mod preflight_tests;
 #[cfg(test)] #[path = "dispatch_backup_tests.rs"] mod backup_tests;

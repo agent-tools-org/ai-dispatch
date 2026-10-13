@@ -39,7 +39,8 @@ fn regular_checkout_grants_git_target_and_temp() {
     let scratch = create_temp_dir(temp.path()).unwrap();
     let prepared_target = prepare_cargo_target(target.to_str()).unwrap();
     let (writable_roots, warnings) = prepare_launch_roots(
-        AgentKind::Codex, repo.to_str(), prepared_target.as_deref(), &scratch, &TaskId("t-roots".into()),
+        AgentKind::Codex, repo.to_str(), prepared_target.as_deref(), &scratch,
+        &TaskId("t-roots".into()), false,
     ).unwrap();
     assert!(warnings.is_empty());
     let cmd = crate::agent::codex::CodexAgent.build_command_with_context(
@@ -141,7 +142,8 @@ fn copilot_grants_checkout_metadata_and_both_scratch_paths() {
     let opts = opts(&repo);
     let prepared_target = prepare_cargo_target(target.to_str()).unwrap();
     let (writable_roots, warnings) = prepare_launch_roots(
-        AgentKind::Copilot, repo.to_str(), prepared_target.as_deref(), &scratch, &TaskId("t-copilot".into()),
+        AgentKind::Copilot, repo.to_str(), prepared_target.as_deref(), &scratch,
+        &TaskId("t-copilot".into()), false,
     ).unwrap();
     assert!(warnings.is_empty());
     let cmd = crate::agent::copilot::CopilotAgent.build_command_with_context(
@@ -220,7 +222,7 @@ fn read_only_git_metadata_is_omitted_with_a_named_warning() {
     let scratch = create_temp_dir(temp.path()).unwrap();
     fs::set_permissions(&git, fs::Permissions::from_mode(0o555)).unwrap();
     let result = prepare_launch_roots(
-        AgentKind::Codex, temp.path().to_str(), None, &scratch, &TaskId("t-read-only".into()),
+        AgentKind::Codex, temp.path().to_str(), None, &scratch, &TaskId("t-read-only".into()), false,
     );
     fs::set_permissions(&git, fs::Permissions::from_mode(0o755)).unwrap();
     let (roots, warnings) = result.unwrap();
@@ -229,4 +231,24 @@ fn read_only_git_metadata_is_omitted_with_a_named_warning() {
     assert!(warnings[0].detail.contains(git.to_str().unwrap()));
     assert!(warnings[0].detail.contains("directory is read-only"));
     assert_eq!(fs::read_dir(&git).unwrap().count(), 0);
+}
+
+#[test]
+fn read_only_launch_roots_include_task_and_scratch_without_git_grants() {
+    let temp = tempfile::tempdir().unwrap();
+    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let repo = temp.path().join("repo");
+    fs::create_dir_all(repo.join(".git")).unwrap();
+    let scratch = create_temp_dir(temp.path()).unwrap();
+    let target = temp.path().join("cache/_base");
+    let target = prepare_cargo_target(target.to_str()).unwrap();
+    let task = TaskId("t-read-only-roots".into());
+    let (roots, warnings) = prepare_launch_roots(
+        AgentKind::Codex, repo.to_str(), target.as_deref(), &scratch, &task, true,
+    ).unwrap();
+    assert!(warnings.is_empty());
+    assert_eq!(roots, vec![PathBuf::from(target.unwrap()), scratch,
+        crate::paths::task_dir(task.as_str()).canonicalize().unwrap()]);
+    assert!(!roots.contains(&repo));
+    assert!(!roots.contains(&repo.join(".git")));
 }

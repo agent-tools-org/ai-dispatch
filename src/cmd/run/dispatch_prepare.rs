@@ -205,7 +205,11 @@ fn finish_dispatch(
 ) -> Result<PreparedDispatch> {
     let setup = attach_worktree(store, args, &context, &mut claimed)?;
     if should_auto_result_file(args, context.had_explicit_result_file) {
-        let result_file = crate::cmd::report_mode::task_result_file(claimed.task_id.as_str());
+        let result_file = if args.container.is_some() || args.sandbox {
+            format!("result-{}.md", claimed.task_id)
+        } else {
+            crate::cmd::report_mode::task_result_file(claimed.task_id.as_str())
+        };
         args.result_file = Some(result_file.clone());
         args.result_file_required = Some(false);
         aid_info!("[aid] Audit report mode: auto-set --result-file {result_file}");
@@ -291,3 +295,4 @@ fn prepared_dispatch(
 #[cfg(test)] #[path = "dispatch_verify_tests.rs"] mod verify_tests;
 #[cfg(test)] #[path = "dispatch_preflight_tests.rs"] mod preflight_tests;
 #[cfg(test)] #[path = "dispatch_backup_tests.rs"] mod backup_tests;
+#[cfg(test)] #[path = "dispatch_report_tests.rs"] mod report_tests;

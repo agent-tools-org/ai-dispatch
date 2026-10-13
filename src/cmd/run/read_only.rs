@@ -76,10 +76,16 @@ fn changed_paths(
             _ => file,
         }
     }).collect();
+    let root = std::process::Command::new("git").current_dir(&dir)
+        .args(["rev-parse", "--show-toplevel"]).output()?;
+    anyhow::ensure!(root.status.success(), "Failed to resolve read-only repository root");
+    let root = String::from_utf8(root.stdout)?;
+    let root = Path::new(root.trim_end_matches('\n')).canonicalize()?;
     let mut paths = BTreeSet::new();
     for entry in before.symmetric_difference(&after) {
         let (path, _, _, _): (String, String, String, u32) = serde_json::from_str(entry)?;
-        if artifacts.iter().any(|file| file.components().eq(dir.join(&path).components())) {
+        if !path.starts_with(".git/")
+            && artifacts.iter().any(|file| file.components().eq(root.join(&path).components())) {
             continue;
         }
         paths.insert(path);

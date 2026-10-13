@@ -38,6 +38,9 @@ struct Fixture {
     log: PathBuf,
 }
 
+#[path = "lifecycle_read_only_audit_tests.rs"]
+mod audit_tests;
+
 fn executable(path: &Path, script: &str) {
     fs::write(path, script).unwrap();
     fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
@@ -165,11 +168,7 @@ impl Fixture {
         assert_eq!(task.status, TaskStatus::Failed);
         assert_eq!(
             task.verify_status,
-            if self.args.verify.is_some() {
-                VerifyStatus::Failed
-            } else {
-                VerifyStatus::Skipped
-            }
+            VerifyStatus::Skipped
         );
         assert_eq!(task.exit_code, Some(0));
         let events = self.store.get_events(self.id.as_str()).unwrap();
@@ -182,7 +181,7 @@ impl Fixture {
         );
         assert_eq!(
             events.iter().any(|e| e.detail == VERIFY_NOT_RUN),
-            self.args.verify.is_some(),
+            false,
             "{events:?}"
         );
         assert!(!home.join("verify-ran").exists());
@@ -215,7 +214,7 @@ impl Fixture {
         assert!(export.status.success());
         let export = String::from_utf8(export.stdout).unwrap();
         assert!(export.contains("- Status: failed\n"), "{export}");
-        assert!(export.contains(VERIFY_NOT_RUN), "{export}");
+        assert!(!export.contains(VERIFY_NOT_RUN), "{export}");
         assert!(
             export.contains("Read-only violation: changed paths: base.txt."),
             "{export}"
@@ -271,7 +270,7 @@ async fn read_only_stop_upload_failure_is_warning_only_and_not_retried() {
     f.settle().await;
     f.assert_failed_and_reviewable(home.path());
     f.assert_report();
-    assert_eq!(f.store.latest_error(f.id.as_str()).as_deref(), Some(VERIFY_NOT_RUN));
+    assert!(f.store.latest_error(f.id.as_str()).unwrap().starts_with("Read-only violation:"));
     f.settle().await;
     f.assert_one_attempt("failed");
     assert!(f.store.backup_url(f.id.as_str()).unwrap().is_none());

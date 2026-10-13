@@ -148,9 +148,9 @@ Important controls:
   with a non-zero diagnostic result is `failed`.
 - `--retry N` permits new attempts after failure.
 - `--bg` returns the task ID immediately.
-- `--read-only` compares the Git run directory with its dispatch snapshot after
+- `--read-only` compares the entire Git repository with its dispatch snapshot after
   the agent exits, including content changes to already dirty files, new untracked
-  files, deletions, and nested repository HEAD changes. Gitlinks also compare their
+  files, deletions, repository HEAD and refs, and nested repository HEAD changes. Gitlinks compare their
   recorded index commit. Without `--dir`, aid captures and uses its current working
   directory. Any change outside the designated result file, `-o/--output` file,
   and aid-owned paths makes the task Failed with an error listing paths. Files
@@ -159,12 +159,23 @@ Important controls:
   symlink artifact does not exempt its destination. Enforcement covers Git run
   directories only: a non-Git directory proceeds with a warning event naming
   the reason. Git errors or unavailable Git snapshots fail enforcement. Ignored
-  untracked files and paths outside the run directory are outside this check;
-  from a repository subdirectory, only that subtree is compared. The run
-  repository's own HEAD, branches, and tags are not compared, so a commit of
-  already staged changes is not detected. An embedded repository without
-  commits fails the snapshot.
+  untracked files and paths outside the repository are outside this check.
+  Runs from a subdirectory still compare the repository top level. Repositories
+  without commits record an unborn HEAD; tracked paths replaced with special
+  files record metadata without opening them. A violation records one failure
+  reason and marks verification skipped. With `--audit`, a preserved report
+  still receives cross-audit post-processing and its verdict is recorded.
   Nested repositories compare commits, not their uncommitted files.
+  Codex uses a native permissions profile extending `:read-only`, with only the
+  task directory and prepared scratch roots writable. It grants no writable Git
+  metadata and disables approval escalation. On Codex CLI 0.162.1, `codex exec --help`
+  exposes `-c/--config` and `--sandbox read-only`; `--approve-for-me` selects
+  workspace-write. The adapter uses `-c 'sandbox_mode="read-only"'`,
+  `-c 'default_permissions="aid-read-only"'`,
+  `-c 'permissions={aid-read-only={extends=":read-only",filesystem={...}}}'`, and
+  `-c 'approval_policy="never"'` so the native read-only base can grant report
+  and scratch exceptions. `--sandbox read-only` alone permits no such exceptions;
+  `codex exec resume --help` exposes `-c` but no `--sandbox` flag.
   Claude retains Bash for audit commands, alongside Read, Glob, and Grep. Without
   a result file it uses plan mode and denies Write, Edit, MultiEdit, and
   NotebookEdit. With a result file it uses `dontAsk`, allows Write, and denies
@@ -429,7 +440,10 @@ modifiers such as `read-only comparative audit`, `read-only cross-audit`, or
 `read-only re-audit`, are dispatched as report tasks from the prompt alone.
 `--read-only` still permits writing the task result file and audit report; it
 forbids modifying the repository under test. AID auto-selects a task-specific
-result file and omits implementation methodology and Git staging instructions.
+result file at `~/.aid/tasks/<id>/result.md` for host launches and omits implementation
+methodology and Git staging instructions. Explicit `--result-file` paths are unchanged;
+Codex's read-only sandbox permits agent writes only in the task and scratch directories.
+Container launches retain their checkout-relative automatic report path.
 This prompt formatting decision is independent of dirty-worktree enforcement.
 Implementation noun phrases such as `add an audit log` and write requests such as
 `add tests for the read-only audit module` or

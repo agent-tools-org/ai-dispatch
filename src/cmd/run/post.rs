@@ -26,7 +26,9 @@ pub(crate) fn maybe_run_post_done_audit(
     let Some(task) = store.get_task(task_id.as_str())? else {
         return Ok(());
     };
-    if task.status != TaskStatus::Done || task.audit_verdict.is_some() {
+    let preserved_read_only_report = task.read_only && task.status == TaskStatus::Failed
+        && crate::paths::task_dir(task_id.as_str()).join("result.md").is_file();
+    if (task.status != TaskStatus::Done && !preserved_read_only_report) || task.audit_verdict.is_some() {
         return Ok(());
     }
     if !crate::aic::is_available() {

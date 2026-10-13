@@ -273,6 +273,7 @@ fn apply_defaults_skips_result_file_when_output_is_set() {
 }
 
 #[test]
-fn task_result_file_uses_task_id_suffix() {
-    assert_eq!(task_result_file("t-123"), "result-t-123.md");
+fn read_only_host_report_is_inside_task_directory() {
+    assert_eq!(task_result_file("t-123"), crate::paths::task_dir("t-123").join("result.md")
+        .to_string_lossy());
 }

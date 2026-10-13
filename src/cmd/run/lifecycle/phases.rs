@@ -40,16 +40,16 @@ pub(super) async fn run_lifecycle_phases(
             return Ok(Some(retry_id));
         }
         LifecyclePhaseDecision::Stop => {
-            record_skipped_configured_verify(
-                store,
-                task_id,
-                args,
-                "dirty worktree settlement failed before verify".to_string(),
-            );
-            if args.read_only
-                && let Some(task) = store.get_task(task_id.as_str())?
-            {
-                persist_result_file(store, task_id, args, &task, effective_dir);
+            if args.read_only {
+                store.update_verify_status(task_id.as_str(), VerifyStatus::Skipped)?;
+                if let Some(task) = store.get_task(task_id.as_str())? {
+                    persist_result_file(store, task_id, args, &task, effective_dir);
+                }
+                maybe_run_post_done_audit(store, task_id, args,
+                    effective_dir.map(String::as_str), repo_path.map(String::as_str))?;
+            } else {
+                record_skipped_configured_verify(store, task_id, args,
+                    "dirty worktree settlement failed before verify".to_string());
             }
             return Ok(None);
         }

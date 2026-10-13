@@ -1,6 +1,6 @@
-// Codex CLI contract validation for host-side dispatch preflight.
-// Exports: validate_installed_codex_with; rejects obsolete approval flag surfaces.
-// Deps: anyhow and the installed `codex exec --help` output.
+// Codex CLI options, native read-only permissions and dispatch preflight.
+// Exports option configuration and installed approval-flag validation.
+// Deps: RunOpts, TOML configuration and `codex exec --help` output.
 
 use anyhow::{Result, ensure};
 use crate::agent::env_identity::help_defines_flag;
@@ -8,6 +8,58 @@ use crate::agent::env_identity::help_defines_flag;
 use crate::agent::CliCommandRunner;
 
 const APPROVE_FOR_ME_VERSION: (u32, u32, u32) = (0, 147, 0);
+
+fn configure_read_only(
+    cmd: &mut std::process::Command,
+    roots: &[std::path::PathBuf],
+) -> Result<()> {
+    let mut filesystem = toml::Table::new();
+    for path in roots {
+        let path = path.to_str().ok_or_else(|| anyhow::anyhow!("Non-UTF-8 sandbox root"))?;
+        filesystem.insert(path.to_string(), toml::Value::String("write".into()));
+    }
+    let profile = toml::Value::Table(toml::Table::from_iter([
+        ("extends".into(), toml::Value::String(":read-only".into())),
+        ("filesystem".into(), toml::Value::Table(filesystem)),
+    ]));
+    let permissions = toml::Value::Table(toml::Table::from_iter([("aid-read-only".into(), profile)]));
+    cmd.args(["-c", "sandbox_mode=\"read-only\""]);
+    cmd.args(["-c", &format!("permissions={permissions}")]);
+    cmd.args(["-c", "default_permissions=\"aid-read-only\"", "-c", "approval_policy=\"never\""]);
+    Ok(())
+}
+
+pub(super) fn configure_options(
+    cmd: &mut std::process::Command,
+    opts: &crate::agent::RunOpts,
+    resuming: bool,
+    roots: &[std::path::PathBuf],
+) -> Result<()> {
+    if let Some(ref model) = opts.model {
+        if super::has_native_model_flag() {
+            cmd.args(["-m", model]);
+        } else {
+            cmd.args(["-c", &format!("model=\"{model}\"")]);
+        }
+    }
+    if let Some(ref output) = opts.output {
+        cmd.args(["-o", output]);
+    }
+    if let Some(ref dir) = opts.dir {
+        if !std::path::Path::new(dir).exists() {
+            anyhow::bail!("codex working directory does not exist: {}", dir);
+        }
+        if !resuming {
+            cmd.args(["-C", dir]);
+        }
+        cmd.current_dir(dir);
+    }
+    if opts.read_only {
+        configure_read_only(cmd, roots)
+    } else {
+        crate::agent::scratch::grant_codex_roots(cmd, roots)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ApprovalFlag {

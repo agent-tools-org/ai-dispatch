@@ -21,6 +21,7 @@ pub(super) fn prepare_launch(
         let temp = agent::scratch::create_temp_dir(home_guard.path())?;
         let (roots, warnings) = agent::scratch::prepare_launch_roots(
             agent.kind(), args.dir.as_deref(), cargo_target_dir.as_deref(), &temp, &TaskId(spec.task_id.clone()),
+            args.read_only,
         )?;
         for warning in warnings {
             store.insert_event(&warning)?;

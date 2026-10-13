@@ -4,6 +4,14 @@
 use super::CodexAgent;
 use crate::agent::{Agent, RunOpts};
 
+pub(super) fn test_opts() -> RunOpts {
+    RunOpts {
+        dir: None, output: None, result_file: None, model: None, budget: false,
+        read_only: false, sandbox: false, context_files: vec![], session_id: None,
+        env: None, env_forward: None,
+    }
+}
+
 #[test]
 fn build_command_includes_skip_git_repo_check() {
     let opts = RunOpts {
@@ -49,7 +57,9 @@ fn build_command_read_only_selects_native_sandbox_without_write_approval() {
         .map(|arg| arg.to_string_lossy().to_string())
         .collect();
 
-    assert!(args.windows(2).any(|pair| pair == ["--sandbox", "read-only"]));
+    assert!(args.contains(&"default_permissions=\"aid-read-only\"".to_string()));
+    assert!(args.contains(&"sandbox_mode=\"read-only\"".to_string()));
+    assert!(args.iter().any(|arg| arg.starts_with("permissions=") && arg.contains(":read-only")));
     assert!(!args.contains(&"--approve-for-me".to_string()));
     assert!(!args.contains(&"--full-auto".to_string()));
 }

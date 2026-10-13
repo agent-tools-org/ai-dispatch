@@ -183,6 +183,9 @@ fn assert_capacity_failure(store: &Store, row: &Task) {
     ))
     .expect("capacity marker");
     assert!(marker.contains(CAPACITY));
+    let events = store.get_events(row.id.as_str()).expect("events");
+    let rendered = crate::board::render_task_detail(&failed, &events, None);
+    assert!(rendered.contains("Status: provider capacity"));
 }
 
 #[test]

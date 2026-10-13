@@ -123,9 +123,6 @@ async fn provider_capacity_refusal_keeps_hold_without_automatic_recovery() {
         .expect("capacity marker");
     assert!(marker.contains(CAPACITY));
     assert_eq!(store.get_retry_tree(row.id.as_str()).expect("tree").len(), 1);
-    let events = store.get_events(row.id.as_str()).expect("events");
-    let rendered = crate::board::render_task_detail(&row, &events, None);
-    assert!(rendered.contains("Status: provider capacity"));
 }
 
 #[path = "capacity_continuation_flow_tests.rs"]

@@ -28,6 +28,16 @@ fn setup() -> (
     RunArgs,
 ) {
     let home = tempfile::tempdir().unwrap();
+    let _permit = crate::test_subprocess::acquire();
+    assert!(
+        std::process::Command::new("git")
+            .args(["init", "-b", "main"])
+            .current_dir(home.path())
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
     let guard = paths::AidHomeGuard::set(home.path());
     paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());

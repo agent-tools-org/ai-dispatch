@@ -49,7 +49,9 @@ pub use self::memory::{Memory, MemoryId, MemoryTier, MemoryType};
 pub use self::outcome::{verify_required, TaskOutcome};
 pub use self::status::{EventKind, PendingReason, TaskStatus};
 pub use self::verify_status::VerifyStatus;
-pub use self::status_sets::{ACTIVE_EXECUTION_FAILURE_STATUSES, ACTIVE_TASK_STATUSES};
+pub use self::status_sets::ACTIVE_TASK_STATUSES;
+#[cfg(test)]
+pub use self::status_sets::ACTIVE_EXECUTION_FAILURE_STATUSES;
 pub use self::task::{CompletionInfo, Finding, Task, TaskEvent, TaskFilter, Workgroup};
 pub use self::task_profile::{
     DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskEgress, TaskProfileDeclaration, TaskRigor,

@@ -154,8 +154,9 @@ Important controls:
   Explicit `--cascade` and `--retry` keep their configured policies.
   `aid stop <task>` and `aid stop <task> --retry-tree` cancel a continuation
   waiting in backoff; the worker checks cancellation before launching it.
-  Only provider `error` and `turn.failed` envelopes count as capacity evidence;
-  raw output, assistant messages, and tool/command output do not create a hold.
+  Only provider `error` and `turn.failed` envelopes on the structured stdout
+  stream count as capacity evidence; stderr, raw output, assistant messages,
+  and tool/command output do not create a hold.
   Events and `aid show` identify provider capacity.
   Verification of the interrupted attempt is skipped; the resumed attempt
   keeps the configured verification command.

@@ -108,10 +108,7 @@ fn provider_capacity_classifies_exact_codex_error_without_quota_or_model_unavail
         classify(&raw, AgentKind::Codex, Channel::CliStream).as_deref(),
         Some(CAPACITY)
     );
-    assert_eq!(
-        classify(&raw, AgentKind::Codex, Channel::CliStderr).as_deref(),
-        Some(CAPACITY)
-    );
+    assert!(classify(&raw, AgentKind::Codex, Channel::CliStderr).is_none());
     assert!(!rate_limit::is_rate_limit_error_for_agent(
         CAPACITY,
         &AgentKind::Codex
@@ -131,13 +128,13 @@ fn provider_capacity_classifies_final_error_after_exhausted_503_reconnects() {
         "{\"type\":\"error\",\"message\":\"Reconnecting... 5/5 (503 Service Unavailable)\"}\n",
         "{\"type\":\"turn.failed\",\"error\":{\"message\":\"stream disconnected before completion\"}}"
     );
-    assert!(classify(tail, AgentKind::Codex, Channel::CliStderr).is_some());
+    assert!(classify(tail, AgentKind::Codex, Channel::CliStderr).is_none());
     assert!(classify(tail, AgentKind::Codex, Channel::CliStream).is_some());
     assert!(
         classify(
             &tail.replace("5/5", "3/5"),
             AgentKind::Codex,
-            Channel::CliStderr
+            Channel::CliStream
         )
         .is_none()
     );
@@ -145,7 +142,7 @@ fn provider_capacity_classifies_final_error_after_exhausted_503_reconnects() {
         classify(
             &tail.replace("503", "401"),
             AgentKind::Codex,
-            Channel::CliStderr
+            Channel::CliStream
         )
         .is_none()
     );
@@ -153,7 +150,7 @@ fn provider_capacity_classifies_final_error_after_exhausted_503_reconnects() {
         classify(
             tail.lines().next().expect("reconnect"),
             AgentKind::Codex,
-            Channel::CliStderr
+            Channel::CliStream
         )
         .is_none()
     );

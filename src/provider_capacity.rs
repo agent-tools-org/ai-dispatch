@@ -2,7 +2,7 @@
 // Exports classification, captured-error lookup, availability and advice notes.
 // Deps: quota channels, rate_limit markers and route availability.
 
-use crate::quota_channel::Channel;
+use crate::quota_channel::{Channel, provider_attributable};
 use crate::{paths, rate_limit, route_availability as routes, types::*};
 
 pub(crate) const HOLD_MINUTES: i64 = 2;
@@ -15,10 +15,17 @@ pub(crate) fn is_capacity(message: &str) -> bool {
     lower == REFUSAL || lower.starts_with(RECONNECT_FAILURE)
 }
 
-pub(crate) fn classify(raw: &str, _agent: AgentKind, _channel: Channel) -> Option<String> {
+pub(crate) fn classify(raw: &str, agent: AgentKind, channel: Channel) -> Option<String> {
+    if channel != Channel::CliStream {
+        return None;
+    }
     let mut exhausted = false;
     for line in raw.lines().filter(|line| !line.trim().is_empty()) {
-        let Some(message) = final_error(line) else {
+        let Some(message) = final_error(line).filter(|_| {
+            !provider_attributable(line, agent, channel)
+                .cli_diagnostic
+                .is_empty()
+        }) else {
             exhausted = false;
             continue;
         };
@@ -49,10 +56,8 @@ fn final_error(raw: &str) -> Option<String> {
 }
 
 pub(crate) fn read(task_id: &TaskId, agent: AgentKind) -> Option<String> {
-    let stderr = std::fs::read_to_string(paths::stderr_path(task_id.as_str())).unwrap_or_default();
     let log = std::fs::read_to_string(paths::log_path(task_id.as_str())).unwrap_or_default();
-    classify(&stderr, agent, Channel::CliStderr)
-        .or_else(|| classify(&log, agent, Channel::CliStream))
+    classify(&log, agent, Channel::CliStream)
 }
 
 pub(crate) fn terminal_label(

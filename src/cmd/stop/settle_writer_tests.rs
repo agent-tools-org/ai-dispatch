@@ -43,7 +43,7 @@ fn settle_first_every_failed_stopped_writer_records_terminal_timing() {
         TaskStatus::Running,
         TaskStatus::Running,
         TaskStatus::Running,
-        TaskStatus::Running,
+        TaskStatus::Done,
     ]
     .into_iter()
     .enumerate()

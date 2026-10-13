@@ -2,7 +2,6 @@
 // Deps: in-memory Store, task/event types and completion payloads.
 
 use super::mutations::*;
-use super::*;
 use crate::types::*;
 use chrono::Local;
 use rusqlite::params;

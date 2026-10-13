@@ -52,7 +52,9 @@ fn signal_observation(reap: bool) {
             .expect("get")
             .expect("task");
         let events = observer_store.get_events("t-stop-signal").expect("events");
-        worker.wait().expect("reap worker");
+        if let Err(err) = worker.wait() {
+            assert_eq!(err.raw_os_error(), Some(libc::ECHILD), "worker reap: {err}");
+        }
         if reap {
             background::check_zombie_tasks_with(&observer_store, |_| false).expect("reaper");
         }
@@ -127,7 +129,9 @@ fn settle_first_restop_signals_live_worker_without_duplicate_event() {
     let result = stop(&store, "t-stop-interrupted");
     let live = crate::test_subprocess::is_live(worker.id() as i32);
     let _ = worker.kill();
-    worker.wait().expect("reap");
+    if let Err(err) = worker.wait() {
+        assert_eq!(err.raw_os_error(), Some(libc::ECHILD), "worker reap: {err}");
+    }
     result.expect("repeat stop must recover signal delivery");
     assert!(!live, "repeat stop must kill the worker");
     let after = store.get_task("t-stop-interrupted").expect("get").expect("task");

@@ -80,6 +80,7 @@ fn assert_launches(h: &Harness, model: Option<&str>) {
         let args = std::fs::read_to_string(h.home.path().join(format!("{output}.args"))).expect("actual launch argv");
         assert!(!args.lines().any(|arg| arg == "parent-model"), "{args}");
         let actual: Vec<_> = args.lines().collect();
+        assert!(actual.contains(&"--ignore-user-config"), "{args}");
         let pinned = actual.windows(2).find(|pair| pair[0] == "-m").map(|pair| pair[1]);
         assert_eq!(pinned, model, "actual CLI launch: {args}");
     }
@@ -149,7 +150,7 @@ fn bestof_caller_pool_filter_excludes_a_weaker_model_before_launch() {
 
 const FAKE_CODEX: &str = r#"#!/bin/sh
 if [ "$1" = "--version" ]; then echo 'codex-cli 0.147.0'; exit 0; fi
-if [ "$2" = "--help" ]; then echo '      --approve-for-me'; exit 0; fi
+if [ "$2" = "--help" ]; then echo '      --ignore-user-config'; exit 0; fi
 out=''
 previous=''
 for arg in "$@"; do

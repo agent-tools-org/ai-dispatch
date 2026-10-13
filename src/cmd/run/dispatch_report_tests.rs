@@ -4,6 +4,59 @@
 
 use super::*;
 
+#[test]
+fn scope_cut_dispatch_rejects_repository_report_and_output_destinations() {
+    for output in [false, true] {
+        let home = tempfile::tempdir().unwrap();
+        let _home = paths::AidHomeGuard::set(home.path());
+        let repo = home.path().join("repo");
+        std::fs::create_dir(&repo).unwrap();
+        let destination = repo.join("new/final.md").display().to_string();
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut args = RunArgs {
+            agent_name: "codex".into(), prompt: "Read-only audit".into(), read_only: true,
+            dir: Some(repo.display().to_string()),
+            output: output.then(|| destination.clone()),
+            result_file: (!output).then_some(destination), ..Default::default()
+        };
+        assert!(prepare_dispatch_with(&store, &mut args, |_| true).is_err());
+        assert!(!repo.join("new").exists());
+    }
+}
+
+#[test]
+fn scope_cut_publication_refuses_symlink_staged_report() {
+    let home = tempfile::tempdir().unwrap();
+    let _home = paths::AidHomeGuard::set(home.path());
+    let destination = home.path().join("requested.md");
+    let (args, prepared) = prepare(destination.to_str(), false);
+    let (_, source) = read_only_delivery::agent_paths(&args, AgentKind::Codex, prepared.task_id.as_str());
+    let source = std::path::Path::new(source.as_ref().unwrap());
+    std::fs::create_dir_all(source.parent().unwrap()).unwrap();
+    let target = home.path().join("protected.txt");
+    std::fs::write(&target, "must not be published").unwrap();
+    std::os::unix::fs::symlink(&target, source).unwrap();
+    assert!(read_only_delivery::publish(
+        &args, AgentKind::Codex, prepared.task_id.as_str(), Some(home.path().to_str().unwrap()),
+    ).is_err());
+    assert!(!destination.exists());
+    assert_eq!(std::fs::read_to_string(target).unwrap(), "must not be published");
+}
+
+#[test]
+fn scope_cut_publication_refuses_directory_staged_report() {
+    let home = tempfile::tempdir().unwrap();
+    let _home = paths::AidHomeGuard::set(home.path());
+    let destination = home.path().join("requested.md");
+    let (args, prepared) = prepare(destination.to_str(), false);
+    let (_, source) = read_only_delivery::agent_paths(&args, AgentKind::Codex, prepared.task_id.as_str());
+    std::fs::create_dir_all(source.unwrap()).unwrap();
+    assert!(read_only_delivery::publish(
+        &args, AgentKind::Codex, prepared.task_id.as_str(), Some(home.path().to_str().unwrap()),
+    ).is_err());
+    assert!(!destination.exists());
+}
+
 fn prepare(result: Option<&str>, container: bool) -> (RunArgs, PreparedDispatch) {
     let repo = tempfile::tempdir().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());

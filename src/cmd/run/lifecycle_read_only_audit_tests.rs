@@ -5,6 +5,27 @@
 use super::*;
 
 #[tokio::test]
+async fn scope_cut_symlink_report_is_not_copied_by_official_persistence() {
+    let _permit = test_subprocess::acquire();
+    let home = tempfile::tempdir().unwrap();
+    let _guard = paths::AidHomeGuard::set(home.path());
+    let f = Fixture::new(home.path(), false, false, false);
+    let dir = Path::new(f.args.dir.as_ref().unwrap());
+    fs::write(dir.join("base.txt"), "base\n").unwrap();
+    let target = home.path().join("protected.txt");
+    fs::write(&target, "must not be published").unwrap();
+    let (_, source) = crate::cmd::run::read_only_delivery::agent_paths(
+        &f.args, AgentKind::Codex, f.id.as_str(),
+    );
+    std::os::unix::fs::symlink(&target, source.unwrap()).unwrap();
+    f.settle().await;
+    assert_delivery_failed(&f);
+    assert!(!Path::new(f.args.result_file.as_ref().unwrap()).exists());
+    assert!(!paths::task_dir(f.id.as_str()).join("result.md").exists());
+    assert_eq!(fs::read_to_string(target).unwrap(), "must not be published");
+}
+
+#[tokio::test]
 async fn read_only_violation_records_audit_verdict_when_report_exists() {
     let _permit = test_subprocess::acquire();
     let _env = crate::aic::test_env_lock();

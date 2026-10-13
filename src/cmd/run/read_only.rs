@@ -39,7 +39,7 @@ pub(super) fn settle(
 ) -> Result<DirtyWorktreeAction> {
     let comparison = (|| {
         if baseline.is_none() && !is_git_directory(dir)? {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), Vec::new()));
         }
         let baseline = baseline.context("Dispatch snapshot is unavailable")?;
         let snapshot = crate::worktree::capture_worktree_snapshot(Path::new(dir))?;
@@ -47,8 +47,11 @@ pub(super) fn settle(
         changed_paths(dir, [args.result_file.as_deref(), args.output.as_deref()], baseline, &current)
     })();
     let detail = match comparison {
-        Ok(paths) if paths.is_empty() => return Ok(DirtyWorktreeAction::Continue),
-        Ok(paths) => format!("Read-only violation: changed paths: {}. Files left unchanged for review.", paths.join(", ")),
+        Ok((paths, refs)) => {
+            record_ref_diagnostic(store, task_id, &refs)?;
+            if paths.is_empty() { return Ok(DirtyWorktreeAction::Continue); }
+            format!("Read-only violation: changed paths: {}. Files left unchanged for review.", paths.join(", "))
+        }
         Err(err) => format!("Read-only enforcement failed in {dir}: {err:#}. Files left unchanged for review."),
     };
     aid_warn!("[aid] {detail}");
@@ -60,12 +63,23 @@ pub(super) fn settle(
     Ok(DirtyWorktreeAction::Failed)
 }
 
+fn record_ref_diagnostic(store: &Store, task_id: &TaskId, refs: &[String]) -> Result<()> {
+    if !refs.is_empty() {
+        store.insert_event(&TaskEvent {
+            task_id: task_id.clone(), timestamp: chrono::Local::now(), event_kind: EventKind::Setup,
+            detail: format!("Read-only diagnostic: unrelated refs changed: {}", refs.join(", ")),
+            metadata: Some(serde_json::json!({"diagnostic": "unrelated_ref_changes", "refs": refs})),
+        })?;
+    }
+    Ok(())
+}
+
 fn changed_paths(
     dir: &str,
     artifacts: [Option<&str>; 2],
     baseline: &[String],
     current: &[String],
-) -> Result<Vec<String>> {
+) -> Result<(Vec<String>, Vec<String>)> {
     let before: BTreeSet<_> = baseline.iter().collect();
     let after: BTreeSet<_> = current.iter().collect();
     let dir = Path::new(dir).canonicalize()?;
@@ -76,13 +90,41 @@ fn changed_paths(
             _ => file,
         }
     }).collect();
+    let root = std::process::Command::new("git").current_dir(&dir)
+        .args(["rev-parse", "--show-toplevel"]).output()?;
+    anyhow::ensure!(root.status.success(), "Failed to resolve read-only repository root");
+    let root = String::from_utf8(root.stdout)?;
+    let root = Path::new(root.trim_end_matches('\n')).canonicalize()?;
+    let branches = head_branches(baseline, current)?;
     let mut paths = BTreeSet::new();
+    let mut refs = BTreeSet::new();
     for entry in before.symmetric_difference(&after) {
         let (path, _, _, _): (String, String, String, u32) = serde_json::from_str(entry)?;
-        if artifacts.iter().any(|file| file.components().eq(dir.join(&path).components())) {
+        if !path.starts_with(".git/")
+            && artifacts.iter().any(|file| file.components().eq(root.join(&path).components())) {
+            continue;
+        }
+        if path.starts_with(".git/refs/") && !branches.contains(&path) {
+            refs.insert(path);
             continue;
         }
         paths.insert(path);
     }
-    Ok(paths.into_iter().collect())
+    Ok((paths.into_iter().collect(), refs.into_iter().collect()))
 }
+
+fn head_branches(baseline: &[String], current: &[String]) -> Result<BTreeSet<String>> {
+    let mut branches = BTreeSet::new();
+    for entry in baseline.iter().chain(current) {
+        let (path, _, content, _): (String, String, String, u32) = serde_json::from_str(entry)?;
+        if path == ".git/HEAD" && let Some((branch, _)) = content.split_once(':')
+            && branch.starts_with("refs/heads/") {
+            branches.insert(format!(".git/{branch}"));
+        }
+    }
+    Ok(branches)
+}
+
+#[cfg(test)]
+#[path = "read_only_ref_tests.rs"]
+mod tests;

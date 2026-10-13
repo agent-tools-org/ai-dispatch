@@ -38,6 +38,9 @@ struct Fixture {
     log: PathBuf,
 }
 
+#[path = "lifecycle_read_only_audit_tests.rs"]
+mod audit_tests;
+
 fn executable(path: &Path, script: &str) {
     fs::write(path, script).unwrap();
     fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
@@ -49,16 +52,17 @@ fn git_output(dir: &Path, args: &[&str]) -> Vec<u8> {
     output.stdout
 }
 
-fn run_fake_agent(home: &Path, dir: &Path, write_report: bool) {
+fn run_fake_agent(home: &Path, dir: &Path, write_report: bool, args: &RunArgs) {
+    let report = Path::new(args.artifact_staging.as_ref().unwrap()).join("agent-result.md");
     let agent = home.join("fake-agent");
     executable(
         &agent,
-        "#!/bin/sh\nset -eu\nif [ \"$1\" = yes ]; then mkdir -p reports; printf '%s' \"$2\" > reports/explicit.md; fi\nprintf 'forbidden edit\\n' > base.txt\n",
+        "#!/bin/sh\nset -eu\nif [ \"$1\" = yes ]; then printf '%s' \"$2\" > \"$3\"; fi\nprintf 'forbidden edit\\n' > base.txt\n",
     );
     assert!(
         Command::new(agent)
             .current_dir(dir)
-            .args([if write_report { "yes" } else { "no" }, REPORT])
+            .args([if write_report { "yes" } else { "no" }, REPORT, report.to_str().unwrap()])
             .status()
             .unwrap()
             .success()
@@ -99,11 +103,14 @@ impl Fixture {
         let id = TaskId("t-read-only-backup".into());
         let mut task = task(id.as_str(), repo.path(), &wt, "fix/read-only-backup");
         task.read_only = true;
+        let staging = crate::agent::scratch::create_temp_dir(home).unwrap();
         let args = RunArgs {
+            agent_name: "codex".into(),
             read_only: true,
             dir: Some(wt.display().to_string()),
             repo: Some(repo.path().display().to_string()),
-            result_file: Some("reports/explicit.md".into()),
+            result_file: Some(home.join("requested/report.md").display().to_string()),
+            artifact_staging: Some(staging.display().to_string()),
             result_file_required: Some(write_report),
             verify: backup.then(|| format!("touch '{}'", home.join("verify-ran").display())),
             backup: backup.then(|| "gdrive:audits".into()),
@@ -124,7 +131,7 @@ impl Fixture {
         let capture = home.join("capture");
         fs::create_dir(&capture).unwrap();
         let log = fake_gws(home, &capture, fail_upload);
-        run_fake_agent(home, &wt, write_report);
+        run_fake_agent(home, &wt, write_report, &args);
         Self {
             _repo: repo,
             store,
@@ -165,11 +172,7 @@ impl Fixture {
         assert_eq!(task.status, TaskStatus::Failed);
         assert_eq!(
             task.verify_status,
-            if self.args.verify.is_some() {
-                VerifyStatus::Failed
-            } else {
-                VerifyStatus::Skipped
-            }
+            VerifyStatus::Skipped
         );
         assert_eq!(task.exit_code, Some(0));
         let events = self.store.get_events(self.id.as_str()).unwrap();
@@ -182,7 +185,7 @@ impl Fixture {
         );
         assert_eq!(
             events.iter().any(|e| e.detail == VERIFY_NOT_RUN),
-            self.args.verify.is_some(),
+            false,
             "{events:?}"
         );
         assert!(!home.join("verify-ran").exists());
@@ -198,7 +201,7 @@ impl Fixture {
             REPORT
         );
         assert_eq!(
-            fs::read_to_string(Path::new(self.args.dir.as_ref().unwrap()).join("reports/explicit.md")).unwrap(),
+            fs::read_to_string(self.args.result_file.as_ref().unwrap()).unwrap(),
             REPORT
         );
         let bundles: Vec<_> = fs::read_dir(&self.capture)
@@ -215,7 +218,7 @@ impl Fixture {
         assert!(export.status.success());
         let export = String::from_utf8(export.stdout).unwrap();
         assert!(export.contains("- Status: failed\n"), "{export}");
-        assert!(export.contains(VERIFY_NOT_RUN), "{export}");
+        assert!(!export.contains(VERIFY_NOT_RUN), "{export}");
         assert!(
             export.contains("Read-only violation: changed paths: base.txt."),
             "{export}"
@@ -271,7 +274,7 @@ async fn read_only_stop_upload_failure_is_warning_only_and_not_retried() {
     f.settle().await;
     f.assert_failed_and_reviewable(home.path());
     f.assert_report();
-    assert_eq!(f.store.latest_error(f.id.as_str()).as_deref(), Some(VERIFY_NOT_RUN));
+    assert!(f.store.latest_error(f.id.as_str()).unwrap().starts_with("Read-only violation:"));
     f.settle().await;
     f.assert_one_attempt("failed");
     assert!(f.store.backup_url(f.id.as_str()).unwrap().is_none());
@@ -293,5 +296,5 @@ async fn read_only_stop_missing_optional_report_without_backup_stays_failed() {
     assert!(!f.log.exists());
     assert_eq!(fs::read_dir(&f.capture).unwrap().count(), 0);
     let task = f.store.get_task(f.id.as_str()).unwrap().unwrap();
-    assert!(task.delivery_assessment.is_none());
+    assert_eq!(task.delivery_assessment, Some(crate::types::DeliveryAssessment::MissingFinalDelivery));
 }

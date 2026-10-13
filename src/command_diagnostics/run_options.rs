@@ -21,6 +21,11 @@ pub(crate) fn validate_run_options(args: &RunArgs) -> anyhow::Result<()> {
         issues.push(Issue::new("audit_no_audit", "--audit conflicts with --no-audit.",
             "Keep --audit to schedule post-task cross-audit, or --no-audit to disable it."));
     }
+    if crate::cmd::run::read_only_delivery::same_destination(args, args.dir.as_deref())? {
+        issues.push(Issue::new("artifact_destination_conflict",
+            "--result-file and -o/--output resolve to the same destination.",
+            "Choose separate report and output destinations, or request only one artifact."));
+    }
     validate_rigor(args, &mut issues);
     validate_iteration(args, &mut issues);
     if issues.is_empty() { return Ok(()); }

@@ -22,6 +22,7 @@ pub struct RunArgs {
     pub dir: Option<String>,
     pub output: Option<String>,
     pub result_file: Option<String>,
+    pub(crate) artifact_staging: Option<String>,
     /// `Some(true)` only when the caller explicitly required this artifact.
     /// Auto-generated report paths are advisory and must not change task status.
     pub result_file_required: Option<bool>,
@@ -152,6 +153,7 @@ impl Default for RunArgs {
             dir: None,
             output: None,
             result_file: None,
+            artifact_staging: None,
             result_file_required: None,
             model: None,
             model_source: ModelSource::default(),

@@ -78,7 +78,8 @@ after the post-run lifecycle of a task that ran: after verification, the verify
 gate, and result-file persistence, so the bundle carries the final status. Tasks
 stopped by read-only enforcement preserve the declared result through the same
 result-file persistence path before backup; their failure and read-only evidence
-remain, and configured verification that did not run is recorded as failed. Tasks
+remain, and verification is skipped without a second failure event. With `--audit`,
+a preserved report still receives audit post-processing. Tasks
 ended by `aid stop`, by the background reaper (dead worker, idle, timeout,
 pending or waiting timeout), or by a failure before the agent started are not
 backed up. The resulting URL is stored on the task (`aid show` prints `Backup:

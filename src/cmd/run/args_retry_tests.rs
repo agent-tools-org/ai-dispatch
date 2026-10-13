@@ -91,6 +91,7 @@ fn every_field_set() -> RunArgs {
         prompt_file: Some("prompt.md".into()), repo: Some("/tmp/repo".into()),
         repo_root: Some("/tmp/root".into()), dir: Some("/tmp/requested".into()),
         output: Some("out.md".into()), result_file: Some("result.md".into()),
+        artifact_staging: Some("/tmp/staging".into()),
         result_file_required: Some(true), model: Some("effective-model".into()),
         model_source: ModelSource::AidResolved,
         declared_difficulty: Some(TaskDifficulty::Complex), declared_budget: Some(TaskBudget::Premium),

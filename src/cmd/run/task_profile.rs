@@ -52,8 +52,22 @@ pub(super) fn apply_category_and_result_defaults(
     task.category = Some(category.label().to_string());
 }
 
-pub(super) fn should_auto_result_file(args: &RunArgs, had_explicit_result_file: bool) -> bool {
+fn should_auto_result_file(args: &RunArgs, had_explicit_result_file: bool) -> bool {
     !had_explicit_result_file
         && args.output.is_none()
         && args.result_file.as_deref() == Some(crate::cmd::report_mode::DEFAULT_AUDIT_RESULT_FILE)
+}
+
+pub(super) fn apply_automatic_result_file(
+    args: &mut RunArgs, task_id: &TaskId, had_explicit_result_file: bool,
+) {
+    if should_auto_result_file(args, had_explicit_result_file) {
+        let result_file = if args.container.is_some() || args.sandbox {
+            format!("result-{}.md", task_id)
+        } else {
+            crate::cmd::report_mode::task_result_file(task_id.as_str())
+        };
+        args.result_file = Some(result_file.clone());
+        aid_info!("[aid] Audit report mode: auto-set --result-file {result_file}");
+    }
 }

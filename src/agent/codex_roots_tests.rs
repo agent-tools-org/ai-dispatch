@@ -39,14 +39,7 @@ fn build_command_adds_worktree_metadata_to_writable_roots() {
         .collect();
 
     assert!(args.contains(&"-c".to_string()));
-    let expected = format!(
-        "sandbox_workspace_write.writable_roots={}",
-        toml::Value::Array(vec![
-            toml::Value::String(metadata.to_string_lossy().to_string()),
-            toml::Value::String(common.to_string_lossy().to_string()),
-        ])
-    );
-    assert!(args.contains(&expected));
+    assert_write_roots(&args, &[metadata, common]);
 }
 
 #[test]
@@ -78,11 +71,7 @@ fn build_command_falls_back_when_commondir_missing() {
         .collect();
 
     assert!(args.contains(&"-c".to_string()));
-    let expected = format!(
-        "sandbox_workspace_write.writable_roots={}",
-        toml::Value::Array(vec![toml::Value::String(metadata.to_string_lossy().to_string())])
-    );
-    assert!(args.contains(&expected));
+    assert_write_roots(&args, &[metadata]);
 }
 
 #[test]
@@ -109,9 +98,7 @@ fn build_command_grants_writable_roots_for_regular_repo() {
         .map(|arg| arg.to_string_lossy().to_string())
         .collect();
 
-    assert!(args.iter().any(|arg| {
-        arg.starts_with("sandbox_workspace_write.writable_roots=")
-    }));
+    assert_write_roots(&args, &[repo.join(".git").canonicalize().unwrap()]);
 }
 
 #[test]
@@ -136,7 +123,17 @@ fn build_command_handles_missing_gitfile_gracefully() {
         .map(|arg| arg.to_string_lossy().to_string())
         .collect();
 
-    assert!(!args.iter().any(|arg| {
-        arg.starts_with("sandbox_workspace_write.writable_roots=")
-    }));
+    assert_write_roots(&args, &[]);
+}
+
+fn assert_write_roots(args: &[String], expected: &[std::path::PathBuf]) {
+    let config = args.iter().find(|arg| arg.starts_with("permissions=")).unwrap();
+    let parsed: toml::Value = config.parse().unwrap();
+    let profile = &parsed["permissions"]["aid-write"];
+    assert_eq!(profile["extends"].as_str(), Some(":workspace"));
+    let roots = profile["filesystem"].as_table().unwrap();
+    assert_eq!(roots.len(), expected.len());
+    for path in expected {
+        assert_eq!(roots[path.to_str().unwrap()].as_str(), Some("write"));
+    }
 }

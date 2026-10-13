@@ -144,6 +144,7 @@ pub(super) fn inject_workspace(
 
 pub(super) fn inject_delivery_instructions(
     args: &RunArgs,
+    agent_kind: &AgentKind,
     category: agent::classifier::TaskCategory,
     mut effective_prompt: String,
     omissions: &mut Vec<String>,
@@ -154,8 +155,9 @@ pub(super) fn inject_delivery_instructions(
             format_batch_siblings(&args.batch_siblings, omissions)
         );
     }
+    let (output, result_file) = super::super::read_only_delivery::agent_paths(args, *agent_kind);
     if let Some(block) =
-        output_file_instruction(args.output.as_deref(), args.result_file.as_deref())
+        output_file_instruction(output.as_deref(), result_file.as_deref())
     {
         effective_prompt = format!("{effective_prompt}\n\n{block}");
     }
@@ -163,7 +165,7 @@ pub(super) fn inject_delivery_instructions(
         &args.prompt,
         args.read_only,
         category,
-        args.result_file.as_deref(),
+        result_file.as_deref(),
         args.kind,
     ) {
         effective_prompt = format!("{effective_prompt}\n\n{block}");
@@ -244,6 +246,6 @@ pub(super) fn inject_delivery_context(
 ) -> Result<String> {
     let prompt = inject_workspace(args, agent_kind, prompt, omissions)?;
     Ok(inject_delivery_instructions(
-        args, category, prompt, omissions,
+        args, agent_kind, category, prompt, omissions,
     ))
 }

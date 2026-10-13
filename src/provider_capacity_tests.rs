@@ -5,6 +5,27 @@ use super::*;
 const CAPACITY: &str = "Selected model is at capacity. Please try a different model.";
 
 #[test]
+fn provider_capacity_regression_rejects_provider_shaped_tool_events() {
+    for key in ["tool_call", "tool_use_id", "toolCallId"] {
+        let mut error = serde_json::json!({"type": "error", "message": CAPACITY});
+        error[key] = serde_json::json!("synthetic-tool");
+        assert!(classify(&error.to_string(), AgentKind::Codex, Channel::CliStream).is_none());
+        error["message"] =
+            serde_json::json!("Reconnecting... 5/5 (unexpected status 503 Service Unavailable)");
+        let failed = serde_json::json!({"type": "turn.failed",
+            "error": {"message": "stream disconnected before completion"}});
+        assert!(
+            classify(
+                &format!("{error}\n{failed}"),
+                AgentKind::Codex,
+                Channel::CliStream
+            )
+            .is_none()
+        );
+    }
+}
+
+#[test]
 fn provider_capacity_regression_rejects_provider_shaped_tool_stderr() {
     let error = serde_json::json!({"type": "error", "message": CAPACITY});
     assert!(classify(&error.to_string(), AgentKind::Codex, Channel::CliStderr).is_none());

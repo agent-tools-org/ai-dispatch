@@ -57,6 +57,10 @@ Known limits found by review (open):
 - The streaming first-token gate (`progress_count() <= 1`) runs before descendant
   activity is considered, so a silent first command can still be killed as idle.
 - Verification output is drained without a bound while descendants keep its pipes open.
+- Piped idle failures and PTY deadline or idle failures record a duration that includes
+  process cleanup (a 3 s kill grace) and output finalization.
+- `verify_status` and delivery assessments are observational metadata and can still
+  change after a task settles.
 - OpenCode's merged PTY stream cannot prove an error line came from the provider: an
   exact 401 text printed by the task plus a nonzero exit can set an auth hold.
 - Wrap-up delivery is not crash-safe exactly-once, and an operator steer can race it.

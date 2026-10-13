@@ -6,6 +6,32 @@ use super::*;
 use crate::cmd::run::read_only_delivery;
 
 #[test]
+fn scope_cut_dispatch_rejects_destinations_in_explicit_repository() {
+    for output in [false, true] {
+        let home = tempfile::tempdir().unwrap();
+        let _home = paths::AidHomeGuard::set(home.path());
+        let repo = home.path().join("repo");
+        std::fs::create_dir(&repo).unwrap();
+        assert!(std::process::Command::new("git").args(["init", "-b", "main"])
+            .arg(&repo).output().unwrap().status.success());
+        let destination = repo.join("new/final.md").display().to_string();
+        let store = Arc::new(Store::open_memory().unwrap());
+        let mut args = RunArgs {
+            agent_name: "codex".into(), prompt: "Read-only audit".into(), read_only: true,
+            repo: Some(repo.display().to_string()),
+            output: output.then(|| destination.clone()),
+            result_file: (!output).then_some(destination), ..Default::default()
+        };
+        let error = match prepare_dispatch_with(&store, &mut args, |_| true) {
+            Ok(_) => panic!("destination inside the resolved repository must be refused"),
+            Err(error) => error.to_string(),
+        };
+        assert!(error.contains("artifact destination"), "{error}");
+        assert!(!repo.join("new").exists());
+    }
+}
+
+#[test]
 fn scope_cut_dispatch_creates_fresh_empty_staging_and_saves_its_identity() {
     let home = tempfile::tempdir().unwrap();
     let _home = paths::AidHomeGuard::set(home.path());

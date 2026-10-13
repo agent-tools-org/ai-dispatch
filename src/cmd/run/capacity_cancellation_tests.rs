@@ -4,6 +4,37 @@
 use super::*;
 
 #[test]
+fn provider_capacity_regression_stop_cancels_backoff_with_existing_child() {
+    let home = tempfile::tempdir().expect("home");
+    let _home = paths::AidHomeGuard::set(home.path());
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let row = task("t-capacity-parent", home.path());
+    let mut child = task("t-capacity-existing-child", home.path());
+    child.parent_task_id = Some(row.id.to_string());
+    child.status = TaskStatus::Done;
+    store.insert_task(&row).expect("parent");
+    store.insert_task(&child).expect("child");
+    record(&store, &row.id, "capacity backoff".into(), true).expect("pending");
+    crate::cmd::stop::stop(&store, row.id.as_str()).expect("cancel pending parent");
+    assert_eq!(
+        store
+            .get_task(row.id.as_str())
+            .expect("task")
+            .expect("row")
+            .status,
+        TaskStatus::Stopped
+    );
+    assert_eq!(
+        store
+            .get_task(child.id.as_str())
+            .expect("task")
+            .expect("row")
+            .status,
+        TaskStatus::Done
+    );
+}
+
+#[test]
 fn provider_capacity_stop_rejects_backoff_that_already_ended() {
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());

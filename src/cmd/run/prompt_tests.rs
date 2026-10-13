@@ -7,6 +7,9 @@ use super::*;
 #[path = "prompt_preservation_tests.rs"]
 mod preservation;
 
+#[path = "prompt_round2_tests.rs"]
+mod round2_preservation;
+
 #[path = "prompt_auxiliary_tests.rs"]
 mod auxiliary_preservation;
 

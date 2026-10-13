@@ -58,6 +58,9 @@ fn make_failed_task(task_id: &str) -> Task {
     }
 }
 
+#[path = "delivery_recovery_tests.rs"]
+mod delivery_recovery_tests;
+
 #[path = "transcript_tests.rs"]
 mod run_transcript_tests;
 

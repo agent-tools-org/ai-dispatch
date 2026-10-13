@@ -217,11 +217,6 @@ pub(in crate::cmd::run) async fn retry_or_cascade(
     if let Some(mut retry_args) =
         retry_logic::prepare_retry(store.clone(), task_id, args).await?
     {
-        if let Some(id) = retry_args.existing_task_id.as_ref()
-            && store.get_task(id.as_str())?.is_some_and(|task| task.status == TaskStatus::Stopped)
-        {
-            return Ok(Some(id.clone()));
-        }
         if let Some(task) = store.get_task(task_id.as_str())? {
             inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
         }
@@ -240,17 +235,6 @@ pub(in crate::cmd::run) async fn retry_or_cascade(
         cascade_args.cascade = remaining_cascade;
         cascade_args.parent_task_id = Some(task_id.as_str().to_string());
         inherit_cascade_target(&mut cascade_args, &task)?;
-        if crate::provider_capacity::read(store, task_id, task.agent).is_some() {
-            cascade_args.prompt = retry_logic::root_prompt(store, &task).unwrap_or_else(|| args.prompt.clone());
-            cascade_args.background = false;
-            cascade_args.on_done = None;
-            cascade_args.existing_task_id = None;
-            if task.read_only {
-                cascade_args.dir = task.effective_dir.or(task.worktree_path).or(cascade_args.dir);
-                cascade_args.worktree = None;
-                cascade_args.base_branch = None;
-            }
-        }
         return Box::pin(run(store.clone(), cascade_args)).await.map(Some);
     }
     Ok(None)

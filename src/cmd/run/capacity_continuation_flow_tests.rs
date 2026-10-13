@@ -1,5 +1,5 @@
 // Fake-agent capacity flows through real process completion, salvage and dispatch.
-// Pins single recovery, retry budget, cascade and unchanged read-only Git HEAD.
+// Pins zero-budget terminal failure, ordinary retry and unchanged read-only Git HEAD.
 
 use super::*;
 use crate::cmd::run::run_lifecycle::{LifecycleMode, post_run_lifecycle};
@@ -51,7 +51,7 @@ fn configured_store(row: &Task, repeated: bool) -> (Arc<Store>, RunArgs) {
         verify: row.verify.clone(),
         retry: if repeated { 2 } else { 0 },
         foreground: true,
-        cascade: vec!["capacity-peer".into()],
+        cascade: vec![],
         no_audit: true,
         skills: vec![crate::cmd::run::NO_SKILL_SENTINEL.into()],
         ..Default::default()
@@ -152,7 +152,7 @@ impl Fixture {
             );
         }
         assert!(git(&self.worktree, &["status", "--porcelain"]).is_empty());
-        // An expired fixture marker keeps the suite short; recovery still backs off five seconds.
+        // Expire the hold so the ordinary retry can run with its five-second backoff.
         let past = chrono::Local::now().naive_local() - chrono::Duration::minutes(1);
         std::fs::write(
             rate_limit::group_marker_path(
@@ -168,7 +168,7 @@ impl Fixture {
         .expect("expiry");
     }
 
-    async fn continue_task(&self) -> TaskId {
+    async fn continue_task(&self) -> Option<TaskId> {
         let baseline = crate::cmd::run::run_dirty::capture_baseline(
             &self.store,
             &self.row.id,
@@ -199,49 +199,29 @@ impl Fixture {
         )
         .await
         .expect("lifecycle")
-        .expect("continuation")
     }
 
-    fn assert_completion(&self, final_id: &TaskId, repeated: bool) {
-        assert_eq!(
-            self.store
-                .get_task(final_id.as_str())
-                .expect("lookup")
-                .expect("final")
-                .status,
-            TaskStatus::Done
-        );
-        let chain = self
-            .store
-            .get_retry_chain(final_id.as_str())
-            .expect("chain");
-        self.assert_verification(final_id);
-        assert_eq!(chain.len(), if repeated { 3 } else { 2 });
-        for child in chain.iter().filter(|entry| entry.parent_task_id.is_some()) {
-            let saved = RunArgs::saved_for_task(&self.store, child.id.as_str())
-                .expect("saved")
-                .expect("args");
-            assert_eq!(saved.retry, self.args.retry);
-            if child.agent_display_name() == "capacity-peer" {
-                assert_eq!(saved.prompt, "Original task");
-            }
+    fn assert_completion(&self, final_id: Option<&TaskId>, repeated: bool) {
+        let tree = self.store.get_retry_tree(self.row.id.as_str()).expect("tree");
+        assert_eq!(tree.len(), if repeated { 2 } else { 1 });
+        if repeated {
+            let id = final_id.expect("ordinary retry");
+            let child = self.store.get_task(id.as_str()).expect("lookup").expect("child");
+            assert_eq!(child.status, TaskStatus::Failed);
+            let saved = RunArgs::saved_for_task(&self.store, id.as_str())
+                .expect("saved").expect("args");
+            assert_eq!(saved.retry, self.args.retry - 1);
+            assert!(saved.prompt.starts_with("[Previous attempt failed]"));
+            assert!(saved.existing_task_id.is_none());
+        } else {
+            assert!(final_id.is_none(), "zero retry budget creates no continuation");
         }
-        assert_eq!(
-            chain.last().expect("last").agent_display_name(),
-            if repeated {
-                "capacity-peer"
-            } else {
-                "capacity-fixture"
-            }
-        );
+        self.assert_verification();
         if self.row.read_only {
-            assert_eq!(
-                git(&self.worktree, &["rev-parse", "HEAD"]),
-                self.initial_head
-            );
+            assert_eq!(git(&self.worktree, &["rev-parse", "HEAD"]), self.initial_head);
         }
     }
-    fn assert_verification(&self, final_id: &TaskId) {
+    fn assert_verification(&self) {
         if !self.row.read_only {
             assert_eq!(
                 self.store
@@ -250,14 +230,6 @@ impl Fixture {
                     .expect("row")
                     .verify_status,
                 VerifyStatus::Skipped
-            );
-            assert_eq!(
-                self.store
-                    .get_task(final_id.as_str())
-                    .expect("child")
-                    .expect("row")
-                    .verify_status,
-                VerifyStatus::Passed
             );
         }
     }
@@ -268,20 +240,20 @@ async fn flow(repeated: bool, read_only: bool) {
     let fixture = Fixture::new(repeated, read_only);
     fixture.fail_initial_agent().await;
     let final_id = fixture.continue_task().await;
-    fixture.assert_completion(&final_id, repeated);
+    fixture.assert_completion(final_id.as_ref(), repeated);
 }
 
 #[tokio::test]
-async fn provider_capacity_fake_agent_continues_once_then_succeeds_without_retry() {
+async fn provider_capacity_fake_agent_retry_zero_ends_failed_without_child() {
     flow(false, false).await;
 }
 
 #[tokio::test]
-async fn provider_capacity_second_failure_cascades_without_consuming_retry() {
+async fn provider_capacity_second_failure_stops_ordinary_retry_on_identical_error() {
     flow(true, false).await;
 }
 
 #[tokio::test]
-async fn provider_capacity_read_only_continuation_does_not_commit() {
+async fn provider_capacity_read_only_failure_does_not_continue_or_commit() {
     flow(false, true).await;
 }

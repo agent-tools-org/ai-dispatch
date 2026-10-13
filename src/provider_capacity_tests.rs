@@ -231,7 +231,7 @@ fn provider_capacity_expiry_and_success_release_model_hold() {
     }).expect("stdout event");
     assert_eq!(
         terminal_label(&store, &id, agent, TaskStatus::Failed),
-        "provider capacity"
+        format!("provider capacity for model (default): {CAPACITY}")
     );
     assert!(rate_limit::clear_rate_limit_for_model(&agent, None, model));
     assert!(notes(&agent, None).is_empty());

@@ -90,9 +90,10 @@ pub(crate) fn resolve_failure_exit_code(store: &Store, task_id: &TaskId, exit_co
 
 pub(crate) fn record_execution_failure(store: &Store, task_id: &TaskId, duration_ms: i64, exit_code: Option<i32>, context: &FailureContext) {
     let capacity = store.get_task(task_id.as_str()).ok().flatten()
-        .and_then(|task| crate::provider_capacity::read(store, task_id, task.agent));
+        .and_then(|task| crate::provider_capacity::read(store, task_id, task.agent).map(|_|
+            crate::provider_capacity::terminal_label(store, task_id, task.agent, TaskStatus::Failed)));
     let reason = match (capacity, exit_code) {
-        (Some(message), _) => format!("provider capacity: {message}"),
+        (Some(message), _) => message,
         (_, Some(code)) => format!("agent exited with code {code}"),
         (_, None) => "agent process failed".to_string(),
     };

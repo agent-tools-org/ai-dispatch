@@ -1,10 +1,10 @@
-// Pending capacity continuation cancellation through direct and retry-tree stop.
-// Exercises persisted cancellation and the worker's final launch check.
+// Shared waiting-task cancellation through direct and retry-tree stop.
+// Explicit waiting fixtures cover stopped-row replacement and suffixed IDs.
 
 use super::*;
 
 #[test]
-fn provider_capacity_regression_stop_cancels_backoff_with_existing_child() {
+fn provider_capacity_explicit_waiting_stop_preserves_completed_child() {
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());
     let store = Arc::new(Store::open_memory().expect("store"));
@@ -38,14 +38,14 @@ fn provider_capacity_regression_stop_cancels_backoff_with_existing_child() {
 }
 
 #[test]
-fn provider_capacity_stop_rejects_backoff_that_already_ended() {
+fn provider_capacity_stop_rejects_terminal_parent_without_recovery() {
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());
     let store = Arc::new(Store::open_memory().expect("store"));
     let row = task("t-capacity-ended", home.path());
     store.insert_task(&row).expect("task");
-    record(&store, &row.id, "capacity backoff".into(), true).expect("pending");
-    record(&store, &row.id, "backoff ended".into(), false).expect("ended");
+    seed_stdout(&store, &row.id,
+        &serde_json::json!({"type": "error", "message": CAPACITY}).to_string());
     assert!(crate::cmd::stop::stop(&store, row.id.as_str()).is_err());
     assert_eq!(
         store
@@ -76,10 +76,17 @@ async fn cancel_waiting(mode: u8) {
         skills: vec![crate::cmd::run::NO_SKILL_SENTINEL.into()],
         ..Default::default()
     };
-    let worker = continue_capacity(&store, &args, &row.id);
-    let stopper = stop_after_marker(&store, row.id.as_str(), mode);
-    let (outcome, ()) = tokio::join!(worker, stopper);
-    let child_id = outcome.expect("worker").expect("waiting retry");
+    let mut waiting = row.clone();
+    waiting.id = TaskId::generate();
+    waiting.parent_task_id = Some(row.id.to_string());
+    waiting.status = TaskStatus::Waiting;
+    store.insert_task(&waiting).expect("ordinary waiting fixture");
+    stop_after_marker(&store, row.id.as_str(), mode).await;
+    let mut child = args;
+    child.parent_task_id = Some(row.id.to_string());
+    child.existing_task_id = Some(waiting.id.clone());
+    assert!(crate::cmd::run::run(store.clone(), child).await.is_err());
+    let child_id = waiting.id;
     assert_eq!(
         store
             .get_task(child_id.as_str())
@@ -117,21 +124,21 @@ async fn stop_after_marker(store: &Arc<Store>, task_id: &str, mode: u8) {
 }
 
 #[tokio::test]
-async fn provider_capacity_regression_direct_stop_cancels_backoff() {
+async fn provider_capacity_explicit_waiting_direct_stop_prevents_dispatch() {
     tokio::time::timeout(std::time::Duration::from_secs(15), cancel_waiting(0))
         .await
         .expect("bounded cancellation");
 }
 
 #[tokio::test]
-async fn provider_capacity_regression_retry_tree_stop_cancels_backoff() {
+async fn provider_capacity_explicit_waiting_tree_stop_prevents_dispatch() {
     tokio::time::timeout(std::time::Duration::from_secs(15), cancel_waiting(1))
         .await
         .expect("bounded cancellation");
 }
 
 #[tokio::test]
-async fn provider_capacity_regression_worker_rechecks_cancellation_before_launch() {
+async fn provider_capacity_explicit_waiting_persisted_cancellation_prevents_dispatch() {
     tokio::time::timeout(std::time::Duration::from_secs(15), cancel_waiting(2))
         .await
         .expect("bounded cancellation");

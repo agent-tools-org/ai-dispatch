@@ -147,23 +147,19 @@ Important controls:
   `infrastructure_failure`; both are inconclusive. A finished verify command
   with a non-zero diagnostic result is `failed`.
 - `--retry N` permits new attempts after failure.
-  A provider-capacity refusal creates a short hold on the selected model. Aid
-  resumes the same session once after backoff and salvage, preserving `--retry`.
-  Read-only continuation does not commit. Repeated capacity fails with the
-  selected model's hold and expiry; automatic advice fallback is disabled.
-  Explicit `--cascade` and `--retry` keep their configured policies.
-  Automatic retries, including capacity recovery, create a linked `waiting`
-  child before backoff. `aid stop <child>` or `aid stop <parent> --retry-tree`
-  cancels that child; a cancelled retry cannot launch under a suffixed ID.
-  A refreshed capacity hold fails dispatch with its reason, preserving agent,
-  model and session. Held-route dispatch uses only explicit `--cascade` routes;
-  it never automatically substitutes an advised agent.
-  Only provider `error` and `turn.failed` envelopes on the structured stdout
-  stream, decoded into persisted events, count as capacity evidence; stderr, raw output, assistant messages,
-  and tool/command output do not create a hold.
-  Events and `aid show` identify provider capacity.
-  Verification of the interrupted attempt is skipped; the resumed attempt
-  keeps the configured verification command.
+  A decoded provider-capacity refusal ends the task `failed`, naming the error
+  and selected model, and creates a short hold on that model. Capacity does not
+  create an automatic continuation or waiting child. Recovery uses the ordinary
+  `--retry N` budget or a manual `aid retry`; ordinary retries consume that budget.
+  Explicit `--cascade` retains its configured policy. Held-route dispatch never
+  automatically substitutes an advised agent; a capacity hold fails dispatch
+  with its reason, preserving agent, model and session.
+  Only decoded provider `error` and `turn.failed` envelopes persisted as events
+  count as capacity evidence. Raw text, assistant messages and tool envelopes do
+  not create a hold. Over the PTY transport stdout and stderr are merged, so a
+  provider-shaped capacity error printed by a tool can be classified as capacity.
+  Events and `aid show` identify provider capacity. Verification of the interrupted
+  attempt is skipped; an ordinary retry keeps the configured verification command.
 - `--bg` returns the task ID immediately.
 - `--read-only` compares the Git run directory with its dispatch snapshot after
   the agent exits, including content changes to already dirty files, new untracked

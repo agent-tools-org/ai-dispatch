@@ -5,7 +5,7 @@ use super::*;
 use std::process::Stdio;
 
 #[tokio::test]
-async fn provider_capacity_round2_retry_tree_stop_sees_waiting_child_before_backoff() {
+async fn provider_capacity_explicit_waiting_retry_tree_stop_rejects_replacement() {
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());
     paths::ensure_dirs().expect("dirs");
@@ -22,24 +22,14 @@ async fn provider_capacity_round2_retry_tree_stop_sees_waiting_child_before_back
         dir: row.effective_dir.clone(),
         ..Default::default()
     };
-    let stopper = async {
-        while store.get_events(row.id.as_str()).expect("events").is_empty() {
-            tokio::task::yield_now().await;
-        }
-        let tree = store.get_retry_tree(row.id.as_str()).expect("tree");
-        assert_eq!(tree.len(), 2, "retry child must exist before the wait");
-        let child = tree.iter().find(|task| task.parent_task_id.is_some()).expect("child");
-        assert_eq!(child.status, TaskStatus::Waiting);
-        crate::cmd::stop::stop_retry_tree(&store, row.id.as_str(), false).expect("stop");
-        assert_eq!(
-            store.get_task(child.id.as_str()).expect("lookup").expect("child").status,
-            TaskStatus::Stopped
-        );
-    };
-    let (outcome, ()) = tokio::time::timeout(std::time::Duration::from_secs(15), async {
-        tokio::join!(continue_capacity(&store, &args, &row.id), stopper)
-    }).await.expect("bounded cancellation");
-    let child = outcome.expect("worker").expect("cancelled retry");
+    let mut waiting = row.clone();
+    waiting.id = TaskId::generate();
+    waiting.parent_task_id = Some(row.id.to_string());
+    waiting.status = TaskStatus::Waiting;
+    store.insert_task(&waiting).expect("ordinary waiting fixture");
+    crate::cmd::stop::stop_retry_tree(&store, row.id.as_str(), false).expect("stop");
+    assert!(continue_capacity(&store, &args, &row.id).await.expect("capacity").is_none());
+    let child = waiting.id;
     assert_eq!(store.get_task(child.as_str()).expect("lookup").expect("child").status,
         TaskStatus::Stopped);
     let mut stopped_args = RunArgs::for_retry(&store, &store.get_task(child.as_str())
@@ -81,7 +71,7 @@ async fn provider_capacity_round2_replayed_stderr_never_creates_hold_or_retry() 
 }
 
 #[tokio::test]
-async fn provider_capacity_round2_refreshed_hold_never_substitutes_or_clears_session() {
+async fn provider_capacity_ordinary_retry_refreshed_hold_never_substitutes_or_clears_session() {
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());
     let _cache = crate::live_quota::CacheDirGuard::set(home.path());
@@ -96,20 +86,12 @@ async fn provider_capacity_round2_refreshed_hold_never_substitutes_or_clears_ses
     let args = RunArgs {
         agent_name: "codex".into(), dir: row.effective_dir.clone(), ..Default::default()
     };
-    let refresh = async {
-        while store.get_retry_tree(row.id.as_str()).expect("tree").len() == 1 {
-            tokio::task::yield_now().await;
-        }
-        rate_limit::mark_rate_limited_for_model(
-            &row.agent, None, row.requested_model.as_deref(), CAPACITY);
-    };
-    let (child, ()) = tokio::time::timeout(std::time::Duration::from_secs(15), async {
-        tokio::join!(
-            prepare_retry(store.clone(), &row.id, &args),
-            refresh
-        )
-    }).await.expect("bounded backoff");
-    let mut child = child.expect("backoff").expect("retry");
+    let mut child = prepare_retry(store.clone(), &row.id, &RunArgs { retry: 1, ..args })
+        .await.expect("ordinary backoff").expect("ordinary retry");
+    assert_eq!(child.retry, 0);
+    assert!(child.existing_task_id.is_none());
+    rate_limit::mark_rate_limited_for_model(
+        &row.agent, None, row.requested_model.as_deref(), CAPACITY);
     let result = crate::cmd::run::run_dispatch_resolve::resolve_agent_setup(&store, &mut child, None);
     assert!(result.is_err(), "refreshed capacity must fail with its hold");
     assert_eq!(child.agent_name, "codex");
@@ -120,11 +102,8 @@ async fn provider_capacity_round2_refreshed_hold_never_substitutes_or_clears_ses
     assert_eq!(child.agent_name, "codex");
     assert_eq!(child.session_id, row.agent_session_id);
     assert_eq!(child.cascade, ["droid"]);
-    let id = child.existing_task_id.clone().expect("waiting child");
     assert!(crate::cmd::run::run(store.clone(), child).await.is_err());
-    let failed = store.get_task(id.as_str()).expect("lookup").expect("child");
-    assert_eq!(failed.status, TaskStatus::Failed);
-    assert!(store.latest_error(id.as_str()).expect("reason").contains("provider capacity held until"));
+    assert_eq!(store.get_retry_tree(row.id.as_str()).expect("tree").len(), 1);
 }
 
 #[test]
@@ -137,8 +116,12 @@ fn provider_capacity_round2_pins_resolved_model_when_served_cache_changes() {
     let store = Arc::new(Store::open_memory().expect("store"));
     let row = task("t-round2-pin", home.path());
     store.insert_task(&row).expect("task");
-    let args = RunArgs { dir: row.effective_dir.clone(), ..Default::default() };
-    let mut child = capacity_args(&store, &args, &row).expect("retry args");
+    let args = RunArgs { model: row.requested_model.clone(),
+        model_source: crate::agent::model_validation::ModelSource::UserSupplied,
+        dir: row.effective_dir.clone(), ..Default::default() };
+    store.update_task_dispatch_args(row.id.as_str(), &args.dispatch_args_json().expect("json"))
+        .expect("saved args");
+    let mut child = RunArgs::for_retry(&store, &row).expect("ordinary retry args");
     let error = crate::cmd::run::run_dispatch_resolve::resolve_agent_setup(&store, &mut child, None)
         .err().expect("unserved retained model must fail");
     assert!(error.to_string().contains("does not serve model"));

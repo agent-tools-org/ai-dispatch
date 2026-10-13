@@ -67,11 +67,15 @@ pub(crate) fn terminal_label(
     task_id: &TaskId,
     agent: AgentKind,
     status: TaskStatus,
-) -> &'static str {
-    if status == TaskStatus::Failed && read(store, task_id, agent).is_some() {
-        "provider capacity"
+) -> String {
+    if status == TaskStatus::Failed
+        && let Some(message) = read(store, task_id, agent)
+    {
+        let model = store.get_task(task_id.as_str()).ok().flatten()
+            .and_then(|task| task.requested_model.or(task.observed_model));
+        format!("provider capacity for model {}: {message}", model.as_deref().unwrap_or("(default)"))
     } else {
-        status.label()
+        status.label().to_string()
     }
 }
 

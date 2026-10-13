@@ -2,7 +2,7 @@
 // Deps: lifecycle, in-memory Store, isolated aid home and custom shell agent.
 
 use super::*;
-use crate::cmd::retry_logic::{capacity_args, prepare_retry};
+use crate::cmd::retry_logic::prepare_retry;
 use crate::{paths, rate_limit, provider_capacity};
 
 const CAPACITY: &str = "Selected model is at capacity. Please try a different model.";
@@ -52,8 +52,8 @@ fn task(id: &str, dir: &std::path::Path) -> Task {
     }
 }
 
-#[test]
-fn provider_capacity_continuation_reuses_codex_session_without_consuming_retry() {
+#[tokio::test]
+async fn provider_capacity_ordinary_retry_reuses_codex_session_and_consumes_budget() {
     let dir = tempfile::tempdir().expect("dir");
     let store = Store::open_memory().expect("store");
     let row = task("t-capacity-args", dir.path());
@@ -63,17 +63,14 @@ fn provider_capacity_continuation_reuses_codex_session_without_consuming_retry()
         dir: Some(dir.path().display().to_string()),
         ..Default::default()
     };
-    let child = capacity_args(&store, &args, &row).expect("continuation");
+    let child = prepare_retry(Arc::new(store), &row.id, &args).await
+        .expect("ordinary retry").expect("retry args");
     assert_eq!(child.session_id.as_deref(), Some("capacity-session"));
-    assert_eq!(child.retry, 3);
+    assert_eq!(child.retry, 2);
     assert_eq!(child.model, row.requested_model);
     assert_eq!(child.parent_task_id.as_deref(), Some(row.id.as_str()));
-    let mut read_only = row;
-    read_only.read_only = true;
-    let readonly = capacity_args(&store, &args, &read_only).expect("readonly");
-    assert!(readonly.read_only);
-    assert!(readonly.prompt.contains("read-only"));
-    assert!(!readonly.prompt.contains("commit"));
+    assert!(child.prompt.starts_with("[Previous attempt failed]"));
+    assert!(child.existing_task_id.is_none());
 }
 
 fn install_agent(home: &std::path::Path, name: &str, command: &str) {
@@ -90,7 +87,7 @@ fn install_agent(home: &std::path::Path, name: &str, command: &str) {
 }
 
 #[tokio::test]
-async fn provider_capacity_repeated_refusal_names_hold_expiry_when_no_route_is_launchable() {
+async fn provider_capacity_refusal_keeps_hold_without_automatic_recovery() {
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![]);
@@ -106,13 +103,6 @@ async fn provider_capacity_repeated_refusal_names_hold_expiry_when_no_route_is_l
         row.requested_model.as_deref(),
         CAPACITY,
     );
-    record(
-        &store,
-        &row.id,
-        "provider capacity: continuation already used".into(),
-        true,
-    )
-    .expect("marker");
     let args = RunArgs {
         agent_name: "codex".into(),
         dir: row.effective_dir.clone(),
@@ -124,10 +114,11 @@ async fn provider_capacity_repeated_refusal_names_hold_expiry_when_no_route_is_l
             .expect("capacity")
             .is_none()
     );
-    let detail = store.latest_error(row.id.as_str()).expect("failure");
+    let detail = rate_limit::dispatch_blocking_hold_for_model(
+        &row.agent, None, row.requested_model.as_deref()).expect("hold");
     assert!(detail.contains("provider capacity held until"));
-    assert!(detail.contains("continuation already used"));
-    assert!(detail.contains("gpt-6.1-sol"));
+    assert!(detail.contains(CAPACITY));
+    assert_eq!(store.get_retry_tree(row.id.as_str()).expect("tree").len(), 1);
     let events = store.get_events(row.id.as_str()).expect("events");
     let rendered = crate::board::render_task_detail(&row, &events, None);
     assert!(rendered.contains("Status: provider capacity"));
@@ -155,8 +146,9 @@ fn provider_capacity_regression_never_selects_automatic_advice_fallback() {
         ..Default::default()
     };
     rate_limit::mark_rate_limited_for_model(&row.agent, None, row.requested_model.as_deref(), CAPACITY);
-    let mut child = capacity_args(&store, &RunArgs { dir: row.effective_dir.clone(), ..args }, &row)
-        .expect("retry args");
+    let mut child = RunArgs::for_retry(&store, &row).expect("ordinary retry args");
+    child.dir = row.effective_dir.clone();
+    assert_eq!(child.agent_name, args.agent_name);
     assert!(crate::cmd::run::run_dispatch_resolve::resolve_agent_setup(&Arc::new(store), &mut child, None)
         .is_err());
     assert_eq!(child.agent_name, "codex");
@@ -168,13 +160,6 @@ fn seed_stdout(store: &Store, id: &TaskId, raw: &str) {
         task_id: id.clone(), timestamp: chrono::Local::now(), event_kind: EventKind::Error,
         detail: CAPACITY.into(), metadata: Some(serde_json::json!({"provider_stdout": raw})),
     }).expect("stdout event");
-}
-
-fn record(store: &Store, id: &TaskId, detail: String, continuation: bool) -> Result<()> {
-    store.insert_event(&TaskEvent {
-        task_id: id.clone(), timestamp: chrono::Local::now(), event_kind: EventKind::Error,
-        detail, metadata: Some(serde_json::json!({"capacity_continuation": continuation})),
-    })
 }
 
 async fn continue_capacity(store: &Arc<Store>, args: &RunArgs, id: &TaskId) -> Result<Option<TaskId>> {

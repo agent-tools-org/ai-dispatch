@@ -11,12 +11,12 @@ mod common;
 use common::aid_cmd_in;
 
 #[test]
-fn fresh_codex_accepts_the_current_approval_flag() {
+fn fresh_codex_0147_accepts_native_permissions() {
     assert_fresh_codex_succeeds("t-current-codex-approval", false);
 }
 
 #[test]
-fn fresh_codex_accepts_the_legacy_approval_flag() {
+fn fresh_codex_0146_accepts_native_permissions() {
     assert_fresh_codex_succeeds("t-legacy-codex-approval", true);
 }
 
@@ -67,19 +67,37 @@ fn assert_missing_explicit_result_file_fails(background: bool) {
     command
         .env("PATH", test_path(bin_dir.path()))
         .env("FAKE_CODEX_SHORT_FINAL", "1")
-        .args(["run", "codex", "Reply with the single word: ok", "--result-file", "required-result.md", "--id", "t-missing-required-result"]);
+        .args([
+            "run",
+            "codex",
+            "Reply with the single word: ok",
+            "--result-file",
+            "required-result.md",
+            "--id",
+            "t-missing-required-result",
+        ]);
     if background {
         command.arg("--bg");
     }
     let output = command.output().unwrap();
 
-    assert_eq!(output.status.success(), background, "stdout:\n{}\nstderr:\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+    assert_eq!(
+        output.status.success(),
+        background,
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
     if background {
         let wait = aid_cmd_in(aid_home.path())
             .args(["wait", "--timeout", "5", "t-missing-required-result"])
             .output()
             .unwrap();
-        assert_eq!(wait.status.code(), Some(1), "background task unexpectedly succeeded");
+        assert_eq!(
+            wait.status.code(),
+            Some(1),
+            "background task unexpectedly succeeded"
+        );
     }
     let conn = Connection::open(aid_home.path().join("aid.db")).unwrap();
     let facts = task_facts(&conn, "t-missing-required-result");
@@ -100,8 +118,15 @@ fn assert_fresh_codex_succeeds(task_id: &str, legacy: bool) {
         command.env("FAKE_CODEX_LEGACY", "1");
     }
     let output = command
-        .args(["run", "codex", "Implement and report the requested change", "--id", task_id])
-        .output().unwrap();
+        .args([
+            "run",
+            "codex",
+            "Implement and report the requested change",
+            "--id",
+            task_id,
+        ])
+        .output()
+        .unwrap();
     assert!(
         output.status.success(),
         "stdout:\n{}\nstderr:\n{}",
@@ -175,7 +200,10 @@ fn repeated_missing_delivery_does_not_start_third_attempt() {
         ])
         .output()
         .unwrap();
-    assert!(!output.status.success(), "repeated hollow delivery must fail");
+    assert!(
+        !output.status.success(),
+        "repeated hollow delivery must fail"
+    );
 
     let conn = Connection::open(aid_home.path().join("aid.db")).unwrap();
     let facts: (i64, i64) = conn
@@ -199,7 +227,9 @@ fn home_with_seeded_rollout() -> TempDir {
     let sessions = home.path().join(".codex/sessions/2026/08/09");
     std::fs::create_dir_all(&sessions).unwrap();
     std::fs::write(
-        sessions.join(format!("rollout-2026-08-09T00-00-00-{FIXTURE_SESSION_ID}.jsonl")),
+        sessions.join(format!(
+            "rollout-2026-08-09T00-00-00-{FIXTURE_SESSION_ID}.jsonl"
+        )),
         "{\"type\":\"turn_context\",\"model\":\"gpt-5.6-sol\"}\n",
     )
     .unwrap();
@@ -226,64 +256,7 @@ fn child_facts(conn: &Connection, parent_id: &str) -> (String, i64) {
 
 fn write_fake_codex(dir: &Path) {
     let path = dir.join("codex");
-    std::fs::write(
-        &path,
-        r#"#!/bin/sh
-if [ "$1" = "--version" ]; then
-  if [ "$FAKE_CODEX_LEGACY" = "1" ]; then
-    echo "codex-cli 0.146.0"
-  else
-    echo "codex-cli 0.147.0"
-  fi
-  exit 0
-fi
-if [ "$1" = "exec" ] && [ "$2" = "--help" ]; then
-  if [ "$FAKE_CODEX_LEGACY" = "1" ]; then
-    echo "      --full-auto"
-  else
-    echo "      --approve-for-me"
-  fi
-  exit 0
-fi
-if [ "$2" = "resume" ]; then
-  printf '%s\n' '{"type":"thread.started","thread_id":"019e3e49-6b83-7563-a3d8-b51a3a716dd1"}'
-  if [ "$FAKE_CODEX_HOLLOW_RESUME" = "1" ]; then
-    printf '%s\n' '{"type":"item.completed","item":{"id":"work-again","type":"command_execution","command":"inspect again","aggregated_output":"","exit_code":0}}'
-    printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":10,"output_tokens":8000}}'
-    exit 0
-  fi
-  printf '%s\n' '{"type":"item.completed","item":{"id":"final","type":"agent_message","text":"Recovery complete."}}'
-  printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":10,"output_tokens":80}}'
-  exit 0
-fi
-if [ "$FAKE_CODEX_LEGACY" = "1" ]; then
-  case " $* " in
-    *" --full-auto "*) ;;
-    *) echo "error: missing '--full-auto'" >&2; exit 2 ;;
-  esac
-else
-  case " $* " in
-    *" --approve-for-me "*) ;;
-    *) echo "error: missing '--approve-for-me'" >&2; exit 2 ;;
-  esac
-fi
-printf '%s\n' '{"type":"thread.started","thread_id":"019e3e49-6b83-7563-a3d8-b51a3a716dd1"}'
-if [ "$FAKE_CODEX_SHORT_FINAL" = "1" ]; then
-  printf '%s\n' '{"type":"item.completed","item":{"id":"final","type":"agent_message","text":"ok"}}'
-  printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":10,"output_tokens":1}}'
-  exit 0
-fi
-if [ "$FAKE_CODEX_FINAL_ON_FRESH" = "1" ]; then
-  printf '%s\n' '{"type":"item.completed","item":{"id":"final","type":"agent_message","text":"Completed and verified."}}'
-  printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":10,"output_tokens":80}}'
-  exit 0
-fi
-printf '%s\n' '{"type":"item.completed","item":{"id":"progress","type":"agent_message","text":"I am investigating the task now. I will inspect the available evidence and provide the final report after the tool work is complete. This progress update is deliberately substantive but is not a final answer."}}'
-printf '%s\n' '{"type":"item.completed","item":{"id":"work","type":"command_execution","command":"inspect evidence","aggregated_output":"","exit_code":0}}'
-printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":50,"output_tokens":9000}}'
-"#,
-    )
-    .unwrap();
+    std::fs::write(&path, include_str!("fixtures/codex-delivery-cli.sh")).unwrap();
     let mut permissions = std::fs::metadata(&path).unwrap().permissions();
     permissions.set_mode(0o755);
     std::fs::set_permissions(path, permissions).unwrap();

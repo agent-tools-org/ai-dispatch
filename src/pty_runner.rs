@@ -61,7 +61,13 @@ pub(crate) fn run_agent_process_with_control(
     control: Option<PtyRunControl>,
 ) -> Result<()> {
     let start = std::time::Instant::now();
-    let mut bridge = match spawn_bridge(cmd, log_path) {
+    let mut bridge = match store.with_running_task(task_id.as_str(), || {
+        let bridge = spawn_bridge(cmd, log_path)?;
+        if let Some(pid) = bridge.child_pid() {
+            let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
+        }
+        Ok(bridge)
+    }) {
         Ok(bridge) => bridge,
         Err(err) => {
             fail_task_on_spawn_error(
@@ -77,7 +83,6 @@ pub(crate) fn run_agent_process_with_control(
         if let Some(control) = &control {
             control.set_agent_pid(pid);
         }
-        let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
     }
     if control.as_ref().is_some_and(PtyRunControl::is_interrupted) {
         let _ = bridge.kill_group();
@@ -223,7 +228,7 @@ fn record_completion(
         ),
         metadata: None,
     };
-    crate::task_lifecycle::complete_task_atomic(
+    if !crate::task_lifecycle::complete_task_atomic(
         store.as_ref(),
         TaskCompletionUpdate {
             id: task_id.as_str(),
@@ -236,7 +241,9 @@ fn record_completion(
             exit_code: info.exit_code,
         },
         &event,
-    )?;
+    )? {
+        return Ok(());
+    }
     crate::state::refresh_project_state(store.as_ref(), task_id);
     println!(
         "Task {} {} ({}{}{})",

@@ -24,7 +24,7 @@ use super::run_model_selfheal::maybe_auto_retry_after_model_unavailable;
 use super::run_delivery_recovery::maybe_auto_recover_missing_delivery;
 use super::run_post::{
     auto_save_task_output, maybe_auto_retry_after_hang, maybe_flag_empty_worktree_diff,
-    maybe_run_post_done_audit, read_quota_error_message, rescue_quota_failed_task,
+    maybe_run_post_done_audit, read_quota_error_message,
     take_next_cascade_agent, worktree_is_empty_diff_with_base,
 };
 use super::{RunArgs, inherit_retry_base_branch, iterate_config, maybe_auto_retry_after_checklist_miss, maybe_auto_retry_after_verify_failure, maybe_iterate, maybe_judge_retry, maybe_verify, run, run_agent, run_prompt};
@@ -82,6 +82,9 @@ pub(crate) async fn post_run_lifecycle(
         pre_task_dirty_paths,
     )
     .await;
+    if outcome.is_ok() {
+        store.settle_task_status(task_id.as_str(), TaskStatus::Done, Some(&[TaskStatus::Done]), None, None)?;
+    }
     crate::backup::on_settled(store.as_ref(), task_id.as_str());
     outcome
 }

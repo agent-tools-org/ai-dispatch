@@ -115,7 +115,7 @@ fn insert_fast_fail_snapshot_event(store: &Store, task_id: &TaskId, duration_ms:
         context.worktree_path.as_deref().unwrap_or("(none)"),
         context.worktree_created,
     );
-    let _ = store.insert_event(&TaskEvent {
+    let _ = store.insert_agent_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
         event_kind: EventKind::Error,
@@ -160,19 +160,22 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
     #[cfg(unix)]
     cmd.process_group(0);
     crate::cmd::noninteractive_stdio::configure(&mut cmd);
-    let mut child = match cmd.spawn() {
+    let mut child = match store.with_running_task(task_id.as_str(), || {
+        let child = cmd.spawn()?;
+        if let Some(pid) = child.id() {
+            let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
+        }
+        Ok(child)
+    }) {
         Ok(child) => child,
         Err(err) => {
-            let err = anyhow::Error::new(err).context("Failed to spawn agent process");
+            let err = err.context("Failed to spawn agent process");
             let stderr = stderr_excerpt(task_id)
                 .or_else(|| Some("unavailable (process did not start)".to_string()));
             fail_task_on_agent_spawn(store.as_ref(), task_id, &err, stderr.as_deref());
             return Err(err);
         }
     };
-    if let Some(pid) = child.id() {
-        let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
-    }
     let info = if streaming {
         watcher::watch_streaming(agent, &mut child, task_id, store, log_path, workgroup_id, idle_timeout, max_task_cost).await
     } else {
@@ -198,7 +201,7 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
     if cost_usd.is_some_and(|cost| max_task_cost.is_some_and(|max| cost > max)) {
         let current_cost = cost_usd.unwrap_or_default();
         let max_cost = max_task_cost.unwrap_or_default();
-        let _ = store.insert_event(&TaskEvent {
+        let _ = store.insert_agent_event(&TaskEvent {
             task_id: task_id.clone(),
             timestamp: Local::now(),
             event_kind: EventKind::Error,
@@ -218,6 +221,25 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
     }
     let duration_ms = start.elapsed().as_millis() as i64;
     let exit_code = resolve_failure_exit_code(store.as_ref(), task_id, info.exit_code);
+    // Same split as pty_runner::record_completion: the observation stands alone,
+    // only the cost estimate may fall back to what was requested.
+    let (observed_model, attribution_source) = crate::agent::codex::grade_completion_observation(
+        agent, store.as_ref(), task_id, &info, model,
+    );
+    let costing_model = observed_model.as_deref().or(model);
+    let cost_usd = crate::cost::completion_cost(store, task_id, &info, costing_model, agent.kind())?;
+    if !crate::task_lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
+        id: task_id.as_str(),
+        status: info.status,
+        tokens: info.tokens,
+        duration_ms,
+        observed_model: observed_model.as_deref(),
+        attribution_source,
+        cost_usd,
+        exit_code,
+    })? {
+        return Ok(());
+    }
     if info.status == TaskStatus::Failed && exit_code != Some(0) {
         record_execution_failure(
             store.as_ref(),
@@ -227,23 +249,6 @@ pub(crate) async fn run_agent_process_impl(args: RunProcessArgs<'_>) -> Result<(
             &failure_context,
         );
     }
-    // Same split as pty_runner::record_completion: the observation stands alone,
-    // only the cost estimate may fall back to what was requested.
-    let (observed_model, attribution_source) = crate::agent::codex::grade_completion_observation(
-        agent, store.as_ref(), task_id, &info, model,
-    );
-    let costing_model = observed_model.as_deref().or(model);
-    let cost_usd = crate::cost::completion_cost(store, task_id, &info, costing_model, agent.kind())?;
-    crate::task_lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
-        id: task_id.as_str(),
-        status: info.status,
-        tokens: info.tokens,
-        duration_ms,
-        observed_model: observed_model.as_deref(),
-        attribution_source,
-        cost_usd,
-        exit_code,
-    })?;
     let duration_str = format_duration(duration_ms);
     let tokens_str = info.tokens.map(|t| format!(", {} tokens", t)).unwrap_or_default();
     let cost_str = if cost_usd.is_some() { format!(", {}", crate::cost::format_cost(cost_usd)) } else { String::new() };

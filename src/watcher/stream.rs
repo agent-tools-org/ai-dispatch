@@ -37,7 +37,7 @@ pub(crate) fn apply_codex_delivery_guard(
         task_id.as_str(),
         Some(DeliveryAssessment::MissingFinalDelivery),
     );
-    let _ = store.insert_event(&TaskEvent {
+    let _ = store.insert_agent_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),
         event_kind: EventKind::Error,
@@ -104,7 +104,7 @@ pub(crate) fn handle_streaming_line_with_session(
 
     if let Some(event) = parse_milestone_event(task_id, line) {
         synthetic_tracker.observe(&event);
-        store.insert_event(&event)?;
+        store.insert_agent_event(&event)?;
         *event_count += 1;
         return Ok(Some(EventDetail::from_event(&event)));
     }
@@ -130,10 +130,10 @@ pub(crate) fn handle_streaming_line_with_session(
         {
             mark_stream_rate_limit(store, task_id, agent, line, &message);
         }
-        store.insert_event(&event)?;
+        store.insert_agent_event(&event)?;
         *event_count += 1;
         if let Some(event) = synthetic_tracker.synthetic_event(task_id, &event) {
-            store.insert_event(&event)?;
+            store.insert_agent_event(&event)?;
             *event_count += 1;
         }
         return Ok(Some(EventDetail::from_event(&event)));

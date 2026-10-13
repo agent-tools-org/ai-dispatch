@@ -73,7 +73,6 @@ pub(super) async fn run_lifecycle_phases(
         runtime_hooks,
         prompt_bundle,
     )?;
-    rescue_quota_failed_task(store.as_ref(), task_id, quota_error_message.as_deref());
     if let Some(retry_id) = maybe_judge_retry(store, args, task_id).await? {
         return Ok(Some(retry_id));
     }

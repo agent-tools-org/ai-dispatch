@@ -74,7 +74,7 @@ fn task(id: &str, repo: &Path, wt: &Path, branch: &str) -> Task {
         cost_usd: None,
         exit_code: Some(0),
         created_at: Local::now(),
-        completed_at: Some(Local::now()),
+        completed_at: None,
         verify: Some("false".to_string()),
         verify_status: VerifyStatus::Skipped,
         pending_reason: None,

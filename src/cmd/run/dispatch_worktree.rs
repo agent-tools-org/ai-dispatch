@@ -285,7 +285,7 @@ pub(super) fn fail_claimed_task(
             detail: format!("Failed during worktree setup: {err}"),
             metadata: None,
         },
-    )
+    ).map(|_| ())
 }
 
 #[cfg(test)]

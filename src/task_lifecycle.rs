@@ -5,10 +5,10 @@
 use anyhow::Result;
 
 use crate::store::{Store, TaskCompletionUpdate};
-use crate::types::{PendingReason, TaskEvent, TaskId, TaskStatus};
+use crate::types::{ACTIVE_TASK_STATUSES, PendingReason, TaskEvent, TaskId, TaskStatus};
 
 pub(crate) fn mark_running(store: &Store, task_id: &TaskId) -> Result<bool> {
-    store.update_task_status(task_id.as_str(), TaskStatus::Running)
+    store.settle_task_status(task_id.as_str(), TaskStatus::Running, Some(&ACTIVE_TASK_STATUSES), None, None)
 }
 
 pub(crate) fn mark_awaiting_input(store: &Store, task_id: &TaskId) -> Result<bool> {
@@ -37,10 +37,6 @@ pub(crate) fn restore_after_merge_failure(
     status: TaskStatus,
 ) -> Result<bool> {
     store.update_task_status(task_id, status)
-}
-
-pub(crate) fn rescue_to_done(store: &Store, task_id: &TaskId) -> Result<bool> {
-    store.rescue_task_to_done(task_id.as_str())
 }
 
 pub(crate) fn mark_failed(store: &Store, task_id: &TaskId) -> Result<bool> {
@@ -93,24 +89,24 @@ pub(crate) fn fail_waiting_with_reason(
 pub(crate) fn update_task_completion(
     store: &Store,
     payload: TaskCompletionUpdate<'_>,
-) -> Result<()> {
+) -> Result<bool> {
     let task_id = TaskId(payload.id.to_string());
     let status = payload.status;
-    let changed = store.update_task_completion(payload)?;
+    let changed = store.record_agent_completion(payload, None)?;
     salvage_failed_transition(store, &task_id, status, changed);
-    Ok(())
+    Ok(changed)
 }
 
 pub(crate) fn complete_task_atomic(
     store: &Store,
     payload: TaskCompletionUpdate<'_>,
     event: &TaskEvent,
-) -> Result<()> {
+) -> Result<bool> {
     let task_id = TaskId(payload.id.to_string());
     let status = payload.status;
-    let changed = store.complete_task_atomic(payload, event)?;
+    let changed = store.record_agent_completion(payload, Some(event))?;
     salvage_failed_transition(store, &task_id, status, changed);
-    Ok(())
+    Ok(changed)
 }
 
 fn salvage_failed_id(store: &Store, task_id: &str, changed: bool) {

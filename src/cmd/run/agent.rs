@@ -212,3 +212,20 @@ fn format_duration(ms: i64) -> String {
         format!("{}m {:02}s", secs / 60, secs % 60)
     }
 }
+
+fn timeout_event(
+    task_id: &TaskId, timeout_mins: i64, idle_timeout: std::time::Duration,
+) -> crate::types::TaskEvent {
+    let detail = format!(
+        "exceeded {timeout_mins}m timeout after {}s without parsed activity",
+        idle_timeout.as_secs()
+    );
+    let event = crate::types::TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: Local::now(),
+        event_kind: crate::types::EventKind::Error,
+        detail: format!("Failed during execution: {detail}"),
+        metadata: None,
+    };
+    event
+}

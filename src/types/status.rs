@@ -108,9 +108,6 @@ impl TaskStatus {
         }
     }
 
-    pub fn can_rescue_to_done(self, next: Self) -> bool {
-        self == Self::Failed && next == Self::Done
-    }
 }
 
 impl fmt::Display for TaskStatus {

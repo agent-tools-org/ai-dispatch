@@ -2,7 +2,6 @@
 // Exports run_agent_process_with_timeout plus small testable timeout helpers.
 // Depends on watcher activity events, process-group cleanup, and task store updates.
 use anyhow::Result;
-use chrono::Local;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -10,7 +9,7 @@ use tokio::process::Command;
 
 use crate::process_group::{cleanup_process_group, force_kill_process_group};
 use crate::store::{Store, TaskCompletionUpdate};
-use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
+use crate::types::{CompletionInfo, TaskId, TaskStatus};
 use crate::watcher;
 
 use super::{format_duration, run_prompt, spawn_child_with_log, write_streaming_output};
@@ -46,7 +45,13 @@ pub(crate) async fn run_agent_process_with_timeout(
     let failure_context = run_prompt::capture_failure_context(store.as_ref(), task_id, &cmd);
     #[cfg(unix)]
     cmd.process_group(0);
-    let mut child = match spawn_child_with_log(&mut cmd, log_path) {
+    let mut child = match store.with_running_task(task_id.as_str(), || {
+        let child = spawn_child_with_log(&mut cmd, log_path)?;
+        if let Some(pid) = child.id() {
+            let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
+        }
+        Ok(child)
+    }) {
         Ok(child) => child,
         Err(err) => {
             let err = err.context("Failed to spawn agent process");
@@ -57,9 +62,6 @@ pub(crate) async fn run_agent_process_with_timeout(
         }
     };
     let child_pid = child.id();
-    if let Some(pid) = child_pid {
-        let _ = crate::background::update_agent_pid(task_id.as_str(), pid);
-    }
     let result = {
         let watch_future = async {
             let info = if streaming {
@@ -175,6 +177,25 @@ fn handle_success(
     }
     let duration_ms = start.elapsed().as_millis() as i64;
     let exit_code = run_prompt::resolve_failure_exit_code(store.as_ref(), task_id, info.exit_code);
+    // Same split as pty_runner::record_completion: the observation stands alone,
+    // only the cost estimate may fall back to what was requested.
+    let (observed_model, attribution_source) = crate::agent::codex::grade_completion_observation(
+        agent, store.as_ref(), task_id, &info, model,
+    );
+    let costing_model = observed_model.as_deref().or(model);
+    let cost_usd = crate::cost::completion_cost(store, task_id, &info, costing_model, agent.kind())?;
+    if !crate::task_lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
+        id: task_id.as_str(),
+        status: info.status,
+        tokens: info.tokens,
+        duration_ms,
+        observed_model: observed_model.as_deref(),
+        attribution_source,
+        cost_usd,
+        exit_code,
+    })? {
+        return Ok(());
+    }
     if info.status == TaskStatus::Failed {
         run_prompt::record_execution_failure(
             store.as_ref(),
@@ -184,23 +205,6 @@ fn handle_success(
             failure_context,
         );
     }
-    // Same split as pty_runner::record_completion: the observation stands alone,
-    // only the cost estimate may fall back to what was requested.
-    let (observed_model, attribution_source) = crate::agent::codex::grade_completion_observation(
-        agent, store.as_ref(), task_id, &info, model,
-    );
-    let costing_model = observed_model.as_deref().or(model);
-    let cost_usd = crate::cost::completion_cost(store, task_id, &info, costing_model, agent.kind())?;
-    crate::task_lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
-        id: task_id.as_str(),
-        status: info.status,
-        tokens: info.tokens,
-        duration_ms,
-        observed_model: observed_model.as_deref(),
-        attribution_source,
-        cost_usd,
-        exit_code,
-    })?;
     crate::state::refresh_project_state(store.as_ref(), task_id);
     let duration_str = format_duration(duration_ms);
     let tokens_str = info.tokens.map(|t| format!(", {t} tokens")).unwrap_or_default();
@@ -221,7 +225,8 @@ fn handle_timeout(
     idle_timeout: Duration,
 ) -> Result<()> {
     let duration_ms = start.elapsed().as_millis() as i64;
-    crate::task_lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
+    let event = super::timeout_event(task_id, timeout_mins, idle_timeout);
+    if crate::task_lifecycle::complete_task_atomic(store.as_ref(), TaskCompletionUpdate {
         id: task_id.as_str(),
         status: TaskStatus::Failed,
         tokens: None,
@@ -232,21 +237,10 @@ fn handle_timeout(
         attribution_source: None,
         cost_usd: None,
         exit_code: None,
-    })?;
-    crate::state::refresh_project_state(store.as_ref(), task_id);
-    let detail = format!(
-        "exceeded {timeout_mins}m timeout after {}s without parsed activity",
-        idle_timeout.as_secs()
-    );
-    let event = TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: format!("Failed during execution: {detail}"),
-        metadata: None,
-    };
-    let _ = store.insert_event(&event);
-    aid_error!("[aid] {detail}");
+    }, &event)? {
+        crate::state::refresh_project_state(store.as_ref(), task_id);
+        aid_error!("[aid] {}", event.detail);
+    }
     Ok(())
 }
 

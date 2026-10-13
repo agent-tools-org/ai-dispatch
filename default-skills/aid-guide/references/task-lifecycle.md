@@ -26,10 +26,28 @@ or Qwen `[API Error: ...]`) are recorded as `Failed`. Ambiguous envelopes stay
 `Merged` means code was integrated. Neither `Done` nor `Merged` means that the
 task succeeded or that the principal accepted the result.
 
+`aid stop` records `Stopped`, terminal timing, and its completion event in one
+transaction before signalling the worker and agent. A worker can still run until
+the signal lands. If stop is interrupted before signalling, run `aid stop` again;
+a stopped task with a live stored worker PID receives the signal again. If another
+terminal result already won, stop reports its status and reason and exits non-zero
+without writing a stop event.
+
+A stopped parent refuses automatic child tasks and automatic child worker launches
+(verification retries, judge retries, iterations, `--retry`, cascades, and batch fallbacks).
+Explicit `aid retry <task-id> -f "feedback"` and `aid batch retry` can create and launch
+new attempts even when the parent is stopped, including when retry itself stops the prior run.
+A child launched before its parent's stop committed is independent: stop it by its own ID
+or with `aid stop --retry-tree`.
+
 `aid wait` waits for the worker's post-run delivery and verification checks before
 reporting a terminal result, including for group or implicit active-task selection.
-A provisional `Done` cannot bypass a required result-file failure. `--exit-on-await`
-still returns when input is requested; `--timeout` also covers post-run settlement.
+`Done` is provisional while `completed_at` is absent; post-run checks can still
+record failure or stop. Successful settlement records `completed_at` after those
+checks. Execution completion writers preserve terminal results; later passing
+verification does not convert `Failed` back to `Done`. A provisional `Done` cannot
+bypass a required result-file failure. `--exit-on-await` still returns when input
+is requested; `--timeout` also covers post-run settlement.
 If a worker exits with an unfinished job spec, waiting reports an error instead of
 claiming success from its provisional status.
 

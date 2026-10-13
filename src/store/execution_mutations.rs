@@ -6,7 +6,9 @@ use anyhow::Result;
 use rusqlite::{params, OptionalExtension};
 
 use super::Store;
-use crate::types::{ACTIVE_EXECUTION_FAILURE_STATUSES, TaskStatus};
+use crate::types::TaskStatus;
+#[cfg(test)]
+use crate::types::ACTIVE_EXECUTION_FAILURE_STATUSES;
 
 impl Store {
     pub fn set_backup_url(&self, id: &str, url: &str) -> Result<bool> {
@@ -41,31 +43,14 @@ impl Store {
     }
 
     pub fn fail_completed_verify_gate(&self, id: &str) -> Result<bool> {
-        let rows = self.db().execute(
-            "UPDATE tasks SET status = 'failed',
-             exit_code = CASE WHEN exit_code IS NULL OR exit_code = 0 THEN 1 ELSE exit_code END
-             WHERE id = ?1 AND status = 'done'",
-            params![id],
-        )?;
-        Ok(rows > 0)
+        self.settle_task_status(id, TaskStatus::Failed, Some(&[TaskStatus::Done]), None, None)
     }
 
     pub fn fail_active_execution(&self, id: &str) -> Result<bool> {
-        if !self.guard_current_status(id, &ACTIVE_EXECUTION_FAILURE_STATUSES, TaskStatus::Failed)? {
-            return Ok(false);
-        }
-        let rows = self.db().execute(
-            "UPDATE tasks SET status = 'failed' WHERE id = ?1
-             AND status IN (?2, ?3, ?4, ?5)",
-            params![
-                id,
-                ACTIVE_EXECUTION_FAILURE_STATUSES[0].as_str(),
-                ACTIVE_EXECUTION_FAILURE_STATUSES[1].as_str(),
-                ACTIVE_EXECUTION_FAILURE_STATUSES[2].as_str(),
-                ACTIVE_EXECUTION_FAILURE_STATUSES[3].as_str()
-            ],
-        )?;
-        Ok(rows > 0)
+        self.settle_task_status(id, TaskStatus::Failed, Some(&[
+            TaskStatus::Running, TaskStatus::AwaitingInput, TaskStatus::Stalled,
+            TaskStatus::Waiting, TaskStatus::Done,
+        ]), None, None)
     }
 }
 
@@ -105,6 +90,8 @@ mod tests {
         let store = Store::open_memory().expect("store");
         insert_task(&store, "t-pending", TaskStatus::Pending);
         insert_task(&store, "t-done", TaskStatus::Done);
+        store.db().execute("UPDATE tasks SET completed_at = created_at WHERE id = 't-done'", [])
+            .expect("settled success");
 
         assert!(!store.fail_active_execution("t-pending").expect("pending"));
         assert!(!store.fail_active_execution("t-done").expect("done"));

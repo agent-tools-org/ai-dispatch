@@ -19,6 +19,10 @@ pub struct PeerReview {
 }
 
 pub async fn judge_task(task: &Task, judge_agent: &str, original_prompt: &str) -> Result<JudgeResult> {
+    #[cfg(test)]
+    if let Some(result) = crate::cmd::run::stop_followup_tests::judge_result() {
+        return result;
+    }
     let diff = judge_review_material(task);
     let truncated = truncate_diff(&diff, MAX_DIFF_CHARS);
     let prompt = format!(

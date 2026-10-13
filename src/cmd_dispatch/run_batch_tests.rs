@@ -74,6 +74,7 @@ fn cli_run_conversion_preserves_lifecycle_flags() {
     assert_eq!(args.best_of, Some(2));
     assert_eq!(args.metric.as_deref(), Some("score"));
     assert_eq!(args.parent_task_id.as_deref(), Some("t-parent"));
+    assert_eq!(args.origin, crate::types::DispatchOrigin::Automatic);
     assert_eq!(args.existing_task_id.as_ref().map(TaskId::as_str), Some("t-existing"));
     assert_eq!(args.timeout, Some(601));
     assert_eq!(args.idle_timeout_secs, Some(121));
@@ -150,7 +151,7 @@ fn cli_run_conversion_does_not_drop_any_configurable_field() {
         "result_file_required", "base_branch", "setup", "max_duration_mins", "max_task_cost",
         "foreground", "audit_report_mode", "budget", "session_id", "batch_siblings", "env",
         "env_forward", "judge_retry", "timeout_policy", "suppress_nested_repo_warning",
-        "force_default_model",
+        "force_default_model", "origin",
     ];
     for key in internal {
         let default = defaults.get(key).expect("allowlisted field exists");

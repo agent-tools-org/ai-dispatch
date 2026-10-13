@@ -2,7 +2,7 @@
 // Uses stored launch text; legacy rows expose only their stored raw brief.
 use super::*;
 
-pub(super) fn task_fixture(
+pub(in crate::cmd::show) fn task_fixture(
     id: &str,
     prompt: &str,
     resolved_prompt: Option<&str>,

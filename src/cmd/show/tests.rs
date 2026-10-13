@@ -12,7 +12,8 @@ use std::sync::Arc;
 
 #[path = "context_tests.rs"]
 mod context;
-use context::{research_task, task_fixture};
+use context::research_task;
+pub(super) use context::task_fixture;
 
 #[test]
 fn summary_text_shows_diff_stat_without_full_diff() {

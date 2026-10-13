@@ -194,3 +194,7 @@ mod settle_launch_tests;
 #[cfg(test)]
 #[path = "stop/settle_done_tests.rs"]
 mod settle_done_tests;
+
+#[cfg(test)]
+#[path = "stop/settle_worker_tests.rs"]
+mod settle_worker_tests;

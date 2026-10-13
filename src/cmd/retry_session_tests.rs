@@ -3,6 +3,42 @@
 use super::*;
 
 #[test]
+fn retry_preservation_manual_retry_of_retry_keeps_all_feedback() {
+    let store = Store::open_memory().unwrap();
+    let mut task = failed_task("t-manual-retry-preservation");
+    task.prompt =
+        "[Previous attempt failed]\nExecution error\n\n[Original task]\nChild brief".repeat(200);
+    task.resolved_prompt = Some("Injected launch context".into());
+    store.insert_task(&task).unwrap();
+    let args = retry_task_to_run_args(
+        &store,
+        &task,
+        RetryArgs {
+            task_id: task.id.to_string(),
+            feedback: Some("New correction".into()),
+            feedback_file: None,
+            agent: None,
+            model: None,
+            idle_timeout_secs: None,
+            dir: None,
+            reset: false,
+            bg: false,
+        },
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        args.prompt,
+        format!(
+            "[Previous attempt feedback]\nNew correction\n\n[Original task]\n{}",
+            task.prompt,
+        )
+    );
+    assert!(!args.prompt.contains("Injected launch context"));
+}
+
+
+#[test]
 fn retry_preservation_keeps_long_feedback_first_and_whole_on_codex_resume() {
     let store = Store::open_memory().unwrap();
     let mut task = failed_task("t-feedback-resume");

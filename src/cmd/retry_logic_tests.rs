@@ -163,3 +163,44 @@ fn failed_retry_keeps_saved_configuration_and_uses_root_feedback() {
     assert_eq!(args.parent_task_id.as_deref(), Some(child.id.as_str()));
     assert!(!args.background);
 }
+
+#[test]
+fn retry_preservation_execution_failure_keeps_distinct_child_brief() {
+    assert_failed_retry_preserves("Implement child B, not parent A");
+}
+
+#[test]
+fn retry_preservation_execution_failure_keeps_checklist_feedback() {
+    assert_failed_retry_preserves(
+        "[Checklist feedback]\nMissing acceptance item\n\n[Original task]\nChild brief",
+    );
+}
+
+#[test]
+fn retry_preservation_execution_failure_keeps_iteration_feedback() {
+    assert_failed_retry_preserves(
+        "[Iteration feedback]\nFix evaluation failure\n\n[Original task]\nChild brief",
+    );
+}
+
+fn assert_failed_retry_preserves(brief: &str) {
+    let store = Store::open_memory().unwrap();
+    let mut parent = failed_task("t-parent-preservation");
+    parent.prompt = "Unrelated ancestor A".into();
+    store.insert_task(&parent).unwrap();
+    let mut child = failed_task("t-child-preservation");
+    child.prompt = brief.repeat(500);
+    child.resolved_prompt = Some("Auxiliary launch context must not be inherited".into());
+    child.parent_task_id = Some(parent.id.to_string());
+    store.insert_task(&child).unwrap();
+    let retry = retry_args_for(&store, &child).unwrap();
+    assert_eq!(
+        retry.prompt,
+        format!(
+            "[Previous attempt failed]\nError: agent failed\n\n[Original task]\n{}",
+            child.prompt,
+        )
+    );
+    assert!(!retry.prompt.contains("Unrelated ancestor A"));
+    assert!(!retry.prompt.contains("Auxiliary launch context"));
+}

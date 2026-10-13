@@ -15,16 +15,7 @@ async fn explicit_retry_batch_stopped_parent_launches() {
     let home = TempDir::new().unwrap();
     let _guard = paths::AidHomeGuard::set(home.path());
     paths::ensure_dirs().unwrap();
-    std::fs::create_dir_all(paths::aid_dir().join("agents")).unwrap();
-    std::fs::write(
-        paths::aid_dir().join("agents/batch-explicit.toml"),
-        concat!(
-            "[agent]\nid = \"batch-explicit\"\ndisplay_name = \"Batch Explicit\"\n",
-            "command = \"/bin/sh\"\nprompt_mode = \"arg\"\n",
-            "fixed_args = [\"-c\", \"echo batch-retried\"]\ninteractive_input = false\n"
-        ),
-    )
-    .unwrap();
+    install_explicit_retry_agent();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = make_task("t-batch-stopped", AgentKind::Custom);
     task.custom_agent_name = Some("batch-explicit".into());
@@ -65,6 +56,18 @@ async fn explicit_retry_batch_stopped_parent_launches() {
     assert!(log.contains("batch-retried"));
 }
 
+fn install_explicit_retry_agent() {
+    std::fs::create_dir_all(paths::aid_dir().join("agents")).unwrap();
+    std::fs::write(
+        paths::aid_dir().join("agents/batch-explicit.toml"),
+        concat!(
+            "[agent]\nid = \"batch-explicit\"\ndisplay_name = \"Batch Explicit\"\n",
+            "command = \"/bin/sh\"\nprompt_mode = \"arg\"\n",
+            "fixed_args = [\"-c\", \"echo batch-retried\"]\ninteractive_input = false\n"
+        ),
+    )
+    .unwrap();
+}
 
 fn make_task(id: &str, agent: AgentKind) -> Task {
     Task {

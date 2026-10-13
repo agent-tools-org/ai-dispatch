@@ -172,9 +172,13 @@ fn methodology_preservation_bounds_auxiliary_and_aggregates_warning() {
     let skills = crate::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&skills).unwrap();
     std::fs::write(skills.join("large.md"), "Methodology é\n".repeat(8000)).unwrap();
+    let output = home.path().join("prior.md");
+    std::fs::write(&output, "Prior result\n".repeat(8000)).unwrap();
+    insert_task(&store, "t-prior", Some(output.to_str().unwrap()), None);
     let args = RunArgs {
         prompt: "Caller brief".into(),
         skills: vec!["large".into()],
+        context_from: vec!["t-prior".into()],
         ..Default::default()
     };
     assert_bounded(
@@ -182,6 +186,8 @@ fn methodology_preservation_bounds_auxiliary_and_aggregates_warning() {
         &bundle(&store, &args, &args.skills).effective_prompt,
         "Methodology",
     );
+    let warnings = store.get_events("t-current").unwrap();
+    assert!(warnings[0].detail.contains("Prior Task Result"));
 }
 
 #[test]

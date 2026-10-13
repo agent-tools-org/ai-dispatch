@@ -172,7 +172,7 @@ fn retry_preservation_execution_failure_keeps_distinct_child_brief() {
 #[test]
 fn retry_preservation_execution_failure_keeps_checklist_feedback() {
     assert_failed_retry_preserves(
-        "[Checklist feedback]\nMissing acceptance item\n\n[Original task]\nChild brief",
+        "[Checklist items not addressed]\nYou MUST address these items:\nMissing item\n\n[Original task]\nChild brief",
     );
 }
 

@@ -74,6 +74,12 @@ The read-only staging root is resolved through symlinks and parent traversal. A 
 or contained by the repository top level, primary checkout, worktree, Git common directory,
 or trusted task directory is rejected. The task directory and Cargo target receive no write grant.
 Aid's official result persistence, automatic `output.md`, and transcript writers remain outside staging.
+Those writers use ordinary path writes into `AID_HOME`; the guarantee assumes `AID_HOME`
+and its subdirectories (database, logs, jobs, tasks) are outside every repository a
+read-only task runs against and contain no links planted into one. Dispatch checks
+only the resolved task directory. `aid show --result` reads the stored `result.md`
+as-is and does not apply the missing-delivery assessment; `aid wait` prints the latest
+error event, which can be an earlier failure rather than the delivery assessment.
 
 Aid publishes staged artifacts after settlement and persists the staged report as the official
 result. Delivery failures mark the task Failed. Ref enforcement checks this run's HEAD and branch;

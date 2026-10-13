@@ -7,8 +7,8 @@ use crate::types::{AgentKind, Task};
 use anyhow::{Context, Result};
 use std::{
     fs,
-    io::Write,
-    os::unix::fs::OpenOptionsExt,
+    io::{Read, Write},
+    os::unix::fs::{MetadataExt, OpenOptionsExt},
     path::{Component, Path, PathBuf},
 };
 
@@ -23,6 +23,8 @@ pub(crate) fn prepare(args: &mut RunArgs, kind: AgentKind, task: &Task) -> Resul
     let cwd = resolve(".", task.effective_dir.as_deref().or(args.dir.as_deref())).canonicalize()?;
     anyhow::ensure!(!same_destination(args, task.effective_dir.as_deref())?, "result/-o: same destination");
     let mut forbidden = crate::agent::scratch::protected_roots(&cwd)?;
+    anyhow::ensure!(!forbidden.iter().any(|root| task_dir.starts_with(root)),
+        "read-only task directory is inside the repository or its Git common directory");
     anyhow::ensure!(!forbidden.iter().chain([&task_dir])
         .any(|root| staging.starts_with(root) || root.starts_with(&staging)),
         "read-only staging directory overlaps repository or trusted task directory");
@@ -63,6 +65,7 @@ pub(crate) fn publish(
     args: &RunArgs,
     kind: AgentKind,
     dir: Option<&str>,
+    task_id: &str,
 ) -> Result<()> {
     if !enabled(args, kind) {
         return Ok(());
@@ -75,21 +78,26 @@ pub(crate) fn publish(
         let (Some(source), Some(destination)) = (source, destination) else {
             continue;
         };
-        let metadata = match fs::symlink_metadata(source) {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(error) => return Err(error.into()),
-        };
-        anyhow::ensure!(metadata.is_file(), "staged artifact '{}' is not a regular file", source);
+        let mut file = fs::OpenOptions::new().read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK).open(source)
+            .with_context(|| format!("Cannot open staged artifact '{source}'"))?;
+        let metadata = file.metadata()?;
+        anyhow::ensure!(metadata.is_file() && metadata.nlink() == 1,
+            "staged artifact '{}' must be a regular file with a single link", source);
         #[cfg(test)]
         AFTER_VALIDATE.with(|hook| {
             if let Some(hook) = hook.borrow_mut().take() {
                 hook();
             }
         });
-        let content = fs::read_to_string(source)?;
+        let mut content = String::new();
+        file.read_to_string(&mut content)?;
+        anyhow::ensure!(!content.trim().is_empty(), "staged artifact '{}' is empty", source);
         deliver(&content, &resolve(destination, dir))
             .with_context(|| format!("Cannot deliver read-only artifact to '{}'", destination))?;
+        if Some(source) == result.as_deref() {
+            deliver(&content, &crate::paths::task_dir(task_id).join("result.md"))?;
+        }
     }
     Ok(())
 }

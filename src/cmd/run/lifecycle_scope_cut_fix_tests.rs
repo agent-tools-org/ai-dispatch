@@ -57,17 +57,33 @@ async fn scope_cut_fix_missing_or_refused_staging_never_selects_old_reports() {
                 std::os::unix::fs::symlink(&destination, staged(&f, name)).unwrap();
             }
             f.settle().await;
-            let task = f.store.get_task(f.id.as_str()).unwrap().unwrap();
-            for text in [
-                crate::cmd::show::output_text(&f.store, f.id.as_str()).unwrap(),
-                crate::task_view::read_output(&task),
-            ] {
-                assert!(text.contains("not delivered by this run"), "{text}");
-                assert!(!text.contains("STALE"), "{text}");
-            }
+            assert_not_delivered(&f).await;
             assert_delivery_failed(&f);
             assert_eq!(fs::read_to_string(destination).unwrap(), "STALE REPORT");
         }
+    }
+}
+
+async fn assert_not_delivered(f: &Fixture) {
+    let task = f.store.get_task(f.id.as_str()).unwrap().unwrap();
+    assert!(!crate::cmd::run::run_lifecycle::output_has_content(&task));
+    let mut outputs = vec![
+        crate::cmd::show::output_text(&f.store, f.id.as_str()).unwrap(),
+        crate::task_view::read_output(&task),
+    ];
+    #[cfg(feature = "web")]
+    {
+        let axum::Json(response) = crate::web::api::get_task_result(
+            axum::extract::Path(f.id.0.clone()),
+            axum::extract::State(f.store.clone()),
+        )
+        .await
+        .unwrap();
+        outputs.push(response.result);
+    }
+    for text in outputs {
+        assert!(text.contains("not delivered by this run"), "{text}");
+        assert!(!text.contains("STALE"), "{text}");
     }
 }
 

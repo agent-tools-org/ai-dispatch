@@ -13,12 +13,16 @@ For native Codex read-only host runs, the agent writes `agent-result.md` and `ag
 in a fresh, empty staging directory outside the repository and the trusted task directory.
 That staging directory is the run's only writable grant. Dispatch refuses destinations inside
 the repository, its Git metadata, staging, or any other Codex-writable root, resolving existing
-symlinks and parent traversal. Aid publishes regular staged files after execution; staged
-symlinks and other file types are refused. It writes a temporary file in the destination
+symlinks and parent traversal. Dispatch also refuses a trusted task directory under `AID_HOME`
+that resolves inside the repository or its Git common directory. Aid opens each staged source
+once without following links, checks that descriptor for a regular file with a single link,
+and uses its captured content for every sink. It writes a temporary file in the destination
 directory and renames it over the destination, replacing external symlinks without changing
 their targets. Rejected publication marks the task Failed and skips official report copying. Report and
 output paths resolving to the same destination are rejected at dispatch; choose separate paths
-or request one artifact. A missing staged report cannot be satisfied by an old destination file.
+or request one artifact. Missing or refused staged reports/outputs and failed official-report
+copies record task events and a missing-delivery assessment. CLI, TUI and web report preference
+then show "not delivered by this run" instead of selecting an old destination or official report.
 The requested parent directory receives no sandbox grant. Container launches retain their existing delivery path.
 Container launches retain their checkout-relative automatic report path.
 This prompt formatting decision is independent of dirty-worktree enforcement.

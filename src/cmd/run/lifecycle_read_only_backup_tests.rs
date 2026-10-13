@@ -296,5 +296,5 @@ async fn read_only_stop_missing_optional_report_without_backup_stays_failed() {
     assert!(!f.log.exists());
     assert_eq!(fs::read_dir(&f.capture).unwrap().count(), 0);
     let task = f.store.get_task(f.id.as_str()).unwrap().unwrap();
-    assert!(task.delivery_assessment.is_none());
+    assert_eq!(task.delivery_assessment, Some(crate::types::DeliveryAssessment::MissingFinalDelivery));
 }

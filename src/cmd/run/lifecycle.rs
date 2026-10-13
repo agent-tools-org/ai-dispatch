@@ -166,6 +166,9 @@ pub(crate) fn maybe_flag_hollow_output(
     });
 }
 pub(super) fn output_has_content(task: &Task) -> bool {
+    if task.artifact_delivery_notice().is_some() {
+        return false;
+    }
     if let Some(ref path) = task.output_path {
         if let Ok(content) = std::fs::read_to_string(path) {
             return !content.trim().is_empty();

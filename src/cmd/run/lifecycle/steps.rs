@@ -196,37 +196,49 @@ pub(super) fn persist_result_file(
     effective_dir: Option<&String>,
 ) {
     // Persist before failed-task worktree cleanup, otherwise the source file may disappear.
-    if let Err(err) = super::super::read_only_delivery::publish(
-        args, task.agent, effective_dir.map(String::as_str),
-    ) {
-        let _ = crate::task_lifecycle::mark_failed(store, task_id);
-        let _ = store.insert_event(&TaskEvent {
-            task_id: task_id.clone(), timestamp: chrono::Local::now(), event_kind: EventKind::Error,
-            detail: format!("Read-only artifact delivery failed: {err:#}"), metadata: None,
-        });
-        return;
-    }
-    let (_, result_file) = super::super::read_only_delivery::agent_paths(args, task.agent);
+    let native = super::super::read_only_delivery::enabled(args, task.agent);
     let log_path = task
         .log_path
         .as_deref()
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| crate::paths::log_path(task_id.as_str()));
-    match run_prompt::persist_result_file(
+    let delivery = if native {
+        super::super::read_only_delivery::publish(
+            args, task.agent, effective_dir.map(String::as_str), task_id.as_str(),
+        ).map(|_| run_prompt::ResultDelivery::File)
+    } else { run_prompt::persist_result_file(
         task_id.as_str(),
-        result_file.as_deref(),
+        args.result_file.as_deref(),
         effective_dir.map(String::as_str),
         &log_path,
         Some(task.agent_display_name()),
-    ) {
+    ) };
+    match delivery {
         Ok(delivery) => record_missing_report(
             store.as_ref(),
             task_id,
             delivery,
             args.result_file_required == Some(true),
         ),
-        Err(err) => aid_warn!("[aid] Failed to persist result file: {err}"),
+        Err(err) => record_artifact_failure(store, task, native, &err),
     }
+}
+
+fn record_artifact_failure(store: &Store, task: &Task, native: bool, err: &anyhow::Error) {
+    let event_kind = if task.status == TaskStatus::Failed
+        && store.latest_error(task.id.as_str()).is_some() {
+        EventKind::Milestone
+    } else { EventKind::Error };
+    let _ = store.update_delivery_assessment(
+        task.id.as_str(), Some(DeliveryAssessment::MissingFinalDelivery),
+    );
+    let _ = crate::task_lifecycle::mark_failed(store, &task.id);
+    let label = if native { "Read-only artifact delivery failed" }
+        else { "Failed to persist result file" };
+    let _ = store.insert_event(&TaskEvent {
+        task_id: task.id.clone(), timestamp: chrono::Local::now(), event_kind,
+        detail: format!("{label}: {err:#}"), metadata: None,
+    });
 }
 
 pub(super) fn handle_failed_postprocess(

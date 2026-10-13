@@ -158,6 +158,11 @@ impl Task {
         self.delivery_assessment
     }
 
+    pub(crate) fn artifact_delivery_notice(&self) -> Option<&'static str> {
+        (self.read_only && self.delivery_assessment == Some(DeliveryAssessment::MissingFinalDelivery))
+            .then_some("Artifact not delivered by this run\n")
+    }
+
     pub fn has_verify_failure(&self) -> bool {
         self.verify_status == VerifyStatus::Failed
     }

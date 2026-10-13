@@ -132,7 +132,7 @@ fn scope_cut_publication_refuses_symlink_staged_report() {
     std::fs::write(&target, "must not be published").unwrap();
     std::os::unix::fs::symlink(&target, source).unwrap();
     assert!(read_only_delivery::publish(
-        &args, AgentKind::Codex, repo.path().to_str(),
+        &args, AgentKind::Codex, repo.path().to_str(), "t-scope-cut",
     ).is_err());
     assert!(!destination.exists());
     assert_eq!(std::fs::read_to_string(target).unwrap(), "must not be published");
@@ -148,7 +148,7 @@ fn scope_cut_publication_refuses_directory_staged_report() {
     let (_, source) = read_only_delivery::agent_paths(&args, AgentKind::Codex);
     std::fs::create_dir_all(source.unwrap()).unwrap();
     assert!(read_only_delivery::publish(
-        &args, AgentKind::Codex, repo.path().to_str(),
+        &args, AgentKind::Codex, repo.path().to_str(), "t-scope-cut",
     ).is_err());
     assert!(!destination.exists());
 }

@@ -75,9 +75,10 @@ Known limits found by review (open):
   the same task ID does not clear it.
 - The native Codex permission-transition test is opt-in and needs a box with the
   Codex CLI installed.
-- Batch fallback authorization is per task, but held-agent dispatch, worker quota
-  continuation and `aid batch retry` on a held agent can still select an advised peer
-  without opt-in, and worker and coordinator can each launch one fallback child.
+- Batch fallback authorization is per task, and held-route dispatch no longer
+  substitutes an advised agent. Worker quota continuation can still select an advised
+  peer without a declared fallback, and worker and coordinator can each launch one
+  fallback child.
 - `lifecycle_read_only_backup_tests` can fail with `ETXTBSY` when it executes a fake
   agent script immediately after writing it.
 

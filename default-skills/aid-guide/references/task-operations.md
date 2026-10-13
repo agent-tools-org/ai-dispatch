@@ -109,7 +109,7 @@ silence. After first output, a live descendant's growing CPU time also refreshes
 activity. An `ssh` remote command or an `rbox` execution, sync, task wait or lock
 wait counts while it is a live descendant in the agent's process group. Other
 sleeping children with unchanged CPU time remain idle. Remote waits cannot prove
-remote progress; the absolute task deadline bounds them. The shared probe uses
+remote progress; the absolute agent-execution deadline bounds them. The shared probe uses
 Linux CPU ticks or macOS fractional CPU time and keeps samples between reaper
 invocations. If process inspection fails, output remains the activity signal.
 Pure terminal-control noise (spinners, cursor hides), idle
@@ -120,12 +120,14 @@ the idle window.
 Hung events distinguish `no first output` from `no output or descendant progress`.
 The first-token timeout still requires agent output; child activity does not extend it.
 
-`--timeout SECS` is an absolute wall-clock cap, even during CPU work or remote waits.
+`--timeout SECS` caps agent execution in wall-clock time, including CPU work and remote waits.
 The detached worker enforces the smaller of maximum duration and hard cap without
 `aid` polling. Without `--timeout`, the default maximum duration is 60 minutes
 and the hard cap is 24 hours; project configuration can change either bound.
+Post-run verification is bounded separately by the verify command's own limits.
 Descendant activity requires the agent root's recorded launch identity; a reused
 root PID or an older job without that identity cannot extend reaper liveness.
+Missing or unreadable launch identity fails closed: no descendant activity or stored-agent signals.
 Recognized rbox lock-queue time is excluded from a duration-based verification
 timeout, up to the lock notice's timeout. Remote verification's absolute task
 deadline still includes queue time.

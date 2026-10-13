@@ -1,23 +1,22 @@
 // Shared reaper process termination helpers.
-// Exports task-process termination; a stored worker pid is signalled only after
-// its `__run-task <id>` command line proves it is still this task's worker.
+// Exports termination after worker command-line and persisted agent launch checks.
 // Deps: background process signals, run specs, process_group and `ps` on Unix.
 
 use super::background_process::{kill_process, sigkill_process};
 use super::background_spec::BackgroundRunSpec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(test)]
 struct KillTargets {
     worker_pid: Option<u32>,
     agent_pid: Option<u32>,
 }
 
 pub(super) fn terminate_task_processes(worker_pid: Option<u32>, spec: &BackgroundRunSpec) {
-    let targets = kill_targets(worker_pid, spec);
     #[cfg(test)]
-    RECORDED_KILLS.with(|kills| kills.borrow_mut().push(targets.pids()));
+    RECORDED_KILLS.with(|kills| kills.borrow_mut().push(kill_targets(worker_pid, spec).pids()));
     #[cfg(not(test))]
-    signal_targets(&targets, &spec.task_id);
+    signal_targets(worker_pid, spec);
 }
 
 #[cfg(test)]
@@ -32,19 +31,26 @@ thread_local! {
 /// descendants are captured before any signal: the agent's tool commands run in
 /// their own sessions and are untraceable once the worker and agent die.
 #[cfg_attr(test, allow(dead_code))]
-fn signal_targets(targets: &KillTargets, task_id: &str) {
-    let worker_pid = targets.worker_pid.filter(|pid| is_task_worker(*pid, task_id));
-    let mut pids = [worker_pid, targets.agent_pid].into_iter().flatten().collect::<Vec<_>>();
+fn signal_targets(worker_pid: Option<u32>, spec: &BackgroundRunSpec) {
+    let agent_pid = spec.agent_pid_for_signal();
+    let worker_pid = worker_pid.filter(|pid| {
+        Some(*pid) != spec.agent_pid && is_task_worker(*pid, &spec.task_id)
+    });
+    let mut pids = worker_pid.into_iter().collect::<Vec<_>>();
     #[cfg(unix)]
-    if let Some(worker_pid) = worker_pid {
+    if let Some(worker_pid) = worker_pid
+        && (spec.agent_pid.is_none() || agent_pid.is_some())
+    {
         let descendants = crate::process_group::descendant_pids(worker_pid);
-        pids.extend(descendants.into_iter().filter(|pid| Some(*pid) != targets.agent_pid));
+        pids.extend(descendants.into_iter().filter(|pid| Some(*pid) != spec.agent_pid));
     }
-    for &pid in &pids {
-        kill_process(pid);
-    }
-    for &pid in &pids {
-        sigkill_process(pid);
+    for signal in [kill_process, sigkill_process] {
+        for &pid in &pids {
+            signal(pid);
+        }
+        if let Some(pid) = spec.agent_pid_for_signal() {
+            signal(pid);
+        }
     }
 }
 
@@ -67,6 +73,7 @@ fn names_worker(args: &str, task_id: &str) -> bool {
     tokens.windows(2).any(|pair| pair[0] == "__run-task" && pair[1] == task_id)
 }
 
+#[cfg(test)]
 fn kill_targets(worker_pid: Option<u32>, spec: &BackgroundRunSpec) -> KillTargets {
     let agent_pid = spec.agent_pid.filter(|pid| Some(*pid) != worker_pid);
     KillTargets {
@@ -169,13 +176,14 @@ mod tests {
             let mut spec = spec(Some(parent.id()));
             spec.agent_started = started;
             let targets = kill_targets(None, &spec);
-            signal_targets(&targets, &spec.task_id);
+            signal_targets(targets.worker_pid, &spec);
+            std::thread::sleep(std::time::Duration::from_millis(100));
             let survived = parent.try_wait().expect("wait").is_none() && is_live(child);
             unsafe { libc::kill(child, libc::SIGKILL) };
             let _ = parent.kill();
             let _ = parent.wait();
             assert!(survived, "unverified agent root and child must survive settlement");
-            assert!(targets.pids().is_empty(), "unverified agent must not be a kill target");
+            assert!(spec.agent_pid_for_signal().is_none(), "unverified agent must not be signalled");
         }
     }
 
@@ -191,8 +199,27 @@ mod tests {
         assert!(spec.agent_started.is_some());
         let targets = kill_targets(None, &spec);
         assert_eq!(targets.pids(), vec![root.id()]);
-        signal_targets(&targets, &spec.task_id);
+        signal_targets(targets.worker_pid, &spec);
         assert!(!root.child_mut().wait().expect("wait").success(), "owned agent must be killed");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn detached_kill_rechecks_identity_after_target_selection() {
+        let _permit = crate::test_subprocess::acquire();
+        let mut command = std::process::Command::new("sleep");
+        command.arg("60");
+        let mut root = crate::process_guard::ProcessGuard::spawn(&mut command).expect("agent");
+        let mut spec = spec(Some(root.id()));
+        spec.agent_started = crate::process_monitor::activity::root_started(root.id());
+        assert!(spec.agent_started.is_some());
+        let targets = kill_targets(None, &spec);
+        spec.agent_started = Some("previous-launch".to_string());
+        signal_targets(targets.worker_pid, &spec);
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        let survived = root.child_mut().try_wait().expect("wait").is_none();
+        root.force_kill();
+        assert!(survived, "target selection must not authorize a later mismatched root");
     }
 
     #[test]
@@ -211,7 +238,7 @@ mod tests {
     fn reused_worker_pid_leaves_unrelated_process_and_child_alive() {
         let _permit = crate::test_subprocess::acquire();
         let (mut parent, child) = spawn_tree(&["sh"]);
-        signal_targets(&KillTargets { worker_pid: Some(parent.id()), agent_pid: None }, "t-kill");
+        signal_targets(Some(parent.id()), &spec(None));
         std::thread::sleep(std::time::Duration::from_millis(300));
 
         let survived = parent.try_wait().ok().flatten().is_none() && is_live(child);
@@ -226,7 +253,7 @@ mod tests {
     fn verified_worker_and_its_descendant_are_killed() {
         let _permit = crate::test_subprocess::acquire();
         let (mut parent, child) = spawn_tree(&["__run-task", "t-kill"]);
-        signal_targets(&KillTargets { worker_pid: Some(parent.id()), agent_pid: None }, "t-kill");
+        signal_targets(Some(parent.id()), &spec(None));
 
         let parent_killed = parent.wait().is_ok_and(|status| !status.success());
         let child_gone = (0..100).any(|_| {

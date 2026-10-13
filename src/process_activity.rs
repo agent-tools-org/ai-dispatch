@@ -35,7 +35,7 @@ pub(crate) fn latest_owned(
 ) -> Option<SystemTime> {
     let root = root.filter(|pid| *pid > 1)?;
     let started = started?;
-    if root_started(root)? != started {
+    if !root_matches(root, Some(started)) {
         return None;
     }
     let path = crate::paths::task_dir(task_id).join("child-activity.json");
@@ -70,6 +70,10 @@ pub(crate) fn latest_owned(
     };
     persist(&path, &sample)?;
     Some(progress_at)
+}
+
+pub(crate) fn root_matches(pid: u32, started: Option<&str>) -> bool {
+    started.is_some_and(|started| root_started(pid).as_deref() == Some(started))
 }
 
 pub(crate) fn root_started(pid: u32) -> Option<String> {

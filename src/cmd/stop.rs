@@ -87,23 +87,18 @@ fn terminate(
 ) -> Result<()> {
     let task = ensure_non_terminal_task(store, task_id)?;
     if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled) {
-        if let Some(pid) = background::load_worker_pid(task_id)? {
-            if graceful {
-                background::kill_process(pid);
-                if wait_for_exit(pid) {
-                    background::sigkill_process(pid);
-                }
-            } else {
+        let spec = background::load_spec_if_exists(task_id)?;
+        let signal = if graceful { background::kill_process } else { background::sigkill_process };
+        if let Some(pid) = spec.as_ref().and_then(|spec| {
+            spec.worker_pid.filter(|pid| Some(*pid) != spec.agent_pid)
+        }) {
+            signal(pid);
+            if wait_for_exit(pid) && graceful {
                 background::sigkill_process(pid);
-                let _ = wait_for_exit(pid);
             }
         }
-        if let Some(agent_pid) = background::load_agent_pid(task_id)? {
-            if graceful {
-                background::kill_process(agent_pid);
-            } else {
-                background::sigkill_process(agent_pid);
-            }
+        if let Some(agent_pid) = spec.as_ref().and_then(|spec| spec.agent_pid_for_signal()) {
+            signal(agent_pid);
         }
         crate::sandbox::kill_container(task_id);
         preserve_worktree(task_id, &task, preserve_label);

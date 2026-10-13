@@ -102,6 +102,20 @@ pub struct BackgroundRunSpec {
     pub foreground: bool,
 }
 
+impl BackgroundRunSpec {
+    pub(crate) fn agent_pid_for_signal(&self) -> Option<u32> {
+        let pid = self.agent_pid?;
+        if crate::process_monitor::activity::root_matches(pid, self.agent_started.as_deref()) {
+            return Some(pid);
+        }
+        aid_warn!(
+            "[aid] Skip agent signal for {} (pid {pid}): launch identity missing, unreadable or mismatched",
+            self.task_id,
+        );
+        None
+    }
+}
+
 fn default_link_deps() -> bool { true }
 
 pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {

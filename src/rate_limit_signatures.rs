@@ -67,17 +67,14 @@ pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
     // existed the refusal was caught by the generic `402` rule alone — that is,
     // by the status code and not by anything droid said.
     QuotaSignature { agent: AgentKind::Droid, needle: "standard usage limit", recovery: QuotaRecovery::After(300) },
-    // droid, captured 2026-08-19 14:50 as an HTTP 402 body:
-    // "You've reached your weekly Droid Core usage limit (resets in 2 days).
-    //  Reload Extra Usage credits or wait for your limits to reset."
-    // A rolling window on a clock: the message states the remainder and names
-    // waiting as a way out. Reloading Extra Usage is the other way out, but
-    // unlike `reload your tokens` it is not the only one — NeedsHuman would
-    // write off a pool the message says returns on its own. Windowed is for
-    // refusals with no clock. After's floor is 2 days from this capture, not
-    // the standard weekly entry's 1440: a shorter floor is the wrong-but-short
-    // guess After forbids.
-    QuotaSignature { agent: AgentKind::Droid, needle: "weekly droid core usage limit", recovery: QuotaRecovery::After(2880) },
+    // Droid weekly (2026-08-19) and monthly (2026-10-12) HTTP 402 bodies:
+    // Both periods state a reset; waiting restores this pool and Extra Usage is optional.
+    // A dated reset wins. The two-day fallback comes from both captures.
+    QuotaSignature {
+        agent: AgentKind::Droid,
+        needle: "droid core usage limit",
+        recovery: QuotaRecovery::After(2880),
+    },
     // Cursor monthly cycle (captured 2026-09-11): dated reset, else 30 days.
     QuotaSignature { agent: AgentKind::Cursor, needle: cursor::NEEDLE, recovery: QuotaRecovery::After(43_200) },
     // codex-cli: "You have hit your usage limit ... try again at <date>."

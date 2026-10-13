@@ -85,6 +85,12 @@ fn preflight_cli_command_runner(program: &str, args: &[&str]) -> Result<agent::C
 
 pub(super) fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<String> {
     let mut warnings = Vec::new();
+    if let Some(seconds) = args.timeout.filter(|seconds| *seconds < 300) {
+        warnings.push(format!(
+            "--timeout {seconds} s is in seconds — did you mean --timeout {}?",
+            seconds * 60
+        ));
+    }
     let prompt_len = args.prompt.chars().count();
     if prompt_len < 10 {
         warnings.push("Prompt is very short, agent may not have enough context".to_string());

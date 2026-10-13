@@ -30,16 +30,8 @@ pub(crate) enum Channel {
     /// Raw lines off the CLI's stdout, exactly as captured, before any adapter
     /// has parsed them. Split further by envelope — see the table below.
     CliStream,
-    /// The CLI's own stderr. Kept line for line: the model writes its answer to
-    /// stdout and has no way to address stderr, so the split the stream channel
-    /// needs does not arise here.
-    ///
-    /// The residual, stated rather than assumed away: a tool subprocess the CLI
-    /// spawns can inherit this descriptor, so a line here is *the CLI's process
-    /// group*, not strictly the CLI. That is bounded by what a match on this
-    /// channel can do — a generic token (`429`, `402`) writes a five-minute
-    /// `Hold::Transient` and nothing longer, so the worst case is one route
-    /// stepped over for five minutes, never a hold that waits for a person.
+    /// Process-group stderr, including inherited tool output. Droid Core holds
+    /// and OpenCode auth require stream error envelopes instead.
     CliStderr,
 }
 
@@ -54,14 +46,6 @@ pub(crate) enum Channel {
 /// the bytes — no wording the model chooses can promote its own text out of the
 /// field it is written into.
 ///
-/// This exists because the previous rule was a property of the bytes. On
-/// 2026-08-07 a cursor audit task read `src/agent/cursor_tests.rs:142` —
-/// `assert_rate_limit(r#"{"type":"error","message":"quota exceeded for this
-/// workspace"}"#, true);` — and quoted it back in its report. The denylist meant
-/// to stop that (`is_signature_source_citation`) looked for `needle:` and
-/// `QuotaSignature`, which a test fixture does not contain — and could not have
-/// contained every other way our own repo carries a needle.
-///
 /// What survives on `CliStream`, line by line:
 ///
 /// | line | kept |
@@ -70,7 +54,7 @@ pub(crate) enum Channel {
 /// | JSON tool envelope, even one reporting the tool failed | nothing |
 /// | JSON `result`/`turn_complete` envelope, for an agent whose refusal is known to land there | its top-level `result` |
 /// | any other JSON object | nothing |
-/// | not JSON | the line |
+/// | not JSON | the line, except Droid Core refusals |
 ///
 /// What this cannot catch, stated rather than papered over:
 ///
@@ -102,8 +86,12 @@ pub(crate) fn provider_attributable(
         if line.is_empty() {
             continue;
         }
+        let core = agent == AgentKind::Droid
+            && line.to_ascii_lowercase().contains("droid core usage limit");
         if channel == Channel::CliStderr {
-            push_line(&mut kept.cli_diagnostic, line);
+            if !core {
+                push_line(&mut kept.cli_diagnostic, line);
+            }
             continue;
         }
         match serde_json::from_str::<Value>(line)
@@ -111,10 +99,22 @@ pub(crate) fn provider_attributable(
             .and_then(|value| value.as_object().cloned())
         {
             Some(object) => keep_envelope_strings(&object, agent, &mut kept),
-            None => push_line(&mut kept.unsplit, line),
+            None if !core => push_line(&mut kept.unsplit, line),
+            None => {}
         }
     }
     kept
+}
+
+pub(crate) fn read_run_stream(task_id: &str) -> Option<String> {
+    let raw = std::fs::read_to_string(crate::paths::log_path(task_id)).ok()?;
+    // Failed stderr-only runs replay a capped diagnostic into the empty log.
+    if crate::watcher::read_capped_stderr(task_id)
+        .is_some_and(|stderr| raw.trim_end() == stderr.trim_end())
+    {
+        return None;
+    }
+    Some(raw)
 }
 
 /// Attributable text, kept apart by how strong the attribution is.
@@ -187,8 +187,11 @@ fn keep_envelope_strings(object: &Map<String, Value>, agent: AgentKind, kept: &m
 
 /// An envelope the CLI opened to report its own failure. The model never
 /// produces one of these: its output is a value inside a field, not a line.
-fn is_error_envelope(object: &Map<String, Value>) -> bool {
-    if describes_a_tool(object) {
+pub(crate) fn is_error_envelope(object: &Map<String, Value>) -> bool {
+    if describes_a_tool(object)
+        || object.get("type").and_then(Value::as_str).is_some_and(|kind| kind.contains("assistant"))
+        || matches!(object.get("role").and_then(Value::as_str), Some("assistant" | "tool"))
+    {
         return false;
     }
     names_an_error_type(object)
@@ -237,10 +240,7 @@ fn is_terminal_result(object: &Map<String, Value>) -> bool {
     )
 }
 
-/// Agents measured to report a refusal in the same slot their model's answer
-/// occupies. This is a record of captured channels, not of wording: adding an
-/// entry says "this CLI writes its refusal here", and it is the only place where
-/// a model's own words are still read as provider testimony.
+/// Agents measured to report refusals in their model's terminal result slot.
 fn terminal_text_is_a_refusal_channel(agent: AgentKind) -> bool {
     matches!(agent, AgentKind::Qwen)
 }

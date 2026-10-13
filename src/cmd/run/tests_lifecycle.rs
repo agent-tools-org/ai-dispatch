@@ -3,6 +3,34 @@
 use super::*;
 
 #[test]
+fn sub_300_second_timeout_warns_with_minutes_conversion_refusal_regression() {
+    let args = RunArgs {
+        prompt: "Research the available options".into(),
+        timeout: Some(90),
+        ..Default::default()
+    };
+    let warnings = validate_dispatch(&args, &AgentKind::Gemini);
+    assert!(
+        warnings.iter().any(|warning| warning.contains("90 s")
+            && warning.contains("seconds")
+            && warning.contains("--timeout 5400")),
+        "{warnings:?}"
+    );
+    for timeout in [None, Some(300), Some(5400)] {
+        assert!(
+            validate_dispatch(
+                &RunArgs {
+                    timeout,
+                    ..args.clone()
+                },
+                &AgentKind::Gemini
+            )
+            .is_empty()
+        );
+    }
+}
+
+#[test]
 fn resolve_id_conflict_blocks_running() {
     let store = Store::open_memory().unwrap();
     let mut task = make_failed_task("my-task");

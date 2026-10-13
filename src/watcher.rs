@@ -47,6 +47,7 @@ use extract::{
     extract_finding_detail, extract_milestone_detail, parse_milestone_event,
 };
 use stderr::{append_stderr_to_log, drain_stderr_capture, failure_stderr_note, spawn_stderr_capture};
+pub(crate) use stderr::read_capped_stderr;
 pub(crate) use progress::SyntheticMilestoneTracker;
 pub(crate) use stream::{
     StreamLineContext, apply_codex_delivery_guard, handle_streaming_line_with_session,

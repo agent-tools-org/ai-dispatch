@@ -8,9 +8,10 @@ use chrono::{DateTime, Duration, Local};
 use serde::{Deserialize, Serialize};
 
 use crate::quota_channel::{provider_attributable, Channel};
-use crate::types::AgentKind;
+use crate::store::Store;
+use crate::types::{AgentKind, TaskStatus};
 
-/// An observed-bad verdict is trusted for this long, then reverts to unknown.
+/// Auth observations without credential stamps expire after this interval.
 pub(crate) const AUTH_FAILED_TTL_SECS: i64 = 3600;
 
 /// CLI wording that means "this account is not signed in". Matched only on
@@ -63,14 +64,24 @@ fn auth_status_at(agent: AgentKind, custom_name: Option<&str>, now: DateTime<Loc
     let Ok(content) = std::fs::read_to_string(marker_path(agent)) else {
         return AuthStatus::default();
     };
-    let field = |key: &str| content.lines().find_map(|line| line.strip_prefix(key)).map(str::to_string);
+    let field = |key: &str| {
+        content
+            .lines()
+            .find_map(|line| line.strip_prefix(key))
+            .map(str::to_string)
+    };
     let Some(observed) = field("observed_at: ")
         .and_then(|at| DateTime::parse_from_rfc3339(&at).ok())
         .map(|at| at.with_timezone(&Local))
     else {
         return AuthStatus::default();
     };
-    if now - observed >= Duration::seconds(AUTH_FAILED_TTL_SECS) {
+    let expired = if agent == AgentKind::OpenCode {
+        field("credentials: ").as_deref() != Some(opencode_credential_stamp().as_str())
+    } else {
+        now - observed >= Duration::seconds(AUTH_FAILED_TTL_SECS)
+    };
+    if expired {
         return AuthStatus::default();
     }
     AuthStatus {
@@ -82,6 +93,26 @@ fn auth_status_at(agent: AgentKind, custom_name: Option<&str>, now: DateTime<Loc
 
 /// The CLI's own not-signed-in line in this run output, if any.
 pub(crate) fn auth_failure_line(raw: &str, agent: AgentKind, channel: Channel) -> Option<String> {
+    if agent == AgentKind::OpenCode {
+        if channel != Channel::CliStream {
+            return None;
+        }
+        return raw.lines().find_map(|line| {
+            let cleaned = crate::watcher::strip_terminal_escapes(line);
+            let value: serde_json::Value = serde_json::from_str(cleaned.trim()).ok()?;
+            if !crate::quota_channel::is_error_envelope(value.as_object()?) {
+                return None;
+            }
+            let data = &value["error"]["data"];
+            (value["type"] == "error"
+                && value["error"]["name"] == "APIError"
+                && data["statusCode"] == 401
+                && !data["message"].as_str().is_some_and(|text| {
+                    crate::rate_limit_signatures::match_quota_signature_for_agent(text, agent).is_some()
+                }))
+            .then(|| "OpenCode APIError statusCode 401".to_string())
+        });
+    }
     let needles: Vec<&str> = AUTH_SIGNATURES
         .iter()
         .filter(|(kind, _)| *kind == agent)
@@ -99,16 +130,45 @@ pub(crate) fn auth_failure_line(raw: &str, agent: AgentKind, channel: Channel) -
         .map(|line| line.trim().chars().take(240).collect())
 }
 
-/// Read a failed run's stderr and stream log; write the marker on a match.
-pub(crate) fn record_from_run(task_id: &str, agent: AgentKind) -> bool {
-    let sources = [
-        (crate::paths::stderr_path(task_id), Channel::CliStderr),
-        (crate::paths::log_path(task_id), Channel::CliStream),
-    ];
-    let line = sources.iter().find_map(|(path, channel)| {
-        let raw = std::fs::read_to_string(path).ok()?;
-        auth_failure_line(&raw, agent, *channel)
-    });
+/// Read failed-run evidence; OpenCode requires decoded events and a failed process exit.
+pub(crate) fn record_from_run(task_id: &str, agent: AgentKind, store: &Store) -> bool {
+    let line = if agent == AgentKind::OpenCode {
+        let Ok(Some(task)) = store.get_task(task_id) else {
+            return false;
+        };
+        if task.status != TaskStatus::Failed || !task.exit_code.is_some_and(|code| code != 0) {
+            return false;
+        }
+        store.get_events(task_id).ok().and_then(|events| {
+            events
+                .iter()
+                .rev()
+                .filter(|event| event.timestamp >= task.created_at)
+                .filter_map(|event| event.metadata.as_ref())
+                .find(|metadata| {
+                    metadata.get("opencode_auth_failure").is_some()
+                        || metadata["assistant_output"] == true
+                })
+                .and_then(|metadata| {
+                    metadata["opencode_auth_failure"]
+                        .as_str()
+                        .map(str::to_owned)
+                })
+        })
+    } else {
+        let sources = [
+            (crate::paths::stderr_path(task_id), Channel::CliStderr),
+            (crate::paths::log_path(task_id), Channel::CliStream),
+        ];
+        sources.iter().find_map(|(path, channel)| {
+            let raw = if *channel == Channel::CliStream {
+                crate::quota_channel::read_run_stream(task_id)?
+            } else {
+                std::fs::read_to_string(path).ok()?
+            };
+            auth_failure_line(&raw, agent, *channel)
+        })
+    };
     match line {
         Some(line) => {
             record_failure_at(agent, &line, Local::now());
@@ -120,13 +180,24 @@ pub(crate) fn record_from_run(task_id: &str, agent: AgentKind) -> bool {
 
 pub(crate) fn record_failure_at(agent: AgentKind, message: &str, at: DateTime<Local>) {
     let first = message.lines().next().unwrap_or_default();
-    let body = format!("observed_at: {}\nmessage: {first}\n", at.to_rfc3339());
+    let credentials = if agent == AgentKind::OpenCode {
+        format!("credentials: {}\n", opencode_credential_stamp())
+    } else {
+        String::new()
+    };
+    let body = format!(
+        "observed_at: {}\nmessage: {first}\n{credentials}",
+        at.to_rfc3339()
+    );
     let path = marker_path(agent);
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
     if let Err(err) = std::fs::write(&path, body) {
-        aid_warn!("[aid] Failed to record auth failure for {}: {err}", agent.as_str());
+        aid_warn!(
+            "[aid] Failed to record auth failure for {}: {err}",
+            agent.as_str()
+        );
     }
 }
 
@@ -135,68 +206,49 @@ pub(crate) fn clear_on_success(agent: AgentKind) {
     let _ = std::fs::remove_file(marker_path(agent));
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::paths::AidHomeGuard;
+fn credential_stamp(paths: &[PathBuf]) -> String {
+    paths
+        .iter()
+        .map(|path| {
+            let metadata = std::fs::metadata(path)
+                .ok()
+                .map(|meta| (meta.len(), meta.modified().ok()));
+            format!("{path:?}:{metadata:?}")
+        })
+        .collect::<Vec<_>>()
+        .join("|")
+}
 
-    const GROK_ERROR: &str = r#"{"type":"error","message":"Not signed in. To authenticate without a browser, run:\n  grok login --device-code"}"#;
-
-    #[test]
-    fn no_evidence_is_unknown() {
-        let home = tempfile::tempdir().expect("home");
-        let _guard = AidHomeGuard::set(home.path());
-        let status = auth_status(AgentKind::Grok, None);
-        assert_eq!(status.state, "unknown");
-        assert_eq!(status.observed_at, None);
-    }
-
-    #[test]
-    fn not_signed_in_run_sets_failed_with_observed_time() {
-        let home = tempfile::tempdir().expect("home");
-        let _guard = AidHomeGuard::set(home.path());
-        std::fs::create_dir_all(crate::paths::logs_dir()).expect("logs");
-        std::fs::write(crate::paths::log_path("t-auth"), format!("{GROK_ERROR}\n")).expect("log");
-        assert!(record_from_run("t-auth", AgentKind::Grok));
-        let status = auth_status(AgentKind::Grok, None);
-        assert_eq!(status.state, "failed");
-        assert!(status.observed_at.is_some());
-        assert!(status.message.as_deref().is_some_and(|m| m.starts_with("Not signed in")));
-        assert_eq!(auth_status(AgentKind::Codex, None).state, "unknown");
-    }
-
-    #[test]
-    fn failed_verdict_expires_after_ttl() {
-        let home = tempfile::tempdir().expect("home");
-        let _guard = AidHomeGuard::set(home.path());
-        let at = Local::now() - Duration::seconds(AUTH_FAILED_TTL_SECS + 5);
-        record_failure_at(AgentKind::Grok, "Not signed in.", at);
-        assert_eq!(auth_status(AgentKind::Grok, None).state, "unknown");
-        let fresh = Local::now() - Duration::seconds(AUTH_FAILED_TTL_SECS - 60);
-        record_failure_at(AgentKind::Grok, "Not signed in.", fresh);
-        assert_eq!(auth_status(AgentKind::Grok, None).state, "failed");
-        let later = fresh + Duration::seconds(AUTH_FAILED_TTL_SECS);
-        assert_eq!(auth_status_at(AgentKind::Grok, None, later).state, "unknown");
-    }
-
-    #[test]
-    fn successful_run_clears_failed_verdict() {
-        let home = tempfile::tempdir().expect("home");
-        let _guard = AidHomeGuard::set(home.path());
-        record_failure_at(AgentKind::Claude, "Invalid API key · Please run /login", Local::now());
-        assert!(auth_status(AgentKind::Claude, None).failed());
-        clear_on_success(AgentKind::Claude);
-        assert_eq!(auth_status(AgentKind::Claude, None).state, "unknown");
-    }
-
-    #[test]
-    fn unmatched_or_missing_output_never_marks_failed() {
-        let home = tempfile::tempdir().expect("home");
-        let _guard = AidHomeGuard::set(home.path());
-        assert!(!record_from_run("t-missing", AgentKind::Grok));
-        let quoted = r#"{"type":"assistant","message":{"content":[{"text":"Not signed in"}]}}"#;
-        assert_eq!(auth_failure_line(quoted, AgentKind::Grok, Channel::CliStream), None);
-        assert_eq!(auth_failure_line("Not signed in", AgentKind::Codex, Channel::CliStderr), None);
-        assert_eq!(auth_status(AgentKind::Grok, None).state, "unknown");
+fn opencode_credential_stamp() -> String {
+    #[cfg(test)]
+    return credential_stamp(&[crate::paths::aid_dir().join("opencode-auth.json")]);
+    #[cfg(not(test))]
+    {
+        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+        let data = std::env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join(".local/share"));
+        let config = std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join(".config"))
+            .join("opencode");
+        let mut paths = vec![
+            data.join("opencode/auth.json"),
+            config.join("opencode.json"),
+            config.join("opencode.jsonc"),
+        ];
+        paths.extend(std::env::var_os("OPENCODE_CONFIG").map(PathBuf::from));
+        if let Some(dir) = std::env::var_os("OPENCODE_CONFIG_DIR") {
+            paths.extend(["opencode.json", "opencode.jsonc"].map(|name| PathBuf::from(&dir).join(name)));
+        }
+        credential_stamp(&paths)
     }
 }
+
+#[cfg(test)]
+#[path = "auth_marker_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "auth_marker_refusal_tests.rs"]
+mod refusal_tests;

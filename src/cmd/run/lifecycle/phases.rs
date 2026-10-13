@@ -236,17 +236,20 @@ pub(in crate::cmd::run) async fn retry_or_cascade(
             args.agent_name
         );
         let mut cascade_args = args.clone();
-        cascade_args.prompt = retry_logic::root_prompt(store, &task).unwrap_or_else(|| args.prompt.clone());
-        cascade_args.background = false;
-        cascade_args.on_done = None;
         crate::cmd::run::switch_agent(&mut cascade_args, next_agent);
         cascade_args.cascade = remaining_cascade;
         cascade_args.parent_task_id = Some(task_id.as_str().to_string());
         inherit_cascade_target(&mut cascade_args, &task)?;
-        if task.read_only {
-            cascade_args.dir = task.effective_dir.or(task.worktree_path).or(cascade_args.dir);
-            cascade_args.worktree = None;
-            cascade_args.base_branch = None;
+        if crate::provider_capacity::read(store, task_id, task.agent).is_some() {
+            cascade_args.prompt = retry_logic::root_prompt(store, &task).unwrap_or_else(|| args.prompt.clone());
+            cascade_args.background = false;
+            cascade_args.on_done = None;
+            cascade_args.existing_task_id = None;
+            if task.read_only {
+                cascade_args.dir = task.effective_dir.or(task.worktree_path).or(cascade_args.dir);
+                cascade_args.worktree = None;
+                cascade_args.base_branch = None;
+            }
         }
         return Box::pin(run(store.clone(), cascade_args)).await.map(Some);
     }

@@ -33,6 +33,10 @@ a stopped task with a live stored worker PID receives the signal again. If anoth
 terminal result already won, stop reports its status and reason and exits non-zero
 without writing a stop event.
 
+A stopped parent refuses new child tasks and child worker launches.
+A child launched before its parent's stop committed is independent: stop it by its own ID
+or with `aid stop --retry-tree`.
+
 `aid wait` waits for the worker's post-run delivery and verification checks before
 reporting a terminal result, including for group or implicit active-task selection.
 `Done` is provisional while `completed_at` is absent; post-run checks can still

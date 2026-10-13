@@ -113,7 +113,7 @@ pub(super) fn run_background_task(
         pre_task_dirty_paths,
         foreground: args.foreground,
     };
-    let worker_pid = store.with_running_task(prepared.task_id.as_str(), || {
+    let worker_pid = store.with_worker_launch(prepared.task_id.as_str(), || {
         background::save_spec(&spec)?;
         #[cfg(test)]
         let worker_pid = std::process::id();

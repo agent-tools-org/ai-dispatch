@@ -229,6 +229,7 @@ pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_i
         if feedback.is_empty() { "Judge requested retry without feedback" } else { feedback }
     );
     retry_args.judge_retry = true;
+    retry_args.parent_task_id = Some(task_id.to_string());
     let retry_id = Box::pin(run(store.clone(), retry_args)).await?;
     Ok(Some(retry_id))
 }

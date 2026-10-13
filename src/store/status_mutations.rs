@@ -53,12 +53,42 @@ impl Store {
         Ok(true)
     }
 
-    pub(crate) fn with_running_task<T>(&self, id: &str, launch: impl FnOnce() -> Result<T>) -> Result<T> {
+    pub(crate) fn with_running_task<T>(
+        &self,
+        id: &str,
+        launch: impl FnOnce() -> Result<T>,
+    ) -> Result<T> {
+        self.with_launch_guard(id, false, launch)
+    }
+
+    pub(crate) fn with_worker_launch<T>(
+        &self,
+        id: &str,
+        launch: impl FnOnce() -> Result<T>,
+    ) -> Result<T> {
+        self.with_launch_guard(id, true, launch)
+    }
+
+    fn with_launch_guard<T>(
+        &self,
+        id: &str,
+        check_parent: bool,
+        launch: impl FnOnce() -> Result<T>,
+    ) -> Result<T> {
         let conn = self.db();
         let tx = conn.unchecked_transaction()?;
-        if tx.execute("UPDATE tasks SET status = status WHERE id = ?1 AND status = 'running'",
-            params![id])? == 0
+        if tx.execute(
+            "UPDATE tasks SET status = status WHERE id = ?1 AND status = 'running'
+             AND (?2 = 0 OR NOT EXISTS (
+                 SELECT 1 FROM tasks parent WHERE parent.id = tasks.parent_task_id
+                 AND parent.status = 'stopped'))",
+            params![id, check_parent],
+        )? == 0
         {
+            if check_parent && let Some(parent) = stop_unlaunched_child(&tx, id)? {
+                tx.commit()?;
+                anyhow::bail!("Parent task '{parent}' stopped; refusing child '{id}' launch");
+            }
             anyhow::bail!("Task '{id}' is no longer running; refusing launch");
         }
         let result = launch()?;
@@ -188,4 +218,34 @@ impl Store {
             .optional()?;
         Ok(status.and_then(|value| TaskStatus::parse_str(&value)))
     }
+}
+
+fn stop_unlaunched_child(tx: &rusqlite::Transaction<'_>, id: &str) -> Result<Option<String>> {
+    let parent = tx.query_row(
+        "SELECT parent.id FROM tasks child JOIN tasks parent ON parent.id = child.parent_task_id
+         WHERE child.id = ?1 AND child.status = 'running' AND parent.status = 'stopped'",
+        params![id], |row| row.get::<_, String>(0),
+    ).optional()?;
+    let Some(parent) = parent else {
+        return Ok(None);
+    };
+    let now = Local::now();
+    tx.execute(
+        "UPDATE tasks SET status = 'stopped', completed_at = ?2,
+         duration_ms = MAX(0, COALESCE(CAST(ROUND((julianday(?2) -
+             julianday(COALESCE(started_at, created_at))) * 86400000) AS INTEGER), 0))
+         WHERE id = ?1 AND status = 'running'",
+        params![id, now.to_rfc3339()],
+    )?;
+    super::mutations::insert_event_on(
+        tx,
+        &TaskEvent {
+            task_id: TaskId(id.to_string()),
+            timestamp: now,
+            event_kind: EventKind::Completion,
+            detail: format!("Parent task '{parent}' stopped; child launch refused"),
+            metadata: None,
+        },
+    )?;
+    Ok(Some(parent))
 }

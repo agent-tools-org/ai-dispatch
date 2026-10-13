@@ -172,7 +172,8 @@ fn retry_preservation_execution_failure_keeps_distinct_child_brief() {
 #[test]
 fn retry_preservation_execution_failure_keeps_checklist_feedback() {
     assert_failed_retry_preserves(
-        "[Checklist items not addressed]\nYou MUST address these items:\nMissing item\n\n[Original task]\nChild brief",
+        concat!("[Checklist items not addressed]\nYou MUST address these items:\n",
+            "Missing item\n\n[Original task]\nChild brief"),
     );
 }
 
@@ -185,11 +186,13 @@ fn retry_preservation_execution_failure_keeps_iteration_feedback() {
 
 fn assert_failed_retry_preserves(brief: &str) {
     let store = Store::open_memory().unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let mut parent = failed_task("t-parent-preservation");
     parent.prompt = "Unrelated ancestor A".into();
     store.insert_task(&parent).unwrap();
     let mut child = failed_task("t-child-preservation");
     child.prompt = brief.repeat(500);
+    child.repo_path = Some(dir.path().display().to_string());
     child.resolved_prompt = Some("Auxiliary launch context must not be inherited".into());
     child.parent_task_id = Some(parent.id.to_string());
     store.insert_task(&child).unwrap();

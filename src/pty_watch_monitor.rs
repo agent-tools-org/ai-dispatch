@@ -3,6 +3,10 @@
 
 use super::*;
 
+#[cfg(test)]
+#[path = "pty_watch_terminal_events_tests.rs"]
+mod terminal_events_tests;
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn monitor_bridge(
     agent: &dyn Agent,
@@ -60,7 +64,7 @@ fn deadline_elapsed(state: &mut MonitorState, store: &Store, task_id: &TaskId) -
         return Ok(false);
     }
     state.info.status = TaskStatus::Failed;
-    store.insert_event(&TaskEvent {
+    store.insert_agent_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
         event_kind: EventKind::Error,
@@ -142,7 +146,7 @@ fn cost_exceeded(
     else {
         return false;
     };
-    let _ = store.insert_event(&TaskEvent {
+    let _ = store.insert_agent_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
         event_kind: EventKind::Error,

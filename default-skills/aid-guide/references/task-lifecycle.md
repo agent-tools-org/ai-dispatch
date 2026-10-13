@@ -33,6 +33,9 @@ a stopped task with a live stored worker PID receives the signal again. If anoth
 terminal result already won, stop reports its status and reason and exits non-zero
 without writing a stop event.
 
+After settlement, later worker completions and failure diagnostics cannot append
+competing terminal events or change the task's status or terminal timing.
+
 A stopped parent refuses automatic child tasks and automatic child worker launches
 (verification retries, judge retries, iterations, `--retry`, cascades, and batch fallbacks).
 Explicit `aid retry <task-id> -f "feedback"` and `aid batch retry` can create and launch

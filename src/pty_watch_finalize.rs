@@ -79,7 +79,7 @@ pub(super) fn finalize_streaming(
     }
     state.info.status = status;
     state.info.exit_code = i32::try_from(exit_status.exit_code()).ok();
-    store.insert_event(&TaskEvent {
+    store.insert_agent_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
         event_kind: if status == TaskStatus::Done {
@@ -131,10 +131,11 @@ fn finalize_buffered(
         }
     };
     state.info.exit_code = i32::try_from(exit_status.exit_code()).ok();
-    store.insert_event(&crate::agent::gemini::make_completion_event(
-        task_id,
-        &state.info,
-    ))?;
+    let mut event = crate::agent::gemini::make_completion_event(task_id, &state.info);
+    if state.info.status == TaskStatus::Failed {
+        event.event_kind = EventKind::Error;
+    }
+    store.insert_agent_event(&event)?;
     Ok(())
 }
 

@@ -95,6 +95,10 @@ Do not send repeated polling messages; inspect events first.
 
 AID enforces configured idle, hung-task, cost, and maximum-duration safeguards.
 
+Buffered runs that exceed a cost ceiling retain the ceiling reason even when the
+agent exits 0. Deadline failures record elapsed agent-execution time; later
+completions preserve that duration.
+
 A task that has produced zero progress since spawn is reaped on the shorter
 first-token budget (default 180s, `AID_FIRST_TOKEN_TIMEOUT_SECS`). For PTY
 agents this is the first-token dead-stream detector; for buffered background

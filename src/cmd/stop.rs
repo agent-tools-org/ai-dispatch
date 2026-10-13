@@ -188,3 +188,7 @@ mod settle_done_tests;
 #[cfg(test)]
 #[path = "stop/settle_worker_tests.rs"]
 mod settle_worker_tests;
+
+#[cfg(test)]
+#[path = "stop/terminal_events_tests.rs"]
+mod terminal_events_tests;

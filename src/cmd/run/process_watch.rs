@@ -62,12 +62,13 @@ pub(super) async fn watch_agent(
         }
     };
     let result = tokio::time::timeout(limit.saturating_sub(start.elapsed()), watch).await;
-    settle_result(args, child, result).await
+    settle_result(args, child, start, result).await
 }
 
 async fn settle_result(
     args: &RunProcessArgs<'_>,
     child: &mut Child,
+    start: Instant,
     result: std::result::Result<Result<CompletionInfo>, tokio::time::error::Elapsed>,
 ) -> Result<CompletionInfo> {
     let limit = args.timeout_policy.max_duration.min(args.timeout_policy.hard_cap);
@@ -77,13 +78,13 @@ async fn settle_result(
             crate::process_group::force_kill_process_group(child);
             let _ = child.kill().await;
             let _ = child.wait().await;
-            settle_execution_failure(args, &err.to_string());
+            settle_execution_failure(args, start, &err.to_string());
             Err(err)
         }
         Err(_) => {
             crate::process_group::force_kill_process_group(child);
             settle_execution_failure(
-                args, &format!("exceeded hard timeout of {} seconds", limit.as_secs()),
+                args, start, &format!("exceeded hard timeout of {} seconds", limit.as_secs()),
             );
             Ok(CompletionInfo {
                 status: TaskStatus::Failed,
@@ -96,7 +97,7 @@ async fn settle_result(
     }
 }
 
-fn settle_execution_failure(args: &RunProcessArgs<'_>, detail: &str) {
+fn settle_execution_failure(args: &RunProcessArgs<'_>, start: Instant, detail: &str) {
     let event = TaskEvent {
         task_id: args.task_id.clone(),
         timestamp: Local::now(),
@@ -110,7 +111,7 @@ fn settle_execution_failure(args: &RunProcessArgs<'_>, detail: &str) {
             id: args.task_id.as_str(),
             status: TaskStatus::Failed,
             tokens: None,
-            duration_ms: 0,
+            duration_ms: start.elapsed().as_millis() as i64,
             observed_model: None,
             attribution_source: None,
             cost_usd: None,

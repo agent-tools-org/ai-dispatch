@@ -140,7 +140,7 @@ pub async fn watch_streaming(
             if exceeds_cost_ceiling(info.cost_usd, max_task_cost) {
                 let current_cost = info.cost_usd.unwrap_or_default();
                 let max_cost = max_task_cost.unwrap_or_default();
-                let _ = store.insert_event(&TaskEvent {
+                let _ = store.insert_agent_event(&TaskEvent {
                     task_id: task_id.clone(),
                     timestamp: Local::now(),
                     event_kind: EventKind::Error,
@@ -242,7 +242,7 @@ pub async fn watch_streaming(
         exit_status.code().unwrap_or(-1),
         stderr_note,
     );
-    store.insert_event(&TaskEvent {
+    store.insert_agent_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
         event_kind: if status == TaskStatus::Done {

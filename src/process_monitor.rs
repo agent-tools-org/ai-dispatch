@@ -42,7 +42,7 @@ pub(crate) fn insert_hung_detected_events(
         detail: "hung_detected".to_string(),
         metadata: Some(metadata.clone()),
     })?;
-    store.insert_event(&TaskEvent {
+    store.insert_agent_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),
         event_kind: EventKind::Error,

@@ -165,7 +165,7 @@ fn complete_agent(
         return Ok(());
     }
     if let Some(event) = cost_event {
-        let _ = store.insert_agent_event(&event);
+        let _ = store.insert_event(&event);
     }
     if info.status == TaskStatus::Failed && exit_code != Some(0) {
         record_execution_failure(

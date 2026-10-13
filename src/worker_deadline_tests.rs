@@ -49,7 +49,7 @@ async fn assert_deadline(pty: bool, streaming: bool, script: &str, default_max: 
         .await
         .expect("piped worker");
     }
-    assert_result(&store, &id, started);
+    assert_result(&store, &id, started, pty);
 }
 
 fn prepare_remote_wait(dir: &Path) {
@@ -62,9 +62,38 @@ fn prepare_remote_wait(dir: &Path) {
     }
 }
 
-fn assert_result(store: &Store, id: &TaskId, started: Instant) {
-    assert_eq!(store.get_task(id.as_str()).expect("query").expect("task").status, TaskStatus::Failed);
-    assert!(started.elapsed() < Duration::from_secs(6), "worker must stop before tool exits");
+fn assert_result(store: &Store, id: &TaskId, started: Instant, pty: bool) {
+    let task = store.get_task(id.as_str()).expect("query").expect("task");
+    assert_eq!(task.status, TaskStatus::Failed);
+    if !pty {
+        let duration = task.duration_ms.expect("deadline duration");
+        assert!(
+            (350..2_000).contains(&duration),
+            "duration near the 400ms cap: {duration}ms"
+        );
+    }
+    assert!(
+        !store
+            .update_task_completion(TaskCompletionUpdate {
+                id: id.as_str(),
+                status: TaskStatus::Done,
+                tokens: None,
+                duration_ms: 9_999,
+                observed_model: None,
+                attribution_source: None,
+                cost_usd: None,
+                exit_code: Some(0),
+            })
+            .expect("late completion")
+    );
+    let later = store.get_task(id.as_str()).expect("query").expect("task");
+    assert_eq!(later.status, task.status);
+    assert_eq!(later.duration_ms, task.duration_ms);
+    assert_eq!(later.completed_at, task.completed_at);
+    assert!(
+        started.elapsed() < Duration::from_secs(6),
+        "worker must stop before tool exits"
+    );
     assert!(
         store
             .get_events(id.as_str())

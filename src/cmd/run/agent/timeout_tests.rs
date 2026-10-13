@@ -7,6 +7,9 @@ use crate::hooks::Hook;
 use crate::types::{Task, VerifyStatus};
 use std::process::Command as StdCommand;
 
+#[path = "stop_launch_tests.rs"]
+mod stop_launch_tests;
+
 struct TimeoutTestAgent;
 
 impl Agent for TimeoutTestAgent {

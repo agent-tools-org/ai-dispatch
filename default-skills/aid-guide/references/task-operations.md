@@ -124,10 +124,15 @@ The first-token timeout still requires agent output; child activity does not ext
 The detached worker enforces the smaller of maximum duration and hard cap without
 `aid` polling. Without `--timeout`, the default maximum duration is 60 minutes
 and the hard cap is 24 hours; project configuration can change either bound.
-Post-run verification is bounded separately by the verify command's own limits.
+The deadline does not cover quota waits and launch preparation before the agent
+starts, or post-run verification after it exits. Verification reads its output
+until the pipes close, so a surviving descendant that keeps them open delays settlement.
 Descendant activity requires the agent root's recorded launch identity; a reused
 root PID or an older job without that identity cannot extend reaper liveness.
 Missing or unreadable launch identity fails closed: no descendant activity or stored-agent signals.
+Only the stored agent root is checked against its launch identity before a signal;
+`aid stop` signals the stored worker PID, and reaper cleanup signals the descendant
+PIDs it listed, without that check.
 Recognized rbox lock-queue time is excluded from a duration-based verification
 timeout, up to the lock notice's timeout. Remote verification's absolute task
 deadline still includes queue time.

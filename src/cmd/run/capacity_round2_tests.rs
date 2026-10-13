@@ -83,7 +83,9 @@ async fn provider_capacity_round2_refreshed_hold_never_substitutes_or_clears_ses
     let store = Arc::new(Store::open_memory().expect("store"));
     let row = task("t-round2-refresh", home.path());
     store.insert_task(&row).expect("parent");
-    let args = RunArgs { agent_name: "codex".into(), ..Default::default() };
+    let args = RunArgs {
+        agent_name: "codex".into(), dir: row.effective_dir.clone(), ..Default::default()
+    };
     let refresh = async {
         while store.get_events(row.id.as_str()).expect("events").is_empty() {
             tokio::task::yield_now().await;
@@ -91,10 +93,12 @@ async fn provider_capacity_round2_refreshed_hold_never_substitutes_or_clears_ses
         rate_limit::mark_rate_limited_for_model(
             &row.agent, None, row.requested_model.as_deref(), CAPACITY);
     };
-    let (child, ()) = tokio::join!(
-        prepare_session(&store, &args, &row, row.requested_model.as_deref(), "expired hold"),
-        refresh
-    );
+    let (child, ()) = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+        tokio::join!(
+            prepare_session(&store, &args, &row, row.requested_model.as_deref(), "expired hold"),
+            refresh
+        )
+    }).await.expect("bounded backoff");
     let mut child = child.expect("backoff");
     let result = crate::cmd::run::run_dispatch_resolve::resolve_agent_setup(&store, &mut child, None);
     assert!(result.is_err(), "refreshed capacity must fail with its hold");

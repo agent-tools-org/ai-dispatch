@@ -30,6 +30,18 @@ const GUIDE_FILES: &[(&str, &str)] = &[
         include_str!("../../default-skills/aid-guide/references/dispatch.md"),
     ),
     (
+        "references/dispatch-routing.md",
+        include_str!("../../default-skills/aid-guide/references/dispatch-routing.md"),
+    ),
+    (
+        "references/dispatch-delivery.md",
+        include_str!("../../default-skills/aid-guide/references/dispatch-delivery.md"),
+    ),
+    (
+        "references/dispatch-retry.md",
+        include_str!("../../default-skills/aid-guide/references/dispatch-retry.md"),
+    ),
+    (
         "references/collaboration.md",
         include_str!("../../default-skills/aid-guide/references/collaboration.md"),
     ),

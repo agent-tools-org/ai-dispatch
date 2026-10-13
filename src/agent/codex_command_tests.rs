@@ -13,6 +13,31 @@ pub(super) fn test_opts() -> RunOpts {
 }
 
 #[test]
+fn fix_round_one_read_only_uses_one_permission_mechanism_for_fresh_and_resume() {
+    for session in [None, Some("saved-session".to_string())] {
+        let opts = RunOpts { read_only: true, session_id: session, ..test_opts() };
+        let cmd = CodexAgent.build_command_with_context("audit", &opts,
+            crate::agent::CommandContext { durable_codex_home: false, writable_roots: vec![] }).unwrap();
+        let args: Vec<_> = cmd.get_args().map(|arg| arg.to_string_lossy()).collect();
+        assert!(!args.iter().any(|arg| arg.starts_with("sandbox_mode=")
+            || arg.starts_with("sandbox_workspace_write.") || arg == "--sandbox"));
+        assert!(args.iter().any(|arg| arg == "default_permissions=\"aid-read-only\""));
+        assert!(args.iter().any(|arg| arg == "--ignore-user-config"));
+    }
+}
+
+#[test]
+fn fix_round_one_write_policy_is_explicit_for_fresh_and_resume() {
+    for session in [None, Some("saved-session".to_string())] {
+        let opts = RunOpts { session_id: session, ..test_opts() };
+        let cmd = CodexAgent.build_command_with_context("write", &opts,
+            crate::agent::CommandContext { durable_codex_home: false, writable_roots: vec![] }).unwrap();
+        assert!(cmd.get_args().any(|arg| arg == "default_permissions=\"aid-write\""));
+        assert!(!cmd.get_args().any(|arg| arg == "--approve-for-me" || arg == "--full-auto"));
+    }
+}
+
+#[test]
 fn build_command_includes_skip_git_repo_check() {
     let opts = RunOpts {
         dir: None,
@@ -58,7 +83,8 @@ fn build_command_read_only_selects_native_sandbox_without_write_approval() {
         .collect();
 
     assert!(args.contains(&"default_permissions=\"aid-read-only\"".to_string()));
-    assert!(args.contains(&"sandbox_mode=\"read-only\"".to_string()));
+    assert!(args.contains(&"--ignore-user-config".to_string()));
+    assert!(!args.iter().any(|arg| arg.starts_with("sandbox_mode=")));
     assert!(args.iter().any(|arg| arg.starts_with("permissions=") && arg.contains(":read-only")));
     assert!(!args.contains(&"--approve-for-me".to_string()));
     assert!(!args.contains(&"--full-auto".to_string()));

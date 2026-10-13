@@ -10,7 +10,7 @@ pub(super) fn prepare_launch(
     store: &Arc<Store>, spec: &BackgroundRunSpec, args: &RunArgs,
     agent: &dyn agent::Agent, home_guard: &agent::home_isolation::IsolatedHomeGuard,
 ) -> Result<(std::process::Command, Option<String>)> {
-    let opts = run_opts(spec, args);
+    let opts = run_opts(spec, args, agent.kind());
     let worktree_branch = store.get_task(&spec.task_id)?.and_then(|task| task.worktree_branch);
     let mut cargo_target_dir = agent::rust_build_cache_target_dir(args.dir.as_deref(), worktree_branch.as_deref());
     let uses_durable_codex_home = agent::should_use_durable_codex_home(agent.kind(), args.sandbox, args.container.is_some());
@@ -47,11 +47,12 @@ pub(super) fn prepare_launch(
     wrap_command(spec, args, agent.kind(), std_cmd)
 }
 
-fn run_opts(spec: &BackgroundRunSpec, args: &RunArgs) -> agent::RunOpts {
+fn run_opts(spec: &BackgroundRunSpec, args: &RunArgs, kind: crate::types::AgentKind) -> agent::RunOpts {
+    let (output, result_file) = crate::cmd::run::read_only_delivery::agent_paths(args, kind, &spec.task_id);
     agent::RunOpts {
         dir: args.dir.clone(),
-        output: args.output.clone(),
-        result_file: args.result_file.clone(),
+        output,
+        result_file,
         model: args.model.clone(),
         budget: args.budget,
         read_only: args.read_only,
@@ -119,4 +120,30 @@ fn wrap_command(
         cmd
     };
     Ok((cmd, container_name))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fix_round_one_read_only_launch_stages_explicit_report_and_output_in_task_directory() {
+        let temp = tempfile::tempdir().unwrap();
+        let _home = crate::paths::AidHomeGuard::set(temp.path());
+        let spec: BackgroundRunSpec = serde_json::from_value(serde_json::json!({
+            "task_id": "t-routing", "agent_name": "codex", "prompt": "audit",
+            "dir": null, "output": null, "verify": null, "retry": 0, "group": null
+        })).unwrap();
+        let args = RunArgs {
+            agent_name: "codex".into(), read_only: true,
+            output: Some("/outside/final.txt".into()),
+            result_file: Some("reports/explicit.md".into()), ..Default::default()
+        };
+        let opts = run_opts(&spec, &args, crate::types::AgentKind::Codex);
+        let task = crate::paths::task_dir(&spec.task_id);
+        assert_eq!(opts.result_file.as_deref(), task.join("agent-result.md").to_str());
+        assert_eq!(opts.output.as_deref(), task.join("agent-output.txt").to_str());
+        assert_eq!(args.result_file.as_deref(), Some("reports/explicit.md"));
+        assert_eq!(args.output.as_deref(), Some("/outside/final.txt"));
+    }
 }

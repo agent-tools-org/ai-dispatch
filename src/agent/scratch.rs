@@ -98,20 +98,49 @@ pub(crate) fn prepare_launch_roots(
         ensure_directory(&task)?;
         probe_directory(&task)?;
         roots.push(task.canonicalize()?);
+        roots = validate_read_only_roots(dir, &roots)?;
     }
     Ok((roots, warnings))
 }
 
-pub(crate) fn grant_codex_roots(cmd: &mut Command, roots: &[PathBuf]) -> Result<()> {
-    if roots.is_empty() {
-        return Ok(());
+pub(crate) fn validate_read_only_roots(dir: Option<&str>, roots: &[PathBuf]) -> Result<Vec<PathBuf>> {
+    let cwd = dir.map(PathBuf::from).map(Ok).unwrap_or_else(std::env::current_dir)?.canonicalize()?;
+    let protected = protected_roots(&cwd)?;
+    let mut canonical = Vec::new();
+    for root in roots {
+        let root = root.canonicalize()
+            .with_context(|| format!("cannot resolve writable root '{}'", root.display()))?;
+        for path in &protected {
+            anyhow::ensure!(!root.starts_with(path) && !path.starts_with(&root),
+                "read-only writable root '{}' overlaps protected repository path '{}'",
+                root.display(), path.display());
+        }
+        if !canonical.contains(&root) { canonical.push(root); }
     }
-    let roots = roots.iter().map(|path| {
-        path.to_str().map(|path| toml::Value::String(path.to_string()))
-            .with_context(|| format!("granted directory is not valid UTF-8: '{}'", path.display()))
-    }).collect::<Result<Vec<_>>>()?;
-    cmd.args(["-c", &format!("sandbox_workspace_write.writable_roots={}", toml::Value::Array(roots))]);
-    Ok(())
+    Ok(canonical)
+}
+
+fn protected_roots(cwd: &Path) -> Result<Vec<PathBuf>> {
+    let mut protected = vec![cwd.to_path_buf()];
+    for flag in ["--show-toplevel", "--git-common-dir"] {
+        let output = Command::new("git").current_dir(cwd)
+            .args(["rev-parse", "--path-format=absolute", flag]).output()?;
+        if output.status.success() {
+            let path = String::from_utf8(output.stdout)?;
+            protected.push(Path::new(path.trim_end_matches('\n')).canonicalize()?);
+        }
+    }
+    let output = Command::new("git").current_dir(cwd)
+        .args(["worktree", "list", "--porcelain", "-z"]).output()?;
+    if output.status.success()
+        && let Some(entry) = output.stdout.split(|byte| *byte == 0).next()
+        && let Some(path) = std::str::from_utf8(entry)?.strip_prefix("worktree ") {
+        protected.push(Path::new(path).canonicalize()?);
+    }
+    for path in writable_roots(cwd.to_str()) {
+        protected.push(path.canonicalize()?);
+    }
+    Ok(protected)
 }
 
 pub(crate) fn grant_launch_dirs(mut cmd: Command, kind: AgentKind, roots: &[PathBuf]) -> Command {
@@ -126,3 +155,7 @@ pub(crate) fn grant_launch_dirs(mut cmd: Command, kind: AgentKind, roots: &[Path
 #[cfg(test)]
 #[path = "scratch_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "scratch_read_only_tests.rs"]
+mod read_only_tests;

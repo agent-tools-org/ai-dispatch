@@ -50,16 +50,15 @@ fn build_command_adds_effective_target_without_granting_parent() {
         .get_args()
         .map(|arg| arg.to_string_lossy().into_owned())
         .collect();
-    let expected = format!(
-        "sandbox_workspace_write.writable_roots={}",
-        toml::Value::Array(vec![
-            toml::Value::String(metadata.to_string_lossy().into_owned()),
-            toml::Value::String(common.to_string_lossy().into_owned()),
-            toml::Value::String(cargo_target.canonicalize().unwrap().to_string_lossy().into_owned()),
-        ])
-    );
+    let config = args.iter().find(|arg| arg.starts_with("permissions=")).unwrap();
+    let parsed: toml::Value = config.parse().unwrap();
+    let roots = parsed["permissions"]["aid-write"]["filesystem"].as_table().unwrap();
+    assert_eq!(roots.len(), 3);
+    for path in [metadata, common, cargo_target.canonicalize().unwrap()] {
+        assert_eq!(roots[path.to_str().unwrap()].as_str(), Some("write"));
+    }
+    assert!(args.contains(&"default_permissions=\"aid-write\"".to_string()));
 
-    assert!(args.contains(&expected));
 }
 
 #[test]

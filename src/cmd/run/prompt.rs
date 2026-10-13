@@ -227,11 +227,12 @@ pub(super) fn build_prompt_bundle(store: &Store, args: &RunArgs, agent_kind: &Ag
             format_batch_siblings(&args.batch_siblings)
         );
     }
-    if let Some(block) = output_file_instruction(args.output.as_deref(), args.result_file.as_deref()) {
+    let (output, result_file) = super::read_only_delivery::agent_paths(args, *agent_kind, current_task_id);
+    if let Some(block) = output_file_instruction(output.as_deref(), result_file.as_deref()) {
         effective_prompt = format!("{effective_prompt}\n\n{block}");
     }
     if let Some(block) = crate::cmd::report_mode::instruction(
-        &args.prompt, args.read_only, task_profile.category, args.result_file.as_deref(), args.kind,
+        &args.prompt, args.read_only, task_profile.category, result_file.as_deref(), args.kind,
     ) {
         effective_prompt = format!("{effective_prompt}\n\n{block}");
     }

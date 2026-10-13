@@ -53,15 +53,17 @@ fn git_output(dir: &Path, args: &[&str]) -> Vec<u8> {
 }
 
 fn run_fake_agent(home: &Path, dir: &Path, write_report: bool) {
+    let report = paths::task_dir("t-read-only-backup").join("agent-result.md");
+    fs::create_dir_all(report.parent().unwrap()).unwrap();
     let agent = home.join("fake-agent");
     executable(
         &agent,
-        "#!/bin/sh\nset -eu\nif [ \"$1\" = yes ]; then mkdir -p reports; printf '%s' \"$2\" > reports/explicit.md; fi\nprintf 'forbidden edit\\n' > base.txt\n",
+        "#!/bin/sh\nset -eu\nif [ \"$1\" = yes ]; then printf '%s' \"$2\" > \"$3\"; fi\nprintf 'forbidden edit\\n' > base.txt\n",
     );
     assert!(
         Command::new(agent)
             .current_dir(dir)
-            .args([if write_report { "yes" } else { "no" }, REPORT])
+            .args([if write_report { "yes" } else { "no" }, REPORT, report.to_str().unwrap()])
             .status()
             .unwrap()
             .success()
@@ -103,6 +105,7 @@ impl Fixture {
         let mut task = task(id.as_str(), repo.path(), &wt, "fix/read-only-backup");
         task.read_only = true;
         let args = RunArgs {
+            agent_name: "codex".into(),
             read_only: true,
             dir: Some(wt.display().to_string()),
             repo: Some(repo.path().display().to_string()),

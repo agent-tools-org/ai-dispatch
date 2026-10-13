@@ -91,9 +91,6 @@ impl CodexAgent {
             ]);
         } else {
             cmd.args(["exec", "--json", "--skip-git-repo-check"]);
-            if !opts.read_only && let Some(version) = codex_version() {
-                cmd.arg(capabilities::approval_flag_for_version(version).as_str());
-            }
             cmd.arg(&injected);
         }
         capabilities::configure_options(&mut cmd, opts, resume_session_id.is_some(), writable_roots)?;
@@ -239,3 +236,7 @@ mod command_tests;
 
 #[cfg(test)]
 mod codex_nudge_tests;
+
+#[cfg(test)]
+#[path = "codex_native_policy_tests.rs"]
+mod native_policy_tests;

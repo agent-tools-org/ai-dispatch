@@ -224,3 +224,11 @@ impl<'de> IntoDeserializer<'de, Error> for Fields<'_> {
 
     fn into_deserializer(self) -> Self { self }
 }
+
+#[test]
+fn official_guide_bundles_dispatch_references_within_file_limits() {
+    for name in ["dispatch.md", "dispatch-routing.md", "dispatch-delivery.md", "dispatch-retry.md"] {
+        let content = reference(&format!("references/{name}"));
+        assert!(content.lines().count() <= 300, "{name} exceeds 300 lines");
+    }
+}

@@ -50,12 +50,12 @@ fn regular_checkout_grants_git_target_and_temp() {
         },
     ).unwrap();
     let config = cmd.get_args().find_map(|arg| arg.to_str()
-        .filter(|arg| arg.starts_with("sandbox_workspace_write.writable_roots="))).unwrap();
+        .filter(|arg| arg.starts_with("permissions="))).unwrap();
     let parsed: toml::Value = config.parse().unwrap();
-    let roots = parsed["sandbox_workspace_write"]["writable_roots"].as_array().unwrap();
+    let roots = parsed["permissions"]["aid-write"]["filesystem"].as_table().unwrap();
     for path in [repo.join(".git"), target, scratch] {
         let path = path.canonicalize().unwrap();
-        assert!(roots.contains(&toml::Value::String(path.to_str().unwrap().into())));
+        assert_eq!(roots[path.to_str().unwrap()].as_str(), Some("write"));
     }
     assert_eq!(roots.len(), 3);
 }
@@ -79,8 +79,9 @@ fn codex_capability_command_does_not_grant_caller_directories() {
     let mut opts = opts(Path::new("."));
     opts.dir = None;
     let cmd = crate::agent::codex::CodexAgent.build_command("check capabilities", &opts).unwrap();
-    assert!(!cmd.get_args().any(|arg| arg.to_string_lossy()
-        .starts_with("sandbox_workspace_write.writable_roots=")));
+    let config = cmd.get_args().find(|arg| arg.to_string_lossy().starts_with("permissions=")).unwrap();
+    let parsed: toml::Value = config.to_str().unwrap().parse().unwrap();
+    assert!(parsed["permissions"]["aid-write"]["filesystem"].as_table().unwrap().is_empty());
 }
 
 #[test]
@@ -203,9 +204,12 @@ fn symlinked_scratch_uses_identical_grants_and_env_paths() {
     std::os::unix::fs::symlink(&actual, &alias).unwrap();
     let target = prepare_cargo_target(alias.join("_base").to_str()).unwrap().unwrap();
     let scratch = create_temp_dir(&alias).unwrap();
-    let mut cmd = Command::new("codex");
+    let mut cmd = crate::agent::codex::CodexAgent.build_command_with_context(
+        "check", &opts(temp.path()), CommandContext {
+            durable_codex_home: false, writable_roots: vec![PathBuf::from(&target), scratch.clone()],
+        },
+    ).unwrap();
     cmd.env("TMPDIR", &scratch).env("CARGO_TARGET_DIR", &target);
-    grant_codex_roots(&mut cmd, &[PathBuf::from(&target), scratch.clone()]).unwrap();
     for path in [PathBuf::from(target), scratch] {
         assert!(path.starts_with(actual.canonicalize().unwrap()));
         assert!(cmd.get_args().any(|arg| arg.to_str().unwrap().contains(path.to_str().unwrap())));

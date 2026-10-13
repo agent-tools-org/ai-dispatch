@@ -27,6 +27,12 @@ Useful controls:
 - `--yes` or `--no-prompt` supports non-interactive automation.
 - `--var key=value` supplies batch interpolation variables.
 
+Failed-task automatic fallback is authorized per task by its own `fallback` list
+(including an inherited `[defaults] fallback`). A sibling's fallback never
+authorizes another task. Set `[defaults] auto_fallback = true` explicitly to
+enable automatic advice for tasks without a fallback list; omitted or `false`
+leaves those tasks on their original agent.
+
 Retry failed batch members with `aid batch retry --help`; preserve the original
 workgroup so history remains connected. A same-agent batch retry resumes the
 latest recorded session when the agent supports resume; switching agents clears it.

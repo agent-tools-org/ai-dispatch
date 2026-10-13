@@ -14,3 +14,5 @@ mod retry;
 
 #[path = "advised_retry_tests.rs"]
 mod advised_retry;
+#[path = "fallback_scope_tests.rs"]
+mod fallback_scope;

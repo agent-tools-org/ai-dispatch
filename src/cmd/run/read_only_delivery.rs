@@ -81,6 +81,12 @@ pub(crate) fn publish(
             Err(error) => return Err(error.into()),
         };
         anyhow::ensure!(metadata.is_file(), "staged artifact '{}' is not a regular file", source);
+        #[cfg(test)]
+        AFTER_VALIDATE.with(|hook| {
+            if let Some(hook) = hook.borrow_mut().take() {
+                hook();
+            }
+        });
         let content = fs::read_to_string(source)?;
         deliver(&content, &resolve(destination, dir))
             .with_context(|| format!("Cannot deliver read-only artifact to '{}'", destination))?;
@@ -142,4 +148,10 @@ fn canonical_path(path: &Path) -> Result<PathBuf> {
 
 fn resolve(path: &str, dir: Option<&str>) -> PathBuf {
     Path::new(dir.unwrap_or(".")).join(path)
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static AFTER_VALIDATE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        std::cell::RefCell::new(None);
 }

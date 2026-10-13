@@ -29,7 +29,7 @@ fn build_command_includes_skip_git_repo_check() {
 }
 
 #[test]
-fn build_command_read_only_omits_legacy_approval_flags() {
+fn build_command_read_only_selects_native_sandbox_without_write_approval() {
     let opts = RunOpts {
         dir: None,
         output: None,
@@ -49,8 +49,9 @@ fn build_command_read_only_omits_legacy_approval_flags() {
         .map(|arg| arg.to_string_lossy().to_string())
         .collect();
 
-    assert!(!args.contains(&"-s".to_string()));
-    assert!(!args.contains(&"read-only".to_string()));
+    assert!(args.windows(2).any(|pair| pair == ["--sandbox", "read-only"]));
+    assert!(!args.contains(&"--approve-for-me".to_string()));
+    assert!(!args.contains(&"--full-auto".to_string()));
 }
 
 #[test]

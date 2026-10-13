@@ -97,7 +97,8 @@ async fn provider_capacity_repeated_refusal_names_hold_expiry_when_no_route_is_l
     let store = Arc::new(Store::open_memory().expect("store"));
     let row = task("t-capacity-no-route", home.path());
     store.insert_task(&row).expect("task");
-    std::fs::write(paths::stderr_path(row.id.as_str()), CAPACITY).expect("refusal");
+    let error = serde_json::json!({"type":"error", "message":CAPACITY});
+    std::fs::write(paths::log_path(row.id.as_str()), error.to_string()).expect("refusal");
     rate_limit::mark_rate_limited_for_model(
         &row.agent,
         None,
@@ -124,7 +125,8 @@ async fn provider_capacity_repeated_refusal_names_hold_expiry_when_no_route_is_l
     );
     let detail = store.latest_error(row.id.as_str()).expect("failure");
     assert!(detail.contains("provider capacity held until"));
-    assert!(detail.contains("no launchable route remains"));
+    assert!(detail.contains("continuation already used"));
+    assert!(detail.contains("gpt-6.1-sol"));
     let events = store.get_events(row.id.as_str()).expect("events");
     let rendered = crate::board::render_task_detail(&row, &events, None);
     assert!(rendered.contains("Status: provider capacity"));

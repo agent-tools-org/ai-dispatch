@@ -76,7 +76,7 @@ fn provider_capacity_classifies_exact_codex_error_without_quota_or_model_unavail
         Some(CAPACITY)
     );
     assert_eq!(
-        classify(CAPACITY, AgentKind::Codex, Channel::CliStderr).as_deref(),
+        classify(&raw, AgentKind::Codex, Channel::CliStderr).as_deref(),
         Some(CAPACITY)
     );
     assert!(!rate_limit::is_rate_limit_error_for_agent(
@@ -84,16 +84,20 @@ fn provider_capacity_classifies_exact_codex_error_without_quota_or_model_unavail
         &AgentKind::Codex
     ));
     assert!(crate::model_health::extract_model_unavailable_json_error(&raw).is_none());
+    let error = serde_json::json!({"type":"error", "message":CAPACITY});
+    assert!(classify(&error.to_string(), AgentKind::Codex, Channel::CliStream).is_some());
     let item =
         serde_json::json!({"type":"item.completed", "item":{"type":"error", "message":CAPACITY}});
-    assert!(classify(&item.to_string(), AgentKind::Codex, Channel::CliStream).is_some());
+    assert!(classify(&item.to_string(), AgentKind::Codex, Channel::CliStream).is_none());
 }
 
 #[test]
 fn provider_capacity_classifies_final_error_after_exhausted_503_reconnects() {
-    let tail = "Reconnecting... 4/5 (unexpected status 503 Service Unavailable)\n\
-                Reconnecting... 5/5 (unexpected status 503 Service Unavailable)\n\
-                ERROR: stream disconnected before completion";
+    let tail = concat!(
+        "{\"type\":\"error\",\"message\":\"Reconnecting... 4/5 (503 Service Unavailable)\"}\n",
+        "{\"type\":\"error\",\"message\":\"Reconnecting... 5/5 (503 Service Unavailable)\"}\n",
+        "{\"type\":\"turn.failed\",\"error\":{\"message\":\"stream disconnected before completion\"}}"
+    );
     assert!(classify(tail, AgentKind::Codex, Channel::CliStderr).is_some());
     assert!(classify(tail, AgentKind::Codex, Channel::CliStream).is_some());
     assert!(
@@ -182,22 +186,15 @@ fn provider_capacity_expiry_and_success_release_model_hold() {
     );
     let id = TaskId("t-capacity-label".into());
     paths::ensure_dirs().expect("dirs");
-    std::fs::write(paths::stderr_path(id.as_str()), CAPACITY).expect("stderr");
+    let error = serde_json::json!({"type":"error", "message":CAPACITY});
+    std::fs::write(paths::log_path(id.as_str()), error.to_string()).expect("log");
     assert_eq!(
         terminal_label(&id, agent, TaskStatus::Failed),
         "provider capacity"
     );
     assert!(rate_limit::clear_rate_limit_for_model(&agent, None, model));
     assert!(notes(&agent, None).is_empty());
-    let past = chrono::Local::now().naive_local() - chrono::Duration::minutes(1);
-    std::fs::write(
-        rate_limit::group_marker_path(&agent, None, &group(model)),
-        format!(
-            "recovery_at: {}\nmessage: {CAPACITY}\n",
-            rate_limit::format_recovery(past)
-        ),
-    )
-    .expect("expired");
+    expire_hold(&agent, model);
     assert_ne!(
         availability_for_model(&agent, None, model).status,
         routes::RouteStatus::Held
@@ -206,4 +203,16 @@ fn provider_capacity_expiry_and_success_release_model_hold() {
     rate_limit::mark_rate_limited_for_model(&agent, None, model, CAPACITY);
     assert!(rate_limit::clear_all_rate_limits_for_agent(&agent, None));
     assert!(notes(&agent, None).is_empty());
+}
+
+fn expire_hold(agent: &AgentKind, model: Option<&str>) {
+    let past = chrono::Local::now().naive_local() - chrono::Duration::minutes(1);
+    std::fs::write(
+        rate_limit::group_marker_path(agent, None, &group(model)),
+        format!(
+            "recovery_at: {}\nmessage: {CAPACITY}\n",
+            rate_limit::format_recovery(past)
+        ),
+    )
+    .expect("expired");
 }

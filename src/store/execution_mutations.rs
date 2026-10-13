@@ -8,7 +8,23 @@ use rusqlite::{params, OptionalExtension};
 use super::Store;
 use crate::types::{ACTIVE_EXECUTION_FAILURE_STATUSES, TaskStatus};
 
+const CAPACITY_BACKOFF: &str = "id = ?1 AND status = 'failed'
+    AND NOT EXISTS (SELECT 1 FROM tasks WHERE parent_task_id = ?1)
+    AND (SELECT json_extract(metadata, '$.capacity_continuation') FROM events
+         WHERE task_id = ?1 AND json_extract(metadata, '$.capacity_continuation') IS NOT NULL
+         ORDER BY timestamp DESC, rowid DESC LIMIT 1) = 1";
+
 impl Store {
+    pub(crate) fn capacity_backoff_pending(&self, id: &str) -> Result<bool> {
+        let sql = format!("SELECT EXISTS (SELECT 1 FROM tasks WHERE {CAPACITY_BACKOFF})");
+        Ok(self.db().query_row(&sql, params![id], |row| row.get(0))?)
+    }
+
+    pub(crate) fn cancel_capacity_continuation(&self, id: &str) -> Result<bool> {
+        let sql = format!("UPDATE tasks SET status = 'stopped' WHERE {CAPACITY_BACKOFF}");
+        Ok(self.db().execute(&sql, params![id])? > 0)
+    }
+
     pub fn set_backup_url(&self, id: &str, url: &str) -> Result<bool> {
         let rows = self.db().execute(
             "UPDATE tasks SET backup_url = ?1 WHERE id = ?2",

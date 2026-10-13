@@ -149,9 +149,14 @@ Important controls:
 - `--retry N` permits new attempts after failure.
   A provider-capacity refusal creates a short hold on the selected model. Aid
   resumes the same session once after backoff and salvage, preserving `--retry`.
-  Read-only continuation does not commit. Repeated capacity uses cascade or
-  the next launchable advice route; if none remains, the error names the hold
-  and its expiry. Events and `aid show` identify provider capacity.
+  Read-only continuation does not commit. Repeated capacity fails with the
+  selected model's hold and expiry; automatic advice fallback is disabled.
+  Explicit `--cascade` and `--retry` keep their configured policies.
+  `aid stop <task>` and `aid stop <task> --retry-tree` cancel a continuation
+  waiting in backoff; the worker checks cancellation before launching it.
+  Only provider `error` and `turn.failed` envelopes count as capacity evidence;
+  raw output, assistant messages, and tool/command output do not create a hold.
+  Events and `aid show` identify provider capacity.
   Verification of the interrupted attempt is skipped; the resumed attempt
   keeps the configured verification command.
 - `--bg` returns the task ID immediately.

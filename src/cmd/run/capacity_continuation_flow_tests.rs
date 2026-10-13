@@ -82,7 +82,8 @@ impl Fixture {
         let guard = paths::AidHomeGuard::set(home.path());
         paths::ensure_dirs().expect("dirs");
         let (repo, worktree, initial_head) = repository();
-        let failure = format!("echo '{CAPACITY}' >&2; exit 1");
+        let error = serde_json::json!({"type":"error", "message":CAPACITY});
+        let failure = format!("echo '{error}'; exit 1");
         install_agent(
             home.path(),
             "capacity-fixture",

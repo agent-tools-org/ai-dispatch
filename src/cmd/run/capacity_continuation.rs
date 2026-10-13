@@ -1,4 +1,4 @@
-// One capacity continuation per retry chain, then existing cascade/advice routing.
+// One capacity continuation per retry chain, retaining only explicit cascade routing.
 // Exports continue_capacity; depends on captured errors, salvage, session retry and holds.
 
 use super::{RunArgs, inherit_cascade_target, run, take_next_cascade_agent};
@@ -31,14 +31,7 @@ pub(super) async fn continue_capacity(
     )
     .unwrap_or_else(|| "provider capacity hold expired".to_string());
     let child = if !already_continued(store, &task)? {
-        let child = continuation_args(store, args, &task)?;
-        record(
-            store,
-            task_id,
-            format!("provider capacity — {hold}; resuming session once after backoff"),
-            true,
-        )?;
-        wait_for_capacity(&task, model).await;
+        let child = prepare_session(store, args, &task, model, &hold).await?;
         child
     } else if let Some(child) = cascade_args(store, args, &task)? {
         child
@@ -46,12 +39,42 @@ pub(super) async fn continue_capacity(
         record(
             store,
             task_id,
-            format!("provider capacity — {hold}; no launchable route remains: {message}"),
+            format!(
+                "provider capacity for model {} — {hold}; continuation already used: {message}",
+                model.unwrap_or("(default)")
+            ),
             false,
         )?;
         return Ok(None);
     };
+    if store.get_task(task_id.as_str())?.map(|task| task.status) != Some(TaskStatus::Failed) {
+        return Ok(None);
+    }
     Box::pin(run(store.clone(), child)).await.map(Some)
+}
+
+async fn prepare_session(
+    store: &Store,
+    args: &RunArgs,
+    task: &Task,
+    model: Option<&str>,
+    hold: &str,
+) -> Result<RunArgs> {
+    let child = continuation_args(store, args, task)?;
+    record(
+        store,
+        &task.id,
+        format!("provider capacity — {hold}; resuming session once after backoff"),
+        true,
+    )?;
+    wait_for_capacity(task, model).await;
+    record(
+        store,
+        &task.id,
+        "provider capacity backoff complete".into(),
+        false,
+    )?;
+    Ok(child)
 }
 
 async fn wait_for_capacity(task: &Task, model: Option<&str>) {
@@ -71,6 +94,9 @@ async fn wait_for_capacity(task: &Task, model: Option<&str>) {
 }
 
 fn cascade_args(store: &Store, args: &RunArgs, task: &Task) -> Result<Option<RunArgs>> {
+    let Some((next, remaining)) = take_next_cascade_agent(args) else {
+        return Ok(None);
+    };
     let mut child = args.clone();
     child.prompt =
         crate::cmd::retry_logic::root_prompt(store, task).unwrap_or_else(|| args.prompt.clone());
@@ -79,16 +105,8 @@ fn cascade_args(store: &Store, args: &RunArgs, task: &Task) -> Result<Option<Run
     child.parent_task_id = Some(task.id.as_str().to_string());
     inherit_cascade_target(&mut child, task)?;
     readonly_target(task, &mut child);
-    if let Some((next, remaining)) = take_next_cascade_agent(args) {
-        super::super::switch_agent(&mut child, next);
-        child.cascade = remaining;
-    } else if let Some(candidate) =
-        super::super::advice_route::automatic_candidate(Some(store), args)
-    {
-        super::super::advice_route::apply_candidate(&mut child, &candidate);
-    } else {
-        return Ok(None);
-    }
+    super::super::switch_agent(&mut child, next);
+    child.cascade = remaining;
     Ok(Some(child))
 }
 

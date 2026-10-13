@@ -35,29 +35,16 @@ pub fn stop_retry_tree(store: &Arc<Store>, task_id: &str, force: bool) -> Result
     let mut skipped = 0;
     let mut failed: Vec<String> = Vec::new();
     for task in &tree {
-        if task.status.is_terminal() {
+        if task.status.is_terminal() && !store.capacity_backoff_pending(task.id.as_str())? {
             skipped += 1;
             continue;
         }
-        let outcome = if force {
-            terminate(
-                store,
-                task.id.as_str(),
-                false,
-                "Task killed by user (--retry-tree)",
-                "killed",
-                None,
-            )
+        let (detail, label) = if force {
+            ("Task killed by user (--retry-tree)", "killed")
         } else {
-            terminate(
-                store,
-                task.id.as_str(),
-                true,
-                "Task stopped by user (--retry-tree)",
-                "stopped",
-                None,
-            )
+            ("Task stopped by user (--retry-tree)", "stopped")
         };
+        let outcome = terminate(store, task.id.as_str(), !force, detail, label, None);
         match outcome {
             Ok(()) => stopped += 1,
             Err(err) => failed.push(format!("{}: {err}", task.id.as_str())),
@@ -86,26 +73,14 @@ fn terminate(
     print_label: Option<&'static str>,
 ) -> Result<()> {
     let task = ensure_non_terminal_task(store, task_id)?;
-    if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled) {
-        if let Some(pid) = background::load_worker_pid(task_id)? {
-            if graceful {
-                background::kill_process(pid);
-                if wait_for_exit(pid) {
-                    background::sigkill_process(pid);
-                }
-            } else {
-                background::sigkill_process(pid);
-                let _ = wait_for_exit(pid);
-            }
-        }
-        if let Some(agent_pid) = background::load_agent_pid(task_id)? {
-            if graceful {
-                background::kill_process(agent_pid);
-            } else {
-                background::sigkill_process(agent_pid);
-            }
-        }
-        crate::sandbox::kill_container(task_id);
+    if task.status == TaskStatus::Failed && !store.cancel_capacity_continuation(task_id)? {
+        bail!("Task '{task_id}' no longer has a pending capacity continuation");
+    }
+    if matches!(
+        task.status,
+        TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled | TaskStatus::Failed
+    ) {
+        terminate_processes(task_id, graceful)?;
         preserve_worktree(task_id, &task, preserve_label);
     }
     capture_final_worktree_state(store.as_ref(), &TaskId(task_id.to_string()))?;
@@ -130,11 +105,34 @@ fn terminate(
     Ok(())
 }
 
+fn terminate_processes(task_id: &str, graceful: bool) -> Result<()> {
+    if let Some(pid) = background::load_worker_pid(task_id)? {
+        if graceful {
+            background::kill_process(pid);
+            if wait_for_exit(pid) {
+                background::sigkill_process(pid);
+            }
+        } else {
+            background::sigkill_process(pid);
+            let _ = wait_for_exit(pid);
+        }
+    }
+    if let Some(agent_pid) = background::load_agent_pid(task_id)? {
+        if graceful {
+            background::kill_process(agent_pid);
+        } else {
+            background::sigkill_process(agent_pid);
+        }
+    }
+    crate::sandbox::kill_container(task_id);
+    Ok(())
+}
+
 fn ensure_non_terminal_task(store: &Arc<Store>, task_id: &str) -> Result<Task> {
     let task = store
         .get_task(task_id)?
         .ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
-    if task.status.is_terminal() {
+    if task.status.is_terminal() && !store.capacity_backoff_pending(task_id)? {
         bail!(
             "Task '{task_id}' is already terminal (status: {})",
             task.status.as_str()

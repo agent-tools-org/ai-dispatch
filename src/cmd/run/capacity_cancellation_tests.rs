@@ -3,6 +3,31 @@
 
 use super::*;
 
+#[test]
+fn provider_capacity_stop_rejects_backoff_that_already_ended() {
+    let home = tempfile::tempdir().expect("home");
+    let _home = paths::AidHomeGuard::set(home.path());
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let row = task("t-capacity-ended", home.path());
+    store.insert_task(&row).expect("task");
+    record(&store, &row.id, "capacity backoff".into(), true).expect("pending");
+    record(&store, &row.id, "backoff ended".into(), false).expect("ended");
+    assert!(
+        !store
+            .cancel_capacity_continuation(row.id.as_str())
+            .expect("claim")
+    );
+    assert!(crate::cmd::stop::stop(&store, row.id.as_str()).is_err());
+    assert_eq!(
+        store
+            .get_task(row.id.as_str())
+            .expect("task")
+            .expect("row")
+            .status,
+        TaskStatus::Failed
+    );
+}
+
 async fn cancel_waiting(mode: u8) {
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());

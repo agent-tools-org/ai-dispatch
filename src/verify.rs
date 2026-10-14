@@ -100,15 +100,11 @@ pub(crate) fn run_verify_with_env(
     }
 
     cmd.envs(env.iter().cloned());
-    let mut result = execute_verify(cmd, cmd_str, worktree_path, budget)?;
-    if container_name.is_none() && matches!(result.exit_code, Some(126 | 127)) {
-        result.infrastructure_failure = true;
-    }
-    Ok(result)
+    execute_verify(cmd, cmd_str, worktree_path, budget, container_name.is_none())
 }
 
 fn execute_verify(
-    mut cmd: Command, cmd_str: String, worktree_path: &Path, budget: VerifyBudget,
+    mut cmd: Command, cmd_str: String, worktree_path: &Path, budget: VerifyBudget, host_shell: bool,
 ) -> Result<VerifyResult> {
     let _lock = VERIFY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     cmd.current_dir(worktree_path)
@@ -124,10 +120,13 @@ fn execute_verify(
     let reader = spawn_output_reader(guard.child_mut(), queue.clone())?;
     let (status, timeout) = budget.wait(&mut guard, &queue)?;
     let timed_out = status.is_none();
-    let combined = match reader.join() {
+    let captured = match reader.join() {
         Ok(result) => result?,
         Err(_) => return Err(anyhow::anyhow!("verify output reader thread panicked")),
     };
+    let exit_code = status.as_ref().and_then(|status| status.code());
+    let infrastructure_failure = host_shell && captured.shell_execution_failure(exit_code);
+    let combined = captured.combined;
     let combined = if timed_out {
         format!(
             "{combined}\nVerification timed out after {} seconds",
@@ -142,8 +141,8 @@ fn execute_verify(
         timed_out,
         output: combined,
         command: cmd_str,
-        infrastructure_failure: false,
-        exit_code: status.as_ref().and_then(|s| s.code()),
+        infrastructure_failure,
+        exit_code,
     })
 }
 

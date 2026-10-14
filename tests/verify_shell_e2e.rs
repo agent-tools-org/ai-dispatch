@@ -64,7 +64,38 @@ fn run_help_describes_verify_shell_semantics() {
     let help = String::from_utf8_lossy(&output.stdout);
     assert!(help.contains("sh -c in the task directory"), "{help}");
     assert!(
-        help.contains("bare --verify uses the project default"),
+        help.contains("bare --verify uses auto-detection"),
         "{help}"
     );
+    assert!(help.contains("project default applies when --verify is absent"), "{help}");
+}
+
+#[test]
+fn cargo_prefixed_compound_verify_runs_second_command() {
+    verify_command("cargo check --help && false", false);
+}
+
+#[test]
+fn checker_exit_127_is_ordinary_failure() {
+    verify_command("sh -c 'exit 127'", false);
+}
+
+#[test]
+fn checker_exit_126_is_ordinary_failure() {
+    verify_command("sh -c 'exit 126'", false);
+}
+
+#[test]
+fn stdout_shell_like_diagnostic_is_ordinary_failure() {
+    verify_command("printf 'sh: 1: checker: not found\\n'; exit 127", false);
+}
+
+#[test]
+fn checker_stderr_is_ordinary_failure() {
+    verify_command("printf 'checker: input not found\\n' >&2; exit 127", false);
+}
+
+#[test]
+fn cargo_version_compound_verify_runs_second_command() {
+    verify_command("cargo --version && false", false);
 }

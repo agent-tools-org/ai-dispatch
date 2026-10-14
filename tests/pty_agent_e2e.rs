@@ -89,7 +89,11 @@ fn reply_write_and_echo_do_not_claim_consumption() {
         "SELECT count(*) FROM pragma_table_info('task_messages') WHERE name = 'acked_at'", [],
         |row| row.get(0),
     ).unwrap();
-    assert_eq!(ack_columns, 0);
+    assert_eq!(ack_columns, 1);
+    let acked_at: Option<String> = db.query_row(
+        "SELECT acked_at FROM task_messages", [], |row| row.get(0),
+    ).unwrap();
+    assert!(acked_at.is_none());
 }
 
 fn pty_available() -> bool {

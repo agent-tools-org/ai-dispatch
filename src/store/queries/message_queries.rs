@@ -158,26 +158,32 @@ mod tests {
     }
 
     #[test]
-    fn message_migration_removes_false_acknowledgements_and_preserves_delivery() {
+    fn message_schema_remains_readable_by_v11_release() {
         let store = Store::open_memory().unwrap();
         insert_task(&store, "t-legacy-input");
         let message = store.insert_message(
             "t-legacy-input", MessageDirection::In, "pivot", MessageSource::Reply,
         ).unwrap();
         store.mark_delivered(message.id).unwrap();
-        store.db().execute_batch(
-            "ALTER TABLE task_messages ADD COLUMN acked_at DATETIME;
-             UPDATE task_messages SET acked_at = delivered_at;",
-        ).unwrap();
-        super::super::super::migrations::migrate_task_messages(&store.db()).unwrap();
-        let columns: Vec<String> = store.db().prepare("PRAGMA table_info(task_messages)")
+        let db = store.db();
+        let columns: Vec<String> = db.prepare("PRAGMA table_info(task_messages)")
             .unwrap().query_map([], |row| row.get(1)).unwrap()
             .collect::<rusqlite::Result<_>>().unwrap();
-        assert!(!columns.iter().any(|name| name == "acked_at"));
-        let messages = store.list_messages_for_task("t-legacy-input").unwrap();
-        assert_eq!(messages.len(), 1);
-        assert_eq!(messages[0].content, "pivot");
-        assert!(messages[0].delivered_at.is_some());
+        assert!(columns.iter().any(|name| name == "acked_at"));
+        let row = db.query_row(
+            "SELECT id, task_id, direction, content, source, created_at, delivered_at, acked_at
+             FROM task_messages WHERE id = ?1",
+            [message.id],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?, row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?, row.get::<_, String>(5)?,
+                row.get::<_, Option<String>>(6)?, row.get::<_, Option<String>>(7)?)),
+        ).unwrap();
+        assert_eq!((row.0, row.1.as_str(), row.2.as_str()), (message.id, "t-legacy-input", "in"));
+        assert_eq!((row.3.as_str(), row.4.as_str()), ("pivot", "reply"));
+        assert!(!row.5.is_empty());
+        assert!(row.6.is_some());
+        assert!(row.7.is_none());
     }
 
     #[test]

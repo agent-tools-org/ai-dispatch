@@ -8,6 +8,7 @@ use anyhow::Result;
 use rusqlite::Connection;
 use std::path::Path;
 
+// acked_at is retained for older binaries; current code never reads or writes it.
 const CREATE_TASK_MESSAGES_SQL: &str = "CREATE TABLE IF NOT EXISTS task_messages (
     id INTEGER PRIMARY KEY,
     task_id TEXT NOT NULL REFERENCES tasks(id),
@@ -15,7 +16,8 @@ const CREATE_TASK_MESSAGES_SQL: &str = "CREATE TABLE IF NOT EXISTS task_messages
     content TEXT NOT NULL,
     source TEXT NOT NULL CHECK (source IN ('reply','steer','unstick-auto','agent-ack')),
     created_at DATETIME NOT NULL,
-    delivered_at DATETIME
+    delivered_at DATETIME,
+    acked_at DATETIME
 );";
 
 const NORMALIZE_BACKUP_ATTEMPTS_SQL: &str = "UPDATE tasks SET backup_url = ''
@@ -30,15 +32,6 @@ const NORMALIZE_BACKUP_ATTEMPTS_SQL: &str = "UPDATE tasks SET backup_url = ''
 
 pub(super) fn migrate_task_messages(conn: &Connection) -> Result<()> {
     conn.execute_batch(CREATE_TASK_MESSAGES_SQL)?;
-    let has_ack = conn
-        .prepare("PRAGMA table_info(task_messages)")?
-        .query_map([], |row| row.get::<_, String>(1))?
-        .collect::<rusqlite::Result<Vec<_>>>()?
-        .iter()
-        .any(|name| name == "acked_at");
-    if has_ack {
-        conn.execute_batch("ALTER TABLE task_messages DROP COLUMN acked_at;")?;
-    }
     Ok(())
 }
 

@@ -36,8 +36,9 @@ applies at launch and does not provide mid-run steering.
 
 For PTY-capable adapters, successful input forwarding means **written to PTY;
 consumption unconfirmed**. Arbitrary subsequent output cannot acknowledge it.
-There is no real receipt writer for `acked_at`; its active storage and readers
-must be removed rather than presenting output activity as a receipt.
+There is no real receipt writer for `acked_at`; current Rust code neither reads
+nor writes it. The SQL column remains for older binaries whose message queries
+select it, rather than presenting output activity as a receipt.
 
 The remaining built-in true capability declarations are Gemini, Qwen, Copilot,
 CommandCode, Cursor, Droid, Oz, OpenCode, Kilo, and MimoCode. Custom adapters are

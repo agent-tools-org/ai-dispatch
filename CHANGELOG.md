@@ -1,3 +1,11 @@
+## v11.1.0 (2026-10-14)
+- Input truthfulness: `aid steer`, `reply`, `respond`, `unstick`, auto-nudge, group broadcast and wrap-up now report what aid actually did (queued, file published, or written to the PTY with consumption unconfirmed) instead of claiming the agent received or acknowledged the message
+- Codex tasks refuse interactive input: `codex exec` never reads its terminal, so steering a Codex task fails with a pointer to `aid retry -f`
+- Events recorded by aid 11.0 and earlier may still read "Acked reply" or "Steered"; those recorded a PTY write or a queued file, not a confirmed receipt. aid does not rewrite stored history
+- `--verify` commands run through the shell (`sh -c`) on every route; plain `cargo check|test|clippy` still uses the build runner, and the command's exit status decides the outcome
+- Test hygiene: faster pipe-drain fixture and neutral names in fixtures
+
+
 ## v11.0.0 (2026-10-14)
 - Failure truthfulness: a failed, stopped or interrupted task now reports what actually happened
 - `aid stop` settles the task (stopped status, completion time, duration and completion event) before signalling the worker; a racing worker, reaper or wait can no longer rewrite it as "worker died"

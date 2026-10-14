@@ -136,8 +136,8 @@ Important controls:
 - `--repo` or `--repo-root` supplies the repository anchor.
 - `--worktree` creates or reuses an isolated task branch.
 - For a read-only audit of an existing checkout, use `--kind debugging --read-only --dir <checkout-path>`; `--read-only` cannot be combined with `--worktree`. `--audit` schedules an additional post-task cross-audit. Rejected requests can be inspected with `aid errors`; see [command-errors.md](command-errors.md).
-- `--verify [COMMAND]` verifies completion; without a value it uses project
-  configuration or supported defaults. A task with verification configured is
+- `--verify [COMMAND]` and project/batch `verify` run through `sh -c` in the task directory.
+  Bare `--verify` uses project configuration or supported defaults. A task with verification configured is
   written with `verify_status = pending` at dispatch, so `pending` means that a
   result is in flight. Verification is skipped (not failed) when the task is
   `--read-only` or has no working directory. An empty diff is not a skip —

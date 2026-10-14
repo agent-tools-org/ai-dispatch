@@ -87,12 +87,22 @@ fn verify_fail_case() {
 }
 
 #[test]
-fn verify_does_not_expand_shell_operators() {
+fn verify_expands_shell_operators() {
     let _permit = test_subprocess::acquire();
     let dir = TempDir::new().unwrap();
     let result = run_verify(dir.path(), Some("echo ok && false"), None, None).unwrap();
+    assert!(!result.success);
+    assert!(result.output.contains("ok"));
+    assert!(!result.output.contains("&& false"));
+}
+
+#[test]
+fn verify_pipeline_consumes_quoted_output() {
+    let _permit = test_subprocess::acquire();
+    let dir = TempDir::new().unwrap();
+    let result = run_verify(dir.path(), Some("printf 'a b' | grep -q 'a b'"), None, None).unwrap();
     assert!(result.success);
-    assert!(result.output.contains("ok && false"));
+    assert!(result.output.is_empty(), "{}", result.output);
 }
 
 #[test]

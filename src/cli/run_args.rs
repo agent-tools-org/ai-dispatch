@@ -52,6 +52,7 @@ pub struct RunArgs {
     pub team: Option<String>,
     #[arg(long, short = 'g')]
     pub group: Option<String>,
+    /// Run through sh -c in the task directory; bare --verify uses the project default.
     #[arg(long, num_args = 0..=1, default_missing_value = "auto")]
     pub verify: Option<String>,
     #[arg(long, value_name = "N")]

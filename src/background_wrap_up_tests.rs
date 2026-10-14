@@ -155,9 +155,12 @@ fn migrated_wrap_up_record_prevents_duplicate_queueing() {
     store.insert_event(&crate::types::TaskEvent {
         task_id: task.id.clone(), timestamp: Local::now(), event_kind: EventKind::Milestone,
         detail: "Hard-cap wrap-up: queued request to commit work in progress and write the report".into(),
-        metadata: Some(serde_json::json!({"input_delivery": "queued", "hard_cap_wrap_up": true, "legacy_rewritten": true})),
+        metadata: Some(serde_json::json!({
+            "input_delivery": "queued", "hard_cap_wrap_up": true, "legacy_rewritten": true
+        })),
     }).unwrap();
     assert!(!crate::cmd::steer::wrap_up_before_timeout(&store, task.id.as_str(), 540, 600).unwrap());
     assert!(store.list_messages_for_task(task.id.as_str()).unwrap().is_empty());
-    assert!(store.get_events(task.id.as_str()).unwrap()[0].metadata.as_ref().unwrap()["input_delivery"] == "queued");
+    let events = store.get_events(task.id.as_str()).unwrap();
+    assert_eq!(events[0].metadata.as_ref().unwrap()["input_delivery"], "queued");
 }

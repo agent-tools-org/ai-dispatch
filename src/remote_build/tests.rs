@@ -166,9 +166,9 @@ fn pick_passes_repo_and_exclude_to_rbox() {
     let rbox = temp.path().join("rbox");
     let argv = temp.path().join("argv");
     executable(&rbox, &format!("#!/bin/bash\nprintf '%s\\n' \"$@\" > '{}'\necho second-box\n", argv.display()));
-    let picked = pick(&mut Command::new(&rbox), Path::new("/repos/wt"), Some("grok-bot-chief")).expect("pick");
+    let picked = pick(&mut Command::new(&rbox), Path::new("/repos/wt"), Some("box-a")).expect("pick");
     assert_eq!(picked, "second-box");
-    assert_eq!(std::fs::read_to_string(&argv).expect("argv"), "pick\n--tool\nrust\n--repo\n/repos/wt\n--exclude\ngrok-bot-chief\n");
+    assert_eq!(std::fs::read_to_string(&argv).expect("argv"), "pick\n--tool\nrust\n--repo\n/repos/wt\n--exclude\nbox-a\n");
     let mut args = RunArgs { remote_build: Some("auto".into()), dir: Some("/repos/main".into()), ..Default::default() };
     resolve_in(&mut args, true, &mut Command::new(&rbox)).expect("resolve");
     assert_eq!(args.remote_build.as_deref(), Some("second-box"));

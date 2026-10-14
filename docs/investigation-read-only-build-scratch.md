@@ -228,12 +228,12 @@ Initial implementation (`697b4720`) evidence, superseded where noted below:
 - Final `aid build check -p ai-dispatch`: 0 errors, 2 existing warnings.
   Final `aid build clippy -p ai-dispatch -- --all-targets`: 0 errors,
   27 existing warnings. No formatters were run or dependencies added.
-- Remote guide E2E on `grok-bot-twitter`: 14 passed, 0 failed; the new guide
+- Remote guide E2E on `box-b`: 14 passed, 0 failed; the new guide
   contract test also passed after the final scratch-path normalization.
 - Independent cross-review accepted the final normalization and grant wiring.
 
 Real Codex 0.154.0 runs used a plain Git checkout at
-`/tmp/aid-sandbox-scratch-20260911/plain-repo` on `grok-bot-twitter`, with:
+`/tmp/aid-sandbox-scratch-20260911/plain-repo` on `box-b`, with:
 
 ```sh
 aid run codex "run aid build check and paste its digest line" -d /tmp/aid-sandbox-scratch-20260911/plain-repo --verify true --idle-timeout 300
@@ -272,7 +272,7 @@ FIX validation: 13 scratch unit tests passed; the broader agent suite passed
 test with `No such file or directory`; restoring it passed. Remote CLI coverage
 passed 5 sandbox/preflight, 14 guide, 3 foreground, and 2 batch tests. The same
 read-only caller fixture exits 1 with `697b4720` and 0 with the fix for `--dry-run`.
-Before/after artifacts are on `grok-bot-twitter` at
+Before/after artifacts are on `box-b` at
 `/tmp/aid-preflight-before-after-8515-wub978in/`; CLI tests use fake agents.
 The earlier real-provider build proofs remain separate from these regression tests.
 Container and sandbox launches skip host scratch preparation and export, retaining main's guest command behavior.

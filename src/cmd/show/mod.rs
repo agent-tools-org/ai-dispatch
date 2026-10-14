@@ -261,3 +261,6 @@ mod banner_tests;
 #[cfg(test)]
 #[path = "checklist_tests.rs"]
 mod show_checklist_tests;
+
+#[cfg(test)]
+mod legacy_ack_tests;

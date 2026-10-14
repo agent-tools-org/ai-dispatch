@@ -101,7 +101,7 @@ fn queued_message_after_child_exit_does_not_fail_monitor() {
         })
         .expect("failed PTY input must be visible as an event");
     assert_eq!(event.event_kind, EventKind::Milestone);
-    assert!(event.detail.contains("Reply not delivered"));
+    assert!(event.detail.contains("Reply PTY write failed"));
     assert!(
         event.detail.contains("PTY child has already exited")
             || event.detail.contains("Input/output error")

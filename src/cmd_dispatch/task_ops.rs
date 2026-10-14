@@ -105,8 +105,8 @@ pub(super) fn reply(
         cmd::reply::ReplyOutcome::Written => {
             println!("Reply for {task_id} written to PTY; consumption unconfirmed");
         }
-        cmd::reply::ReplyOutcome::TimedOut { delivered } => {
-            println!("Reply timed out for {task_id} (delivered: {delivered})");
+        cmd::reply::ReplyOutcome::TimedOut => {
+            println!("Reply for {task_id}: PTY write unconfirmed after timeout; consumption unconfirmed");
         }
     }
     Ok(())

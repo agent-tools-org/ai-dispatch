@@ -121,5 +121,5 @@ fn reply_times_out_cleanly() {
     )
     .unwrap();
 
-    assert_eq!(outcome, ReplyOutcome::TimedOut { delivered: false });
+    assert_eq!(outcome, ReplyOutcome::TimedOut);
 }

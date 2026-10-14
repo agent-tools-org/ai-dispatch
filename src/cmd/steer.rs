@@ -54,12 +54,14 @@ fn queue_wrap_up(store: &Store, task_id: &str) -> Result<bool> {
         "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
          SELECT id, ?2, 'milestone', ?3, ?4 FROM tasks WHERE id = ?1
          AND status IN ('running', 'awaiting_input', 'stalled') AND read_only = 0
-         AND NOT EXISTS (SELECT 1 FROM events WHERE task_id = ?1 AND detail = ?3)",
+         AND NOT EXISTS (SELECT 1 FROM events WHERE task_id = ?1 AND
+             (detail = ?3 OR CASE WHEN json_valid(metadata)
+              THEN json_extract(metadata, '$.hard_cap_wrap_up') END = 1))",
         rusqlite::params![
             task_id,
             chrono::Local::now().to_rfc3339(),
-            "Hard-cap wrap-up: committing work in progress and writing the report requested",
-            r#"{"steered":true,"hard_cap_wrap_up":true}"#
+            "Hard-cap wrap-up: queued request to commit work in progress and write the report",
+            r#"{"input_delivery":"queued","hard_cap_wrap_up":true}"#
         ],
     )?;
     if rows == 0 {

@@ -54,8 +54,12 @@ fn output_after_pty_write_never_acknowledges_input() {
     let messages = store.list_messages_for_task(task.id.as_str()).unwrap();
     assert!(messages[0].delivered_at.is_some());
     assert!(serde_json::to_value(&messages[0]).unwrap().get("acked_at").is_none());
-    assert!(!store.get_events(task.id.as_str()).unwrap().iter()
-        .any(|event| event.detail.contains("Acked reply")));
+    let events = store.get_events(task.id.as_str()).unwrap();
+    assert!(!events.iter().any(|event| event.detail.contains("Acked reply")));
+    let metadata = events[0].metadata.as_ref().unwrap();
+    assert_eq!(metadata["input_delivery"], "written");
+    assert_eq!(metadata["consumption"], "unconfirmed");
+    assert!(metadata.get("delivered").is_none());
 }
 
 fn pty_task(task_id: &str) -> Task {

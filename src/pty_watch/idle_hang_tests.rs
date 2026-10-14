@@ -205,7 +205,7 @@ fn maybe_handle_idle_skips_ladder_when_buffered_log_grows() {
     assert!(!state.idle_warned && !state.idle_nudged);
     let events = store.get_events(task_id.as_str()).expect("events");
     assert!(
-        events.iter().all(|e| e.detail != "idle warn" && e.detail != "Auto-nudge sent"),
+        events.iter().all(|e| e.detail != "idle warn" && e.detail != "Auto-nudge queued"),
         "ladder must not fire while buffered log is alive: {events:?}"
     );
 }

@@ -56,7 +56,7 @@ pub enum GroupAction {
         #[command(subcommand)]
         action: crate::cli::FindingCommands,
     },
-    /// Send a message to the workgroup's broadcast channel
+    /// Publish a message to the workgroup's broadcast file; member consumption is unconfirmed
     Broadcast {
         /// Workgroup ID
         group_id: String,

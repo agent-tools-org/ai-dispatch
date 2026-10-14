@@ -207,6 +207,22 @@ pub struct TaskEvent {
 }
 
 impl TaskEvent {
+    pub fn legacy_unconfirmed(&self) -> bool {
+        self.detail == "Acked reply"
+            || self.metadata.as_ref()
+                .and_then(|meta| meta.get("acked_reply"))
+                .and_then(|value| value.as_bool()) == Some(true)
+    }
+
+    pub fn display_detail(&self, full: bool) -> std::borrow::Cow<'_, str> {
+        if self.legacy_unconfirmed() {
+            return std::borrow::Cow::Borrowed(
+                "Acked reply (not a confirmed receipt; earlier aid observed output after the write)",
+            );
+        }
+        std::borrow::Cow::Borrowed(if full { self.full_detail() } else { &self.detail })
+    }
+
     /// Untruncated detail: parsers stash text over the display cap in
     /// metadata under `"full"`.
     pub fn full_detail(&self) -> &str {

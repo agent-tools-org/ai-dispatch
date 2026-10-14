@@ -163,8 +163,10 @@ impl MonitorState {
                     task_id: task_id.clone(),
                     timestamp: Local::now(),
                     event_kind: EventKind::Reasoning,
-                    detail: "Auto-nudge sent".to_string(),
-                    metadata: Some(json!({ "message": message, "source": "unstick-auto" })),
+                    detail: "Auto-nudge queued".to_string(),
+                    metadata: Some(json!({
+                        "message": message, "source": "unstick-auto", "input_delivery": "queued"
+                    })),
                 })?;
             }
             IdleAction::Escalate if crate::unstick::mark_task_stalled(store.as_ref(), task_id.as_str())? => {
@@ -286,3 +288,6 @@ mod write_tests;
 #[cfg(test)]
 #[path = "pty_watch_child_tests.rs"]
 mod child_tests;
+
+#[cfg(test)]
+mod input_status_tests;

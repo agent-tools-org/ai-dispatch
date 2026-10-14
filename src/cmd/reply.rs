@@ -18,7 +18,7 @@ const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 pub enum ReplyOutcome {
     Queued { id: i64 },
     Written,
-    TimedOut { delivered: bool },
+    TimedOut,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -235,19 +235,17 @@ where
     F: FnMut(i64),
 {
     let deadline = Instant::now() + timeout;
-    let mut delivered = false;
     loop {
         let messages = store.list_messages_for_task(task_id)?;
         let message = messages
             .into_iter()
             .find(|entry| entry.id == message_id)
             .ok_or_else(|| anyhow!("Reply message {message_id} disappeared for task {task_id}"))?;
-        delivered |= message.delivered_at.is_some();
-        if delivered {
+        if message.delivered_at.is_some() {
             return Ok(ReplyOutcome::Written);
         }
         if Instant::now() >= deadline {
-            return Ok(ReplyOutcome::TimedOut { delivered });
+            return Ok(ReplyOutcome::TimedOut);
         }
         on_poll(message_id);
         sleep(poll_interval);

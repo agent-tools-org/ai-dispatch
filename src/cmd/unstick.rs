@@ -33,7 +33,8 @@ pub fn run(store: &Store, task_id: &str, message: Option<&str>, escalate: bool) 
         .is_some_and(background::is_process_running);
     if !worker_alive && !agent_alive {
         bail!(
-            "Task {task_id} worker process is dead; use `aid unstick {task_id} --escalate` to mark it stalled or `aid stop {task_id}` instead of sending a nudge"
+            "Task {task_id} worker process is dead; use `aid unstick {task_id} --escalate` \
+             to mark it stalled or `aid stop {task_id}` instead of queueing a nudge"
         );
     }
 
@@ -50,7 +51,7 @@ pub fn run(store: &Store, task_id: &str, message: Option<&str>, escalate: bool) 
         MessageSource::Reply,
         InputCommand::Unstick,
     )?;
-    println!("Sent unstick nudge to {task_id}");
+    println!("Queued unstick nudge for {task_id}");
     Ok(())
 }
 
@@ -134,7 +135,7 @@ mod tests {
     }
 
     #[test]
-    fn unstick_sends_default_message_when_absent() {
+    fn unstick_queues_default_message_when_absent() {
         let temp = tempfile::tempdir().unwrap();
         let _aid_home = paths::AidHomeGuard::set(temp.path());
         let store = Store::open_memory().unwrap();

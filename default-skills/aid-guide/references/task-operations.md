@@ -76,7 +76,8 @@ aid unstick <task-id>
   pending prompt, and records the reason in a task event. Real prompts with
   silent logs still await input.
 - Use `reply` for a tracked message. It optionally waits for a PTY write;
-  successful forwarding means written to PTY; consumption unconfirmed.
+  successful forwarding means written to PTY; consumption unconfirmed. A timeout
+  leaves the PTY write unconfirmed.
 - Use `steer` to queue updated direction for a PTY-capable adapter. Queuing
   is not delivery. Output lines, including echoes, never acknowledge input.
 - Codex `steer`, `reply`, and `respond` are refused before aid inserts a message
@@ -92,7 +93,15 @@ aid unstick <task-id>
 - The refusal names a route for new direction to a one-shot task:
   `aid stop <id>` then `aid retry <id> -f "..."`, which starts a fresh session
   for agents without resume.
-- Use `unstick` when progress has stopped and recovery is appropriate.
+- Use `unstick` when progress has stopped and recovery is appropriate. A nudge
+  is queued; only a successful PTY write is recorded as written, with consumption
+  unconfirmed. Automatic nudges and hard-cap wrap-up requests follow the same stages.
+- `aid group broadcast` publishes a message to the group's broadcast file;
+  member consumption is unconfirmed.
+- Historic `Acked reply` events are shown as not a confirmed receipt: earlier aid
+  inferred acknowledgement from output after a write. JSON keeps the raw event and
+  adds `legacy_unconfirmed: true` plus the qualified `display_detail`; stored records
+  remain unchanged.
 
 Do not send repeated polling messages; inspect events first.
 

@@ -1,4 +1,4 @@
-// CLI handler for `aid group broadcast` — send messages to workgroup broadcast file.
+// CLI handler for `aid group broadcast` — publish messages to workgroup broadcast file.
 // Exports: run.
 // Deps: paths, store.
 
@@ -24,6 +24,6 @@ pub fn run(store: &Store, group_id: &str, message: &str) -> Result<()> {
     let timestamp = Local::now().format("%H:%M:%S");
     writeln!(file, "- [{timestamp}] (orchestrator) {message}")?;
 
-    println!("Broadcast sent to {group_id}");
+    println!("Broadcast published to file for {group_id}; member consumption unconfirmed");
     Ok(())
 }

@@ -15,6 +15,8 @@ pub mod sse;
 mod api_tests;
 #[cfg(test)]
 mod data_tests;
+#[cfg(test)]
+mod legacy_ack_tests;
 
 use anyhow::Result;
 use axum::extract::Path;

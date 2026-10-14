@@ -52,6 +52,9 @@ fn ninety_percent_cap_steers_commit_and_report_once_refusal_regression() {
         1
     );
     let events = store.get_events(task.id.as_str()).expect("events");
+    let queued = events.iter().find(|event| event.detail.contains("wrap-up")).unwrap();
+    assert_eq!(queued.metadata.as_ref().unwrap()["input_delivery"], "queued");
+    assert!(queued.metadata.as_ref().unwrap().get("steered").is_none());
     assert_eq!(
         events
             .iter()
@@ -140,4 +143,21 @@ fn wrap_up_delivery_failure_can_recover_once_fix_regression() {
     assert_eq!(store.get_events(task.id.as_str()).expect("events").len(), 1);
     assert_eq!(store.list_messages_for_task(task.id.as_str()).expect("messages").len(), 1);
     assert!(!signal.exists());
+}
+
+#[test]
+fn legacy_wrap_up_record_still_prevents_duplicate_queueing() {
+    let _home = setup_home();
+    let store = Store::open_memory().unwrap();
+    let mut task = task("t-legacy-wrap", TaskStatus::Running);
+    task.agent = AgentKind::Gemini;
+    store.insert_task(&task).unwrap();
+    store.insert_event(&crate::types::TaskEvent {
+        task_id: task.id.clone(), timestamp: Local::now(), event_kind: EventKind::Milestone,
+        detail: "Hard-cap wrap-up: committing work in progress and writing the report requested".into(),
+        metadata: Some(serde_json::json!({"steered": true, "hard_cap_wrap_up": true})),
+    }).unwrap();
+    assert!(!crate::cmd::steer::wrap_up_before_timeout(&store, task.id.as_str(), 540, 600).unwrap());
+    assert!(store.list_messages_for_task(task.id.as_str()).unwrap().is_empty());
+    assert!(store.get_events(task.id.as_str()).unwrap()[0].metadata.as_ref().unwrap()["steered"] == true);
 }

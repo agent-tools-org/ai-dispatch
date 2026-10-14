@@ -50,3 +50,13 @@ input loops and real receipts were not verified, so their flags are unchanged.
 The original investigation was read-only and ran no builds or tests. Its evidence
 establishes the Codex failure and false acknowledgement; it does not establish
 which particular output line triggered every historical acknowledgement.
+
+Queueing, PTY writes, and file publication are separate observations. Manual and
+automatic nudges and hard-cap wrap-up requests record a queued stage. Successful
+PTY writes record a written stage with unconfirmed consumption. Group broadcasts
+record file publication without claiming that any member read the file.
+
+Historical acknowledgement events remain unchanged in storage. People-facing
+renderers qualify them through one event-detail helper as not a confirmed receipt.
+JSON retains raw detail and metadata and adds `legacy_unconfirmed` and
+`display_detail` so consumers can distinguish the old observation from a receipt.

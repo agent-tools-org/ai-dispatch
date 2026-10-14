@@ -222,7 +222,7 @@ fn append_task_events(out: &mut String, events: &[TaskEvent]) {
 }
 
 fn event_detail_lines(event: &TaskEvent) -> Vec<String> {
-    let mut lines = vec![truncate(&event.detail, 60)];
+    let mut lines = vec![truncate(&event.display_detail(false), 60)];
     if let Some(eval_output) = iterate_eval_output(event) {
         lines.push(format!("Eval output: {}", truncate(eval_output, 60)));
     }

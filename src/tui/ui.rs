@@ -65,7 +65,7 @@ fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                     (
                         e.timestamp.format("%H:%M:%S").to_string(),
                         e.event_kind.as_str().to_string(),
-                        e.display_detail(false).into_owned(),
+                        e.detail.clone(),
                     )
                 })
                 .collect();

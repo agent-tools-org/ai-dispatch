@@ -256,22 +256,3 @@ fn task_event_full_detail_prefers_metadata_full() {
     event.metadata = None;
     assert_eq!(event.full_detail(), "truncated...");
 }
-
-#[test]
-fn task_event_display_qualifies_only_legacy_acknowledgements() {
-    let mut event = TaskEvent {
-        task_id: TaskId("t-display".into()), timestamp: Local::now(),
-        event_kind: EventKind::Reasoning, detail: "Acked reply".into(), metadata: None,
-    };
-    for full in [false, true] {
-        assert!(event.legacy_unconfirmed());
-        assert!(event.display_detail(full).contains("not a confirmed receipt"));
-    }
-    event.detail = "ordinary output".into();
-    event.metadata = Some(serde_json::json!({"acked_reply": true, "full": "historic output"}));
-    assert!(event.display_detail(true).contains("not a confirmed receipt"));
-    event.metadata = Some(serde_json::json!({"full": "complete ordinary output"}));
-    assert!(!event.legacy_unconfirmed());
-    assert_eq!(event.display_detail(false), "ordinary output");
-    assert_eq!(event.display_detail(true), "complete ordinary output");
-}

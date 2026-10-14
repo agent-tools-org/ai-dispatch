@@ -123,22 +123,16 @@ pub struct TaskEventResponse {
     pub timestamp: String,
     pub event_kind: String,
     pub detail: String,
-    pub display_detail: String,
-    pub legacy_unconfirmed: bool,
     pub metadata: Option<serde_json::Value>,
 }
 
 impl From<TaskEvent> for TaskEventResponse {
     fn from(event: TaskEvent) -> Self {
-        let display_detail = event.display_detail(false).into_owned();
-        let legacy_unconfirmed = event.legacy_unconfirmed();
         Self {
             task_id: event.task_id.to_string(),
             timestamp: event.timestamp.to_rfc3339(),
             event_kind: event.event_kind.as_str().to_string(),
             detail: event.detail,
-            display_detail,
-            legacy_unconfirmed,
             metadata: event.metadata,
         }
     }

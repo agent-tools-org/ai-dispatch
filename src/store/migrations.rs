@@ -32,7 +32,7 @@ const NORMALIZE_BACKUP_ATTEMPTS_SQL: &str = "UPDATE tasks SET backup_url = ''
 
 pub(super) fn migrate_task_messages(conn: &Connection) -> Result<()> {
     conn.execute_batch(CREATE_TASK_MESSAGES_SQL)?;
-    Ok(())
+    migrate_legacy_receipts(conn)
 }
 
 /// Splits model attribution in two. The pre-existing `model` column keeps what
@@ -133,6 +133,48 @@ pub(super) fn migrate_backup_url(conn: &Connection) -> Result<()> {
         tx.execute_batch("PRAGMA user_version = 1;")?;
     }
     tx.commit()?;
+    Ok(())
+}
+
+pub(super) fn migrate_legacy_receipts(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"WITH legacy AS (
+            SELECT id, detail,
+                   CASE WHEN json_valid(metadata) THEN metadata ELSE '{}' END AS meta
+            FROM events
+         ), rewritten AS (
+            SELECT id, meta,
+                   (detail LIKE 'Steered: %' OR json_extract(meta, '$.steered') = 1) AS steering,
+                   CASE WHEN json_extract(meta, '$.hard_cap_wrap_up') = 1 THEN
+                       'Hard-cap wrap-up: queued request to commit work in progress and write the report'
+                   WHEN detail LIKE 'Steered: %' THEN
+                       'Steer written to PTY; consumption unconfirmed: ' || substr(detail, 10)
+                   WHEN json_extract(meta, '$.steered') = 1 THEN
+                       'Steer written to PTY; consumption unconfirmed'
+                   WHEN detail LIKE 'Replied: %' THEN
+                       'Reply written to PTY; consumption unconfirmed: ' || substr(detail, 10)
+                   ELSE 'Response written to PTY; consumption unconfirmed' END AS truthful,
+                   CASE WHEN json_extract(meta, '$.hard_cap_wrap_up') = 1
+                        THEN 'queued' ELSE 'written' END AS stage
+            FROM legacy WHERE detail = 'Acked reply'
+                OR json_extract(meta, '$.acked_reply') = 1
+                OR json_extract(meta, '$.steered') = 1
+                OR detail LIKE 'Steered: %' OR detail LIKE 'Replied: %'
+         )
+         UPDATE events SET
+             detail = rewritten.truthful,
+             metadata = json_patch(
+                 json_remove(rewritten.meta, '$.acked_reply', '$.steered', '$.delivered', '$.full'),
+                 CASE WHEN rewritten.stage = 'queued' THEN
+                     '{"legacy_rewritten":true,"input_delivery":"queued"}'
+                 WHEN rewritten.steering THEN
+                     '{"legacy_rewritten":true,"input_delivery":"written",
+                       "source":"steer","consumption":"unconfirmed"}'
+                 ELSE '{"legacy_rewritten":true,"input_delivery":"written",
+                        "consumption":"unconfirmed"}' END
+             )
+         FROM rewritten WHERE events.id = rewritten.id;"#,
+    )?;
     Ok(())
 }
 

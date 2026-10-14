@@ -55,8 +55,8 @@ fn queue_wrap_up(store: &Store, task_id: &str) -> Result<bool> {
          SELECT id, ?2, 'milestone', ?3, ?4 FROM tasks WHERE id = ?1
          AND status IN ('running', 'awaiting_input', 'stalled') AND read_only = 0
          AND NOT EXISTS (SELECT 1 FROM events WHERE task_id = ?1 AND
-             (detail = ?3 OR CASE WHEN json_valid(metadata)
-              THEN json_extract(metadata, '$.hard_cap_wrap_up') END = 1))",
+             CASE WHEN json_valid(metadata)
+             THEN json_extract(metadata, '$.hard_cap_wrap_up') END = 1)",
         rusqlite::params![
             task_id,
             chrono::Local::now().to_rfc3339(),

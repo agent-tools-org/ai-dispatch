@@ -84,7 +84,7 @@ fn fallback_response(events: &[TaskEvent]) -> String {
                 Some(format!("function_call: {}", event.detail))
             }
             EventKind::Reasoning | EventKind::Milestone | EventKind::Completion => {
-                Some(event.display_detail(false).into_owned())
+                Some(event.detail.clone())
             }
             EventKind::Error => Some(format!("[error] {}", event.detail)),
             _ => None,

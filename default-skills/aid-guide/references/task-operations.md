@@ -98,10 +98,9 @@ aid unstick <task-id>
   unconfirmed. Automatic nudges and hard-cap wrap-up requests follow the same stages.
 - `aid group broadcast` publishes a message to the group's broadcast file;
   member consumption is unconfirmed.
-- Historic `Acked reply` events are shown as not a confirmed receipt: earlier aid
-  inferred acknowledgement from output after a write. JSON keeps the raw event and
-  adds `legacy_unconfirmed: true` plus the qualified `display_detail`; stored records
-  remain unchanged.
+- Historic receipt claims are rewritten in stored history to queued or written to
+  PTY with consumption unconfirmed. Migrated records have `legacy_rewritten: true`;
+  text, JSON, and explanation context use the rewritten history.
 
 Do not send repeated polling messages; inspect events first.
 

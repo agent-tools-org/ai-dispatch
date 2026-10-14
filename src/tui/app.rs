@@ -188,7 +188,7 @@ impl App {
                 .iter()
                 .rev()
                 .find(|e| e.event_kind == EventKind::Error)
-                .map(|e| e.display_detail(false).into_owned())
+                .map(|e| e.detail.clone())
         })
     }
     pub fn config(&self) -> &crate::config::AidConfig { &self.config }
@@ -199,7 +199,7 @@ impl App {
                 events
                     .iter()
                     .filter(|event| event.event_kind == EventKind::Milestone)
-                    .map(|event| event.display_detail(false).into_owned())
+                    .map(|event| event.detail.clone())
                     .collect()
             })
             .unwrap_or_default()

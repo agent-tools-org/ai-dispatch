@@ -113,7 +113,7 @@ fn event_line(event: &TaskEvent) -> Line<'static> {
             Style::default().fg(kind_color),
         ),
         Span::raw(" "),
-        Span::raw(event.display_detail(false).into_owned()),
+        Span::raw(event.detail.clone()),
     ])
 }
 
@@ -133,17 +133,6 @@ mod tests {
     use super::event_kind_color;
     use crate::types::EventKind;
     use ratatui::prelude::Color;
-
-    #[test]
-    fn tui_legacy_ack_audit_regression() {
-        let event = crate::types::TaskEvent {
-            task_id: crate::types::TaskId("t-ui-ack".into()), timestamp: chrono::Local::now(),
-            event_kind: EventKind::Reasoning, detail: "Acked reply".into(), metadata: None,
-        };
-        let line = super::event_line(&event);
-        let text: String = line.spans.iter().map(|span| span.content.as_ref()).collect();
-        assert!(text.contains("not a confirmed receipt"), "{text}");
-    }
 
     #[test]
     fn event_kind_color_matches_event_list_styling() {

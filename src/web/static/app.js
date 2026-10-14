@@ -62,7 +62,7 @@ list.appendChild(el(
 "div",{class:"event-item"},
 el("div",{class:"event-time",dataset:{timestamp:ev.timestamp||""}},timeAgo(ev.timestamp)),
 kindEl,
-el("div",{class:"event-detail"},String(ev.display_detail||ev.detail||""))
+el("div",{class:"event-detail"},String(ev.detail||""))
 ));
 });
 list.scrollTop=list.scrollHeight;

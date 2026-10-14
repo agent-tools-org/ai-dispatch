@@ -37,10 +37,9 @@ pub(crate) fn activity_label(
         return waiting_label(task_id, latest);
     }
     if let Some(event) = latest
-        && (event.legacy_unconfirmed()
-            || event.metadata.as_ref().is_some_and(|meta| meta.get("input_delivery").is_some()))
+        && event.metadata.as_ref().is_some_and(|meta| meta.get("input_delivery").is_some())
     {
-        return format!("{} · {} ago", event.display_detail(false), elapsed_since_event(event));
+        return format!("{} · {} ago", event.detail, elapsed_since_event(event));
     }
     if status == TaskStatus::Running
         && reasoning_indicator_supported(agent)
@@ -63,7 +62,7 @@ fn waiting_label(task_id: &str, latest: Option<&TaskEvent>) -> String {
         .and_then(|value| value.as_str())
         .filter(|value| !value.is_empty())
         .map(str::to_owned)
-        .unwrap_or_else(|| event.display_detail(false).into_owned());
+        .unwrap_or_else(|| event.detail.clone());
     format!(
         "WAITING FOR OPERATOR · {} · {} · aid respond {task_id} \"...\"",
         elapsed_since_event(event),

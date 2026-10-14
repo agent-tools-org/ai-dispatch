@@ -115,7 +115,7 @@ fn format_recent_events(events: &[TaskEvent]) -> String {
     for event in &events[start..] {
         let kind = event.event_kind.as_str();
         let time = event.timestamp.format("%H:%M:%S");
-        let detail = truncate(&event.display_detail(false), 80);
+        let detail = truncate(&event.detail, 80);
         let marker = if event.event_kind == EventKind::Error { "!" } else { " " };
         out.push_str(&format!("{marker} [{time}] {kind}: {detail}\n"));
     }

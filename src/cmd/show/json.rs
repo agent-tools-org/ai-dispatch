@@ -37,8 +37,6 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
                 "timestamp": e.timestamp.to_rfc3339(),
                 "type": e.event_kind.as_str(),
                 "detail": e.detail,
-                "display_detail": e.display_detail(false),
-                "legacy_unconfirmed": e.legacy_unconfirmed(),
                 "metadata": e.metadata,
             })
         })

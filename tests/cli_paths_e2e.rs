@@ -126,7 +126,12 @@ fn group_paths_preserve_findings_summary_and_broadcast() {
     let summary = run_ok(home.path(), &["group", "summary", group]);
     assert!(summary.contains("CLI paths"));
     assert!(summary.contains("Evidence survives"));
-    run_ok(home.path(), &["group", "broadcast", group, "Ready to integrate"]);
+    let published = run_ok(home.path(), &["group", "broadcast", group, "Ready to integrate"]);
+    assert!(published.contains("published to file"), "{published}");
+    assert!(!published.contains("sent"));
+    let help = run_ok(home.path(), &["group", "broadcast", "--help"]);
+    assert!(help.contains("broadcast file"), "{help}");
+    assert!(help.contains("consumption is unconfirmed"), "{help}");
     let workspace = std::path::PathBuf::from(format!("/tmp/aid-wg-{group}"));
     let broadcast = std::fs::read_to_string(workspace.join("broadcast.md")).unwrap();
     assert!(broadcast.contains("Ready to integrate"));

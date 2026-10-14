@@ -86,5 +86,4 @@ pub struct TaskMessage {
     pub source: MessageSource,
     pub created_at: DateTime<Local>,
     pub delivered_at: Option<DateTime<Local>>,
-    pub acked_at: Option<DateTime<Local>>,
 }

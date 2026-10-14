@@ -8,6 +8,7 @@ use anyhow::Result;
 use rusqlite::Connection;
 use std::path::Path;
 
+// acked_at is retained for older binaries; current code never reads or writes it.
 const CREATE_TASK_MESSAGES_SQL: &str = "CREATE TABLE IF NOT EXISTS task_messages (
     id INTEGER PRIMARY KEY,
     task_id TEXT NOT NULL REFERENCES tasks(id),

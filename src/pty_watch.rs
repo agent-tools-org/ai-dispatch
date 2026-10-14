@@ -65,7 +65,6 @@ pub(crate) struct MonitorState {
     start_system_time: std::time::SystemTime,
     idle_nudged: bool,
     idle_warned: bool,
-    pending_inbound_acks: usize,
     failed_inbound_message_ids: HashSet<i64>,
     /// Payloads aid wrote to the PTY; matching stream lines are echoes, not agent progress.
     inbound_echo_suppress: Vec<InboundEcho>,
@@ -114,7 +113,6 @@ impl MonitorState {
             start_system_time: std::time::SystemTime::now(),
             idle_nudged: false,
             idle_warned: false,
-            pending_inbound_acks: 0,
             failed_inbound_message_ids: HashSet::new(),
             inbound_echo_suppress: Vec::new(),
             idle_detector: IdleDetector::from_policy(timeout_policy),
@@ -165,8 +163,10 @@ impl MonitorState {
                     task_id: task_id.clone(),
                     timestamp: Local::now(),
                     event_kind: EventKind::Reasoning,
-                    detail: "Auto-nudge sent".to_string(),
-                    metadata: Some(json!({ "message": message, "source": "unstick-auto" })),
+                    detail: "Auto-nudge queued".to_string(),
+                    metadata: Some(json!({
+                        "message": message, "source": "unstick-auto", "input_delivery": "queued"
+                    })),
                 })?;
             }
             IdleAction::Escalate if crate::unstick::mark_task_stalled(store.as_ref(), task_id.as_str())? => {
@@ -288,3 +288,6 @@ mod write_tests;
 #[cfg(test)]
 #[path = "pty_watch_child_tests.rs"]
 mod child_tests;
+
+#[cfg(test)]
+mod input_status_tests;

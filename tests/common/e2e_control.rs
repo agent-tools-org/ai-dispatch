@@ -159,7 +159,7 @@ fn respond_reads_response_text_from_file() {
          VALUES (?1, ?2, ?3, ?4, ?5)",
         params![
             "t-bb02",
-            "codex",
+            "gemini",
             "awaiting input",
             "running",
             "2026-08-10T00:00:00+00:00"

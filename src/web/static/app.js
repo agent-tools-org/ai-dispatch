@@ -50,7 +50,23 @@ tabs.appendChild(tab("events","Events"));tabs.appendChild(tab("diff","Diff"));ta
 function setTabActive(){Array.prototype.slice.call(tabs.querySelectorAll(".detail-tab")).forEach(function(b){b.classList.toggle("active",(b.dataset&&b.dataset.tabId)===cur);});}
 function paint(){setTabActive();content.textContent="";if(cur==="prompt"){content.appendChild(el("pre",{class:"prompt-display"},String(task.prompt||"—")));return;}if(cur==="output"){content.appendChild(el("pre",{class:"output-display"},"Loading…"));api("/api/tasks/"+encodeURIComponent(taskId)+"/output").then(function(o){content.textContent="";content.appendChild(el("pre",{class:"output-display"},String((o&&o.output)||"—")));}).catch(function(){content.textContent="";content.appendChild(el("pre",{class:"output-display"},"Failed to load output."));});return;}if(cur==="diff"){content.appendChild(el("pre",{class:"diff-display"},"Loading…"));api("/api/tasks/"+encodeURIComponent(taskId)+"/diff").then(function(d){content.textContent="";content.appendChild(renderDiff(String((d&&d.diff)||"No diff available")));}).catch(function(){content.textContent="";content.appendChild(el("pre",{class:"diff-display"},"Failed to load diff."));});return;}
 var list=el("div",{class:"event-list"});content.appendChild(list);
-function fillEvents(evts){list.textContent="";S.detailEvents=evts||[];S.detailEvents.forEach(function(ev){var kindEl=el("div",{class:"event-kind",dataset:{kind:String(ev.event_kind||"")}},String(ev.event_kind||"—"));list.appendChild(el("div",{class:"event-item"},el("div",{class:"event-time",dataset:{timestamp:ev.timestamp||""}},timeAgo(ev.timestamp)),kindEl,el("div",{class:"event-detail"},String(ev.detail||""))));});list.scrollTop=list.scrollHeight;}
+function fillEvents(evts){
+list.textContent="";
+S.detailEvents=evts||[];
+S.detailEvents.forEach(function(ev){
+var kindEl=el(
+"div",{class:"event-kind",dataset:{kind:String(ev.event_kind||"")}},
+String(ev.event_kind||"—")
+);
+list.appendChild(el(
+"div",{class:"event-item"},
+el("div",{class:"event-time",dataset:{timestamp:ev.timestamp||""}},timeAgo(ev.timestamp)),
+kindEl,
+el("div",{class:"event-detail"},String(ev.detail||""))
+));
+});
+list.scrollTop=list.scrollHeight;
+}
 function refreshEventTimes(){list.querySelectorAll(".event-time").forEach(function(node){var ts=node.dataset&&node.dataset.timestamp;if(ts)node.textContent=timeAgo(ts);});}
 function load(){api("/api/tasks/"+encodeURIComponent(taskId)+"/events").then(function(evts){fillEvents(evts);timeRefreshStop();S.timeRefresh=setInterval(refreshEventTimes,30000);}).catch(function(){list.textContent="";list.appendChild(el("div",{class:"empty-state"},"Failed to load events."));});}
 load();if(String(task.status||"").toLowerCase()==="running")S.poll=setInterval(load,5000);}

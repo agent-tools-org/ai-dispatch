@@ -21,6 +21,13 @@ impl MonitorState {
         )? {
             return Ok(());
         }
+        store.insert_event(&TaskEvent {
+            task_id: task_id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::Reasoning,
+            detail: "Response written to PTY; consumption unconfirmed".to_string(),
+            metadata: Some(json!({ "input_delivery": "written", "consumption": "unconfirmed" })),
+        })?;
         register_inbound_echo(&mut self.inbound_echo_suppress, input);
         self.finish_input_delivery(store, task_id)?;
         Ok(())
@@ -41,17 +48,19 @@ impl MonitorState {
             return Ok(());
         }
         register_inbound_echo(&mut self.inbound_echo_suppress, message.clone());
-        let delivered = store.mark_delivered_matching_inbound(task_id.as_str(), &message)?;
-        if delivered {
-            self.pending_inbound_acks += 1;
-        }
+        store.mark_delivered_matching_inbound(task_id.as_str(), &message)?;
         self.finish_input_delivery(store, task_id)?;
         store.insert_event(&TaskEvent {
             task_id: task_id.clone(),
             timestamp: Local::now(),
             event_kind: EventKind::Reasoning,
-            detail: format!("Steered: {}", message.chars().take(200).collect::<String>()),
-            metadata: Some(json!({ "steered": true, "delivered": delivered })),
+            detail: format!(
+                "Steer written to PTY; consumption unconfirmed: {}",
+                message.chars().take(200).collect::<String>()
+            ),
+            metadata: Some(json!({
+                "input_delivery": "written", "source": "steer", "consumption": "unconfirmed"
+            })),
         })?;
         Ok(())
     }
@@ -78,21 +87,21 @@ impl MonitorState {
                 break;
             }
             register_inbound_echo(&mut self.inbound_echo_suppress, message.content.clone());
-            if store.mark_delivered(message.id)? {
-                self.pending_inbound_acks += 1;
-            }
+            store.mark_delivered(message.id)?;
             self.finish_input_delivery(store, task_id)?;
             store.insert_event(&TaskEvent {
                 task_id: task_id.clone(),
                 timestamp: Local::now(),
                 event_kind: EventKind::Reasoning,
                 detail: format!(
-                    "Replied: {}",
+                    "Reply written to PTY; consumption unconfirmed: {}",
                     message.content.chars().take(200).collect::<String>()
                 ),
                 metadata: Some(json!({
                     "message_id": message.id,
                     "source": message.source,
+                    "input_delivery": "written",
+                    "consumption": "unconfirmed",
                 })),
             })?;
         }
@@ -120,12 +129,11 @@ impl MonitorState {
             timestamp: Local::now(),
             event_kind: EventKind::Milestone,
             detail: format!(
-                "{source} not delivered: {} — {error:#}",
+                "{source} PTY write failed; consumption unconfirmed: {} — {error:#}",
                 message.chars().take(200).collect::<String>()
             ),
             metadata: Some(json!({
                 "input_delivery": "failed",
-                "delivered": false,
                 "source": source,
                 "message_id": message_id,
                 "error": error.to_string(),

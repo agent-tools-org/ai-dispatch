@@ -28,10 +28,10 @@ current arguments.
 | `aid wait` | Block until selected tasks or a group finish worker settlement, including delivery and verification checks; returns non-zero when any task did not succeed. |
 | `aid show` | Inspect task state, outcome, verification, events, context, output, result, transcript, summary, audit, or diff; prints `Backup: <url>` (also `backup_url` in `--json`) once an artifact backup was uploaded; `--diff --branch` widens the diff from the task's own commits to the whole branch. |
 | `aid tree` | Show task ancestry and retries. |
-| `aid respond` | Supply an answer to a task awaiting input. |
-| `aid reply` | Send a message to a running task and optionally wait for acknowledgement. |
-| `aid steer` | Inject updated direction into a running task. |
-| `aid unstick` | Request recovery or escalation for a stalled task. |
+| `aid respond` | Codex: refused; use `aid retry <id> -f "<feedback>"`. Other PTY-capable adapters: supply an answer; written to PTY; consumption unconfirmed. |
+| `aid reply` | Codex: refused; use retry with feedback. Other PTY-capable adapters: queue input and optionally wait until written to PTY; consumption unconfirmed. |
+| `aid steer` | Codex: refused; use `aid retry <id> -f "<feedback>"` (or stop then retry). Other PTY-capable adapters: queue direction; successful forwarding means written to PTY; consumption unconfirmed. |
+| `aid unstick` | Queue a recovery nudge or request escalation. PTY writes leave consumption unconfirmed. |
 | `aid stop` | Stop one task or its retry tree while preserving artifacts; `--force` kills it immediately. |
 | `aid retry` | Start a new attempt using prior task context and artifacts; supersedes a non-terminal task by stopping its live worker first. Optional `--model`, `--idle-timeout`, and `--feedback-file` (`-F`) override those fields; unspecified model/idle-timeout inherit the original task. Same-agent retries resume the latest recorded session when supported; switching agents clears it. |
 | `aid merge` | Merge delivered code only when its outcome is successful by default; `--force` overrides a failed or inconclusive verification and records the reason. This is not principal acceptance. |
@@ -49,7 +49,7 @@ current arguments.
 
 | Command | Purpose |
 |---|---|
-| `aid group` | Create and manage workgroups; `summary <group-id>`, `finding add/list/get/update <group-id>`, and `broadcast <group-id> <message>` handle shared results and messages. |
+| `aid group` | Create and manage workgroups; `summary <group-id>`, `finding add/list/get/update <group-id>`, and `broadcast <group-id> <message>` handle shared results and publish messages to a file; member consumption is unconfirmed. |
 | `aid team` | Manage reusable team definitions. |
 | `aid memory` | Add, search, update, version, or forget project memory. |
 | `aid kg` | Add, query, invalidate, search, or inspect temporal knowledge-graph facts. |

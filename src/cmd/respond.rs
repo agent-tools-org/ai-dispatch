@@ -71,16 +71,14 @@ mod tests {
     }
 
     #[test]
-    fn respond_keeps_codex_delivery_path() {
+    fn respond_refuses_codex_without_writing_signal() {
         let temp_home = tempfile::tempdir().unwrap();
         let _aid_home = AidHomeGuard::set(temp_home.path());
         let store = Store::open_memory().unwrap();
         store.insert_task(&make_task("t-respond-codex", AgentKind::Codex)).unwrap();
-        run(&store, "t-respond-codex", Some("yes"), None).unwrap();
-        assert_eq!(
-            input_signal::take_response("t-respond-codex").unwrap().as_deref(),
-            Some("yes")
-        );
+        let error = run(&store, "t-respond-codex", Some("yes"), None).unwrap_err();
+        assert!(error.to_string().contains("aid retry t-respond-codex -f"));
+        assert!(input_signal::take_response("t-respond-codex").unwrap().is_none());
     }
 
     #[test]

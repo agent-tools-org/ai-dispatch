@@ -1,5 +1,5 @@
 // Message-related store query methods for task reply delivery state.
-// Exports: Store task message insert/list/pending/delivery/ack methods.
+// Exports: Store task message insert/list/pending/delivery methods.
 // Deps: super::super::Store, rusqlite, chrono, crate::types.
 
 use anyhow::Result;
@@ -12,7 +12,7 @@ use super::super::schema::parse_dt;
 use crate::types::{MessageDirection, MessageSource, TaskId, TaskMessage};
 
 const MESSAGE_COLUMNS: &str =
-    "id, task_id, direction, content, source, created_at, delivered_at, acked_at";
+    "id, task_id, direction, content, source, created_at, delivered_at";
 
 impl Store {
     pub fn insert_message(
@@ -43,7 +43,6 @@ impl Store {
             source,
             created_at,
             delivered_at: None,
-            acked_at: None,
         })
     }
 
@@ -92,22 +91,6 @@ impl Store {
         )?;
         Ok(rows > 0)
     }
-
-    pub fn mark_acked_latest_inbound(&self, task_id: &str) -> Result<bool> {
-        let acked_at = Local::now().to_rfc3339();
-        let rows = self.db().execute(
-            "UPDATE task_messages SET acked_at = ?1
-             WHERE id = (
-                 SELECT id FROM task_messages
-                 WHERE task_id = ?2 AND direction = 'in'
-                   AND delivered_at IS NOT NULL AND acked_at IS NULL
-                 ORDER BY delivered_at DESC, id DESC
-                 LIMIT 1
-             )",
-            params![acked_at, task_id],
-        )?;
-        Ok(rows > 0)
-    }
 }
 
 fn row_to_message(row: &Row<'_>) -> rusqlite::Result<TaskMessage> {
@@ -125,7 +108,6 @@ fn row_to_message(row: &Row<'_>) -> rusqlite::Result<TaskMessage> {
         source,
         created_at: parse_dt(&row.get::<_, String>(5)?),
         delivered_at: row.get::<_, Option<String>>(6)?.map(|value| parse_dt(&value)),
-        acked_at: row.get::<_, Option<String>>(7)?.map(|value| parse_dt(&value)),
     })
 }
 
@@ -176,6 +158,35 @@ mod tests {
     }
 
     #[test]
+    fn message_schema_remains_readable_by_v11_release() {
+        let store = Store::open_memory().unwrap();
+        insert_task(&store, "t-legacy-input");
+        let message = store.insert_message(
+            "t-legacy-input", MessageDirection::In, "pivot", MessageSource::Reply,
+        ).unwrap();
+        store.mark_delivered(message.id).unwrap();
+        let db = store.db();
+        let columns: Vec<String> = db.prepare("PRAGMA table_info(task_messages)")
+            .unwrap().query_map([], |row| row.get(1)).unwrap()
+            .collect::<rusqlite::Result<_>>().unwrap();
+        assert!(columns.iter().any(|name| name == "acked_at"));
+        let row = db.query_row(
+            "SELECT id, task_id, direction, content, source, created_at, delivered_at, acked_at
+             FROM task_messages WHERE id = ?1",
+            [message.id],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?, row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?, row.get::<_, String>(5)?,
+                row.get::<_, Option<String>>(6)?, row.get::<_, Option<String>>(7)?)),
+        ).unwrap();
+        assert_eq!((row.0, row.1.as_str(), row.2.as_str()), (message.id, "t-legacy-input", "in"));
+        assert_eq!((row.3.as_str(), row.4.as_str()), ("pivot", "reply"));
+        assert!(!row.5.is_empty());
+        assert!(row.6.is_some());
+        assert!(row.7.is_none());
+    }
+
+    #[test]
     fn message_queries_pending_filters_delivered_rows() {
         let store = Store::open_memory().unwrap();
         insert_task(&store, "t-pending");
@@ -194,7 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn message_queries_mark_delivery_and_ack() {
+    fn message_queries_mark_delivery_without_acknowledgement() {
         let store = Store::open_memory().unwrap();
         insert_task(&store, "t-acked");
         let first = store
@@ -206,11 +217,10 @@ mod tests {
         store.mark_delivered(first.id).unwrap();
         store.mark_delivered(second.id).unwrap();
 
-        assert!(store.mark_acked_latest_inbound("t-acked").unwrap());
-
         let messages = store.list_messages_for_task("t-acked").unwrap();
-        assert!(messages.iter().find(|msg| msg.id == first.id).unwrap().acked_at.is_none());
-        assert!(messages.iter().find(|msg| msg.id == second.id).unwrap().acked_at.is_some());
+        assert!(messages.iter().find(|msg| msg.id == first.id).unwrap().delivered_at.is_some());
+        assert!(messages.iter().find(|msg| msg.id == second.id).unwrap().delivered_at.is_some());
+        assert!(serde_json::to_value(&messages).unwrap()[0].get("acked_at").is_none());
     }
 
     #[test]

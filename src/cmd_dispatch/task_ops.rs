@@ -102,11 +102,11 @@ pub(super) fn reply(
         timeout_secs,
     )? {
         cmd::reply::ReplyOutcome::Queued { id } => println!("Queued reply {id} for {task_id}"),
-        cmd::reply::ReplyOutcome::Acked { delivered } => {
-            println!("Reply acknowledged for {task_id} (delivered: {delivered})");
+        cmd::reply::ReplyOutcome::Written => {
+            println!("Reply for {task_id} written to PTY; consumption unconfirmed");
         }
-        cmd::reply::ReplyOutcome::TimedOut { delivered } => {
-            println!("Reply timed out for {task_id} (delivered: {delivered})");
+        cmd::reply::ReplyOutcome::TimedOut => {
+            println!("Reply for {task_id}: PTY write unconfirmed after timeout; consumption unconfirmed");
         }
     }
     Ok(())

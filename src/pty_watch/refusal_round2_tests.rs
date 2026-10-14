@@ -105,7 +105,8 @@ fn wrap_fixture() -> (
     let guard = AidHomeGuard::set(home.path());
     paths::ensure_dirs().expect("directories");
     let store = Arc::new(Store::open_memory().expect("store"));
-    let task = crate::pty_watch::tests::pty_task("t-pty-wrap", TaskStatus::Running);
+    let mut task = crate::pty_watch::tests::pty_task("t-pty-wrap", TaskStatus::Running);
+    task.agent = AgentKind::Gemini;
     store.insert_task(&task).expect("task");
     let bridge = PtyBridge::spawn(&["/bin/cat".into()], None, vec![]).expect("PTY");
     (home, guard, store, task.id, bridge)
@@ -127,7 +128,7 @@ fn consume_twice(store: &Arc<Store>, id: &crate::types::TaskId, bridge: &mut Pty
         events
             .iter()
             .filter(|e| e.event_kind == EventKind::Reasoning
-                && (e.detail.starts_with("Replied:") || e.detail.starts_with("Steered:")))
+                && e.detail.contains("written to PTY; consumption unconfirmed"))
             .count(),
         1
     );

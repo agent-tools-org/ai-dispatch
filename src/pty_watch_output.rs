@@ -37,7 +37,6 @@ impl MonitorState {
             if !is_echo && agent.kind() == AgentKind::Codex {
                 self.delivery_evidence.observe_codex_jsonl(&line);
             }
-            self.observe_output_line(task_id, store, &line)?;
             if !is_echo && is_agent_output(&line) {
                 self.mark_progress();
             }
@@ -82,7 +81,6 @@ impl MonitorState {
         if !is_echo && agent.kind() == AgentKind::Codex {
             self.delivery_evidence.observe_codex_jsonl(&trailing);
         }
-        self.observe_output_line(task_id, store, &trailing)?;
         if !is_echo && is_agent_output(&trailing) {
             self.mark_progress();
         }
@@ -112,35 +110,6 @@ impl MonitorState {
         self.line_buffer.clear();
         Ok(())
     }
-
-    pub(super) fn observe_output_line(
-        &mut self,
-        task_id: &TaskId,
-        store: &Arc<Store>,
-        line: &str,
-    ) -> Result<()> {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            return Ok(());
-        }
-        if self.pending_inbound_acks == 0 {
-            return Ok(());
-        }
-        if store.mark_acked_latest_inbound(task_id.as_str())? {
-            self.pending_inbound_acks -= 1;
-            store.insert_event(&TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: Local::now(),
-                event_kind: EventKind::Reasoning,
-                detail: "Acked reply".to_string(),
-                metadata: Some(json!({ "acked_reply": true })),
-            })?;
-        } else {
-            self.pending_inbound_acks = 0;
-        }
-        Ok(())
-    }
-
 }
 
 pub(super) fn extract_awaiting_prompt(output: &str, prompt: &str) -> String {

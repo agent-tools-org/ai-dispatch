@@ -18,7 +18,7 @@ pub fn run(store: &Store, task_id: &str, message: &str) -> Result<()> {
         MessageSource::Steer,
         InputCommand::Steer,
     )?;
-    println!("Steered {task_id}: {}", message.chars().take(80).collect::<String>());
+    println!("Queued steer for {task_id}: {}", message.chars().take(80).collect::<String>());
     Ok(())
 }
 
@@ -54,12 +54,14 @@ fn queue_wrap_up(store: &Store, task_id: &str) -> Result<bool> {
         "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
          SELECT id, ?2, 'milestone', ?3, ?4 FROM tasks WHERE id = ?1
          AND status IN ('running', 'awaiting_input', 'stalled') AND read_only = 0
-         AND NOT EXISTS (SELECT 1 FROM events WHERE task_id = ?1 AND detail = ?3)",
+         AND NOT EXISTS (SELECT 1 FROM events WHERE task_id = ?1 AND
+             CASE WHEN json_valid(metadata)
+             THEN json_extract(metadata, '$.hard_cap_wrap_up') END = 1)",
         rusqlite::params![
             task_id,
             chrono::Local::now().to_rfc3339(),
-            "Hard-cap wrap-up: committing work in progress and writing the report requested",
-            r#"{"steered":true,"hard_cap_wrap_up":true}"#
+            "Hard-cap wrap-up: queued request to commit work in progress and write the report",
+            r#"{"input_delivery":"queued","hard_cap_wrap_up":true}"#
         ],
     )?;
     if rows == 0 {
@@ -86,7 +88,7 @@ mod tests {
     fn make_task(id: &str, status: TaskStatus) -> Task {
         Task {
             id: TaskId(id.to_string()),
-            agent: AgentKind::Codex,
+            agent: AgentKind::Gemini,
             custom_agent_name: None,
             prompt: "test".to_string(),
             resolved_prompt: None,
@@ -155,6 +157,31 @@ mod tests {
     }
 
     #[test]
+    fn legacy_wrap_up_marker_prevents_another_nudge() {
+        let home = tempfile::tempdir().expect("home");
+        let _home = AidHomeGuard::set(home.path());
+        let path = home.path().join("aid.db");
+        let store = Store::open(&path).expect("store");
+        store.insert_task(&make_task("t-legacy", TaskStatus::Running)).expect("task");
+        let detail = "Hard-cap wrap-up: committing work in progress and writing the report requested";
+        let metadata = r#"{"steered":true,"hard_cap_wrap_up":true}"#;
+        store.db().execute(
+            "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
+             VALUES ('t-legacy', ?1, 'milestone', ?2, ?3)",
+            rusqlite::params![Local::now().to_rfc3339(), detail, metadata],
+        ).expect("legacy event");
+        drop(store);
+        let store = Store::open(&path).expect("reopened store");
+        assert!(!wrap_up_before_timeout(&store, "t-legacy", 540, 600).expect("wrap-up"));
+        assert!(store.list_messages_for_task("t-legacy").expect("messages").is_empty());
+        assert!(!crate::paths::steer_signal_path("t-legacy").exists());
+        let events = store.get_events("t-legacy").expect("events");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].detail, detail);
+        assert_eq!(events[0].metadata, Some(serde_json::from_str(metadata).expect("metadata")));
+    }
+
+    #[test]
     fn wrap_up_preserves_pending_operator_steer_and_skips_expired_cap() {
         let home = tempfile::tempdir().expect("home");
         let _home = AidHomeGuard::set(home.path());
@@ -217,22 +244,17 @@ mod tests {
     }
 
     #[test]
-    fn steer_keeps_codex_delivery_path() {
+    fn steer_refuses_codex_without_queuing() {
         let temp_home = tempfile::tempdir().unwrap();
         let _aid_home = AidHomeGuard::set(temp_home.path());
         let store = Store::open_memory().unwrap();
-        let task = make_task("t-steer-codex", TaskStatus::Running);
+        let mut task = make_task("t-steer-codex", TaskStatus::Running);
+        task.agent = AgentKind::Codex;
         store.insert_task(&task).unwrap();
-
-        run(&store, task.id.as_str(), "pivot").unwrap();
-
-        let messages = store.list_messages_for_task(task.id.as_str()).unwrap();
-        assert_eq!(messages.len(), 1);
-        assert_eq!(messages[0].source.as_str(), "steer");
-        assert_eq!(
-            input_signal::take_steer(task.id.as_str()).unwrap().as_deref(),
-            Some("pivot")
-        );
+        let error = run(&store, task.id.as_str(), "pivot").unwrap_err();
+        assert!(error.to_string().contains("aid retry t-steer-codex -f"));
+        assert!(store.list_messages_for_task(task.id.as_str()).unwrap().is_empty());
+        assert!(!crate::paths::steer_signal_path(task.id.as_str()).exists());
     }
 
     #[test]

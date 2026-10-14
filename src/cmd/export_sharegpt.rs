@@ -83,7 +83,9 @@ fn fallback_response(events: &[TaskEvent]) -> String {
             EventKind::ToolCall | EventKind::FileRead | EventKind::FileWrite => {
                 Some(format!("function_call: {}", event.detail))
             }
-            EventKind::Reasoning | EventKind::Milestone | EventKind::Completion => Some(event.detail.clone()),
+            EventKind::Reasoning | EventKind::Milestone | EventKind::Completion => {
+                Some(event.detail.clone())
+            }
             EventKind::Error => Some(format!("[error] {}", event.detail)),
             _ => None,
         })

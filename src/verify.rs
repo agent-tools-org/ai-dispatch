@@ -100,7 +100,11 @@ pub(crate) fn run_verify_with_env(
     }
 
     cmd.envs(env.iter().cloned());
-    execute_verify(cmd, cmd_str, worktree_path, budget)
+    let mut result = execute_verify(cmd, cmd_str, worktree_path, budget)?;
+    if container_name.is_none() && matches!(result.exit_code, Some(126 | 127)) {
+        result.infrastructure_failure = true;
+    }
+    Ok(result)
 }
 
 fn execute_verify(

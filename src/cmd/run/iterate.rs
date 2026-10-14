@@ -152,7 +152,7 @@ async fn run_iteration_retry(
 fn iteration_retry_args(
     store: &Store, task: &Task, args: &RunArgs, feedback: &str, retry_task_id: &TaskId,
 ) -> Result<RunArgs> {
-    let mut retry_args = RunArgs::for_retry(store, &task)?;
+    let mut retry_args = RunArgs::for_retry(store, task)?;
     retry_args.dir = args.dir.clone();
     retry_args.env = args.env.clone();
     retry_args.foreground = args.foreground;

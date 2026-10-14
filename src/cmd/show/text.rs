@@ -228,7 +228,7 @@ fn summary_header(task: &Task) -> String {
     out.push_str(&format!(
         "Route: {}  Status: {}  Prompt: {}\n",
         task.display_route(),
-        human_status(&task),
+        human_status(task),
         task.prompt,
     ));
     if let Some(verdict) = task.audit_verdict.as_deref() {

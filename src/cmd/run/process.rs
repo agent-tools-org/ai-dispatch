@@ -148,10 +148,10 @@ fn complete_agent(
     // Same split as pty_runner::record_completion: the observation stands alone,
     // only the cost estimate may fall back to what was requested.
     let (observed_model, attribution_source) = crate::agent::codex::grade_completion_observation(
-        agent, store.as_ref(), task_id, &info, model,
+        agent, store.as_ref(), task_id, info, model,
     );
     let costing_model = observed_model.as_deref().or(model);
-    let cost_usd = crate::cost::completion_cost(store, task_id, &info, costing_model, agent.kind())?;
+    let cost_usd = crate::cost::completion_cost(store, task_id, info, costing_model, agent.kind())?;
     if !crate::task_lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
         id: task_id.as_str(),
         status: info.status,
@@ -173,7 +173,7 @@ fn complete_agent(
             task_id,
             duration_ms,
             exit_code,
-            &failure_context,
+            failure_context,
         );
     }
     print_completion(agent, store, task_id, info, duration_ms, cost_usd);
@@ -187,7 +187,7 @@ fn apply_cost_ceiling(args: &RunProcessArgs<'_>, info: &mut CompletionInfo) -> R
     let model = args.model;
     let max_task_cost = args.max_task_cost;
     let costing_model = info.model.as_deref().or(model);
-    let cost_usd = crate::cost::completion_cost(store, task_id, &info, costing_model, agent.kind())?;
+    let cost_usd = crate::cost::completion_cost(store, task_id, info, costing_model, agent.kind())?;
     if cost_usd.is_some_and(|cost| max_task_cost.is_some_and(|max| cost > max)) {
         let current_cost = cost_usd.unwrap_or_default();
         let max_cost = max_task_cost.unwrap_or_default();

@@ -6,8 +6,7 @@ use super::*;
 use crate::test_subprocess;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
-use std::env;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 fn git(repo: &Path, args: &[&str]) {
     let status = Command::new("git")

@@ -35,12 +35,16 @@ async fn running_task_reports_measured_worker_rss_and_fleet_sums_it() {
     .unwrap();
     save_spec(&spec).unwrap();
     assert_eq!(crate::background::load_worker_pid("t-memory").unwrap(), Some(worker_pid));
-    let expected_memory = crate::tui::metrics::get_process_metrics(worker_pid)
-        .map(|metrics| metrics.memory_mb.round() as i64);
+    let sample_memory = || {
+        crate::tui::metrics::get_process_metrics(worker_pid).unwrap().memory_mb.round() as i64
+    };
 
+    let before = sample_memory();
     let Json(response) = get_task(Path("t-memory".to_string()), State(store.clone())).await.unwrap();
-    assert_eq!(response.memory_mb, expected_memory);
+    let after = sample_memory();
+    assert!((before.min(after)..=before.max(after)).contains(&response.memory_mb.unwrap()));
 
+    let before = sample_memory();
     let Json(fleet) = get_fleet(
         Query(FleetParams { window: Some("all".to_string()) }),
         State(store),
@@ -53,7 +57,9 @@ async fn running_task_reports_measured_worker_rss_and_fleet_sums_it() {
     )
     .await
     .unwrap();
-    assert_eq!(fleet.summary.memory_mb, expected_memory);
+    let after = sample_memory();
+    assert!((before.min(after)..=before.max(after)).contains(&fleet.summary.memory_mb.unwrap()));
+    assert_eq!(fleet.summary.memory_mb, fleet.sectors[0].tasks[0]["memory_mb"].as_i64());
 }
 
 #[tokio::test(flavor = "current_thread")]

@@ -39,8 +39,12 @@ fn timeout_returns_promptly_and_reaps_the_probe_pid() {
 #[test]
 fn oversized_help_drains_both_pipes_and_preserves_success() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let binary = fake_binary(dir.path(),
-        "printf 'Cursor Agent\\n'; i=0; while [ $i -lt 8192 ]; do printf '0123456789abcdef'; printf 'fedcba9876543210' >&2; i=$((i + 1)); done");
+    let body = format!(
+        "printf 'Cursor Agent\\n'; printf '%s' '{}'; printf '%s' '{}' >&2",
+        "0123456789abcdef".repeat(8192),
+        "fedcba9876543210".repeat(8192),
+    );
+    let binary = fake_binary(dir.path(), &body);
     let start = Instant::now();
     let output = run_bounded(&binary, &["--help"], Duration::from_secs(2)).expect("large help");
     assert!(output.success);

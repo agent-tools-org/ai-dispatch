@@ -309,9 +309,9 @@ mod tests {
     fn parse_full_config() {
         let toml_data = r#"
             [agent]
-            id = "walker"
-            display_name = "Walker"
-            command = "walker-cli"
+            id = "example-agent"
+            display_name = "Example Agent"
+            command = "example-agent-cli"
             prompt_mode = "flag"
             prompt_flag = "--input"
             dir_flag = "--dir"

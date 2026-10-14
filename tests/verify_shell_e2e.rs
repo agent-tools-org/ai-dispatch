@@ -70,7 +70,7 @@ fn run_help_describes_verify_shell_semantics() {
         "{help}"
     );
     assert!(help.contains("an absent flag uses the project default"), "{help}");
-    assert!(help.contains("a missing program fails verification"), "{help}");
+    assert!(help.contains("a program missing under sh -c fails verification"), "{help}");
 }
 
 #[test]

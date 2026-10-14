@@ -140,7 +140,7 @@ Important controls:
   commands without shell syntax through aid's build runner (adding `--message-format=json`)
   outside remote-build/container runs, otherwise through `sh -c` in the task directory; bare
   `--verify` auto-detects, and an absent flag uses the project default.
-  A missing verify program is failed verification with the shell's diagnostic in its output.
+  Missing under `sh -c`, a program fails verification; missing `cargo` on the runner is `InfrastructureFailure`.
   A task with verification configured is written with `verify_status = pending` at dispatch; read-only tasks
   or tasks without a working directory skip verification.
   An empty diff still runs configured verification; delivery assessment records `empty_diff`.

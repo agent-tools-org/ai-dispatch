@@ -69,7 +69,8 @@ fn wait_duration(
     loop {
         let expired = start.elapsed().saturating_sub(queue.elapsed()) >= timeout;
         if guard.child_mut().try_wait()?.is_some() {
-            return Ok(Some(guard.wait()?).filter(|_| !expired));
+            let status = guard.wait()?;
+            return Ok(if expired { None } else { Some(status) });
         }
         if expired {
             guard.force_kill();

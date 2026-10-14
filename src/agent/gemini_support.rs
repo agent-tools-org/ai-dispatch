@@ -172,7 +172,7 @@ fn model_tokens(model: &Value) -> i64 {
         .and_then(Value::as_i64).unwrap_or(0)
 }
 
-fn dominant_model<'a>(models: &'a Value) -> Option<&'a str> {
+fn dominant_model(models: &Value) -> Option<&str> {
     let use_cost = match models {
         Value::Object(obj) => obj.values().all(|v| v.get("costUSD").and_then(Value::as_f64).is_some()),
         Value::Array(items) => items.iter().all(|v| v.get("costUSD").and_then(Value::as_f64).is_some()),

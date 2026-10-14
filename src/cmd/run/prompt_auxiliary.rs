@@ -85,7 +85,7 @@ pub(super) fn inject_methodology(
         .cloned()
         .collect::<Vec<_>>();
     let effective_prompt = inject_skill(
-        &effective_prompt,
+        effective_prompt,
         agent_kind,
         &prompt_skills,
         !args.skills.is_empty(),

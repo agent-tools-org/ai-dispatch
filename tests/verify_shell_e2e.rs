@@ -62,12 +62,15 @@ fn run_help_describes_verify_shell_semantics() {
     let output = harness.aid().args(["run", "--help"]).output().unwrap();
     assert!(output.status.success());
     let help = String::from_utf8_lossy(&output.stdout);
+    assert!(help.contains("uses aid's build runner"), "{help}");
+    assert!(help.contains("--message-format=json"), "{help}");
     assert!(help.contains("sh -c in the task directory"), "{help}");
     assert!(
-        help.contains("bare --verify uses auto-detection"),
+        help.contains("bare --verify auto-detects"),
         "{help}"
     );
-    assert!(help.contains("project default applies when --verify is absent"), "{help}");
+    assert!(help.contains("an absent flag uses the project default"), "{help}");
+    assert!(help.contains("a missing program fails verification"), "{help}");
 }
 
 #[test]
@@ -98,4 +101,17 @@ fn checker_stderr_is_ordinary_failure() {
 #[test]
 fn cargo_version_compound_verify_runs_second_command() {
     verify_command("cargo --version && false", false);
+}
+
+#[test]
+fn missing_verify_program_fails_task() {
+    verify_command("missing-aid-verify-bin", false);
+}
+
+#[test]
+fn checker_shell_like_stderr_cannot_override_exit_status() {
+    for (code, message) in [(126, "Permission denied"), (127, "not found")] {
+        let command = format!("printf 'sh: 1: checker: {message}\\n' >&2; exit {code}");
+        verify_command(&command, false);
+    }
 }

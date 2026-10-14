@@ -106,24 +106,27 @@ fn verify_pipeline_consumes_quoted_output() {
 }
 
 #[test]
-fn verify_missing_command_is_infrastructure_failure() {
+fn verify_missing_command_is_failed_verification() {
     let _permit = test_subprocess::acquire();
     let dir = TempDir::new().unwrap();
     let result = run_verify(dir.path(), Some("missing-aid-verify-bin"), None, None).unwrap();
     assert!(!result.success);
-    assert!(result.infrastructure_failure);
+    assert!(!result.infrastructure_failure);
     assert_eq!(result.exit_code, Some(127));
+    assert!(result.output.contains("missing-aid-verify-bin"));
+    assert!(!result.output.trim().is_empty());
 }
 
 #[test]
-fn verify_nonexecutable_command_is_infrastructure_failure() {
+fn verify_nonexecutable_command_is_failed_verification() {
     let _permit = test_subprocess::acquire();
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("not-executable"), "#!/bin/sh\nexit 0\n").unwrap();
     let result = run_verify(dir.path(), Some("./not-executable"), None, None).unwrap();
     assert!(!result.success);
-    assert!(result.infrastructure_failure);
+    assert!(!result.infrastructure_failure);
     assert_eq!(result.exit_code, Some(126));
+    assert!(result.output.contains("not-executable"));
 }
 
 #[test]

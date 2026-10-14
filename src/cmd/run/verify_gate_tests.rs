@@ -34,7 +34,7 @@ fn configured_verify_without_working_dir_is_a_legitimate_skip() {
 }
 
 #[test]
-fn configured_verify_spawn_failure_is_inconclusive() {
+fn configured_missing_verify_fails_with_recorded_shell_output() {
     let dir = tempfile::tempdir().unwrap();
     let dir_str = dir.path().to_string_lossy().to_string();
     let store = Store::open_memory().unwrap();
@@ -46,9 +46,11 @@ fn configured_verify_spawn_failure_is_inconclusive() {
     maybe_verify(&store, &task_id, Some("missing-aid-verify-bin"), Some(&dir_str), None);
 
     let task = store.get_task(task_id.as_str()).unwrap().unwrap();
-    assert_eq!(task.verify_status, VerifyStatus::InfrastructureFailure);
-    assert_eq!(task.status, TaskStatus::Done);
-    assert!(store.latest_error(task_id.as_str()).is_none());
+    assert_eq!(task.verify_status, VerifyStatus::Failed);
+    assert_eq!(task.status, TaskStatus::Failed);
+    let error = store.latest_error(task_id.as_str()).unwrap();
+    assert!(error.contains("Output: sh:"), "{error}");
+    assert!(error.contains("missing-aid-verify-bin"), "{error}");
 }
 
 /// A completed verify process is governed by its exit status. AID must not

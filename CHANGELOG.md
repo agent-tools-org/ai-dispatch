@@ -1,3 +1,19 @@
+## v11.0.0 (2026-10-14)
+- Failure truthfulness: a failed, stopped or interrupted task now reports what actually happened
+- `aid stop` settles the task (stopped status, completion time, duration and completion event) before signalling the worker; a racing worker, reaper or wait can no longer rewrite it as "worker died"
+- Automatic follow-ups (verify/judge retry, iteration, `--retry`, cascade, batch fallback, quota continuation) are never inserted or launched under a stopped parent; explicit `aid retry` and `aid batch retry` still are
+- Failed and stopped rows always carry `completed_at` and `duration_ms`
+- Idle watchdog: after first output, a descendant whose CPU time grows, or an `ssh`/`rbox` wait in the agent's process group, counts as activity, so a task waiting on a silent remote build is no longer killed as idle; the detached worker enforces the `--timeout` cap itself
+- Codex "Selected model is at capacity" and exhausted 503 reconnects are classified as transient provider capacity with a two-minute model hold, separate from quota and plan walls
+- Refusal signatures: a failed OpenCode run with a decoded 401 stream error sets an auth hold; weekly and monthly Droid Core refusals set a dated hold; Claude `seven_day` rejections hold until `resetsAt`
+- For `--timeout` of 600 s or more, aid asks the agent once at 90 % to commit and write its report (not for read-only tasks or agents without steer support); a `--timeout` below 300 s warns that the unit is seconds
+- The caller's brief and retry feedback are never compressed: only auxiliary context is bounded, with in-place omission notes and one `Prompt context bounded:` warning; a template without `{{prompt}}` gets the brief appended
+- Native Codex `--read-only` runs launch under a read-only permissions profile with one fresh staging directory as the only writable path; aid publishes the staged report and output after settlement and records a missing delivery instead of showing an older report
+- Batch auto-fallback is authorised per task: one task's `fallback` no longer lets its siblings switch agents
+- Remote build auto-selection uses `rbox pick --tool rust --repo <main-working-tree>`
+- The release script updates the README version badge
+
+
 ## v10.52.1 (2026-10-09)
 - Price and score feeds refresh in a detached download that survives short commands; a download is validated before it replaces the cache, so a failed or partial fetch never overwrites good data
 - `aid advise` starts the feed refresh too (it previously never fetched the score feed); it still creates nothing in a fresh aid home

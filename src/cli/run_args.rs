@@ -52,6 +52,10 @@ pub struct RunArgs {
     pub team: Option<String>,
     #[arg(long, short = 'g')]
     pub group: Option<String>,
+    /// Eligible plain cargo check|test|clippy without shell syntax uses aid's build runner
+    /// outside remote-build/container runs, adding --message-format=json; everything else uses
+    /// sh -c in the task directory; bare --verify auto-detects, an absent flag uses the project default,
+    /// and a program missing under sh -c fails verification (missing cargo on the runner is infrastructure).
     #[arg(long, num_args = 0..=1, default_missing_value = "auto")]
     pub verify: Option<String>,
     #[arg(long, value_name = "N")]

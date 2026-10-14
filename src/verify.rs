@@ -95,9 +95,6 @@ pub(crate) fn run_verify_with_env(
         });
     };
 
-    // Verify commands are user-authored, but we still execute them as argv to avoid
-    // handing arbitrary strings to a shell. This preserves simple commands like
-    // `cargo test` while refusing shell metacharacter expansion by default.
     if container_name.is_none() {
         crate::agent::apply_cargo_target_env(&mut cmd, cargo_target_dir);
     }
@@ -127,6 +124,7 @@ fn execute_verify(
         Ok(result) => result?,
         Err(_) => return Err(anyhow::anyhow!("verify output reader thread panicked")),
     };
+    let exit_code = status.as_ref().and_then(|status| status.code());
     let combined = if timed_out {
         format!(
             "{combined}\nVerification timed out after {} seconds",
@@ -142,7 +140,7 @@ fn execute_verify(
         output: combined,
         command: cmd_str,
         infrastructure_failure: false,
-        exit_code: status.as_ref().and_then(|s| s.code()),
+        exit_code,
     })
 }
 
@@ -252,7 +250,7 @@ fn build_verify_command(
     if cmd_str == "skip" {
         return Ok(None);
     }
-    let (_, cmd) = split_command(&cmd_str)?;
+    anyhow::ensure!(!cmd_str.is_empty(), "verify command is empty");
     let cmd = if let Some(container_name) = container_name {
         crate::container::verify_in_container(
             container_name,
@@ -261,17 +259,11 @@ fn build_verify_command(
             cargo_target_dir,
         )
     } else {
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", &cmd_str]);
         cmd
     };
     Ok(Some((cmd_str, cmd)))
-}
-fn split_command(command: &str) -> Result<(String, Command)> {
-    let mut parts = command.split_whitespace();
-    let program = parts.next().context("verify command is empty")?;
-    let args: Vec<&str> = parts.collect();
-    let mut cmd = Command::new(program);
-    cmd.args(&args);
-    Ok((command.to_string(), cmd))
 }
 #[cfg(test)]
 #[path = "verify_tests.rs"]

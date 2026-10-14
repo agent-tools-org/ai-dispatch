@@ -16,7 +16,7 @@ pub(crate) fn run_verify_with_store(
     container_name: Option<&str>,
 ) -> Result<VerifyResult> {
     let Some(request) = crate::cmd::build::BuildRequest::for_verify(worktree_path, command)
-        .filter(|_| container_name.is_none())
+        .filter(|_| container_name.is_none() && command.is_none_or(plain_command))
     else {
         return crate::verify::run_verify(worktree_path, command, cargo_target_dir, container_name);
     };
@@ -43,19 +43,9 @@ pub(crate) fn run_verify_with_store(
             .join()
             .map_err(|_| anyhow::anyhow!("Cargo verification thread panicked"))?
     })?;
-    let mut output = result.report.stderr_lines.join("\n");
-    if !result.plain_stdout.is_empty() {
-        if !output.is_empty() {
-            output.push('\n');
-        }
-        output.push_str(&result.plain_stdout.join("\n"));
-    }
-    if let Some(note) = result.report.note.as_ref() {
-        if !output.is_empty() {
-            output.push('\n');
-        }
-        output.push_str(note);
-    }
+    let mut output = cargo_output(
+        &result.report.stderr_lines, &result.plain_stdout, result.report.note.as_deref(),
+    );
     if result.timed_out {
         output.push_str(&format!("\nVerification timed out after {} seconds", VERIFY_TIMEOUT.as_secs()));
     }
@@ -67,6 +57,53 @@ pub(crate) fn run_verify_with_store(
         infrastructure_failure: result.infrastructure_failure,
         exit_code: Some(result.exit_code),
     })
+}
+
+fn cargo_output(stderr: &[String], stdout: &[String], note: Option<&str>) -> String {
+    let mut output = stderr.join("\n");
+    if !stdout.is_empty() {
+        if !output.is_empty() {
+            output.push('\n');
+        }
+        output.push_str(&stdout.join("\n"));
+    }
+    if let Some(note) = note {
+        if !output.is_empty() {
+            output.push('\n');
+        }
+        output.push_str(note);
+    }
+    output
+}
+
+fn plain_command(command: &str) -> bool {
+    command.bytes().all(|byte| {
+        byte.is_ascii_alphanumeric() || b" \t/._-:=,+%@".contains(&byte)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::plain_command;
+
+    #[test]
+    fn cargo_fast_path_accepts_plain_arguments() {
+        for command in ["cargo check", "cargo test --bin aid", " cargo clippy\t-p example "] {
+            assert!(plain_command(command), "{command}");
+        }
+    }
+
+    #[test]
+    fn cargo_fast_path_rejects_shell_syntax() {
+        for syntax in [
+            "&& false", "|| true", "; false", "| cat", "&", "> out", "< in",
+            "'a b'", "\"a b\"", "$(true)", "`true`", "$FILTER", "*", "?", "[ab]",
+            "{a,b}", "~/dir", "a\\ b", "\nfalse", "# comment", "(true)", "! true",
+        ] {
+            let command = format!("cargo test {syntax}");
+            assert!(!plain_command(&command), "{command}");
+        }
+    }
 }
 
 pub(crate) fn target_dir_permission_failure(result: &VerifyResult, target_dir: Option<&str>) -> bool {

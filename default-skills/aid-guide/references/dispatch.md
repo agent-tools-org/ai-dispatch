@@ -136,16 +136,16 @@ Important controls:
 - `--repo` or `--repo-root` supplies the repository anchor.
 - `--worktree` creates or reuses an isolated task branch.
 - For a read-only audit of an existing checkout, use `--kind debugging --read-only --dir <checkout-path>`; `--read-only` cannot be combined with `--worktree`. `--audit` schedules an additional post-task cross-audit. Rejected requests can be inspected with `aid errors`; see [command-errors.md](command-errors.md).
-- `--verify [COMMAND]` verifies completion; without a value it uses project
-  configuration or supported defaults. A task with verification configured is
-  written with `verify_status = pending` at dispatch, so `pending` means that a
-  result is in flight. Verification is skipped (not failed) when the task is
-  `--read-only` or has no working directory. An empty diff is not a skip —
-  delivery assessment records `empty_diff`, and a configured verify still runs
-  against the tree. A verify timeout is recorded as `timed_out`, and a verify
-  tooling failure without a compiler or test diagnostic is recorded as
-  `infrastructure_failure`; both are inconclusive. A finished verify command
-  with a non-zero diagnostic result is `failed`.
+- `--verify [COMMAND]` and project/batch `verify` send eligible plain `cargo check|test|clippy`
+  commands without shell syntax through aid's build runner (adding `--message-format=json`)
+  outside remote-build/container runs, otherwise through `sh -c` in the task directory; bare
+  `--verify` auto-detects, and an absent flag uses the project default.
+  Missing under `sh -c`, a program fails verification; missing `cargo` on the runner is `InfrastructureFailure`.
+  A task with verification configured is written with `verify_status = pending` at dispatch; read-only tasks
+  or tasks without a working directory skip verification.
+  An empty diff still runs configured verification; delivery assessment records `empty_diff`.
+  Timeout is `timed_out`; errors launching verification or Cargo infrastructure failures can be
+  `infrastructure_failure`; both are inconclusive; other nonzero verification exits are `failed`.
 - `--retry N` permits new attempts after failure.
   A decoded provider-capacity refusal ends the task `failed`, naming the error
   and selected model, and creates a short hold on that model. Capacity does not

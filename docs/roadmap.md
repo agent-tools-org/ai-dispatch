@@ -70,6 +70,11 @@ Known limits found by review (open):
   exact 401 text printed by the task plus a nonzero exit can set an auth hold.
 - Wrap-up delivery is not crash-safe exactly-once, and an operator steer can race it.
 - Time spent waiting for a build-box lock counts against `--timeout`.
+- Verification runs in its own process group; `aid stop` signals the worker and agent groups
+  only, so a running verify command can outlive the stop and the worktree lock release.
+- A Cargo verification timeout kills the direct `cargo` child, not its descendants.
+- Verify cleanup sends TERM only to remaining descendants; one that ignores TERM keeps the
+  output readers waiting.
 - `aid wait` reports "worker exited before settlement completed" when a task reaches its
   hard cap, and counts finished read-only audits as not succeeded (`[VNORESULT]`).
 - Auto-verify does not check build-box reachability; it can select an offline box.

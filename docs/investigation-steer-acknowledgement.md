@@ -56,7 +56,5 @@ automatic nudges and hard-cap wrap-up requests record a queued stage. Successful
 PTY writes record a written stage with unconfirmed consumption. Group broadcasts
 record file publication without claiming that any member read the file.
 
-Historical acknowledgement events remain unchanged in storage. People-facing
-renderers qualify them through one event-detail helper as not a confirmed receipt.
-JSON retains raw detail and metadata and adds `legacy_unconfirmed` and
-`display_detail` so consumers can distinguish the old observation from a receipt.
+Events recorded by aid 11.0 and earlier may read 'Acked reply' or 'Steered'; those recorded a
+PTY write or a queued file, not a confirmed receipt. aid does not rewrite stored history.

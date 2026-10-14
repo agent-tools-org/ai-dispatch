@@ -57,5 +57,3 @@ mod task_tests;
 mod workgroup_tests;
 mod memory_tests;
 mod status_guard_tests;
-
-mod receipt_migration_tests;

@@ -157,6 +157,31 @@ mod tests {
     }
 
     #[test]
+    fn legacy_wrap_up_marker_prevents_another_nudge() {
+        let home = tempfile::tempdir().expect("home");
+        let _home = AidHomeGuard::set(home.path());
+        let path = home.path().join("aid.db");
+        let store = Store::open(&path).expect("store");
+        store.insert_task(&make_task("t-legacy", TaskStatus::Running)).expect("task");
+        let detail = "Hard-cap wrap-up: committing work in progress and writing the report requested";
+        let metadata = r#"{"steered":true,"hard_cap_wrap_up":true}"#;
+        store.db().execute(
+            "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
+             VALUES ('t-legacy', ?1, 'milestone', ?2, ?3)",
+            rusqlite::params![Local::now().to_rfc3339(), detail, metadata],
+        ).expect("legacy event");
+        drop(store);
+        let store = Store::open(&path).expect("reopened store");
+        assert!(!wrap_up_before_timeout(&store, "t-legacy", 540, 600).expect("wrap-up"));
+        assert!(store.list_messages_for_task("t-legacy").expect("messages").is_empty());
+        assert!(!crate::paths::steer_signal_path("t-legacy").exists());
+        let events = store.get_events("t-legacy").expect("events");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].detail, detail);
+        assert_eq!(events[0].metadata, Some(serde_json::from_str(metadata).expect("metadata")));
+    }
+
+    #[test]
     fn wrap_up_preserves_pending_operator_steer_and_skips_expired_cap() {
         let home = tempfile::tempdir().expect("home");
         let _home = AidHomeGuard::set(home.path());

@@ -146,7 +146,7 @@ fn wrap_up_delivery_failure_can_recover_once_fix_regression() {
 }
 
 #[test]
-fn migrated_wrap_up_record_prevents_duplicate_queueing() {
+fn legacy_wrap_up_record_prevents_duplicate_queueing() {
     let _home = setup_home();
     let store = Store::open_memory().unwrap();
     let mut task = task("t-legacy-wrap", TaskStatus::Running);
@@ -154,13 +154,13 @@ fn migrated_wrap_up_record_prevents_duplicate_queueing() {
     store.insert_task(&task).unwrap();
     store.insert_event(&crate::types::TaskEvent {
         task_id: task.id.clone(), timestamp: Local::now(), event_kind: EventKind::Milestone,
-        detail: "Hard-cap wrap-up: queued request to commit work in progress and write the report".into(),
+        detail: "Hard-cap wrap-up: committing work in progress and writing the report requested".into(),
         metadata: Some(serde_json::json!({
-            "input_delivery": "queued", "hard_cap_wrap_up": true, "legacy_rewritten": true
+            "steered": true, "hard_cap_wrap_up": true
         })),
     }).unwrap();
     assert!(!crate::cmd::steer::wrap_up_before_timeout(&store, task.id.as_str(), 540, 600).unwrap());
     assert!(store.list_messages_for_task(task.id.as_str()).unwrap().is_empty());
     let events = store.get_events(task.id.as_str()).unwrap();
-    assert_eq!(events[0].metadata.as_ref().unwrap()["input_delivery"], "queued");
+    assert_eq!(events[0].metadata.as_ref().unwrap()["steered"], true);
 }

@@ -32,7 +32,7 @@ fn poll_at(age: i64, cap: u64, agent: AgentKind) -> (Store, Task) {
 #[test]
 fn ninety_percent_cap_steers_commit_and_report_once_refusal_regression() {
     let _home = setup_home();
-    let (store, task) = poll_at(540, 600, AgentKind::Codex);
+    let (store, task) = poll_at(540, 600, AgentKind::Gemini);
     let messages = store.list_messages_for_task(task.id.as_str()).expect("messages");
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].source.as_str(), "steer");
@@ -72,8 +72,9 @@ fn ninety_percent_cap_steers_commit_and_report_once_refusal_regression() {
 #[test]
 fn wrap_up_skips_early_short_and_unsupported_runs_refusal_regression() {
     for (age, cap, agent) in [
-        (539, 600, AgentKind::Codex),
-        (550, 599, AgentKind::Codex),
+        (539, 600, AgentKind::Gemini),
+        (550, 599, AgentKind::Gemini),
+        (540, 600, AgentKind::Codex),
         (540, 600, AgentKind::Claude),
         (540, 600, AgentKind::Grok),
     ] {
@@ -98,7 +99,7 @@ fn read_only_reaper_never_queues_wrap_up_fix_regression() {
     let _home = setup_home();
     let store = Store::open_memory().expect("store");
     let mut task = task("t-read-only-wrap", TaskStatus::Running);
-    task.agent = AgentKind::Codex;
+    task.agent = AgentKind::Gemini;
     task.read_only = true;
     task.created_at = Local::now() - Duration::seconds(540);
     store.insert_task(&task).expect("task");
@@ -121,7 +122,7 @@ fn wrap_up_delivery_failure_can_recover_once_fix_regression() {
     let _home = setup_home();
     let store = Store::open_memory().expect("store");
     let mut task = task("t-wrap-recovery", TaskStatus::Running);
-    task.agent = AgentKind::Codex;
+    task.agent = AgentKind::Gemini;
     task.read_only = false;
     store.insert_task(&task).expect("task");
     let signal = crate::paths::steer_signal_path(task.id.as_str());

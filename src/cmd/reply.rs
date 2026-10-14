@@ -1,4 +1,4 @@
-// Handler for `aid reply` task message delivery and ack polling.
+// Handler for `aid reply` task message delivery and PTY write polling.
 // Exports: run plus the reply outcome used by CLI dispatch.
 // Deps: crate::store::Store, crate::input_signal, crate::types.
 
@@ -17,7 +17,7 @@ const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReplyOutcome {
     Queued { id: i64 },
-    Acked { delivered: bool },
+    Written,
     TimedOut { delivered: bool },
 }
 
@@ -161,7 +161,7 @@ where
         return Ok(ReplyOutcome::Queued { id: queued.id });
     }
 
-    wait_for_ack(
+    wait_for_write(
         store,
         task_id,
         queued.id,
@@ -196,7 +196,7 @@ pub(crate) fn ensure_interactive_input(task: &Task, command: InputCommand) -> Re
         task.agent.as_str()
     };
     bail!(
-        "Task {id} uses '{}' in one-shot print mode and cannot consume interactive input; {} for {}. \
+        "Task {id} uses '{}' in non-interactive mode and cannot consume interactive input; {} for {}. \
          To change direction, run `aid stop {id}` then `aid retry {id} -f \"...\"` \
          (starts a fresh session for agents without resume)",
         agent_name,
@@ -222,7 +222,7 @@ fn read_message(message: Option<&str>, file: Option<&str>) -> Result<String> {
     Ok(buf)
 }
 
-fn wait_for_ack<F>(
+fn wait_for_write<F>(
     store: &Store,
     task_id: &str,
     message_id: i64,
@@ -243,8 +243,8 @@ where
             .find(|entry| entry.id == message_id)
             .ok_or_else(|| anyhow!("Reply message {message_id} disappeared for task {task_id}"))?;
         delivered |= message.delivered_at.is_some();
-        if message.acked_at.is_some() {
-            return Ok(ReplyOutcome::Acked { delivered });
+        if delivered {
+            return Ok(ReplyOutcome::Written);
         }
         if Instant::now() >= deadline {
             return Ok(ReplyOutcome::TimedOut { delivered });

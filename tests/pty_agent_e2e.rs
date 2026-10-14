@@ -56,6 +56,42 @@ fn pty_streaming_agent_strips_osc_and_persists_events() {
     assert!(events.iter().any(|(kind, _)| kind == "completion"));
 }
 
+#[test]
+fn reply_write_and_echo_do_not_claim_consumption() {
+    assert!(pty_available(), "this regression requires the remote PTY test host");
+    let home = TempDir::new().unwrap();
+    let scripts = TempDir::new().unwrap();
+    let agent = write_script(scripts.path(), "input-agent",
+        "#!/bin/sh\nread line\nprintf 'unrelated output\\n'\n");
+    write_custom_agent(home.path(), "inputagent", &agent, false);
+    run_ok(aid_cmd_in(home.path()).args([
+        "run", "inputagent", "wait for input", "--bg", "--id", TASK_ID,
+    ]));
+    let reply = run_ok(aid_cmd_in(home.path()).args([
+        "reply", TASK_ID, "pivot", "--timeout", "10",
+    ]));
+    assert!(String::from_utf8_lossy(&reply.stdout)
+        .contains("written to PTY; consumption unconfirmed"));
+    wait_for_status(home.path(), TASK_ID, "done", Duration::from_secs(10));
+    let log = std::fs::read_to_string(home.path().join(format!("logs/{TASK_ID}.jsonl"))).unwrap();
+    assert!(log.contains("pivot"), "terminal echo must exercise the output path");
+    assert!(log.contains("unrelated output"));
+    let events = event_details(home.path(), TASK_ID);
+    assert!(!events.iter().any(|(_, detail)| detail.contains("Acked reply")));
+    assert!(events.iter().any(|(_, detail)| detail.contains("consumption unconfirmed")));
+    let db = Connection::open(home.path().join("aid.db")).unwrap();
+    let delivered: i64 = db.query_row(
+        "SELECT count(*) FROM task_messages WHERE delivered_at IS NOT NULL", [],
+        |row| row.get(0),
+    ).unwrap();
+    assert_eq!(delivered, 1);
+    let ack_columns: i64 = db.query_row(
+        "SELECT count(*) FROM pragma_table_info('task_messages') WHERE name = 'acked_at'", [],
+        |row| row.get(0),
+    ).unwrap();
+    assert_eq!(ack_columns, 0);
+}
+
 fn pty_available() -> bool {
     cfg!(unix) && Path::new("/dev/ptmx").exists()
 }

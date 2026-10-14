@@ -31,6 +31,33 @@ fn handle_chunk_strips_terminal_escapes_before_log_write() {
     assert_eq!(String::from_utf8(bytes).unwrap(), "clean line\n");
 }
 
+#[test]
+fn output_after_pty_write_never_acknowledges_input() {
+    use crate::types::{MessageDirection, MessageSource};
+    let _permit = crate::test_subprocess::acquire();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut task = pty_task("t-unconfirmed-input");
+    task.agent = AgentKind::Gemini;
+    store.insert_task(&task).unwrap();
+    store.insert_message(task.id.as_str(), MessageDirection::In, "pivot",
+        MessageSource::Reply).unwrap();
+    let command = ["/bin/sh", "-c", "read line"].map(String::from).to_vec();
+    let mut bridge = crate::pty_bridge::PtyBridge::spawn(&command, None, vec![]).unwrap();
+    let mut state = MonitorState::new(false, None);
+    state.maybe_consume_reply(&mut bridge, &store, &task.id).unwrap();
+    let mut log = tempfile::NamedTempFile::new().unwrap();
+    state.handle_chunk(&crate::agent::gemini::GeminiAgent, &task.id, &store,
+        log.as_file_mut(), "pivot\nunrelated output\n".to_string()).unwrap();
+    state.line_buffer.push_str("trailing output");
+    state.flush_trailing_output(&crate::agent::gemini::GeminiAgent, &task.id, &store).unwrap();
+    assert!(bridge.wait().unwrap().success());
+    let messages = store.list_messages_for_task(task.id.as_str()).unwrap();
+    assert!(messages[0].delivered_at.is_some());
+    assert!(serde_json::to_value(&messages[0]).unwrap().get("acked_at").is_none());
+    assert!(!store.get_events(task.id.as_str()).unwrap().iter()
+        .any(|event| event.detail.contains("Acked reply")));
+}
+
 fn pty_task(task_id: &str) -> Task {
     Task {
         id: TaskId(task_id.to_string()),

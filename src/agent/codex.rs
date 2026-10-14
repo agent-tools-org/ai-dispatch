@@ -108,7 +108,7 @@ impl super::Agent for CodexAgent {
     }
 
     fn accepts_interactive_input(&self) -> bool {
-        true
+        false
     }
 
     fn accepts_idle_nudge(&self) -> bool {

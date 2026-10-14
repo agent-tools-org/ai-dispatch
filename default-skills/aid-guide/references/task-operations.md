@@ -75,16 +75,21 @@ aid unstick <task-id>
   Subsequent log growth restores RUNNING, clears the
   pending prompt, and records the reason in a task event. Real prompts with
   silent logs still await input.
-- Use `reply` for a tracked message with acknowledgement behavior.
-- Use `steer` for updated direction during execution.
-- `steer` is refused for the one-shot print-mode `agy`, `grok` and `claude`
-  CLIs because they do not consume PTY stdin; aid reports the limitation before
-  queuing a steer message, and sends them no idle nudges. Codex steering remains
-  supported.
+- Use `reply` for a tracked message. It optionally waits for a PTY write;
+  successful forwarding means written to PTY; consumption unconfirmed.
+- Use `steer` to queue updated direction for a PTY-capable adapter. Queuing
+  is not delivery. Output lines, including echoes, never acknowledge input.
+- Codex `steer`, `reply`, and `respond` are refused before aid inserts a message
+  or writes a signal: `codex exec` cannot consume mid-run PTY input. Use
+  `aid retry <id> -f "<feedback>"`, or stop then retry, to change direction.
+- `steer` and `reply` are also refused for the one-shot print-mode `agy`, `grok`
+  and `claude` CLIs; they receive no idle nudges.
 - `respond` is refused for those same one-shot CLIs before aid writes a
-  response signal; aid says that no response signal was written. Use it only
-  when the selected adapter consumes PTY input.
-- The refusal names the only route for new direction to a one-shot task:
+  response signal; aid says that no response signal was written.
+- For other PTY-capable adapters, `respond` writes input when the task awaits it;
+  the result is written to PTY; consumption unconfirmed, just as for `reply`
+  and `steer`. A capability declaration does not prove model consumption.
+- The refusal names a route for new direction to a one-shot task:
   `aid stop <id>` then `aid retry <id> -f "..."`, which starts a fresh session
   for agents without resume.
 - Use `unstick` when progress has stopped and recovery is appropriate.

@@ -1,4 +1,4 @@
-// Tests for tracked reply queuing and acknowledgement polling.
+// Tests for tracked reply queuing and PTY write polling.
 // Deps: reply handlers, Store, temporary AID homes, and task types.
 
 use std::time::Duration;
@@ -13,7 +13,7 @@ use crate::types::{AgentKind, MessageSource, Task, TaskId, TaskStatus, VerifySta
 fn make_task(id: &str, status: TaskStatus) -> Task {
     Task {
         id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
+        agent: AgentKind::Gemini,
         custom_agent_name: None,
         prompt: "test".to_string(),
         resolved_prompt: None,
@@ -70,7 +70,7 @@ fn reply_async_returns_immediately() {
 }
 
 #[test]
-fn reply_polls_until_ack() {
+fn reply_polls_until_written() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = AidHomeGuard::set(temp.path());
     let store = Store::open_memory().unwrap();
@@ -92,15 +92,12 @@ fn reply_polls_until_ack() {
             if polls == 1 {
                 store.mark_delivered(message_id).unwrap();
             }
-            if polls == 2 {
-                store.mark_acked_latest_inbound("t-reply-ack").unwrap();
-            }
         },
         |_| {},
     )
     .unwrap();
 
-    assert_eq!(outcome, ReplyOutcome::Acked { delivered: true });
+    assert_eq!(outcome, ReplyOutcome::Written);
 }
 
 #[test]

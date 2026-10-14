@@ -18,7 +18,7 @@ pub fn run(store: &Store, task_id: &str, message: &str) -> Result<()> {
         MessageSource::Steer,
         InputCommand::Steer,
     )?;
-    println!("Steered {task_id}: {}", message.chars().take(80).collect::<String>());
+    println!("Queued steer for {task_id}: {}", message.chars().take(80).collect::<String>());
     Ok(())
 }
 
@@ -86,7 +86,7 @@ mod tests {
     fn make_task(id: &str, status: TaskStatus) -> Task {
         Task {
             id: TaskId(id.to_string()),
-            agent: AgentKind::Codex,
+            agent: AgentKind::Gemini,
             custom_agent_name: None,
             prompt: "test".to_string(),
             resolved_prompt: None,
@@ -217,22 +217,17 @@ mod tests {
     }
 
     #[test]
-    fn steer_keeps_codex_delivery_path() {
+    fn steer_refuses_codex_without_queuing() {
         let temp_home = tempfile::tempdir().unwrap();
         let _aid_home = AidHomeGuard::set(temp_home.path());
         let store = Store::open_memory().unwrap();
-        let task = make_task("t-steer-codex", TaskStatus::Running);
+        let mut task = make_task("t-steer-codex", TaskStatus::Running);
+        task.agent = AgentKind::Codex;
         store.insert_task(&task).unwrap();
-
-        run(&store, task.id.as_str(), "pivot").unwrap();
-
-        let messages = store.list_messages_for_task(task.id.as_str()).unwrap();
-        assert_eq!(messages.len(), 1);
-        assert_eq!(messages[0].source.as_str(), "steer");
-        assert_eq!(
-            input_signal::take_steer(task.id.as_str()).unwrap().as_deref(),
-            Some("pivot")
-        );
+        let error = run(&store, task.id.as_str(), "pivot").unwrap_err();
+        assert!(error.to_string().contains("aid retry t-steer-codex -f"));
+        assert!(store.list_messages_for_task(task.id.as_str()).unwrap().is_empty());
+        assert!(!crate::paths::steer_signal_path(task.id.as_str()).exists());
     }
 
     #[test]

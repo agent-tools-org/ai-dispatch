@@ -1,6 +1,6 @@
 # aid Roadmap
 
-Updated 2026-10-09 after v10.52.1 (`cb1ee7b2`).
+Updated 2026-10-14 after v11.0.0 (`9a84f8a2`).
 This document owns execution order and acceptance gates; [CHANGELOG](../CHANGELOG.md)
 owns release history. The [takeover inventory](project-status-2026-09-22.md) records
 source evidence and verification limits. Release validation is recorded separately from historical audit results.
@@ -11,7 +11,11 @@ does not assert board closure. New slices need board IDs before implementation.
 
 ## Current baseline
 
-- The current release is **v10.52.1** (2026-10-09): third-party capability evidence
+- The current release is **v11.0.0** (2026-10-14): failure truthfulness; see
+  "Failure truthfulness" below. The release gate passed the full workspace suite on the
+  build box (38 test binaries, 3,442 passed, 0 failed, 15 ignored). The native Codex
+  permission test was not run: no build box had the Codex CLI installed.
+- v10.52.1 (2026-10-09): third-party capability evidence
   and detached feed refresh; see "Third-party capability evidence" below.
 - v10.51.0 (2026-10-08): quota, cost and isolation fixes from
   [the magpie comparison](investigation-magpie-absorption.md); see the section below.
@@ -28,7 +32,7 @@ does not assert board closure. New slices need board IDs before implementation.
   re-run for this release.
 - Earlier baseline notes (v10.47.x custody and budget work) remain below for reconciliation.
 
-## Failure truthfulness (next release, from the 2026-10-13 failed-task review)
+## Failure truthfulness (v11.0.0, from the 2026-10-13 failed-task review)
 
 [The review](investigation-failed-tasks-20261013.md) found
 two state bugs and three handling gaps that cost the most agent time. Order:

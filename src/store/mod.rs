@@ -96,6 +96,7 @@ impl Store {
     fn create_tables(&self) -> Result<()> {
         schema::create_tables(self)?;
         self.migrate()?;
+        migrations::migrate_billing_index(&self.db())?;
         Ok(())
     }
 

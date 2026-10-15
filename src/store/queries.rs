@@ -3,6 +3,7 @@
 // Deps: submodules under src/store/queries/.
 
 mod event_queries;
+mod billing_queries;
 mod agent_queries;
 mod message_queries;
 mod memory_queries;

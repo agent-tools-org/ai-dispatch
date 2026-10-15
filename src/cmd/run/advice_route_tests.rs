@@ -251,3 +251,30 @@ fn selected_route_materializes_and_persists_default_profiles_without_changing_ki
 
 #[path = "advice_route_resolve_tests.rs"]
 mod resolve_tests;
+
+#[test]
+fn automatic_fallback_obeys_billing_but_explicit_route_remains_allowed() {
+    let (dir, _home, _cache) = isolated();
+    let _fleet = DetectAgentsGuard::set(vec![AgentKind::Codex]);
+    let _served = crate::agent::model_validation::MockServedModelsGuard::set(AgentKind::Codex, None);
+    let store = Arc::new(Store::open_memory().expect("store"));
+    for (state, budget, allowed) in [
+        ("overage", TaskBudget::Cheap, false),
+        ("overage", TaskBudget::Standard, true),
+        ("exhausted", TaskBudget::Premium, false),
+    ] {
+        std::fs::write(dir.path().join("codex.json"), serde_json::json!({
+            "ok":true,"snapshot":{"provider":"codex","windows":[],
+                "fetched_at":"2099-01-01T00:00:00Z","billing":{"state":state}}
+        }).to_string()).expect("cache");
+        let mut child = args();
+        child.declared_budget = Some(budget);
+        child.declared_difficulty = Some(TaskDifficulty::Moderate);
+        assert_eq!(automatic_candidate(Some(&store), &child).is_some(), allowed);
+        child.agent_name = "codex".into();
+        child.model_source = ModelSource::UserSupplied;
+        let setup = super::super::run_dispatch_resolve::resolve_agent_setup(&store, &mut child, None)
+            .expect("explicit billing route allowed");
+        assert_eq!(setup.agent_kind, AgentKind::Codex);
+    }
+}

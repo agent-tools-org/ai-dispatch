@@ -13,7 +13,6 @@ use super::GUIDE_FILES;
 // Existing undocumented flags only. Remove entries as documented; never add gaps.
 const UNDOCUMENTED_FLAGS: &[&str] = &[
     "--active",
-    "--agent",
     "--agents",
     "--as",
     "--as-of",
@@ -61,7 +60,6 @@ const UNDOCUMENTED_FLAGS: &[&str] = &[
     "--prompt-file",
     "--reset",
     "--running",
-    "--session",
     "--source",
     "--stats",
     "--stdin",

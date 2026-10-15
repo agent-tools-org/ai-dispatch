@@ -94,6 +94,8 @@ fn print_quota_row(name: &str, row: QuotaRow) {
             println!("{name:<12} {:<10} {detail}", "UNKNOWN")
         }
         QuotaRow::Ok { detail } => println!("{name:<12} {:<10} {detail}", "OK"),
+        QuotaRow::Overage { detail } => println!("{name:<12} {:<10} {detail}", "OVERAGE"),
+        QuotaRow::Exhausted { detail } => println!("{name:<12} {:<10} {detail}", "EXHAUSTED"),
         QuotaRow::Limited { detail } => println!("{name:<12} {:<10} {detail}", "LIMITED"),
         QuotaRow::Partial { detail } => println!("{name:<12} {:<10} {detail}", "PARTIAL"),
     }
@@ -179,6 +181,8 @@ pub(super) fn list_agents() -> anyhow::Result<()> {
 fn quota_status_label(kind: AgentKind, custom: Option<&str>, row: &QuotaRow) -> String {
     match row {
         QuotaRow::Ok { .. } => String::new(),
+        QuotaRow::Overage { .. } => "OVERAGE".to_string(),
+        QuotaRow::Exhausted { .. } => "EXHAUSTED".to_string(),
         QuotaRow::Partial { .. } => "PARTIAL".to_string(),
         QuotaRow::Limited { .. } => match crate::routing::rate_limit::get_rate_limit_info(&kind, custom) {
             Some(info) if info.needs_human => {

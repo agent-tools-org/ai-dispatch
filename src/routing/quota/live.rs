@@ -16,6 +16,8 @@ pub(crate) const STALE_AFTER: Duration = Duration::from_secs(15 * 60);
 struct CachedRecord {
     ok: bool,
     snapshot: Option<UsageSnapshot>,
+    #[serde(skip)]
+    billing: Option<super::billing::Billing>,
 }
 
 #[derive(Deserialize)]
@@ -46,10 +48,28 @@ pub(crate) fn snapshot(agent: &AgentKind) -> Option<ProbeEvidence> {
 }
 
 pub(crate) fn snapshot_in_cache(agent: &AgentKind, cache_dir: &Path) -> Option<ProbeEvidence> {
+    let record = read_record(agent, cache_dir)?;
+    probe_from_record(&record, provider_name(agent)?)
+}
+
+fn read_record(agent: &AgentKind, cache_dir: &Path) -> Option<CachedRecord> {
     let provider = provider_name(agent)?;
     let raw = std::fs::read(cache_dir.join(format!("{provider}.json"))).ok()?;
-    let record: CachedRecord = serde_json::from_slice(&raw).ok()?;
-    probe_from_record(&record, provider)
+    let mut record: CachedRecord = serde_json::from_slice(&raw).ok()?;
+    record.billing = serde_json::from_slice::<serde_json::Value>(&raw).ok()
+        .and_then(|value| value.pointer("/snapshot/billing").cloned())
+        .and_then(|value| serde_json::from_value::<super::billing::Billing>(value).ok())
+        .filter(|billing| billing.state != super::billing::BillingState::Unknown);
+    Some(record)
+}
+
+pub(crate) fn billing(agent: &AgentKind) -> Option<super::billing::Billing> {
+    let record = read_record(agent, &cache_dir()?)?;
+    let probe = probe_from_record(&record, provider_name(agent)?)?;
+    if !probe.ok || probe.stale {
+        return None;
+    }
+    record.billing
 }
 
 fn probe_from_record(record: &CachedRecord, expected_provider: &str) -> Option<ProbeEvidence> {

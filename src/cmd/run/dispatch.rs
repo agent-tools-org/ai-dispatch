@@ -19,6 +19,9 @@ use super::run_dispatch_prepare::{PreparedDispatch, prepare_dispatch};
 use super::run_prompt;
 use super::{RunArgs, preview_prompt};
 
+#[path = "billing.rs"]
+mod billing;
+
 pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     if let Some(n) = args.best_of {
         return Box::pin(run_bestof::run_best_of(store, args, n)).await;
@@ -53,18 +56,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     }
     ensure_agent_binary_available(&store, &prepared, &args)?;
     let runtime_hooks = load_runtime_hooks(&args)?;
-    maybe_record_start_sha(&store, &prepared.task_id, prepared.effective_dir.as_ref())?;
-    if !crate::task::lifecycle::mark_running(store.as_ref(), &prepared.task_id)? {
-        anyhow::bail!(
-            "Task {} could not transition to running (status changed underneath dispatch — likely stopped or timed out); aborting dispatch",
-            prepared.task_id
-        );
-    }
-    run_before_hook(
-        &store,
-        &prepared,
-        &runtime_hooks,
-    )?;
+    start_dispatch(&store, &prepared, &runtime_hooks)?;
     if args.background {
         run_background_task(&store, &args, &prepared, &prompt_bundle)?;
     } else if let Some(retry_id) = run_foreground_task(
@@ -78,6 +70,28 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         return Ok(retry_id);
     }
     Ok(prepared.task_id)
+}
+
+fn start_dispatch(
+    store: &Arc<Store>, prepared: &PreparedDispatch, runtime_hooks: &[hooks::Hook],
+) -> Result<()> {
+    maybe_record_start_sha(store, &prepared.task_id, prepared.effective_dir.as_ref())?;
+    if !crate::task::lifecycle::mark_running(store.as_ref(), &prepared.task_id)? {
+        anyhow::bail!(
+            concat!("Task {} could not transition to running (status changed underneath dispatch ",
+                "— likely stopped or timed out); aborting dispatch"),
+            prepared.task_id
+        );
+    }
+    if let Err(error) = billing::record(store, &prepared.task_id, prepared.agent_kind) {
+        aid_warn!("[aid] Could not record billing for {}: {error}", prepared.task_id);
+    }
+    run_before_hook(
+        store,
+        prepared,
+        runtime_hooks,
+    )?;
+    Ok(())
 }
 
 fn ensure_agent_binary_available(

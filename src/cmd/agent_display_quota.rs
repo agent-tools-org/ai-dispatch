@@ -11,6 +11,8 @@ use std::time::Duration;
 #[derive(Debug, PartialEq)]
 pub(super) enum QuotaRow {
     Ok { detail: String },
+    Overage { detail: String },
+    Exhausted { detail: String },
     Limited { detail: String },
     Partial { detail: String },
 }
@@ -28,6 +30,14 @@ pub(super) fn quota_row(kind: AgentKind, custom_name: Option<&str>) -> QuotaRow 
     }
     let groups = rate_limit::active_group_holds(&kind, custom_name);
     if groups.is_empty() {
+        if let Some(billing) = live_quota::billing(&kind) {
+            use crate::routing::quota::billing::BillingState;
+            match billing.state {
+                BillingState::Overage => return QuotaRow::Overage { detail: billing.label() },
+                BillingState::Exhausted => return QuotaRow::Exhausted { detail: billing.label() },
+                _ => {}
+            }
+        }
         return QuotaRow::Ok {
             detail: probe_detail(kind).unwrap_or_else(|| NO_PROBE.to_string()),
         };
@@ -212,3 +222,7 @@ mod probe_tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "agent_display_billing_tests.rs"]
+mod billing_tests;

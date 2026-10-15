@@ -134,7 +134,7 @@ fn git_revert(dir: &str) -> Result<()> {
     Ok(())
 }
 fn git_commit(dir: &str, message: &str) -> Result<()> {
-    crate::worktree::stage_aid_files(Path::new(dir), crate::worktree::AidStageMode::All, &[])?;
+    crate::workspace::worktree::stage_aid_files(Path::new(dir), crate::workspace::worktree::AidStageMode::All, &[])?;
     Command::new("git")
         .args(["commit", "-m", message])
         .current_dir(dir)
@@ -145,7 +145,7 @@ fn git_commit(dir: &str, message: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::git_commit;
-    use crate::test_subprocess;
+    use crate::support::test_subprocess;
     use std::process::Command;
 
     fn git(dir: &std::path::Path, args: &[&str]) {

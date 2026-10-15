@@ -35,7 +35,7 @@ pub(crate) fn wrap_up_before_timeout(
         return Ok(false);
     };
     if task.read_only || reply::ensure_interactive_input(&task, InputCommand::Steer).is_err()
-        || crate::paths::steer_signal_path(task_id).exists()
+        || crate::support::paths::steer_signal_path(task_id).exists()
     {
         return Ok(false);
     }
@@ -45,7 +45,7 @@ pub(crate) fn wrap_up_before_timeout(
 fn queue_wrap_up(store: &Store, task_id: &str) -> Result<bool> {
     let mut conn = store.db();
     let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
-    if crate::paths::steer_signal_path(task_id).exists() {
+    if crate::support::paths::steer_signal_path(task_id).exists() {
         return Ok(false);
     }
     let message = "Hard timeout is approaching: please commit work in progress if changes are permitted, \
@@ -79,8 +79,8 @@ fn queue_wrap_up(store: &Store, task_id: &str) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::{run, wrap_up_before_timeout};
-    use crate::input_signal;
-    use crate::paths::AidHomeGuard;
+    use crate::runtime::input_signal;
+    use crate::support::paths::AidHomeGuard;
     use crate::store::Store;
     use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
     use chrono::Local;
@@ -174,7 +174,7 @@ mod tests {
         let store = Store::open(&path).expect("reopened store");
         assert!(!wrap_up_before_timeout(&store, "t-legacy", 540, 600).expect("wrap-up"));
         assert!(store.list_messages_for_task("t-legacy").expect("messages").is_empty());
-        assert!(!crate::paths::steer_signal_path("t-legacy").exists());
+        assert!(!crate::support::paths::steer_signal_path("t-legacy").exists());
         let events = store.get_events("t-legacy").expect("events");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].detail, detail);
@@ -239,7 +239,7 @@ mod tests {
             assert!(message.contains("no steer message was queued"), "{message}");
             assert!(message.contains(&format!("`aid stop {task_id}` then `aid retry {task_id} -f")), "{message}");
             assert!(store.list_messages_for_task(task_id).unwrap().is_empty());
-            assert!(!crate::paths::steer_signal_path(task_id).exists());
+            assert!(!crate::support::paths::steer_signal_path(task_id).exists());
         }
     }
 
@@ -254,7 +254,7 @@ mod tests {
         let error = run(&store, task.id.as_str(), "pivot").unwrap_err();
         assert!(error.to_string().contains("aid retry t-steer-codex -f"));
         assert!(store.list_messages_for_task(task.id.as_str()).unwrap().is_empty());
-        assert!(!crate::paths::steer_signal_path(task.id.as_str()).exists());
+        assert!(!crate::support::paths::steer_signal_path(task.id.as_str()).exists());
     }
 
     #[test]

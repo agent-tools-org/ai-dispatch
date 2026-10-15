@@ -3,8 +3,8 @@
 
 use super::super::held::degraded_dispatch_warning;
 use super::*;
-use crate::live_quota::CacheDirGuard;
-use crate::paths::{self, AidHomeGuard};
+use crate::routing::quota::live::CacheDirGuard;
+use crate::support::paths::{self, AidHomeGuard};
 use chrono::Utc;
 
 fn isolated_codex_probe(used: f64) -> (tempfile::TempDir, AidHomeGuard, CacheDirGuard) {

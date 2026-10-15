@@ -44,7 +44,7 @@ pub(super) fn inject_task_summaries(
         && let Some(summary_json) = store.get_completion_summary(parent_id)?
         && let Ok(summary) = serde_json::from_str::<CompletionSummary>(&summary_json)
     {
-        let summary_block = crate::workgroup::bound_auxiliary(
+        let summary_block = crate::task::workgroup::bound_auxiliary(
             &format_summary_for_injection(&summary),
             "Parent Task Context",
             omissions,
@@ -64,7 +64,7 @@ pub(super) fn inject_task_summaries(
                 &sibling_summaries,
             ));
             let block =
-                crate::workgroup::bound_auxiliary(&block, "Sibling Task Context", omissions);
+                crate::task::workgroup::bound_auxiliary(&block, "Sibling Task Context", omissions);
             effective_prompt = format!("{block}\n\n{effective_prompt}");
         }
     }

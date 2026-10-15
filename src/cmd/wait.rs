@@ -10,7 +10,7 @@ use tokio::time::{sleep, Duration, Instant};
 use crate::cost;
 use crate::store::Store;
 use crate::types::{verify_required, Task, TaskFilter, TaskOutcome, TaskStatus, VerifyStatus};
-use crate::verify::VERIFY_TIMEOUT;
+use crate::task::verify::VERIFY_TIMEOUT;
 #[path = "wait_settlement.rs"]
 mod settlement;
 use settlement::worker_is_settling;
@@ -53,7 +53,7 @@ pub async fn run(
     {
         WaitOutcome::Completed => {
             if let Some(group_id) = tracked_group
-                && let Ok(repo_path) = crate::repo_root::resolve_git_root_string(".")
+                && let Ok(repo_path) = crate::support::repo_root::resolve_git_root_string(".")
                 && let Some(hint) =
                     crate::cmd::batch_gitbutler::merge_back_hint(std::path::Path::new(&repo_path), group_id)
             {
@@ -119,7 +119,7 @@ async fn wait_for_task_ids_inner(
     };
 
     loop {
-        let _ = crate::background::check_zombie_tasks(store);
+        let _ = crate::runtime::background::check_zombie_tasks(store);
         track_group_tasks(&mut task_ids, completed)?;
         let mut remaining = 0usize;
         let total = task_ids.len();

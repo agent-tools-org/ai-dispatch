@@ -4,7 +4,7 @@
 use anyhow::Result;
 use chrono::Local;
 use std::{path::{Path, PathBuf}, sync::Arc};
-use crate::{agent, paths, project::{self, ProjectConfig}, session};
+use crate::{agent, support::paths, config::project::{self, ProjectConfig}, runtime::session};
 use crate::{store::Store, types::*};
 use super::run_dispatch_claim::insert_task_claiming_id;
 use super::run_dispatch_resolve::{AgentSetup, apply_project_defaults, maybe_insert_held_route_event, resolve_agent_setup};
@@ -85,9 +85,9 @@ fn resolve_dispatch_context(store: &Arc<Store>, args: &mut RunArgs) -> Result<Di
     if args.read_only && let Some(output) = args.output.as_mut() {
         *output = std::env::current_dir()?.join(&*output).to_string_lossy().into_owned();
     }
-    crate::command_diagnostics::validate_run_options(args)?;
+    crate::cli::diagnostics::validate_run_options(args)?;
     validate_egress(args)?;
-    crate::remote_build::resolve(args)?;
+    crate::runtime::remote_build::resolve(args)?;
     // Use the same resolved identity as task persistence, never the caller's cwd
     // inside budget enforcement. Explicit non-Git targets remain unattributed.
     let project_id = resolve_task_project_id(
@@ -97,12 +97,12 @@ fn resolve_dispatch_context(store: &Arc<Store>, args: &mut RunArgs) -> Result<Di
     );
     let agent_setup = resolve_agent_setup(store, args, project_id.as_deref())?;
     let agent_name = agent_setup.custom_agent_name.as_deref().unwrap_or_else(|| agent_setup.agent_kind.as_str());
-    let mut policy = crate::timeout_policy::TimeoutPolicy::resolve(agent_name, args.idle_timeout_secs, args.max_duration_mins, detected_project.as_ref());
+    let mut policy = crate::config::timeout_policy::TimeoutPolicy::resolve(agent_name, args.idle_timeout_secs, args.max_duration_mins, detected_project.as_ref());
     if let Some(timeout) = args.timeout {
         policy.max_duration = std::time::Duration::from_secs(timeout);
     }
     args.timeout_policy = policy; args.max_duration_mins = Some(policy.max_duration_mins());
-    args.env = crate::timeout_policy::env_with_policy(args.env.take(), policy);
+    args.env = crate::config::timeout_policy::env_with_policy(args.env.take(), policy);
     Ok(DispatchContext { project_root, detected_project, agent_setup, had_explicit_result_file })
 }
 
@@ -118,7 +118,7 @@ where
     let explicit_id = args.existing_task_id.is_some(); let mut task_id = initial_task_id(args)?;
     let mut log_path = paths::log_path(task_id.as_str());
     let workgroup = run_prompt::load_workgroup(store, args.group.as_deref())?;
-    let explicit_repo_path = crate::repo_root::resolve_explicit_repo_path(args.repo_root.as_deref(), args.repo.as_deref())?;
+    let explicit_repo_path = crate::support::repo_root::resolve_explicit_repo_path(args.repo_root.as_deref(), args.repo.as_deref())?;
     let caller = session::current_caller();
     let mut task = pending_task(
         args,
@@ -220,7 +220,7 @@ fn finish_dispatch(
     store.update_task_dispatch_args(
         claimed.task_id.as_str(), &dispatch_args.dispatch_args_json()?,
     )?;
-    crate::remote_build::record(store, &claimed.task_id, args)?;
+    crate::runtime::remote_build::record(store, &claimed.task_id, args)?;
     let requested_skills = run_prompt::effective_skills(args, context.detected_project.as_ref());
     if args.skills.is_empty() && !requested_skills.is_empty() {
         aid_info!("[aid] Project default skill: {} (.aid/project.toml)", requested_skills.join(", "));
@@ -240,7 +240,7 @@ fn finish_dispatch(
 
 fn initial_task_id(args: &RunArgs) -> Result<TaskId> {
     let Some(id) = args.existing_task_id.clone() else { return Ok(TaskId::generate()) };
-    crate::sanitize::validate_task_id(id.as_str())?;
+    crate::support::sanitize::validate_task_id(id.as_str())?;
     Ok(id)
 }
 

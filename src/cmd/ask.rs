@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::cmd::run::{self, RunArgs};
 use crate::cmd::show;
-use crate::agent_config;
+use crate::config::agent as agent_config;
 use crate::store::Store;
 use crate::types::TaskId;
 
@@ -82,7 +82,7 @@ fn prepare_request(
 
 fn detect_context_files(prompt: &str, files: Vec<String>) -> Vec<String> {
     if files.is_empty() {
-        crate::explore::auto_detect_files(prompt, Path::new("."))
+        crate::support::explore::auto_detect_files(prompt, Path::new("."))
     } else {
         files
     }
@@ -92,9 +92,9 @@ fn inject_context(prompt: String, context_files: &[String]) -> Result<String> {
     if context_files.is_empty() {
         return Ok(prompt);
     }
-    let specs = crate::context::parse_context_specs(context_files)?;
-    let context = crate::context::resolve_context(&specs)?;
-    Ok(crate::context::inject_context(&prompt, &context))
+    let specs = crate::prompt::context::parse_context_specs(context_files)?;
+    let context = crate::prompt::context::resolve_context(&specs)?;
+    Ok(crate::prompt::context::inject_context(&prompt, &context))
 }
 
 fn announce_context_files(context_files: &[String]) {
@@ -134,7 +134,7 @@ fn read_answer(task_id: &TaskId, capture_path: &Path) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths::AidHomeGuard;
+    use crate::support::paths::AidHomeGuard;
 
     #[test]
     fn prepare_request_rejects_disabled_default_agent() {

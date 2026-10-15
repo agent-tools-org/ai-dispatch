@@ -1,6 +1,6 @@
 // Handler for `aid reply` task message delivery and PTY write polling.
 // Exports: run plus the reply outcome used by CLI dispatch.
-// Deps: crate::store::Store, crate::input_signal, crate::types.
+// Deps: crate::store::Store, crate::runtime::input_signal, crate::types.
 
 use std::io::Read;
 use std::time::{Duration, Instant};
@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, anyhow, bail};
 
 use crate::agent;
-use crate::input_signal;
+use crate::runtime::input_signal;
 use crate::store::Store;
 use crate::types::{MessageDirection, MessageSource, Task, TaskStatus};
 

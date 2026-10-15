@@ -33,8 +33,8 @@ fn format_batch_siblings_truncates_and_limits_output() {
 #[test]
 fn effective_skills_default_to_none_when_nothing_is_declared() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    let dir = crate::paths::aid_dir().join("skills");
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let dir = crate::support::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
     // The project default is passed in rather than detected, so this asserts
@@ -47,7 +47,7 @@ fn effective_skills_default_to_none_when_nothing_is_declared() {
 /// explicit "no skills" still beats it.
 #[test]
 fn project_default_skill_applies_only_when_nothing_is_declared() {
-    let project = crate::project::ProjectConfig { skills: vec!["implementer".to_string()], ..Default::default() };
+    let project = crate::config::project::ProjectConfig { skills: vec!["implementer".to_string()], ..Default::default() };
     assert_eq!(
         effective_skills(&run_args(vec![]), Some(&project)),
         vec!["implementer"]
@@ -69,7 +69,7 @@ fn project_default_skill_applies_only_when_nothing_is_declared() {
 /// explicit `--skill` still applies.
 #[test]
 fn read_only_run_skips_project_default_skill_but_keeps_declared_one() {
-    let project = crate::project::ProjectConfig { skills: vec!["implementer".to_string()], ..Default::default() };
+    let project = crate::config::project::ProjectConfig { skills: vec!["implementer".to_string()], ..Default::default() };
     let read_only = RunArgs { read_only: true, ..run_args(vec![]) };
     assert!(effective_skills(&read_only, Some(&project)).is_empty());
     let declared = RunArgs { read_only: true, ..run_args(vec!["reviewer".to_string()]) };
@@ -79,7 +79,7 @@ fn read_only_run_skips_project_default_skill_but_keeps_declared_one() {
 #[test]
 fn a_declared_skill_is_used_verbatim() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     assert_eq!(
         effective_skills(&run_args(vec!["reviewer".to_string()]), None),
         vec!["reviewer"]
@@ -89,8 +89,8 @@ fn a_declared_skill_is_used_verbatim() {
 #[test]
 fn effective_skills_respect_no_skill_sentinel() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    let dir = crate::paths::aid_dir().join("skills");
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let dir = crate::support::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
     assert!(
@@ -183,7 +183,7 @@ fn build_prompt_bundle_includes_git_staging_guard_for_writable_tasks() {
     )
     .unwrap();
 
-    assert!(bundle.effective_prompt.contains(crate::templates::git_staging_guard().trim()));
+    assert!(bundle.effective_prompt.contains(crate::prompt::templates::git_staging_guard().trim()));
 }
 
 #[test]

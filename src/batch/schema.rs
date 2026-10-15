@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use crate::agent::classifier::TaskCategory;
 use crate::types::{TaskBudget, TaskDifficulty, TaskEgress, TaskRigor, TaskUrgency};
-use super::batch_serde::{deserialize_judge, deserialize_string_or_vec, deserialize_verify};
+use super::serde_fields::{deserialize_judge, deserialize_string_or_vec, deserialize_verify};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

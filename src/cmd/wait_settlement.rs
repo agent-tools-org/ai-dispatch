@@ -2,12 +2,12 @@
 use super::*;
 
 pub(super) fn worker_is_settling(task_id: &str) -> Result<bool> {
-    let Some(spec) = crate::background::load_spec_if_exists(task_id)? else { return Ok(false); };
+    let Some(spec) = crate::runtime::background::load_spec_if_exists(task_id)? else { return Ok(false); };
     if let Some(pid) = spec.worker_pid
-        && !crate::background::is_process_running(pid)
+        && !crate::runtime::background::is_process_running(pid)
     {
         // A worker can remove the spec and exit between the read and PID probe.
-        if !crate::paths::job_path(task_id).try_exists()? { return Ok(false); }
+        if !crate::support::paths::job_path(task_id).try_exists()? { return Ok(false); }
         anyhow::bail!("Task {task_id}: worker exited before settlement completed");
     }
     Ok(true)
@@ -15,7 +15,7 @@ pub(super) fn worker_is_settling(task_id: &str) -> Result<bool> {
 
 pub(super) fn include_worker_tasks(store: &Store, tasks: &mut Vec<Task>) -> Result<()> {
     // Done can still be provisional while the worker checks delivery artifacts.
-    let jobs = match std::fs::read_dir(crate::paths::jobs_dir()) {
+    let jobs = match std::fs::read_dir(crate::support::paths::jobs_dir()) {
         Ok(jobs) => Some(jobs),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
         Err(err) => return Err(err.into()),

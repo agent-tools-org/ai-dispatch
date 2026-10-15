@@ -2,7 +2,7 @@
 // Deps: dispatch_run_model::input, RunModelInput::declared, isolated AID_HOME and codex home.
 
 use super::*;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::types::{DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
 
 #[test]
@@ -13,7 +13,7 @@ fn run_and_advise_resolve_identical_models_for_the_same_profile() {
     std::fs::create_dir_all(&codex_home).expect("codex home");
     std::fs::write(codex_home.join("config.toml"), "model = \"gpt-6-sol\"\n").expect("config");
     crate::agent::codex::cli_config::set_test_codex_home(Some(codex_home));
-    crate::agent_config::save_agent_default_model("claude", Some("sonnet")).expect("sticky");
+    crate::config::agent::save_agent_default_model("claude", Some("sonnet")).expect("sticky");
     let selection = SelectionConfig::default();
     let mut compared = 0;
     for kind in [AgentKind::Codex, AgentKind::Gemini, AgentKind::Grok, AgentKind::Claude, AgentKind::Qwen] {

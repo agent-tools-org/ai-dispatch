@@ -7,7 +7,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::background;
+use crate::runtime::background;
 use crate::cmd::run::capture_final_worktree_state;
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
@@ -89,7 +89,7 @@ fn terminate(
     signal_task(task_id, &task, graceful, preserve_label)?;
     capture_final_worktree_state(store.as_ref(), &TaskId(task_id.to_string()))?;
     if let Some(ref path) = task.worktree_path
-        && let Err(err) = crate::worktree::clear_worktree_lock(Path::new(path), task_id)
+        && let Err(err) = crate::workspace::worktree::clear_worktree_lock(Path::new(path), task_id)
     {
         aid_warn!("[aid] Warning: failed to release worktree lock for task {task_id}: {err}");
     }
@@ -124,7 +124,7 @@ fn signal_task(task_id: &str, task: &Task, graceful: bool, preserve_label: &str)
     if let Some(pid) = spec.as_ref().and_then(|spec| spec.agent_pid_for_signal()) {
         if graceful { background::kill_process(pid); } else { background::sigkill_process(pid); }
     }
-    crate::sandbox::kill_container(task_id);
+    crate::runtime::sandbox::kill_container(task_id);
     if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput
         | TaskStatus::Stalled | TaskStatus::Stopped | TaskStatus::Done)
     {
@@ -148,9 +148,9 @@ fn preserve_worktree(task_id: &str, task: &Task, action: &str) {
     if !task.read_only
         && let Some(ref path) = task.worktree_path
         && Path::new(path).exists()
-        && crate::commit::has_uncommitted_changes(path).unwrap_or(false)
+        && crate::workspace::commit::has_uncommitted_changes(path).unwrap_or(false)
     {
-        match crate::commit::auto_commit(path, task_id, &task.prompt) {
+        match crate::workspace::commit::auto_commit(path, task_id, &task.prompt) {
             Ok(_) => aid_info!("[aid] Preserved uncommitted changes for {action} task {task_id}"),
             Err(err) => aid_warn!("[aid] Warning: failed to preserve uncommitted changes for {action} task {task_id}: {err}"),
         }

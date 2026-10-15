@@ -152,10 +152,10 @@ fn official_guide_covers_generated_facts() {
 
     let keys = RefCell::new(BTreeSet::new());
     let fields = Fields(&keys);
-    crate::project::ProjectConfig::deserialize(fields).expect("project fields");
+    crate::config::project::ProjectConfig::deserialize(fields).expect("project fields");
     crate::config::AidConfig::deserialize(fields).expect("global fields");
     // The budget accepts scalar shorthand through deserialize_with; inspect its table too.
-    crate::project::ProjectBudget::deserialize(fields).expect("budget fields");
+    crate::config::project::ProjectBudget::deserialize(fields).expect("budget fields");
     check_coverage(&keys.borrow(), reference("references/configuration.md"), UNDOCUMENTED_CONFIG_KEYS);
 
     let statuses = crate::types::TaskStatus::ALL.iter().map(|status| status.as_str())

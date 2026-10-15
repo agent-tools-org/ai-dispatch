@@ -3,7 +3,7 @@
 // Deps: run.rs wrappers, hooks, retry/judge flow, store, and task types.
 use anyhow::Result;
 use std::{path::Path, sync::Arc};
-use crate::{hooks, rate_limit, store::Store, types::*};
+use crate::{config::hooks, routing::rate_limit, store::Store, types::*};
 use crate::cmd::{checklist_scan, judge, retry_logic, show};
 #[path = "lifecycle/final_state.rs"]
 mod final_state;
@@ -87,7 +87,7 @@ pub(crate) async fn post_run_lifecycle(
     if outcome.is_ok() {
         store.settle_task_status(task_id.as_str(), TaskStatus::Done, Some(&[TaskStatus::Done]), None, None)?;
     }
-    crate::backup::on_settled(store.as_ref(), task_id.as_str());
+    crate::workspace::backup::on_settled(store.as_ref(), task_id.as_str());
     outcome
 }
 
@@ -179,11 +179,11 @@ pub(super) fn output_has_content(task: &Task) -> bool {
             return !content.trim().is_empty();
         }
     }
-    let auto_path = crate::paths::task_dir(task.id.as_str()).join("output.md");
+    let auto_path = crate::support::paths::task_dir(task.id.as_str()).join("output.md");
     if let Ok(content) = std::fs::read_to_string(auto_path) {
         return !content.trim().is_empty();
     }
-    let transcript = crate::paths::transcript_path(task.id.as_str());
+    let transcript = crate::support::paths::transcript_path(task.id.as_str());
     if let Some(content) = super::run_prompt::extract_output_fallback_from_path(&transcript, Some(task.agent_display_name())) {
         return !content.trim().is_empty();
     }
@@ -191,7 +191,7 @@ pub(super) fn output_has_content(task: &Task) -> bool {
         .log_path
         .as_deref()
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| crate::paths::log_path(task.id.as_str()));
+        .unwrap_or_else(|| crate::support::paths::log_path(task.id.as_str()));
     super::run_prompt::extract_output_fallback_from_path(&log_path, Some(task.agent_display_name()))
         .is_some_and(|content| !content.trim().is_empty())
 }

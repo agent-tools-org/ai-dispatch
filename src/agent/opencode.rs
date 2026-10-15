@@ -6,7 +6,7 @@ use serde_json::json;
 
 use super::opencode_overlay::OpenCodeOverlaySpec;
 use super::truncate::capped_detail_with;
-use crate::rate_limit;
+use crate::routing::rate_limit;
 use crate::types::*;
 
 pub(crate) fn spec() -> OpenCodeOverlaySpec {
@@ -80,13 +80,13 @@ pub(crate) fn parse_json_event(
             // Watcher owns built-in OpenCode (has the model); overlays write here.
             if marker_kind != AgentKind::OpenCode {
                 if let Some(message) = rate_limit::refusal_on_channel(
-                    &v.to_string(), signature_kind, crate::quota_channel::Channel::CliStream,
+                    &v.to_string(), signature_kind, crate::routing::quota::channel::Channel::CliStream,
                 ) {
                     rate_limit::mark_rate_limited_for_message(&marker_kind, custom_name, &message);
                 }
             }
-            let auth = crate::auth_marker::auth_failure_line(
-                &v.to_string(), marker_kind, crate::quota_channel::Channel::CliStream,
+            let auth = crate::routing::auth_marker::auth_failure_line(
+                &v.to_string(), marker_kind, crate::routing::quota::channel::Channel::CliStream,
             );
             (detail.to_string(), auth.map(|message| json!({ "opencode_auth_failure": message })))
         }

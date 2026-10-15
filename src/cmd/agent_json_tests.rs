@@ -37,7 +37,7 @@ fn test_agent_json_serialization_roundtrip() {
             source: "marker".to_string(),
             groups: vec![], used_percent: None, resets_at: None, window: None, stale: false,
         },
-        auth: crate::auth_marker::AuthStatus::default(),
+        auth: crate::routing::auth_marker::AuthStatus::default(),
         models: ModelsJson {
             default: None, default_source: None,
             budget: Some("gpt-5.4-mini".to_string()),
@@ -78,8 +78,8 @@ fn test_agent_list_json_serialization_roundtrip() {
 #[test]
 fn agent_list_marks_discovered_agy_metadata_unknown() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().expect("aid dirs");
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().expect("aid dirs");
     crate::agent::model_validation::clear_served_models_cache();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -89,7 +89,7 @@ fn agent_list_marks_discovered_agy_metadata_unknown() {
         "agy": {"models": ["gemini-3.7-flash-high"], "updated_at_secs": now}
     });
     std::fs::write(
-        crate::paths::aid_dir().join("served_models_cache.json"),
+        crate::support::paths::aid_dir().join("served_models_cache.json"),
         cache.to_string(),
     )
     .expect("served-model cache");
@@ -169,16 +169,16 @@ fn delegate_opencode_without_endpoint_uses_own_custom_marker() {
 
 fn isolated_home() -> (
     tempfile::TempDir,
-    crate::paths::AidHomeGuard,
-    crate::live_quota::CacheDirGuard,
+    crate::support::paths::AidHomeGuard,
+    crate::routing::quota::live::CacheDirGuard,
 ) {
     let tmp = tempfile::tempdir().expect("tempdir");
     let _ = std::fs::create_dir_all(tmp.path().join(".aid"));
-    let guard = crate::paths::AidHomeGuard::set(tmp.path());
-    std::fs::create_dir_all(crate::paths::aid_dir()).ok();
+    let guard = crate::support::paths::AidHomeGuard::set(tmp.path());
+    std::fs::create_dir_all(crate::support::paths::aid_dir()).ok();
     let aidbar = tmp.path().join("aidbar");
     std::fs::create_dir_all(&aidbar).ok();
-    let cache = crate::live_quota::CacheDirGuard::set(&aidbar);
+    let cache = crate::routing::quota::live::CacheDirGuard::set(&aidbar);
     (tmp, guard, cache)
 }
 
@@ -191,8 +191,8 @@ fn custom_agent_quota_read_matches_write() {
     let mut config = sample_custom_config();
     config.id = "auditor".into();
     config.base_url = None; // no endpoint — triggers the old delegate_to path
-    let stated = crate::rate_limit::test_future_recovery_time();
-    crate::rate_limit::mark_rate_limited(
+    let stated = crate::routing::rate_limit::test_future_recovery_time();
+    crate::routing::rate_limit::mark_rate_limited(
         &AgentKind::Custom,
         Some("auditor"),
         &format!("try again at {stated}."),
@@ -220,12 +220,12 @@ fn quota_json_unknown_when_no_evidence() {
 #[test]
 fn quota_json_limited_for_agent_level_hold() {
     let (_tmp, _guard, _cache) = isolated_home();
-    crate::rate_limit::mark_rate_limited(
+    crate::routing::rate_limit::mark_rate_limited(
         &AgentKind::Codex,
         None,
         &format!(
             "You've hit your usage limit. try again at {}.",
-            crate::rate_limit::test_future_recovery_time()
+            crate::routing::rate_limit::test_future_recovery_time()
         ),
     );
     let q = build_quota_json(&AgentKind::Codex, None);
@@ -237,14 +237,14 @@ fn quota_json_limited_for_agent_level_hold() {
 #[test]
 fn quota_json_partial_for_group_hold_carries_provider_message() {
     let (_tmp, _guard, _cache) = isolated_home();
-    crate::rate_limit::mark_group_rate_limited(
+    crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::Cursor,
         None,
         "premium",
         "ActionRequiredError: You're out of usage. Switch to Auto, or ask your admin to increase your limit",
     );
     // The agent-level marker must NOT be set.
-    assert!(!crate::rate_limit::is_rate_limited(&AgentKind::Cursor, None));
+    assert!(!crate::routing::rate_limit::is_rate_limited(&AgentKind::Cursor, None));
     let q = build_quota_json(&AgentKind::Cursor, None);
     assert_eq!(q.state, "partial");
     assert_eq!(q.recovery_at, None);

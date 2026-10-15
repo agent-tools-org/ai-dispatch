@@ -47,7 +47,7 @@ fn supersede_live_holder(store: &Arc<Store>, task: &crate::types::Task) -> Resul
     let Some(path) = task.worktree_path.as_deref().map(std::path::Path::new) else {
         return Ok(());
     };
-    let Some(holder) = crate::worktree::live_lock_holder_with_store(path, store) else {
+    let Some(holder) = crate::workspace::worktree::live_lock_holder_with_store(path, store) else {
         return Ok(());
     };
     if holder != task.id.as_str() {
@@ -59,7 +59,7 @@ fn supersede_live_holder(store: &Arc<Store>, task: &crate::types::Task) -> Resul
     // Holder is this task itself (or an ancestor): stop the live worker first,
     // then verify the lease is actually released before proceeding.
     crate::cmd::stop::terminate_any(store, &holder)?;
-    if let Some(still_holder) = crate::worktree::live_lock_holder_with_store(path, store) {
+    if let Some(still_holder) = crate::workspace::worktree::live_lock_holder_with_store(path, store) {
         anyhow::bail!(
             "Worktree {} is still locked by task {still_holder} — the worker could not be stopped. Refusing to share a live worktree.",
             path.display()
@@ -180,7 +180,7 @@ fn resume_pruned_worktree_at_tip(task: &crate::types::Task, run_args: &mut RunAr
     if Path::new(path).exists() { return Ok(()) }
     let Some(branch) = run_args.worktree.as_deref() else { return Ok(()) };
     let Some(repo) = run_args.repo.as_deref() else { return Ok(()) };
-    if let Some(base) = crate::worktree::branch_tip_resume_base(Path::new(repo), branch)? {
+    if let Some(base) = crate::workspace::worktree::branch_tip_resume_base(Path::new(repo), branch)? {
         run_args.base_branch = Some(base);
     }
     Ok(())
@@ -205,7 +205,7 @@ fn resolve_retry_target(
 ) -> Result<(Option<String>, Option<String>)> {
     match task.worktree_path.as_ref() {
         Some(path) if std::path::Path::new(path).exists() => {
-            crate::worktree::ensure_consumed_worktree_path_is_isolated(
+            crate::workspace::worktree::ensure_consumed_worktree_path_is_isolated(
                 task.repo_path.as_deref(),
                 path,
                 &format!("recorded worktree path for task {}", task.id),
@@ -228,7 +228,7 @@ fn resolve_retry_target(
 
 fn save_partial_work(path: &str, task_id: &str) -> Result<()> {
     if worktree_is_dirty(path)? {
-        crate::worktree::stage_aid_files(Path::new(path), crate::worktree::AidStageMode::All, &[])?;
+        crate::workspace::worktree::stage_aid_files(Path::new(path), crate::workspace::worktree::AidStageMode::All, &[])?;
         run_git(path, &["commit", "-m", &format!("[aid] partial work from {task_id}")])?;
         aid_info!("[aid] Saved partial work from prior attempt as commit");
     }

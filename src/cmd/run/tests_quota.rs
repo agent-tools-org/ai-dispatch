@@ -97,7 +97,7 @@ fn read_quota_error_message_ignores_agent_grep_in_log() {
     let dir = TempDir::new().unwrap();
     let _guard = paths::AidHomeGuard::set(dir.path());
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
-    crate::rate_limit::clear_rate_limit(&AgentKind::Cursor, None);
+    crate::routing::rate_limit::clear_rate_limit(&AgentKind::Cursor, None);
     let grep_line = "completed: grep clear_rate_limit_if_stale|marker_path";
     std::fs::write(
         paths::log_path("t-quota-grep-log"),
@@ -108,9 +108,9 @@ fn read_quota_error_message_ignores_agent_grep_in_log() {
     let message = read_quota_error_message(&task_id, &AgentKind::Cursor);
     assert_eq!(message, None);
     if let Some(line) = message.as_deref() {
-        crate::rate_limit::mark_rate_limited(&AgentKind::Cursor, None, line);
+        crate::routing::rate_limit::mark_rate_limited(&AgentKind::Cursor, None, line);
     }
-    assert!(!crate::rate_limit::is_rate_limited(&AgentKind::Cursor, None));
+    assert!(!crate::routing::rate_limit::is_rate_limited(&AgentKind::Cursor, None));
 }
 
 #[test]

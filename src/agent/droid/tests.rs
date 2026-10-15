@@ -1,11 +1,11 @@
 // Droid adapter tests: command flags and streamed event parsing.
 // Exports no public API; validates DroidAgent behavior.
-// Depends on crate::agent, crate::rate_limit, and crate::types.
+// Depends on crate::agent, crate::routing::rate_limit, and crate::types.
 
 use super::DroidAgent;
 use crate::agent::{Agent, RunOpts};
-use crate::paths;
-use crate::rate_limit;
+use crate::support::paths;
+use crate::routing::rate_limit;
 use crate::types::{AgentKind, EventKind, TaskId};
 
 #[test]

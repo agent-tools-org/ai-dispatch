@@ -127,7 +127,7 @@ fn guard_refuses_worktree_branch_without_resolved_dir_at_repo_root() {
 
 #[test]
 fn guard_derives_repo_from_task_worktree_path_and_allows_real_worktree() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let repo = init_repo();
     let branch = unique_branch("feat/derive-worktree");
     let linked_root = tempfile::tempdir().unwrap();

@@ -3,7 +3,7 @@
 
 use super::super::{Agent, RunOpts, get_agent};
 use super::*;
-use crate::{paths, rate_limit};
+use crate::{support::paths, routing::rate_limit};
 
 #[test]
 fn parses_new_milestone_events() {
@@ -252,7 +252,7 @@ fn live_insufficient_balance_envelope_is_a_stream_refusal() {
     let refusal = rate_limit::refusal_on_channel(
         line,
         AgentKind::OpenCode,
-        crate::quota_channel::Channel::CliStream,
+        crate::routing::quota::channel::Channel::CliStream,
     );
     assert!(
         refusal

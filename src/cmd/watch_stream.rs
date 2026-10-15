@@ -23,7 +23,7 @@ pub async fn run(
     let tracked_group = if task_ids.is_empty() { group } else { None };
     let mut state = StreamState::new(task_ids.to_vec());
     loop {
-        let _ = crate::background::check_zombie_tasks(store);
+        let _ = crate::runtime::background::check_zombie_tasks(store);
         state.add_group_tasks(store, tracked_group)?;
         if state.task_ids.is_empty() {
             println!("{}", json!({ "event": "watch_empty" }));

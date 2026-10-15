@@ -113,7 +113,7 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
     // hits the default recursion limit.
     payload["outcome"] = serde_json::Value::String(task.outcome().as_str().to_string());
     serde_json::to_string(&TaskJson {
-        payload, remote_build: crate::remote_build::saved_box(store, task_id)?,
+        payload, remote_build: crate::runtime::remote_build::saved_box(store, task_id)?,
         backup_url: store.backup_url(task_id)?,
     }).map_err(Into::into)
 }

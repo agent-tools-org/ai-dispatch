@@ -1,15 +1,15 @@
 // Tests for pricing override loading and merged model resolution.
 // Exports: module-scoped tests only
-// Deps: model catalog resolution, config helpers, crate::paths
+// Deps: model catalog resolution, config helpers, crate::support::paths
 
 use std::collections::HashMap;
 
 use super::config_display::{ModelHistory, recent_observed_models_line};
 use super::{builtin_agent_visible, disabled_agent_names, disabled_summary_line, merged_agent_models};
-use crate::model_catalog::load_pricing_overrides;
-use crate::agent_config;
-use crate::paths::AidHomeGuard;
-use crate::rate_limit;
+use crate::routing::model_catalog::load_pricing_overrides;
+use crate::config::agent as agent_config;
+use crate::support::paths::AidHomeGuard;
+use crate::routing::rate_limit;
 use crate::types::AgentKind;
 
 #[test]
@@ -17,7 +17,7 @@ fn loads_and_merges_pricing_overrides() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
     std::fs::write(
-        crate::paths::pricing_path(),
+        crate::support::paths::pricing_path(),
         r#"{
             "models": [
                 {
@@ -176,7 +176,7 @@ fn disabled_agent_listing_hides_and_summarizes_agent() {
 fn config_agents_custom_hold_names_agent_id_in_hint() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
-    std::fs::create_dir_all(crate::paths::aid_dir()).ok();
+    std::fs::create_dir_all(crate::support::paths::aid_dir()).ok();
 
     // A message with no reset date causes needs_human = true, so
     // dispatch_blocking_hold emits the "until cleared with …" hint.

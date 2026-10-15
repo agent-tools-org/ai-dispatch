@@ -113,7 +113,7 @@ Known limits found by review:
 - Effort strings must match exactly; a mismatch falls back to the model-level source.
 - A model the relay lists under two price ids (e.g. `claude-opus-5-5` and
   `anthropic/claude-opus-5.5`) scores only under the one the scores feed uses.
-- Feed refresh (`src/feed_refresh.rs`): the detached `sh` is not reaped, so a
+- Feed refresh (`src/routing/feed_refresh/mod.rs`): the detached `sh` is not reaped, so a
   long-running aid process keeps up to two defunct children until it exits; `.ready`
   is validated then renamed by path (claiming it under a per-process name first would
   close a narrow swap window); the script's `mv` takes no `--` and curl has no
@@ -223,7 +223,7 @@ gates remain open. These changes do not constitute a release.
 | `wi-29bd`: project budget | Target identity enforcement/reporting committed in `d7dc85ef` and remotely tested; init/sync contract remains | Next budget work is slice 3 below |
 | `wi-e1a0`: merge conflict attribution | Distinct stash-restore result, durable stash identity, regression tests exist | Acceptance recheck; not an unimplemented feature |
 | `wi-5eef`: truthful release dry-run | Recorded in v10.47.0 and covered by release hygiene tests | Remove from implementation queue; keep release gate |
-| #152: module-tree migration | run/show/batch subdirectories landed (v10.46.0) | Continue only remaining clusters |
+| #152: module-tree migration | Done: every module lives in a layer directory; `src/main.rs` is the only root file | None |
 
 ## M0 — Restore a reproducible baseline (P0, next)
 
@@ -288,9 +288,10 @@ personal task history or undocumented local tooling. No release number is promis
 
 ## M3 — Reduce remaining maintenance cost (P2)
 
-- Continue #152 with rate-limit, worker/PTY and Store mutation boundaries; the
-  lifecycle boundary is tracked in the structural refactor program above.
-  Keep behavior-preserving extraction separate from semantic fixes.
+- #152 is done as a relocation. Directories still over ten files: `cmd` (148),
+  `cmd/run` (111), `agent` (105), `cli` (25), `cmd/show` (22), `store` (22),
+  `cmd/batch` (21), `types` (20), `batch` (16), `store/queries` (11). Split them only
+  alongside a behaviour change in that area; keep extraction separate from semantic fixes.
 - #160 adapter consolidation: OpenCode native/overlay and CLI probing are shared as of
   v10.50.0; reassess further sharing against captured protocol fixtures.
 - Re-triage [historical UX debt](ux-debt.md): batch dependency lineage (`wi-f4bf`),

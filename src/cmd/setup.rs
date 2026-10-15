@@ -16,7 +16,7 @@ pub fn run() -> Result<()> {
     println!("  Press Enter to skip any step.");
     println!();
 
-    let config_path = crate::paths::config_path();
+    let config_path = crate::support::paths::config_path();
     let mut existing = if config_path.exists() {
         std::fs::read_to_string(&config_path)?
     } else {
@@ -122,7 +122,7 @@ pub fn run() -> Result<()> {
             missing.push(name);
         }
     }
-    let agents_dir = crate::paths::aid_dir().join("agents");
+    let agents_dir = crate::support::paths::aid_dir().join("agents");
     if agents_dir.is_dir()
         && let Ok(entries) = std::fs::read_dir(&agents_dir)
     {
@@ -147,7 +147,7 @@ pub fn run() -> Result<()> {
     std::fs::write(&config_path, &existing)?;
 
     // 4. Auto-init skills & templates if missing
-    let skills_dir = crate::paths::aid_dir().join("skills");
+    let skills_dir = crate::support::paths::aid_dir().join("skills");
     let needs_init = !skills_dir.is_dir()
         || std::fs::read_dir(&skills_dir)
             .map(|d| d.count() == 0)

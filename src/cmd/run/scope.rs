@@ -2,7 +2,7 @@
 // Exports path normalization and changed-file scope warnings for committed work.
 use std::path::{Component, Path, PathBuf};
 
-use crate::worktree;
+use crate::workspace::worktree;
 
 use super::resolve_repo_path;
 

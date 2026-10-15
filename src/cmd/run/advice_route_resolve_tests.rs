@@ -51,7 +51,7 @@ fn selected_defaults_are_exact_through_budget_pressure_and_cross_agent_reset() {
 fn held_resolution_never_automatically_applies_advice_in_either_phase() {
     let (dir, _home, _cache) = isolated();
     let _fleet = DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::OpenCode]);
-    crate::agent_config::save_agent_default_model("codex", Some("gpt-6-sol")).expect("model");
+    crate::config::agent::save_agent_default_model("codex", Some("gpt-6-sol")).expect("model");
     let _served =
         crate::agent::model_validation::MockServedModelsGuard::set(AgentKind::Codex, None);
     let store = Arc::new(Store::open_memory().expect("store"));
@@ -78,7 +78,7 @@ fn held_resolution_never_automatically_applies_advice_in_either_phase() {
 fn advice_rejects_unserved_model_or_new_hold_without_dropping_or_family_switching() {
     let (dir, _home, _cache) = isolated();
     let _fleet = DetectAgentsGuard::set(vec![AgentKind::Droid]);
-    crate::agent_config::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
+    crate::config::agent::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
     let store = Arc::new(Store::open_memory().expect("store"));
     let selected = automatic_candidate(Some(&store), &args()).expect("peer");
     let mut child = args();

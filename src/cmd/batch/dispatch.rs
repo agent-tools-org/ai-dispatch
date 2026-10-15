@@ -83,8 +83,8 @@ async fn dispatch_with_dependencies(
         } else {
             task.agent.as_str()
         };
-        let (kind, custom_name) = crate::rate_limit::resolve_agent(agent_name);
-        if !crate::rate_limit::is_rate_limited(&kind, custom_name)
+        let (kind, custom_name) = crate::routing::rate_limit::resolve_agent(agent_name);
+        if !crate::routing::rate_limit::is_rate_limited(&kind, custom_name)
             || !rate_warned.insert(agent_name.to_string())
         {
             continue;
@@ -106,7 +106,7 @@ async fn dispatch_with_dependencies(
             let id = task
                 .id
                 .as_ref()
-                .filter(|s| crate::sanitize::is_valid_task_id(s))
+                .filter(|s| crate::support::sanitize::is_valid_task_id(s))
                 .map(|s| crate::types::TaskId(s.clone()))
                 .unwrap_or_else(crate::types::TaskId::generate);
             let agent = task.agent.as_str();
@@ -171,7 +171,7 @@ async fn dispatch_with_dependencies(
                     None => {
                         outcomes[dispatch.index] = Some(BatchTaskOutcome::Failed);
                         // Mark waiting placeholder as skipped
-                        let _ = crate::task_lifecycle::mark_skipped(
+                        let _ = crate::task::lifecycle::mark_skipped(
                             store.as_ref(),
                             &waiting_ids[dispatch.index],
                         );
@@ -267,7 +267,7 @@ async fn dispatch_with_dependencies(
     // Mark any remaining waiting tasks as skipped (deps never resolved)
     for (i, outcome) in outcomes.iter().enumerate() {
         if outcome.is_none() {
-            let _ = crate::task_lifecycle::mark_skipped(store.as_ref(), &waiting_ids[i]);
+            let _ = crate::task::lifecycle::mark_skipped(store.as_ref(), &waiting_ids[i]);
         }
     }
     // Only add retry/fallback IDs that aren't already in waiting_ids.
@@ -290,7 +290,7 @@ pub(super) fn reconcile_and_poll_completed_tasks(
     store: &Arc<Store>,
     active: &mut Vec<(usize, String)>,
 ) -> Result<Vec<super::batch_types::CompletedTask>> {
-    let _ = crate::background::check_zombie_tasks(store.as_ref())?;
+    let _ = crate::runtime::background::check_zombie_tasks(store.as_ref())?;
     poll_completed_tasks(store, active)
 }
 

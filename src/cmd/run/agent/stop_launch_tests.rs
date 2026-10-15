@@ -3,7 +3,7 @@
 
 use super::{task, TimeoutTestAgent};
 use crate::{
-    paths,
+    support::paths,
     store::Store,
     types::{TaskId, TaskStatus},
 };
@@ -33,7 +33,7 @@ async fn settle_first_stopped_task_never_spawns_timeout_agent() {
         None,
         false,
         None,
-        crate::timeout_policy::TimeoutPolicy::default(),
+        crate::config::timeout_policy::TimeoutPolicy::default(),
         None,
     )
     .await;

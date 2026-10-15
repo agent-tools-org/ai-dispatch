@@ -1,11 +1,11 @@
 // Handler for `aid upgrade` CLI command — replaces the aid binary from crates.io.
 // Exports: run.
-// Deps: crate::paths, crate::store, std::env, std::process.
+// Deps: crate::support::paths, crate::store, std::env, std::process.
 
 use anyhow::{bail, Result};
 use std::process::Command;
 
-use crate::paths;
+use crate::support::paths;
 use crate::store::Store;
 
 pub fn run(force: bool) -> Result<()> {

@@ -4,7 +4,7 @@
 
 use super::{stop, tests::make_task};
 use crate::{
-    agent, paths,
+    agent, support::paths,
     store::Store,
     types::{AgentKind, TaskId, TaskStatus},
 };
@@ -43,7 +43,7 @@ fn assert_refused(store: &Store, id: &TaskId, marker: &std::path::Path, result: 
 fn settle_first_stopped_task_never_spawns_pty_agent() {
     let (home, _guard, store, id) = setup();
     let marker = home.path().join("launched");
-    let result = crate::pty_runner::run_agent_process(
+    let result = crate::runtime::pty::runner::run_agent_process(
         agent::get_agent(AgentKind::Codex).as_ref(),
         &command(&marker),
         &id,
@@ -70,7 +70,7 @@ async fn settle_first_stopped_task_never_spawns_buffered_agent() {
         None,
         false,
         None,
-        crate::timeout_policy::TimeoutPolicy::default(),
+        crate::config::timeout_policy::TimeoutPolicy::default(),
         None,
     )
     .await;

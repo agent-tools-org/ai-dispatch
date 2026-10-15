@@ -1,15 +1,15 @@
 // Handler for `aid agent` subcommands — manage custom agent definitions.
 // Exports: AgentAction, run_agent_command.
-// Deps: crate::agent::registry, crate::agent::custom, crate::paths, std::fs.
+// Deps: crate::agent::registry, crate::agent::custom, crate::support::paths, std::fs.
 use anyhow::{bail, Context, Result};
 use std::fs;
 use std::path::PathBuf;
 
 use crate::agent::custom::parse_config;
 use crate::agent::registry;
-use crate::agent_config;
-use crate::paths;
-use crate::sanitize;
+use crate::config::agent as agent_config;
+use crate::support::paths;
+use crate::support::sanitize;
 use crate::types::AgentKind;
 
 use crate::store::Store;
@@ -249,7 +249,7 @@ fn custom_agent_path(name: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths;
+    use crate::support::paths;
 
     #[test]
     fn show_quota_runs_without_panic() {

@@ -4,7 +4,7 @@
 
 use super::{kill, stop};
 use crate::store::Store;
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::path::Path;
@@ -78,7 +78,7 @@ fn stop_captures_final_branch_before_marking_stopped() {
     let _permit = test_subprocess::acquire();
     let repo = init_repo();
     let branch = "fix/stop-final-capture";
-    let info = crate::worktree::create_worktree(repo.path(), branch, None).unwrap();
+    let info = crate::workspace::worktree::create_worktree(repo.path(), branch, None).unwrap();
     git(&info.path, &["switch", "-c", "agent/stop-final"]);
     let store = Arc::new(Store::open_memory().unwrap());
     let task = running_task("t-stop-final-capture", repo.path(), &info.path, branch);
@@ -104,16 +104,16 @@ fn stop_and_kill_release_worktree_locks() {
         ("t-kill-lock", "fix/kill-lock", TaskStatus::Running, kill as fn(&Arc<Store>, &str) -> anyhow::Result<()>),
         ("t-pending-lock", "fix/pending-lock", TaskStatus::Pending, stop as fn(&Arc<Store>, &str) -> anyhow::Result<()>),
     ] {
-        let info = crate::worktree::create_worktree(repo.path(), branch, None).unwrap();
+        let info = crate::workspace::worktree::create_worktree(repo.path(), branch, None).unwrap();
         let mut task = running_task(task_id, repo.path(), &info.path, branch);
         task.status = status;
         store.insert_task(&task).unwrap();
-        crate::worktree::try_acquire_worktree_lock(&info.path, task_id).unwrap();
+        crate::workspace::worktree::try_acquire_worktree_lock(&info.path, task_id).unwrap();
 
         action(&store, task_id).unwrap();
 
         assert!(!info.path.join(".aid-lock").exists());
-        assert!(crate::worktree::check_worktree_lock(&info.path).is_none());
+        assert!(crate::workspace::worktree::check_worktree_lock(&info.path).is_none());
     }
 }
 
@@ -124,7 +124,7 @@ fn detached_stop_and_force_kill_reject_unverified_agent_identity() {
     for action in [stop, kill] {
         for started in [Some("previous-launch".to_string()), None] {
             let home = tempfile::tempdir().expect("home");
-            let _home = crate::paths::AidHomeGuard::set(home.path());
+            let _home = crate::support::paths::AidHomeGuard::set(home.path());
             let store = Arc::new(Store::open_memory().expect("store"));
             let mut task = running_task("t-stop-identity", home.path(), home.path(), "unused");
             task.worktree_path = None;
@@ -132,15 +132,15 @@ fn detached_stop_and_force_kill_reject_unverified_agent_identity() {
             store.insert_task(&task).expect("task");
             let mut command = Command::new("sleep");
             command.arg("60");
-            let mut root = crate::process_guard::ProcessGuard::spawn(&mut command).expect("agent");
-            let mut spec: crate::background::BackgroundRunSpec = serde_json::from_str(
+            let mut root = crate::runtime::process::guard::ProcessGuard::spawn(&mut command).expect("agent");
+            let mut spec: crate::runtime::background::BackgroundRunSpec = serde_json::from_str(
                 include_str!("../../../testdata/legacy-background-spec.json"),
             ).expect("spec");
             spec.task_id = task.id.to_string();
             spec.worker_pid = Some(root.id());
             spec.agent_pid = Some(root.id());
             spec.agent_started = started;
-            crate::background::save_spec(&spec).expect("save spec");
+            crate::runtime::background::save_spec(&spec).expect("save spec");
             action(&store, task.id.as_str()).expect("stop");
             std::thread::sleep(std::time::Duration::from_millis(100));
             let survived = root.child_mut().try_wait().expect("wait").is_none();
@@ -156,7 +156,7 @@ fn detached_stop_and_force_kill_signal_matching_agent_identity() {
     let _permit = test_subprocess::acquire();
     for action in [stop, kill] {
         let home = tempfile::tempdir().expect("home");
-        let _home = crate::paths::AidHomeGuard::set(home.path());
+        let _home = crate::support::paths::AidHomeGuard::set(home.path());
         let store = Arc::new(Store::open_memory().expect("store"));
         let mut task = running_task("t-stop-owned", home.path(), home.path(), "unused");
         task.worktree_path = None;
@@ -164,16 +164,16 @@ fn detached_stop_and_force_kill_signal_matching_agent_identity() {
         store.insert_task(&task).expect("task");
         let mut command = Command::new("sleep");
         command.arg("60");
-        let mut root = crate::process_guard::ProcessGuard::spawn(&mut command).expect("agent");
-        let mut spec: crate::background::BackgroundRunSpec = serde_json::from_str(
+        let mut root = crate::runtime::process::guard::ProcessGuard::spawn(&mut command).expect("agent");
+        let mut spec: crate::runtime::background::BackgroundRunSpec = serde_json::from_str(
             include_str!("../../../testdata/legacy-background-spec.json"),
         ).expect("spec");
         spec.task_id = task.id.to_string();
         spec.worker_pid = None;
         spec.agent_pid = Some(root.id());
-        spec.agent_started = crate::process_monitor::activity::root_started(root.id());
+        spec.agent_started = crate::runtime::process::monitor::activity::root_started(root.id());
         assert!(spec.agent_started.is_some());
-        crate::background::save_spec(&spec).expect("save spec");
+        crate::runtime::background::save_spec(&spec).expect("save spec");
         action(&store, task.id.as_str()).expect("stop");
         assert!(!root.child_mut().wait().expect("wait").success(), "owned agent must be killed");
     }

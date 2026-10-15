@@ -58,7 +58,7 @@ mod tests {
     #[test]
     fn run_env_forward_overrides_explicit_value_at_launch() {
         let aid_home = tempfile::tempdir().unwrap();
-        let _aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+        let _aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
         let opts = crate::agent::RunOpts {
             dir: None, output: None, result_file: None, model: None, budget: false,
             read_only: false, sandbox: false, context_files: vec![], session_id: None,
@@ -73,7 +73,7 @@ mod tests {
 
     fn launch_env(env: Option<std::collections::HashMap<String, String>>) -> Command {
         let aid_home = tempfile::tempdir().unwrap();
-        let _aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+        let _aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
         let opts = crate::agent::RunOpts {
             dir: None, output: None, result_file: None, model: None, budget: false,
             read_only: false, sandbox: false, context_files: vec![], session_id: None,

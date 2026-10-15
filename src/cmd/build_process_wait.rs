@@ -23,7 +23,7 @@ pub(super) async fn wait_for_cargo(
     stream_state: &mut CargoStreamState,
     timeout: Option<Duration>,
 ) -> Result<(ExitStatus, bool)> {
-    let queue = crate::remote_build::LockQueue::default();
+    let queue = crate::runtime::remote_build::LockQueue::default();
     let poll = timeout.map_or(Duration::from_millis(100), |limit| {
         (limit / 4)
             .min(Duration::from_millis(100))

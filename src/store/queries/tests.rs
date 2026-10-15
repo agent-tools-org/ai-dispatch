@@ -7,7 +7,7 @@ use rusqlite::params;
 
 use crate::store::Store;
 use crate::types::{AgentKind, TaskStatus};
-use crate::usage::parse_window;
+use crate::cost::usage::parse_window;
 
 fn insert_task(
     store: &Store,

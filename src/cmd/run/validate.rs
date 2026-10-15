@@ -36,8 +36,8 @@ where
     W: Fn(&str) -> bool,
 {
     if args.sandbox
-        && crate::sandbox::can_sandbox(agent.kind())
-        && !crate::sandbox::is_available()
+        && crate::runtime::sandbox::can_sandbox(agent.kind())
+        && !crate::runtime::sandbox::is_available()
     {
         anyhow::bail!(
             "--sandbox requires Apple Container CLI. Install: brew install container; or omit --sandbox"

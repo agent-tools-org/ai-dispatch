@@ -61,7 +61,7 @@ fn assert_bounded(store: &Store, prompt: &str, label: &str) {
 #[test]
 fn sibling_file_list_preservation_bounds_auxiliary_and_warns_once() {
     let home = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     let store = Store::open_memory().unwrap();
     let group = store.create_workgroup("siblings", "", None, None).unwrap();
     insert_task(&store, "t-current", None, Some(group.id.as_str()));
@@ -99,7 +99,7 @@ fn sibling_file_list_preservation_bounds_auxiliary_and_warns_once() {
 #[test]
 fn prior_output_preservation_bounds_auxiliary_and_warns_once() {
     let home = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     let store = Store::open_memory().unwrap();
     let output = home.path().join("output.md");
     std::fs::write(&output, "Prior result é\n".repeat(8000)).unwrap();
@@ -120,7 +120,7 @@ fn prior_output_preservation_bounds_auxiliary_and_warns_once() {
 #[test]
 fn shared_output_preservation_bounds_auxiliary_and_warns_once() {
     if std::env::var_os("AID_TEST_SHARED_BOUND").is_none() {
-        let _permit = crate::test_subprocess::acquire();
+        let _permit = crate::support::test_subprocess::acquire();
         let home = tempfile::tempdir().unwrap();
         std::fs::write(
             home.path().join("result.md"),
@@ -148,7 +148,7 @@ fn shared_output_preservation_bounds_auxiliary_and_warns_once() {
         return;
     }
     let home = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     let store = Store::open_memory().unwrap();
     insert_task(&store, "t-current", None, None);
     let args = RunArgs {
@@ -166,10 +166,10 @@ fn shared_output_preservation_bounds_auxiliary_and_warns_once() {
 #[test]
 fn methodology_preservation_bounds_auxiliary_and_aggregates_warning() {
     let home = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     let store = Store::open_memory().unwrap();
     insert_task(&store, "t-current", None, None);
-    let skills = crate::paths::aid_dir().join("skills");
+    let skills = crate::support::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&skills).unwrap();
     std::fs::write(skills.join("large.md"), "Methodology é\n".repeat(8000)).unwrap();
     let output = home.path().join("prior.md");
@@ -193,7 +193,7 @@ fn methodology_preservation_bounds_auxiliary_and_aggregates_warning() {
 #[test]
 fn background_cascade_preservation_does_not_accumulate_launch_context() {
     let home = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     let store = Store::open_memory().unwrap();
     let group = store
         .create_workgroup("cascade", "Injected shared context", None, None)
@@ -243,8 +243,8 @@ fn background_cascade_preservation_does_not_accumulate_launch_context() {
 #[test]
 fn template_preservation_appends_brief_without_placeholder_on_dispatch_and_retry() {
     let home = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
-    let templates = crate::paths::aid_dir().join("templates");
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let templates = crate::support::paths::aid_dir().join("templates");
     std::fs::create_dir_all(&templates).unwrap();
     std::fs::write(templates.join("broken.md"), "Unrelated task").unwrap();
     let store = Store::open_memory().unwrap();

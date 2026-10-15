@@ -172,8 +172,8 @@ pub fn provider_for_custom(
     (provider, metering)
 }
 
-mod provider_egress;
-pub use provider_egress::{egress_for_base_url, egress_for_cli, egress_for_provider};
+mod egress;
+pub use egress::{egress_for_base_url, egress_for_cli, egress_for_provider};
 
 fn parse_metering_label(label: &str) -> MeteringShape {
     match label {

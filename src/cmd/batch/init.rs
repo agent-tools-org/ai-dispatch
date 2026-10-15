@@ -1,5 +1,5 @@
 // Generate a batch TOML template with all available fields.
-// Exports: init(); depends on crate::project for auto-detecting project defaults.
+// Exports: init(); depends on crate::config::project for auto-detecting project defaults.
 
 use anyhow::Result;
 
@@ -20,7 +20,7 @@ pub fn init(output_path: Option<&str>) -> Result<()> {
 }
 
 fn detect_project_defaults() -> (String, String, String, String) {
-    let project = crate::project::detect_project();
+    let project = crate::config::project::detect_project();
     match project {
         Some(config) => {
             let dir = ".".to_string();

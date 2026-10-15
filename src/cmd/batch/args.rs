@@ -152,9 +152,9 @@ pub(super) fn merged_env(
 mod tests {
     use super::*;
 
-    fn batch_task(toml: &str) -> (tempfile::TempDir, crate::paths::AidHomeGuard, batch::BatchTask) {
+    fn batch_task(toml: &str) -> (tempfile::TempDir, crate::support::paths::AidHomeGuard, batch::BatchTask) {
         let home = tempfile::tempdir().expect("temporary aid home");
-        let guard = crate::paths::AidHomeGuard::set(home.path());
+        let guard = crate::support::paths::AidHomeGuard::set(home.path());
         let task: batch::BatchTask = toml::from_str(toml).expect("valid batch task");
         (home, guard, task)
     }
@@ -183,7 +183,7 @@ mod tests {
             budget = "cheap"
             "#,
         );
-        crate::agent_config::save_agent_default_model("gemini", Some("pro")).expect("save config");
+        crate::config::agent::save_agent_default_model("gemini", Some("pro")).expect("save config");
         let store = Arc::new(Store::open_memory().expect("in-memory store"));
 
         let args = task_to_run_args(&task, &[], false, &store, None);
@@ -205,7 +205,7 @@ mod tests {
             model = "flash"
             "#,
         );
-        crate::agent_config::save_agent_default_model("gemini", Some("pro")).expect("save config");
+        crate::config::agent::save_agent_default_model("gemini", Some("pro")).expect("save config");
         let store = Arc::new(Store::open_memory().expect("in-memory store"));
 
         let args = task_to_run_args(&task, &[], false, &store, None);
@@ -217,7 +217,7 @@ mod tests {
     #[test]
     fn standard_and_premium_batch_leave_model_unset_without_config() {
         let home = tempfile::tempdir().expect("temporary aid home");
-        let _guard = crate::paths::AidHomeGuard::set(home.path());
+        let _guard = crate::support::paths::AidHomeGuard::set(home.path());
         let store = Arc::new(Store::open_memory().expect("store"));
         for agent in ["codex", "agy"] {
             for budget in ["standard", "premium"] {

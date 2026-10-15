@@ -18,123 +18,41 @@
 #![allow(clippy::unnecessary_map_or)]
 
 #[macro_use]
-pub mod output;
+pub mod ui;
 mod agent;
-mod backup;
-mod remote_build;
-mod agent_config;
-mod aic;
-mod auth_marker;
-mod background;
 mod batch;
-mod board;
-mod command_diagnostics;
 mod cmd;
-mod cmd_dispatch;
-mod commit;
 mod config;
-mod container;
-mod context;
 mod cost;
-pub mod credential_pool;
-mod explore;
-mod failure_salvage;
-mod feed_refresh;
-mod delivery_guard;
-pub mod gitbutler;
-mod hooks;
-mod idle_timeout;
-mod live_quota;
-mod live_quota_refresh;
-mod route_availability;
-mod input_signal;
-mod model_catalog;
-mod model_health;
-mod provider_capacity;
-mod notify;
-mod paths;
 mod prompt;
-mod prompt_scan;
-pub mod process_group;
-mod process_guard;
-mod process_monitor;
-mod pty_bridge;
-mod pty_runner;
-mod pty_runner_control;
-mod pty_watch_idle;
-mod pty_watch;
-mod quota_channel;
-mod rate_limit;
-mod rate_limit_signatures;
-mod rate_limit_wait;
-mod repo_root;
-pub(crate) mod sanitize;
-mod sandbox;
-#[cfg(test)]
-mod sandbox_tests;
-mod session;
-mod shared_dir;
-mod skills;
-mod state;
-#[cfg(test)]
-mod state_tests;
 mod store;
-mod store_workgroups;
-mod artifact_custody;
-mod task_actions;
-mod task_lifecycle;
-mod task_view;
-mod project;
-mod team;
-mod templates;
-mod timeout_policy;
-mod toolbox;
-mod unstick;
-#[cfg(test)]
-mod test_subprocess;
-#[cfg(test)]
-mod test_env;
-mod compaction;
-pub mod claudemd;
-mod tui;
-mod system_resources;
-mod scores;
 mod types;
-mod update_check;
-mod usage;
-pub mod usage_report;
-mod verify;
-mod verify_cargo;
-mod watcher;
-mod webhook;
 mod typesafe;
-#[cfg(feature = "web")]
-mod web;
-mod workgroup;
-mod worktree_gc;
-mod worktree_deps;
-mod worktree;
-mod worktree_layout;
 mod cli;
+mod support;
+mod runtime;
+mod routing;
+mod task;
+mod workspace;
 
 use crate::cli::{Cli, Commands};
 use anyhow::Result;
 use std::sync::Arc;
 
 fn main() -> Result<()> {
-    let result = run_cli(command_diagnostics::parse());
+    let result = run_cli(cli::diagnostics::parse());
     if let Err(error) = &result {
-        command_diagnostics::record_error(error);
+        cli::diagnostics::record_error(error);
     }
     result
 }
 
 fn run_cli(cli: Cli) -> Result<()> {
     if let Some(Commands::Errors(args)) = cli.command.as_ref() {
-        return command_diagnostics::show(args);
+        return cli::diagnostics::show(args);
     }
     if matches!(cli.command.as_ref(), Some(Commands::InternalRunTask(_)))
-        && background::daemonize_worker_if_requested()?
+        && runtime::background::daemonize_worker_if_requested()?
     {
         return Ok(());
     }
@@ -145,19 +63,19 @@ fn run_cli(cli: Cli) -> Result<()> {
 }
 
 async fn async_main(cli: Cli) -> Result<()> {
-    output::init();
+    ui::output::init();
     if cli.quiet {
-        output::set_quiet(true);
+        ui::output::set_quiet(true);
     }
 
     let command = match cli.command {
         Some(Commands::Advise(args)) => {
             // Advise reads the score feed, so it starts the detached refresh too, but only
             // in an initialised aid home: advise must not create state in a fresh one.
-            if paths::db_path().exists() {
+            if support::paths::db_path().exists() {
                 cost::maybe_refresh_prices();
             }
-            let store = store::Store::open_read_only(&paths::db_path())?;
+            let store = store::Store::open_read_only(&support::paths::db_path())?;
             cmd::advise::run(store.as_ref(), args)?;
             return Ok(());
         }
@@ -166,21 +84,21 @@ async fn async_main(cli: Cli) -> Result<()> {
         other => other,
     };
 
-    paths::ensure_dirs()?;
+    support::paths::ensure_dirs()?;
     let config = config::load_config().unwrap_or_default();
     if config.updates.check {
-        update_check::maybe_check_update();
+        support::update_check::maybe_check_update();
     }
     // Refresh the model price feed out of band: never on the dispatch path, so
     // a cold or stale cache cannot delay or fail a run.
     cost::maybe_refresh_prices();
-    let store = Arc::new(store::Store::open(&paths::db_path())?);
+    let store = Arc::new(store::Store::open(&support::paths::db_path())?);
     cost::warm_gemini_default_from_store(store.as_ref());
-    let _ = background::check_zombie_tasks(&store);
+    let _ = runtime::background::check_zombie_tasks(&store);
 
     let outcome = match command {
-        Some(command) => cmd_dispatch::dispatch(store.clone(), command).await?,
-        None => cmd_dispatch::dispatch(store.clone(), Commands::Board(Default::default())).await?,
+        Some(command) => cli::dispatch::dispatch(store.clone(), command).await?,
+        None => cli::dispatch::dispatch(store.clone(), Commands::Board(Default::default())).await?,
     };
     if let Some(run_status) = outcome.run_exit_status(store.as_ref())? {
         println!("{}", run_status.summary_line());

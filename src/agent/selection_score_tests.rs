@@ -14,9 +14,9 @@ use super::selection_scoring::{
 };
 use super::advise;
 use crate::agent::classifier::{Complexity, TaskCategory, TaskProfile};
-use crate::live_quota::CacheDirGuard;
-use crate::paths::AidHomeGuard;
-use crate::team::TeamConfig;
+use crate::routing::quota::live::CacheDirGuard;
+use crate::support::paths::AidHomeGuard;
+use crate::config::team::TeamConfig;
 use crate::types::{
     AgentKind, DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency,
 };
@@ -87,12 +87,12 @@ fn declared(urgency: TaskUrgency) -> DeclaredTaskProfile {
 
 /// Historical catalog-tier inputs, kept only as scoring regression fixtures.
 fn hint_breakdown(ctx: &CandidateContext<'_>, kind: AgentKind) -> super::selection_scoring::ScoreBreakdown {
-    let models = crate::model_catalog::static_models_for_agent(&kind);
+    let models = crate::routing::model_catalog::static_models_for_agent(&kind);
     let tier = match ctx.profile.complexity {
         Complexity::Low => "cheap", Complexity::Medium => "standard", Complexity::High => "premium",
     };
     let model = if ctx.budget {
-        crate::model_catalog::budget_model(&kind)
+        crate::routing::model_catalog::budget_model(&kind)
     } else {
         models.iter().find(|m| m.tier == tier).or_else(|| models.first()).map(|m| m.model)
     };
@@ -133,7 +133,7 @@ fn breakdown_is_bit_identical_to_pre_decomposition_value() {
 fn discovered_agy_model_keeps_base_score_when_capability_is_unknown() {
     let temp = TempDir::new().expect("temp dir");
     let _home = AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().expect("aid dirs");
+    crate::support::paths::ensure_dirs().expect("aid dirs");
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("current time")
@@ -142,7 +142,7 @@ fn discovered_agy_model_keeps_base_score_when_capability_is_unknown() {
         "agy": {"models": ["gemini-3.7-flash-high"], "updated_at_secs": now}
     });
     std::fs::write(
-        crate::paths::aid_dir().join("served_models_cache.json"),
+        crate::support::paths::aid_dir().join("served_models_cache.json"),
         cache.to_string(),
     )
     .expect("served-model cache");

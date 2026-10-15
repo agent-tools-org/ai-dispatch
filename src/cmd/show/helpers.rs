@@ -6,7 +6,7 @@ use anyhow::Result;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::paths;
+use crate::support::paths;
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent};
 
@@ -63,7 +63,7 @@ pub(super) fn research_findings(store: &Store, task: &Task) -> Option<String> {
         .log_path
         .as_ref()
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| crate::paths::log_path(task.id.as_str()));
+        .unwrap_or_else(|| crate::support::paths::log_path(task.id.as_str()));
     extract_messages_from_log(&log_path, false, Some(task.agent_display_name())).filter(|messages| !messages.is_empty())
 }
 

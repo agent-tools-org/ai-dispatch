@@ -5,7 +5,7 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration, Instant};
 
-use crate::board::{render_board, render_task_detail};
+use crate::ui::board::{render_board, render_task_detail};
 use crate::store::Store;
 use crate::types::{Task, TaskFilter, TaskStatus};
 

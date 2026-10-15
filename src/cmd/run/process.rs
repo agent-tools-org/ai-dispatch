@@ -6,7 +6,7 @@ use tokio::process::Command;
 
 use crate::{store::Store, types::*};
 use crate::cmd::run::RunArgs;
-use crate::process_group::cleanup_process_group;
+use crate::runtime::process::group::cleanup_process_group;
 use crate::store::TaskCompletionUpdate;
 
 use super::{clean_output_if_jsonl, fill_empty_output_from_log};
@@ -31,7 +31,7 @@ pub(crate) struct RunProcessArgs<'a> {
     pub store: &'a Arc<Store>, pub log_path: &'a std::path::Path,
     pub output_path: Option<&'a str>, pub model: Option<&'a str>, pub streaming: bool,
     pub workgroup_id: Option<&'a str>,
-    pub timeout_policy: crate::timeout_policy::TimeoutPolicy,
+    pub timeout_policy: crate::config::timeout_policy::TimeoutPolicy,
     pub max_task_cost: Option<f64>,
 }
 
@@ -60,7 +60,7 @@ pub(crate) fn capture_failure_context(store: &Store, task_id: &TaskId, cmd: &Com
 }
 
 pub(crate) fn stderr_excerpt(task_id: &TaskId) -> Option<String> {
-    let stderr_path = crate::paths::stderr_path(task_id.as_str());
+    let stderr_path = crate::support::paths::stderr_path(task_id.as_str());
     let content = std::fs::read_to_string(stderr_path).ok()?;
     let lines: Vec<&str> = content
         .lines()
@@ -93,8 +93,8 @@ pub(crate) fn resolve_failure_exit_code(store: &Store, task_id: &TaskId, exit_co
 
 pub(crate) fn record_execution_failure(store: &Store, task_id: &TaskId, duration_ms: i64, exit_code: Option<i32>, context: &FailureContext) {
     let capacity = store.get_task(task_id.as_str()).ok().flatten()
-        .and_then(|task| crate::provider_capacity::read(store, task_id, task.agent).map(|_|
-            crate::provider_capacity::terminal_label(store, task_id, task.agent, TaskStatus::Failed)));
+        .and_then(|task| crate::routing::capacity::read(store, task_id, task.agent).map(|_|
+            crate::routing::capacity::terminal_label(store, task_id, task.agent, TaskStatus::Failed)));
     let reason = match (capacity, exit_code) {
         (Some(message), _) => message,
         (_, Some(code)) => format!("agent exited with code {code}"),
@@ -145,14 +145,14 @@ fn complete_agent(
     let model = args.model;
     let duration_ms = start.elapsed().as_millis() as i64;
     let exit_code = resolve_failure_exit_code(store.as_ref(), task_id, info.exit_code);
-    // Same split as pty_runner::record_completion: the observation stands alone,
+    // Same split as runner::record_completion: the observation stands alone,
     // only the cost estimate may fall back to what was requested.
     let (observed_model, attribution_source) = crate::agent::codex::grade_completion_observation(
         agent, store.as_ref(), task_id, info, model,
     );
     let costing_model = observed_model.as_deref().or(model);
     let cost_usd = crate::cost::completion_cost(store, task_id, info, costing_model, agent.kind())?;
-    if !crate::task_lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
+    if !crate::task::lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
         id: task_id.as_str(),
         status: info.status,
         tokens: info.tokens,
@@ -229,13 +229,13 @@ fn print_completion(
     } else {
         String::new()
     };
-    let label = crate::provider_capacity::terminal_label(store, task_id, agent.kind(), info.status);
+    let label = crate::routing::capacity::terminal_label(store, task_id, agent.kind(), info.status);
     println!("Task {} {} ({}{}{}){}", task_id, label, duration_str, tokens_str, cost_str, fail_reason);
 }
 
 pub(crate) fn notify_task_completion(store: &Store, task_id: &TaskId) -> Result<()> {
     if let Some(task) = store.get_task(task_id.as_str())? {
-        crate::notify::notify_completion(&task);
+        crate::task::notify::notify_completion(&task);
     }
     Ok(())
 }
@@ -257,7 +257,7 @@ pub(crate) fn inherit_retry_base_branch_impl(repo_dir: Option<&str>, task: &Task
     let Some(branch) = task.worktree_branch.as_deref() else { return; };
     if retry_args.worktree.as_deref() == Some(branch) { return; }
     let repo_dir = std::path::Path::new(task.repo_path.as_deref().or(retry_args.repo.as_deref()).or(repo_dir).unwrap_or("."));
-    if let Ok(true) = crate::worktree::branch_has_commits_ahead_of_main(repo_dir, branch) { retry_args.base_branch = Some(branch.to_string()); }
+    if let Ok(true) = crate::workspace::worktree::branch_has_commits_ahead_of_main(repo_dir, branch) { retry_args.base_branch = Some(branch.to_string()); }
 }
 
 fn format_duration(ms: i64) -> String {

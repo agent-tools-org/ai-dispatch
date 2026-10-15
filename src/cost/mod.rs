@@ -7,7 +7,7 @@ mod pricing_resolution;
 mod components;
 pub(crate) use components::{apply_completion_usage_cost, completion_cost, task_cost};
 
-use crate::model_catalog;
+use crate::routing::model_catalog;
 use crate::store::Store;
 use crate::types::AgentKind;
 use std::collections::HashMap;
@@ -47,7 +47,7 @@ pub fn warm_gemini_default_from_store(store: &Store) {
 /// network failure keeps the old cache.
 pub fn maybe_refresh_prices() {
     price_feed::maybe_refresh();
-    crate::scores::feed::maybe_refresh();
+    crate::routing::scores::feed::maybe_refresh();
 }
 
 /// The price feed's exact canonical-ID/alias resolver, shared by score evidence.
@@ -197,7 +197,7 @@ pub(crate) fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<M
             .get()
             .and_then(|stored| stored.clone())
             .filter(|model| !model.is_empty()),
-        (None, AgentKind::Qwen) => crate::model_catalog::get_qwen_selected_model(),
+        (None, AgentKind::Qwen) => crate::routing::model_catalog::get_qwen_selected_model(),
         (None, _) => None,
     };
     match known {
@@ -247,3 +247,6 @@ pub(crate) mod test_support;
 
 #[cfg(test)]
 mod process_tests;
+
+pub(crate) mod usage;
+pub mod usage_report;

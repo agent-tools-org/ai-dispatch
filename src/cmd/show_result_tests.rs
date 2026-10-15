@@ -2,7 +2,7 @@
 // Ensures `result.md` is treated as the primary rendered output when present.
 
 use crate::cmd::show::read_task_output;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 
@@ -51,7 +51,7 @@ fn task(id: &str) -> Task {
 fn read_task_output_uses_persisted_result_file() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = AidHomeGuard::set(temp.path());
-    let result_path = crate::paths::task_dir("t-result-default").join("result.md");
+    let result_path = crate::support::paths::task_dir("t-result-default").join("result.md");
     std::fs::create_dir_all(result_path.parent().unwrap()).unwrap();
     std::fs::write(&result_path, "## Findings\nNo findings.\n").unwrap();
 
@@ -164,7 +164,7 @@ fn output_text_reports_missing_owned_file_then_task_log() {
     )
     .unwrap();
 
-    let log_b = crate::paths::log_path("t-victim-output");
+    let log_b = crate::support::paths::log_path("t-victim-output");
     std::fs::create_dir_all(log_b.parent().unwrap()).unwrap();
     std::fs::write(&log_b, "task-b-own-log-line\n").unwrap();
 

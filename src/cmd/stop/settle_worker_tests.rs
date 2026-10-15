@@ -5,7 +5,7 @@
 use super::{stop, tests::make_task};
 use crate::{
     agent::{Agent, RunOpts},
-    paths,
+    support::paths,
     store::Store,
     types::*,
 };
@@ -41,7 +41,7 @@ impl Agent for StopAtFailure {
 
 #[tokio::test]
 async fn settle_worker_failure_after_stop_records_no_failure_event() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let home = tempfile::tempdir().expect("home");
     let _guard = paths::AidHomeGuard::set(home.path());
     paths::ensure_dirs().expect("dirs");
@@ -66,7 +66,7 @@ async fn settle_worker_failure_after_stop_records_no_failure_event() {
         None,
         false,
         None,
-        crate::timeout_policy::TimeoutPolicy::default(),
+        crate::config::timeout_policy::TimeoutPolicy::default(),
         None,
     )
     .await

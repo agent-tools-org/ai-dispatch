@@ -7,7 +7,7 @@ use std::sync::Arc;
 use super::cost::{daily_summary_rows, group_tasks, run};
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-use crate::usage::UsageWindow;
+use crate::cost::usage::UsageWindow;
 
 fn make_task(
     id: &str,

@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 use crate::agent::classifier::TaskCategory;
-use crate::background;
+use crate::runtime::background;
 use crate::cmd::advise;
 use crate::cmd::agent_json;
 use crate::cmd::ask;
@@ -22,8 +22,8 @@ use crate::store::Store;
 use crate::types::{
     DeclaredTaskProfile, Task, TaskBudget, TaskDifficulty, TaskFilter, TaskRigor, TaskUrgency,
 };
-use crate::usage;
-use crate::usage_report;
+use crate::cost::usage;
+use crate::cost::usage_report;
 
 #[cfg(test)]
 #[path = "mcp_tools_tests.rs"]

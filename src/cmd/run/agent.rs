@@ -26,7 +26,7 @@ pub(crate) async fn run_agent_process(
     model: Option<&str>,
     streaming: bool,
     workgroup_id: Option<&str>,
-    timeout_policy: crate::timeout_policy::TimeoutPolicy,
+    timeout_policy: crate::config::timeout_policy::TimeoutPolicy,
 ) -> Result<()> {
     run_agent_process_with_cost(
         agent, cmd, task_id, store, log_path, output_path, model, streaming,
@@ -44,7 +44,7 @@ pub(crate) async fn run_agent_process_with_cost(
     model: Option<&str>,
     streaming: bool,
     workgroup_id: Option<&str>,
-    timeout_policy: crate::timeout_policy::TimeoutPolicy,
+    timeout_policy: crate::config::timeout_policy::TimeoutPolicy,
     max_task_cost: Option<f64>,
 ) -> Result<()> {
     run_prompt::run_agent_process_impl(run_prompt::RunProcessArgs {

@@ -2,7 +2,7 @@
 // Fallback readers use command-layer advice; scoring stays agent-owned.
 // Deps: run advice routes, scoring, isolated AID_HOME and installed agents.
 
-use crate::paths::{self, AidHomeGuard};
+use crate::support::paths::{self, AidHomeGuard};
 use crate::types::AgentKind;
 use tempfile::TempDir;
 
@@ -50,7 +50,7 @@ fn fallback_chain_skips_rate_limited() {
         AgentKind::Codex,
         AgentKind::Cursor,
     ]);
-    crate::rate_limit::mark_rate_limited(&AgentKind::Codex, None, "quota exhausted");
+    crate::routing::rate_limit::mark_rate_limited(&AgentKind::Codex, None, "quota exhausted");
     let result = crate::cmd::run::advice_route::automatic_candidate(
         None,
         &crate::cmd::run::RunArgs {

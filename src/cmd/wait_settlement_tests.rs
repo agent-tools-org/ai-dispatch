@@ -1,7 +1,7 @@
 // Deterministic coverage of Done -> delivery failure during worker settlement.
 use super::*;
 use super::tests::make_task;
-use crate::{background, paths};
+use crate::{runtime::background, support::paths};
 
 fn pending_worker(id: &str, pid: u32) {
     let spec = serde_json::from_value(serde_json::json!({

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::background;
+use crate::runtime::background;
 use crate::cmd::eta;
 use crate::store::Store;
 use crate::types::{Task, TaskFilter, TaskOutcome, TaskStatus};
@@ -77,7 +77,7 @@ fn init_stream(
     all_projects: bool,
     limit: Option<usize>,
 ) -> Result<StreamInit> {
-    let current = crate::project::current_project_id();
+    let current = crate::config::project::current_project_id();
     println!(
         "{}",
         crate::cmd::board::board_filter::project_scope_banner(

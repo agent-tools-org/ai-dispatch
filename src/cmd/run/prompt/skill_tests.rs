@@ -1,6 +1,6 @@
 // Tests for skill injection formatting in `cmd::run_prompt`.
 // Exports: none.
-// Deps: run_prompt::inject_skill, crate::paths, AgentKind, tempfile.
+// Deps: run_prompt::inject_skill, crate::support::paths, AgentKind, tempfile.
 
 use super::inject_skill;
 use crate::types::AgentKind;
@@ -8,8 +8,8 @@ use crate::types::AgentKind;
 #[test]
 fn inject_skill_includes_gotchas_scripts_and_references_for_folder_skill() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    let dir = crate::paths::aid_dir().join("skills").join("implementer");
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let dir = crate::support::paths::aid_dir().join("skills").join("implementer");
     std::fs::create_dir_all(dir.join("gotchas")).unwrap();
     std::fs::create_dir_all(dir.join("scripts")).unwrap();
     std::fs::create_dir_all(dir.join("references")).unwrap();
@@ -41,8 +41,8 @@ fn inject_skill_includes_gotchas_scripts_and_references_for_folder_skill() {
 #[test]
 fn inject_skill_includes_methodology_for_short_prompts() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    let dir = crate::paths::aid_dir().join("skills").join("implementer");
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let dir = crate::support::paths::aid_dir().join("skills").join("implementer");
     std::fs::create_dir_all(dir.join("references")).unwrap();
     std::fs::write(dir.join("SKILL.md"), "method").unwrap();
     std::fs::write(dir.join("gotchas.md"), "general gotcha").unwrap();

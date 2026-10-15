@@ -4,8 +4,8 @@
 
 use super::*;
 use chrono::Local;
-use crate::background::{self, BackgroundRunSpec};
-use crate::paths;
+use crate::runtime::background::{self, BackgroundRunSpec};
+use crate::support::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use std::fs;
@@ -168,7 +168,7 @@ fn read_only_repo() -> (tempfile::TempDir, Vec<String>) {
     let repo = tempfile::tempdir().expect("repo");
     assert!(std::process::Command::new("git").args(["init", "--quiet"])
         .arg(repo.path()).status().expect("git init").success());
-    let baseline = crate::worktree::capture_worktree_snapshot(repo.path())
+    let baseline = crate::workspace::worktree::capture_worktree_snapshot(repo.path())
         .expect("snapshot").read_only_state(repo.path()).expect("baseline");
     (repo, baseline)
 }

@@ -1,11 +1,11 @@
 // Tests for `cmd::board` anti-poll behavior and board output helpers.
 // Covers limit handling, marker transitions, and rendered output.
-// Deps: super module internals, tempfile, chrono, crate::store, crate::paths.
+// Deps: super module internals, tempfile, chrono, crate::store, crate::support::paths.
 
 use super::{TruncationNotice, apply_limit, board_json_row, long_running_warning, truncation_notice_message, write_board_output};
 use super::board_poll::{AntiPollStatus, anti_poll_status, write_board_marker};
 use chrono::{Duration, Local};
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use std::sync::Arc;
@@ -79,7 +79,7 @@ fn format_group_header_includes_custom_name() {
 fn board_output_is_written_when_anti_poll_cooldown_applies() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
-    let marker = crate::paths::aid_dir().join("board-last.txt");
+    let marker = crate::support::paths::aid_dir().join("board-last.txt");
     let store = Store::open_memory().unwrap();
     let tasks = vec![make_task("t-1001", TaskStatus::Done, Local::now())];
     let fingerprint = format!("t-1001:{}", TaskStatus::Done.label());
@@ -130,13 +130,13 @@ fn board_output_shows_failed_status_when_result_file_is_missing() {
 fn board_loads_actual_pre_upgrade_spec_with_detached_field() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     store
         .insert_task(&make_task("t-9ef43f87", TaskStatus::Running, Local::now()))
         .unwrap();
     std::fs::write(
-        crate::paths::job_path("t-9ef43f87"),
+        crate::support::paths::job_path("t-9ef43f87"),
         include_str!("../../testdata/legacy-background-spec.json"),
     )
     .unwrap();
@@ -148,7 +148,7 @@ fn board_loads_actual_pre_upgrade_spec_with_detached_field() {
 fn test_anti_poll_cooldown_reports_rapid_calls() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
-    let marker = crate::paths::aid_dir().join("board-last.txt");
+    let marker = crate::support::paths::aid_dir().join("board-last.txt");
     std::fs::write(&marker, "100\nfp\n0").unwrap();
     assert_eq!(anti_poll_status(&marker, "changed", 103, false).0, AntiPollStatus::Cooldown(3))
 }
@@ -157,7 +157,7 @@ fn test_anti_poll_cooldown_reports_rapid_calls() {
 fn test_anti_poll_force_bypasses_cooldown() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
-    let marker = crate::paths::aid_dir().join("board-last.txt");
+    let marker = crate::support::paths::aid_dir().join("board-last.txt");
     std::fs::write(&marker, "100\nfp\n0").unwrap();
     assert_eq!(anti_poll_status(&marker, "changed", 103, true).0, AntiPollStatus::Allowed(0))
 }
@@ -166,7 +166,7 @@ fn test_anti_poll_force_bypasses_cooldown() {
 fn test_anti_poll_allows_first_empty_board_call() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
-    let marker = crate::paths::aid_dir().join("board-last.txt");
+    let marker = crate::support::paths::aid_dir().join("board-last.txt");
 
     assert_eq!(anti_poll_status(&marker, "", 111, false).0, AntiPollStatus::Allowed(0));
 }
@@ -175,7 +175,7 @@ fn test_anti_poll_allows_first_empty_board_call() {
 fn test_anti_poll_repeat_blocks_on_second_same_fingerprint_call() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
-    let marker = crate::paths::aid_dir().join("board-last.txt");
+    let marker = crate::support::paths::aid_dir().join("board-last.txt");
     write_board_marker(&marker, "fp", 100, 0, 0, 0);
 
     assert_eq!(anti_poll_status(&marker, "fp", 111, false).0, AntiPollStatus::Repeat(1));
@@ -185,7 +185,7 @@ fn test_anti_poll_repeat_blocks_on_second_same_fingerprint_call() {
 fn test_anti_poll_repeat_precedes_cooldown_for_rapid_same_state() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
-    let marker = crate::paths::aid_dir().join("board-last.txt");
+    let marker = crate::support::paths::aid_dir().join("board-last.txt");
     write_board_marker(&marker, "fp", 100, 0, 2, 100);
 
     assert_eq!(anti_poll_status(&marker, "fp", 103, false).0, AntiPollStatus::Repeat(1));
@@ -195,7 +195,7 @@ fn test_anti_poll_repeat_precedes_cooldown_for_rapid_same_state() {
 fn test_anti_poll_preserves_force_state_for_normal_calls() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
-    let marker = crate::paths::aid_dir().join("board-last.txt");
+    let marker = crate::support::paths::aid_dir().join("board-last.txt");
     write_board_marker(&marker, "fp", 100, 0, 2, 100);
 
     let (status, force_state) = anti_poll_status(&marker, "changed", 111, false);
@@ -209,7 +209,7 @@ fn test_anti_poll_preserves_force_state_for_normal_calls() {
 fn test_force_bypasses_cooldown_within_30s() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
-    let marker = crate::paths::aid_dir().join("board-last.txt");
+    let marker = crate::support::paths::aid_dir().join("board-last.txt");
     write_board_marker(&marker, "fp", 100, 0, 0, 0);
     assert_eq!(anti_poll_status(&marker, "changed", 120, true).0, AntiPollStatus::Allowed(0));
 }
@@ -218,7 +218,7 @@ fn test_force_bypasses_cooldown_within_30s() {
 fn test_force_cooldown_allows_after_30s() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
-    let marker = crate::paths::aid_dir().join("board-last.txt");
+    let marker = crate::support::paths::aid_dir().join("board-last.txt");
     write_board_marker(&marker, "fp", 100, 0, 0, 0);
     assert_eq!(anti_poll_status(&marker, "changed", 130, true).0, AntiPollStatus::Allowed(0));
 }
@@ -227,7 +227,7 @@ fn test_force_cooldown_allows_after_30s() {
 fn test_force_escalation_blocks_after_3_calls() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
-    let marker = crate::paths::aid_dir().join("board-last.txt");
+    let marker = crate::support::paths::aid_dir().join("board-last.txt");
 
     write_board_marker(&marker, "fp", 100, 0, 1, 100);
     let (_, force_state) = anti_poll_status(&marker, "changed", 131, true);
@@ -243,7 +243,7 @@ fn test_force_escalation_blocks_after_3_calls() {
 fn test_force_escalation_resets_after_window() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
-    let marker = crate::paths::aid_dir().join("board-last.txt");
+    let marker = crate::support::paths::aid_dir().join("board-last.txt");
     write_board_marker(&marker, "fp", 100, 0, 3, 10);
 
     let (status, force_state) = anti_poll_status(&marker, "changed", 231, true);

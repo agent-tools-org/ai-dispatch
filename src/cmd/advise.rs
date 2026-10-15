@@ -11,7 +11,7 @@ use crate::store::Store;
 use crate::types::DeclaredTaskProfile;
 
 pub(crate) fn run(store: Option<&Store>, args: AdviseArgs) -> Result<()> {
-    crate::live_quota_refresh::refresh_stale_if_enabled();
+    crate::routing::quota::refresh::refresh_stale_if_enabled();
     let declared = DeclaredTaskProfile {
         difficulty: args.difficulty,
         budget: args.budget,
@@ -45,9 +45,9 @@ pub(crate) fn build_report(
     top: usize,
     caller_model: Option<&str>,
 ) -> AdviceReport {
-    let team = team.and_then(crate::team::resolve_team);
-    let model = crate::session::caller_model(caller_model);
-    let caller = crate::session::current_caller()
+    let team = team.and_then(crate::config::team::resolve_team);
+    let model = crate::runtime::session::caller_model(caller_model);
+    let caller = crate::runtime::session::current_caller()
         .and_then(|session| caller_advice(&session.kind, model.as_deref(), kind.unwrap_or_else(|| {
             let normalized = prompt.trim().to_lowercase();
             crate::agent::classifier::classify(prompt,
@@ -112,7 +112,7 @@ mod tests {
     #[test]
     fn advice_payload_round_trips_through_json() {
         let home = tempfile::tempdir().expect("temp aid home");
-        let _guard = crate::paths::AidHomeGuard::set(home.path());
+        let _guard = crate::support::paths::AidHomeGuard::set(home.path());
         let args = AdviseArgs {
             prompt: "Refactor src/main.rs".to_string(),
             difficulty: crate::types::TaskDifficulty::Complex,
@@ -148,15 +148,15 @@ mod tests {
     #[test]
     fn complex_critical_surfaces_alternatives_with_shortfall_reasons() {
         let home = tempfile::tempdir().expect("temp aid home");
-        let _guard = crate::paths::AidHomeGuard::set(home.path());
+        let _guard = crate::support::paths::AidHomeGuard::set(home.path());
         // Eligibility now requires an installed binary; pin the fleet.
         use crate::types::AgentKind;
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![
             AgentKind::Codex, AgentKind::Droid, AgentKind::Claude, AgentKind::Cursor,
         ]);
-        crate::scores::test_support::seed_live();
+        crate::routing::scores::test_support::seed_live();
         // Pin rated evidence: the floor no longer reads Cursor's CLI score (6).
-        crate::agent_config::save_agent_default_model("cursor", Some("openai/gpt-4o-mini"))
+        crate::config::agent::save_agent_default_model("cursor", Some("openai/gpt-4o-mini"))
             .expect("cursor model");
         let declared = DeclaredTaskProfile {
             difficulty: crate::types::TaskDifficulty::Complex,

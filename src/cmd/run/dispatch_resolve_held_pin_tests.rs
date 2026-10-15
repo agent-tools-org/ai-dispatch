@@ -14,14 +14,14 @@ fn substituted_fallback_is_pinned_to_a_group_that_can_serve() {
     let dir = tempfile::tempdir().expect("tempdir");
     let _guard = AidHomeGuard::set(dir.path());
     // opencode is held on its own provider group — the substitution trigger.
-    crate::rate_limit::mark_group_rate_limited(
+    crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::OpenCode,
         None,
         "opencode",
         "Insufficient balance.",
     );
     // agy's gemini allowance is exhausted; claude still serves.
-    crate::rate_limit::mark_group_rate_limited(
+    crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::Antigravity,
         None,
         "gemini",
@@ -60,13 +60,13 @@ fn substituted_fallback_is_pinned_to_a_group_that_can_serve() {
 fn substituted_aid_resolved_pin_survives_served_list_miss() {
     let dir = tempfile::tempdir().expect("tempdir");
     let _guard = AidHomeGuard::set(dir.path());
-    crate::rate_limit::mark_group_rate_limited(
+    crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::OpenCode,
         None,
         "opencode",
         "Insufficient balance.",
     );
-    crate::rate_limit::mark_group_rate_limited(
+    crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::Antigravity,
         None,
         "gemini",
@@ -122,18 +122,18 @@ fn substituted_route_keeps_agent_config_model_despite_served_list_miss() {
     let dir = tempfile::tempdir().expect("tempdir");
     let _guard = AidHomeGuard::set(dir.path());
     // grok is agent-level held — the agent-level substitution trigger.
-    crate::rate_limit::mark_rate_limited(
+    crate::routing::rate_limit::mark_rate_limited(
         &AgentKind::Grok,
         None,
         &format!(
             "Individual quota reached. Please upgrade your subscription. try again at {}.",
-            crate::rate_limit::test_future_recovery_time()
+            crate::routing::rate_limit::test_future_recovery_time()
         ),
     );
     // The fallback (codex) has a configured default model that is NOT in its
     // served-list snapshot — the cache shape that drops an aid-resolved model
     // on a non-substituted route.
-    crate::agent_config::save_agent_default_model("codex", Some("codex-stale-config-model"))
+    crate::config::agent::save_agent_default_model("codex", Some("codex-stale-config-model"))
         .expect("save codex default");
     let _served = crate::agent::model_validation::MockServedModelsGuard::set(
         AgentKind::Codex,

@@ -89,7 +89,7 @@ fn maybe_verify_records_missing_deps_hint_for_fresh_worktree() {
     let store = Store::open_memory().unwrap();
     let worktree = TempDir::new().unwrap();
     let worktree_str = worktree.path().to_string_lossy().to_string();
-    crate::worktree_deps::prepare_worktree_dependencies(
+    crate::workspace::worktree::deps::prepare_worktree_dependencies(
         &store, &TaskId("t-verify-hint".to_string()), worktree.path(), worktree.path(),
         None, false, None, true, None,
     )
@@ -118,7 +118,7 @@ fn maybe_verify_records_missing_deps_hint_for_fresh_worktree() {
 fn maybe_verify_reports_stale_worktree_when_dir_is_missing() {
     let store = Store::open_memory().unwrap();
     let task_id = TaskId("t-stale-verify".to_string());
-    let worktree_path = crate::worktree::aid_worktree_path(Path::new(env!("CARGO_MANIFEST_DIR")), "feat/stale");
+    let worktree_path = crate::workspace::worktree::aid_worktree_path(Path::new(env!("CARGO_MANIFEST_DIR")), "feat/stale");
     let worktree_path = worktree_path.to_string_lossy().to_string();
     let mut task = make_task("t-stale-verify", &worktree_path);
     task.workgroup_id = Some("wg-stale".to_string());

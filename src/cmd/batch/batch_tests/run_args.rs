@@ -2,7 +2,7 @@
 // Exports: (tests only)
 // Deps: crate::batch, batch_args
 use crate::batch;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
 use std::sync::Arc;
 

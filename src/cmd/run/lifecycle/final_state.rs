@@ -5,7 +5,7 @@
 use anyhow::Result;
 use std::path::Path;
 
-use crate::{commit, store::Store, types::TaskId};
+use crate::{workspace::commit, store::Store, types::TaskId};
 
 pub(crate) fn capture_final_worktree_state(store: &Store, task_id: &TaskId) -> Result<()> {
     let Some(task) = store.get_task(task_id.as_str())? else {

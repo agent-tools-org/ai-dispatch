@@ -3,7 +3,7 @@
 // Deps: stop command internals, Store, background run specs.
 
 use super::*;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
 use crate::types::EventKind;
 use std::sync::Arc;
@@ -80,12 +80,12 @@ fn kill_waiting_task_sets_stopped() {
 
 #[test]
 fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
-    use crate::background::{save_spec, BackgroundRunSpec};
+    use crate::runtime::background::{save_spec, BackgroundRunSpec};
     use tempfile::TempDir;
 
     let temp = TempDir::new().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().unwrap();
 
     let store = Arc::new(Store::open_memory().unwrap());
     let task = make_task("t-3010", TaskStatus::Running);
@@ -158,13 +158,13 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
 fn stop_loads_actual_pre_upgrade_spec_with_detached_field() {
     let temp = TempDir::new().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     store
         .insert_task(&make_task("t-9ef43f87", TaskStatus::Running))
         .unwrap();
     std::fs::write(
-        crate::paths::job_path("t-9ef43f87"),
+        crate::support::paths::job_path("t-9ef43f87"),
         include_str!("../../../testdata/legacy-background-spec.json"),
     )
     .unwrap();

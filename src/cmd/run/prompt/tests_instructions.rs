@@ -90,8 +90,8 @@ fn extract_raw_text_from_log_ignores_aid_sentinel_lines() {
 #[test]
 fn build_prompt_bundle_appends_batch_siblings_after_system_context() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Store::open_memory().unwrap();
     let group = store
         .create_workgroup("batch", "desc", Some("seed"), Some("wg-batch"))
@@ -129,8 +129,8 @@ fn build_prompt_bundle_appends_batch_siblings_after_system_context() {
 async fn run_auto_retries_after_verify_failure() {
     let _permit = test_subprocess::acquire();
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().unwrap();
 
     let bin_dir = temp.path().join("bin");
     std::fs::create_dir_all(&bin_dir).unwrap();
@@ -188,8 +188,8 @@ async fn run_auto_retries_after_verify_failure() {
         .iter()
         .find(|task| Some(task.id.as_str()) == retried.parent_task_id.as_deref())
         .unwrap();
-    let run_status = crate::cmd_dispatch::DispatchOutcome::Run(
-        crate::cmd_dispatch::RunDispatch::new(final_id, false, false),
+    let run_status = crate::cli::dispatch::DispatchOutcome::Run(
+        crate::cli::dispatch::RunDispatch::new(final_id, false, false),
     )
     .run_exit_status(store.as_ref())
     .unwrap()

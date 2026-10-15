@@ -28,7 +28,7 @@ use output_classifier::classify_output;
 use super::read_only::read_only_prompt;
 use super::truncate::{capped_detail, capped_detail_with, truncate_text};
 use super::{CommandContext, RunOpts};
-use crate::templates;
+use crate::prompt::templates;
 use crate::types::*;
 
 /// Parsed codex CLI version (major, minor, patch), when the probe succeeds.

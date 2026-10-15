@@ -4,7 +4,7 @@
 
 use super::{AdviceReport, candidate_mark, unrated_served_line};
 
-pub(super) fn leaderboard_lines(evidence: &crate::scores::Evidence) -> Vec<String> {
+pub(super) fn leaderboard_lines(evidence: &crate::routing::scores::Evidence) -> Vec<String> {
     let mut lines = vec![format!(
         "     capability: {} ({})",
         evidence

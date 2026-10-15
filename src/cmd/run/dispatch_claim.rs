@@ -4,7 +4,7 @@
 use anyhow::{Result, anyhow};
 use std::path::PathBuf;
 
-use crate::{paths, store::Store, types::{DispatchOrigin, Task, TaskId}};
+use crate::{support::paths, store::Store, types::{DispatchOrigin, Task, TaskId}};
 
 use super::run_validate::{IdConflict, resolve_id_conflict};
 

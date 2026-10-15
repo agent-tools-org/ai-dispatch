@@ -9,9 +9,9 @@ use super::{
     run_prompt::PromptBundle,
 };
 use crate::{
-    paths::{self, AidHomeGuard},
+    support::paths::{self, AidHomeGuard},
     store::Store,
-    test_subprocess,
+    support::test_subprocess,
     types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus},
 };
 use chrono::Local;
@@ -95,7 +95,7 @@ fn prompt_bundle() -> PromptBundle {
 }
 
 fn committed_worktree(repo: &Path, branch: &str) -> std::path::PathBuf {
-    let info = crate::worktree::create_worktree(repo, branch, None).unwrap();
+    let info = crate::workspace::worktree::create_worktree(repo, branch, None).unwrap();
     std::fs::write(info.path.join("done.txt"), "done\n").unwrap();
     git(&info.path, &["add", "done.txt"]);
     git(&info.path, &["commit", "-m", "done"]);

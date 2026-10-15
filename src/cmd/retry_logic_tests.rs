@@ -63,7 +63,7 @@ fn retry_args_for(store: &Store, task: &Task) -> Result<RunArgs> {
 
 #[test]
 fn failed_retry_with_pruned_worktree_keeps_branch_target() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let store = Store::open_memory().unwrap();
     let repo = init_repo();
     let branch = format!("fix/retry-pruned-{}", std::process::id());
@@ -84,11 +84,11 @@ fn failed_retry_with_pruned_worktree_keeps_branch_target() {
 
 #[test]
 fn pruned_retry_recreates_worktree_from_parent_branch_tip() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let store = Store::open_memory().unwrap();
     let repo = init_repo();
     let branch = format!("fix/retry-preserve-{}", std::process::id());
-    let worktree = crate::worktree::create_worktree(repo.path(), &branch, Some("main")).unwrap();
+    let worktree = crate::workspace::worktree::create_worktree(repo.path(), &branch, Some("main")).unwrap();
     std::fs::write(worktree.path.join("sentinel.txt"), "keep\n").unwrap();
     git(&worktree.path, &["add", "sentinel.txt"]);
     git(&worktree.path, &["commit", "-m", "parent commit"]);
@@ -101,7 +101,7 @@ fn pruned_retry_recreates_worktree_from_parent_branch_tip() {
     store.insert_task(&task).unwrap();
 
     let retry_args = retry_args_for(&store, &task).unwrap();
-    let recreated = crate::worktree::create_worktree(
+    let recreated = crate::workspace::worktree::create_worktree(
         repo.path(),
         retry_args.worktree.as_deref().unwrap(),
         retry_args.base_branch.as_deref(),
@@ -114,7 +114,7 @@ fn pruned_retry_recreates_worktree_from_parent_branch_tip() {
 
 #[test]
 fn failed_retry_errors_when_recorded_branch_is_gone() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let store = Store::open_memory().unwrap();
     let repo = init_repo();
     let branch = format!("fix/retry-missing-{}", std::process::id());

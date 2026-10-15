@@ -56,7 +56,7 @@ impl Store {
                 workgroup.updated_at.to_rfc3339(),
             ],
         )?;
-        let workspace_dir = crate::paths::workspace_dir(workgroup.id.as_str())?;
+        let workspace_dir = crate::support::paths::workspace_dir(workgroup.id.as_str())?;
         if let Err(e) = std::fs::create_dir_all(&workspace_dir) {
             // Rollback DB row to avoid orphaned workgroup without workspace
             let _ = self.db().execute(

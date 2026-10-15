@@ -6,7 +6,7 @@ use chrono::Local;
 
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId};
-use crate::verify::VerifyResult;
+use crate::task::verify::VerifyResult;
 
 /// Skip verify only when there is genuinely nothing under test.
 /// Read-only tasks never change the tree. An empty diff is *not* a skip:

@@ -2,7 +2,7 @@
 // Proves persisted config, live runtime, and single completion-hook execution.
 use super::RunArgs;
 use crate::cmd::{checklist_scan::*, run::*};
-use crate::{paths, store::Store};
+use crate::{support::paths, store::Store};
 use chrono::Local;
 use std::{collections::HashMap, sync::Arc};
 
@@ -75,7 +75,7 @@ async fn dispatch_retry(site: &str, store: &Arc<Store>, row: &Task, args: &RunAr
             max_iterations: 2, eval_command: "echo failure; exit 1".into(), feedback_template: None,
         }).await,
         "hung" => {
-            crate::process_monitor::insert_hung_detected_events(store, &row.id, 180, 1, None, false).unwrap();
+            crate::runtime::process::monitor::insert_hung_detected_events(store, &row.id, 180, 1, None, false).unwrap();
             crate::cmd::run::run_post::maybe_auto_retry_after_hang(store, &row.id, args).await
         }
         "selfheal" => {

@@ -7,7 +7,7 @@ use chrono::Local;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::project::{self, ProjectConfig};
+use crate::config::project::{self, ProjectConfig};
 use crate::store::{Store, TaskCompletionUpdate};
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
 
@@ -41,7 +41,7 @@ impl WorktreeLockGuard {
 impl Drop for WorktreeLockGuard {
     fn drop(&mut self) {
         if let Some(path) = self.path.take() {
-            let _ = crate::worktree::clear_worktree_lock(Path::new(&path), &self.task_id);
+            let _ = crate::workspace::worktree::clear_worktree_lock(Path::new(&path), &self.task_id);
         }
     }
 }
@@ -60,12 +60,12 @@ pub(super) fn setup_worktree(
         Some(std::env::current_dir()?.join(effective_dir.as_deref().unwrap_or(".")).to_string_lossy().into_owned())
     } else { effective_dir };
     let repo_path = resolved_repo.or_else(|| explicit_repo_path.map(str::to_string));
-    crate::worktree::ensure_requested_worktree_is_isolated(
+    crate::workspace::worktree::ensure_requested_worktree_is_isolated(
         args.worktree.as_deref(), repo_path.as_deref(), wt_path.as_deref(),
     )?;
     let mut lock = WorktreeLockGuard::new(task_id);
     if let Some(ref wt) = wt_path {
-        if let Err(holder) = crate::worktree::try_acquire_worktree_lock_with_store(
+        if let Err(holder) = crate::workspace::worktree::try_acquire_worktree_lock_with_store(
             Path::new(wt), task_id.as_str(), Some(store),
         ) {
             anyhow::bail!(
@@ -103,11 +103,11 @@ fn configure_gitbutler(
         return false;
     };
     let worktree = Path::new(wt);
-    let plan = crate::gitbutler::task_worktree_integration_plan(
+    let plan = crate::workspace::gitbutler::task_worktree_integration_plan(
         Path::new(repo), worktree, project.gitbutler_mode(), agent_setup.agent_kind.as_str(),
     );
     if plan.install_claude_hooks {
-        if let Err(err) = crate::gitbutler::install_claude_hooks(worktree) {
+        if let Err(err) = crate::workspace::gitbutler::install_claude_hooks(worktree) {
             aid_warn!("[aid] gitbutler: failed to install claude hooks: {err}");
         }
     } else if let Some(command) = plan.on_done_command {
@@ -126,7 +126,7 @@ fn sync_context_files(args: &RunArgs, wt_path: Option<&str>, repo_path: Option<&
         .iter()
         .map(|spec| context_file_from_spec(spec))
         .collect::<Vec<_>>();
-    let synced = crate::worktree::sync_context_files_into_worktree(
+    let synced = crate::workspace::worktree::sync_context_files_into_worktree(
         Path::new(repo), Path::new(wt), &context_files,
     );
     if !synced.is_empty() {
@@ -237,14 +237,14 @@ pub(super) fn prepare_worktree_deps(
     let (Some(wt), Some(repo)) = (setup.wt_path.as_deref(), setup.repo_path.as_deref()) else {
         return Ok(());
     };
-    if let Err(err) = crate::worktree_deps::prepare_worktree_dependencies(
+    if let Err(err) = crate::workspace::worktree::deps::prepare_worktree_dependencies(
         store,
         task_id,
         Path::new(repo),
         Path::new(wt),
         args.setup.as_deref(),
         args.link_deps,
-        crate::idle_timeout::idle_timeout_secs_from_env(args.env.as_ref()),
+        crate::config::idle_timeout::idle_timeout_secs_from_env(args.env.as_ref()),
         setup.fresh_worktree,
         setup.wt_branch.as_deref(),
     ) {
@@ -257,7 +257,7 @@ pub(super) fn prepare_worktree_deps(
 
 pub(super) fn clear_worktree_lock(wt_path: Option<&str>, task_id: &str) {
     if let Some(wt) = wt_path {
-        let _ = crate::worktree::clear_worktree_lock(Path::new(wt), task_id);
+        let _ = crate::workspace::worktree::clear_worktree_lock(Path::new(wt), task_id);
     }
 }
 
@@ -266,7 +266,7 @@ pub(super) fn fail_claimed_task(
     task_id: &TaskId,
     err: &anyhow::Error,
 ) -> Result<()> {
-    crate::task_lifecycle::complete_task_atomic(
+    crate::task::lifecycle::complete_task_atomic(
         store,
         TaskCompletionUpdate {
             id: task_id.as_str(),

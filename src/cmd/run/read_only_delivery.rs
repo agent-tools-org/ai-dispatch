@@ -19,7 +19,7 @@ pub(crate) fn enabled(args: &RunArgs, kind: AgentKind) -> bool {
 pub(crate) fn prepare(args: &mut RunArgs, kind: AgentKind, task: &Task) -> Result<()> {
     if !enabled(args, kind) { return Ok(()); }
     let staging = crate::agent::scratch::create_temp_dir(&std::env::temp_dir())?;
-    let task_dir = canonical_path(&crate::paths::task_dir(task.id.as_str()))?;
+    let task_dir = canonical_path(&crate::support::paths::task_dir(task.id.as_str()))?;
     let cwd = resolve(".", task.effective_dir.as_deref().or(args.dir.as_deref())).canonicalize()?;
     anyhow::ensure!(!same_destination(args, task.effective_dir.as_deref())?, "result/-o: same destination");
     let mut forbidden = crate::agent::scratch::protected_roots(&cwd)?;
@@ -96,7 +96,7 @@ pub(crate) fn publish(
         deliver(&content, &resolve(destination, dir))
             .with_context(|| format!("Cannot deliver read-only artifact to '{}'", destination))?;
         if Some(source) == result.as_deref() {
-            deliver(&content, &crate::paths::task_dir(task_id).join("result.md"))?;
+            deliver(&content, &crate::support::paths::task_dir(task_id).join("result.md"))?;
         }
     }
     Ok(())

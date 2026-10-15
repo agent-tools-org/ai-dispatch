@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::agent::read_only::read_only_prompt;
-use crate::{paths, rate_limit};
+use crate::{support::paths, routing::rate_limit};
 use std::process::Command;
 
 fn base_opts() -> RunOpts {

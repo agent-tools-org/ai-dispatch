@@ -1,11 +1,11 @@
 // Handler for `aid unstick` manual nudges and escalation.
 // Exports run() for the CLI path and keeps behavior aligned with current PTY steering.
-// Deps: crate::cmd::reply, crate::store::Store, crate::unstick helpers.
+// Deps: crate::cmd::reply, crate::store::Store, crate::task::unstick helpers.
 
 use anyhow::{Result, anyhow, bail};
 use chrono::Local;
 
-use crate::background;
+use crate::runtime::background;
 use crate::cmd::reply::{self, InputCommand};
 use crate::store::Store;
 use crate::types::{EventKind, MessageSource, TaskEvent, TaskId, TaskStatus};
@@ -15,7 +15,7 @@ const ESCALATED_EVENT_DETAIL: &str = "Task marked stalled by aid unstick";
 pub fn run(store: &Store, task_id: &str, message: Option<&str>, escalate: bool) -> Result<()> {
     let task = require_running_task(store, task_id)?;
     if escalate {
-        crate::unstick::mark_task_stalled(store, task.id.as_str())?;
+        crate::task::unstick::mark_task_stalled(store, task.id.as_str())?;
         store.insert_event(&TaskEvent {
             task_id: TaskId(task.id.as_str().to_string()),
             timestamp: Local::now(),
@@ -40,7 +40,7 @@ pub fn run(store: &Store, task_id: &str, message: Option<&str>, escalate: bool) 
 
     let body = message
         .map(ToOwned::to_owned)
-        .unwrap_or_else(crate::unstick::default_nudge_message);
+        .unwrap_or_else(crate::task::unstick::default_nudge_message);
     reply::run_with_source(
         store,
         task.id.as_str(),
@@ -70,8 +70,8 @@ mod tests {
     use chrono::Local;
 
     use super::{ESCALATED_EVENT_DETAIL, run};
-    use crate::background::{self, BackgroundRunSpec};
-    use crate::paths;
+    use crate::runtime::background::{self, BackgroundRunSpec};
+    use crate::support::paths;
     use crate::store::Store;
     use crate::types::{AgentKind, EventKind, Task, TaskId, TaskStatus, VerifyStatus};
 
@@ -146,7 +146,7 @@ mod tests {
 
         let messages = store.list_messages_for_task("t-unstick").unwrap();
         assert_eq!(messages.len(), 1);
-        assert_eq!(messages[0].content, crate::unstick::default_nudge_message());
+        assert_eq!(messages[0].content, crate::task::unstick::default_nudge_message());
         assert_eq!(messages[0].source, crate::types::MessageSource::Reply);
     }
 

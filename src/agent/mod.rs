@@ -36,7 +36,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::process::Command;
 
-use crate::prompt_scan::scan_for_injection;
+use crate::prompt::scan::scan_for_injection;
 use crate::types::*;
 pub mod home_isolation;
 pub(crate) mod env;
@@ -155,7 +155,7 @@ pub fn env_with_agent_log(
     let mut env = env.unwrap_or_default();
     env.insert(
         AGENT_LOG_ENV.to_string(),
-        crate::paths::agent_log_path(task_id).to_string_lossy().into_owned(),
+        crate::support::paths::agent_log_path(task_id).to_string_lossy().into_owned(),
     );
     Some(env)
 }

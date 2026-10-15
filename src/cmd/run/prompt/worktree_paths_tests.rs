@@ -3,7 +3,7 @@
 // Deps: run_prompt helpers, git subprocess fixtures, tempfile.
 
 use super::*;
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use std::path::Path;
 use std::process::Command;
 
@@ -41,7 +41,7 @@ fn resolve_worktree_paths_recreates_pruned_existing_branch_at_tip() {
     let repo = tempfile::tempdir().unwrap();
     init_git_repo_with_commit(repo.path());
     let branch = format!("feat/run-resume-{}", std::process::id());
-    let first = crate::worktree::create_worktree(repo.path(), &branch, Some("main")).unwrap();
+    let first = crate::workspace::worktree::create_worktree(repo.path(), &branch, Some("main")).unwrap();
     std::fs::write(first.path.join("agent.txt"), "agent\n").unwrap();
     git(&first.path, &["add", "agent.txt"]);
     git(&first.path, &["commit", "-m", "agent commit"]);

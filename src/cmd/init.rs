@@ -1,6 +1,6 @@
 // Handler for `aid init` — install bundled skills and templates.
 // Exports: run().
-// Deps: crate::paths, anyhow, std::fs.
+// Deps: crate::support::paths, anyhow, std::fs.
 
 use anyhow::Result;
 use std::path::Path;
@@ -30,7 +30,7 @@ const TEMPLATES: &[(&str, &str)] = &[
 ];
 
 pub fn run() -> Result<()> {
-    let base = crate::paths::aid_dir();
+    let base = crate::support::paths::aid_dir();
     let default_skills = write_defaults(&base.join("skills"), "skill", SKILLS)?;
     official_guide::refresh(&base.join("skills"))?;
     let created_skills = default_skills + 1;
@@ -43,7 +43,7 @@ pub fn run() -> Result<()> {
 }
 
 pub(crate) fn refresh_official_guide() -> Result<()> {
-    official_guide::refresh(&crate::paths::aid_dir().join("skills"))
+    official_guide::refresh(&crate::support::paths::aid_dir().join("skills"))
 }
 
 fn write_defaults(dir: &Path, label: &str, files: &[(&str, &str)]) -> Result<usize> {

@@ -18,7 +18,7 @@ pub(in crate::cmd::run) fn capture_baseline(store: &Store, task_id: &TaskId, dir
         })?;
         return Ok(None);
     }
-    Ok(Some(crate::worktree::capture_worktree_snapshot(Path::new(dir))?.read_only_state(Path::new(dir))?))
+    Ok(Some(crate::workspace::worktree::capture_worktree_snapshot(Path::new(dir))?.read_only_state(Path::new(dir))?))
 }
 
 fn is_git_directory(dir: &str) -> Result<bool> {
@@ -42,7 +42,7 @@ pub(super) fn settle(
             return Ok((Vec::new(), Vec::new()));
         }
         let baseline = baseline.context("Dispatch snapshot is unavailable")?;
-        let snapshot = crate::worktree::capture_worktree_snapshot(Path::new(dir))?;
+        let snapshot = crate::workspace::worktree::capture_worktree_snapshot(Path::new(dir))?;
         let current = snapshot.read_only_state(Path::new(dir))?;
         changed_paths(dir, [args.result_file.as_deref(), args.output.as_deref()], baseline, &current)
     })();
@@ -59,7 +59,7 @@ pub(super) fn settle(
         task_id: task_id.clone(), timestamp: chrono::Local::now(),
         event_kind: EventKind::Error, detail, metadata: None,
     })?;
-    crate::task_lifecycle::mark_failed(store, task_id)?;
+    crate::task::lifecycle::mark_failed(store, task_id)?;
     Ok(DirtyWorktreeAction::Failed)
 }
 

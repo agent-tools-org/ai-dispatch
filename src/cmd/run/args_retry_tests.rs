@@ -2,7 +2,7 @@
 // Covers every persisted field, model provenance, and session eligibility.
 use super::RunArgs;
 use crate::agent::{classifier::TaskCategory, model_validation::ModelSource};
-use crate::{store::Store, timeout_policy::TimeoutPolicy, types::*};
+use crate::{store::Store, config::timeout_policy::TimeoutPolicy, types::*};
 use chrono::Local;
 use serde_json::{json, Value};
 use std::{collections::HashMap, time::Duration};

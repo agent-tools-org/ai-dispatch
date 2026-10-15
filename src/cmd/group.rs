@@ -5,7 +5,7 @@
 use anyhow::Result;
 use std::sync::Arc;
 
-use crate::sanitize;
+use crate::support::sanitize;
 use crate::store::Store;
 use crate::types::TaskFilter;
 
@@ -31,7 +31,7 @@ pub fn create(
     );
     aid_info!(
         "[aid] Workspace: {}",
-        crate::paths::workspace_dir(workgroup.id.as_str())?.display()
+        crate::support::paths::workspace_dir(workgroup.id.as_str())?.display()
     );
     Ok(())
 }
@@ -161,7 +161,7 @@ fn truncate(value: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths::AidHomeGuard;
+    use crate::support::paths::AidHomeGuard;
     use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
     use chrono::Local;
     use tempfile::TempDir;

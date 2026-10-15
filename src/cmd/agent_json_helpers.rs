@@ -11,7 +11,7 @@ pub fn command_installed(command: &str) -> bool {
 }
 
 pub(crate) fn build_quota_json(rlk: &AgentKind, custom_name: Option<&str>) -> QuotaJson {
-    let avail = crate::route_availability::availability(rlk, custom_name);
+    let avail = crate::routing::availability::availability(rlk, custom_name);
     let quota = crate::agent::selection::quota_from(&avail);
     let window = avail
         .probe
@@ -19,11 +19,11 @@ pub(crate) fn build_quota_json(rlk: &AgentKind, custom_name: Option<&str>) -> Qu
         .and_then(|probe| crate::agent::selection::tightest_window(&probe.windows))
         .map(|item| item.label.clone())
         .filter(|label| !label.is_empty());
-    let held = avail.status == crate::route_availability::RouteStatus::Held;
+    let held = avail.status == crate::routing::availability::RouteStatus::Held;
     let groups = if held {
         Vec::new()
     } else {
-        crate::rate_limit::active_group_holds(rlk, custom_name)
+        crate::routing::rate_limit::active_group_holds(rlk, custom_name)
             .into_iter()
             .map(|(group, info)| GroupHoldJson {
                 group,
@@ -36,7 +36,7 @@ pub(crate) fn build_quota_json(rlk: &AgentKind, custom_name: Option<&str>) -> Qu
         "limited"
     } else if !groups.is_empty() {
         "partial"
-    } else if avail.status == crate::route_availability::RouteStatus::Degraded {
+    } else if avail.status == crate::routing::availability::RouteStatus::Degraded {
         "degraded"
     } else if crate::agent::selection::observed_ok(&avail) {
         "ok"
@@ -44,7 +44,7 @@ pub(crate) fn build_quota_json(rlk: &AgentKind, custom_name: Option<&str>) -> Qu
         "unknown"
     };
     let info = held
-        .then(|| crate::rate_limit::get_rate_limit_info(rlk, custom_name))
+        .then(|| crate::routing::rate_limit::get_rate_limit_info(rlk, custom_name))
         .flatten();
     QuotaJson {
         state: state.to_string(),

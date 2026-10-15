@@ -22,7 +22,7 @@ pub(super) async fn run_lifecycle_phases(
     run_escape_checks_phase(args, effective_dir, repo_path, wt_path);
     if let Some(task) = store.get_task(task_id.as_str())?
         && task.status == TaskStatus::Failed
-        && crate::provider_capacity::read(store, task_id, task.agent).is_some()
+        && crate::routing::capacity::read(store, task_id, task.agent).is_some()
     {
         if task.verify_status == VerifyStatus::Pending {
             store.update_verify_status(task_id.as_str(), VerifyStatus::Skipped)?;
@@ -148,7 +148,7 @@ pub(super) async fn run_lifecycle_phases(
             aid_error!("[aid] Hook after_complete failed: {err}");
         }
     }
-    crate::webhook::fire_task_webhooks(store, task_id.as_str()).await;
+    crate::task::webhook::fire_task_webhooks(store, task_id.as_str()).await;
     if mode.is_foreground() && args.announce && !args.background {
         if let Some(status_hint) = foreground_status_hint(store.as_ref(), task_id.as_str())? {
             aid_hint!("{status_hint}");
@@ -185,7 +185,7 @@ pub(super) async fn run_lifecycle_phases(
     {
         return Ok(Some(retry_id));
     }
-    crate::verify::enforce_verify_status(store, task_id);
+    crate::task::verify::enforce_verify_status(store, task_id);
     if let Some(retry_id) = retry_or_cascade(store, args, task_id).await? {
         return Ok(Some(retry_id));
     }

@@ -28,7 +28,7 @@ pub(crate) fn spec() -> OpenCodeOverlaySpec {
 mod tests {
     use super::super::{Agent, RunOpts};
     use super::*;
-    use crate::{paths, rate_limit};
+    use crate::{support::paths, routing::rate_limit};
     use crate::types::{EventKind, TaskId};
 
     fn base_opts() -> RunOpts {

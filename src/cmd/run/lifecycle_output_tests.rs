@@ -4,7 +4,7 @@
 
 use super::run_lifecycle::{capture_final_worktree_state, output_has_content};
 use crate::store::Store;
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::path::Path;
@@ -75,9 +75,9 @@ fn task(id: &str) -> Task {
 #[test]
 fn output_presence_accepts_plain_text_transcript() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     let task = task("t-transcript-output");
-    let transcript = crate::paths::transcript_path(task.id.as_str());
+    let transcript = crate::support::paths::transcript_path(task.id.as_str());
     std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
     std::fs::write(&transcript, "plain transcript output\n".repeat(20)).unwrap();
 

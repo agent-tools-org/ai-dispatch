@@ -1,5 +1,5 @@
 use super::*;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::types::AgentKind;
 use std::sync::Arc;
 
@@ -14,8 +14,8 @@ mod degraded_tests;
 
 /// Write a manual-hold marker for `agent` so `dispatch_blocking_hold` returns `Some`.
 fn write_manual_hold(agent: AgentKind) {
-    let path = crate::paths::aid_dir().join(format!("rate-limit-{}", agent.as_str()));
-    std::fs::create_dir_all(crate::paths::aid_dir()).unwrap();
+    let path = crate::support::paths::aid_dir().join(format!("rate-limit-{}", agent.as_str()));
+    std::fs::create_dir_all(crate::support::paths::aid_dir()).unwrap();
     std::fs::write(path, "recovery_at: \nhold: manual\nmessage: test quota exhausted\n").unwrap();
 }
 
@@ -230,7 +230,7 @@ fn resolve_agent_setup_drops_unserved_aid_selected_model() {
 /// Write a minimal custom-agent TOML under the isolated AID_HOME so
 /// `custom_agent_exists` and `resolve_custom_agent` can find it.
 fn write_custom_agent(name: &str) {
-    let agents_dir = crate::paths::aid_dir().join("agents");
+    let agents_dir = crate::support::paths::aid_dir().join("agents");
     std::fs::create_dir_all(&agents_dir).unwrap();
     std::fs::write(
         agents_dir.join(format!("{name}.toml")),

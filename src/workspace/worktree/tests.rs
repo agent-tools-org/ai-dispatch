@@ -1,0 +1,280 @@
+// Worktree tests for reuse/prune behavior. Exports test helpers and validates Cargo sync deps.
+// Purpose: Guard worktree creation when branches already exist. Deps: tempfile, std.
+use super::*;
+use crate::support::test_subprocess;
+use std::path::Path;
+use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
+use tempfile::TempDir;
+
+fn git(repo_dir: &Path, args: &[&str]) {
+    let repo_dir = repo_dir.to_string_lossy().to_string();
+    assert!(Command::new("git")
+        .args(["-C", repo_dir.as_str()])
+        .args(args)
+        .status()
+        .unwrap()
+        .success());
+}
+
+fn git_output(repo_dir: &Path, args: &[&str]) -> String {
+    let repo_dir = repo_dir.to_string_lossy().to_string();
+    let out = Command::new("git")
+        .args(["-C", repo_dir.as_str()])
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    String::from_utf8(out.stdout).unwrap()
+}
+
+fn unique_branch(prefix: &str) -> String {
+    format!(
+        "{prefix}-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    )
+}
+
+#[test]
+fn validate_git_repo_fails_on_nonrepo() {
+    assert!(validate_git_repo(Path::new("/tmp")).is_err());
+}
+
+#[test]
+fn validate_git_repo_succeeds_on_real_repo() {
+    assert!(validate_git_repo(Path::new(env!("CARGO_MANIFEST_DIR"))).is_ok());
+}
+
+#[test]
+fn create_worktree_rejects_invalid_branch_name() {
+    let _permit = test_subprocess::acquire();
+    let repo = TempDir::new().unwrap();
+    git(repo.path(), &["init", "-b", "main"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test User"]);
+
+    let err = create_worktree(repo.path(), "../escape", None).unwrap_err();
+    assert!(err.to_string().contains("Invalid branch name"));
+}
+
+#[test]
+fn create_worktree_with_base_branch_inherits_base_content() {
+    let _permit = test_subprocess::acquire();
+    let repo = TempDir::new().unwrap();
+    git(repo.path(), &["init", "-b", "main"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test User"]);
+    std::fs::write(repo.path().join("base.txt"), "main\n").unwrap();
+    git(repo.path(), &["add", "base.txt"]);
+    git(repo.path(), &["commit", "-m", "init"]);
+
+    let base_branch = unique_branch("base");
+    git(repo.path(), &["checkout", "-b", base_branch.as_str()]);
+    std::fs::write(repo.path().join("inherited.txt"), "from base\n").unwrap();
+    git(repo.path(), &["add", "inherited.txt"]);
+    git(repo.path(), &["commit", "-m", "base"]);
+    git(repo.path(), &["checkout", "main"]);
+
+    let retry_branch = unique_branch("retry");
+    let info = create_worktree(
+        repo.path(),
+        retry_branch.as_str(),
+        Some(base_branch.as_str()),
+    )
+    .unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(info.path.join("inherited.txt")).unwrap(),
+        "from base\n"
+    );
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &info.path.to_string_lossy(),
+        ],
+    );
+}
+
+#[test]
+fn create_worktree_syncs_cargo_lock() {
+    let _permit = test_subprocess::acquire();
+    let repo = TempDir::new().unwrap();
+    git(repo.path(), &["init", "-b", "main"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test User"]);
+    std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
+    std::fs::write(repo.path().join("Cargo.lock"), "# lock content\n").unwrap();
+    git(repo.path(), &["add", "."]);
+    git(repo.path(), &["commit", "-m", "init"]);
+
+    let branch = unique_branch("feat/cargo-lock-test");
+    let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
+    assert!(info.path.join("Cargo.lock").exists());
+    std::fs::write(repo.path().join("Cargo.lock"), "# updated lock\n").unwrap();
+    let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(info.path.join("Cargo.lock")).unwrap(),
+        "# updated lock\n"
+    );
+
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &info.path.to_string_lossy(),
+        ],
+    );
+}
+
+#[test]
+fn sync_context_files_copies_missing_files() {
+    let repo = TempDir::new().unwrap(); let wt = TempDir::new().unwrap();
+    std::fs::write(repo.path().join("new_file.rs"), "fn main() {}\n").unwrap();
+    let synced = sync_context_files_into_worktree(repo.path(), wt.path(), &["new_file.rs".to_string()]);
+    assert_eq!(synced, vec!["new_file.rs"]);
+    assert_eq!(std::fs::read_to_string(wt.path().join("new_file.rs")).unwrap(), "fn main() {}\n");
+}
+
+#[test]
+fn sync_context_files_skips_existing_files() {
+    let repo = TempDir::new().unwrap(); let wt = TempDir::new().unwrap();
+    std::fs::write(repo.path().join("existing.rs"), "original\n").unwrap();
+    std::fs::write(wt.path().join("existing.rs"), "modified\n").unwrap();
+    let synced = sync_context_files_into_worktree(repo.path(), wt.path(), &["existing.rs".to_string()]);
+    assert!(synced.is_empty());
+    assert_eq!(std::fs::read_to_string(wt.path().join("existing.rs")).unwrap(), "modified\n");
+}
+
+#[test]
+fn create_worktree_reuses_existing_branch_worktree() {
+    let _permit = test_subprocess::acquire();
+    let repo = TempDir::new().unwrap();
+    git(repo.path(), &["init", "-b", "main"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test User"]);
+    std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
+    git(repo.path(), &["add", "."]);
+    git(repo.path(), &["commit", "-m", "init"]);
+
+    let branch = unique_branch("feat/reuse");
+    let existing_root = TempDir::new().unwrap();
+    let existing_path = existing_root.path().join("worktree");
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            "-b",
+            branch.as_str(),
+            existing_path.to_str().unwrap(),
+        ],
+    );
+
+    let info = create_worktree(repo.path(), branch.as_str(), None).unwrap();
+    // Canonicalize to handle macOS /var → /private/var symlink
+    let actual = info.path.canonicalize().unwrap_or(info.path.clone());
+    let expected = existing_path
+        .canonicalize()
+        .unwrap_or(existing_path.clone());
+    assert_eq!(actual, expected);
+
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &existing_path.to_string_lossy(),
+        ],
+    );
+}
+
+#[test]
+fn create_worktree_prunes_conflicting_branch_and_recreates_worktree() {
+    let _permit = test_subprocess::acquire();
+    let repo = TempDir::new().unwrap();
+    git(repo.path(), &["init", "-b", "main"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test User"]);
+    std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
+    git(repo.path(), &["add", "."]);
+    git(repo.path(), &["commit", "-m", "init"]);
+
+    let branch = unique_branch("feat/orphan");
+    let orphan_root = TempDir::new().unwrap();
+    let orphan_path = orphan_root.path().join("worktree");
+    git(
+        repo.path(),
+        &[
+            "worktree",
+            "add",
+            "-b",
+            branch.as_str(),
+            orphan_path.to_str().unwrap(),
+        ],
+    );
+    std::fs::remove_dir_all(&orphan_path).unwrap();
+
+    let error = create_worktree(repo.path(), branch.as_str(), None).unwrap_err();
+    assert!(error.to_string().contains("automatic pruning is forbidden"));
+}
+
+#[test]
+fn worktree_changed_files_reports_committed_files() {
+    let _permit = test_subprocess::acquire();
+    let repo = TempDir::new().unwrap();
+    git(repo.path(), &["init", "-b", "main"]);
+    git(repo.path(), &["config", "user.email", "test@example.com"]);
+    git(repo.path(), &["config", "user.name", "Test User"]);
+    std::fs::write(repo.path().join("base.txt"), "main").unwrap();
+    git(repo.path(), &["add", "base.txt"]);
+    git(repo.path(), &["commit", "-m", "base"]);
+    git(repo.path(), &["checkout", "-b", "agent-branch"]);
+
+    std::fs::write(repo.path().join("agent.txt"), "one").unwrap();
+    git(repo.path(), &["add", "agent.txt"]);
+    git(repo.path(), &["commit", "-m", "agent one"]);
+
+    std::fs::write(repo.path().join("agent2.txt"), "two").unwrap();
+    git(repo.path(), &["add", "agent2.txt"]);
+    git(repo.path(), &["commit", "-m", "agent two"]);
+
+    let files = worktree_changed_files(repo.path()).unwrap();
+    assert!(files.contains(&"agent.txt".to_string()));
+    assert!(files.contains(&"agent2.txt".to_string()));
+}
+
+#[test]
+fn worktree_lock_write_and_read() {
+    let dir = TempDir::new().unwrap();
+    assert!(check_worktree_lock(dir.path()).is_none());
+
+    write_worktree_lock(dir.path(), "t-1234");
+    let holder = check_worktree_lock(dir.path());
+    assert_eq!(holder.as_deref(), Some("t-1234"));
+
+    clear_worktree_lock(dir.path(), "t-1234").unwrap();
+    assert!(check_worktree_lock(dir.path()).is_none());
+}
+
+#[test]
+fn worktree_lock_dead_owner_without_worker_is_held_and_untouched() {
+    let dir = TempDir::new().unwrap();
+    let lock_path = dir.path().join(".aid-lock");
+    // Dead owner with no worker_pid: the launcher may have exited before the
+    // background worker re-keyed the lease, so a store-less check must treat
+    // the lock as held and never delete it (checks are side-effect-free).
+    std::fs::write(&lock_path, "version=1\ntask_id=t-stale\nowner_pid=999999999\n").unwrap();
+
+    assert_eq!(check_worktree_lock(dir.path()).as_deref(), Some("t-stale"));
+    assert!(lock_path.exists());
+}

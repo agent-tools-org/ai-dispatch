@@ -6,7 +6,7 @@ use super::*;
 
 #[test]
 fn scope_notice_preserves_settlement_winner() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let f = Fixture::new(TaskStatus::Stopped);
     init_repo(f.home.path());
     std::fs::write(f.home.path().join("file.txt"), "outside scope\n").expect("edit");

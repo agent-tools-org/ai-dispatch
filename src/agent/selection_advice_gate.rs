@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::agent::classifier::TaskCategory;
-use crate::team::TeamConfig;
+use crate::config::team::TeamConfig;
 use crate::types::{provider_for_cli, AgentKind, TaskBudget, TaskDifficulty};
 use super::AdviceCandidate;
 
@@ -90,11 +90,11 @@ pub(crate) struct CallerAdvice {
 
 /// Resolve a caller session kind (`claude-code`, `codex`) to its pool.
 pub(crate) fn caller_advice(session: &str, model: Option<&str>, category: TaskCategory) -> Option<CallerAdvice> {
-    let agent = crate::session::caller_agent(session)?;
+    let agent = crate::runtime::session::caller_agent(session)?;
     let (provider, _) = provider_for_cli(agent);
     let model = model.map(str::trim).filter(|value| !value.is_empty()).map(str::to_string);
     let capability = model.as_deref().and_then(|name| {
-        crate::scores::capability_score(agent, name, category)
+        crate::routing::scores::capability_score(agent, name, category)
     });
     Some(CallerAdvice {
         session: session.to_string(),

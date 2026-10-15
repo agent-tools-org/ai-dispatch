@@ -1,11 +1,11 @@
 // Hook subcommands for lightweight Claude Code integration.
-// Exports: session_start; depends on crate::project and crate::team.
+// Exports: session_start; depends on crate::config::project and crate::config::team.
 
 use anyhow::Result;
 use chrono::NaiveDateTime;
 
-use crate::project::{self, ProjectConfig};
-use crate::team::TeamConfig;
+use crate::config::project::{self, ProjectConfig};
+use crate::config::team::TeamConfig;
 use crate::types::AgentKind;
 
 /// Injected into every session, so it is the one place a dispatcher reliably
@@ -43,7 +43,7 @@ pub fn session_start() -> Result<()> {
     let team = project
         .as_ref()
         .and_then(|config| config.team.as_deref())
-        .and_then(crate::team::resolve_team);
+        .and_then(crate::config::team::resolve_team);
     let mut rendered = render_session_start(project.as_ref(), team.as_ref());
     if let Some(line) = agents_status_line() {
         rendered.push('\n');
@@ -74,7 +74,7 @@ enum QuotaState {
 }
 
 fn probe_bits(
-    probe: Option<&crate::route_availability::ProbeEvidence>,
+    probe: Option<&crate::routing::availability::ProbeEvidence>,
 ) -> (Option<f64>, bool) {
     match probe {
         Some(probe) if probe.ok && !probe.windows.is_empty() => {
@@ -91,16 +91,16 @@ fn probe_bits(
 }
 
 fn quota_state_for(kind: AgentKind, custom: Option<&str>) -> QuotaState {
-    let avail = crate::route_availability::availability(&kind, custom);
+    let avail = crate::routing::availability::availability(&kind, custom);
     let (used_percent, stale) = probe_bits(avail.probe.as_ref());
-    if avail.status == crate::route_availability::RouteStatus::Held {
+    if avail.status == crate::routing::availability::RouteStatus::Held {
         let resets = match avail.ends {
-            crate::route_availability::HoldEnd::At(at) => Some(at),
-            _ => crate::rate_limit::recovery_datetime(&kind, custom),
+            crate::routing::availability::HoldEnd::At(at) => Some(at),
+            _ => crate::routing::rate_limit::recovery_datetime(&kind, custom),
         };
-        let human = crate::rate_limit::get_rate_limit_info(&kind, custom)
+        let human = crate::routing::rate_limit::get_rate_limit_info(&kind, custom)
             .filter(|info| info.needs_human)
-            .map(|info| crate::rate_limit::format_hold_end(&kind, custom, &info));
+            .map(|info| crate::routing::rate_limit::format_hold_end(&kind, custom, &info));
         return QuotaState::Limited {
             resets,
             used_percent,
@@ -108,13 +108,13 @@ fn quota_state_for(kind: AgentKind, custom: Option<&str>) -> QuotaState {
             human,
         };
     }
-    if !crate::rate_limit::active_group_holds(&kind, custom).is_empty() {
+    if !crate::routing::rate_limit::active_group_holds(&kind, custom).is_empty() {
         return QuotaState::Partial {
             used_percent,
             stale,
         };
     }
-    if avail.status == crate::route_availability::RouteStatus::Degraded {
+    if avail.status == crate::routing::availability::RouteStatus::Degraded {
         let resets = avail
             .probe
             .as_ref()
@@ -139,11 +139,11 @@ fn agents_status_line() -> Option<String> {
         .iter()
         .copied()
         .filter(|kind| installed.contains(kind))
-        .filter(|kind| !crate::agent_config::is_agent_disabled(kind.as_str()))
+        .filter(|kind| !crate::config::agent::is_agent_disabled(kind.as_str()))
         .map(|kind| (kind.as_str().to_string(), quota_state_for(kind, None)))
         .collect::<Vec<_>>();
     for config in crate::agent::registry::list_custom_agents() {
-        if crate::agent_config::is_agent_disabled(&config.id) {
+        if crate::config::agent::is_agent_disabled(&config.id) {
             continue;
         }
         let state = quota_state_for(AgentKind::Custom, Some(config.id.as_str()));

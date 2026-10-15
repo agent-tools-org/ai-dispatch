@@ -150,7 +150,7 @@ pub(crate) fn terminal_task_ids(store: &Store) -> Result<Vec<String>> {
 }
 
 fn terminal_task_homes(store: &Store) -> Result<Vec<PathBuf>> {
-    Ok(terminal_task_ids(store)?.into_iter().map(|id| crate::paths::task_dir(&id).join("home")).filter(|p| p.is_dir()).collect())
+    Ok(terminal_task_ids(store)?.into_iter().map(|id| crate::support::paths::task_dir(&id).join("home")).filter(|p| p.is_dir()).collect())
 }
 
 fn owned_target_dirs(store: &Store, fallback_root: Option<&Path>) -> Result<Vec<(TargetKind, PathBuf)>> {

@@ -3,9 +3,9 @@
 // self-holder refusal (message must not suggest separate worktree names).
 // Deps: supersede_live_holder, stop, Store, tempfile, git.
 use super::{reset_dirty_worktree, save_partial_work, supersede_live_holder};
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::path::Path;

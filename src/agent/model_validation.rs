@@ -39,7 +39,7 @@ fn cache() -> &'static Mutex<HashMap<AgentKind, CachedServedModels>> {
 }
 
 fn cache_file_path() -> std::path::PathBuf {
-    crate::paths::aid_dir().join("served_models_cache.json")
+    crate::support::paths::aid_dir().join("served_models_cache.json")
 }
 
 fn now_secs() -> u64 {

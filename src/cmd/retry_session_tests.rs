@@ -78,7 +78,7 @@ fn retry_preservation_keeps_long_feedback_first_and_whole_on_codex_resume() {
             .starts_with(&format!("[Previous attempt feedback]\n{feedback}"))
     );
     let composed =
-        crate::workgroup::compose_prompt(&retry.prompt, Some(&"context\n".repeat(1000)), None, &[], &[]);
+        crate::task::workgroup::compose_prompt(&retry.prompt, Some(&"context\n".repeat(1000)), None, &[], &[]);
     let delivered = codex_resume_prompt(&composed.text, &retry);
     assert!(delivered.contains(&retry.prompt));
     assert!(delivered.find(&feedback) < delivered.find(&task.prompt));

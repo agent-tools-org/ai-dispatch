@@ -2,8 +2,8 @@
 // Deps: build_quota_json, isolated AID_HOME, CacheDirGuard.
 
 use super::build_quota_json;
-use crate::live_quota::CacheDirGuard;
-use crate::paths::{self, AidHomeGuard};
+use crate::routing::quota::live::CacheDirGuard;
+use crate::support::paths::{self, AidHomeGuard};
 use crate::types::AgentKind;
 use chrono::Utc;
 

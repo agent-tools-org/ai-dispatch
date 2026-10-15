@@ -8,7 +8,7 @@ use super::{
     run_lifecycle::{merge_hint_for_task, LifecycleMode, post_run_lifecycle},
     run_prompt::PromptBundle,
 };
-use crate::{hooks::Hook, store::Store, test_subprocess, types::*};
+use crate::{config::hooks::Hook, store::Store, support::test_subprocess, types::*};
 use chrono::Local;
 use std::{path::Path, process::Command, sync::Arc};
 
@@ -219,7 +219,7 @@ async fn audit_report_mode_skips_dirty_worktree_enforcement() {
 async fn background_lifecycle_runs_verify_and_checklist_scan() {
     let _permit = test_subprocess::acquire();
     let aid_home = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(aid_home.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
     let dir = tempfile::tempdir().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = TaskId("t-bg-lifecycle-ok".to_string());

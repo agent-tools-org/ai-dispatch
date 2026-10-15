@@ -1,5 +1,5 @@
 // Agent performance dashboard for the `aid stats` command.
-// Exports: run(). Deps: crate::store::Store, crate::types, crate::usage, crate::cost.
+// Exports: run(). Deps: crate::store::Store, crate::types, crate::cost::usage, crate::cost.
 
 use anyhow::Result;
 use chrono::{DateTime, Local, Timelike};
@@ -9,7 +9,7 @@ use super::stats_hint;
 use crate::cost;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskOutcome};
-use crate::usage::UsageWindow;
+use crate::cost::usage::UsageWindow;
 
 #[derive(Debug, PartialEq)] struct StatsSnapshot { agent_rows: Vec<AgentRow>, failure_rows: Vec<FailureRow>, model_rows: Vec<ModelRow>, declared_rows: Vec<DeclaredRow>, activity_by_day: Vec<(String, usize)>, activity_by_hour: Vec<(u32, usize)>, top_sessions: Vec<TopSession>, total_cost: Option<f64>, total_tokens: i64, total_tasks: usize }
 #[derive(Debug, PartialEq)] struct AgentRow { agent: String, tasks: usize, share_pct: usize, success_rate: f64, avg_duration_ms: Option<i64>, cost: String }

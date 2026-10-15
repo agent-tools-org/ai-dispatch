@@ -2,7 +2,7 @@
 // Exports: apply_board_filters, active_project_filter.
 // Deps: project identity helpers, session, store Task list.
 
-use crate::session;
+use crate::runtime::session;
 use crate::types::Task;
 
 /// Apply mine/group/project filters in memory (no per-row DB queries).
@@ -23,8 +23,8 @@ pub(crate) fn apply_board_filters(
     if all_projects {
         return None;
     }
-    let current = crate::project::current_project_id();
-    crate::project::retain_project(tasks, current.as_deref());
+    let current = crate::config::project::current_project_id();
+    crate::config::project::retain_project(tasks, current.as_deref());
     Some(current)
 }
 
@@ -36,6 +36,6 @@ pub(crate) fn project_scope_banner(
     let filter = project_filter.unwrap_or(None);
     format!(
         "[aid] {}",
-        crate::project::project_filter_banner(filter, all_projects)
+        crate::config::project::project_filter_banner(filter, all_projects)
     )
 }

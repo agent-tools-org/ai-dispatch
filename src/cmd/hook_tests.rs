@@ -1,8 +1,8 @@
 // Session-start hook tests: fleet line is silent unless a hold or Degraded exists.
 
 use super::{QuotaState, render_agents_status_line, render_session_start};
-use crate::project::{ProjectAgents, ProjectBudget, ProjectConfig};
-use crate::team::TeamConfig;
+use crate::config::project::{ProjectAgents, ProjectBudget, ProjectConfig};
+use crate::config::team::TeamConfig;
 use std::collections::HashMap;
 
 fn ok() -> QuotaState {
@@ -104,8 +104,8 @@ fn agent_line_shows_partial_and_live_percent() {
 #[test]
 fn agents_status_line_reads_markers_for_installed_fleet() {
     let temp_dir = std::env::temp_dir().join("aid-hook-quota-line-test");
-    let _home = crate::paths::AidHomeGuard::set(&temp_dir);
-    std::fs::create_dir_all(crate::paths::aid_dir()).expect("create aid dir");
+    let _home = crate::support::paths::AidHomeGuard::set(&temp_dir);
+    std::fs::create_dir_all(crate::support::paths::aid_dir()).expect("create aid dir");
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![
         crate::types::AgentKind::Codex,
         crate::types::AgentKind::Antigravity,
@@ -116,7 +116,7 @@ fn agents_status_line_reads_markers_for_installed_fleet() {
         "recovery_at: {}\nmessage: quota exhausted\n",
         recovery.format("%b %d, %Y %I:%M %p")
     );
-    std::fs::write(crate::paths::aid_dir().join("rate-limit-codex"), marker)
+    std::fs::write(crate::support::paths::aid_dir().join("rate-limit-codex"), marker)
         .expect("write marker");
 
     let line = super::agents_status_line().expect("line when an agent is limited");
@@ -126,20 +126,20 @@ fn agents_status_line_reads_markers_for_installed_fleet() {
         format!("agents: codex LIMITED (resets {expected_reset}) - opencode ok - agy ok")
     );
 
-    std::fs::remove_file(crate::paths::aid_dir().join("rate-limit-codex")).ok();
+    std::fs::remove_file(crate::support::paths::aid_dir().join("rate-limit-codex")).ok();
     assert_eq!(super::agents_status_line(), None);
 }
 
 #[test]
 fn agents_status_line_shows_oz_credentials_hold() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
-    std::fs::create_dir_all(crate::paths::aid_dir()).expect("create aid dir");
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(crate::support::paths::aid_dir()).expect("create aid dir");
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![
         crate::types::AgentKind::Oz,
         crate::types::AgentKind::Antigravity,
     ]);
-    crate::rate_limit::mark_rate_limited(
+    crate::routing::rate_limit::mark_rate_limited(
         &crate::types::AgentKind::Oz,
         None,
         "Error: Your credentials are invalid. Please log in again with `oz login`.",
@@ -201,14 +201,14 @@ fn with_codex_probe(
     used: f64,
 ) -> (
     tempfile::TempDir,
-    crate::paths::AidHomeGuard,
-    crate::live_quota::CacheDirGuard,
+    crate::support::paths::AidHomeGuard,
+    crate::routing::quota::live::CacheDirGuard,
     crate::agent::DetectAgentsGuard,
 ) {
     let temp = tempfile::tempdir().expect("tempdir");
     let _ = std::fs::create_dir_all(temp.path().join(".aid"));
-    let home = crate::paths::AidHomeGuard::set(temp.path());
-    std::fs::create_dir_all(crate::paths::aid_dir()).expect("create aid dir");
+    let home = crate::support::paths::AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(crate::support::paths::aid_dir()).expect("create aid dir");
     let aidbar = temp.path().join("aidbar");
     std::fs::create_dir_all(&aidbar).expect("cache");
     let fetched = chrono::Utc::now().to_rfc3339();
@@ -219,7 +219,7 @@ fn with_codex_probe(
         ),
     )
     .expect("cache");
-    let cache = crate::live_quota::CacheDirGuard::set(&aidbar);
+    let cache = crate::routing::quota::live::CacheDirGuard::set(&aidbar);
     let fleet = crate::agent::DetectAgentsGuard::set(vec![crate::types::AgentKind::Codex]);
     (temp, home, cache, fleet)
 }

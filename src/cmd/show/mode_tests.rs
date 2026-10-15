@@ -113,9 +113,9 @@ fn events_text_full_renders_metadata_full_detail() {
 #[test]
 fn output_mode_uses_full_flag_for_untruncated_messages() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    std::fs::create_dir_all(crate::paths::logs_dir()).unwrap();
-    std::fs::write(crate::paths::log_path("t-show-full"), numbered_assistant_log(22, 500))
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(crate::support::paths::logs_dir()).unwrap();
+    std::fs::write(crate::support::paths::log_path("t-show-full"), numbered_assistant_log(22, 500))
         .unwrap();
 
     let store = Arc::new(Store::open_memory().unwrap());
@@ -135,13 +135,13 @@ fn output_mode_uses_full_flag_for_untruncated_messages() {
 #[test]
 fn log_mode_uses_full_flag_for_untruncated_log() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    std::fs::create_dir_all(crate::paths::logs_dir()).unwrap();
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(crate::support::paths::logs_dir()).unwrap();
     let log = (0..220)
         .map(|index| format!("line-{index:03}"))
         .collect::<Vec<_>>()
         .join("\n");
-    std::fs::write(crate::paths::log_path("t-log-full"), log).unwrap();
+    std::fs::write(crate::support::paths::log_path("t-log-full"), log).unwrap();
 
     let brief = render_log_text("t-log-full", false).unwrap();
     let full = render_log_text("t-log-full", true).unwrap();

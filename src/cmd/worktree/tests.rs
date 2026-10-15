@@ -3,8 +3,8 @@
 // Deps: super command helpers, git CLI, tempfile, TmpWorktreeGuard.
 
 use super::{list_json, prune, should_prune_worktree};
-use crate::test_env::TmpWorktreeGuard;
-use crate::test_subprocess;
+use crate::support::test_env::TmpWorktreeGuard;
+use crate::support::test_subprocess;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Command;

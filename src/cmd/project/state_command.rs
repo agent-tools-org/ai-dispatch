@@ -3,8 +3,8 @@
 // Deps: crate::{paths, project, state, store}, anyhow, chrono.
 
 use super::current_git_root;
-use crate::project;
-use crate::state::{self, ProjectState};
+use crate::config::project;
+use crate::store::state::{self, ProjectState};
 use crate::store::Store;
 use anyhow::Result;
 use chrono::{DateTime, Local};
@@ -15,7 +15,7 @@ type AgentRate = (String, f64, usize);
 pub(super) fn run() -> Result<()> {
     let git_root = current_git_root()?;
     let repo_path = git_root.to_string_lossy().into_owned();
-    let store = Store::open(&crate::paths::db_path())?;
+    let store = Store::open(&crate::support::paths::db_path())?;
     let state = state::compute_state(&store, &repo_path)?;
     state::save_state(&state)?;
     let agent_rates = store.project_agent_success_rates(&repo_path)?;
@@ -127,7 +127,7 @@ fn format_relative_time(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{render_state, AgentRate};
-    use crate::state::{ContextState, HealthState, PerformanceState, ProjectState};
+    use crate::store::state::{ContextState, HealthState, PerformanceState, ProjectState};
     use chrono::{Duration, Local};
     use std::collections::BTreeMap;
     use std::path::Path;

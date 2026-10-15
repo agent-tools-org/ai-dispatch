@@ -54,15 +54,15 @@ async fn provider_capacity_round2_replayed_stderr_never_creates_hold_or_retry() 
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn().expect("child");
-    let info = crate::watcher::watch_streaming(
+    let info = crate::runtime::watcher::watch_streaming(
         &crate::agent::codex::CodexAgent, &mut child, &row.id, &store,
         &paths::log_path(row.id.as_str()), None,
-        crate::idle_timeout::DEFAULT_IDLE_TIMEOUT, None,
+        crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT, None,
     ).await.expect("watch");
     assert_eq!(info.status, TaskStatus::Failed);
     assert!(std::fs::read_to_string(paths::log_path(row.id.as_str())).expect("log")
         .contains(CAPACITY), "stderr must still be replayed");
-    crate::task_lifecycle::mark_failed(&store, &row.id).expect("failed");
+    crate::task::lifecycle::mark_failed(&store, &row.id).expect("failed");
     assert!(rate_limit::dispatch_blocking_hold_for_model(
         &row.agent, None, row.requested_model.as_deref()).is_none(), "stderr created hold");
     assert!(continue_capacity(&store, &RunArgs::default(), &row.id)
@@ -74,9 +74,9 @@ async fn provider_capacity_round2_replayed_stderr_never_creates_hold_or_retry() 
 async fn provider_capacity_ordinary_retry_refreshed_hold_never_substitutes_or_clears_session() {
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());
-    let _cache = crate::live_quota::CacheDirGuard::set(home.path());
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid]);
-    crate::agent_config::save_agent_default_model("droid", Some("gpt-5.3-codex"))
+    crate::config::agent::save_agent_default_model("droid", Some("gpt-5.3-codex"))
         .expect("peer model");
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut row = task("t-round2-refresh", home.path());
@@ -149,11 +149,11 @@ fn provider_capacity_round2_classifies_decoded_turn_failure_and_reconnect_sequen
         row.status = TaskStatus::Running;
         store.insert_task(&row).expect("task");
         let mut info = crate::agent::Agent::parse_completion(&crate::agent::codex::CodexAgent, "");
-        let mut tracker = crate::watcher::SyntheticMilestoneTracker::new();
+        let mut tracker = crate::runtime::watcher::SyntheticMilestoneTracker::new();
         let mut count = 0;
         let mut session_saved = false;
         for line in lines {
-            crate::watcher::handle_streaming_line_with_session(crate::watcher::StreamLineContext {
+            crate::runtime::watcher::handle_streaming_line_with_session(crate::runtime::watcher::StreamLineContext {
                 agent: &crate::agent::codex::CodexAgent, task_id: &row.id, store: &store,
                 workgroup_id: None, synthetic_tracker: &mut tracker,
             }, &mut info, &mut count, &line.to_string(), &mut session_saved).expect("decode");

@@ -43,7 +43,7 @@ pub(in super::super) fn resolve_context_from(
             continue;
         };
         if let Some(block) = block {
-            blocks.push(crate::workgroup::bound_auxiliary(&block, label, omissions));
+            blocks.push(crate::task::workgroup::bound_auxiliary(&block, label, omissions));
         }
     }
     if blocks.is_empty() {
@@ -51,7 +51,7 @@ pub(in super::super) fn resolve_context_from(
     }
     let context = blocks.join("\n\n");
     Ok(Some(if blocks.len() > 1 {
-        crate::workgroup::bound_auxiliary(&context, "Prior/shared output", omissions)
+        crate::task::workgroup::bound_auxiliary(&context, "Prior/shared output", omissions)
     } else {
         context
     }))

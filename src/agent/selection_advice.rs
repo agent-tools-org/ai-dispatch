@@ -15,10 +15,10 @@ use super::selection_scoring::{
 use crate::agent::RouteBlocker;
 use crate::agent::run_model::{RunModel, RunModelInput, RunModelSource, resolve_run_model};
 use crate::config::SelectionConfig;
-use crate::agent_config;
-use crate::auth_marker::AuthStatus;
+use crate::config::agent as agent_config;
+use crate::routing::auth_marker::AuthStatus;
 use crate::store::Store;
-use crate::team::TeamConfig;
+use crate::config::team::TeamConfig;
 use crate::types::{AgentKind, DeclaredTaskProfile, TaskBudget, TaskUrgency};
 
 #[path = "selection_advice_custom.rs"]
@@ -44,7 +44,7 @@ pub(crate) struct AdviceReport {
     pub candidates: Vec<AdviceCandidate>,
     pub custom_candidates: Vec<CustomAdviceCandidate>,
     pub notes: Vec<String>,
-    pub sources: std::collections::BTreeMap<String, crate::scores::Source>,
+    pub sources: std::collections::BTreeMap<String, crate::routing::scores::Source>,
     /// The calling session's provider pool, when detected.
     #[serde(default)]
     pub caller: Option<CallerAdvice>,
@@ -82,7 +82,7 @@ pub(crate) struct AdviceCandidate {
     pub pinned: bool,
     pub source: RunModelSource,
     pub breakdown: ScoreBreakdown,
-    pub capability_evidence: crate::scores::Evidence,
+    pub capability_evidence: crate::routing::scores::Evidence,
     pub exclusion_reason: Option<String>,
     /// Stable codes for `exclusion_reason`, one per reason.
     #[serde(default)]
@@ -106,7 +106,7 @@ pub(crate) struct CustomAdviceCandidate {
     pub eligible: bool,
     pub model: Option<String>,
     pub category_capability: i32,
-    pub capability_evidence: crate::scores::Evidence,
+    pub capability_evidence: crate::routing::scores::Evidence,
     pub strength_bonus: i32,
     pub team_preferred: bool,
     pub exclusion_reason: Option<String>,
@@ -166,7 +166,7 @@ pub(crate) fn advise(
         custom_candidates.truncate(top);
     }
     AdviceReport { declared, inferred, recommended, candidates, custom_candidates, notes, caller,
-        sources: crate::scores::sources() }
+        sources: crate::routing::scores::sources() }
 }
 
 /// Eligible first, then eligible-but-demoted (caller's pool), then the rest.
@@ -238,7 +238,7 @@ fn builtin_candidate(
         declared.difficulty, context.profile.category,
     );
     exclusions.budget(budget_allows(declared.budget, model.as_deref()), declared.budget);
-    let auth = crate::auth_marker::auth_status(kind, None);
+    let auth = crate::routing::auth_marker::auth_status(kind, None);
     if auth.failed() {
         let at = auth.observed_at.as_deref().unwrap_or("unknown time");
         exclusions.push("auth_failed", format!("auth failed (observed {at})"));
@@ -257,12 +257,12 @@ fn builtin_candidate(
     let eligible = exclusions.is_empty();
     let (exclusion_reason, exclusion_codes) = exclusions.into_parts();
     let unrated_served_models = model.as_deref()
-        .map(|model| crate::model_catalog::unrated_served_newer_than(kind, model))
+        .map(|model| crate::routing::model_catalog::unrated_served_newer_than(kind, model))
         .unwrap_or_default();
     let report = AdviceCandidate {
         agent: kind.as_str().to_string(), installed: blocker.is_none(), eligible,
         quota: selection_quota::candidate_quota(kind, None, model.as_deref()),
-        capability_evidence: crate::scores::evidence(kind, model.as_deref(), context.profile.category),
+        capability_evidence: crate::routing::scores::evidence(kind, model.as_deref(), context.profile.category),
         score: breakdown.total, model, pinned, source, breakdown, exclusion_reason, exclusion_codes,
         demotion_reason, auth,
         unrated_served_models,

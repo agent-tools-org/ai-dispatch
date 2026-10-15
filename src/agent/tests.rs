@@ -1,9 +1,9 @@
 // Integration-style tests for agent env helpers and subprocess markers.
-// Exports: none (test module). Deps: crate::agent, crate::paths, tempfile.
+// Exports: none (test module). Deps: crate::agent, crate::support::paths, tempfile.
 
 use super::{apply_run_env, is_rust_project, set_git_ceiling, shared_target_dir, target_dir_for_worktree, RunOpts};
-use crate::paths::AidHomeGuard;
-use crate::test_subprocess;
+use crate::support::paths::AidHomeGuard;
+use crate::support::test_subprocess;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};

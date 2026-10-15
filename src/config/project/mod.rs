@@ -1,0 +1,278 @@
+// Project config parsing for .aid/project.toml and built-in profiles.
+// Exports: ProjectConfig, ProjectBudget, ProjectAgents, detect_project, knowledge helpers.
+// Deps: serde, toml, anyhow, std::{env, fs, path}, and project submodules.
+
+use anyhow::{Context, Result};
+use serde::de::{Deserializer, IntoDeserializer};
+use serde::Deserialize;
+use std::path::{Path, PathBuf};
+use std::{env, fs};
+
+mod audit;
+mod edit;
+mod identity;
+mod discovery;
+pub use discovery::detect_project_in;
+pub(crate) use discovery::resolve_project_in;
+mod profile;
+mod project_team;
+pub(crate) mod worktree;
+
+use self::audit::ProjectFile;
+pub use self::edit::{upsert_gitbutler_mode, upsert_gitbutler_prompt_suppressed};
+pub use self::identity::{
+    current_project_id, project_display,
+    project_filter_banner, resolve_project_id, retain_project,
+    UNATTRIBUTED,
+};
+use self::profile::apply_profile;
+pub use self::audit::ProjectAuditConfig;
+pub use self::project_team::{project_knowledge_dir, read_project_knowledge};
+
+#[derive(Debug, Clone, Deserialize)]
+#[derive(Default)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectConfig {
+    pub id: String,
+    #[serde(default)]
+    pub profile: Option<String>,
+    #[serde(default)]
+    pub require_task_profile: bool,
+    #[serde(default)]
+    pub max_task_cost: Option<f64>,
+    #[serde(default)]
+    pub team: Option<String>,
+    #[serde(default)]
+    pub verify: Option<String>,
+    #[serde(default)]
+    pub setup: Option<String>,
+    #[serde(default)]
+    pub container: Option<String>,
+    #[serde(default)]
+    pub remote_build: Option<String>,
+    #[serde(default)]
+    pub idle_timeout: Option<u64>,
+    #[serde(default)]
+    pub max_duration_mins: Option<i64>,
+    #[serde(default)]
+    pub hard_cap_hours: Option<i64>,
+    #[serde(default)]
+    pub idle_warn_secs: Option<u64>,
+    #[serde(default)]
+    pub idle_nudge_secs: Option<u64>,
+    #[serde(default)]
+    pub idle_escalate_secs: Option<u64>,
+    #[serde(default)]
+    pub unstick: ProjectUnstickConfig,
+    #[serde(default)]
+    pub gitbutler: Option<String>,
+    #[serde(default)]
+    pub suppress_gitbutler_prompt: bool,
+    #[serde(default)]
+    pub worktree_prefix: Option<String>,
+    #[serde(default)]
+    pub language: Option<String>,
+    #[serde(default)]
+    pub rules: Vec<String>,
+    /// Skills injected when the caller declares none. Empty means none:
+    /// aid no longer picks a skill on the caller's behalf.
+    #[serde(default)]
+    pub skills: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_budget")]
+    pub budget: ProjectBudget,
+    #[serde(default)]
+    pub agents: ProjectAgents,
+    #[serde(skip)]
+    pub audit: ProjectAuditConfig,
+    /// `[backup]` from the same file; never read from `[project]`.
+    #[serde(skip)]
+    pub backup: Option<crate::workspace::backup::BackupProjectConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+#[derive(Default)]
+pub struct ProjectUnstickConfig {
+    #[serde(default)]
+    pub warn_after_secs: Option<u64>,
+    #[serde(default)]
+    pub nudge_after_secs: Option<u64>,
+    #[serde(default)]
+    pub escalate_after_secs: Option<u64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+#[derive(Default)]
+pub struct ProjectBudget {
+    #[serde(default)]
+    pub window: Option<String>,
+    #[serde(default)]
+    pub cost_limit_usd: Option<f64>,
+    #[serde(default)]
+    pub token_limit: Option<u64>,
+    #[serde(default)]
+    pub prefer_budget: bool,
+}
+
+impl ProjectBudget {
+    pub fn budget_shorthand(&self) -> Option<String> {
+        let cost = self.cost_limit_usd?;
+        let mut shorthand = format!("${}", cost);
+        if let Some(window) = self.window.as_deref() {
+            match window.to_lowercase().as_str() {
+                "day" | "daily" => shorthand.push_str("/day"),
+                "month" | "monthly" => shorthand.push_str("/month"),
+                other => {
+                    shorthand.push('/');
+                    shorthand.push_str(other);
+                }
+            }
+        }
+        Some(shorthand)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+#[derive(Default)]
+pub struct ProjectAgents {
+    #[serde(default)]
+    pub default: Option<String>,
+    #[serde(default)]
+    pub research: Option<String>,
+    #[serde(default)]
+    pub simple_edit: Option<String>,
+}
+
+impl ProjectConfig {
+    pub fn audit_auto(&self) -> bool {
+        self.audit.auto
+    }
+
+    pub fn gitbutler_mode(&self) -> crate::workspace::gitbutler::Mode {
+        let Some(value) = self.gitbutler.as_deref() else {
+            return crate::workspace::gitbutler::Mode::Off;
+        };
+
+        match crate::workspace::gitbutler::Mode::from_str(value) {
+            Ok(mode) => mode,
+            Err(err) => {
+                aid_warn!(
+                    "[aid] Warning: invalid project.gitbutler mode '{value}': {err}. Falling back to off."
+                );
+                crate::workspace::gitbutler::Mode::Off
+            }
+        }
+    }
+}
+
+fn deserialize_budget<'de, D>(deserializer: D) -> Result<ProjectBudget, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = toml::Value::deserialize(deserializer)?;
+    match value {
+        toml::Value::String(raw) => parse_budget_shorthand(&raw).map_err(serde::de::Error::custom),
+        toml::Value::Integer(amount) => Ok(ProjectBudget {
+            cost_limit_usd: Some(amount as f64),
+            ..Default::default()
+        }),
+        toml::Value::Float(amount) => Ok(ProjectBudget {
+            cost_limit_usd: Some(amount),
+            ..Default::default()
+        }),
+        toml::Value::Table(table) => ProjectBudget::deserialize(
+            toml::Value::Table(table).into_deserializer(),
+        )
+        .map_err(serde::de::Error::custom),
+        other => Err(serde::de::Error::custom(format!(
+            "invalid budget value: {other:?}"
+        ))),
+    }
+}
+
+fn parse_budget_shorthand(value: &str) -> Result<ProjectBudget, String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err("budget shorthand is empty".to_string());
+    }
+    let trimmed = trimmed.strip_prefix('$').unwrap_or(trimmed).trim();
+    if trimmed.is_empty() {
+        return Err("budget amount is missing".to_string());
+    }
+
+    let (amount_part, window_part) = match trimmed.split_once('/') {
+        Some((left, right)) => (left.trim(), Some(right.trim())),
+        None => (trimmed, None),
+    };
+
+    if amount_part.is_empty() {
+        return Err("budget amount is missing".to_string());
+    }
+
+    let cost_limit_usd = amount_part
+        .parse::<f64>()
+        .map_err(|_| format!("invalid budget amount '{}'", amount_part))?;
+
+    let window = match window_part {
+        Some(w) if !w.is_empty() => match w.to_lowercase().as_str() {
+            "day" | "daily" => Some("daily".to_string()),
+            "month" | "monthly" => Some("monthly".to_string()),
+            other => {
+                return Err(format!("unsupported budget window '{}'", other));
+            }
+        },
+        Some(_) => return Err("budget window is empty".to_string()),
+        None => None,
+    };
+
+    Ok(ProjectBudget {
+        cost_limit_usd: Some(cost_limit_usd),
+        window,
+        ..Default::default()
+    })
+}
+
+
+pub fn detect_project() -> Option<ProjectConfig> {
+    let cwd = env::current_dir().ok()?;
+    detect_project_in(&cwd)
+}
+
+pub fn project_path_in_repo(repo_root: &Path) -> PathBuf {
+    repo_root.join(".aid").join("project.toml")
+}
+
+pub fn load_project(path: &Path) -> Result<ProjectConfig> {
+    let contents =
+        fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
+    let file: ProjectFile =
+        toml::from_str(&contents).with_context(|| format!("Failed to parse {}", path.display()))?;
+    let mut config = file.project;
+    config.audit = file.audit;
+    config.backup = file.backup;
+    apply_profile(&mut config);
+    Ok(config)
+}
+
+fn find_git_root_from(start_dir: &Path) -> Option<PathBuf> {
+    let mut dir = start_dir.to_path_buf();
+    loop {
+        if dir.join(".git").exists() {
+            return Some(dir);
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+#[path = "project_tests.rs"]
+mod tests;
+#[cfg(test)]
+mod edit_tests;
+#[cfg(test)]
+mod discovery_tests;

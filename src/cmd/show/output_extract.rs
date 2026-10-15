@@ -16,7 +16,7 @@ struct MessageCollector {
 pub(super) fn collect_messages(content: &str) -> Vec<String> {
     let mut collector = MessageCollector::default();
     for line in content.lines() {
-        let cleaned = crate::watcher::strip_terminal_escapes(line);
+        let cleaned = crate::runtime::watcher::strip_terminal_escapes(line);
         let Ok(value) = serde_json::from_str::<Value>(&cleaned) else {
             continue;
         };

@@ -82,7 +82,7 @@ pub struct RunArgs {
     pub existing_task_id: Option<TaskId>,
     pub timeout: Option<u64>,
     pub idle_timeout_secs: Option<u64>,
-    pub timeout_policy: crate::timeout_policy::TimeoutPolicy,
+    pub timeout_policy: crate::config::timeout_policy::TimeoutPolicy,
     pub audit: bool,
     pub audit_explicit: bool,
     pub no_audit: bool,
@@ -123,7 +123,7 @@ impl RunArgs {
     /// stays None), the resolved budget mode and runtime state. `on_done` is
     /// the worker's own hook: it runs from the spec, so retries built from
     /// these args do not inherit it.
-    pub(crate) fn for_worker(store: &Store, spec: &crate::background::BackgroundRunSpec) -> Result<Self> {
+    pub(crate) fn for_worker(store: &Store, spec: &crate::runtime::background::BackgroundRunSpec) -> Result<Self> {
         let task_id = spec.task_id.as_str();
         let mut args = Self::saved_for_task(store, task_id)?
             .with_context(|| format!("Task {task_id} has no saved dispatch args"))?;
@@ -210,7 +210,7 @@ impl Default for RunArgs {
             existing_task_id: None,
             timeout: None,
             idle_timeout_secs: None,
-            timeout_policy: crate::timeout_policy::TimeoutPolicy::default(),
+            timeout_policy: crate::config::timeout_policy::TimeoutPolicy::default(),
             audit: false,
             audit_explicit: false,
             no_audit: false,

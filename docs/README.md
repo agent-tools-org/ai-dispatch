@@ -4,6 +4,24 @@ Start with the [2026-09-22 takeover inventory](project-status-2026-09-22.md) for
 codebase map, source-backed risks, and verification limits; use the [roadmap](roadmap.md)
 for current sequencing and acceptance gates.
 
+## Source layout
+
+`src/main.rs` declares these top-level modules:
+
+| Module | Contents |
+|---|---|
+| `cli`, `cmd` | argument parsing, command dispatch and diagnostics; one module per command |
+| `agent` | agent adapters, detection and selection |
+| `batch`, `types` | batch TOML schema; shared task, status, route and provider types |
+| `config`, `prompt` | global, agent, project and team configuration; prompt assembly, templates, skills |
+| `routing` | rate limits, quota, provider capacity, route availability, model catalog, scores |
+| `runtime` | background workers, PTY, process groups, sandbox, containers, watcher, remote build |
+| `task` | lifecycle, actions, verification, delivery guard, notifications |
+| `workspace` | worktrees, GitButler, artifact custody, backup, commits |
+| `store`, `cost` | SQLite store and queries; cost and usage accounting |
+| `ui` | text board, TUI, output, and the `web` feature's HTTP server |
+| `support` | paths, sanitization, repository root and test helpers |
+
 | Need | Source |
 | --- | --- |
 | Product introduction and examples | [Root README](../README.md) |

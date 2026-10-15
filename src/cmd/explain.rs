@@ -4,10 +4,10 @@
 use anyhow::Result;
 use std::sync::Arc;
 
-use crate::agent_config;
+use crate::config::agent as agent_config;
 use crate::cmd::run::{self, RunArgs};
 use crate::cmd::show::{load_task, read_tail};
-use crate::paths;
+use crate::support::paths;
 use crate::store::Store;
 use crate::types::{Task, TaskEvent};
 pub(crate) async fn run_explain(store: Arc<Store>, task_id: &str, agent: Option<String>, model: Option<String>) -> Result<()> {

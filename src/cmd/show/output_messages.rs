@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::paths;
+use crate::support::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, Task};
 use super::show_output_extract::collect_messages;

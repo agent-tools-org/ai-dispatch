@@ -40,7 +40,7 @@ pub async fn retry_failed(
     agent_override: Option<&str>,
     include_waiting: bool,
 ) -> Result<()> {
-    crate::sanitize::validate_workgroup_id(group_id)?;
+    crate::support::sanitize::validate_workgroup_id(group_id)?;
     let tasks = store.list_tasks_by_group(group_id)?;
     let total = tasks.len();
     let retry_tasks: Vec<_> = tasks
@@ -75,8 +75,8 @@ pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str,
     if let Some(name) = agent_override {
         switch_agent(&mut run_args, name.to_string());
     } else {
-        let (kind, custom) = crate::rate_limit::resolve_agent(&run_args.agent_name);
-        if crate::rate_limit::is_rate_limited(&kind, custom)
+        let (kind, custom) = crate::routing::rate_limit::resolve_agent(&run_args.agent_name);
+        if crate::routing::rate_limit::is_rate_limited(&kind, custom)
             && run_args.cascade.is_empty()
             && let Some(candidate) = run::advice_route::automatic_candidate(Some(store), &run_args)
         {

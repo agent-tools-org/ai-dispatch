@@ -108,7 +108,7 @@ pub(crate) fn get_agents_list_with_installed(
     Ok(AgentListJson {
         generated_at: Local::now().to_rfc3339(),
         agents,
-        sources: crate::scores::sources(),
+        sources: crate::routing::scores::sources(),
     })
 }
 
@@ -143,7 +143,7 @@ fn build_agent_json(
     } else {
         installed_agents.contains(&kind)
     };
-    let disabled = crate::agent_config::is_agent_disabled(&name);
+    let disabled = crate::config::agent::is_agent_disabled(&name);
     
     let (description, trust_tier, provider, metering) = agent_metadata(kind, custom_config);
     let supports_session_resume = !is_custom && kind.supports_session_resume();
@@ -152,7 +152,7 @@ fn build_agent_json(
         custom_config.map(|c| c.id.as_str()),
     );
     
-    let auth = crate::auth_marker::auth_status(kind, custom_config.map(|c| c.id.as_str()));
+    let auth = crate::routing::auth_marker::auth_status(kind, custom_config.map(|c| c.id.as_str()));
 
     let models = build_models_json(&name, kind, custom_config)?;
     Ok(AgentJson {
@@ -181,7 +181,7 @@ fn build_models_json(
     let budget_model = if is_custom {
         None
     } else {
-        crate::model_catalog::budget_model(&kind).map(|s| s.to_string())
+        crate::routing::model_catalog::budget_model(&kind).map(|s| s.to_string())
     };
     let available = if is_custom {
         Vec::new()
@@ -191,7 +191,7 @@ fn build_models_json(
             .filter(|m| m.agent == kind)
             .map(|m| {
                 let price = crate::cost::resolve_pricing(Some(&m.model), kind);
-                let evidence = crate::scores::evidence(kind, Some(&m.model),
+                let evidence = crate::routing::scores::evidence(kind, Some(&m.model),
                     crate::agent::classifier::TaskCategory::ComplexImpl);
                 AvailableModelJson {
                     model: m.model,

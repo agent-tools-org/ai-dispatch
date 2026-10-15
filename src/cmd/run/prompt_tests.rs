@@ -42,8 +42,8 @@ fn sanitize_preserves_normal_lines() {
 #[test]
 fn audit_report_bundle_omits_implementation_instructions() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    let skills_dir = crate::paths::aid_dir().join("skills");
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let skills_dir = crate::support::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&skills_dir).unwrap();
     std::fs::write(
         skills_dir.join("implementer.md"),
@@ -81,8 +81,8 @@ fn audit_report_bundle_omits_implementation_instructions() {
 #[test]
 fn explicit_result_file_write_review_keeps_implementation_instructions() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    let skills_dir = crate::paths::aid_dir().join("skills");
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let skills_dir = crate::support::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&skills_dir).unwrap();
     std::fs::write(skills_dir.join("implementer.md"), "implementation method").unwrap();
     let store = Store::open_memory().unwrap();
@@ -115,8 +115,8 @@ fn explicit_result_file_write_review_keeps_implementation_instructions() {
 #[test]
 fn code_review_then_fix_keeps_implementation_instructions() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    let skills_dir = crate::paths::aid_dir().join("skills");
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let skills_dir = crate::support::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&skills_dir).unwrap();
     std::fs::write(skills_dir.join("implementer.md"), "implementation method").unwrap();
     let store = Store::open_memory().unwrap();
@@ -154,8 +154,8 @@ fn code_review_then_fix_keeps_implementation_instructions() {
 #[test]
 fn write_task_mentioning_read_only_audit_keeps_implementation_instructions() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    let skills_dir = crate::paths::aid_dir().join("skills");
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let skills_dir = crate::support::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&skills_dir).unwrap();
     std::fs::write(skills_dir.join("implementer.md"), "implementation method").unwrap();
     let store = Store::open_memory().unwrap();

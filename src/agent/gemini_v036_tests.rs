@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::agent::{Agent, RunOpts};
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use std::sync::{Mutex, OnceLock};
 use tempfile::TempDir;
 
@@ -200,7 +200,7 @@ fn parses_gemini_rate_limit_errors() {
     });
     let event = parse_stream_event(&task_id, &json, Local::now()).unwrap();
     assert_eq!(event.event_kind, EventKind::Error);
-    assert!(crate::rate_limit::is_rate_limited(&AgentKind::Gemini, None));
+    assert!(crate::routing::rate_limit::is_rate_limited(&AgentKind::Gemini, None));
 }
 
 #[test]

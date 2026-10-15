@@ -10,7 +10,7 @@ use super::super::held::{
 fn held_opencode_provider_switches_before_dispatch() {
     let dir = tempfile::tempdir().expect("tempdir");
     let _guard = AidHomeGuard::set(dir.path());
-    crate::rate_limit::mark_group_rate_limited(
+    crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::OpenCode,
         None,
         "nvidia",
@@ -36,7 +36,7 @@ fn held_opencode_provider_switches_before_dispatch() {
 fn held_cursor_premium_switches_to_auto_without_changing_agent() {
     let dir = tempfile::tempdir().expect("tempdir");
     let _guard = AidHomeGuard::set(dir.path());
-    crate::rate_limit::mark_group_rate_limited(
+    crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::Cursor,
         None,
         "premium",
@@ -67,13 +67,13 @@ fn background_urgency_keeps_held_ungrouped_agent() {
     let _guard = AidHomeGuard::set(dir.path());
     let cache = dir.path().join("aidbar");
     std::fs::create_dir_all(&cache).unwrap();
-    let _probe = crate::live_quota::CacheDirGuard::set(&cache);
+    let _probe = crate::routing::quota::live::CacheDirGuard::set(&cache);
     std::fs::write(
         cache.join("grok.json"),
         r#"{"ok":true,"snapshot":{"provider":"grok","windows":[{"label":"w","used_percent":100.0,"resets_at":"2026-08-18T00:55:28Z","group":null}],"fetched_at":"2099-01-01T00:00:00Z"}}"#,
     )
     .unwrap();
-    crate::rate_limit::mark_rate_limited(
+    crate::routing::rate_limit::mark_rate_limited(
         &AgentKind::Grok,
         None,
         "API error (status 402 Payment Required): Grok Build usage balance exhausted",
@@ -101,12 +101,12 @@ fn background_urgency_keeps_held_ungrouped_agent() {
 fn background_urgency_keeps_held_droid_agent() {
     let dir = tempfile::tempdir().expect("tempdir");
     let _guard = AidHomeGuard::set(dir.path());
-    crate::rate_limit::mark_rate_limited(
+    crate::routing::rate_limit::mark_rate_limited(
         &AgentKind::Droid,
         None,
         &format!(
             "try again at {}.",
-            crate::rate_limit::test_future_recovery_time()
+            crate::routing::rate_limit::test_future_recovery_time()
         ),
     );
     let store = Arc::new(Store::open_memory().expect("store"));
@@ -131,7 +131,7 @@ fn background_urgency_keeps_held_droid_agent() {
 fn agent_wide_droid_hold_cascades_away_even_with_a_core_model() {
     let dir = tempfile::tempdir().expect("tempdir");
     let _guard = AidHomeGuard::set(dir.path());
-    crate::rate_limit::mark_rate_limited(
+    crate::routing::rate_limit::mark_rate_limited(
         &AgentKind::Droid,
         None,
         "402 payment required: reload your tokens",
@@ -161,26 +161,26 @@ fn agent_wide_droid_hold_cascades_away_even_with_a_core_model() {
 fn group_held_fallback_is_skipped_when_cascade_steps_over_held_route() {
     let dir = tempfile::tempdir().expect("tempdir");
     let _guard = AidHomeGuard::set(dir.path());
-    crate::rate_limit::mark_group_rate_limited(
+    crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::OpenCode,
         None,
         "opencode",
         "Insufficient balance.",
     );
     // agy's gemini AND claude allowances are exhausted — nothing it can serve.
-    crate::rate_limit::mark_group_rate_limited(
+    crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::Antigravity,
         None,
         "gemini",
         "Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 59m21s.",
     );
-    crate::rate_limit::mark_group_rate_limited(
+    crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::Antigravity,
         None,
         "claude",
         "Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 59m21s.",
     );
-    crate::rate_limit::mark_group_rate_limited(
+    crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::Antigravity,
         None,
         "gpt-oss",
@@ -216,17 +216,17 @@ fn group_held_fallback_is_skipped_when_cascade_steps_over_held_route() {
 fn agent_level_held_fallback_is_skipped_when_cascade_steps_over_held_route() {
     let dir = tempfile::tempdir().expect("tempdir");
     let _guard = AidHomeGuard::set(dir.path());
-    crate::rate_limit::mark_group_rate_limited(
+    crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::OpenCode,
         None,
         "opencode",
         "Insufficient balance.",
     );
     // agy's agent-level marker names a future recovery — the exact 11:07 shape.
-    crate::rate_limit::mark_rate_limited(
+    crate::routing::rate_limit::mark_rate_limited(
         &AgentKind::Antigravity,
         None,
-        &format!("Individual quota reached. Please upgrade your subscription. try again at {}.", crate::rate_limit::test_future_recovery_time()),
+        &format!("Individual quota reached. Please upgrade your subscription. try again at {}.", crate::routing::rate_limit::test_future_recovery_time()),
     );
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut args = RunArgs {

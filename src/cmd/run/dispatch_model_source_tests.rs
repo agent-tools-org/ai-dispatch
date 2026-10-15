@@ -5,7 +5,7 @@
 use super::super::resolve_agent_setup;
 use crate::agent::model_validation::{ModelSource, MockServedModelsGuard};
 use crate::cmd::run::RunArgs;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
 use crate::types::AgentKind;
 use std::sync::Arc;
@@ -14,7 +14,7 @@ use std::sync::Arc;
 fn aid_selected_default_is_persisted_as_aid_resolved() {
     let home = tempfile::tempdir().expect("temporary aid home");
     let _home_guard = AidHomeGuard::set(home.path());
-    crate::agent_config::save_agent_default_model("grok", Some("stale-aid-model"))
+    crate::config::agent::save_agent_default_model("grok", Some("stale-aid-model"))
         .expect("save agent default");
     let _served = MockServedModelsGuard::set(
         AgentKind::Grok,
@@ -62,7 +62,7 @@ fn explicit_model_remains_user_supplied() {
 fn substituted_model_is_persisted_as_aid_resolved() {
     let home = tempfile::tempdir().expect("temporary aid home");
     let _home_guard = AidHomeGuard::set(home.path());
-    crate::rate_limit::mark_group_rate_limited(
+    crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::Cursor,
         None,
         "premium",
@@ -107,7 +107,7 @@ fn declared_standard_and_premium_reach_cli_default() {
 }
 
 fn assert_cli_default(store: &Arc<Store>, args: &mut RunArgs) {
-    assert_eq!(crate::agent_config::get_default_model(&args.agent_name), None);
+    assert_eq!(crate::config::agent::get_default_model(&args.agent_name), None);
     assert_eq!(args.model, None);
     let codex_home = tempfile::tempdir().expect("empty codex home");
     crate::agent::codex::cli_config::set_test_codex_home(Some(codex_home.path().to_path_buf()));

@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 
 use crate::{
-    agent, skills, store::Store, templates, types::*,
+    agent, prompt::skills, store::Store, prompt::templates, types::*,
 };
 use crate::cmd::run::{RunArgs, NO_SKILL_SENTINEL};
 
@@ -80,7 +80,7 @@ pub(super) fn format_batch_siblings(
         lines.push(format!("+ {remaining} more [{note}]"));
     }
     lines.push("</aid-batch-siblings>".to_string());
-    crate::workgroup::bound_auxiliary(&lines.join("\n"), "Batch Siblings", omissions)
+    crate::task::workgroup::bound_auxiliary(&lines.join("\n"), "Batch Siblings", omissions)
 }
 
 pub(crate) fn inject_skill(
@@ -107,7 +107,7 @@ pub(crate) fn inject_skill(
         sections.push(format!("--- Methodology ---\n{skill_text}"));
         append_skill_resources(name, &mut sections);
     }
-    let context = crate::workgroup::bound_auxiliary(
+    let context = crate::task::workgroup::bound_auxiliary(
         &sections.join("\n\n"), "Methodology", omissions,
     );
     Ok(format!("{prompt}\n\n{context}"))
@@ -144,19 +144,19 @@ fn append_skill_resources(name: &str, sections: &mut Vec<String>) {
 
 pub(crate) fn build_context_flags(agent_kind: &AgentKind, context_args: &[String]) -> Result<(Option<String>, Vec<String>)> {
     if context_args.is_empty() { return Ok((None, vec![])); }
-    let specs = crate::context::parse_context_specs(context_args)?;
+    let specs = crate::prompt::context::parse_context_specs(context_args)?;
     let context_files = expand_context_paths(&specs);
     if *agent_kind == AgentKind::OpenCode || *agent_kind == AgentKind::Kilo || *agent_kind == AgentKind::MiMoCode {
         let hints: Vec<String> = specs.iter().filter_map(|spec| spec.items.as_ref().map(|items| format!("Focus on: {} in {}", items.join(", "), spec.file))).collect();
         let file_context = (!hints.is_empty()).then(|| hints.join("\n"));
         return Ok((file_context, context_files));
     }
-    if agent::agent_has_fs_access(agent_kind) { return Ok((Some(crate::context::resolve_context_pointers(&specs)), vec![])); }
+    if agent::agent_has_fs_access(agent_kind) { return Ok((Some(crate::prompt::context::resolve_context_pointers(&specs)), vec![])); }
     let file_context = if specs.iter().all(|spec| spec.items.is_none()) {
         let mut blocks = Vec::new();
         for spec in &specs { let content = read_context_file(&spec.file)?; blocks.push(format_context_block(&spec.file, &content)); }
         blocks.join("\n\n")
-    } else { crate::context::resolve_context(&specs)? };
+    } else { crate::prompt::context::resolve_context(&specs)? };
     Ok((Some(file_context), vec![]))
 }
 
@@ -164,7 +164,7 @@ pub(crate) fn rust_cache_prompt_line(dir: Option<&str>) -> Option<&'static str> 
     agent::is_rust_project(dir).then_some(RUST_CACHE_PROMPT_LINE)
 }
 
-pub(crate) fn expand_context_paths(specs: &[crate::context::ContextSpec]) -> Vec<String> { specs.iter().map(|spec| spec.file.clone()).collect() }
+pub(crate) fn expand_context_paths(specs: &[crate::prompt::context::ContextSpec]) -> Vec<String> { specs.iter().map(|spec| spec.file.clone()).collect() }
 
 pub(crate) fn read_context_file(path: &str) -> Result<String> { std::fs::read_to_string(path).with_context(|| format!("Failed to read context file: {}", path)) }
 
@@ -172,7 +172,7 @@ pub(crate) fn format_context_block(path: &str, content: &str) -> String { format
 
 /// Explicit skills override defaults from the dispatch's resolved project;
 /// read-only runs receive no project default.
-pub(crate) fn effective_skills(args: &RunArgs, project: Option<&crate::project::ProjectConfig>) -> Vec<String> {
+pub(crate) fn effective_skills(args: &RunArgs, project: Option<&crate::config::project::ProjectConfig>) -> Vec<String> {
     let declared: Vec<String> = args
         .skills
         .iter()
@@ -192,7 +192,7 @@ pub(crate) fn effective_skills(args: &RunArgs, project: Option<&crate::project::
 }
 
 pub(crate) fn resolve_repo_path(path: &str) -> Result<String> {
-    crate::repo_root::resolve_git_root_string(path)
+    crate::support::repo_root::resolve_git_root_string(path)
 }
 
 pub(crate) fn resolve_dir_in_target(base_dir: &str, dir: Option<&str>, repo_dir: Option<&str>) -> String {
@@ -219,12 +219,12 @@ pub(crate) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) ->
         // so worktrees inherit the latest state of whatever branch the user is on
         let default_base = args.base_branch.clone().or_else(|| current_branch(std::path::Path::new(&repo_dir)));
         let base = if args.base_branch.is_none() {
-            crate::worktree::branch_tip_resume_base(std::path::Path::new(&repo_dir), branch)?
+            crate::workspace::worktree::branch_tip_resume_base(std::path::Path::new(&repo_dir), branch)?
                 .or(default_base)
         } else {
             default_base
         };
-        let info = crate::worktree::create_worktree(std::path::Path::new(&repo_dir), branch, base.as_deref())?;
+        let info = crate::workspace::worktree::create_worktree(std::path::Path::new(&repo_dir), branch, base.as_deref())?;
         let p = info.path.to_string_lossy().to_string();
         return Ok((Some(p.clone()), Some(info.branch), Some(resolve_dir_in_target(&p, args.dir.as_deref(), Some(&repo_dir))), Some(repo_dir), info.created));
     }

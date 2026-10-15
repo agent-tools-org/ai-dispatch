@@ -36,14 +36,14 @@ fn declared_budget_model_warning(
     }
     let kind = AgentKind::parse_str(agent_name);
     let on_preference = chosen_model.is_some_and(|name| {
-        kind.is_some_and(|kind| crate::model_catalog::model_on_budget_preference(kind, budget, name))
+        kind.is_some_and(|kind| crate::routing::model_catalog::model_on_budget_preference(kind, budget, name))
     });
     if on_preference {
         return None;
     }
     let catalog_has_preference = kind.is_some_and(|kind| {
-        crate::model_catalog::model_for_task_budget(kind, budget)
-            .is_some_and(|name| crate::model_catalog::model_on_budget_preference(kind, budget, name))
+        crate::routing::model_catalog::model_for_task_budget(kind, budget)
+            .is_some_and(|name| crate::routing::model_catalog::model_on_budget_preference(kind, budget, name))
     });
     let chosen = chosen_model.unwrap_or("agent default");
     if from_config && catalog_has_preference {

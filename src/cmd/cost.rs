@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::cost;
 use crate::store::Store;
 use crate::types::{Task, TaskFilter};
-use crate::usage::UsageWindow;
+use crate::cost::usage::UsageWindow;
 
 type Totals = (usize, i64, Option<f64>);
 

@@ -34,7 +34,7 @@ fn repository() -> (tempfile::TempDir, PathBuf, String) {
     std::fs::write(repo.path().join("base.txt"), "base\n").expect("base");
     git(repo.path(), &["add", "base.txt"]);
     git(repo.path(), &["commit", "-m", "base"]);
-    let worktree = crate::worktree::create_worktree(repo.path(), "fix/capacity-fixture", None)
+    let worktree = crate::workspace::worktree::create_worktree(repo.path(), "fix/capacity-fixture", None)
         .expect("worktree")
         .path;
     let initial_head = git(&worktree, &["rev-parse", "HEAD"]);
@@ -236,7 +236,7 @@ impl Fixture {
 }
 
 async fn flow(repeated: bool, read_only: bool) {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let fixture = Fixture::new(repeated, read_only);
     fixture.fail_initial_agent().await;
     let final_id = fixture.continue_task().await;

@@ -5,7 +5,7 @@ use super::*;
 use crate::agent::{Agent, RunOpts};
 use crate::cmd::run::run_agent_process_with_cost as run_agent_process_with_timeout;
 use crate::cmd::run::run_prompt;
-use crate::hooks::Hook;
+use crate::config::hooks::Hook;
 use crate::types::{Task, TaskEvent};
 use std::process::Command as StdCommand;
 use std::time::{Duration, Instant};
@@ -53,10 +53,10 @@ async fn idle_task_past_deadline_times_out() {
 }
 
 async fn assert_worker_timeout(script: &str) {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().expect("dirs");
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let task_id = TaskId("t-active-deadline".into());
     store.insert_task(&task(&task_id, TaskStatus::Running)).expect("task");
@@ -83,7 +83,7 @@ async fn assert_worker_timeout(script: &str) {
 #[test]
 fn foreground_default_duration_uses_shared_config_constant() {
     assert_eq!(
-        crate::timeout_policy::TimeoutPolicy::default().max_duration_mins(),
+        crate::config::timeout_policy::TimeoutPolicy::default().max_duration_mins(),
         crate::config::DEFAULT_MAX_TASK_DURATION_MINS
     );
 }
@@ -91,8 +91,8 @@ fn foreground_default_duration_uses_shared_config_constant() {
 #[tokio::test]
 async fn max_duration_timeout_reaches_on_fail_lifecycle() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = TaskId("t-foreground-timeout".to_string());
     store.insert_task(&task(&task_id, TaskStatus::Running)).unwrap();
@@ -157,14 +157,14 @@ async fn run_failure_hook(store: &Arc<Store>, task_id: &TaskId, hook_path: &std:
 #[tokio::test]
 async fn spawn_failure_marks_task_failed_not_running() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = TaskId("t-spawn-miss".to_string());
     store.insert_task(&task(&task_id, TaskStatus::Running)).unwrap();
     let log_path = temp.path().join("spawn.log");
     let cmd = tokio::process::Command::new("/definitely/missing/agent-binary");
-    let policy = crate::timeout_policy::TimeoutPolicy::default();
+    let policy = crate::config::timeout_policy::TimeoutPolicy::default();
 
     let err = run_agent_process_with_timeout(
         &TimeoutTestAgent,
@@ -190,11 +190,11 @@ async fn spawn_failure_marks_task_failed_not_running() {
     assert!(detail.contains("Failed during agent spawn"), "unexpected detail: {detail}");
 }
 
-fn tiny_timeout_policy() -> crate::timeout_policy::TimeoutPolicy {
-    crate::timeout_policy::TimeoutPolicy {
+fn tiny_timeout_policy() -> crate::config::timeout_policy::TimeoutPolicy {
+    crate::config::timeout_policy::TimeoutPolicy {
         idle: Duration::from_millis(20),
         first_token: Duration::from_millis(20),
-        nudge_ladder: crate::timeout_policy::NudgeLadder {
+        nudge_ladder: crate::config::timeout_policy::NudgeLadder {
             warn: Duration::from_millis(20),
             nudge: Duration::from_millis(20),
             escalate: Duration::from_millis(20),
@@ -214,7 +214,7 @@ fn task(task_id: &TaskId, status: TaskStatus) -> Task {
 #[test]
 fn process_foreground_completion_records_component_usage() {
     let _guard = crate::cost::test_support::seed_prices(Some(0.125));
-    crate::paths::ensure_dirs().expect("aid dirs");
+    crate::support::paths::ensure_dirs().expect("aid dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut task = crate::cost::test_support::task(crate::types::AgentKind::Codex, 238_440, None);
     task.status = TaskStatus::Running;
@@ -235,12 +235,12 @@ fn process_foreground_completion_records_component_usage() {
         cmd: Command::new("true"),
         task_id: &task.id,
         store: &store,
-        log_path: &crate::paths::log_path(task.id.as_str()),
+        log_path: &crate::support::paths::log_path(task.id.as_str()),
         output_path: None,
         model: task.requested_model.as_deref(),
         streaming: true,
         workgroup_id: None,
-        timeout_policy: crate::timeout_policy::TimeoutPolicy::default(),
+        timeout_policy: crate::config::timeout_policy::TimeoutPolicy::default(),
         max_task_cost: None,
     };
     complete_agent(&args, &mut { info }, Instant::now(), &context).expect("record completion");

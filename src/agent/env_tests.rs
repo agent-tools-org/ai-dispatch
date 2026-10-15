@@ -2,7 +2,7 @@
 // Exports: none. Deps: env helpers, subprocess env guards, tempfile.
 
 use super::*;
-use crate::test_env::CargoTargetDirGuard;
+use crate::support::test_env::CargoTargetDirGuard;
 use std::process::Command;
 use std::os::unix::fs::PermissionsExt;
 
@@ -238,7 +238,7 @@ fn apply_codex_home_env_uses_durable_real_home() {
 #[test]
 fn apply_run_env_sets_host_toolchain_paths() {
     let aid_home = tempfile::tempdir().unwrap();
-    let _aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+    let _aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
     let mut cmd = Command::new("echo");
     let opts = RunOpts {
         dir: None,

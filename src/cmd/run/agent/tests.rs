@@ -207,15 +207,15 @@ fn task_fixture(id: &str, status: TaskStatus, worktree_path: Option<&str>) -> Ta
 #[test]
 fn record_execution_failure_stores_phase_event_and_snapshot() {
     let aid_home = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(aid_home.path());
-    crate::paths::ensure_dirs().unwrap();
+    let _guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Store::open_memory().unwrap();
-    let worktree_path = crate::worktree::aid_worktree_path(Path::new(env!("CARGO_MANIFEST_DIR")), "feat/fast-fail");
+    let worktree_path = crate::workspace::worktree::aid_worktree_path(Path::new(env!("CARGO_MANIFEST_DIR")), "feat/fast-fail");
     let worktree_path = worktree_path.to_string_lossy().to_string();
     let task = task_fixture("t-fast-fail", TaskStatus::Running, Some(&worktree_path));
     store.insert_task(&task).unwrap();
     std::fs::write(
-        crate::paths::stderr_path(task.id.as_str()),
+        crate::support::paths::stderr_path(task.id.as_str()),
         "spawn blew up\nsecondary detail\n",
     )
     .unwrap();

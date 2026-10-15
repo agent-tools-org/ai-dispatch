@@ -3,7 +3,7 @@
 // Deps: agent registry/selection, rate_limit, Store, AgentSetup.
 use anyhow::Result;
 use crate::agent;
-use crate::rate_limit;
+use crate::routing::rate_limit;
 use crate::store::Store;
 use crate::types::AgentKind;
 use super::AgentSetup;
@@ -118,8 +118,8 @@ pub(super) fn degraded_dispatch_warning(
     kind: AgentKind,
     custom_name: Option<&str>,
 ) -> Option<String> {
-    let avail = crate::route_availability::availability(&kind, custom_name);
-    if avail.status != crate::route_availability::RouteStatus::Degraded {
+    let avail = crate::routing::availability::availability(&kind, custom_name);
+    if avail.status != crate::routing::availability::RouteStatus::Degraded {
         return None;
     }
     let name = custom_name.unwrap_or_else(|| kind.as_str());
@@ -166,20 +166,20 @@ fn candidate_is_blocked(kind: &AgentKind, custom_name: Option<&str>) -> bool {
     })
 }
 
-fn wall_label(wall: crate::route_availability::QuotaWall) -> &'static str {
+fn wall_label(wall: crate::routing::availability::QuotaWall) -> &'static str {
     match wall {
-        crate::route_availability::QuotaWall::Clock => "clock",
-        crate::route_availability::QuotaWall::Windowed => "windowed",
-        crate::route_availability::QuotaWall::Prepaid => "prepaid",
-        crate::route_availability::QuotaWall::PlanChange => "plan_change",
-        crate::route_availability::QuotaWall::Transient => "transient",
-        crate::route_availability::QuotaWall::None => "none",
+        crate::routing::availability::QuotaWall::Clock => "clock",
+        crate::routing::availability::QuotaWall::Windowed => "windowed",
+        crate::routing::availability::QuotaWall::Prepaid => "prepaid",
+        crate::routing::availability::QuotaWall::PlanChange => "plan_change",
+        crate::routing::availability::QuotaWall::Transient => "transient",
+        crate::routing::availability::QuotaWall::None => "none",
     }
 }
 
 fn model_tier(kind: AgentKind, model: Option<&str>) -> Option<String> {
     let model = model?;
-    crate::model_catalog::models_for_agent(&kind)
+    crate::routing::model_catalog::models_for_agent(&kind)
         .into_iter()
         .find(|entry| entry.model == model)
         .map(|entry| entry.tier)
@@ -259,7 +259,7 @@ pub(crate) fn maybe_insert_held_route_event(
     let from_custom = AgentKind::parse_str(original)
         .is_none()
         .then_some(original.as_str());
-    let wall = wall_label(crate::route_availability::availability(&from_kind, from_custom).wall);
+    let wall = wall_label(crate::routing::availability::availability(&from_kind, from_custom).wall);
     let _ = store.insert_event(&crate::types::TaskEvent {
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),

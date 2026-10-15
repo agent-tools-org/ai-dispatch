@@ -2,7 +2,7 @@
 // Deps: resolve_run_model, isolated AID_HOME, test codex home, custom agent config parser.
 
 use super::*;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 
 struct Isolated {
     _temp: tempfile::TempDir,
@@ -34,7 +34,7 @@ fn pinned(model: &str, source: RunModelSource) -> RunModel {
 #[test]
 fn explicit_model_is_pinned_over_sticky() {
     let _env = isolated();
-    crate::agent_config::save_agent_default_model("gemini", Some("pro")).expect("sticky");
+    crate::config::agent::save_agent_default_model("gemini", Some("pro")).expect("sticky");
     let resolved = resolve_run_model(&RunModelInput {
         explicit_model: Some("flash"), declared_budget: Some(TaskBudget::Cheap), ..input(AgentKind::Gemini)
     });
@@ -54,7 +54,7 @@ fn forced_default_passes_nothing_even_with_explicit_model() {
 #[test]
 fn sticky_default_beats_declared_cheap_catalog() {
     let _env = isolated();
-    crate::agent_config::save_agent_default_model("gemini", Some("pro")).expect("sticky");
+    crate::config::agent::save_agent_default_model("gemini", Some("pro")).expect("sticky");
     let resolved = resolve_run_model(&RunModelInput {
         declared_budget: Some(TaskBudget::Cheap), budget_mode: true, ..input(AgentKind::Gemini)
     });
@@ -82,7 +82,7 @@ fn custom_forced_model_is_reported_not_pinned() {
 fn smart_route_pins_budget_model_for_declared_simple_task_without_budget() {
     let _env = isolated();
     let simple = RunModelInput { declared_difficulty: Some(TaskDifficulty::Simple), ..input(AgentKind::Gemini) };
-    let expected = crate::model_catalog::budget_model(&AgentKind::Gemini).expect("gemini budget model");
+    let expected = crate::routing::model_catalog::budget_model(&AgentKind::Gemini).expect("gemini budget model");
     assert_eq!(resolve_run_model(&simple), pinned(expected, RunModelSource::SmartRoute));
     let declared = RunModelInput { declared_budget: Some(TaskBudget::Standard), ..simple };
     assert_eq!(resolve_run_model(&declared).source, RunModelSource::AgentDefault);
@@ -98,7 +98,7 @@ fn budget_route_pins_declared_cheap_catalog_and_budget_mode_model() {
     let grok = RunModelInput { declared_budget: Some(TaskBudget::Cheap), budget_mode: true, ..input(AgentKind::Grok) };
     assert_eq!(resolve_run_model(&grok), pinned("grok-4.6", RunModelSource::BudgetRoute));
     let mode = RunModelInput { budget_mode: true, ..input(AgentKind::Gemini) };
-    let expected = crate::model_catalog::budget_model(&AgentKind::Gemini).expect("gemini budget model");
+    let expected = crate::routing::model_catalog::budget_model(&AgentKind::Gemini).expect("gemini budget model");
     assert_eq!(resolve_run_model(&mode), pinned(expected, RunModelSource::BudgetRoute));
 }
 

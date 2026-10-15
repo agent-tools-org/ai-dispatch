@@ -40,7 +40,7 @@ pub(super) fn clean_isolated_task_homes_with(
         }
     };
     for id in crate::cmd::clean_cargo_target::terminal_task_ids(store)? {
-        let home_dir = crate::paths::task_dir(&id).join("home");
+        let home_dir = crate::support::paths::task_dir(&id).join("home");
         if home_dir.exists() {
             let size = sizes.get_dir_size(&home_dir)?;
             if dry_run {

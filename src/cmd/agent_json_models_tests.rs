@@ -7,7 +7,7 @@ use crate::agent::codex::cli_config::set_test_codex_home;
 use crate::cmd::agent_json_types::AgentJson;
 
 fn write_served_cache(entries: serde_json::Value) {
-    crate::paths::ensure_dirs().expect("aid dirs");
+    crate::support::paths::ensure_dirs().expect("aid dirs");
     crate::agent::model_validation::clear_served_models_cache();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -21,7 +21,7 @@ fn write_served_cache(entries: serde_json::Value) {
         );
     }
     std::fs::write(
-        crate::paths::aid_dir().join("served_models_cache.json"),
+        crate::support::paths::aid_dir().join("served_models_cache.json"),
         serde_json::Value::Object(map).to_string(),
     )
     .expect("served-model cache");
@@ -39,7 +39,7 @@ fn agent(name: &str) -> AgentJson {
 #[test]
 fn served_only_models_appear_unrated_for_every_probe_agent() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     write_served_cache(serde_json::json!({
         "codex": ["gpt-5.6-sol", "gpt-6-sol"],
         "grok": ["grok-9-served"],
@@ -92,7 +92,7 @@ fn served_only_models_appear_unrated_for_every_probe_agent() {
         codex_rows, 1,
         "a served model with a catalog row is not duplicated"
     );
-    crate::scores::test_support::seed_live();
+    crate::routing::scores::test_support::seed_live();
     let measured = crate::cmd::agent_json::agents_list_value(&store).expect("measured list");
     let model = measured["agents"].as_array().expect("agents").iter()
         .find(|row| row["name"] == "claude").expect("claude")["models"]["available"]
@@ -106,7 +106,7 @@ fn served_only_models_appear_unrated_for_every_probe_agent() {
 #[test]
 fn codex_default_is_the_resolver_model_and_never_a_catalog_guess() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let codex_home = temp.path().join("codex-home");
     std::fs::create_dir_all(&codex_home).expect("codex home");
     set_test_codex_home(Some(codex_home.clone()));
@@ -123,7 +123,7 @@ fn codex_default_is_the_resolver_model_and_never_a_catalog_guess() {
         Some("cli_config")
     );
 
-    crate::agent_config::save_agent_default_model("codex", Some("gpt-5.6-luna")).expect("sticky");
+    crate::config::agent::save_agent_default_model("codex", Some("gpt-5.6-luna")).expect("sticky");
     let sticky = agent("codex");
     set_test_codex_home(None);
     assert_eq!(sticky.models.default.as_deref(), Some("gpt-5.6-luna"));

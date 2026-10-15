@@ -30,7 +30,7 @@ fn task(id: &str, dir: &str, verify: &str) -> Task {
 #[cfg(unix)]
 #[test]
 fn cargo_target_permission_diagnostic_is_unverified_infrastructure() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let dir = tempfile::tempdir().unwrap();
     let dir_str = dir.path().to_string_lossy().to_string();
     let target = crate::agent::target_dir_for_worktree(Some("fix/verify-gate")).unwrap();

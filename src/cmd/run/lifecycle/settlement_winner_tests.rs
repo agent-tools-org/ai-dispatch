@@ -10,7 +10,7 @@ mod notices;
 
 struct Fixture {
     home: tempfile::TempDir,
-    _guard: crate::paths::AidHomeGuard,
+    _guard: crate::support::paths::AidHomeGuard,
     store: Arc<Store>,
     id: TaskId,
     winner: Task,
@@ -19,8 +19,8 @@ struct Fixture {
 impl Fixture {
     fn new(status: TaskStatus) -> Self {
         let home = tempfile::tempdir().expect("home");
-        let guard = crate::paths::AidHomeGuard::set(home.path());
-        crate::paths::ensure_dirs().expect("dirs");
+        let guard = crate::support::paths::AidHomeGuard::set(home.path());
+        crate::support::paths::ensure_dirs().expect("dirs");
         let store = Arc::new(Store::open_memory().expect("store"));
         let mut task = crate::cost::test_support::task(AgentKind::Codex, 0, None);
         task.status = TaskStatus::Running;
@@ -98,7 +98,7 @@ impl Fixture {
 
 #[test]
 fn verification_failure_preserves_settlement_winner() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     for status in [TaskStatus::Stopped, TaskStatus::Done, TaskStatus::Failed] {
         let f = Fixture::new(status);
         maybe_verify(&f.store, &f.id, Some("false"), f.home.path().to_str(), None);
@@ -184,7 +184,7 @@ fn stale_artifact_snapshot_does_not_authorize_losing_failure() {
 
 #[tokio::test]
 async fn read_only_violation_preserves_settlement_winner() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let f = Fixture::new(TaskStatus::Stopped);
     init_repo(f.home.path());
     let dir = f.home.path().to_str().expect("dir");
@@ -209,7 +209,7 @@ async fn read_only_violation_preserves_settlement_winner() {
 
 #[tokio::test]
 async fn shared_checkout_failure_preserves_settlement_winner() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let f = Fixture::new(TaskStatus::Stopped);
     init_repo(f.home.path());
     std::fs::write(f.home.path().join(".git/config"), "[broken\n").expect("invalid Git config");
@@ -278,10 +278,10 @@ fn rejected_transition_notice_preserves_settlement_winner() {
 #[test]
 fn hung_retry_notice_preserves_settlement_winner() {
     let f = Fixture::new(TaskStatus::Failed);
-    crate::process_monitor::insert_hung_retry_event(&f.store, &f.id).expect("retry notice");
+    crate::runtime::process::monitor::insert_hung_retry_event(&f.store, &f.id).expect("retry notice");
     f.assert_unchanged();
     let events = f.store.get_events(f.id.as_str()).expect("events");
-    assert!(crate::process_monitor::was_auto_retried_after_hang(&events));
+    assert!(crate::runtime::process::monitor::was_auto_retried_after_hang(&events));
     assert_eq!(
         events.last().expect("notice").event_kind,
         EventKind::Milestone

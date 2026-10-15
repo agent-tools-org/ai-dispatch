@@ -25,17 +25,17 @@ fn args(dir: &std::path::Path) -> RunArgs {
 
 fn setup() -> (
     tempfile::TempDir,
-    crate::paths::AidHomeGuard,
-    crate::live_quota::CacheDirGuard,
+    crate::support::paths::AidHomeGuard,
+    crate::routing::quota::live::CacheDirGuard,
     Store,
 ) {
     let dir = tempfile::tempdir().expect("home");
-    let home = crate::paths::AidHomeGuard::set(dir.path());
-    let cache = crate::live_quota::CacheDirGuard::set(dir.path());
+    let home = crate::support::paths::AidHomeGuard::set(dir.path());
+    let cache = crate::routing::quota::live::CacheDirGuard::set(dir.path());
     crate::agent::codex::cli_config::set_test_codex_home(Some(dir.path().join("no-codex")));
-    std::fs::create_dir(crate::team::teams_dir()).expect("teams");
+    std::fs::create_dir(crate::config::team::teams_dir()).expect("teams");
     std::fs::write(
-        crate::team::teams_dir().join("routes.toml"),
+        crate::config::team::teams_dir().join("routes.toml"),
         "[team]\nid = 'routes'\ndisplay_name = 'Routes'\npreferred_agents = ['droid', 'claude']\n",
     )
     .expect("team");
@@ -47,7 +47,7 @@ fn held_batch_retry_uses_saved_profile_not_row_category_and_keeps_candidate_mode
     let (dir, _home, _cache, store) = setup();
     let _fleet =
         DetectAgentsGuard::set(vec![AgentKind::Droid, AgentKind::Claude, AgentKind::Codex]);
-    crate::agent_config::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
+    crate::config::agent::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
     let mut task = make_stored_task("t-batch-advice", AgentKind::Oz, TaskStatus::Failed);
     task.category = Some("research".into());
     task.agent_session_id = Some("old-session".into());
@@ -94,7 +94,7 @@ fn held_batch_retry_uses_saved_profile_not_row_category_and_keeps_candidate_mode
 fn failed_batch_auto_fallback_returns_exact_candidate_args_from_saved_dispatch() {
     let (dir, _home, _cache, store) = setup();
     let _fleet = DetectAgentsGuard::set(vec![AgentKind::Codex]);
-    crate::agent_config::save_agent_default_model("codex", Some("gpt-6-sol")).expect("model");
+    crate::config::agent::save_agent_default_model("codex", Some("gpt-6-sol")).expect("model");
     let task = make_stored_task("t-failed-advice", AgentKind::Oz, TaskStatus::Failed);
     store.insert_task(&task).expect("task");
     let saved = args(dir.path());

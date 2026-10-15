@@ -96,10 +96,10 @@ fn insert_model_selfheal_event(store: &Store, task_id: &TaskId, message: &str) -
 }
 
 pub(crate) fn read_model_unavailable_message(task_id: &TaskId) -> Option<String> {
-    let stderr = std::fs::read_to_string(crate::paths::stderr_path(task_id.as_str())).ok();
+    let stderr = std::fs::read_to_string(crate::support::paths::stderr_path(task_id.as_str())).ok();
     let from_stderr = stderr.as_deref().and_then(find_model_unavailable_stderr_line);
     from_stderr.or_else(|| {
-        std::fs::read_to_string(crate::paths::log_path(task_id.as_str()))
+        std::fs::read_to_string(crate::support::paths::log_path(task_id.as_str()))
             .ok()
             .as_deref()
             .and_then(find_model_unavailable_json_error)
@@ -109,13 +109,13 @@ pub(crate) fn read_model_unavailable_message(task_id: &TaskId) -> Option<String>
 fn find_model_unavailable_stderr_line(content: &str) -> Option<String> {
     content
         .lines()
-        .find_map(crate::model_health::extract_model_unavailable_stderr_line)
+        .find_map(crate::routing::model_health::extract_model_unavailable_stderr_line)
 }
 
 fn find_model_unavailable_json_error(content: &str) -> Option<String> {
     content
         .lines()
-        .find_map(crate::model_health::extract_model_unavailable_json_error)
+        .find_map(crate::routing::model_health::extract_model_unavailable_json_error)
 }
 
 #[cfg(test)]

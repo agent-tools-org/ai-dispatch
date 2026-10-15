@@ -140,7 +140,7 @@ fn declared_write_task(declared: Option<TaskCategory>, read_only: bool) -> bool 
 }
 
 pub(crate) fn task_result_file(task_id: &str) -> String {
-    crate::paths::task_dir(task_id).join("result.md").to_string_lossy().into_owned()
+    crate::support::paths::task_dir(task_id).join("result.md").to_string_lossy().into_owned()
 }
 
 pub(crate) fn instruction(

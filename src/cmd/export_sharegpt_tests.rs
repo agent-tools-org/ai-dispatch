@@ -2,7 +2,7 @@
 // Exports: module-local tests for export_sharegpt.rs.
 // Deps: export_sharegpt helpers, Store, AidHomeGuard, tempfile.
 use super::{ShareGptRecord, export_sharegpt};
-use crate::paths::{self, AidHomeGuard};
+use crate::support::paths::{self, AidHomeGuard};
 use crate::store::Store;
 use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
@@ -22,7 +22,7 @@ fn prompt_preservation_matches_show_and_sharegpt_stored_context() {
         "original task line\n".repeat(1000)
     );
     task.workgroup_id = Some(group.id.to_string());
-    task.resolved_prompt = Some(crate::workgroup::compose_prompt(
+    task.resolved_prompt = Some(crate::task::workgroup::compose_prompt(
         &task.prompt, None, Some(&group), &[], &[],
     ).text);
     store.insert_task(&task).unwrap();

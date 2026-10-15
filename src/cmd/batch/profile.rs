@@ -7,7 +7,7 @@ use anyhow::Result;
 use crate::batch::BatchTask;
 
 pub(super) fn validate_required_profiles(tasks: &[BatchTask]) -> Result<()> {
-    let required = crate::project::detect_project()
+    let required = crate::config::project::detect_project()
         .is_some_and(|project| project.require_task_profile);
     if !required {
         return Ok(());

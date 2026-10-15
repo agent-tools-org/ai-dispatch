@@ -1,6 +1,6 @@
 // Agent environment helpers: shared target dirs, git ceiling, cwd resolution, run env.
 // Exports: path and process helpers for agent runs.
-// Deps: anyhow::Result, crate::paths, std::process::Command, super::RunOpts.
+// Deps: anyhow::Result, crate::support::paths, std::process::Command, super::RunOpts.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -41,7 +41,7 @@ pub fn shared_target_dir() -> Option<String> {
 fn target_layout(project_dir: Option<&str>) -> Option<CargoTargetLayout> {
     let branch_root = std::env::var_os(CARGO_TARGET_DIR_ENV)
         .map(PathBuf::from)
-        .unwrap_or_else(|| crate::paths::aid_dir().join(SHARED_TARGET_DIR_NAME));
+        .unwrap_or_else(|| crate::support::paths::aid_dir().join(SHARED_TARGET_DIR_NAME));
     Some(cargo_target_layout::layout_for_project(branch_root, project_dir))
 }
 
@@ -213,7 +213,7 @@ pub fn apply_run_env(
     guard: &super::home_isolation::IsolatedHomeGuard,
 ) {
     super::env_redirects::strip_inherited_config_redirects(cmd);
-    cmd.env("AID_HOME", crate::paths::aid_dir());
+    cmd.env("AID_HOME", crate::support::paths::aid_dir());
     if let Some(env) = opts.env.as_ref() {
         for (key, value) in env {
             cmd.env(key, value);

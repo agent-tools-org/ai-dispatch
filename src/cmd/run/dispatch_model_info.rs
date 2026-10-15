@@ -93,7 +93,7 @@ mod tests {
     #[test]
     fn custom_delegate_reports_its_actual_forced_default() {
         let home = tempfile::tempdir().expect("temporary aid home");
-        let _guard = crate::paths::AidHomeGuard::set(home.path());
+        let _guard = crate::support::paths::AidHomeGuard::set(home.path());
         std::fs::create_dir(home.path().join("agents")).expect("agents directory");
         std::fs::write(home.path().join("agents/byok.toml"),
             "[agent]\nid = 'byok'\ndisplay_name = 'BYOK'\ncommand = 'opencode'\ndelegate_to = 'opencode'\nforced_model = 'provider/custom-model'\n",
@@ -145,7 +145,7 @@ mod tests {
     #[test]
     fn routed_retry_model_keeps_its_source() {
         let home = tempfile::tempdir().expect("temporary aid home");
-        let _guard = crate::paths::AidHomeGuard::set(home.path());
+        let _guard = crate::support::paths::AidHomeGuard::set(home.path());
         let args = RunArgs {
             agent_name: "cursor".to_string(), force_default_model: true, ..Default::default()
         };
@@ -159,10 +159,10 @@ mod tests {
         std::fs::create_dir(home.path().join(".qwen")).expect("qwen directory");
         std::fs::write(home.path().join(".qwen/settings.json"),
             r#"{"model":{"name":"configured-qwen"}}"#).expect("qwen settings");
-        crate::model_catalog::set_test_qwen_home(Some(home.path().to_path_buf()));
+        crate::routing::model_catalog::set_test_qwen_home(Some(home.path().to_path_buf()));
         let args = RunArgs { agent_name: "qwen".to_string(), ..Default::default() };
         let info = model_selection_info(&args, &unpinned(), None, &crate::agent::qwen::QwenAgent);
-        crate::model_catalog::set_test_qwen_home(None);
+        crate::routing::model_catalog::set_test_qwen_home(None);
         assert_eq!(info,
             "[aid] qwen model: configured-qwen; source: adapter default (no caller -m)");
     }

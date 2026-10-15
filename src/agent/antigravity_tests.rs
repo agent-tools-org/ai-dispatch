@@ -53,7 +53,7 @@ fn build_command_with_sandbox_and_read_only_proceeds() {
     let mut opts = opts(true, vec![]);
     opts.sandbox = true;
 
-    assert!(crate::sandbox::can_sandbox(AgentKind::Antigravity));
+    assert!(crate::runtime::sandbox::can_sandbox(AgentKind::Antigravity));
     assert!(AntigravityAgent.build_command("test prompt", &opts).is_ok());
 }
 
@@ -268,8 +268,8 @@ fn build_command_omits_the_log_flag_when_no_task_is_known() {
 #[test]
 fn build_command_passes_only_the_log_it_was_handed() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().expect("ensure dirs");
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().expect("ensure dirs");
 
     let none = crate::agent::env_with_agent_log(None, "t-abcd1234", false);
     assert!(none.is_none(), "an unwatchable run must be handed no path");

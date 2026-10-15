@@ -94,7 +94,7 @@ fn audit_text_shows_pending_reason() {
 #[test]
 fn audit_text_shows_done_status_when_result_file_is_missing() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = Arc::new(Store::open_memory().unwrap());
     let task = task_fixture("t-done-no-result", "investigate issue", None, None);
     store.insert_task(&task).unwrap();
@@ -138,7 +138,7 @@ fn task_hook_payload_adds_outcome_and_verification_status() {
 #[test]
 fn audit_text_shows_failed_status_when_result_file_is_missing() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = task_fixture("t-failed-no-result", "investigate issue", None, None);
     task.status = TaskStatus::Failed;
@@ -223,9 +223,9 @@ fn task_json_does_not_report_unobserved_as_success() {
 #[test]
 fn result_text_reads_task_result_file() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = Arc::new(Store::open_memory().unwrap());
-    let path = crate::paths::task_dir("t-result").join("result.md");
+    let path = crate::support::paths::task_dir("t-result").join("result.md");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(&path, "structured result\n").unwrap();
 
@@ -237,11 +237,11 @@ fn result_text_reads_task_result_file() {
 #[test]
 fn render_mode_text_reads_transcript() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = Arc::new(Store::open_memory().unwrap());
     let task = task_fixture("t-show-transcript", "raw prompt", None, None);
     store.insert_task(&task).unwrap();
-    let transcript = crate::paths::transcript_path(task.id.as_str());
+    let transcript = crate::support::paths::transcript_path(task.id.as_str());
     std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
     std::fs::write(&transcript, "raw transcript\n").unwrap();
 

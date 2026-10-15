@@ -178,7 +178,7 @@ fn kind_returns_grok() {
 
 #[test]
 fn catalog_lists_grok_profile_and_default_model() {
-    use crate::model_catalog::{AGENT_MODELS, AGENT_PROFILES};
+    use crate::routing::model_catalog::{AGENT_MODELS, AGENT_PROFILES};
     let profile = AGENT_PROFILES
         .iter()
         .find(|(agent, _, _, _, _)| *agent == AgentKind::Grok);
@@ -206,7 +206,7 @@ fn catalog_lists_grok_profile_and_default_model() {
     // feed_index() reloads from AID_HOME on the next miss, so the home is what
     // has to be isolated.
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     crate::cost::clear_feed_for_tests();
     for model_name in ["grok-4.6", "grok-4.5", "grok-4.5-build"] {
         let cost = crate::cost::estimate_cost(100_000, Some(model_name), AgentKind::Grok);

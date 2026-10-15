@@ -6,8 +6,8 @@ use std::collections::{HashMap, HashSet};
 
 use crate::agent::custom::CapabilityScores;
 use crate::cost;
-use crate::model_catalog::{AGENT_MODELS, AGENT_PROFILES};
-use crate::rate_limit;
+use crate::routing::model_catalog::{AGENT_MODELS, AGENT_PROFILES};
+use crate::routing::rate_limit;
 use crate::types::{AgentKind, Task, TaskOutcome};
 
 pub(crate) struct AgentHistory {

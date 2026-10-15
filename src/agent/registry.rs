@@ -1,11 +1,11 @@
 // Custom agent registry: loads agent definitions from ~/.aid/agents/*.toml.
 // Exports: load_custom_agents, resolve_custom_agent, list_custom_agents.
-// Deps: crate::paths, super::custom.
+// Deps: crate::support::paths, super::custom.
 #![allow(dead_code)]
 
 use super::custom::{parse_config, CustomAgent, CustomAgentConfig};
 use super::opencode_overlay::{OpenCodeOverlayAgent, OpenCodeOverlaySpec};
-use crate::paths;
+use crate::support::paths;
 use crate::types::AgentKind;
 use std::collections::HashMap;
 use std::fs;

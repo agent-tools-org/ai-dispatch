@@ -1,8 +1,8 @@
 // Batch helper utilities (pathing, summaries, hooks, safety warnings).
 // Exports: batch_summary, format_elapsed, warn_for_rate_limited_agents, low_disk_space_mb, resolve_batch_path, ensure_batch_workgroup, resolve_hook_targets, trigger_conditional
-// Deps: crate::batch, crate::rate_limit, crate::store::Store, super::batch_validate
+// Deps: crate::batch, crate::routing::rate_limit, crate::store::Store, super::batch_validate
 use crate::batch;
-use crate::rate_limit;
+use crate::routing::rate_limit;
 use crate::store::Store;
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
@@ -94,7 +94,7 @@ pub(crate) fn resolve_batch_path(path: &Path) -> std::path::PathBuf {
     }
     match path.file_name() {
         Some(file_name) => {
-            let fallback = crate::paths::aid_dir().join("batches").join(file_name);
+            let fallback = crate::support::paths::aid_dir().join("batches").join(file_name);
             if fallback.exists() {
                 fallback
             } else {
@@ -116,9 +116,9 @@ pub(crate) fn ensure_batch_workgroup(
     {
         aid_info!("[aid] Reusing existing workgroup {gid} for batch {stem}");
         let path = if shared_dir {
-            match crate::shared_dir::shared_dir_path(gid) {
+            match crate::support::shared_dir::shared_dir_path(gid) {
                 Some(path) => Some(path),
-                None => Some(crate::shared_dir::create_shared_dir(gid)?),
+                None => Some(crate::support::shared_dir::create_shared_dir(gid)?),
             }
         } else {
             None
@@ -133,7 +133,7 @@ pub(crate) fn ensure_batch_workgroup(
     )?;
     aid_info!("[aid] Auto-created workgroup {} for batch {stem}", wg.id);
     let path = if shared_dir {
-        Some(crate::shared_dir::create_shared_dir(wg.id.as_str())?)
+        Some(crate::support::shared_dir::create_shared_dir(wg.id.as_str())?)
     } else {
         None
     };
@@ -188,7 +188,7 @@ pub(crate) fn trigger_conditional(
 
 /// Returns Some(available_mb) if disk space is below the threshold, None if OK.
 pub(crate) fn low_disk_space_mb(min_mb: u64) -> Option<u64> {
-    let avail = crate::system_resources::available_disk_mb(".")?;
+    let avail = crate::support::system_resources::available_disk_mb(".")?;
     if avail < min_mb {
         Some(avail)
     } else {
@@ -218,7 +218,7 @@ pub(super) fn finalize_batch(
             batch_repo_path,
         )
     );
-    let archive_dir = crate::paths::aid_dir().join("batches");
+    let archive_dir = crate::support::paths::aid_dir().join("batches");
     if let Err(e) = std::fs::create_dir_all(&archive_dir) {
         aid_error!("[aid] Failed to create batch archive dir: {e}");
     } else {
@@ -268,5 +268,5 @@ pub(super) fn warn_nested_repo_for_batch(tasks: &[batch::BatchTask]) {
     let Some(task) = tasks.iter().find(|task| task.worktree.is_some()) else {
         return;
     };
-    crate::repo_root::warn_if_nested_repo(task.dir.as_deref().unwrap_or("."));
+    crate::support::repo_root::warn_if_nested_repo(task.dir.as_deref().unwrap_or("."));
 }

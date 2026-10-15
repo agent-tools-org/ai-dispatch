@@ -20,7 +20,7 @@ pub(super) fn inject_team_context(
                 .collect::<Vec<_>>()
                 .join("\n");
             let rules_block =
-                crate::workgroup::bound_auxiliary(&rules_block, "Team Rules", omissions);
+                crate::task::workgroup::bound_auxiliary(&rules_block, "Team Rules", omissions);
             effective_prompt =
                 format!("<aid-team-rules>\n{rules_block}\n</aid-team-rules>\n\n{effective_prompt}");
             aid_info!("[aid] Injected {} team rule(s)", tc.rules.len());
@@ -39,7 +39,7 @@ pub(super) fn inject_team_context(
                 let knowledge_block = sanitize_injected_text(
                     &prompt_context::format_knowledge_block(team_id, &relevant, omitted, omissions),
                 );
-                let knowledge_block = crate::workgroup::bound_auxiliary(
+                let knowledge_block = crate::task::workgroup::bound_auxiliary(
                     &knowledge_block,
                     "Team Knowledge",
                     omissions,
@@ -91,7 +91,7 @@ pub(super) fn inject_toolbox(
         filter_note
     );
     if !tools.is_empty() {
-        let toolbox_block = crate::workgroup::bound_auxiliary(
+        let toolbox_block = crate::task::workgroup::bound_auxiliary(
             &toolbox::format_toolbox_instructions(&tools), "Toolbox", omissions,
         );
         effective_prompt = format!("{effective_prompt}\n\n{toolbox_block}");
@@ -114,13 +114,13 @@ pub(super) fn inject_workspace(
             ),
             shared_dir = shared_dir
         );
-        let block = crate::workgroup::bound_auxiliary(&block, "Shared Directory", omissions);
+        let block = crate::task::workgroup::bound_auxiliary(&block, "Shared Directory", omissions);
         effective_prompt = format!("{block}\n\n{effective_prompt}");
     }
 
     // Inject workspace path if workgroup has one (appended to avoid commit message pollution)
     if let Some(ref group_id) = args.group {
-        let workspace = crate::paths::workspace_dir(group_id)?;
+        let workspace = crate::support::paths::workspace_dir(group_id)?;
         if workspace.is_dir() {
             let workspace_ref = if agent_kind.sandboxed_fs() {
                 ".aid-workspace".to_string()
@@ -134,7 +134,7 @@ pub(super) fn inject_workspace(
                 ),
                 workspace_ref = workspace_ref
             );
-            let block = crate::workgroup::bound_auxiliary(&block, "Shared Workspace", omissions);
+            let block = crate::task::workgroup::bound_auxiliary(&block, "Shared Workspace", omissions);
             effective_prompt = format!("{effective_prompt}\n\n{block}");
         }
     }
@@ -198,7 +198,7 @@ pub(super) fn inject_stored_context(
         omissions,
     )? {
         let block = sanitize_injected_text(&memory_block);
-        let block = crate::workgroup::bound_auxiliary(&block, "Memory", omissions);
+        let block = crate::task::workgroup::bound_auxiliary(&block, "Memory", omissions);
         *effective_prompt = format!("{block}\n\n{effective_prompt}");
         injected_memory_ids = memory_ids;
     }

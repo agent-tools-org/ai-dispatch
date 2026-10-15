@@ -116,7 +116,7 @@ fn merge_single_with_output(store: &Store, task_id: &str, approve: bool, check: 
                 }
                 aid_hint!("[aid] Manual merge needed: git merge {branch}");
                 let preserved_status = if force { original_status } else { TaskStatus::Done };
-                crate::task_lifecycle::restore_after_merge_failure(store, task_id, preserved_status)?;
+                crate::task::lifecycle::restore_after_merge_failure(store, task_id, preserved_status)?;
                 return Err(anyhow!("Merge failed — resolve manually, then re-run aid merge {task_id}"));
             }
             MergeResult::StashRestoreFailed(error) => {
@@ -144,7 +144,7 @@ fn merge_single_with_output(store: &Store, task_id: &str, approve: bool, check: 
     if force {
         record_force_merge_warning(store, &task)?;
     }
-    crate::task_lifecycle::mark_merged(store, task_id)?;
+    crate::task::lifecycle::mark_merged(store, task_id)?;
     if print_summary {
         println!("Marked {task_id} as merged");
     }
@@ -324,7 +324,7 @@ fn merge_group_with_output(store: &Store, group_id: &str, approve: bool, check: 
         } else {
             aid_info!("[aid] {} — no worktree, edits applied in-place", task.id);
         }
-        crate::task_lifecycle::mark_merged(store, task.id.as_str())?;
+        crate::task::lifecycle::mark_merged(store, task.id.as_str())?;
         merged += 1;
     }
     if print_summary {
@@ -389,7 +389,7 @@ pub(super) fn ensure_task_worktree_is_safe(task: &Task) -> Result<()> {
     if !std::path::Path::new(wt).exists() {
         return Ok(());
     }
-    crate::worktree::ensure_consumed_worktree_path_is_isolated(
+    crate::workspace::worktree::ensure_consumed_worktree_path_is_isolated(
         task.repo_path.as_deref(),
         wt,
         &format!("recorded worktree path for task {}", task.id),

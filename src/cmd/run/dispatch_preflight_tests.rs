@@ -5,9 +5,9 @@ use super::*;
 use super::validate_command_preflight_with;
 use std::sync::Arc;
 
-fn isolated_home() -> crate::paths::AidHomeGuard {
+fn isolated_home() -> crate::support::paths::AidHomeGuard {
     let temp = tempfile::tempdir().unwrap();
-    crate::paths::AidHomeGuard::set(temp.path())
+    crate::support::paths::AidHomeGuard::set(temp.path())
 }
 
 #[test]
@@ -115,9 +115,9 @@ fn validate_command_preflight_skips_agy_model_check_on_dry_run() {
 #[test]
 fn prepare_dispatch_rejects_custom_agent_with_missing_binary_before_task_exists() {
     let temp = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
-    let agents_dir = crate::paths::aid_dir().join("agents");
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().unwrap();
+    let agents_dir = crate::support::paths::aid_dir().join("agents");
     std::fs::create_dir_all(&agents_dir).unwrap();
     std::fs::write(
         agents_dir.join("goose.toml"),
@@ -156,7 +156,7 @@ command = "definitely-not-on-path-goose-bin"
 /// advise, detect_agents and run preflight must refuse Cursor with one reason.
 #[test]
 fn foreign_agent_binary_blocks_cursor_in_advise_and_preflight_alike() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let bin_dir = tempfile::tempdir().unwrap();
     let agent = bin_dir.path().join("agent");
     std::fs::write(&agent, "#!/bin/sh\necho 'Grok Build TUI'\nexit 0\n").unwrap();
@@ -185,7 +185,7 @@ fn foreign_agent_binary_blocks_cursor_in_advise_and_preflight_alike() {
 #[ignore]
 fn reports_cursor_route_for_subprocess() {
     let temp = tempfile::tempdir().unwrap();
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let declared = crate::types::DeclaredTaskProfile {
         difficulty: crate::types::TaskDifficulty::Moderate,
         budget: crate::types::TaskBudget::Standard,

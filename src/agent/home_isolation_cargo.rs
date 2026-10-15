@@ -13,7 +13,7 @@ pub(super) fn materialize(real_cargo: &Path, isolated_cargo: &Path) -> Result<()
     link_entries(real_cargo, isolated_cargo, "bin")?;
     link_entries(&real_cargo.join("bin"), &bin, "cargo")?;
     let shim = bin.join("cargo");
-    fs::write(&shim, include_str!("../remote_build/cargo.sh"))?;
+    fs::write(&shim, include_str!("../runtime/remote_build/cargo.sh"))?;
     #[cfg(unix)] {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&shim, fs::Permissions::from_mode(0o755))?;

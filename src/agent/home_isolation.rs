@@ -116,14 +116,14 @@ impl IsolatedHomeGuard {
         real_home: Option<&Path>, task_id: Option<&str>, remote_build: bool,
     ) -> anyhow::Result<Self> {
         let base_dir = match task_id {
-            Some(id) => crate::paths::task_dir(id),
+            Some(id) => crate::support::paths::task_dir(id),
             None => {
                 let pid = std::process::id();
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.as_nanos())
                     .unwrap_or(0);
-                crate::paths::aid_dir()
+                crate::support::paths::aid_dir()
                     .join("tmp_home")
                     .join(format!("iso-{pid}-{now}"))
             }

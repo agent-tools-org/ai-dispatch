@@ -46,7 +46,7 @@ pub(crate) async fn post_agent_dirty_worktree_cleanup(
     );
     let start_sha = task.start_sha;
 
-    match crate::commit::rescue_dirty_worktree_with_baseline(
+    match crate::workspace::commit::rescue_dirty_worktree_with_baseline(
         dir,
         task_id.as_str(),
         pre_task_dirty_paths,
@@ -82,7 +82,7 @@ pub(crate) async fn post_agent_dirty_worktree_cleanup(
     }
 
     let mut retry_id = None;
-    if crate::commit::has_uncommitted_changes(dir).unwrap_or(false) {
+    if crate::workspace::commit::has_uncommitted_changes(dir).unwrap_or(false) {
         retry_id = maybe_retry_uncommitted(store, task_id, args, dir).await?;
     }
     if final_dirty_assertion(store.as_ref(), task_id, dir, args.read_only, pre_task_dirty_paths)? {
@@ -114,10 +114,10 @@ pub(crate) fn final_dirty_assertion(
         }
     };
     if let Some(baseline) = baseline {
-        let baseline_paths = crate::worktree::extract_baseline_paths(baseline);
+        let baseline_paths = crate::workspace::worktree::extract_baseline_paths(baseline);
         dirty_files.retain(|line| {
-            crate::worktree::extract_baseline_path(line)
-                .map(|path| !crate::worktree::baseline_contains(&baseline_paths, &path))
+            crate::workspace::worktree::extract_baseline_path(line)
+                .map(|path| !crate::workspace::worktree::baseline_contains(&baseline_paths, &path))
                 .unwrap_or(true)
         });
     }
@@ -137,7 +137,7 @@ pub(crate) fn final_dirty_assertion(
         detail,
         metadata: None,
     })?;
-    crate::task_lifecycle::mark_failed(store, task_id)?;
+    crate::task::lifecycle::mark_failed(store, task_id)?;
     Ok(true)
 }
 
@@ -219,7 +219,7 @@ fn build_uncommitted_retry_args(
     Ok(retry_args)
 }
 
-fn rescue_files_summary(outcome: &crate::commit::RescueOutcome) -> String {
+fn rescue_files_summary(outcome: &crate::workspace::commit::RescueOutcome) -> String {
     let mut files = Vec::new();
     files.extend(outcome.untracked.iter().map(|path| format!("untracked:{path}")));
     files.extend(outcome.modified.iter().map(|path| format!("modified:{path}")));
@@ -230,7 +230,7 @@ fn rescue_files_summary(outcome: &crate::commit::RescueOutcome) -> String {
 /// the retry decision and the data-loss assertion, and aid removing its own
 /// `.aid-lock` on the way out is not the agent leaving work behind.
 fn worktree_status_lines(dir: &str) -> Result<Vec<String>> {
-    Ok(crate::worktree::capture_worktree_snapshot(Path::new(dir))?.agent_status_lines())
+    Ok(crate::workspace::worktree::capture_worktree_snapshot(Path::new(dir))?.agent_status_lines())
 }
 
 /// Shared checkouts remain dirty for the principal to review and commit. A
@@ -240,7 +240,7 @@ fn preserve_shared_checkout(
     task_id: &TaskId,
     dir: &str,
 ) -> Result<DirtyWorktreeAction> {
-    match crate::commit::preserve_shared_checkout(Path::new(dir), task_id.as_str()) {
+    match crate::workspace::commit::preserve_shared_checkout(Path::new(dir), task_id.as_str()) {
         Ok(Some(checkpoint)) => {
             let detail = format!(
                 "Shared checkout preserved at {} ({}). HEAD, index and files were left unchanged; \
@@ -271,7 +271,7 @@ fn preserve_shared_checkout(
                 detail,
                 metadata: None,
             })?;
-            crate::task_lifecycle::mark_failed(store, task_id)?;
+            crate::task::lifecycle::mark_failed(store, task_id)?;
             return Ok(DirtyWorktreeAction::Failed);
         }
     }

@@ -6,7 +6,7 @@ use std::io::IsTerminal;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 
-use crate::background;
+use crate::runtime::background;
 use crate::store::Store;
 use crate::types::{verify_required, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 
@@ -121,7 +121,7 @@ fn print_completion(store: &Store, task: &Task) {
     println!(
         "Task {} {} ({}{}{}){}",
         task.id,
-        crate::provider_capacity::terminal_label(store, &task.id, task.agent, task.status),
+        crate::routing::capacity::terminal_label(store, &task.id, task.agent, task.status),
         duration,
         tokens,
         cost,

@@ -7,7 +7,7 @@ use super::{
     price_feed::{Feed, FeedModel},
     set_feed_for_tests,
 };
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 
 pub(crate) const CODEX_USAGE: &str = concat!(

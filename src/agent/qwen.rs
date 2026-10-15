@@ -11,7 +11,7 @@ use super::gemini_support::{
     classify_tool_result, extract_error_detail, extract_tool_arguments, extract_tool_name,
 };
 use super::RunOpts;
-use crate::rate_limit;
+use crate::routing::rate_limit;
 use crate::types::*;
 
 pub struct QwenAgent;
@@ -22,7 +22,7 @@ impl super::Agent for QwenAgent {
     }
 
     fn default_model(&self) -> Option<String> {
-        Some(crate::model_catalog::get_qwen_selected_model().unwrap_or_else(|| "coder-model".to_string()))
+        Some(crate::routing::model_catalog::get_qwen_selected_model().unwrap_or_else(|| "coder-model".to_string()))
     }
 
     fn streaming(&self) -> bool {

@@ -200,3 +200,37 @@ fn structured_billing_refusals_match_all_supported_envelopes() {
         "type": "assistant", "message": {"content": [{"text": "billing error"}]}
     })));
 }
+
+#[test]
+fn credit_refusal_preserves_reported_cost_before_stopping() {
+    let (_home, _guard) = setup();
+    let store = crate::store::Store::open_memory().unwrap();
+    let id = TaskId("t-credit-cost".into());
+    store
+        .insert_waiting_task(
+            id.as_str(),
+            "claude-api-ming",
+            "test",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            false,
+        )
+        .unwrap();
+    let mut info = CompletionInfo {
+        tokens: None,
+        status: TaskStatus::Done,
+        model: None,
+        cost_usd: None,
+        exit_code: None,
+    };
+    let line = r#"{"type":"result","is_error":true,"result":"Credit balance is too low",
+        "total_cost_usd":0.05}"#;
+    assert!(record_stream_failure(&adapter(), line, &store, &id, &mut info).unwrap());
+    assert_eq!(info.cost_usd, Some(0.05));
+    assert_eq!(info.status, TaskStatus::Failed);
+}

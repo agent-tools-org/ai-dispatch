@@ -66,7 +66,10 @@ pub(super) fn finalize_streaming(
         .ok()
         .flatten()
         .and_then(|task| task.requested_model);
-    if crate::agent::stream_completion::record_quota_exhaustion_with_delivery(
+    let api_failure = state.info.status == TaskStatus::Failed
+        && agent.rate_limit_name().is_some_and(|id|
+            crate::config::api_route::find(id).ok().flatten().is_some());
+    if !api_failure && crate::agent::stream_completion::record_quota_exhaustion_with_delivery(
         &state.full_output,
         agent.kind(),
         agent.rate_limit_name(),

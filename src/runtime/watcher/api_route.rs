@@ -8,8 +8,9 @@ pub(super) async fn stop_if_misbilled(
     child: &mut Child,
     store: &Store,
     task_id: &TaskId,
+    info: &mut CompletionInfo,
 ) -> Result<bool> {
-    let result = crate::agent::api_route::record_stream_failure(agent, line, store, task_id);
+    let result = crate::agent::api_route::record_stream_failure(agent, line, store, task_id, info);
     if matches!(result, Ok(false)) {
         return Ok(false);
     }

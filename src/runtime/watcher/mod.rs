@@ -103,8 +103,9 @@ pub async fn watch_streaming(
                 break;
             }
         };
-        if api_route::stop_if_misbilled(agent, &line, child, store, task_id).await? {
-            info.status = TaskStatus::Failed;
+        if api_route::stop_if_misbilled(
+            agent, &line, child, store, task_id, &mut info,
+        ).await? {
             api_route_failed = true;
             break;
         }

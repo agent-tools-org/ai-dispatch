@@ -41,13 +41,11 @@ impl MonitorState {
                 self.mark_progress();
             }
             if self.streaming && !is_echo {
-                if let Some(reason) = crate::agent::api_route::stream_failure(agent, &line)? {
-                    self.info.status = TaskStatus::Failed;
-                    store.insert_agent_event(&TaskEvent {
-                        task_id: task_id.clone(), timestamp: Local::now(),
-                        event_kind: EventKind::Error, detail: reason.clone(), metadata: None,
-                    })?;
-                    anyhow::bail!("{reason}");
+                if crate::agent::api_route::record_stream_failure(
+                    agent, &line, store, task_id, &mut self.info,
+                )? {
+                    self.line_buffer.clear();
+                    return Ok(());
                 }
                 if let Some(event_detail) = watcher::handle_streaming_line_with_session(
                     watcher::StreamLineContext {
@@ -93,6 +91,12 @@ impl MonitorState {
             self.mark_progress();
         }
         if self.streaming && !is_echo {
+            if crate::agent::api_route::record_stream_failure(
+                agent, &trailing, store, task_id, &mut self.info,
+            )? {
+                self.line_buffer.clear();
+                return Ok(());
+            }
             if let Some(event_detail) = watcher::handle_streaming_line_with_session(
                 watcher::StreamLineContext {
                     agent,

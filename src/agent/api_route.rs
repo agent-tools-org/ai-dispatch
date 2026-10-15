@@ -93,10 +93,23 @@ pub(crate) fn record_stream_failure(
     line: &str,
     store: &crate::store::Store,
     task_id: &TaskId,
+    info: &mut CompletionInfo,
 ) -> Result<bool> {
     let Some(reason) = stream_failure(agent, line)? else {
         return Ok(false);
     };
+    if let Some(event) = agent.parse_event(task_id, line)
+        && event.event_kind == EventKind::Completion
+    {
+        info.cost_usd = event
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get("cost_usd"))
+            .and_then(serde_json::Value::as_f64)
+            .or(info.cost_usd);
+        store.insert_agent_event(&event)?;
+    }
+    info.status = TaskStatus::Failed;
     store.insert_agent_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),

@@ -33,6 +33,13 @@ pub(crate) fn monitor_bridge(
                     let _ = bridge.kill_group();
                     return Err(error);
                 }
+                if state.info.status == TaskStatus::Failed
+                    && agent.rate_limit_name().is_some_and(|id|
+                        crate::config::api_route::find(id).ok().flatten().is_some())
+                {
+                    let _ = bridge.kill_group();
+                    break;
+                }
                 if cost_exceeded(state, store, task_id, bridge, max_task_cost) {
                     break;
                 }

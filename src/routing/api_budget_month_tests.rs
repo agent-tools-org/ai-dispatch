@@ -96,7 +96,7 @@ fn launch_checks_completed_budget_without_installing_a_hold_or_changing_task_out
         .unwrap();
     let agent = crate::agent::api_route::ApiRouteAgent(route(false));
     let error = crate::agent::api_route::validate_launch(&agent, &store, false).unwrap_err();
-    assert!(error.to_string().contains("EXHAUSTED"));
+    assert!(error.to_string().contains("exhausted"));
     assert_eq!(
         store.get_task("finished-over").unwrap().unwrap().status,
         TaskStatus::Done

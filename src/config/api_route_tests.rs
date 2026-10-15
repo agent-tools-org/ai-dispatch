@@ -62,7 +62,10 @@ fn keychain_identifiers_reject_shell_syntax_at_config_load() {
             "line\nbreak",
         ] {
             let mut config: toml::Value = toml::from_str(&document("")).unwrap();
-            config["api_route"][0][field] = toml::Value::String(value.into());
+            config["api_route"][0]
+                .as_table_mut()
+                .expect("route table")
+                .insert(field.into(), toml::Value::String(value.into()));
             std::fs::write(
                 crate::support::paths::config_path(),
                 toml::to_string(&config).unwrap(),

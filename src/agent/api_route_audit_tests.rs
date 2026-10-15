@@ -55,13 +55,13 @@ fn route_only_scrubs_all_provider_and_billing_redirects() {
     let route = adapter();
     let mut command = route.build_command("test", &opts()).unwrap();
     let mut plain = ClaudeAgent.build_command("test", &opts()).unwrap();
-    for name in ROUTE_ENV_REMOVALS {
+    for &name in ROUTE_ENV_REMOVALS {
         command.env(name, "synthetic");
         plain.env(name, "synthetic");
     }
     route.finalize_launch_env(&mut command);
     ClaudeAgent.finalize_launch_env(&mut plain);
-    for name in ROUTE_ENV_REMOVALS {
+    for &name in ROUTE_ENV_REMOVALS {
         assert!(
             command
                 .get_envs()

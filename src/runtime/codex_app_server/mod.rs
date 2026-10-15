@@ -6,9 +6,11 @@ mod command;
 mod control;
 mod home;
 mod io;
+mod resume;
 mod turn;
 pub(crate) use command::available;
 pub(crate) use control::{active, receipt, wait_for_interrupt};
+pub(crate) use resume::exec_fallback;
 
 use crate::config::timeout_policy::TimeoutPolicy;
 use crate::runtime::pty::runner_control::PtyRunControl;
@@ -61,7 +63,14 @@ fn fallback(args: &Run<'_>, reason: &str) -> Result<()> {
         task_id: args.task.clone(),
         timestamp: chrono::Local::now(),
         event_kind: EventKind::Milestone,
-        detail: format!("Codex app-server startup failed; falling back to exec: {reason}"),
+        detail: format!(
+            "Codex app-server startup failed; falling back to exec{}: {reason}",
+            if reason.contains("Codex thread/resume:") {
+                " with a fresh session"
+            } else {
+                ""
+            }
+        ),
         metadata: Some(
             serde_json::json!({"codex_app_server_fallback":true,"reason":reason,"stderr":stderr}),
         ),
@@ -116,6 +125,7 @@ fn failed(args: &Run<'_>, reason: &str) -> Result<CompletionInfo> {
 fn run_inner(args: &Run<'_>) -> Result<Option<CompletionInfo>> {
     let (mut launch, _home, _owner) = prepare(args)?;
     let rpc = spawn(args, &mut launch)?;
+    let _origin_active = _owner.server_marker(args.task.as_str(), rpc.pid())?;
     let active = control::Active::starting(args.task.as_str(), rpc.pid())?;
     let mut turn = turn::Turn::new(args, rpc)?;
     if let Err(error) = turn.start(launch) {
@@ -141,9 +151,20 @@ fn prepare(args: &Run<'_>) -> Result<(command::Launch, Option<home::Home>, clean
     let task_dir = crate::support::paths::task_dir(args.task.as_str());
     std::fs::create_dir_all(&task_dir)?;
     cleanup::sweep()?;
-    let _owner = cleanup::Owner::create(args.task.as_str())?;
+    let origin = if launch.resume {
+        resume::origin(
+            args.store,
+            launch.thread["threadId"].as_str().unwrap_or_default(),
+        )?
+    } else {
+        None
+    };
+    let home_task = origin.as_deref().unwrap_or(args.task.as_str());
+    let home_dir = crate::support::paths::task_dir(home_task);
+    std::fs::create_dir_all(&home_dir)?;
+    let _owner = cleanup::Owner::create(home_task)?;
     let _home = if launch.isolated {
-        let home = home::Home::for_command(args.command, &task_dir)?;
+        let home = home::Home::for_command(args.command, &home_dir)?;
         launch.command.env("CODEX_HOME", &home.path);
         Some(home)
     } else {

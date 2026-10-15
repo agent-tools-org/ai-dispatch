@@ -12,12 +12,39 @@ impl Owner {
     pub fn create(task: &str) -> Result<Self> {
         let path = paths::task_dir(task).join("codex-owner.json");
         let pid = std::process::id();
-        let temporary = path.with_extension("tmp");
         let started =
             activity::root_started(pid).context("Cannot identify Codex worker process")?;
-        std::fs::write(&temporary, json!({"pid":pid,"started":started}).to_string())?;
-        std::fs::rename(temporary, &path)?;
+        use std::io::Write;
+        let temporary = path.with_extension(format!(
+            "{pid}-{}.tmp",
+            chrono::Local::now()
+                .timestamp_nanos_opt()
+                .context("Cannot timestamp Codex worker lease")?
+        ));
+        let result = (|| -> Result<()> {
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temporary)?;
+            file.write_all(json!({"pid":pid,"started":started}).to_string().as_bytes())?;
+            std::fs::hard_link(&temporary, &path)?;
+            Ok(())
+        })();
+        let _ = std::fs::remove_file(temporary);
+        result?;
         Ok(Self(path))
+    }
+
+    pub fn server_marker(&self, task: &str, pid: u32) -> Result<Option<super::control::Active>> {
+        let dir = self.0.parent().context("Missing Codex owner directory")?;
+        if dir == paths::task_dir(task) {
+            return Ok(None);
+        }
+        let origin = dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .context("Invalid Codex origin task")?;
+        super::control::Active::starting(origin, pid).map(Some)
     }
 }
 

@@ -14,6 +14,11 @@ with open(os.environ["AID_FAKE_FIXTURE"], encoding="utf-8") as fixture_file:
     rows = [json.loads(line) for line in fixture_file]
 mode = os.environ.get("AID_FAKE_MODE", "accept")
 if sys.argv[1] == "exec":
+    if mode == "reject-resume":
+        assert "resume" not in sys.argv and "retry prompt" in sys.argv
+    if mode == "stderr-init" and "resume" in sys.argv:
+        with open(os.environ["AID_FAKE_ORIGIN"], encoding="utf-8") as saved:
+            assert os.path.isdir(saved.read())
     assert "--ignore-user-config" in sys.argv
     assert os.path.exists(os.path.join(os.environ["CODEX_HOME"], "config.toml"))
     print(json.dumps({"type":"item.completed","item":{"type":"agent_message","text":"STEERED"}}))
@@ -76,10 +81,20 @@ for raw in sys.stdin:
         if mode == "silent-thread":
             continue
         if method == "thread/resume":
-            assert request["params"]["threadId"] == "resume-thread"
+            if mode == "reject-resume":
+                send({"id":request["id"],"error":{"code":-32600,"message":"no rollout found"}})
+                continue
+            if mode == "persist-origin":
+                with open(os.environ["AID_FAKE_ORIGIN"], encoding="utf-8") as saved:
+                    assert os.path.samefile(saved.read(), os.environ["CODEX_HOME"])
+            else:
+                assert request["params"]["threadId"] == "resume-thread"
             assert request["params"]["excludeTurns"] is True
         thread = next(row["msg"]["result"] for row in rows
                       if row["dir"] == "in" and row["msg"].get("id") == 2)
+        if mode == "persist-origin" and method == "thread/start":
+            with open(os.environ["AID_FAKE_ORIGIN"], "w", encoding="utf-8") as saved:
+                saved.write(os.environ["CODEX_HOME"])
         response(request, thread)
     elif method == "turn/start":
         assert request["params"]["input"][0]["type"] == "text"
@@ -146,7 +161,7 @@ for raw in sys.stdin:
             finish()
         if mode == "eof":
             sys.exit(0)
-        if mode in ("complete", "slow-init", "slow-resume", "flush"):
+        if mode in ("complete", "slow-init", "slow-resume", "flush", "persist-origin"):
             finish()
     elif method == "turn/steer":
         assert request["params"]["expectedTurnId"] == notification("turn/started")["params"]["turn"]["id"]

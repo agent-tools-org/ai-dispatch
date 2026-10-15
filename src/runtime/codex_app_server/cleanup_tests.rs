@@ -67,3 +67,37 @@ fn orphaned_server_is_terminated_before_its_home_is_removed() {
     assert!(!child.wait().unwrap().success());
     assert!(!task.join("codex-home").exists());
 }
+
+#[test]
+fn an_existing_owner_cannot_be_overwritten_by_a_concurrent_retry() {
+    let (_home, _guard, task) = setup();
+    let owner = Owner::create("t-cleanup").unwrap();
+    let before = std::fs::read(task.join("codex-owner.json")).unwrap();
+    assert!(Owner::create("t-cleanup").is_err());
+    assert_eq!(
+        std::fs::read(task.join("codex-owner.json")).unwrap(),
+        before
+    );
+    drop(owner);
+    assert!(!task.join("codex-owner.json").exists());
+}
+
+#[test]
+fn resumed_server_has_an_origin_marker_for_orphan_cleanup() {
+    let (_home, _guard, task) = setup();
+    let owner = Owner::create("t-cleanup").unwrap();
+    assert!(
+        owner
+            .server_marker("t-cleanup", std::process::id())
+            .unwrap()
+            .is_none()
+    );
+    let marker = owner
+        .server_marker("t-retry", std::process::id())
+        .unwrap()
+        .unwrap();
+    assert!(task.join("codex-app-server.json").exists());
+    assert!(!super::super::control::active("t-cleanup"));
+    drop(marker);
+    assert!(!task.join("codex-app-server.json").exists());
+}

@@ -125,6 +125,7 @@ fn agent_log_label(agent: &dyn crate::agent::Agent) -> &str {
 pub(crate) async fn run_agent_process_impl(mut args: RunProcessArgs<'_>) -> Result<()> {
     let start = std::time::Instant::now();
     let failure_context = capture_failure_context(args.store.as_ref(), args.task_id, &args.cmd);
+    let fallback;
     if args.agent.kind() == AgentKind::Codex
         && crate::runtime::codex_app_server::available(args.cmd.as_std())
     {
@@ -135,6 +136,10 @@ pub(crate) async fn run_agent_process_impl(mut args: RunProcessArgs<'_>) -> Resu
         })? {
             return complete_agent(&args,&mut info,start,&failure_context);
         }
+        fallback = crate::runtime::codex_app_server::exec_fallback(
+            args.cmd.as_std(), args.store, args.task_id,
+        )?;
+        args.cmd = tokio::process::Command::from(fallback.command());
     }
     let mut child = execution::spawn_agent(&mut args)?;
     let mut info = execution::watch_agent(&args, &mut child, start).await?;

@@ -70,8 +70,16 @@ fn expiration_bonus_is_strictly_within_seven_days_and_below_eighty_percent_pace(
             .pace,
         1.0
     );
+    let early = Utc.with_ymd_and_hms(2026, 10, 10, 0, 0, 0).unwrap();
+    let ahead = 200.0 * 9.0 / 31.0 * 1.25;
     assert_eq!(
-        calculate(&route(false), &[task("ahead", now, 200.0)], now)
+        calculate(&route(false), &[task("on-pace", early, ahead - 0.01)], early)
+            .unwrap()
+            .pace,
+        0.0
+    );
+    assert_eq!(
+        calculate(&route(false), &[task("ahead", early, ahead + 0.01)], early)
             .unwrap()
             .pace,
         -2.0

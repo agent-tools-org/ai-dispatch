@@ -30,7 +30,7 @@ impl Store {
              created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
              exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment,
              final_head_sha, final_branch, observed_model, attribution_source, project_id, effective_dir
-             FROM tasks WHERE agent = 'custom' AND custom_agent_name = ?1
+             FROM tasks WHERE custom_agent_name = ?1
              AND status IN ('done', 'merged', 'failed', 'skipped', 'stopped')
              AND julianday(completed_at) >= julianday(?2)
              AND julianday(completed_at) < julianday(?3)",

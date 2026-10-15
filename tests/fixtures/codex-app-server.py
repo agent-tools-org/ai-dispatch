@@ -14,6 +14,7 @@ with open(os.environ["AID_FAKE_FIXTURE"], encoding="utf-8") as fixture_file:
     rows = [json.loads(line) for line in fixture_file]
 mode = os.environ.get("AID_FAKE_MODE", "accept")
 if sys.argv[1] == "exec":
+    assert mode != "write-config", "second launch must keep app-server steering"
     if mode == "reject-resume":
         assert "resume" not in sys.argv and "retry prompt" in sys.argv
     if mode == "stderr-init" and "resume" in sys.argv:
@@ -55,6 +56,9 @@ def finish(status="completed"):
     completed = notification("turn/completed")
     completed["params"]["turn"]["status"] = status
     send(completed)
+    if mode == "write-config":
+        with open(os.path.join(os.environ["CODEX_HOME"], "config.toml"), "w", encoding="utf-8") as config:
+            config.write('[projects."synthetic"]\ntrust_level = "trusted"\n')
 
 
 for raw in sys.stdin:
@@ -161,7 +165,7 @@ for raw in sys.stdin:
             finish()
         if mode == "eof":
             sys.exit(0)
-        if mode in ("complete", "slow-init", "slow-resume", "flush", "persist-origin"):
+        if mode in ("complete", "slow-init", "slow-resume", "flush", "persist-origin", "write-config"):
             finish()
     elif method == "turn/steer":
         assert request["params"]["expectedTurnId"] == notification("turn/started")["params"]["turn"]["id"]

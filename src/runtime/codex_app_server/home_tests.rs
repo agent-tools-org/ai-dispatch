@@ -43,7 +43,7 @@ fn mirrors_entries_idempotently_without_deleting_shared_paths() {
 }
 
 #[test]
-fn preserves_local_state_created_in_the_persistent_mirror() {
+fn refuses_local_state_without_deleting_it() {
     let temp = tempfile::tempdir().unwrap();
     let task = temp.path().join("task");
     std::fs::create_dir_all(task.join("codex-home")).unwrap();
@@ -52,7 +52,7 @@ fn preserves_local_state_created_in_the_persistent_mirror() {
     std::fs::create_dir(&real).unwrap();
     std::fs::create_dir(real.join("sessions")).unwrap();
     std::fs::write(real.join("state_5.sqlite"), "synthetic state").unwrap();
-    Home::create(&real, &task).unwrap();
+    assert!(Home::create(&real, &task).is_err());
     assert!(task.join("codex-home/keep").exists());
 }
 
@@ -124,12 +124,36 @@ fn refresh_removes_links_to_deleted_real_entries() {
     std::fs::write(real.join("state_5.sqlite"), "synthetic state").unwrap();
     std::fs::write(real.join("removed"), "synthetic").unwrap();
     let home = Home::create(&real, temp.path()).unwrap();
-    std::fs::write(home.path.join("local"), "keep").unwrap();
     std::fs::remove_file(real.join("removed")).unwrap();
     Home::create(&real, temp.path()).unwrap();
     assert!(home.path.join("removed").symlink_metadata().is_err());
+}
+
+#[test]
+fn removes_only_regular_mirror_config_files() {
+    let temp = tempfile::tempdir().unwrap();
+    let real = temp.path().join("real");
+    std::fs::create_dir_all(real.join("sessions")).unwrap();
+    std::fs::write(real.join("state_5.sqlite"), "synthetic state").unwrap();
+    std::fs::write(real.join("config.toml"), "real config").unwrap();
+    let home = Home::create(&real, temp.path()).unwrap();
+    for name in ["config.toml", "config.toml.bak", "config.toml-old"] {
+        std::fs::write(home.path.join(name), "Codex trust config").unwrap();
+    }
+    Home::create(&real, temp.path()).unwrap();
+    assert!(std::fs::read_dir(&home.path).unwrap().all(|entry| {
+        !entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with("config.toml")
+    }));
+    let link = home.path.join("config.toml-link");
+    std::os::unix::fs::symlink(real.join("config.toml"), &link).unwrap();
+    assert!(Home::create(&real, temp.path()).is_err());
+    assert!(link.symlink_metadata().unwrap().file_type().is_symlink());
     assert_eq!(
-        std::fs::read_to_string(home.path.join("local")).unwrap(),
-        "keep"
+        std::fs::read_to_string(real.join("config.toml")).unwrap(),
+        "real config"
     );
 }

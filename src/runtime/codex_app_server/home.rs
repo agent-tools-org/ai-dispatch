@@ -55,25 +55,31 @@ impl Home {
         for entry in std::fs::read_dir(&self.path)? {
             let entry = entry?;
             let name = entry.file_name();
-            anyhow::ensure!(
-                !name.to_string_lossy().starts_with("config.toml"),
-                "Codex mirror contains excluded user configuration"
-            );
-            let source_exists = real.join(&name).try_exists()?;
-            if entry.file_type()?.is_symlink() {
-                if !source_exists {
-                    match std::fs::remove_file(entry.path()) {
-                        Ok(()) => {}
-                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                        Err(error) => return Err(error.into()),
-                    }
+            let kind = entry.file_type()?;
+            let config = name.to_string_lossy().starts_with("config.toml");
+            if config && kind.is_file() {
+                match std::fs::remove_file(entry.path()) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error.into()),
                 }
-            } else {
-                anyhow::ensure!(
-                    !source_exists,
-                    "Codex mirror local entry collides with real home: {}",
-                    name.to_string_lossy()
-                );
+                continue;
+            }
+            anyhow::ensure!(
+                !config,
+                "Codex mirror contains non-regular user configuration"
+            );
+            anyhow::ensure!(
+                kind.is_symlink(),
+                "Codex mirror contains local state invisible to the real home: {}",
+                name.to_string_lossy()
+            );
+            if !real.join(&name).try_exists()? {
+                match std::fs::remove_file(entry.path()) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error.into()),
+                }
             }
         }
         Ok(())
@@ -99,3 +105,7 @@ mod tests;
 #[cfg(test)]
 #[path = "home_dispatch_tests.rs"]
 mod dispatch_tests;
+
+#[cfg(test)]
+#[path = "home_launch_tests.rs"]
+mod launch_tests;

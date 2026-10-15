@@ -107,7 +107,7 @@ fn refresh_falls_back_when_local_entry_collides_with_real_entry() {
             std::fs::write(&local, "local").unwrap();
             std::fs::write(&real, "real").unwrap();
         }
-        assert_exec(&fixture, "local entry collides with real home");
+        assert_exec(&fixture, "local state invisible to the real home");
         assert!(!local.symlink_metadata().unwrap().file_type().is_symlink());
         if !directory {
             assert_eq!(std::fs::read_to_string(local).unwrap(), "local");
@@ -117,13 +117,8 @@ fn refresh_falls_back_when_local_entry_collides_with_real_entry() {
 }
 
 #[test]
-fn rejects_existing_config_entries_in_persistent_mirror() {
-    for name in [
-        "config.toml",
-        "config.toml.bak",
-        "config.toml-dir",
-        "config.toml-link",
-    ] {
+fn rejects_non_regular_config_entries_in_persistent_mirror() {
+    for name in ["config.toml-dir", "config.toml-link"] {
         let fixture = Fixture::new("complete");
         let home = Home::for_command(&fixture.command).unwrap();
         let path = home.path.join(name);
@@ -134,7 +129,7 @@ fn rejects_existing_config_entries_in_persistent_mirror() {
         } else {
             std::fs::write(&path, "synthetic user config").unwrap();
         }
-        assert_exec(&fixture, "contains excluded user configuration");
+        assert_exec(&fixture, "contains non-regular user configuration");
         assert!(path.symlink_metadata().is_ok());
     }
 }

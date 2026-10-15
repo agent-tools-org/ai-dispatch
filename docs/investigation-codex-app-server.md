@@ -6,11 +6,12 @@ The query `codex resume rollout home` returned 64 matches, including the warning
 an isolated HOME does not isolate a CLI with its own config-directory variable.
 The query `codex resume mirror` returned 76 matches, including the same isolation warning.
 The query `codex mirror drift` returned 178 matches, including mirror-isolation and
-regression-evidence guidance.
+regression-evidence guidance. The query `codex mirror config` returned 269 matches,
+including config-directory isolation guidance.
 
 # Codex app-server configuration boundary
 
-Status: stable-home preconditions implemented; compilation and Rust suites for this revision
+Status: symlink-only mirror invariant implemented; compilation and Rust suites for this revision
 remain pending. The baseline `4ab977eb` passed 3,538 default tests, 3,570 web tests,
 and clippy, and completed a writable task with a confirmed live steer. Its retry failed
 before producing exec events. The sanitized transcript is preserved at
@@ -50,11 +51,14 @@ the symlink targets. The mirror remains after all task processes and task state 
 
 App-server requires existing `sessions/` and `state_5.sqlite` in the real home, the
 rollout state used by Codex 0.162.1. Missing state selects the native exec path with a
-diagnostic milestone. Refresh rejects any existing mirror `config.toml*` entry and any
-local non-symlink entry colliding with a real-home name. Local content is never deleted.
+diagnostic milestone. On every launch, refresh deletes regular mirror `config.toml*`
+files, including trust configuration written by Codex itself. File types are inspected
+without following symlinks; config symlinks and directories are preserved and cause fallback.
 Symlinks whose real targets have disappeared are removed; missing links are recreated.
-All precondition failures use the existing exec fallback without changing native launch
-settings or creating files in the real home.
+The remaining mirror must contain only symlinks into the real home. Any other local state,
+including an upgraded `state_6.sqlite`, causes diagnostic exec fallback without deletion.
+This replaces the collision-only rule. All precondition failures use the existing exec
+fallback without changing native launch settings or creating files in the real home.
 
 The supplied Codex 0.162.1 measurement establishes the boundary: this symlinked
 home reports on-request approval, readOnly sandbox, and default effort while still
@@ -127,18 +131,21 @@ same fallback command builder and their tests assert that exec emits events.
 `python3 tests/fixtures/codex-resume-home-probe.py` passed all three native checks on
 Codex 0.162.1: first process exit, task-state removal, and subsequent stable-home resume.
 No external model endpoint or real Codex home was used. Static checks passed across
-25 app-server Rust files with 58 registered test declarations. Tests cover idempotent
+26 app-server Rust files with 61 registered test declarations. Tests cover idempotent
 and concurrent mirror construction, exclusions, symlink identity, persistent local state,
 resume after task-state cleanup, and fallback events in both execution paths. Five new
 regressions cover missing sessions through the production command builder, missing state
 database, explicit collision fallback, stale-link pruning, and rejected mirror config.
-These Rust regressions were written but not run here.
+The config rejection tests now cover non-regular config entries; regular mirror config
+is removed while real config and linked files are preserved. Two production-builder tests
+each exercise both runners: two launches after the fake server writes trust config, and
+fallback for unshared mirror-local state. These Rust regressions were written but not run here.
 
 The extra argument in the retry test's `insert_waiting_task` call is removed. No compilation
-or Rust suites ran here; there is no tested remote HEAD for this revision. The supplied `a8771aa4` baseline passed 3,541 default tests, 3,573 web tests, and clippy;
-live writable steer and same-thread retry also passed. That evidence does not verify this
-diff. Cross-review and suites for these precondition changes remain pending; no side tasks
-were dispatched.
+or Rust suites ran here; there is no tested remote HEAD for this revision. The supplied `719a5bce` baseline passed 3,546 default tests, 3,578 web tests, and clippy.
+Its live second launch fell back because Codex had written mirror-local trust config.
+That gate did not cover this two-launch behavior. Cross-review, suites, and the live
+two-launch check for this revision remain pending; no side tasks were dispatched.
 
 Existing threads indexed through deleted per-task homes are not migrated. Their app-server
 resume refusal selects fresh exec. Changing or removing AID_HOME also removes the stable
@@ -161,6 +168,7 @@ python3 /private/tmp/aid-codex-audit-format.py
 python3 /private/tmp/aid-codex-audit-static-check.py
 python3 /private/tmp/aid-codex-stable-static-check.py
 python3 /private/tmp/aid-codex-drift-static-check.py
+python3 /private/tmp/aid-codex-invariant-static-check.py
 python3 tests/fixtures/codex-resume-home-probe.py
 bash /Users/ming/.aid/skills/implementer/scripts/check-file-size.sh src/runtime/codex_app_server
 bash /Users/ming/.aid/skills/implementer/scripts/check-headers.sh src/runtime/codex_app_server

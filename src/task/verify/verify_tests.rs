@@ -10,8 +10,6 @@ use chrono::Local;
 use std::fs;
 use std::io::Error;
 use std::thread;
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 
 fn make_task(id: &str, status: TaskStatus, verify_status: VerifyStatus) -> Task {
@@ -269,14 +267,11 @@ fn verify_kills_background_grandchildren() {
     let _permit = test_subprocess::acquire();
     let dir = TempDir::new().unwrap();
     let script = dir.path().join("verify-cleanup.sh");
-    fs::write(
+    crate::support::test_env::write_executable(
         &script,
         "#!/bin/sh\nsleep 30 &\nchild_pid=$!\necho \"$child_pid\"\nexit 0\n",
-    )
-    .unwrap();
-    let mut perms = fs::metadata(&script).unwrap().permissions();
-    perms.set_mode(0o755);
-    fs::set_permissions(&script, perms).unwrap();
+    );
+
 
     let result = run_verify(dir.path(), script.to_str(), None, None).unwrap();
     assert!(result.success);

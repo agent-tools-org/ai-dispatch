@@ -3,7 +3,6 @@
 
 use super::*;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 
 struct Fake {
     _dir: tempfile::TempDir,
@@ -22,8 +21,7 @@ fn fake_gws(list_reply: &str) -> Fake {
          case \"$*\" in *'files list'*) echo '{list_reply}';; *) echo '{{\"id\":\"fake123\"}}';; esac\n",
         log.display()
     );
-    fs::write(&binary, script).unwrap();
-    fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
+    crate::support::test_env::write_executable(&binary, &script);
     Fake { _dir: dir, binary, log }
 }
 
@@ -90,8 +88,7 @@ fn missing_gws_names_install_and_login_steps() {
 fn gws_failure_surfaces_stderr_and_login_hint() {
     let dir = tempfile::tempdir().unwrap();
     let binary = dir.path().join("gws");
-    fs::write(&binary, "#!/bin/sh\necho 'not authenticated' >&2\nexit 3\n").unwrap();
-    fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
+    crate::support::test_env::write_executable(&binary, "#!/bin/sh\necho 'not authenticated' >&2\nexit 3\n");
     let bundle = bundle_in(dir.path());
     let dest = BackupDest { folder: "a".into(), file_name: "x".into() };
 

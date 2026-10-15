@@ -119,11 +119,8 @@ fn batch_retry_with_no_failures_succeeds() {
 
 #[cfg(unix)]
 fn write_fake_codex(bin_dir: &Path, script: &str) {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::create_dir(bin_dir).unwrap();
     let path = bin_dir.join("codex");
-    std::fs::write(&path, script).unwrap();
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::common::write_executable(&path, script);
 }
 
 fn write_batch(home: &TempDir, tasks: &str) -> PathBuf {

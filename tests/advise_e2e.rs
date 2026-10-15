@@ -177,13 +177,11 @@ fn assert_recommendation_installed(report: &serde_json::Value) {
 
 #[test]
 fn only_claude_installed_without_preference_emits_no_recommendation() {
-    use std::os::unix::fs::PermissionsExt;
     let home = TempDir::new().expect("home");
     let bin = home.path().join("bin");
     std::fs::create_dir(&bin).expect("bin");
     let claude = bin.join("claude");
-    std::fs::write(&claude, "#!/bin/sh\necho 'Claude Code'\n").expect("claude stub");
-    std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).expect("executable");
+    common::write_executable(&claude, "#!/bin/sh\necho 'Claude Code'\n");
     let output = aid_cmd_in(home.path()).env("PATH", &bin)
         .args(["advise", "refactor the scheduler"]).args(PROFILE_ARGS).output().expect("advise");
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));

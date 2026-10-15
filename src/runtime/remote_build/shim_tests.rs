@@ -2,13 +2,9 @@
 // Covers routing, argument preservation, isolation, status diagnostics and heartbeats.
 // Deps: tempfile, Bash and git; no real Cargo jobs or network calls.
 use super::*;
-use std::os::unix::fs::PermissionsExt;
+use crate::support::test_env::write_executable;
 use tempfile::TempDir;
 
-pub(super) fn executable(path: &Path, content: &str) {
-    std::fs::write(path, content).expect("script");
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).expect("executable");
-}
 
 struct Fixture { temp: TempDir, home: std::path::PathBuf, bin: std::path::PathBuf }
 impl Fixture {
@@ -17,8 +13,8 @@ impl Fixture {
         let home = temp.path().join("home");
         let bin = temp.path().join("bin");
         std::fs::create_dir(&bin).expect("bin");
-        executable(&bin.join("rbox"), "#!/bin/bash\nprintf '%s\\n' \"$@\" > \"$RECORD\"\nprintf '%s' \"${CARGO_TARGET_DIR-unset}\" > \"$RECORD.target\"\nexit \"${STATUS:-0}\"\n");
-        executable(&bin.join("cargo"), "#!/bin/bash\nprintf 'local\\n'; printf '%s\\n' \"$@\"\nexit \"${STATUS:-0}\"\n");
+        write_executable(&bin.join("rbox"), "#!/bin/bash\nprintf '%s\\n' \"$@\" > \"$RECORD\"\nprintf '%s' \"${CARGO_TARGET_DIR-unset}\" > \"$RECORD.target\"\nexit \"${STATUS:-0}\"\n");
+        write_executable(&bin.join("cargo"), "#!/bin/bash\nprintf 'local\\n'; printf '%s\\n' \"$@\"\nexit \"${STATUS:-0}\"\n");
         configure(&mut Command::new("agent"), &home, "chosen-box").expect("install shim");
         let git = Command::new("git").args(["init", "-b", "feat/test.box"])
             .arg(temp.path()).output().expect("git init");
@@ -97,8 +93,8 @@ fn toolchain_prefix_and_jobs_override_are_forwarded() {
 #[test]
 fn heartbeat_keeps_silent_remote_job_visible() {
     let f = Fixture::new();
-    executable(&f.bin.join("sleep"), "#!/bin/bash\nexec /bin/sleep 0.05\n");
-    executable(&f.bin.join("rbox"), "#!/bin/bash\n/bin/sleep 0.2\nexit 0\n");
+    write_executable(&f.bin.join("sleep"), "#!/bin/bash\nexec /bin/sleep 0.05\n");
+    write_executable(&f.bin.join("rbox"), "#!/bin/bash\n/bin/sleep 0.2\nexit 0\n");
     let output = f.command(&["check"], 0).output().expect("shim");
     assert!(output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("[remote-build] chosen-box: still running (60s)"));
@@ -118,7 +114,7 @@ fn global_options_do_not_bypass_remote_routing() {
 #[test]
 fn local_passthrough_preserves_empty_path_entries() {
     let f = Fixture::new();
-    executable(&f.temp.path().join("cargo"), "#!/bin/bash\necho cwd-cargo\n");
+    write_executable(&f.temp.path().join("cargo"), "#!/bin/bash\necho cwd-cargo\n");
     let utilities = f.temp.path().join("utilities");
     std::fs::create_dir(&utilities).expect("utilities");
     for name in ["bash", "dirname"] {
@@ -136,7 +132,7 @@ fn remote_cargo_preserves_workspace_member_cwd() {
     let f = Fixture::new();
     let member = f.temp.path().join("members/space and 'quote'");
     std::fs::create_dir_all(&member).expect("member");
-    executable(&f.bin.join("cargo"), "#!/bin/bash\npwd -P\nprintf '%s\\n' \"$@\"\n");
+    write_executable(&f.bin.join("cargo"), "#!/bin/bash\npwd -P\nprintf '%s\\n' \"$@\"\n");
     let output = f.command(&["check", "--lib"], 0).current_dir(&member).output().expect("shim");
     assert!(output.status.success(), "{output:?}");
     let recorded = std::fs::read_to_string(f.temp.path().join("argv")).expect("argv");

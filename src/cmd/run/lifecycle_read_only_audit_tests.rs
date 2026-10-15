@@ -36,7 +36,7 @@ async fn read_only_violation_records_audit_verdict_when_report_exists() {
     let _guard = paths::AidHomeGuard::set(home.path());
     let mut f = Fixture::new(home.path(), true, false, false);
     let aic = home.path().join("aic");
-    executable(&aic, "#!/bin/sh\nprintf 'report: /tmp/audit.md\\n'\nexit 0\n");
+    crate::support::test_env::write_executable(&aic, "#!/bin/sh\nprintf 'report: /tmp/audit.md\\n'\nexit 0\n");
     unsafe {
         std::env::set_var("AIC_TEST_BINARY", &aic);
     }

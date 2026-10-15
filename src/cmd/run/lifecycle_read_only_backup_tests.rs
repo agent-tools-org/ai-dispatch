@@ -15,7 +15,6 @@ use crate::{
 };
 use std::{
     fs,
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::Command,
     sync::Arc,
@@ -41,11 +40,6 @@ struct Fixture {
 #[path = "lifecycle_read_only_audit_tests.rs"]
 mod audit_tests;
 
-fn executable(path: &Path, script: &str) {
-    fs::write(path, script).unwrap();
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
-}
-
 fn git_output(dir: &Path, args: &[&str]) -> Vec<u8> {
     let output = Command::new("git").current_dir(dir).args(args).output().unwrap();
     assert!(output.status.success());
@@ -55,7 +49,7 @@ fn git_output(dir: &Path, args: &[&str]) -> Vec<u8> {
 fn run_fake_agent(home: &Path, dir: &Path, write_report: bool, args: &RunArgs) {
     let report = Path::new(args.artifact_staging.as_ref().unwrap()).join("agent-result.md");
     let agent = home.join("fake-agent");
-    executable(
+    crate::support::test_env::write_executable(
         &agent,
         "#!/bin/sh\nset -eu\nif [ \"$1\" = yes ]; then printf '%s' \"$2\" > \"$3\"; fi\nprintf 'forbidden edit\\n' > base.txt\n",
     );
@@ -77,7 +71,7 @@ fn fake_gws(home: &Path, capture: &Path, fail_upload: bool) -> PathBuf {
     } else {
         ":"
     };
-    executable(
+    crate::support::test_env::write_executable(
         &binary,
         &format!(
             "#!/bin/sh\necho \"$*\" >> '{}'\nfor arg; do last=$arg; done\n\

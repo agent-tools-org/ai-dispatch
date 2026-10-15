@@ -26,7 +26,7 @@ impl Fixture {
         let bin = root.path().join("bin");
         fs::create_dir(&bin).unwrap();
         fs::create_dir(root.path().join("home")).unwrap();
-        fs::write(bin.join("codex"), r#"#!/bin/sh
+        common::write_executable(&bin.join("codex"), r#"#!/bin/sh
 case "$*" in
   *--version*) echo 'codex-cli 0.154.0'; exit 0 ;;
   *--help*) echo '--ignore-user-config'; exit 0 ;;
@@ -38,8 +38,7 @@ esac
 printf '%s\n' "$HOME" "$TMPDIR" "$CARGO_TARGET_DIR" "$@" > "$PREFLIGHT_CAPTURE"
 printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"NO_CHANGES_NEEDED: launch captured"}}'
 printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
-"#).unwrap();
-        fs::set_permissions(bin.join("codex"), fs::Permissions::from_mode(0o755)).unwrap();
+"#);
         Self { root, caller, target }
     }
 
@@ -216,7 +215,7 @@ fn sandbox_launch_keeps_host_scratch_out_of_guest_command() {
 fn assert_guest_launch(sandbox: bool) {
     let fixture = Fixture::new();
     let script = fixture.root.path().join("bin/container");
-    fs::write(&script, r#"#!/bin/sh
+    common::write_executable(&script, r#"#!/bin/sh
 case "$1" in
   --version|kill|rm) exit 0 ;;
   exec) if [ "$#" = 3 ] && [ "$3" = true ]; then exit 0; fi ;;
@@ -224,8 +223,7 @@ esac
 printf '%s\n' "$@" > "$PREFLIGHT_CAPTURE"
 printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"NO_CHANGES_NEEDED: guest command captured"}}'
 printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
-"#).unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+"#);
     let target = fixture.root.path().join("cache/_base");
     fs::create_dir_all(&target).unwrap();
     fs::set_permissions(&target, fs::Permissions::from_mode(0o555)).unwrap();

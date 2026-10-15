@@ -4,7 +4,6 @@
 use super::*;
 use crate::support::test_env::CargoTargetDirGuard;
 use std::process::Command;
-use std::os::unix::fs::PermissionsExt;
 
 #[test]
 fn target_dir_for_worktree_keeps_source_and_branches_as_siblings() {
@@ -269,9 +268,7 @@ fn executable_search_requires_execute_permission() {
     std::fs::write(&binary, "#!/bin/sh\n").unwrap();
     assert!(!executable_in_paths("agent", vec![temp.path().to_path_buf()]));
 
-    let mut permissions = std::fs::metadata(&binary).unwrap().permissions();
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(&binary, permissions).unwrap();
+    crate::support::test_env::write_executable(&binary, "#!/bin/sh\n");
     assert!(executable_in_paths("agent", vec![temp.path().to_path_buf()]));
 }
 

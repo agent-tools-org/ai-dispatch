@@ -63,3 +63,34 @@ pub fn seed_codex_leaderboard(home: &Path) {
         std::fs::write(home.join(file), feed.to_string()).expect("leaderboard cache");
     }
 }
+
+/// Write an executable file without opening the destination path for writing in the test process.
+/// This prevents leaking a write descriptor to concurrently forked child processes, avoiding ETXTBSY.
+#[allow(dead_code)]
+pub fn write_executable(path: &Path, content: &str) {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let parent = if parent.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        parent
+    };
+    if !parent.exists() {
+        std::fs::create_dir_all(parent).expect("create parent directory for executable");
+    }
+    let mut temp = tempfile::Builder::new()
+        .prefix(".tmp-exec-")
+        .tempfile_in(parent)
+        .expect("create sibling temp file");
+    use std::io::Write;
+    temp.write_all(content.as_bytes()).expect("write executable content");
+    temp.flush().expect("flush executable content");
+    let status = Command::new("install")
+        .args(["-m", "755"])
+        .arg(temp.path())
+        .arg(path)
+        .status()
+        .expect("run install");
+    assert!(status.success(), "install -m 755 failed with status {status}");
+    let _ = temp.close();
+}
+

@@ -22,17 +22,16 @@ fn only_accepts_a_bare_agent_binary_that_identifies_as_cursor() {
 #[test]
 fn resolve_cursor_binary_walks_path_with_stubbed_identity() {
     use std::cell::RefCell;
-    use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
 
     fn write_agent(dir: &Path, executable: bool) {
         fs::create_dir_all(dir).unwrap();
         let agent = dir.join("agent");
-        fs::write(&agent, "#!/bin/sh\nexit 0\n").unwrap();
-        let mode = if executable { 0o755 } else { 0o644 };
-        let mut perms = fs::metadata(&agent).unwrap().permissions();
-        perms.set_mode(mode);
-        fs::set_permissions(&agent, perms).unwrap();
+        if executable {
+            crate::support::test_env::write_executable(&agent, "#!/bin/sh\nexit 0\n");
+        } else {
+            fs::write(&agent, "#!/bin/sh\nexit 0\n").unwrap();
+        }
     }
 
     let root = tempfile::tempdir().unwrap();

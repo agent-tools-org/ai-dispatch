@@ -6,7 +6,6 @@ mod common;
 
 use rusqlite::{Connection, params};
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -161,8 +160,7 @@ fn failed_worktree_listing_refuses_gc_without_recording_durability() {
     let bin = fixture.root.path().join("bin");
     fs::create_dir(&bin).unwrap();
     let shim = bin.join("git");
-    fs::write(&shim, "#!/bin/sh\nif [ \"$3\" = worktree ] && [ \"$4\" = list ]; then\n  echo 'injected listing failure' >&2\n  exit 128\nfi\nexec \"$REAL_GIT\" \"$@\"\n").unwrap();
-    fs::set_permissions(&shim, fs::Permissions::from_mode(0o755)).unwrap();
+    common::write_executable(&shim, "#!/bin/sh\nif [ \"$3\" = worktree ] && [ \"$4\" = list ]; then\n  echo 'injected listing failure' >&2\n  exit 128\nfi\nexec \"$REAL_GIT\" \"$@\"\n");
     let mut paths = vec![bin];
     paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap()));
     let output = fixture.gc("t-list-failure")

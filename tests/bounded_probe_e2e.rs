@@ -5,7 +5,6 @@
 mod common;
 use common::aid_cmd_in;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
@@ -29,9 +28,10 @@ fn hung_agy_help_is_reaped_and_dispatch_preview_continues() {
     let bin = home.path().join("bin");
     fs::create_dir(&bin).expect("bin");
     let agy = bin.join("agy");
-    fs::write(&agy, "#!/bin/sh\nif [ \"$1\" = --help ]; then echo $$ > \"$0.pid\"; exec sleep 60; fi\necho agy 1.1\n")
-        .expect("fake agy");
-    fs::set_permissions(&agy, fs::Permissions::from_mode(0o755)).expect("executable agy");
+    common::write_executable(
+        &agy,
+        "#!/bin/sh\nif [ \"$1\" = --help ]; then echo $$ > \"$0.pid\"; exec sleep 60; fi\necho agy 1.1\n",
+    );
     let mut paths = vec![bin];
     paths.extend(std::env::split_paths(&std::env::var_os("PATH").expect("PATH")));
     let mut command = aid_cmd_in(home.path());

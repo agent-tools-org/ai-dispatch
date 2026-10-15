@@ -6,7 +6,7 @@
 
 mod common;
 
-use std::{ffi::CString, fs, io::Read, os::unix::fs::PermissionsExt, path::Path, sync::mpsc};
+use std::{ffi::CString, fs, io::Read, path::Path, sync::mpsc};
 
 const CURL: &str = r#"#!/bin/sh
 target=
@@ -40,12 +40,7 @@ fn setup(home: &Path) {
     fs::create_dir(home.join("bin")).expect("bin");
     fs::create_dir(home.join("fixtures")).expect("fixtures");
     for (name, script) in [("curl", CURL), ("mv", MV)] {
-        fs::write(home.join("bin").join(name), script).expect("script");
-        fs::set_permissions(
-            home.join("bin").join(name),
-            fs::Permissions::from_mode(0o755),
-        )
-        .expect("mode");
+        common::write_executable(&home.join("bin").join(name), script);
     }
     fs::write(home.join("config.toml"), "[updates]\ncheck = false\n").expect("config");
     for (file, body) in [

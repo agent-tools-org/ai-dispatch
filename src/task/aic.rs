@@ -206,7 +206,6 @@ mod tests {
     use super::*;
     use std::env;
     use std::fs;
-    use std::os::unix::fs::PermissionsExt;
 
     fn set_env(key: &str, value: impl AsRef<std::ffi::OsStr>) {
         unsafe { env::set_var(key, value) }
@@ -222,10 +221,7 @@ mod tests {
 
     fn install_aic_shim(dir: &Path, body: &str) {
         let path = dir.join("aic");
-        fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
-        let mut perms = fs::metadata(&path).unwrap().permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&path, perms).unwrap();
+        crate::support::test_env::write_executable(&path, &format!("#!/bin/sh\n{body}\n"));
     }
 
     #[test]

@@ -9,8 +9,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
+mod common;
 
 const TASK_ID: &str = "t-foreground-survivor";
 const INTERRUPT_TASK_ID: &str = "t-foreground-interrupt";
@@ -161,8 +160,7 @@ fn write_custom_agent(aid_home: &Path, id: &str, script: &Path) {
 #[cfg(unix)]
 fn write_script(dir: &Path, name: &str, contents: &str) -> PathBuf {
     let path = dir.join(name);
-    std::fs::write(&path, contents).unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    common::write_executable(&path, contents);
     path
 }
 

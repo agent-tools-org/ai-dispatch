@@ -3,7 +3,6 @@
 // Deps: compiled aid binary (debug build, fake-key seam), tempfile, serde_json, sh.
 
 use serde_json::{Value, json};
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Output;
 use tempfile::TempDir;
@@ -29,8 +28,7 @@ impl Fixture {
     fn new(status: u16, response: &Value) -> Self {
         let bin = TempDir::new().unwrap();
         let curl = bin.path().join("curl");
-        std::fs::write(&curl, FAKE_CURL).unwrap();
-        std::fs::set_permissions(&curl, std::fs::Permissions::from_mode(0o755)).unwrap();
+        common::write_executable(&curl, FAKE_CURL);
         std::fs::write(bin.path().join("response.json"), response.to_string()).unwrap();
         std::fs::write(bin.path().join("status"), status.to_string()).unwrap();
         Self { home: TempDir::new().unwrap(), bin }

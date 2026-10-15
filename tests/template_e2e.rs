@@ -4,8 +4,6 @@
 
 use std::path::Path;
 
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 
 mod common;
@@ -39,9 +37,5 @@ fn run_wraps_prompt_with_template() {
 
 fn write_script(dir: &Path, name: &str, contents: &str) {
     let path = dir.join(name);
-    std::fs::write(&path, contents).unwrap();
-    #[cfg(unix)]
-    {
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
+    common::write_executable(&path, contents);
 }

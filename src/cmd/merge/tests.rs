@@ -680,18 +680,11 @@ fn git_merge_branch_restores_its_own_stash_when_newer_stash_appears() {
     std::fs::write(repo.path().join("init.txt"), "local change\n").unwrap();
 
     let hook = repo.path().join(".git/hooks/pre-merge-commit");
-    std::fs::write(
+    crate::support::test_env::write_executable(
         &hook,
         "#!/bin/sh\nprintf 'task-b rescue\n' > init.txt\ngit stash push -q -m 'task-b rescue'\n",
-    )
-    .unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut permissions = std::fs::metadata(&hook).unwrap().permissions();
-        permissions.set_mode(0o755);
-        std::fs::set_permissions(&hook, permissions).unwrap();
-    }
+    );
+
 
     let result = git_merge_branch(&repo.path().to_string_lossy(), &branch);
     assert!(matches!(result, MergeResult::Merged));

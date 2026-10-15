@@ -2,7 +2,7 @@
 // A fake Claude deliberately writes files; settlement must retain the evidence.
 // Deps: compiled aid CLI, SQLite, git, tempfile, and a PATH-injected agent.
 
-use std::{os::unix::fs::PermissionsExt, path::Path, process::Command};
+use std::{path::Path, process::Command};
 use rusqlite::Connection;
 use tempfile::TempDir;
 mod common;
@@ -29,8 +29,7 @@ impl Fixture {
         git(repo.path(), &["commit", "-m", "initial"]);
         let head = git(repo.path(), &["rev-parse", "HEAD"]);
         let agent = bin.path().join("claude");
-        std::fs::write(&agent, format!("#!/bin/sh\ncase \"$1\" in --help|--version) echo 'Claude Code 2.1.285'; exit 0;; esac\n{script}\nprintf '%s\\n' '{{\"type\":\"assistant\",\"message\":{{\"content\":[{{\"type\":\"text\",\"text\":\"Inspection completed.\"}}]}}}}'\nprintf '%s\\n' '{{\"type\":\"result\",\"subtype\":\"success\",\"result\":\"Inspection completed.\"}}'\n")).unwrap();
-        std::fs::set_permissions(agent, std::fs::Permissions::from_mode(0o755)).unwrap();
+        common::write_executable(&agent, &format!("#!/bin/sh\ncase \"$1\" in --help|--version) echo 'Claude Code 2.1.285'; exit 0;; esac\n{script}\nprintf '%s\\n' '{{\"type\":\"assistant\",\"message\":{{\"content\":[{{\"type\":\"text\",\"text\":\"Inspection completed.\"}}]}}}}'\nprintf '%s\\n' '{{\"type\":\"result\",\"subtype\":\"success\",\"result\":\"Inspection completed.\"}}'\n"));
         std::fs::create_dir(home.path().join("agents")).unwrap();
         std::fs::write(home.path().join("agents/buffered.toml"), format!("[agent]\nid = \"buffered\"\ndisplay_name = \"buffered\"\ncommand = \"{}\"\nprompt_mode = \"arg\"\nstreaming = false\n", bin.path().join("claude").display())).unwrap();
         Self { home, repo, bin, head }
@@ -270,8 +269,7 @@ fn read_only_nested_head_changes_fail() {
 fn read_only_git_failure_fails_before_agent_execution() {
     let f = Fixture::new("echo executed > probe.txt");
     let wrapper = f.bin.path().join("git");
-    std::fs::write(&wrapper, "#!/bin/sh\nfor arg; do if [ \"$arg\" = status ]; then echo 'fatal: permission denied' >&2; exit 128; fi; done\nexec /usr/bin/git \"$@\"\n").unwrap();
-    std::fs::set_permissions(wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    common::write_executable(&wrapper, "#!/bin/sh\nfor arg; do if [ \"$arg\" = status ]; then echo 'fatal: permission denied' >&2; exit 128; fi; done\nexec /usr/bin/git \"$@\"\n");
     f.foreground(f.repo.path(), "claude", &["-o", "output.md"], "failed");
     assert!(!f.repo.path().join("probe.txt").exists());
 }
@@ -284,8 +282,7 @@ fn read_only_many_files_are_hashed_in_one_batch_per_snapshot() {
     }
     let counter = f.home.path().join("hashes");
     let wrapper = f.bin.path().join("git");
-    std::fs::write(&wrapper, format!("#!/bin/sh\nif [ \"$1\" = hash-object ]; then echo hash >> '{}'; fi\nexec /usr/bin/git \"$@\"\n", counter.display())).unwrap();
-    std::fs::set_permissions(wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    common::write_executable(&wrapper, &format!("#!/bin/sh\nif [ \"$1\" = hash-object ]; then echo hash >> '{}'; fi\nexec /usr/bin/git \"$@\"\n", counter.display()));
     f.foreground(f.repo.path(), "buffered", &["-o", "output.md"], "done");
     assert_eq!(std::fs::read_to_string(counter).unwrap().lines().count(), 2);
 }

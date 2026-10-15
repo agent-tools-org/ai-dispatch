@@ -135,18 +135,11 @@ async fn run_auto_retries_after_verify_failure() {
     let bin_dir = temp.path().join("bin");
     std::fs::create_dir_all(&bin_dir).unwrap();
     let script_path = bin_dir.join("opencode");
-    std::fs::write(
+    crate::support::test_env::write_executable(
         &script_path,
         "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"completion\",\"tokens\":1}'\n",
-    )
-    .unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut permissions = std::fs::metadata(&script_path).unwrap().permissions();
-        permissions.set_mode(0o755);
-        std::fs::set_permissions(&script_path, permissions).unwrap();
-    }
+    );
+
 
     let path_value = OsString::from(format!("{}:/bin:/usr/bin", bin_dir.display()));
     let _path = EnvVarGuard::set("PATH", &path_value);

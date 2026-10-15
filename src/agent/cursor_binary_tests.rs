@@ -8,8 +8,8 @@ use super::{
 };
 use crate::support::test_subprocess;
 use crate::types::{AgentKind, EventKind, TaskId};
+use crate::support::test_env::write_executable;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -229,12 +229,7 @@ while [ "$n" -gt 0 ]; do printf x; n=$((n - 1)); done
     dir
 }
 
-fn write_executable(path: &Path, script: &str) {
-    fs::write(path, script).unwrap();
-    let mut perms = fs::metadata(path).unwrap().permissions();
-    perms.set_mode(0o755);
-    fs::set_permissions(path, perms).unwrap();
-}
+
 
 fn run_helper(test_name: &str, bin_dir: &TempDir) -> String {
     let output = Command::new(std::env::current_exe().unwrap())

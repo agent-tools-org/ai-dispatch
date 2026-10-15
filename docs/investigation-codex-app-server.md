@@ -11,11 +11,9 @@ including config-directory isolation guidance.
 
 # Codex app-server configuration boundary
 
-Status: symlink-only mirror invariant implemented; compilation and Rust suites for this revision
-remain pending. The baseline `4ab977eb` passed 3,538 default tests, 3,570 web tests,
-and clippy, and completed a writable task with a confirmed live steer. Its retry failed
-before producing exec events. The sanitized transcript is preserved at
-`tests/fixtures/codex-app-server-steer.jsonl` and drives normalization and fake-server tests.
+Status: implemented at `afca1949`. Codex app-server carries mid-turn steering; `codex exec`
+remains the fallback. The sanitized transcript at `tests/fixtures/codex-app-server-steer.jsonl`
+drives normalization and fake-server tests.
 
 ## Confirmed facts
 
@@ -27,7 +25,7 @@ before producing exec events. The sanitized transcript is preserved at
 - `codex app-server --ignore-user-config --help` exits 2:
   `error: unexpected argument '--ignore-user-config' found`.
 - `codex --ignore-user-config app-server --help` exits 2 with the same diagnostic.
-- `codex app-server generate-json-schema --out /private/tmp/aid-codex-schema`
+- `codex app-server generate-json-schema --out <dir>`
   succeeds. No user-config exclusion parameter was found in the generated schema.
   Thread start/resume accept config overrides, which do not establish exclusion
   of the underlying user configuration.
@@ -126,72 +124,51 @@ options, and working directory. If an earlier handshake step fails, exec keeps r
 the stable rollout path remains available. Both PTY and foreground execution share the
 same fallback command builder and their tests assert that exec emits events.
 
-## Validation and remaining work
+## Validation
 
-`python3 tests/fixtures/codex-resume-home-probe.py` passed all three native checks on
-Codex 0.162.1: first process exit, task-state removal, and subsequent stable-home resume.
-No external model endpoint or real Codex home was used. Static checks passed across
-26 app-server Rust files with 61 registered test declarations. Tests cover idempotent
-and concurrent mirror construction, exclusions, symlink identity, persistent local state,
-resume after task-state cleanup, and fallback events in both execution paths. Five new
-regressions cover missing sessions through the production command builder, missing state
-database, explicit collision fallback, stale-link pruning, and rejected mirror config.
-The config rejection tests now cover non-regular config entries; regular mirror config
-is removed while real config and linked files are preserved. Two production-builder tests
-each exercise both runners: two launches after the fake server writes trust config, and
-fallback for unshared mirror-local state. These Rust regressions were written but not run here.
+On `afca1949` the workspace suite passed with default and `web` features (3,548 and 3,580
+tests; the only failure in each was the load-sensitive
+`runtime::pty::watch::write_tests::queued_message_after_child_exit_does_not_fail_monitor`,
+which also fails intermittently on `main` and passes in isolation), and clippy with the CI
+flags is clean. A live run against Codex 0.162.1 started a writable task on app-server and
+accepted a mid-turn steer. Codex then wrote trust configuration into the mirror. The retry
+refreshed the mirror, launched app-server without fallback, resumed the same thread, and
+accepted a second mid-turn steer.
 
-The extra argument in the retry test's `insert_waiting_task` call is removed. No compilation
-or Rust suites ran here; there is no tested remote HEAD for this revision. The supplied `719a5bce` baseline passed 3,546 default tests, 3,578 web tests, and clippy.
-Its live second launch fell back because Codex had written mirror-local trust config.
-That gate did not cover this two-launch behavior. Cross-review, suites, and the live
-two-launch check for this revision remain pending; no side tasks were dispatched.
+`python3 tests/fixtures/codex-resume-home-probe.py` covers native resume after the first
+process exits and its task state is removed, without a model endpoint or the real home.
+Two production-builder tests exercise both runners: two launches after the fake server
+writes trust configuration, and fallback for unshared mirror-local state.
 
-Existing threads indexed through deleted per-task homes are not migrated. Their app-server
-resume refusal selects fresh exec. Changing or removing AID_HOME also removes the stable
-path guarantee. A real home without session/state files now uses exec; aid does not
-initialize real-home files. The earlier guide
-validator failure remains `ModuleNotFoundError: No module named 'yaml'`.
+## Properties and limitations
 
-Local inspection commands:
+- The mirror invariant is checked once per launch, before the app-server process starts.
+  Mirror `config.toml*` files can only hold configuration that Codex app-server wrote for
+  aid tasks (the real user configuration is never linked), so a concurrent launch that
+  recreates trust configuration between validation and spawn exposes only that content.
+- Removing a mirror `config.toml*` while another app-server writes it drops that trust
+  entry; the open descriptor stays attached to the unlinked file inside the mirror.
+- The first-run guard names `state_5.sqlite`, the state database of Codex 0.162.1. If a
+  later Codex version starts a new database while an obsolete `state_5.sqlite` remains, the
+  first app-server launch can create that database inside the mirror; the next launch sees a
+  non-symlink entry and falls back to exec.
+- The mirror root is trusted: `$AID_HOME` is owned by the same user, and replacing
+  `$AID_HOME/codex-home` with a link to another directory between validation and refresh is
+  outside this boundary.
+- Threads indexed through earlier per-task homes are not migrated; their resume refusal
+  selects fresh exec. Changing or removing `AID_HOME` removes the stable rollout path.
+- A real home without `sessions/` or `state_5.sqlite` uses exec; aid does not initialize
+  real-home files.
+- Wrapped container and sandbox launches keep the exec transport.
+
+Native inspection commands:
 
 ```text
 codex --version
 codex app-server --help
 codex exec --help
-codex app-server generate-json-schema --out /private/tmp/aid-codex-schema
+codex app-server generate-json-schema --out <dir>
 codex --ignore-user-config app-server --help
 codex app-server --ignore-user-config --help
-rg -n 'ignore.user.config|configOverrides|configRequirements' /private/tmp/aid-codex-schema
-rustfmt --edition 2024 src/runtime/codex_app_server/command.rs src/runtime/codex_app_server/command_tests.rs
-python3 /private/tmp/aid-codex-audit-format.py
-python3 /private/tmp/aid-codex-audit-static-check.py
-python3 /private/tmp/aid-codex-stable-static-check.py
-python3 /private/tmp/aid-codex-drift-static-check.py
-python3 /private/tmp/aid-codex-invariant-static-check.py
 python3 tests/fixtures/codex-resume-home-probe.py
-bash /Users/ming/.aid/skills/implementer/scripts/check-file-size.sh src/runtime/codex_app_server
-bash /Users/ming/.aid/skills/implementer/scripts/check-headers.sh src/runtime/codex_app_server
-bash /Users/ming/.aid/skills/implementer/scripts/check-unwrap.sh src/runtime/codex_app_server
-python3 /Users/ming/.codex/skills/.system/skill-creator/scripts/quick_validate.py default-skills/aid-guide
-git diff --check
-~/.local/bin/security-guard repo "$PWD"
 ```
-
-The original exclusion-flag probes failed as described; schema generation succeeded.
-Formatting applies only to new app-server source files. The operator verification
-commands for the final commit are:
-
-```text
-aid build check
-aid test --bin aid codex_app_server
-aid test --bin aid agent::codex
-aid test --bin aid cmd::reply
-aid test --bin aid cmd::steer
-aid test --bin aid cmd::stop
-aid test --bin aid cmd::init::official_guide
-aid test --test aid_guide_e2e --test init_e2e
-```
-
-After these checks, run live steer and stop against Codex 0.162.1, including a resumed
-session. Wrapped container/sandbox transport selection remains an explicit limitation.

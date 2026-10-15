@@ -241,7 +241,7 @@ fn infer_pending_reason(store: &Store, task: &Task) -> Result<Option<PendingReas
     let Ok(spec) = load_spec_for_reaper(task.id.as_str()) else {
         return Ok(None);
     };
-    if crate::rate_limit::is_rate_limited(&task.agent, task.custom_agent_name.as_deref()) {
+    if crate::routing::rate_limit::is_rate_limited(&task.agent, task.custom_agent_name.as_deref()) {
         return Ok(Some(PendingReason::RateLimited));
     }
     if store.list_tasks(TaskFilter::Running)?.len() >= MAX_WORKERS {

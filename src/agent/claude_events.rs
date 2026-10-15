@@ -235,7 +235,7 @@ fn parse_user_event(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -
 
 fn parse_error_event(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
     let detail = v.get("message").or_else(|| v.pointer("/error/message")).and_then(|value| value.as_str()).filter(|msg| !msg.is_empty())?;
-    crate::quota_channel::mark_stream_refusal(AgentKind::Claude, None, &v.to_string());
+    crate::routing::quota::channel::mark_stream_refusal(AgentKind::Claude, None, &v.to_string());
     let (detail, metadata) = capped_detail(detail);
     Some(TaskEvent {
         task_id: task_id.clone(),

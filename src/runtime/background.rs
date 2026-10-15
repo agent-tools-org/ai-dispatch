@@ -140,7 +140,7 @@ fn lifecycle_agent_for_task(
 
 async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec, args: &RunArgs) -> Result<()> {
     let agent = resolve_agent_for_spec(&args.agent_name)?;
-    crate::rate_limit_wait::wait_for_declared_reset(
+    crate::routing::rate_limit::wait::wait_for_declared_reset(
         store.as_ref(), &spec.task_id, agent.kind(), agent.rate_limit_name(),
     ).await?;
     ensure_agent_binary_available(args)?;

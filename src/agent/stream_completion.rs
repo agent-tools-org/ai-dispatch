@@ -131,10 +131,10 @@ pub(crate) fn record_quota_exhaustion_with_delivery(
     // needle is looked for, so a report quoting this repo's signature table —
     // or a test fixture, or a commit message — cannot write a marker. See
     // `quota_channel` for what that rests on and what it does not reach.
-    let tail = crate::quota_channel::provider_attributable(
+    let tail = crate::routing::quota::channel::provider_attributable(
         quota_scan_tail(output),
         agent,
-        crate::quota_channel::Channel::CliStream,
+        crate::routing::quota::channel::Channel::CliStream,
     )
     .quota_text(agent);
     let tail = tail.as_str();
@@ -142,7 +142,7 @@ pub(crate) fn record_quota_exhaustion_with_delivery(
         return QuotaOutcome::None;
     }
     let detail = quota_line(tail, agent).unwrap_or_else(|| tail.chars().take(200).collect());
-    crate::rate_limit::mark_rate_limited_for_model(
+    crate::routing::rate_limit::mark_rate_limited_for_model(
         &agent,
         custom_name,
         model,
@@ -192,7 +192,7 @@ fn agent_prose_quota_match(output: &str, agent: crate::types::AgentKind) -> bool
 /// `quota_channel::provider_attributable`; this decides only *what* was said,
 /// never *who* said it.
 fn prose_line_is_quota_refusal(line: &str, agent: crate::types::AgentKind) -> bool {
-    crate::rate_limit_signatures::match_quota_signature_for_agent(line, agent).is_some()
+    crate::routing::rate_limit::signatures::match_quota_signature_for_agent(line, agent).is_some()
 }
 
 /// The quota sentence itself, windowed around the phrase that reports it.
@@ -245,7 +245,7 @@ fn enclosing_plain_run(line: &str, anchor: usize) -> &str {
 }
 
 fn quota_signature_anchor(lower: &str, agent: crate::types::AgentKind) -> Option<usize> {
-    crate::rate_limit_signatures::QUOTA_SIGNATURES
+    crate::routing::rate_limit::signatures::QUOTA_SIGNATURES
         .iter()
         .find(|signature| signature.agent == agent && lower.contains(signature.needle))
         .and_then(|signature| lower.find(signature.needle))

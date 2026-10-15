@@ -274,7 +274,7 @@ fn only_a_diagnostic_event_can_mark_a_route_rate_limited() {
     let store = std::sync::Arc::new(crate::store::Store::open_memory().unwrap());
     let task = running_task("t-cursor-quote", AgentKind::Cursor);
     store.insert_task(&task).unwrap();
-    crate::rate_limit::clear_all_rate_limits_for_agent(&AgentKind::Cursor, None);
+    crate::routing::rate_limit::clear_all_rate_limits_for_agent(&AgentKind::Cursor, None);
 
     let quoted = "assert_rate_limit(r#\"{\"type\":\"error\",\"message\":\"quota exceeded for \
                   this workspace\"}\"#, true);";
@@ -286,14 +286,14 @@ fn only_a_diagnostic_event_can_mark_a_route_rate_limited() {
 
     feed_stream_line(&store, &task, &report);
     assert!(
-        !crate::rate_limit::is_rate_limited(&AgentKind::Cursor, None),
+        !crate::routing::rate_limit::is_rate_limited(&AgentKind::Cursor, None),
         "a report quoting our own fixture must not hold cursor"
     );
 
     let refusal = r#"{"type":"error","message":"quota exceeded for this workspace"}"#;
     feed_stream_line(&store, &task, refusal);
     assert!(
-        crate::rate_limit::is_rate_limited(&AgentKind::Cursor, None),
+        crate::routing::rate_limit::is_rate_limited(&AgentKind::Cursor, None),
         "the same words from the CLI's own error envelope must still hold cursor"
     );
 }
@@ -306,19 +306,19 @@ fn streamed_opencode_refusal_holds_only_the_dispatched_provider() {
     let mut task = running_task("t-opencode-provider-scope", AgentKind::OpenCode);
     task.requested_model = Some("opencode/deepseek-v4-pro".to_string());
     store.insert_task(&task).unwrap();
-    crate::rate_limit::clear_all_rate_limits_for_agent(&AgentKind::OpenCode, None);
+    crate::routing::rate_limit::clear_all_rate_limits_for_agent(&AgentKind::OpenCode, None);
 
     let refusal = r#"{"type":"error","timestamp":1776000000000,"sessionID":"ses_live","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here: https://opencode.ai/workspace/wrk_live/billing","statusCode":401,"isRetryable":false,"responseHeaders":{},"responseBody":"{\"type\":\"error\",\"error\":{\"type\":\"CreditsError\"}}","metadata":{"url":"https://opencode.ai/zen/v1/chat/completions"}}}}"#;
     feed_stream_line_with_agent(&store, &task, refusal, crate::agent::get_agent(AgentKind::OpenCode).as_ref());
 
-    assert!(!crate::rate_limit::is_rate_limited(&AgentKind::OpenCode, None));
-    assert!(crate::rate_limit::dispatch_blocking_hold_for_model(
+    assert!(!crate::routing::rate_limit::is_rate_limited(&AgentKind::OpenCode, None));
+    assert!(crate::routing::rate_limit::dispatch_blocking_hold_for_model(
         &AgentKind::OpenCode,
         None,
         Some("opencode/deepseek-v4-pro"),
     )
     .is_some());
-    assert!(crate::rate_limit::dispatch_blocking_hold_for_model(
+    assert!(crate::routing::rate_limit::dispatch_blocking_hold_for_model(
         &AgentKind::OpenCode,
         None,
         Some("opencode-go/deepseek-v4-pro"),
@@ -334,11 +334,11 @@ fn tool_error_events_do_not_mark_quota() {
     let store = std::sync::Arc::new(crate::store::Store::open_memory().unwrap());
     let task = running_task("t-copilot-tool", AgentKind::Copilot);
     store.insert_task(&task).unwrap();
-    crate::rate_limit::clear_all_rate_limits_for_agent(&AgentKind::Copilot, None);
+    crate::routing::rate_limit::clear_all_rate_limits_for_agent(&AgentKind::Copilot, None);
     let line = r#"{"type":"tool.execution_complete","data":{"success":false,"toolName":"grep","error":"You have exceeded your monthly quota"}}"#;
     feed_stream_line_with_agent(&store, &task, line, &crate::agent::copilot::CopilotAgent);
     assert!(
-        !crate::rate_limit::is_rate_limited(&AgentKind::Copilot, None),
+        !crate::routing::rate_limit::is_rate_limited(&AgentKind::Copilot, None),
         "a failing tool must not write a copilot hold"
     );
 }

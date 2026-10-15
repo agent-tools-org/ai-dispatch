@@ -91,7 +91,7 @@ impl super::Agent for OzAgent {
             }
             "error" => {
                 let msg = v.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error");
-                crate::quota_channel::mark_stream_refusal(crate::types::AgentKind::Oz, None, line);
+                crate::routing::quota::channel::mark_stream_refusal(crate::types::AgentKind::Oz, None, line);
                 let (detail, metadata) = capped_detail(msg);
                 Some(TaskEvent {
                     task_id: task_id.clone(),

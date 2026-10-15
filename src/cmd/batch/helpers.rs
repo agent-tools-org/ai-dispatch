@@ -1,8 +1,8 @@
 // Batch helper utilities (pathing, summaries, hooks, safety warnings).
 // Exports: batch_summary, format_elapsed, warn_for_rate_limited_agents, low_disk_space_mb, resolve_batch_path, ensure_batch_workgroup, resolve_hook_targets, trigger_conditional
-// Deps: crate::batch, crate::rate_limit, crate::store::Store, super::batch_validate
+// Deps: crate::batch, crate::routing::rate_limit, crate::store::Store, super::batch_validate
 use crate::batch;
-use crate::rate_limit;
+use crate::routing::rate_limit;
 use crate::store::Store;
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;

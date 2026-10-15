@@ -9,7 +9,7 @@ use crate::types::AgentKind;
 fn leaderboard_rule_uses_epoch_eci_instead_of_catalog_rating() {
     let home = tempfile::tempdir().expect("home");
     let _guard = crate::support::paths::AidHomeGuard::set(home.path());
-    crate::scores::test_support::seed();
+    crate::routing::scores::test_support::seed();
     assert_eq!(
         model_capability_score(
             AgentKind::OpenCode,
@@ -24,7 +24,7 @@ fn leaderboard_rule_uses_epoch_eci_instead_of_catalog_rating() {
 fn leaderboard_alias_resolution_is_shared_and_unmapped_models_are_unrated() {
     let home = tempfile::tempdir().expect("home");
     let _guard = crate::support::paths::AidHomeGuard::set(home.path());
-    crate::scores::test_support::seed_live();
+    crate::routing::scores::test_support::seed_live();
     use crate::agent::classifier::TaskCategory;
     assert_eq!(
         model_capability_score(AgentKind::Claude, "opus", TaskCategory::Research),
@@ -89,7 +89,7 @@ fn leaderboard_uses_configured_codex_effort_for_exact_harness() {
     use crate::agent::classifier::TaskCategory;
     let home = tempfile::tempdir().expect("home");
     let _guard = crate::support::paths::AidHomeGuard::set(home.path());
-    crate::scores::test_support::seed_live();
+    crate::routing::scores::test_support::seed_live();
     let codex = home.path().join("codex");
     std::fs::create_dir_all(&codex).expect("codex home");
     crate::agent::codex::cli_config::set_test_codex_home(Some(codex.clone()));
@@ -98,7 +98,7 @@ fn leaderboard_uses_configured_codex_effort_for_exact_harness() {
         "model_reasoning_effort = 'max'\n",
     )
     .expect("config");
-    let measured = crate::scores::evidence(
+    let measured = crate::routing::scores::evidence(
         AgentKind::Codex,
         Some("openai/gpt-5.6-sol"),
         TaskCategory::Testing,
@@ -108,7 +108,7 @@ fn leaderboard_uses_configured_codex_effort_for_exact_harness() {
         "model_reasoning_effort = 'low'\n",
     )
     .expect("config");
-    let fallback = crate::scores::evidence(
+    let fallback = crate::routing::scores::evidence(
         AgentKind::Codex,
         Some("openai/gpt-5.6-sol"),
         TaskCategory::Testing,

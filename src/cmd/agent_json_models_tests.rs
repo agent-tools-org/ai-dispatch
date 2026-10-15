@@ -92,7 +92,7 @@ fn served_only_models_appear_unrated_for_every_probe_agent() {
         codex_rows, 1,
         "a served model with a catalog row is not duplicated"
     );
-    crate::scores::test_support::seed_live();
+    crate::routing::scores::test_support::seed_live();
     let measured = crate::cmd::agent_json::agents_list_value(&store).expect("measured list");
     let model = measured["agents"].as_array().expect("agents").iter()
         .find(|row| row["name"] == "claude").expect("claude")["models"]["available"]

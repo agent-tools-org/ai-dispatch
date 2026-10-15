@@ -153,8 +153,8 @@ async fn rate_limited_agent_without_cascade_fails_early() {
     crate::support::paths::ensure_dirs().unwrap();
     // No installed peers → category-aware fallback correctly returns None.
     let _agents = crate::agent::DetectAgentsGuard::set(vec![AgentKind::MiMoCode]);
-    let stated = crate::rate_limit::test_future_recovery_time();
-    crate::rate_limit::mark_rate_limited(
+    let stated = crate::routing::rate_limit::test_future_recovery_time();
+    crate::routing::rate_limit::mark_rate_limited(
         &AgentKind::MiMoCode,
         None,
         &format!("try again at {stated}."),
@@ -175,10 +175,10 @@ async fn rate_limited_agent_with_cascade_proceeds() {
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
-    crate::rate_limit::mark_rate_limited(
+    crate::routing::rate_limit::mark_rate_limited(
         &AgentKind::Kilo,
         None,
-        &format!("try again at {}.", crate::rate_limit::test_future_recovery_time()),
+        &format!("try again at {}.", crate::routing::rate_limit::test_future_recovery_time()),
     );
     let task_id = run(store.clone(), RunArgs {
         agent_name: "kilo".to_string(),

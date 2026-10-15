@@ -3,7 +3,7 @@
 // Deps: price feed, pricing overrides, model catalog, provider metering.
 
 use super::{feed_index, override_pricing, price_feed, ModelPricing};
-use crate::model_catalog::AGENT_MODELS;
+use crate::routing::model_catalog::AGENT_MODELS;
 use crate::types::{provider_for_cli, AgentKind, MeteringShape};
 
 /// Precedence: an explicit user override, then subscription inclusion, then a

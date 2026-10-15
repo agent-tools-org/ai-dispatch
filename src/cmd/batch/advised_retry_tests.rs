@@ -26,12 +26,12 @@ fn args(dir: &std::path::Path) -> RunArgs {
 fn setup() -> (
     tempfile::TempDir,
     crate::support::paths::AidHomeGuard,
-    crate::live_quota::CacheDirGuard,
+    crate::routing::quota::live::CacheDirGuard,
     Store,
 ) {
     let dir = tempfile::tempdir().expect("home");
     let home = crate::support::paths::AidHomeGuard::set(dir.path());
-    let cache = crate::live_quota::CacheDirGuard::set(dir.path());
+    let cache = crate::routing::quota::live::CacheDirGuard::set(dir.path());
     crate::agent::codex::cli_config::set_test_codex_home(Some(dir.path().join("no-codex")));
     std::fs::create_dir(crate::config::team::teams_dir()).expect("teams");
     std::fs::write(

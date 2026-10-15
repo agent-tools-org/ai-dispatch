@@ -8,7 +8,7 @@ use super::super::selection_scoring::CandidateContext;
 use crate::agent::run_model::{RunModelInput, resolve_run_model};
 use crate::config::agent as agent_config;
 use crate::config::SelectionConfig;
-use crate::model_catalog::AGENT_MODELS;
+use crate::routing::model_catalog::AGENT_MODELS;
 use crate::types::{AgentKind, DeclaredTaskProfile, TaskBudget};
 
 use super::gate::Exclusions;
@@ -47,7 +47,7 @@ pub(super) fn custom_candidates(
             let (exclusion_reason, exclusion_codes) = exclusions.into_parts();
             CustomAdviceCandidate {
                 agent: config.id, installed: blocker.is_none(), eligible,
-                capability_evidence: crate::scores::evidence(AgentKind::Custom, model.as_deref(), context.profile.category),
+                capability_evidence: crate::routing::scores::evidence(AgentKind::Custom, model.as_deref(), context.profile.category),
                 model, category_capability, strength_bonus, team_preferred,
                 exclusion_reason, exclusion_codes,
             }

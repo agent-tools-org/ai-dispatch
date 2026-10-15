@@ -79,7 +79,7 @@ async fn run_batch(store: Arc<Store>, file: &Path, parallel: bool) {
 async fn batch_scope(default: &str, authorized: bool, parallel: bool) {
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());
-    let _cache = crate::live_quota::CacheDirGuard::set(home.path());
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
     paths::ensure_dirs().expect("directories");
     let _peer = CursorBinaryGuard::set(install_agents(home.path()));
     let _fleet = DetectAgentsGuard::set(vec![AgentKind::Cursor]);
@@ -171,7 +171,7 @@ fn save_failed_task(store: &Store, home: &Path, id: &str, cascade: Vec<String>) 
 async fn unauthorized_failed_task_keeps_saved_agent_model_session_and_has_no_peer_launch() {
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());
-    let _cache = crate::live_quota::CacheDirGuard::set(home.path());
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
     paths::ensure_dirs().expect("directories");
     let _peer = CursorBinaryGuard::set(install_agents(home.path()));
     let _fleet = DetectAgentsGuard::set(vec![AgentKind::Cursor]);
@@ -218,7 +218,7 @@ async fn unauthorized_failed_task_keeps_saved_agent_model_session_and_has_no_pee
 async fn task_local_cascade_authorizes_coordinator_fallback_with_false_default() {
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());
-    let _cache = crate::live_quota::CacheDirGuard::set(home.path());
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
     paths::ensure_dirs().expect("directories");
     let _peer = CursorBinaryGuard::set(install_agents(home.path()));
     let _models = MockServedModelsGuard::set(AgentKind::Cursor, None);

@@ -12,7 +12,7 @@ use crate::agent;
 use crate::agent::registry;
 use crate::config::agent as agent_config;
 use crate::cli::ConfigAction;
-use crate::rate_limit;
+use crate::routing::rate_limit;
 use crate::prompt::skills;
 use crate::store::Store;
 use crate::prompt::templates;
@@ -28,9 +28,9 @@ mod tests;
 mod pricing_tests;
 
 use config_display::{agent_profile, compute_agent_history, compute_model_history, format_capabilities};
-use crate::model_catalog::AGENT_PROFILES;
-pub(crate) use crate::model_catalog::merged_agent_models;
-use crate::model_catalog::PricingResponse;
+use crate::routing::model_catalog::AGENT_PROFILES;
+pub(crate) use crate::routing::model_catalog::merged_agent_models;
+use crate::routing::model_catalog::PricingResponse;
 
 pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
     match action {

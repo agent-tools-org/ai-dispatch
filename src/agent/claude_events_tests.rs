@@ -2,7 +2,7 @@
 // Covers rate-limit marking and detail capping with metadata.full.
 // Loaded by `claude_events.rs` under `#[cfg(test)]`.
 use super::*;
-use crate::{support::paths, rate_limit};
+use crate::{support::paths, routing::rate_limit};
 
 // modelUsage copied verbatim from a real two-model result in ~/.aid/logs/t-73b769ce.jsonl.
 const CAPTURED_RESULT: &str = r#"{"type":"result","modelUsage":{"claude-opus-5-5":{"inputTokens":146,"outputTokens":58023,"cacheReadInputTokens":9931249,"cacheCreationInputTokens":188174,"webSearchRequests":0,"costUSD":4.6526858,"contextWindow":1000000,"maxOutputTokens":128000,"thinkingTokens":25274,"canonicalModel":"claude-opus-5-5","provider":"firstParty","costBasis":"list"},"claude-haiku-4-5-20251001":{"inputTokens":65614,"outputTokens":835,"cacheReadInputTokens":0,"cacheCreationInputTokens":0,"webSearchRequests":1,"costUSD":0.079789,"contextWindow":200000,"maxOutputTokens":32000,"thinkingTokens":0,"canonicalModel":"claude-haiku-4-5","provider":"firstParty","costBasis":"list"}}}"#;

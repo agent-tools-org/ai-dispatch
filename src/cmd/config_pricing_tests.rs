@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use super::config_display::render_models_line;
 use super::pricing_table;
 use crate::cost::{clear_feed_for_tests, estimate_cost, has_known_price, resolve_pricing};
-use crate::model_catalog::AGENT_MODELS;
+use crate::routing::model_catalog::AGENT_MODELS;
 use crate::types::AgentKind;
 
 /// One route's price as each display shows it.

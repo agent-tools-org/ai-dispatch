@@ -140,7 +140,7 @@ fn assert_stderr_cannot_hold_core(output: &str) {
     super::failure_stderr_note(
         crate::types::TaskStatus::Failed, &id, &crate::agent::droid::DroidAgent, None,
     );
-    let marker = crate::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core");
+    let marker = crate::routing::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core");
     assert!(!marker.exists());
     std::fs::write(paths::log_path(id.as_str()), format!("{output}\n")).expect("stderr replay");
     assert_eq!(
@@ -166,7 +166,7 @@ fn raw_core_stream_does_not_hold_pool_fix_regression() {
     assert!(!crate::agent::stream_completion::record_quota_exhaustion(
         CORE_FIXTURE, crate::types::AgentKind::Droid, None, None,
     ).recorded());
-    let marker = crate::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core");
+    let marker = crate::routing::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core");
     assert!(!marker.exists());
 }
 
@@ -182,7 +182,7 @@ fn assistant_and_tool_core_errors_do_not_hold_pool_fix_regression() {
             &value.to_string(), crate::types::AgentKind::Droid, None, None,
         ).recorded());
     }
-    let marker = crate::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core");
+    let marker = crate::routing::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core");
     assert!(!marker.exists());
 }
 
@@ -198,11 +198,11 @@ async fn truncated_stderr_replay_cannot_mark_auth_fix_regression() {
         .expect("stderr");
     let mut log = tokio::fs::File::create(paths::log_path(id.as_str())).await.expect("log");
     append_stderr_to_log(&mut log, &id).await.expect("replay");
-    assert!(!crate::auth_marker::record_from_run(
+    assert!(!crate::routing::auth_marker::record_from_run(
         id.as_str(), crate::types::AgentKind::OpenCode,
         &crate::store::Store::open_memory().expect("store"),
     ));
-    assert_eq!(crate::auth_marker::auth_status(crate::types::AgentKind::OpenCode, None).state, "unknown");
+    assert_eq!(crate::routing::auth_marker::auth_status(crate::types::AgentKind::OpenCode, None).state, "unknown");
 }
 
 impl tokio::io::AsyncRead for ReadyStderr {

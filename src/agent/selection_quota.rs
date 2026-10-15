@@ -4,8 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::rate_limit;
-use crate::route_availability::{
+use crate::routing::rate_limit;
+use crate::routing::availability::{
     availability, availability_for_model, relevant_windows, ProbeEvidence, QuotaWall,
     RouteAvailability, RouteStatus, WindowView,
 };
@@ -136,7 +136,7 @@ pub(super) fn notes_for(
         })
         .collect();
     for target in targets {
-        notes.extend(crate::provider_capacity::notes(&target.kind, target.custom_name)
+        notes.extend(crate::routing::capacity::notes(&target.kind, target.custom_name)
             .into_iter().map(|note| format!("{} {note}", target.name)));
     }
     notes

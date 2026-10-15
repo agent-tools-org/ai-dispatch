@@ -43,7 +43,7 @@ fn superseded_gemini_is_never_a_recommendation_fallback() {
     let (_temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Gemini, AgentKind::Antigravity, AgentKind::Codex]);
     for kind in [AgentKind::Antigravity, AgentKind::Codex] {
-        crate::auth_marker::record_failure_at(kind, "Not signed in.", chrono::Local::now());
+        crate::routing::auth_marker::record_failure_at(kind, "Not signed in.", chrono::Local::now());
     }
     let report = advise("compare the docs", declared(TaskDifficulty::Moderate, TaskBudget::Standard),
         Some(TaskCategory::Research), None, None, 0, None);

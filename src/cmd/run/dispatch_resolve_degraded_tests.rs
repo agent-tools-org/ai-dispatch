@@ -3,7 +3,7 @@
 
 use super::super::held::degraded_dispatch_warning;
 use super::*;
-use crate::live_quota::CacheDirGuard;
+use crate::routing::quota::live::CacheDirGuard;
 use crate::support::paths::{self, AidHomeGuard};
 use chrono::Utc;
 

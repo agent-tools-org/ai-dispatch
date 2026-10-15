@@ -74,7 +74,7 @@ async fn provider_capacity_round2_replayed_stderr_never_creates_hold_or_retry() 
 async fn provider_capacity_ordinary_retry_refreshed_hold_never_substitutes_or_clears_session() {
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());
-    let _cache = crate::live_quota::CacheDirGuard::set(home.path());
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid]);
     crate::config::agent::save_agent_default_model("droid", Some("gpt-5.3-codex"))
         .expect("peer model");

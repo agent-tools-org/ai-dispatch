@@ -6,10 +6,10 @@ use std::collections::HashMap;
 
 use super::config_display::{ModelHistory, recent_observed_models_line};
 use super::{builtin_agent_visible, disabled_agent_names, disabled_summary_line, merged_agent_models};
-use crate::model_catalog::load_pricing_overrides;
+use crate::routing::model_catalog::load_pricing_overrides;
 use crate::config::agent as agent_config;
 use crate::support::paths::AidHomeGuard;
-use crate::rate_limit;
+use crate::routing::rate_limit;
 use crate::types::AgentKind;
 
 #[test]

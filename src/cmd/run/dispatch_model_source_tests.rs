@@ -62,7 +62,7 @@ fn explicit_model_remains_user_supplied() {
 fn substituted_model_is_persisted_as_aid_resolved() {
     let home = tempfile::tempdir().expect("temporary aid home");
     let _home_guard = AidHomeGuard::set(home.path());
-    crate::rate_limit::mark_group_rate_limited(
+    crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::Cursor,
         None,
         "premium",

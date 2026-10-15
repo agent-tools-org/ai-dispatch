@@ -77,7 +77,7 @@ fn print_capabilities(cap: &crate::agent::custom::CapabilityScores) {
 
 pub(super) fn show_quota() -> anyhow::Result<()> {
     use crate::agent::registry;
-    crate::live_quota_refresh::refresh_stale_if_enabled();
+    crate::routing::quota::refresh::refresh_stale_if_enabled();
     println!("{:<12} {:<10} DETAIL", "AGENT", "STATUS");
     for kind in crate::agent::routable_builtins() {
         print_quota_row(kind.as_str(), quota_row(kind, None));
@@ -180,9 +180,9 @@ fn quota_status_label(kind: AgentKind, custom: Option<&str>, row: &QuotaRow) -> 
     match row {
         QuotaRow::Ok { .. } => String::new(),
         QuotaRow::Partial { .. } => "PARTIAL".to_string(),
-        QuotaRow::Limited { .. } => match crate::rate_limit::get_rate_limit_info(&kind, custom) {
+        QuotaRow::Limited { .. } => match crate::routing::rate_limit::get_rate_limit_info(&kind, custom) {
             Some(info) if info.needs_human => {
-                crate::rate_limit::format_hold_end(&kind, custom, &info)
+                crate::routing::rate_limit::format_hold_end(&kind, custom, &info)
             }
             _ => "LIMITED".to_string(),
         },

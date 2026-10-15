@@ -57,7 +57,7 @@ pub(super) fn validate_candidate_route(args: &RunArgs, kind: AgentKind) -> Resul
         return Ok(());
     }
     if let Some(hold) =
-        crate::rate_limit::dispatch_blocking_hold_for_model(&kind, None, args.model.as_deref())
+        crate::routing::rate_limit::dispatch_blocking_hold_for_model(&kind, None, args.model.as_deref())
     {
         bail!(
             "advised route '{}' is held ({hold}); refusing a different default",

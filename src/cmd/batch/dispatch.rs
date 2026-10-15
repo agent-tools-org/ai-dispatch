@@ -83,8 +83,8 @@ async fn dispatch_with_dependencies(
         } else {
             task.agent.as_str()
         };
-        let (kind, custom_name) = crate::rate_limit::resolve_agent(agent_name);
-        if !crate::rate_limit::is_rate_limited(&kind, custom_name)
+        let (kind, custom_name) = crate::routing::rate_limit::resolve_agent(agent_name);
+        if !crate::routing::rate_limit::is_rate_limited(&kind, custom_name)
             || !rate_warned.insert(agent_name.to_string())
         {
             continue;

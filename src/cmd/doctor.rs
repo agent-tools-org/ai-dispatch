@@ -57,9 +57,9 @@ pub fn run(store: &Arc<Store>, apply: bool) -> Result<()> {
 pub(crate) fn format_held_agents() -> String {
     let mut body = String::new();
     let mut count = 0usize;
-    for (name, _) in crate::rate_limit::rate_limited_agents() {
-        let (kind, custom) = crate::rate_limit::resolve_agent(&name);
-        let Some(info) = crate::rate_limit::get_rate_limit_info(&kind, custom) else {
+    for (name, _) in crate::routing::rate_limit::rate_limited_agents() {
+        let (kind, custom) = crate::routing::rate_limit::resolve_agent(&name);
+        let Some(info) = crate::routing::rate_limit::get_rate_limit_info(&kind, custom) else {
             continue;
         };
         if !info.needs_human {
@@ -69,7 +69,7 @@ pub(crate) fn format_held_agents() -> String {
         let _ = writeln!(
             body,
             "{name}: {}",
-            crate::rate_limit::format_hold_end(&kind, custom, &info)
+            crate::routing::rate_limit::format_hold_end(&kind, custom, &info)
         );
     }
     if count == 0 {
@@ -182,13 +182,13 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
         std::fs::create_dir_all(crate::support::paths::aid_dir()).expect("aid dir");
-        crate::rate_limit::mark_rate_limited(
+        crate::routing::rate_limit::mark_rate_limited(
             &crate::types::AgentKind::Oz,
             None,
             "Error: Your credentials are invalid. Please log in again with `oz login`.",
         );
-        let stated = crate::rate_limit::test_future_recovery_time();
-        crate::rate_limit::mark_rate_limited(
+        let stated = crate::routing::rate_limit::test_future_recovery_time();
+        crate::routing::rate_limit::mark_rate_limited(
             &crate::types::AgentKind::Codex,
             None,
             &format!("You've hit your usage limit. try again at {stated}."),

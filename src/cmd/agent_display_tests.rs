@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::support::paths::{self, AidHomeGuard};
-use crate::rate_limit::{
+use crate::routing::rate_limit::{
     clear_all_rate_limits_for_agent, is_rate_limited, mark_group_rate_limited, mark_rate_limited,
 };
 use crate::types::AgentKind;
@@ -45,7 +45,7 @@ fn agent_level_hold_is_limited_not_partial() {
     let _guard = AidHomeGuard::set(temp.path());
     std::fs::create_dir_all(paths::aid_dir()).ok();
 
-    let stated = crate::rate_limit::test_future_recovery_time();
+    let stated = crate::routing::rate_limit::test_future_recovery_time();
     mark_rate_limited(
         &AgentKind::Codex,
         None,
@@ -148,7 +148,7 @@ fn custom_agent_with_hold_shows_limited() {
     let _guard = AidHomeGuard::set(temp.path());
     std::fs::create_dir_all(paths::aid_dir()).ok();
 
-    let stated = crate::rate_limit::test_future_recovery_time();
+    let stated = crate::routing::rate_limit::test_future_recovery_time();
     mark_rate_limited(
         &AgentKind::Custom,
         Some("auditor"),
@@ -249,7 +249,7 @@ fn needs_human_list_status_shows_message_and_unlock() {
         "{status}"
     );
 
-    let stated = crate::rate_limit::test_future_recovery_time();
+    let stated = crate::routing::rate_limit::test_future_recovery_time();
     mark_rate_limited(
         &AgentKind::Codex,
         None,

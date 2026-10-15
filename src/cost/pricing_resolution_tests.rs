@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::cost::{clear_feed_for_tests, estimate_cost, format_cost, format_cost_label};
-use crate::model_catalog::AGENT_MODELS;
+use crate::routing::model_catalog::AGENT_MODELS;
 use crate::support::paths::AidHomeGuard;
 use crate::types::AgentKind;
 use tempfile::TempDir;

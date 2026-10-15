@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::cmd::retry_logic::prepare_retry;
-use crate::{support::paths, rate_limit, provider_capacity};
+use crate::{support::paths, routing::rate_limit, routing::capacity as provider_capacity};
 
 const CAPACITY: &str = "Selected model is at capacity. Please try a different model.";
 

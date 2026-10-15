@@ -139,7 +139,7 @@ fn agents_status_line_shows_oz_credentials_hold() {
         crate::types::AgentKind::Oz,
         crate::types::AgentKind::Antigravity,
     ]);
-    crate::rate_limit::mark_rate_limited(
+    crate::routing::rate_limit::mark_rate_limited(
         &crate::types::AgentKind::Oz,
         None,
         "Error: Your credentials are invalid. Please log in again with `oz login`.",
@@ -202,7 +202,7 @@ fn with_codex_probe(
 ) -> (
     tempfile::TempDir,
     crate::support::paths::AidHomeGuard,
-    crate::live_quota::CacheDirGuard,
+    crate::routing::quota::live::CacheDirGuard,
     crate::agent::DetectAgentsGuard,
 ) {
     let temp = tempfile::tempdir().expect("tempdir");
@@ -219,7 +219,7 @@ fn with_codex_probe(
         ),
     )
     .expect("cache");
-    let cache = crate::live_quota::CacheDirGuard::set(&aidbar);
+    let cache = crate::routing::quota::live::CacheDirGuard::set(&aidbar);
     let fleet = crate::agent::DetectAgentsGuard::set(vec![crate::types::AgentKind::Codex]);
     (temp, home, cache, fleet)
 }

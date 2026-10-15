@@ -9,7 +9,7 @@ use super::{AdviceCandidate, advise};
 use crate::agent::classifier::{Complexity, TaskCategory, TaskProfile};
 use crate::agent::run_model::RunModelSource;
 use crate::cost::clear_feed_for_tests;
-use crate::live_quota::CacheDirGuard;
+use crate::routing::quota::live::CacheDirGuard;
 use crate::support::paths::AidHomeGuard;
 use crate::types::{AgentKind, DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
 use tempfile::TempDir;
@@ -100,7 +100,7 @@ fn assert_penalty(agent: AgentKind, model: &str, expected: f64) -> AdviceCandida
 #[test]
 fn resolved_price_catalog_subscription_unknown_and_free_at_both_boundaries() {
     let _home = isolated();
-    let row = crate::model_catalog::AGENT_MODELS
+    let row = crate::routing::model_catalog::AGENT_MODELS
         .iter()
         .find(|row| row.agent == AgentKind::Cursor && row.model == "composer-2.5")
         .expect("subscription with API-looking catalog price");

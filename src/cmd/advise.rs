@@ -11,7 +11,7 @@ use crate::store::Store;
 use crate::types::DeclaredTaskProfile;
 
 pub(crate) fn run(store: Option<&Store>, args: AdviseArgs) -> Result<()> {
-    crate::live_quota_refresh::refresh_stale_if_enabled();
+    crate::routing::quota::refresh::refresh_stale_if_enabled();
     let declared = DeclaredTaskProfile {
         difficulty: args.difficulty,
         budget: args.budget,
@@ -154,7 +154,7 @@ mod tests {
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![
             AgentKind::Codex, AgentKind::Droid, AgentKind::Claude, AgentKind::Cursor,
         ]);
-        crate::scores::test_support::seed_live();
+        crate::routing::scores::test_support::seed_live();
         // Pin rated evidence: the floor no longer reads Cursor's CLI score (6).
         crate::config::agent::save_agent_default_model("cursor", Some("openai/gpt-4o-mini"))
             .expect("cursor model");

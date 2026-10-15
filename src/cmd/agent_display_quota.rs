@@ -1,9 +1,9 @@
 // Quota row + live-probe DETAIL for `aid agent quota` / list.
 // Stale snapshots are tagged STALE and are never treated as Held.
 
-use crate::live_quota;
-use crate::rate_limit::{self, RateLimitInfo};
-use crate::route_availability::{ProbeEvidence, QuotaWall};
+use crate::routing::quota::live as live_quota;
+use crate::routing::rate_limit::{self, RateLimitInfo};
+use crate::routing::availability::{ProbeEvidence, QuotaWall};
 use crate::types::AgentKind;
 use std::time::Duration;
 
@@ -52,7 +52,7 @@ fn with_probe_suffix(
         return detail;
     };
     if include_wall {
-        let wall = crate::route_availability::availability(&kind, custom_name).wall;
+        let wall = crate::routing::availability::availability(&kind, custom_name).wall;
         if !matches!(wall, QuotaWall::None) {
             return format!("{detail}  ({} {probe})", wall_label(wall));
         }
@@ -151,9 +151,9 @@ fn group_holds_detail(
 #[cfg(test)]
 mod probe_tests {
     use super::*;
-    use crate::live_quota::CacheDirGuard;
+    use crate::routing::quota::live::CacheDirGuard;
     use crate::support::paths::{self, AidHomeGuard};
-    use crate::rate_limit::is_rate_limited;
+    use crate::routing::rate_limit::is_rate_limited;
     use chrono::{Duration as ChronoDuration, Utc};
 
     fn isolated() -> (tempfile::TempDir, AidHomeGuard, CacheDirGuard) {

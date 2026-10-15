@@ -9,7 +9,7 @@ use super::batch::{
     BatchTaskOutcome, auto_fallback_args, pre_dispatch_fallback_choice, should_auto_fallback,
 };
 use crate::support::paths::AidHomeGuard;
-use crate::rate_limit::{clear_rate_limit, mark_rate_limited};
+use crate::routing::rate_limit::{clear_rate_limit, mark_rate_limited};
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 
@@ -99,7 +99,7 @@ fn pre_dispatch_uses_fallback_when_agent_is_rate_limited() {
         None,
         &format!(
             "You've hit your usage limit. try again at {}.",
-            crate::rate_limit::test_future_recovery_time()
+            crate::routing::rate_limit::test_future_recovery_time()
         ),
     );
 
@@ -122,7 +122,7 @@ fn pre_dispatch_keeps_original_when_no_fallback_is_available() {
         None,
         &format!(
             "You've hit your usage limit. try again at {}.",
-            crate::rate_limit::test_future_recovery_time()
+            crate::routing::rate_limit::test_future_recovery_time()
         ),
     );
 
@@ -232,7 +232,7 @@ fn pre_dispatch_uses_custom_agent_in_fallback() {
         None,
         &format!(
             "You've hit your usage limit. try again at {}.",
-            crate::rate_limit::test_future_recovery_time()
+            crate::routing::rate_limit::test_future_recovery_time()
         ),
     );
 
@@ -256,7 +256,7 @@ fn pre_dispatch_unknown_fallback_is_an_error() {
         None,
         &format!(
             "You've hit your usage limit. try again at {}.",
-            crate::rate_limit::test_future_recovery_time()
+            crate::routing::rate_limit::test_future_recovery_time()
         ),
     );
 

@@ -212,9 +212,9 @@ fn get_qwen_selected_model_reads_settings_json() {
     });
     std::fs::write(&settings_path, serde_json::to_string(&settings_json).unwrap()).unwrap();
 
-    crate::model_catalog::set_test_qwen_home(Some(temp_dir.path().to_path_buf()));
+    crate::routing::model_catalog::set_test_qwen_home(Some(temp_dir.path().to_path_buf()));
 
-    let selected = crate::model_catalog::get_qwen_selected_model();
+    let selected = crate::routing::model_catalog::get_qwen_selected_model();
     assert_eq!(selected, Some("my-selected-qwen-model".to_string()));
 
     // Test that build_command defaults to this selected model
@@ -223,7 +223,7 @@ fn get_qwen_selected_model_reads_settings_json() {
     let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
     assert!(args.windows(2).any(|pair| pair == ["-m", "my-selected-qwen-model"]));
 
-    crate::model_catalog::set_test_qwen_home(None);
+    crate::routing::model_catalog::set_test_qwen_home(None);
 }
 
 #[test]

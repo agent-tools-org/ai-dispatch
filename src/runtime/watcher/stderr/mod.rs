@@ -10,7 +10,7 @@ use tokio::time::{Duration, Instant};
 
 use crate::support::paths;
 use crate::types::{TaskId, TaskStatus};
-use crate::{agent::Agent, rate_limit};
+use crate::{agent::Agent, routing::rate_limit};
 
 const STDERR_DRAIN_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -123,7 +123,7 @@ pub(super) fn failure_stderr_note(
         && let Some(message) = rate_limit::refusal_on_channel(
             &stderr_content,
             agent.kind(),
-            crate::quota_channel::Channel::CliStderr,
+            crate::routing::quota::channel::Channel::CliStderr,
         )
     {
         rate_limit::mark_rate_limited_for_model(

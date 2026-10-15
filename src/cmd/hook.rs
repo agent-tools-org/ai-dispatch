@@ -74,7 +74,7 @@ enum QuotaState {
 }
 
 fn probe_bits(
-    probe: Option<&crate::route_availability::ProbeEvidence>,
+    probe: Option<&crate::routing::availability::ProbeEvidence>,
 ) -> (Option<f64>, bool) {
     match probe {
         Some(probe) if probe.ok && !probe.windows.is_empty() => {
@@ -91,16 +91,16 @@ fn probe_bits(
 }
 
 fn quota_state_for(kind: AgentKind, custom: Option<&str>) -> QuotaState {
-    let avail = crate::route_availability::availability(&kind, custom);
+    let avail = crate::routing::availability::availability(&kind, custom);
     let (used_percent, stale) = probe_bits(avail.probe.as_ref());
-    if avail.status == crate::route_availability::RouteStatus::Held {
+    if avail.status == crate::routing::availability::RouteStatus::Held {
         let resets = match avail.ends {
-            crate::route_availability::HoldEnd::At(at) => Some(at),
-            _ => crate::rate_limit::recovery_datetime(&kind, custom),
+            crate::routing::availability::HoldEnd::At(at) => Some(at),
+            _ => crate::routing::rate_limit::recovery_datetime(&kind, custom),
         };
-        let human = crate::rate_limit::get_rate_limit_info(&kind, custom)
+        let human = crate::routing::rate_limit::get_rate_limit_info(&kind, custom)
             .filter(|info| info.needs_human)
-            .map(|info| crate::rate_limit::format_hold_end(&kind, custom, &info));
+            .map(|info| crate::routing::rate_limit::format_hold_end(&kind, custom, &info));
         return QuotaState::Limited {
             resets,
             used_percent,
@@ -108,13 +108,13 @@ fn quota_state_for(kind: AgentKind, custom: Option<&str>) -> QuotaState {
             human,
         };
     }
-    if !crate::rate_limit::active_group_holds(&kind, custom).is_empty() {
+    if !crate::routing::rate_limit::active_group_holds(&kind, custom).is_empty() {
         return QuotaState::Partial {
             used_percent,
             stale,
         };
     }
-    if avail.status == crate::route_availability::RouteStatus::Degraded {
+    if avail.status == crate::routing::availability::RouteStatus::Degraded {
         let resets = avail
             .probe
             .as_ref()

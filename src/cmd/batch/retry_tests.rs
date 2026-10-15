@@ -5,7 +5,7 @@
 use super::*;
 use crate::cmd::run::RunArgs;
 use crate::support::paths;
-use crate::rate_limit::{clear_rate_limit, mark_rate_limited};
+use crate::routing::rate_limit::{clear_rate_limit, mark_rate_limited};
 use crate::types::{AgentKind, TaskId, VerifyStatus};
 use chrono::Local;
 use tempfile::TempDir;
@@ -92,7 +92,7 @@ fn retry_uses_fallback_when_rate_limited() {
         None,
         &format!(
             "You've hit your usage limit. try again at {}.",
-            crate::rate_limit::test_future_recovery_time()
+            crate::routing::rate_limit::test_future_recovery_time()
         ),
     );
     let repo = TempDir::new().unwrap();
@@ -112,7 +112,7 @@ fn retry_uses_override_regardless_of_rate_limit() {
         None,
         &format!(
             "You've hit your usage limit. try again at {}.",
-            crate::rate_limit::test_future_recovery_time()
+            crate::routing::rate_limit::test_future_recovery_time()
         ),
     );
     let repo = TempDir::new().unwrap();

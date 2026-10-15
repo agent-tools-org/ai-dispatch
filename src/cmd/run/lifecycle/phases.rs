@@ -22,7 +22,7 @@ pub(super) async fn run_lifecycle_phases(
     run_escape_checks_phase(args, effective_dir, repo_path, wt_path);
     if let Some(task) = store.get_task(task_id.as_str())?
         && task.status == TaskStatus::Failed
-        && crate::provider_capacity::read(store, task_id, task.agent).is_some()
+        && crate::routing::capacity::read(store, task_id, task.agent).is_some()
     {
         if task.verify_status == VerifyStatus::Pending {
             store.update_verify_status(task_id.as_str(), VerifyStatus::Skipped)?;

@@ -5,13 +5,13 @@
 use super::get_agents_list;
 use crate::types::AgentKind;
 
-fn isolated() -> (tempfile::TempDir, crate::support::paths::AidHomeGuard, crate::live_quota::CacheDirGuard) {
+fn isolated() -> (tempfile::TempDir, crate::support::paths::AidHomeGuard, crate::routing::quota::live::CacheDirGuard) {
     let tmp = tempfile::tempdir().expect("tempdir");
     let guard = crate::support::paths::AidHomeGuard::set(tmp.path());
     std::fs::create_dir_all(crate::support::paths::aid_dir()).ok();
     let aidbar = tmp.path().join("aidbar");
     std::fs::create_dir_all(&aidbar).ok();
-    let cache = crate::live_quota::CacheDirGuard::set(&aidbar);
+    let cache = crate::routing::quota::live::CacheDirGuard::set(&aidbar);
     (tmp, guard, cache)
 }
 
@@ -36,7 +36,7 @@ fn agent_list_includes_claude_and_reports_unknown_without_evidence() {
 #[test]
 fn agent_list_reports_failed_auth_with_observed_time() {
     let (_tmp, _home, _cache) = isolated();
-    crate::auth_marker::record_failure_at(AgentKind::Grok, "Not signed in.", chrono::Local::now());
+    crate::routing::auth_marker::record_failure_at(AgentKind::Grok, "Not signed in.", chrono::Local::now());
     let store = crate::store::Store::open_memory().expect("store");
     let list = get_agents_list(&store).expect("agent list");
     let grok = list.agents.iter().find(|agent| agent.name == "grok").expect("grok listed");

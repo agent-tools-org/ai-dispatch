@@ -267,7 +267,7 @@ fn parse_error_event(
     v: &Value,
     now: chrono::DateTime<Local>,
 ) -> Option<TaskEvent> {
-    crate::quota_channel::mark_stream_refusal(AgentKind::Droid, None, &v.to_string());
+    crate::routing::quota::channel::mark_stream_refusal(AgentKind::Droid, None, &v.to_string());
     let (detail, metadata) = capped_detail(droid_error_detail(v).as_deref().unwrap_or("unknown error"));
     Some(TaskEvent {
         task_id: task_id.clone(),

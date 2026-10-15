@@ -32,7 +32,7 @@ use crate::agent::Agent;
 use crate::delivery_guard::{DeliveryEvidence, DeliveryOutcome};
 use crate::runtime::process::group::force_kill_process_group;
 use crate::runtime::process::monitor;
-use crate::rate_limit;
+use crate::routing::rate_limit;
 use crate::store::Store;
 use crate::types::*;
 use extract::{is_standalone_milestone_line, is_thinking_delta};
@@ -231,7 +231,7 @@ pub async fn watch_streaming(
     );
     let detail = format!(
         "{} — {} events, exit code {}{}",
-        crate::provider_capacity::terminal_label(store, task_id, agent.kind(), status),
+        crate::routing::capacity::terminal_label(store, task_id, agent.kind(), status),
         event_count,
         exit_status.code().unwrap_or(-1),
         stderr_note,

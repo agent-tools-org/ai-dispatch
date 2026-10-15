@@ -4,7 +4,7 @@
 use super::CursorAgent;
 use crate::agent::{Agent, RunOpts};
 use crate::types::{AgentKind, EventKind, TaskId};
-use crate::{support::paths, rate_limit};
+use crate::{support::paths, routing::rate_limit};
 use std::fs;
 use std::sync::{Mutex, OnceLock};
 
@@ -194,14 +194,14 @@ fn cursors_error_envelope_is_read_on_the_stream_channel() {
     let refusal = rate_limit::refusal_on_channel(
         line,
         AgentKind::Cursor,
-        crate::quota_channel::Channel::CliStream,
+        crate::routing::quota::channel::Channel::CliStream,
     );
     assert_eq!(refusal.as_deref(), Some("quota exceeded for this workspace"));
-    crate::quota_channel::mark_stream_refusal(AgentKind::Cursor, None, line);
+    crate::routing::quota::channel::mark_stream_refusal(AgentKind::Cursor, None, line);
     assert!(rate_limit::is_rate_limited(&AgentKind::Cursor, None));
     rate_limit::clear_all_rate_limits_for_agent(&AgentKind::Cursor, None);
     let premium = r#"{"type":"error","message":"You're out of usage. Switch to Auto."}"#;
-    crate::quota_channel::mark_stream_refusal(AgentKind::Cursor, None, premium);
+    crate::routing::quota::channel::mark_stream_refusal(AgentKind::Cursor, None, premium);
     assert!(rate_limit::is_group_rate_limited(&AgentKind::Cursor, None, "premium"));
     assert!(!rate_limit::is_rate_limited(&AgentKind::Cursor, None));
 }

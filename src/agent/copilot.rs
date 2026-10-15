@@ -183,7 +183,7 @@ fn parse_session_error(
         return None;
     }
     let text = data.get("message").and_then(Value::as_str)?;
-    crate::quota_channel::mark_stream_refusal(AgentKind::Copilot, None, line);
+    crate::routing::quota::channel::mark_stream_refusal(AgentKind::Copilot, None, line);
     let (detail, metadata) = capped_detail(text);
     Some(TaskEvent {
         task_id: task_id.clone(),
@@ -205,7 +205,7 @@ fn parse_plain_error(
         .and_then(Value::as_str)
         .or_else(|| value.pointer("/data/message").and_then(Value::as_str))
         .unwrap_or("unknown error");
-    crate::quota_channel::mark_stream_refusal(AgentKind::Copilot, None, line);
+    crate::routing::quota::channel::mark_stream_refusal(AgentKind::Copilot, None, line);
     let (detail, metadata) = capped_detail(text);
     Some(TaskEvent {
         task_id: task_id.clone(),

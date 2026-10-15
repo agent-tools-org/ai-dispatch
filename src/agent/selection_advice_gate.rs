@@ -94,7 +94,7 @@ pub(crate) fn caller_advice(session: &str, model: Option<&str>, category: TaskCa
     let (provider, _) = provider_for_cli(agent);
     let model = model.map(str::trim).filter(|value| !value.is_empty()).map(str::to_string);
     let capability = model.as_deref().and_then(|name| {
-        crate::scores::capability_score(agent, name, category)
+        crate::routing::scores::capability_score(agent, name, category)
     });
     Some(CallerAdvice {
         session: session.to_string(),

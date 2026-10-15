@@ -122,12 +122,12 @@ pub(crate) fn resolve_run_model(input: &RunModelInput) -> RunModel {
         return pinned(model.to_string(), RunModelSource::BudgetRoute);
     }
     if smart_route_applies(input)
-        && let Some(model) = crate::model_catalog::budget_model(&input.kind)
+        && let Some(model) = crate::routing::model_catalog::budget_model(&input.kind)
     {
         return pinned(model.to_string(), RunModelSource::SmartRoute);
     }
     if input.budget_mode
-        && let Some(model) = crate::model_catalog::budget_model(&input.kind)
+        && let Some(model) = crate::routing::model_catalog::budget_model(&input.kind)
     {
         return pinned(model.to_string(), RunModelSource::BudgetRoute);
     }
@@ -140,7 +140,7 @@ pub(crate) fn resolve_run_model(input: &RunModelInput) -> RunModel {
 /// A declared free/cheap budget pins the catalog budget model.
 fn declared_budget_model(kind: AgentKind, budget: Option<TaskBudget>) -> Option<&'static str> {
     let budget = budget.filter(|budget| budget.uses_budget_mode())?;
-    crate::model_catalog::model_for_task_budget(kind, budget)
+    crate::routing::model_catalog::model_for_task_budget(kind, budget)
 }
 
 /// Cheap routing for a declared trivial/simple task with no declared budget.
@@ -149,14 +149,14 @@ fn smart_route_applies(input: &RunModelInput) -> bool {
         && input.smart_routing
         && input.declared_budget.is_none()
         && matches!(input.declared_difficulty, Some(TaskDifficulty::Trivial | TaskDifficulty::Simple))
-        && !crate::rate_limit::is_rate_limited(&input.kind, None)
+        && !crate::routing::rate_limit::is_rate_limited(&input.kind, None)
 }
 
 /// The agent CLI's own configured default, where aid can read it.
 fn cli_configured_default(kind: AgentKind) -> Option<String> {
     match kind {
         AgentKind::Codex => crate::agent::codex::cli_config::configured_model(),
-        AgentKind::Qwen => crate::model_catalog::get_qwen_selected_model(),
+        AgentKind::Qwen => crate::routing::model_catalog::get_qwen_selected_model(),
         _ => None,
     }
 }

@@ -93,7 +93,7 @@ fn parse_stream_event(task_id: &TaskId, v: &serde_json::Value, now: chrono::Date
         }
         "error" => {
             let detail = extract_error_detail(v)?;
-            crate::quota_channel::mark_stream_refusal(AgentKind::Gemini, None, &v.to_string());
+            crate::routing::quota::channel::mark_stream_refusal(AgentKind::Gemini, None, &v.to_string());
             (EventKind::Error, detail, None)
         }
         // "turn_complete" (pre-0.35) and "result" (0.35+) carry completion stats

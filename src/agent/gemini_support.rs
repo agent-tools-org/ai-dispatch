@@ -106,7 +106,7 @@ pub(super) fn milestone_detail(event_type: &str, value: &Value) -> String {
 }
 
 pub(super) fn is_gemini_rate_limit_error(message: &str) -> bool {
-    crate::rate_limit_signatures::match_quota_signature_for_agent(
+    crate::routing::rate_limit::signatures::match_quota_signature_for_agent(
         message,
         crate::types::AgentKind::Gemini,
     )

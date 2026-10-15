@@ -4,7 +4,7 @@
 use super::CodexAgent;
 use crate::agent::Agent;
 use crate::types::{AgentKind, EventKind, TaskId};
-use crate::{support::paths, rate_limit};
+use crate::{support::paths, routing::rate_limit};
 
 #[test]
 fn live_usage_limit_error_envelope_marks() {

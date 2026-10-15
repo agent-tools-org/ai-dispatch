@@ -8,7 +8,7 @@ use tokio::process::Child;
 
 use crate::agent::Agent;
 use crate::support::paths;
-use crate::rate_limit;
+use crate::routing::rate_limit;
 use crate::store::Store;
 use crate::types::{AgentKind, CompletionInfo, TaskId, TaskStatus};
 

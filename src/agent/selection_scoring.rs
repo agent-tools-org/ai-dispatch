@@ -3,7 +3,7 @@
 // Deps: classifier, user-declared capabilities, model catalog, rate limits, task profiles.
 
 use crate::agent::classifier::{self, TaskCategory};
-use crate::route_availability::{availability_for_model, RouteStatus};
+use crate::routing::availability::{availability_for_model, RouteStatus};
 use crate::config::team::TeamConfig;
 use crate::types::AgentKind;
 use std::cmp::Ordering;
@@ -34,7 +34,7 @@ pub(super) fn cost_efficiency(quality_score: f64, avg_cost: f64) -> f64 {
 }
 
 pub(super) fn model_capability_score(agent: AgentKind, model: &str, category: TaskCategory) -> Option<f64> {
-    crate::scores::capability_score(agent, model, category)
+    crate::routing::scores::capability_score(agent, model, category)
 }
 
 /// True when the model has a non-zero price. Used to bias budget mode toward

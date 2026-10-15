@@ -183,7 +183,7 @@ pub(super) fn handle_done_postprocess(
         model,
         task.created_at,
     );
-    crate::auth_marker::clear_on_success(agent_kind);
+    crate::routing::auth_marker::clear_on_success(agent_kind);
     for memory_id in &prompt_bundle.injected_memory_ids {
         if let Err(err) = store.increment_memory_success(memory_id) {
             aid_error!("[aid] Failed to record memory success for {memory_id}: {err}");
@@ -254,7 +254,7 @@ pub(super) fn handle_failed_postprocess(
     runtime_hooks: &[hooks::Hook],
 ) -> Option<String> {
     let quota_error_message = read_quota_error_message(task_id, &agent_kind);
-    crate::auth_marker::record_from_run(task_id.as_str(), agent_kind, store);
+    crate::routing::auth_marker::record_from_run(task_id.as_str(), agent_kind, store);
     if let Some(message) = quota_error_message.as_deref() {
         let model = task
             .requested_model

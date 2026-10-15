@@ -7,7 +7,7 @@ use crate::agent;
 use crate::config::agent as agent_config;
 use crate::config;
 use crate::config::project::ProjectConfig;
-use crate::rate_limit;
+use crate::routing::rate_limit;
 use crate::store::Store;
 use crate::types::AgentKind;
 use crate::usage;
@@ -216,17 +216,17 @@ pub(super) fn resolve_agent_setup(
     };
     // No-group for_model is agent-level; skip it or background keep is undone.
     if (agent::model_group::model_group(agent_kind, effective_model.as_deref()).is_some()
-        || !crate::provider_capacity::notes(&agent_kind, custom_agent_name.as_deref()).is_empty())
+        || !crate::routing::capacity::notes(&agent_kind, custom_agent_name.as_deref()).is_empty())
         && let Some(hold) = rate_limit::dispatch_blocking_hold_for_model(
             &agent_kind,
             custom_agent_name.as_deref(),
             effective_model.as_deref(),
         )
     {
-        if crate::route_availability::availability_for_group(
+        if crate::routing::availability::availability_for_group(
             &agent_kind, custom_agent_name.as_deref(),
-            &crate::provider_capacity::group(effective_model.as_deref()),
-        ).status == crate::route_availability::RouteStatus::Held {
+            &crate::routing::capacity::group(effective_model.as_deref()),
+        ).status == crate::routing::availability::RouteStatus::Held {
             anyhow::bail!("{} model is held ({hold})", args.agent_name);
         }
         held::switch_model_held_route(

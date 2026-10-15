@@ -109,13 +109,13 @@ pub(crate) fn read_model_unavailable_message(task_id: &TaskId) -> Option<String>
 fn find_model_unavailable_stderr_line(content: &str) -> Option<String> {
     content
         .lines()
-        .find_map(crate::model_health::extract_model_unavailable_stderr_line)
+        .find_map(crate::routing::model_health::extract_model_unavailable_stderr_line)
 }
 
 fn find_model_unavailable_json_error(content: &str) -> Option<String> {
     content
         .lines()
-        .find_map(crate::model_health::extract_model_unavailable_json_error)
+        .find_map(crate::routing::model_health::extract_model_unavailable_json_error)
 }
 
 #[cfg(test)]

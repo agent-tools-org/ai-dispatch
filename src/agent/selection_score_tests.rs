@@ -14,7 +14,7 @@ use super::selection_scoring::{
 };
 use super::advise;
 use crate::agent::classifier::{Complexity, TaskCategory, TaskProfile};
-use crate::live_quota::CacheDirGuard;
+use crate::routing::quota::live::CacheDirGuard;
 use crate::support::paths::AidHomeGuard;
 use crate::config::team::TeamConfig;
 use crate::types::{
@@ -87,12 +87,12 @@ fn declared(urgency: TaskUrgency) -> DeclaredTaskProfile {
 
 /// Historical catalog-tier inputs, kept only as scoring regression fixtures.
 fn hint_breakdown(ctx: &CandidateContext<'_>, kind: AgentKind) -> super::selection_scoring::ScoreBreakdown {
-    let models = crate::model_catalog::static_models_for_agent(&kind);
+    let models = crate::routing::model_catalog::static_models_for_agent(&kind);
     let tier = match ctx.profile.complexity {
         Complexity::Low => "cheap", Complexity::Medium => "standard", Complexity::High => "premium",
     };
     let model = if ctx.budget {
-        crate::model_catalog::budget_model(&kind)
+        crate::routing::model_catalog::budget_model(&kind)
     } else {
         models.iter().find(|m| m.tier == tier).or_else(|| models.first()).map(|m| m.model)
     };

@@ -45,7 +45,7 @@ fn matrix_removal_unknown_agy_testing_is_eligible_and_unrated() {
 fn matrix_removal_rated_codex_below_floor_is_excluded() {
     let (_temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
-    crate::scores::test_support::seed_live();
+    crate::routing::scores::test_support::seed_live();
     // The captured gpt-4o-mini ECI is the snapshot minimum (126.56 -> 0.0).
     // An evidenced shortfall (base 0 < floor 8 for complex) excludes codex.
     crate::config::agent::save_agent_default_model("codex", Some("openai/gpt-4o-mini")).expect("model");
@@ -72,7 +72,7 @@ fn matrix_removal_rated_codex_below_floor_is_excluded() {
 fn matrix_removal_team_override_wins_over_rated_model() {
     let (_temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
-    crate::scores::test_support::seed_live();
+    crate::routing::scores::test_support::seed_live();
     // Opus has measured model-level ECI; the team override takes precedence.
     crate::config::agent::save_agent_default_model("codex", Some("opus")).expect("model");
     for (score, eligible) in [(10, true), (4, false)] {

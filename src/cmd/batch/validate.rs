@@ -1,11 +1,11 @@
 // Batch validation/helpers used by cmd::batch dispatch.
 // Exports: validate_batch_config, rate_limit_precheck, resolve_dependencies, task helpers
-// Deps: crate::batch, crate::rate_limit, crate::store::Store, crate::types
+// Deps: crate::batch, crate::routing::rate_limit, crate::store::Store, crate::types
 use super::batch_types::BatchTaskOutcome;
 pub(super) use super::batch_analyze::analyze_file_overlap;
 use crate::agent::classifier;
 use crate::batch;
-use crate::rate_limit;
+use crate::routing::rate_limit;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskOutcome, TaskStatus, VerifyStatus};
 use anyhow::Result;

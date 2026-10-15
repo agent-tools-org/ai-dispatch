@@ -2,7 +2,7 @@
 
 use super::super::Agent;
 use super::*;
-use crate::{support::paths, rate_limit};
+use crate::{support::paths, routing::rate_limit};
 use crate::agent::RunOpts;
 use crate::types::{EventKind, TaskId};
 

@@ -44,9 +44,9 @@ fn captured_auth(output: &str, exit: i32) -> bool {
         true,
     )
     .expect("PTY run");
-    let marked = crate::auth_marker::record_from_run(task.id.as_str(), AgentKind::OpenCode, &store);
+    let marked = crate::routing::auth_marker::record_from_run(task.id.as_str(), AgentKind::OpenCode, &store);
     assert_eq!(
-        crate::auth_marker::auth_status(AgentKind::OpenCode, None).failed(),
+        crate::routing::auth_marker::auth_status(AgentKind::OpenCode, None).failed(),
         marked
     );
     marked
@@ -87,7 +87,7 @@ fn raw_401_log_without_decoded_event_does_not_mark_round2_regression() {
     task.exit_code = Some(1);
     store.insert_task(&task).expect("task");
     std::fs::write(paths::log_path(task.id.as_str()), ERROR).expect("raw log");
-    assert!(!crate::auth_marker::record_from_run(
+    assert!(!crate::routing::auth_marker::record_from_run(
         task.id.as_str(),
         task.agent,
         &store

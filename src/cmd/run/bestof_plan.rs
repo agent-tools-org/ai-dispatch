@@ -53,10 +53,10 @@ mod tests {
     use crate::agent::selection::{advise, caller_advice};
     use crate::types::{AgentKind, TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
 
-    fn isolated() -> (tempfile::TempDir, crate::support::paths::AidHomeGuard, crate::live_quota::CacheDirGuard) {
+    fn isolated() -> (tempfile::TempDir, crate::support::paths::AidHomeGuard, crate::routing::quota::live::CacheDirGuard) {
         let temp = tempfile::tempdir().expect("home");
         let home = crate::support::paths::AidHomeGuard::set(temp.path());
-        let cache = crate::live_quota::CacheDirGuard::set(temp.path());
+        let cache = crate::routing::quota::live::CacheDirGuard::set(temp.path());
         crate::agent::codex::cli_config::set_test_codex_home(Some(temp.path().join("no-codex")));
         (temp, home, cache)
     }
@@ -89,8 +89,8 @@ mod tests {
         let (_temp, _home, _cache) = isolated();
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid, AgentKind::Qwen, AgentKind::Grok]);
         crate::config::agent::save_agent_disabled("grok", true).expect("disable");
-        crate::auth_marker::record_failure_at(AgentKind::Droid, "Not signed in.", chrono::Local::now());
-        crate::scores::test_support::seed_live();
+        crate::routing::auth_marker::record_failure_at(AgentKind::Droid, "Not signed in.", chrono::Local::now());
+        crate::routing::scores::test_support::seed_live();
         // Rated Qwen (0.0) is below the complex floor (8); an unrated route stays eligible.
         crate::config::agent::save_agent_default_model("qwen", Some("openai/gpt-4o-mini")).expect("model");
         let declared = DeclaredTaskProfile { difficulty: TaskDifficulty::Complex, ..profile() };
@@ -141,7 +141,7 @@ mod tests {
         let (temp, _home, _cache) = isolated();
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid]);
         crate::config::agent::save_agent_default_model("codex", Some("openai/gpt-5.6-sol")).expect("model");
-        crate::scores::test_support::seed_live();
+        crate::routing::scores::test_support::seed_live();
         let mut caller = caller_advice("codex", Some("openai/gpt-5.6-sol"), TaskCategory::ComplexImpl).expect("caller");
         caller.capability = Some(99.0);
         let report = advise("refactor scheduler", profile(), Some(TaskCategory::Refactoring), None, None, 0, Some(caller));

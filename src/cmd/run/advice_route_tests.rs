@@ -9,11 +9,11 @@ use std::sync::Arc;
 fn isolated() -> (
     tempfile::TempDir,
     crate::support::paths::AidHomeGuard,
-    crate::live_quota::CacheDirGuard,
+    crate::routing::quota::live::CacheDirGuard,
 ) {
     let dir = tempfile::tempdir().expect("home");
     let home = crate::support::paths::AidHomeGuard::set(dir.path());
-    let cache = crate::live_quota::CacheDirGuard::set(dir.path());
+    let cache = crate::routing::quota::live::CacheDirGuard::set(dir.path());
     crate::agent::codex::cli_config::set_test_codex_home(Some(dir.path().join("no-codex")));
     (dir, home, cache)
 }
@@ -107,11 +107,11 @@ fn automatic_excludes_missing_disabled_auth_failed_below_floor_and_exhausted() {
         AgentKind::Qwen,
         AgentKind::Grok,
     ]);
-    crate::scores::test_support::seed_live();
+    crate::routing::scores::test_support::seed_live();
     // Keep a below-floor route with model evidence instead of the removed CLI score.
     crate::config::agent::save_agent_default_model("qwen", Some("openai/gpt-4o-mini")).expect("model");
     crate::config::agent::save_agent_disabled("grok", true).expect("disable");
-    crate::auth_marker::record_failure_at(AgentKind::Droid, "Not signed in.", chrono::Local::now());
+    crate::routing::auth_marker::record_failure_at(AgentKind::Droid, "Not signed in.", chrono::Local::now());
     let args = RunArgs {
         agent_name: "codex".into(),
         ..args()

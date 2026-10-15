@@ -5,7 +5,7 @@
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
-use crate::{rate_limit, store::Store, types::*};
+use crate::{routing::rate_limit, store::Store, types::*};
 
 use super::RunArgs;
 
@@ -132,7 +132,7 @@ pub(crate) fn read_quota_error_message(task_id: &TaskId, agent: &crate::types::A
     {
         return Some(line);
     }
-    if let Some(log) = crate::quota_channel::read_run_stream(task_id.as_str())
+    if let Some(log) = crate::routing::quota::channel::read_run_stream(task_id.as_str())
         && let Some(line) = find_rate_limit_line_in_agent_log(&log, agent)
     {
         return Some(line);
@@ -157,11 +157,11 @@ fn audit_current_dir(effective_dir: Option<&str>, repo_path: Option<&str>) -> Op
 }
 
 fn find_rate_limit_line_stderr(content: &str, agent: &crate::types::AgentKind) -> Option<String> {
-    rate_limit::refusal_on_channel(content, *agent, crate::quota_channel::Channel::CliStderr)
+    rate_limit::refusal_on_channel(content, *agent, crate::routing::quota::channel::Channel::CliStderr)
 }
 
 fn find_rate_limit_line_in_agent_log(content: &str, agent: &crate::types::AgentKind) -> Option<String> {
-    rate_limit::refusal_on_channel(content, *agent, crate::quota_channel::Channel::CliStream)
+    rate_limit::refusal_on_channel(content, *agent, crate::routing::quota::channel::Channel::CliStream)
 }
 
 /// Point `args` at a different agent, dropping any pinned model or session when

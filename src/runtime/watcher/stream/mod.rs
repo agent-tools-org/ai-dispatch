@@ -6,7 +6,7 @@ use anyhow::Result;
 use std::sync::Arc;
 
 use crate::agent::Agent;
-use crate::rate_limit;
+use crate::routing::rate_limit;
 use crate::store::Store;
 use crate::delivery_guard::{DeliveryOutcome, DeliveryOutcome::MissingFinalDelivery};
 use crate::types::{
@@ -128,7 +128,7 @@ pub(crate) fn handle_streaming_line_with_session(
             && let Some(message) = rate_limit::refusal_on_channel(
                 line,
                 agent.kind(),
-                crate::quota_channel::Channel::CliStream,
+                crate::routing::quota::channel::Channel::CliStream,
             )
         {
             mark_stream_rate_limit(store, task_id, agent, line, &message);

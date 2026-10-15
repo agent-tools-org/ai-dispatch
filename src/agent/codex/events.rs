@@ -38,7 +38,7 @@ pub(super) fn parse_item_event(
             if message.is_empty() {
                 return None;
             }
-            crate::quota_channel::mark_stream_refusal(AgentKind::Codex, None, &item.to_string());
+            crate::routing::quota::channel::mark_stream_refusal(AgentKind::Codex, None, &item.to_string());
             let (detail, metadata) = capped_detail(message);
             Some(TaskEvent {
                 task_id: task_id.clone(),
@@ -165,7 +165,7 @@ pub(super) fn parse_error_event(
         .and_then(|value| value.as_str())
         .filter(|message| !message.is_empty())?;
 
-    crate::quota_channel::mark_stream_refusal(AgentKind::Codex, None, &v.to_string());
+    crate::routing::quota::channel::mark_stream_refusal(AgentKind::Codex, None, &v.to_string());
 
     let (detail, metadata) = capped_detail(detail);
     Some(TaskEvent {

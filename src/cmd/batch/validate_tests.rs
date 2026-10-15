@@ -1,9 +1,9 @@
 // Tests for batch validation helpers and dependency readiness.
 // Exports: none.
-// Deps: super::batch_validate, crate::batch, crate::rate_limit, crate::store
+// Deps: super::batch_validate, crate::batch, crate::routing::rate_limit, crate::store
 use super::*;
 use crate::support::paths::AidHomeGuard;
-use crate::rate_limit;
+use crate::routing::rate_limit;
 use crate::store::Store;
 use crate::types::TaskOutcome;
 use std::sync::Arc;

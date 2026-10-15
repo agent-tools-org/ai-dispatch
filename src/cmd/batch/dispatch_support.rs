@@ -1,9 +1,9 @@
 // Batch dispatch helpers for spawning, completion polling, and fallback selection.
 // Exports: dispatch_level_with_ids, poll_completed_tasks, pre_dispatch_fallback_choice, should_auto_fallback, auto_fallback_args, dispatch_task_ref
-// Deps: crate::batch, crate::cmd::run, crate::rate_limit, crate::store::Store, super::batch_args, super::batch_types, super::batch_validate
+// Deps: crate::batch, crate::cmd::run, crate::routing::rate_limit, crate::store::Store, super::batch_args, super::batch_types, super::batch_validate
 use crate::batch;
 use crate::cmd::run;
-use crate::rate_limit;
+use crate::routing::rate_limit;
 use crate::store::Store;
 use crate::types::AgentKind;
 use anyhow::{Context, Result};

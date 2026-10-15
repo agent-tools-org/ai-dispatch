@@ -8,7 +8,7 @@ use std::path::Path;
 use std::process::Command;
 
 use super::RunOpts;
-use crate::rate_limit;
+use crate::routing::rate_limit;
 use crate::types::*;
 
 pub struct GrokAgent;

@@ -9,7 +9,7 @@ use std::collections::HashMap;
 pub struct AgentListJson {
     pub generated_at: String,
     pub agents: Vec<AgentJson>,
-    pub sources: std::collections::BTreeMap<String, crate::scores::Source>,
+    pub sources: std::collections::BTreeMap<String, crate::routing::scores::Source>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -28,7 +28,7 @@ pub struct AgentJson {
     pub quota: QuotaJson,
     /// `failed` (a run hit a not-signed-in refusal within the last hour, with
     /// `observed_at`) or `unknown` (no evidence). Never `ok`.
-    pub auth: crate::auth_marker::AuthStatus,
+    pub auth: crate::routing::auth_marker::AuthStatus,
     pub models: ModelsJson,
     pub history: Option<HistoryJson>,
     pub load: LoadJson,
@@ -80,7 +80,7 @@ pub struct AvailableModelJson {
     pub input_per_m: Option<f64>,
     pub output_per_m: Option<f64>,
     pub capability: Option<f64>,
-    pub capability_evidence: crate::scores::Evidence,
+    pub capability_evidence: crate::routing::scores::Evidence,
     /// False when aid has no measured capability for this model.
     pub rated: bool,
     /// `"catalog"` | `"served"` (CLI reports it, no catalog row) | `"pricing_override"`.

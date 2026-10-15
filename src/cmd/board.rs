@@ -1,6 +1,6 @@
 // Handler for `aid board` — list all tasks with status summary.
 // Detects repeated calls with no status changes and warns callers.
-// Deps: crate::store, crate::board, crate::runtime::background, project filter.
+// Deps: crate::store, crate::ui::board, crate::runtime::background, project filter.
 
 use anyhow::Result;
 use chrono::Local;
@@ -8,7 +8,7 @@ use std::io::Write;
 use std::sync::Arc;
 
 use crate::runtime::background;
-use crate::board::render_board;
+use crate::ui::board::render_board;
 use crate::store::Store;
 use crate::types::{Task, TaskFilter, TaskStatus, Workgroup};
 

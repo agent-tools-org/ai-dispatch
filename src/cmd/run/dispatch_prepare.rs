@@ -85,7 +85,7 @@ fn resolve_dispatch_context(store: &Arc<Store>, args: &mut RunArgs) -> Result<Di
     if args.read_only && let Some(output) = args.output.as_mut() {
         *output = std::env::current_dir()?.join(&*output).to_string_lossy().into_owned();
     }
-    crate::command_diagnostics::validate_run_options(args)?;
+    crate::cli::diagnostics::validate_run_options(args)?;
     validate_egress(args)?;
     crate::runtime::remote_build::resolve(args)?;
     // Use the same resolved identity as task persistence, never the caller's cwd

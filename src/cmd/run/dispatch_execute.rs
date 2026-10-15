@@ -157,7 +157,7 @@ pub(super) fn run_background_task(
         });
     }
     if args.announce {
-        println!("{}", crate::cmd_dispatch::background_status_line(
+        println!("{}", crate::cli::dispatch::background_status_line(
             &prepared.task_id,
             &prepared.agent_display_name,
             &args.prompt,

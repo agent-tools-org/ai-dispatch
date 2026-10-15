@@ -18,22 +18,16 @@
 #![allow(clippy::unnecessary_map_or)]
 
 #[macro_use]
-pub mod output;
+pub mod ui;
 mod agent;
 mod batch;
-mod board;
-mod command_diagnostics;
 mod cmd;
-mod cmd_dispatch;
 mod config;
 mod cost;
 mod prompt;
 mod store;
-mod tui;
 mod types;
 mod typesafe;
-#[cfg(feature = "web")]
-mod web;
 mod cli;
 mod support;
 mod runtime;
@@ -46,16 +40,16 @@ use anyhow::Result;
 use std::sync::Arc;
 
 fn main() -> Result<()> {
-    let result = run_cli(command_diagnostics::parse());
+    let result = run_cli(cli::diagnostics::parse());
     if let Err(error) = &result {
-        command_diagnostics::record_error(error);
+        cli::diagnostics::record_error(error);
     }
     result
 }
 
 fn run_cli(cli: Cli) -> Result<()> {
     if let Some(Commands::Errors(args)) = cli.command.as_ref() {
-        return command_diagnostics::show(args);
+        return cli::diagnostics::show(args);
     }
     if matches!(cli.command.as_ref(), Some(Commands::InternalRunTask(_)))
         && runtime::background::daemonize_worker_if_requested()?
@@ -69,9 +63,9 @@ fn run_cli(cli: Cli) -> Result<()> {
 }
 
 async fn async_main(cli: Cli) -> Result<()> {
-    output::init();
+    ui::output::init();
     if cli.quiet {
-        output::set_quiet(true);
+        ui::output::set_quiet(true);
     }
 
     let command = match cli.command {
@@ -103,8 +97,8 @@ async fn async_main(cli: Cli) -> Result<()> {
     let _ = runtime::background::check_zombie_tasks(&store);
 
     let outcome = match command {
-        Some(command) => cmd_dispatch::dispatch(store.clone(), command).await?,
-        None => cmd_dispatch::dispatch(store.clone(), Commands::Board(Default::default())).await?,
+        Some(command) => cli::dispatch::dispatch(store.clone(), command).await?,
+        None => cli::dispatch::dispatch(store.clone(), Commands::Board(Default::default())).await?,
     };
     if let Some(run_status) = outcome.run_exit_status(store.as_ref())? {
         println!("{}", run_status.summary_line());

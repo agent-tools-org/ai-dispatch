@@ -34,7 +34,7 @@ fn auxiliary_omission_records_one_visible_warning_event() {
         assert_single_warning_line();
         return;
     }
-    crate::output::set_quiet(true);
+    crate::ui::output::set_quiet(true);
     let temp = tempfile::tempdir().unwrap();
     let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = Store::open_memory().unwrap();

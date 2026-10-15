@@ -9,6 +9,10 @@ source evidence and verification limits. Release validation is recorded separate
 Existing `wi-*` IDs are retained for reconciliation; source implementation status below
 does not assert board closure. New slices need board IDs before implementation.
 
+Source modules live under `src/{cli,cmd,agent,config,cost,prompt,routing,runtime,store,task,ui,workspace,support}/`.
+`ui` groups board, tui, web (feature gated), and output; `cli` owns dispatch and diagnostics.
+Batch and core types retain their existing root files and child directories.
+
 ## Current baseline
 
 - The current release is **v11.0.0** (2026-10-14): failure truthfulness; see

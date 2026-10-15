@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::board::render_task_detail;
+use crate::ui::board::render_task_detail;
 use crate::cmd;
 use crate::store::Store;
 use crate::types::{Task, TaskStatus};

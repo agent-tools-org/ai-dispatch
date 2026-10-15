@@ -1,6 +1,8 @@
 // aid CLI definitions.
 // Exports parser structs and subcommands; depends on clap derive and cli helper modules.
 
+pub(crate) mod diagnostics;
+pub(crate) mod dispatch;
 pub(crate) mod admin_args;
 pub(crate) mod advise_args;
 pub(crate) mod agent_provider_args;
@@ -70,7 +72,7 @@ pub struct Cli {
 pub enum Commands {
     Run(run_args::RunArgs),
     /// Inspect recent CLI errors, including requests rejected before task creation
-    Errors(crate::command_diagnostics::ErrorsArgs),
+    Errors(crate::cli::diagnostics::ErrorsArgs),
     /// Show agent routing advice without dispatching
     Advise(advise_args::AdviseArgs),
     Batch(run_args::BatchArgs),

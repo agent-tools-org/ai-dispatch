@@ -1,0 +1,134 @@
+// aid CLI command matching.
+// Routes Commands variants to focused handler functions.
+
+use super::{
+    DispatchOutcome, RunDispatch, admin_config, display, knowledge, project_worktree, run_batch,
+    task_ops,
+};
+use crate::cli::{
+    Commands, admin_args, agent_provider_args, group_args, inspect_args, knowledge_args,
+    project_args, run_args, task_control_args,
+};
+use anyhow::Result;
+use std::sync::Arc;
+
+pub(crate) async fn dispatch(
+    store: Arc<crate::store::Store>,
+    command: Commands,
+) -> Result<DispatchOutcome> {
+    let completed = match command {
+        Commands::Errors(args) => crate::cli::diagnostics::show(&args),
+        Commands::Run(args) => return dispatch_run(store, args).await.map(DispatchOutcome::Run),
+        Commands::Classify(args) => std::process::exit(crate::cmd::classify::run(args)),
+        Commands::Advise(args) => crate::cmd::advise::run(Some(store.as_ref()), args),
+        Commands::Batch(run_args::BatchArgs { action, file, vars, group, repo_root, parallel, analyze, wait, dry_run, no_prompt, yes, force, max_concurrent, output }) => run_batch::batch(store, action, file, vars, parallel, analyze, wait, dry_run, no_prompt, yes, force, max_concurrent, output, group, repo_root).await,
+        Commands::Benchmark(run_args::BenchmarkArgs { prompt, agents, dir, verify }) => display::benchmark(store, prompt, agents, dir, verify).await,
+        Commands::Watch(inspect_args::WatchArgs { task_ids, group, tui, stream, exit_on_await, timeout }) => display::watch(store, task_ids, group, tui, stream, exit_on_await, timeout).await,
+        Commands::Wait(inspect_args::WaitArgs { task_ids, group, exit_on_await, timeout }) => {
+            display::wait(store, task_ids, group, exit_on_await, timeout).await
+        }
+        Commands::Board(inspect_args::BoardArgs { running, today, mine, group, all, limit, force, stream, json }) => {
+            display::board(store, running, today, mine, group, all, limit, force, stream, json).await
+        }
+        Commands::Notifications => display::notifications(),
+        Commands::Changelog(inspect_args::ChangelogArgs { version, all, count, git }) => display::changelog(version, all, count, git),
+        Commands::Agent(agent_provider_args::AgentArgs { action }) => display::agent(store, action),
+        Commands::Clean(project_args::CleanArgs { older_than, worktrees, dry_run }) => display::clean(store, older_than, worktrees, dry_run),
+        Commands::Show(inspect_args::ShowArgs { task_id, events, context, diff, summary, file, branch, output, result, transcript, full, brief, explain, log, json, agent, model }) => display::show(store, task_id, events, context, diff, summary, file, branch, output, result, transcript, full, brief, explain, log, json, agent, model).await,
+        Commands::Export(inspect_args::ExportArgs { task_id, format, sharegpt, output }) => {
+            display::export(store, task_id, format, sharegpt, output).await
+        }
+        Commands::Tree(inspect_args::TreeArgs { task_id }) => display::tree(store, task_id),
+        Commands::Usage(inspect_args::UsageArgs { session, agent, team, period, json }) => display::usage(store, session, agent, team, period, json),
+        Commands::Cost(inspect_args::CostArgs { group, summary, agent, period }) => display::cost(store, group, summary, agent, period),
+        Commands::Stats(inspect_args::StatsArgs { window, agent, insights }) => crate::cmd::stats::run(&store, window, agent, insights),
+        Commands::Retry(task_control_args::RetryArgs {
+            task_id,
+            feedback,
+            feedback_file,
+            agent,
+            model,
+            idle_timeout,
+            dir,
+            reset,
+            bg,
+        }) => {
+            task_ops::retry(
+                store,
+                task_id,
+                feedback,
+                feedback_file,
+                agent,
+                model,
+                idle_timeout,
+                dir,
+                reset,
+                bg,
+            )
+            .await
+        }
+        Commands::Merge(task_control_args::MergeArgs { task_id, group, approve, check, force, target, lanes }) => {
+            task_ops::merge(store, task_id, group, approve, check, force, target, lanes)
+        }
+        Commands::Accept(task_control_args::ArtifactDecisionArgs { task_id }) => {
+            task_ops::accept(store, task_id)
+        }
+        Commands::Reject(task_control_args::ArtifactDecisionArgs { task_id }) => {
+            task_ops::reject(store, task_id)
+        }
+        Commands::Gc(task_control_args::ArtifactGcArgs { task }) => task_ops::gc(store, task),
+        Commands::Respond(task_control_args::RespondArgs { task_id, input, file }) => task_ops::respond(store, task_id, input, file),
+        Commands::Reply(task_control_args::ReplyArgs { task_id, message, file, async_mode, timeout_secs }) => {
+            task_ops::reply(store, task_id, message, file, async_mode, timeout_secs)
+        }
+        Commands::Stop(task_control_args::StopArgs { task_id, force, retry_tree }) => {
+            task_ops::stop(store, task_id, force, retry_tree)
+        }
+        Commands::Steer(task_control_args::SteerArgs { task_id, message }) => task_ops::steer(store, task_id, message),
+        Commands::Unstick(task_control_args::UnstickArgs { task_id, message, escalate }) => {
+            task_ops::unstick(store, task_id, message, escalate)
+        }
+        Commands::Ask(knowledge_args::AskArgs { prompt, agent, model, files, output }) => knowledge::ask(store, prompt, agent, model, files, output).await,
+        Commands::Query(knowledge_args::QueryArgs { prompt, auto, model, group, finding }) => knowledge::query(store, prompt, auto, model, group, finding),
+        Commands::Mcp => admin_config::mcp(store).await,
+        Commands::Hook(admin_args::HookArgs { action }) => admin_config::hook(action),
+        Commands::Config(admin_args::ConfigArgs { action }) => admin_config::config(store, action),
+        Commands::Group(group_args::GroupArgs { action }) => knowledge::group(store, action),
+        Commands::Container(admin_args::ContainerArgs { action }) => admin_config::container(action),
+        Commands::Build(args) => {
+            let code = crate::cmd::build::run(store, args).await?;
+            std::process::exit(code);
+        }
+        Commands::Test(args) => {
+            let code = crate::cmd::test_cmd::run(store, args).await?;
+            std::process::exit(code);
+        }
+        Commands::Worktree(project_args::WorktreeArgs { action }) => project_worktree::worktree(action),
+        Commands::Store(admin_args::StoreArgs { action }) => admin_config::store(action),
+        Commands::Team(agent_provider_args::TeamArgs { action }) => admin_config::team(action),
+        Commands::Tool(agent_provider_args::ToolArgs { action }) => admin_config::tool(action),
+        Commands::Doctor(admin_args::DoctorArgs { apply }) => display::doctor(store, apply),
+        Commands::Byok(agent_provider_args::ByokArgs { action }) => admin_config::byok(action),
+        Commands::Credential(agent_provider_args::CredentialArgs { action }) => admin_config::credential(action),
+        Commands::Project(project_args::ProjectArgs { action }) => project_worktree::project(action),
+        Commands::Memory(knowledge_args::MemoryArgs { action }) => knowledge::memory(store, action),
+        Commands::Kg(knowledge_args::KgArgs { action }) => knowledge::kg(store, action),
+        Commands::Upgrade(admin_args::UpgradeArgs { force }) => admin_config::upgrade(force),
+        Commands::Init => admin_config::init(),
+        Commands::Setup => admin_config::setup(),
+        Commands::InternalRunTask(project_args::InternalRunTaskArgs { task_id }) => project_worktree::internal_run_task(store, task_id).await,
+        Commands::Experiment(subcommand) => project_worktree::experiment(store, subcommand).await,
+        #[cfg(feature = "web")]
+        Commands::Web(admin_args::WebArgs { port, host, token }) => admin_config::run_web(port, host, token).await,
+    };
+    completed.map(|()| DispatchOutcome::CommandCompleted)
+}
+
+async fn dispatch_run(
+    store: Arc<crate::store::Store>,
+    args: run_args::RunArgs,
+) -> Result<RunDispatch> {
+    let (bg, dry_run) = (args.bg, args.dry_run);
+    let task_id = run_batch::run(store, args).await?;
+    Ok(RunDispatch::new(task_id, bg, dry_run))
+}

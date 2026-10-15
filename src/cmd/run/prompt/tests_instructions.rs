@@ -188,8 +188,8 @@ async fn run_auto_retries_after_verify_failure() {
         .iter()
         .find(|task| Some(task.id.as_str()) == retried.parent_task_id.as_deref())
         .unwrap();
-    let run_status = crate::cmd_dispatch::DispatchOutcome::Run(
-        crate::cmd_dispatch::RunDispatch::new(final_id, false, false),
+    let run_status = crate::cli::dispatch::DispatchOutcome::Run(
+        crate::cli::dispatch::RunDispatch::new(final_id, false, false),
     )
     .run_exit_status(store.as_ref())
     .unwrap()

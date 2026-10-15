@@ -74,7 +74,7 @@ async fn assert_not_delivered(f: &Fixture) {
     #[cfg(feature = "web")]
     let outputs = {
         let mut outputs = outputs;
-        let axum::Json(response) = crate::web::api::get_task_result(
+        let axum::Json(response) = crate::ui::web::api::get_task_result(
             axum::extract::Path(f.id.0.clone()),
             axum::extract::State(f.store.clone()),
         )

@@ -3,7 +3,7 @@
 // Deps: clap, tempfile, in-memory Store and sibling shim fixture helpers.
 use super::*;
 use clap::Parser;
-use super::shim_tests::executable;
+use crate::support::test_env::write_executable;
 
 #[test]
 fn cli_optional_box_and_conflicts() {
@@ -22,16 +22,16 @@ fn cli_optional_box_and_conflicts() {
 fn selection_uses_explicit_name_or_one_pick_and_retains_stderr() {
     let temp = tempfile::tempdir().expect("temp");
     let rbox = temp.path().join("rbox");
-    executable(&rbox, "#!/bin/bash\n[[ \"$*\" == \"pick --tool rust\"* ]] || exit 9\necho picked-box\n");
+    write_executable(&rbox, "#!/bin/bash\n[[ \"$*\" == \"pick --tool rust\"* ]] || exit 9\necho picked-box\n");
     assert_eq!(resolve_with("auto", Path::new(""), &mut Command::new(&rbox)).expect("pick"), "picked-box");
     assert_eq!(resolve_with("literal name", Path::new(""), &mut Command::new("missing-command")).expect("explicit"), "literal name");
     let error = resolve_with("auto", Path::new(""), &mut Command::new(temp.path().join("missing-rbox")))
         .expect_err("missing rbox");
     assert_eq!(error.to_string(), "Failed to run rbox pick --tool rust");
-    executable(&rbox, "#!/bin/bash\necho 'none free: all rust builders busy' >&2\nexit 1\n");
+    write_executable(&rbox, "#!/bin/bash\necho 'none free: all rust builders busy' >&2\nexit 1\n");
     let error = resolve_with("auto", Path::new(""), &mut Command::new(&rbox)).expect_err("busy");
     assert!(error.to_string().contains("none free: all rust builders busy"));
-    executable(&rbox, "#!/bin/bash\nexit 0\n");
+    write_executable(&rbox, "#!/bin/bash\nexit 0\n");
     assert!(resolve_with("auto", Path::new(""), &mut Command::new(&rbox)).is_err());
 }
 
@@ -83,7 +83,7 @@ fn verify_receives_stored_box() {
     let (store, id, _) = stored_task();
     let temp = tempfile::tempdir().expect("temp");
     let _home = crate::support::paths::AidHomeGuard::set(temp.path());
-    executable(&temp.path().join("verify"), "#!/bin/bash\nprintf '%s' \"$AID_BUILD_BOX\"\n");
+    write_executable(&temp.path().join("verify"), "#!/bin/bash\nprintf '%s' \"$AID_BUILD_BOX\"\n");
     let result = verify(&store, id.as_str(), temp.path(), Some("./verify"), None, None).expect("verify");
     assert!(result.success);
     assert_eq!(result.output, "chosen-box");
@@ -165,7 +165,7 @@ fn pick_passes_repo_and_exclude_to_rbox() {
     let temp = tempfile::tempdir().expect("temp");
     let rbox = temp.path().join("rbox");
     let argv = temp.path().join("argv");
-    executable(&rbox, &format!("#!/bin/bash\nprintf '%s\\n' \"$@\" > '{}'\necho second-box\n", argv.display()));
+    write_executable(&rbox, &format!("#!/bin/bash\nprintf '%s\\n' \"$@\" > '{}'\necho second-box\n", argv.display()));
     let picked = pick(&mut Command::new(&rbox), Path::new("/repos/wt"), Some("box-a")).expect("pick");
     assert_eq!(picked, "second-box");
     assert_eq!(std::fs::read_to_string(&argv).expect("argv"), "pick\n--tool\nrust\n--repo\n/repos/wt\n--exclude\nbox-a\n");
@@ -176,7 +176,7 @@ fn pick_passes_repo_and_exclude_to_rbox() {
 }
 
 pub(super) fn refusing_verify(dir: &Path, refusing: &str) {
-    executable(&dir.join("verify"), &format!("#!/bin/bash\ncase \"$AID_BUILD_BOX\" in {refusing}) echo \"rbox: $AID_BUILD_BOX 9.9 GiB free; requires 10 GiB\" >&2; exit 69 ;; esac\necho \"ran on $AID_BUILD_BOX\"\n"));
+    write_executable(&dir.join("verify"), &format!("#!/bin/bash\ncase \"$AID_BUILD_BOX\" in {refusing}) echo \"rbox: $AID_BUILD_BOX 9.9 GiB free; requires 10 GiB\" >&2; exit 69 ;; esac\necho \"ran on $AID_BUILD_BOX\"\n"));
 }
 
 #[test]
@@ -187,7 +187,7 @@ fn refused_verify_repicks_once_persists_box_and_reruns() {
     refusing_verify(temp.path(), "chosen-box");
     let rbox = temp.path().join("rbox");
     let argv = temp.path().join("argv");
-    executable(&rbox, &format!("#!/bin/bash\nprintf '%s\\n' \"$@\" > '{}'\necho second-box\n", argv.display()));
+    write_executable(&rbox, &format!("#!/bin/bash\nprintf '%s\\n' \"$@\" > '{}'\necho second-box\n", argv.display()));
     let result = verify_with(&store, id.as_str(), temp.path(), Some("./verify"), None, None, &mut Command::new(&rbox)).expect("verify");
     assert!(result.success, "{}", result.output);
     assert_eq!(result.output, "ran on second-box\n");
@@ -206,13 +206,13 @@ fn second_refusal_or_failed_repick_is_infrastructure_failure_naming_the_box() {
     let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     refusing_verify(temp.path(), "chosen-box|second-box");
     let rbox = temp.path().join("rbox");
-    executable(&rbox, "#!/bin/bash\necho second-box\n");
+    write_executable(&rbox, "#!/bin/bash\necho second-box\n");
     let error = verify_with(&store, id.as_str(), temp.path(), Some("./verify"), None, None, &mut Command::new(&rbox)).expect_err("both refused");
     assert_eq!(error.to_string(), "Remote build box second-box refused admission after re-pick from chosen-box (rbox: second-box 9.9 GiB free; requires 10 GiB)");
     assert_eq!(saved_box(&store, id.as_str()).expect("saved").as_deref(), Some("second-box"));
     
     let (store2, id2, _) = stored_task();
-    executable(&rbox, "#!/bin/bash\necho 'none free: all rust builders busy' >&2\nexit 1\n");
+    write_executable(&rbox, "#!/bin/bash\necho 'none free: all rust builders busy' >&2\nexit 1\n");
     let error = verify_with(&store2, id2.as_str(), temp.path(), Some("./verify"), None, None, &mut Command::new(&rbox)).expect_err("re-pick failed");
     assert_eq!(error.to_string(), "Remote build box chosen-box refused admission (rbox: chosen-box 9.9 GiB free; requires 10 GiB); re-pick failed: Remote build box selection failed: none free: all rust builders busy");
     
@@ -230,7 +230,7 @@ fn resolve_in_with_worktree_passes_main_tree_to_rbox() {
 
     let rbox = temp.path().join("rbox");
     let argv = temp.path().join("argv");
-    executable(&rbox, &format!("#!/bin/bash\nprintf '%s\\n' \"$@\" > '{}'\necho chosen-box\n", argv.display()));
+    write_executable(&rbox, &format!("#!/bin/bash\nprintf '%s\\n' \"$@\" > '{}'\necho chosen-box\n", argv.display()));
 
     let mut args = crate::cmd::run::RunArgs { remote_build: Some("auto".into()), dir: Some(wt_dir.to_string_lossy().into_owned()), ..Default::default() };
     resolve_in(&mut args, true, &mut std::process::Command::new(&rbox)).expect("resolve");

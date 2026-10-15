@@ -173,6 +173,15 @@ pub fn load_config() -> Result<AidConfig> {
     parse_config(&content).with_context(|| format!("Failed to parse {}", path.display()))
 }
 
+pub(crate) fn load_dispatch_config() -> Result<AidConfig> {
+    let path = paths::config_path();
+    if !path.exists() { return Ok(AidConfig::default()); }
+    let content = std::fs::read_to_string(&path)?;
+    let mut value: toml::Value = toml::from_str(&content)?;
+    if let Some(table) = value.as_table_mut() { table.remove("api_route"); }
+    value.try_into().context("Invalid dispatch configuration")
+}
+
 pub(crate) fn parse_config(content: &str) -> Result<AidConfig> {
     let config: AidConfig = toml::from_str(content)?;
     api_route::validate_routes(&config.api_route)?;

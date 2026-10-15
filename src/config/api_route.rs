@@ -1,7 +1,7 @@
 // Named Claude API accounts and validation for [[api_route]] configuration.
 // Secrets remain in the keychain; this module contains item identifiers only.
 use crate::types::AgentKind;
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -86,6 +86,36 @@ pub(crate) fn find(id: &str) -> Result<Option<ApiRoute>> {
         .api_route
         .into_iter()
         .find(|route| route.id == id))
+}
+
+pub(crate) fn find_for_dispatch(id: &str) -> Result<Option<ApiRoute>> {
+    if AgentKind::parse_str(id).is_some() {
+        return Ok(None);
+    }
+    let path = crate::support::paths::config_path();
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = std::fs::read_to_string(&path)?;
+    let value: toml::Value = toml::from_str(&content)?;
+    let Some(routes) = value.get("api_route").and_then(toml::Value::as_array) else {
+        return Ok(None);
+    };
+    let mut matching = routes
+        .iter()
+        .filter(|route| route.get("id").and_then(toml::Value::as_str) == Some(id));
+    let Some(route) = matching.next() else {
+        return Ok(None);
+    };
+    if matching.next().is_some() {
+        bail!("duplicate API route {id}");
+    }
+    let route: ApiRoute = route
+        .clone()
+        .try_into()
+        .with_context(|| format!("Invalid API route {id}"))?;
+    route.validate()?;
+    Ok(Some(route))
 }
 
 #[cfg(test)]

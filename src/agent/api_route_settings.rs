@@ -68,3 +68,58 @@ fn permission_overlay(files: Vec<PathBuf>) -> Result<Map<String, Value>> {
     }
     Ok(permissions)
 }
+
+pub(super) fn reject_managed_settings() -> Result<()> {
+    let root = library_root();
+    let settings = root.join("Application Support/ClaudeCode");
+    for path in [
+        settings.join("managed-settings.json"),
+        settings.join("managed-settings.d"),
+    ] {
+        reject_managed_path(&path)?;
+    }
+    let preferences = root.join("Managed Preferences");
+    reject_managed_path(&preferences.join("com.anthropic.claudecode.plist"))?;
+    let entries = match std::fs::read_dir(&preferences) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error).with_context(|| format!("Cannot inspect {}", preferences.display())),
+    };
+    for entry in entries {
+        let entry = entry?;
+        let metadata = std::fs::metadata(entry.path())
+            .with_context(|| format!("Cannot inspect {}", entry.path().display()))?;
+        if metadata.is_dir() {
+            reject_managed_path(&entry.path().join("com.anthropic.claudecode.plist"))?;
+        }
+    }
+    Ok(())
+}
+
+fn reject_managed_path(path: &std::path::Path) -> Result<()> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => anyhow::bail!(
+            "API route launch refused: Claude managed settings source exists: {}",
+            path.display()
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error).with_context(|| format!("Cannot inspect {}", path.display())),
+    }
+}
+
+fn library_root() -> PathBuf {
+    #[cfg(test)]
+    if let Some(root) = TEST_LIBRARY_ROOT.with(|root| root.borrow().clone()) {
+        return root;
+    }
+    PathBuf::from("/Library")
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_LIBRARY_ROOT: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+#[path = "api_route_settings_tests.rs"]
+mod tests;

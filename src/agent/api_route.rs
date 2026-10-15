@@ -23,6 +23,7 @@ impl Agent for ApiRouteAgent {
         false
     }
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
+        settings::reject_managed_settings()?;
         let mut cmd = ClaudeAgent.build_command(prompt, opts)?;
         let settings = settings::route_settings(&self.0, opts)?;
         cmd.args([
@@ -83,6 +84,7 @@ pub(crate) const ROUTE_ENV_REMOVALS: &[&str] = &[
     "ANTHROPIC_AUTH_TOKEN",
     "CLAUDE_CODE_USE_BEDROCK",
     "CLAUDE_CODE_USE_VERTEX",
+    "CLAUDE_CODE_USE_FOUNDRY",
 ];
 
 fn scrub_env(cmd: &mut Command) {
@@ -143,6 +145,39 @@ pub(crate) fn record_stream_failure(
         metadata: None,
     })?;
     Ok(true)
+}
+
+pub(crate) fn completion_failure(store: &crate::store::Store, id: &str) -> Result<Option<String>> {
+    let events = store.get_events(id)?;
+    let Some(launch) = events.iter().rposition(|event| {
+        event
+            .metadata
+            .as_ref()
+            .and_then(|value| value.get("api_route_launch"))
+            .is_some()
+    }) else {
+        return Ok(None);
+    };
+    if events[launch + 1..].iter().any(|event| {
+        event
+            .metadata
+            .as_ref()
+            .and_then(|value| value.get("api_route_init_verified"))
+            == Some(&serde_json::Value::Bool(true))
+    }) {
+        return Ok(None);
+    }
+    let Some(route) = events[launch]
+        .metadata
+        .as_ref()
+        .and_then(|value| value.get("api_route_launch"))
+        .and_then(serde_json::Value::as_str)
+    else {
+        return Ok(None);
+    };
+    let reason = format!("route {route} is not billed to its API key");
+    api_budget::hold(route, &reason, false)?;
+    Ok(Some(reason))
 }
 
 #[path = "api_route_refusal.rs"]

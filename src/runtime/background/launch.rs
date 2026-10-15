@@ -54,6 +54,13 @@ pub(super) fn prepare_launch(
     finish_env(store, spec, args, agent.kind(), &mut std_cmd, cargo_target_dir.as_deref())?;
     crate::agent::api_route::validate_launch(agent, store, args.container.is_some())?;
     agent.finalize_launch_env(&mut std_cmd);
+    if let Some(route) = agent.api_route() {
+        store.insert_agent_event(&crate::types::TaskEvent {
+            task_id: TaskId(spec.task_id.clone()), timestamp: chrono::Local::now(),
+            event_kind: crate::types::EventKind::Setup, detail: format!("API route {} launch", route.id),
+            metadata: Some(serde_json::json!({"api_route_launch": route.id})),
+        })?;
+    }
     wrap_command(spec, args, agent.kind(), std_cmd)
 }
 

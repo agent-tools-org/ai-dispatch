@@ -36,7 +36,13 @@ pub(crate) fn parse_event_line_for_route(
         "assistant" => parse_assistant_event(task_id, &v, now),
         "tool_use" => parse_tool_use_event(task_id, &v, now),
         "result" => parse_result_event(task_id, &v, now),
-        "system" => parse_system_event(task_id, &v, now),
+        "system" => parse_system_event(task_id, &v, now).map(|mut event| {
+            if route.is_some() && v["subtype"] == "init" && v["apiKeySource"] == "apiKeyHelper" {
+                let metadata = event.metadata.get_or_insert_with(|| json!({}));
+                metadata["api_route_init_verified"] = json!(true);
+            }
+            event
+        }),
         "user" => parse_user_event(task_id, &v, now),
         "error" => parse_error_event(task_id, &v, now, route),
         _ => None,

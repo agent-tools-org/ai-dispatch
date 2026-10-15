@@ -94,7 +94,6 @@ fn resolve_from_registry(
     name: &str,
 ) -> Option<Box<dyn super::Agent>> {
     registry.get(name)
-        .filter(|config| config.delegate_to.as_deref() != Some("claude"))
         .map(|config| build_agent(config))
 }
 
@@ -146,13 +145,10 @@ fn parse_rate_limit_kind(config: &CustomAgentConfig) -> AgentKind {
 }
 
 pub fn resolve_custom_agent(name: &str) -> Option<Box<dyn super::Agent>> {
-    match crate::config::load_config() {
-        Ok(config) => {
-            if let Some(route) = config.api_route.into_iter().find(|route| route.id == name) {
-                return Some(Box::new(super::api_route::ApiRouteAgent(route)));
-            }
-        }
-        Err(error) => aid_warn!("Cannot load API routes: {error:#}"),
+    match crate::config::api_route::find_for_dispatch(name) {
+        Ok(Some(route)) => return Some(Box::new(super::api_route::ApiRouteAgent(route))),
+        Ok(None) => {},
+        Err(error) => aid_warn!("Cannot load API route {name}: {error:#}"),
     }
     let registry = load_from_dir(&agents_dir());
     resolve_from_registry(&registry, name)

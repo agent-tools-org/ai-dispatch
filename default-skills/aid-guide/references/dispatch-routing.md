@@ -246,7 +246,9 @@ checking happens once at launch. Running-task estimates, remaining-budget task
 caps and budget-driven kills are not used: concurrent or long tasks can finish
 above the budget, and crossing it does not fail a successful run. Explicit
 `max_task_cost` settings retain their existing behavior. Overage still excludes
-free/cheap advice profiles and applies the standard-profile `billing` penalty.
+free/cheap advice profiles and applies the standard-profile −4.0 `billing` penalty
+(subject to the premium/critical-rigor exception described above). `bill` permits
+real paid overage; it is not a warning-only mode.
 
 A separate `pace` term subtracts 2.0 when spend exceeds
 `monthly_budget_usd × elapsed_fraction_of_month × 1.25`. With strictly less
@@ -260,7 +262,8 @@ monthly evidence and their own `pace` term.
 The Claude `system/init` stream event must report
 `apiKeySource = "apiKeyHelper"`. A missing field or any other value, including
 an environment-key source, stops the process and fails the task with `route <id> is not billed to its API key`.
-That route receives a needs-human hold. Fix the key or CLI billing configuration,
+A route that finishes without a verified init also fails and receives the same
+credential hold. That route receives a needs-human hold. Fix the key or CLI billing configuration,
 then use `aid config clear-limit <id>`. Structured provider error types and error
 messages identifying a credit-balance or billing refusal hold only that route
 until midnight on the first day of the next UTC month. Result prose and tool

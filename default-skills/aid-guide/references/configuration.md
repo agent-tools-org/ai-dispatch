@@ -71,14 +71,17 @@ agent's shell, can still invoke the same keychain command and read the password.
 The helper does not isolate the keychain from same-user processes.
 
 Route children scrub `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`,
-`ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK` and `CLAUDE_CODE_USE_VERTEX`,
+`ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX` and `CLAUDE_CODE_USE_FOUNDRY`,
 including inherited and explicitly forwarded values, so the helper key is used
 with Anthropic's API. Routes also pass `--setting-sources ""` to disable
 user, project and local settings sources. Only their `permissions` objects are
 carried forward into the aid-provided JSON (permission lists accumulate; scalar
 values use the last source). Their `env`, hooks and helper overrides are not
-loaded. Administrator-managed Claude settings still apply; this flag cannot
-disable managed policy, including managed environment overrides. Plain `claude`
+loaded. Because administrator-managed settings outrank the inline helper, API
+routes refuse launch when `/Library/Application Support/ClaudeCode/managed-settings.json`,
+the adjacent `managed-settings.d` directory, or a `com.anthropic.claudecode.plist`
+in `/Library/Managed Preferences` (including user subdirectories) exists. The
+error names the source path without reading its contents. Plain `claude`
 settings are unchanged. API routes reject `--container` at dispatch because their
 helper requires the host keychain.
 An unreadable item is handled by Claude Code; aid does not preflight passwords.

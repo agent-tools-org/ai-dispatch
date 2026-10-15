@@ -230,14 +230,20 @@ delegate_to = "opencode"
 }
 
 #[test]
-fn stale_api_placeholder_never_resolves_to_plain_claude() {
-    let config: crate::config::api_route::ApiRoute = toml::from_str(concat!(
-        "id = 'claude-api-ming'\nagent = 'claude'\nkeychain_service = 'test'\nmonthly_budget_usd = 200\n",
-    ))
-    .unwrap();
-    let map = HashMap::from([(
-        config.id.clone(),
-        super::super::api_route::registry_config(&config),
-    )]);
-    assert!(resolve_from_registry(&map, &config.id).is_none());
+fn ordinary_claude_delegate_custom_agent_still_resolves() {
+    let home = TempDir::new().unwrap();
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let dir = agents_dir();
+    fs::create_dir_all(&dir).unwrap();
+    write_agent(
+        &dir,
+        "delegate.toml",
+        concat!(
+            "[agent]\nid = 'delegate'\ndisplay_name = 'Delegate'\ncommand = 'wrapper'\n",
+            "delegate_to = 'claude'\nforced_model = 'opus'\n"
+        ),
+    );
+    let agent = resolve_custom_agent("delegate").unwrap();
+    assert!(agent.api_route().is_none());
+    assert_eq!(agent.rate_limit_name(), Some("delegate"));
 }

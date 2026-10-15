@@ -1,10 +1,10 @@
 // Codex home isolation tests using synthetic files only.
-// Covers exclusions, shared writes, symlink identity, and guard cleanup.
+// Covers exclusions, shared writes, symlink identity, and persistent idempotent launches.
 
 use super::*;
 
 #[test]
-fn mirrors_every_entry_except_user_config_and_cleans_up() {
+fn mirrors_entries_idempotently_without_deleting_shared_paths() {
     let temp = tempfile::tempdir().unwrap();
     let real = temp.path().join("real");
     let task = temp.path().join("task");
@@ -12,6 +12,7 @@ fn mirrors_every_entry_except_user_config_and_cleans_up() {
     for name in [
         "config.toml",
         "config.toml.bak",
+        "config.toml-old",
         "auth.json",
         "AGENTS.md",
         "hooks.json",
@@ -21,10 +22,10 @@ fn mirrors_every_entry_except_user_config_and_cleans_up() {
     for name in ["sessions", "skills", "rules"] {
         std::fs::create_dir(real.join(name)).unwrap();
     }
-    let home = Home::create(&real, &task).unwrap();
-    let path = home.path.clone();
+    let path = Home::create(&real, &task).unwrap().path;
     assert!(!path.join("config.toml").exists());
     assert!(!path.join("config.toml.bak").exists());
+    assert!(!path.join("config.toml-old").exists());
     assert_mirrors(&path, &real);
     std::fs::write(path.join("auth.json"), "refreshed synthetic").unwrap();
     std::fs::write(path.join("sessions/new"), "session").unwrap();
@@ -32,19 +33,22 @@ fn mirrors_every_entry_except_user_config_and_cleans_up() {
         std::fs::read_to_string(real.join("auth.json")).unwrap(),
         "refreshed synthetic"
     );
-    drop(home);
-    assert!(!path.exists());
+    assert!(path.exists());
+    Home::create(&real, &task).unwrap();
+    assert_mirrors(&path, &real);
     assert!(real.join("sessions/new").exists());
     assert!(real.join("auth.json").exists());
 }
 
 #[test]
-fn refuses_to_replace_an_existing_task_home() {
+fn preserves_local_state_created_in_the_persistent_mirror() {
     let temp = tempfile::tempdir().unwrap();
     let task = temp.path().join("task");
     std::fs::create_dir_all(task.join("codex-home")).unwrap();
     std::fs::write(task.join("codex-home/keep"), "keep").unwrap();
-    assert!(Home::create(temp.path(), &task).is_err());
+    let real = temp.path().join("real");
+    std::fs::create_dir(&real).unwrap();
+    Home::create(&real, &task).unwrap();
     assert!(task.join("codex-home/keep").exists());
 }
 
@@ -68,4 +72,37 @@ fn assert_mirrors(path: &Path, real: &Path) {
             real.join(name)
         );
     }
+}
+
+#[test]
+fn concurrent_launches_share_links_and_refresh_new_entries() {
+    let temp = tempfile::tempdir().unwrap();
+    let real = temp.path().join("real");
+    let aid = temp.path().join("aid");
+    std::fs::create_dir(&real).unwrap();
+    std::fs::write(real.join("auth.json"), "synthetic").unwrap();
+    std::thread::scope(|scope| {
+        for _ in 0..4 {
+            scope.spawn(|| Home::create(&real, &aid).unwrap());
+        }
+    });
+    std::fs::create_dir(real.join("sessions")).unwrap();
+    Home::create(&real, &aid).unwrap();
+    assert_eq!(
+        std::fs::read_link(aid.join("codex-home/sessions")).unwrap(),
+        real.join("sessions")
+    );
+}
+
+#[test]
+fn refuses_conflicting_links_and_a_mirror_that_is_the_real_home() {
+    let temp = tempfile::tempdir().unwrap();
+    let real = temp.path().join("real");
+    std::fs::create_dir(&real).unwrap();
+    std::fs::write(real.join("auth.json"), "synthetic").unwrap();
+    let home = Home::create(&real, temp.path()).unwrap();
+    std::fs::remove_file(home.path.join("auth.json")).unwrap();
+    std::os::unix::fs::symlink(temp.path().join("wrong"), home.path.join("auth.json")).unwrap();
+    assert!(Home::create(&real, temp.path()).is_err());
+    assert!(Home::create(&home.path, temp.path()).is_err());
 }

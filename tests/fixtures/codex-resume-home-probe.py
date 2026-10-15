@@ -63,10 +63,13 @@ class Client:
 
 
 def mirror(real, path):
-    path.mkdir()
+    path.mkdir(exist_ok=True)
     for entry in real.iterdir():
         if entry.name != "config.toml" and not entry.name.startswith("config.toml."):
-            (path / entry.name).symlink_to(entry)
+            link = path / entry.name
+            if not link.is_symlink():
+                link.symlink_to(entry)
+            assert link.readlink() == entry
     return path
 
 
@@ -82,7 +85,9 @@ def probe(root):
         assert "result" in response, response
     finally:
         client.close()
-    origin = mirror(real, root / "origin")
+    origin = mirror(real, root / "codex-home")
+    task = root / "first-task"
+    task.mkdir()
     client = Client(origin)
     try:
         response = client.request(2, "thread/start", {
@@ -94,20 +99,17 @@ def probe(root):
     finally:
         client.close()
     assert list((real / "sessions").rglob(f"*-{thread}.jsonl")), "rollout must survive"
-    shutil.rmtree(origin)
-    client = Client(mirror(real, root / "retry"))
+    shutil.rmtree(task)
+    client = Client(mirror(real, origin))
     try:
         params = {"threadId": thread, "excludeTurns": True}
         response = client.request(2, "thread/resume", params)
-        assert "no rollout found" in response["error"]["message"], response
-        mirror(real, origin)
-        response = client.request(3, "thread/resume", params)
         assert response["result"]["thread"]["id"] == thread, response
     finally:
         client.close()
-    shutil.rmtree(origin)
-    assert not origin.exists()
-    print("PASS: deleted origin fails; restored origin resumes; temporary home cleaned (3 checks)")
+    assert origin.is_dir()
+    assert not task.exists()
+    print("PASS: process exited; task state removed; stable mirror resumes (3 checks)")
 
 
 if __name__ == "__main__":

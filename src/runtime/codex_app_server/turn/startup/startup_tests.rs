@@ -1,5 +1,5 @@
 // Startup recovery and resume regressions through the real dispatch entry point.
-// Slow fake replies exercise the former fixed ten-second boundary.
+// Slow fake replies exercise the bounded ten-second startup deadline.
 
 use crate::runtime::codex_app_server::*;
 #[path = "../fixture.rs"]
@@ -29,10 +29,10 @@ fn fallback_events(fixture: &Fixture) -> Vec<TaskEvent> {
 }
 
 #[test]
-fn startup_waits_the_first_output_budget_instead_of_ten_seconds() {
+fn startup_falls_back_at_ten_seconds_even_with_a_longer_idle_budget() {
     let fixture = Fixture::new("slow-init");
     fixture.dispatch_with_policy(policy(15));
-    assert!(fallback_events(&fixture).is_empty());
+    assert_eq!(fallback_events(&fixture).len(), 1);
     assert_eq!(
         fixture
             .store
@@ -94,7 +94,7 @@ fn submitted_turn_without_a_response_is_not_replayed_in_exec() {
 }
 
 #[test]
-fn long_resume_excludes_history_and_has_the_startup_budget() {
+fn long_resume_times_out_and_launches_exec_resume() {
     let mut fixture = Fixture::new("slow-resume");
     let mut command = std::process::Command::new(fixture.command.get_program());
     command.args([
@@ -112,7 +112,12 @@ fn long_resume_excludes_history_and_has_the_startup_budget() {
     }
     fixture.command = command;
     fixture.dispatch_with_policy(policy(15));
-    assert!(fallback_events(&fixture).is_empty());
+    assert_eq!(fallback_events(&fixture).len(), 1);
+    assert!(
+        std::fs::read_to_string(&fixture.log)
+            .unwrap()
+            .contains("STEERED")
+    );
     assert_eq!(
         fixture
             .store
@@ -122,27 +127,6 @@ fn long_resume_excludes_history_and_has_the_startup_budget() {
             .status,
         TaskStatus::Done
     );
-}
-
-#[test]
-fn next_launch_sweeps_stale_task_state_before_creating_its_home() {
-    let fixture = Fixture::new("complete");
-    let task = crate::support::paths::task_dir(fixture.task.as_str());
-    std::fs::create_dir_all(task.join("codex-home")).unwrap();
-    std::fs::write(task.join("codex-app-server.json"), "{}").unwrap();
-    fixture.dispatch();
-    assert!(fallback_events(&fixture).is_empty());
-    assert_eq!(
-        fixture
-            .store
-            .get_task(fixture.task.as_str())
-            .unwrap()
-            .unwrap()
-            .status,
-        TaskStatus::Done
-    );
-    assert!(!task.join("codex-home").exists());
-    assert!(!task.join("codex-app-server.json").exists());
 }
 
 #[test]

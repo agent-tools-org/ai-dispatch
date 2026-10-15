@@ -1,5 +1,5 @@
-// Task-scoped Codex configuration isolation with shared auth, sessions, and instructions.
-// Mirrors top-level home entries through symlinks and removes only the owned task directory.
+// Persistent Codex configuration isolation with shared auth, sessions, and instructions.
+// Idempotently mirrors top-level entries under AID_HOME without deleting session paths.
 
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -9,27 +9,44 @@ pub(super) struct Home {
 }
 
 impl Home {
-    pub fn create(real: &Path, task_dir: &Path) -> Result<Self> {
-        std::fs::create_dir_all(task_dir)?;
+    pub fn create(real: &Path, aid_dir: &Path) -> Result<Self> {
+        std::fs::create_dir_all(aid_dir)?;
         let real = real.canonicalize().context("Resolve real Codex home")?;
-        let path = task_dir.join("codex-home");
-        std::fs::create_dir(&path).context("Create task-scoped Codex home")?;
-        let guard = Self { path };
+        let path = aid_dir.join("codex-home");
+        std::fs::create_dir_all(&path).context("Create stable Codex home")?;
+        anyhow::ensure!(
+            std::fs::symlink_metadata(&path)?.file_type().is_dir(),
+            "Codex mirror must be a directory, not a symlink"
+        );
+        anyhow::ensure!(
+            path.canonicalize()? != real,
+            "Codex mirror must differ from real home"
+        );
+        let home = Self { path };
         for entry in std::fs::read_dir(real)? {
             let entry = entry?;
             let name = entry.file_name();
-            if name == "config.toml" || name.to_string_lossy().starts_with("config.toml.") {
+            if name.to_string_lossy().starts_with("config.toml") {
                 continue;
             }
             #[cfg(unix)]
-            std::os::unix::fs::symlink(entry.path(), guard.path.join(name))?;
+            match std::os::unix::fs::symlink(entry.path(), home.path.join(&name)) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                    anyhow::ensure!(
+                        std::fs::read_link(home.path.join(name))? == entry.path(),
+                        "Codex mirror entry points at a different home"
+                    );
+                }
+                Err(error) => return Err(error.into()),
+            }
             #[cfg(not(unix))]
             anyhow::bail!("Codex app-server home isolation requires Unix symlinks");
         }
-        Ok(guard)
+        Ok(home)
     }
 
-    pub fn for_command(cmd: &std::process::Command, task_dir: &Path) -> Result<Self> {
+    pub fn for_command(cmd: &std::process::Command) -> Result<Self> {
         let real = cmd
             .get_envs()
             .find(|(key, _)| *key == "CODEX_HOME")
@@ -38,16 +55,7 @@ impl Home {
             .map(PathBuf::from)
             .map(Ok)
             .unwrap_or_else(crate::agent::codex::cli_config::codex_home)?;
-        Self::create(&real, task_dir)
-    }
-}
-
-impl Drop for Home {
-    fn drop(&mut self) {
-        // remove_dir_all does not follow directory symlinks.
-        if let Err(error) = std::fs::remove_dir_all(&self.path) {
-            aid_warn!("[aid] Could not remove task-scoped Codex home: {error}");
-        }
+        Self::create(&real, &crate::support::paths::aid_dir())
     }
 }
 

@@ -1,4 +1,4 @@
-// Resume ownership and exec fallback regressions using synthetic task state.
+// Persistent-home resume and exec fallback regressions using synthetic task state.
 // No Codex credentials, shared database edits, or model calls are involved.
 
 use super::*;
@@ -21,7 +21,6 @@ fn retry(fixture: &mut Fixture) {
             fixture.task.as_str(),
             "codex",
             "retry prompt",
-            None,
             None,
             None,
             None,
@@ -64,14 +63,16 @@ fn retry_command(fixture: &Fixture, session: &str) -> Command {
 }
 
 #[test]
-fn dispatch_recreates_origin_home_after_cleanup_and_cleans_both_tasks() {
+fn resume_survives_process_exit_and_task_state_removal() {
     let mut fixture = Fixture::new("persist-origin");
     fixture
         .command
         .env("AID_FAKE_ORIGIN", fixture.home.path().join("origin"));
     fixture.dispatch();
-    let origin_dir = crate::support::paths::task_dir(fixture.task.as_str());
-    assert!(!origin_dir.join("codex-home").exists());
+    let task_dir = crate::support::paths::task_dir(fixture.task.as_str());
+    assert!(!task_dir.join("codex-app-server.json").exists());
+    std::fs::remove_dir_all(task_dir).unwrap();
+    assert!(fixture.home.path().join("codex-home").is_dir());
     retry(&mut fixture);
     fixture.dispatch();
     assert_eq!(
@@ -83,17 +84,6 @@ fn dispatch_recreates_origin_home_after_cleanup_and_cleans_both_tasks() {
             .status,
         crate::types::TaskStatus::Done
     );
-    let events = fixture.store.get_events(fixture.task.as_str()).unwrap();
-    assert!(
-        !events
-            .iter()
-            .any(|event| event.detail.contains("falling back"))
-    );
-    assert!(!origin_dir.join("codex-home").exists());
-    assert!(!origin_dir.join("codex-owner.json").exists());
-    assert!(!origin_dir.join("codex-app-server.json").exists());
-    retry(&mut fixture);
-    fixture.dispatch();
     assert!(
         !fixture
             .store
@@ -102,7 +92,6 @@ fn dispatch_recreates_origin_home_after_cleanup_and_cleans_both_tasks() {
             .iter()
             .any(|event| event.detail.contains("falling back"))
     );
-    assert!(!origin_dir.join("codex-home").exists());
 }
 
 #[test]
@@ -137,7 +126,7 @@ fn rejected_resume_dispatches_fresh_exec_with_retry_prompt() {
 }
 
 #[test]
-fn handshake_failure_preserves_exec_resume_and_holds_origin_home() {
+fn handshake_failure_preserves_exec_resume_with_stable_home() {
     let mut fixture = Fixture::new("persist-origin");
     fixture
         .command
@@ -186,53 +175,6 @@ fn fresh_exec_preserves_options_literal_prompt_directory_and_environment() {
     assert_eq!(
         fresh.get_envs().collect::<Vec<_>>(),
         cmd.get_envs().collect::<Vec<_>>()
-    );
-}
-
-#[test]
-fn unknown_sessions_have_no_owned_home() {
-    let fixture = Fixture::new("complete");
-    assert_eq!(origin(&fixture.store, "external-session").unwrap(), None);
-    let fallback = exec_fallback(&fixture.command, &fixture.store, &fixture.task).unwrap();
-    assert_eq!(
-        fallback.command().get_args().collect::<Vec<_>>(),
-        fixture.command.get_args().collect::<Vec<_>>()
-    );
-    assert!(fallback._home.is_none());
-}
-
-#[test]
-fn busy_origin_falls_back_fresh_without_overwriting_its_lease() {
-    let mut fixture = Fixture::new("persist-origin");
-    fixture
-        .command
-        .env("AID_FAKE_ORIGIN", fixture.home.path().join("origin"));
-    fixture.dispatch();
-    let origin = fixture.task.clone();
-    retry(&mut fixture);
-    let _owner = cleanup::Owner::create(origin.as_str()).unwrap();
-    let owner_path = crate::support::paths::task_dir(origin.as_str()).join("codex-owner.json");
-    let before = std::fs::read(&owner_path).unwrap();
-    fixture.dispatch();
-    assert_eq!(std::fs::read(owner_path).unwrap(), before);
-    assert_eq!(
-        fixture
-            .store
-            .get_task(fixture.task.as_str())
-            .unwrap()
-            .unwrap()
-            .status,
-        crate::types::TaskStatus::Done
-    );
-    assert!(
-        fixture
-            .store
-            .get_events(fixture.task.as_str())
-            .unwrap()
-            .iter()
-            .any(|event| event
-                .detail
-                .contains("exec resume unavailable; starting fresh"))
     );
 }
 

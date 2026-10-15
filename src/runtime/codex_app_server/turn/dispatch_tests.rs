@@ -34,6 +34,7 @@ fn full_dispatch_confirms_steer_and_preserves_events_cost_and_output() {
     );
     assert_eq!(std::fs::read_to_string(&fixture.output).unwrap(), "STEERED");
     assert!(!active(fixture.task.as_str()));
+    assert!(fixture.home.path().join("codex-home").is_dir());
     assert!(
         !crate::support::paths::task_dir(fixture.task.as_str())
             .join("codex-home")

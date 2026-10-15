@@ -45,9 +45,8 @@ impl<'a> Turn<'a> {
             deadline: Instant::now() + run.policy.max_duration.min(run.policy.hard_cap),
             last_progress: std::time::SystemTime::now(),
             startup_deadline: Instant::now()
-                + run
-                    .policy
-                    .idle
+                + Duration::from_secs(10)
+                    .min(run.policy.idle)
                     .min(run.policy.max_duration.min(run.policy.hard_cap)),
             start_requested: false,
             terminal: None,

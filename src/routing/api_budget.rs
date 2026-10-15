@@ -39,17 +39,33 @@ pub(crate) fn month_bounds(now: DateTime<Local>) -> Result<(DateTime<Local>, Dat
     Ok((midnight(now.year(), now.month())?, midnight(year, month)?))
 }
 
+fn billed_at(task: &Task, now: DateTime<Local>) -> DateTime<Local> {
+    if task.status.is_terminal() {
+        task.completed_at.unwrap_or(now)
+    } else {
+        now
+    }
+}
+
 pub(crate) fn calculate(route: &ApiRoute, tasks: &[Task], now: DateTime<Local>) -> Result<ApiBudget> {
     let (start, end) = month_bounds(now)?;
     let spent = tasks
         .iter()
         .filter(|task| {
             task.agent_display_name() == route.id
-                && task.created_at >= start
-                && task.created_at <= now
-                && task.created_at < end
+                && billed_at(task, now) >= start
+                && billed_at(task, now) <= now
+                && billed_at(task, now) < end
         })
-        .filter_map(|task| task.cost_usd)
+        .filter_map(|task| {
+            task.cost_usd.or_else(|| {
+                crate::cost::estimate_cost(
+                    task.tokens.unwrap_or(0),
+                    task.costing_model(),
+                    crate::types::AgentKind::Claude,
+                )
+            })
+        })
         .fold(0.0, |spent, cost| spent + cost);
     let elapsed = (now - start).num_seconds() as f64 / (end - start).num_seconds() as f64;
     let state = if spent < route.monthly_budget_usd {
@@ -80,10 +96,18 @@ pub(crate) fn for_route(route: &ApiRoute, store: Option<&Store>) -> Result<ApiBu
             owned.as_ref()
         }
     };
-    let tasks = store
+    let mut tasks = store
         .map(|s| s.list_tasks(TaskFilter::All))
         .transpose()?
         .unwrap_or_default();
+    if let Some(store) = store {
+        for task in tasks
+            .iter_mut()
+            .filter(|task| task.agent_display_name() == route.id)
+        {
+            task.cost_usd = crate::cost::api_route::task_cost(store, task)?;
+        }
+    }
     calculate(route, &tasks, Local::now())
 }
 

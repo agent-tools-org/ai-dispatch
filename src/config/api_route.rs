@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct ApiRoute {
+pub struct ApiRoute {
     pub id: String,
     pub agent: String,
     pub keychain_service: String,
@@ -18,7 +18,7 @@ pub(crate) struct ApiRoute {
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum OverBudget {
+pub enum OverBudget {
     #[default]
     Stop,
     Bill,

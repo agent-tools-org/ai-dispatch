@@ -88,6 +88,8 @@ pub trait Agent: Send + Sync {
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command>;
     /// Apply adapter environment constraints after shared launch environment setup.
     fn finalize_launch_env(&self, _cmd: &mut Command) {}
+    /// Validated, immutable API-account identity captured when resolving this adapter.
+    fn api_route(&self) -> Option<&crate::config::api_route::ApiRoute> { None }
     /// Validate the installed host CLI contract before a task row is claimed.
     fn validate_cli(&self, _model: Option<&str>, _run: &CliCommandRunner<'_>) -> Result<()> {
         Ok(())

@@ -251,6 +251,7 @@ pub(super) fn resolve_agent_setup(
     } else {
         agent::get_agent(agent_kind)
     };
+    agent::api_route::reject_container(agent.as_ref(), args.container.is_some())?;
     let model_source = if args.model.is_some() || args.model_source == agent::model_validation::ModelSource::Advised { args.model_source } else { agent::model_validation::ModelSource::AidResolved };
     args.model_source = model_source;
     if let Some(ref model) = effective_model

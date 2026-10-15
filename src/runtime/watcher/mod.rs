@@ -139,24 +139,24 @@ pub async fn watch_streaming(
             }
             let detail = event_detail.detail;
             last_event_detail = Some(detail.clone());
-            if exceeds_cost_ceiling(info.cost_usd, max_task_cost) {
-                let current_cost = info.cost_usd.unwrap_or_default();
-                let max_cost = max_task_cost.unwrap_or_default();
-                let _ = store.insert_agent_event(&TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: Local::now(),
-                    event_kind: EventKind::Error,
-                    detail: format!(
-                        "Task killed: cost ${:.2} exceeded ceiling ${:.2}",
-                        current_cost, max_cost
-                    ),
-                    metadata: None,
-                });
-                force_kill_process_group(child);
-                let _ = child.kill().await;
-                info.status = TaskStatus::Failed;
-                break;
-            }
+        }
+        if exceeds_cost_ceiling(info.cost_usd, max_task_cost) {
+            let current_cost = info.cost_usd.unwrap_or_default();
+            let max_cost = max_task_cost.unwrap_or_default();
+            let _ = store.insert_agent_event(&TaskEvent {
+                task_id: task_id.clone(),
+                timestamp: Local::now(),
+                event_kind: EventKind::Error,
+                detail: format!(
+                    "Task killed: cost ${:.2} exceeded ceiling ${:.2}",
+                    current_cost, max_cost
+                ),
+                metadata: None,
+            });
+            force_kill_process_group(child);
+            let _ = child.kill().await;
+            info.status = TaskStatus::Failed;
+            break;
         }
     }
     log_file.flush().await?;

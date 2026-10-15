@@ -60,6 +60,10 @@ fn args(home: &std::path::Path) -> RunArgs {
         env: Some(std::collections::HashMap::from([
             ("PATH".into(), home.join("bin").display().to_string()),
             ("ANTHROPIC_API_KEY".into(), "synthetic-operator-key".into()),
+            ("ANTHROPIC_BASE_URL".into(), "https://example.invalid".into()),
+            ("ANTHROPIC_AUTH_TOKEN".into(), "synthetic".into()),
+            ("CLAUDE_CODE_USE_BEDROCK".into(), "1".into()),
+            ("CLAUDE_CODE_USE_VERTEX".into(), "1".into()),
         ])),
         ..Default::default()
     }
@@ -141,6 +145,38 @@ done
 expected='{"apiKeyHelper":"/usr/bin/security find-generic-password -s test -a account-ming -w"}'
 [ "$settings" = "$expected" ] || exit 91
 [ "${ANTHROPIC_API_KEY+x}" != x ] || exit 92
+[ "${ANTHROPIC_BASE_URL+x}" != x ] || exit 93
+[ "${ANTHROPIC_AUTH_TOKEN+x}" != x ] || exit 94
+[ "${CLAUDE_CODE_USE_BEDROCK+x}" != x ] || exit 95
+[ "${CLAUDE_CODE_USE_VERTEX+x}" != x ] || exit 96
 printf '%s\n' '{"type":"system","subtype":"init","apiKeySource":"apiKeyHelper"}'
 printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0}'
 "#;
+
+#[tokio::test]
+async fn route_cost_cap_stops_assistant_usage_without_a_result() {
+    let _permit = crate::support::test_subprocess::acquire();
+    let (home, _guard, store) = fixture();
+    crate::support::test_env::write_executable(
+        &home.path().join("bin/claude"),
+        concat!(
+            "#!/bin/sh\n",
+            "printf '%s\\n' '{\"type\":\"assistant\",\"message\":{\"id\":\"cap\",",
+            "\"model\":\"sonnet\",\"usage\":{\"input_tokens\":1000000}}}'\n",
+            "/bin/sleep 30\n",
+        ),
+    );
+    let spec = spec(false);
+    let (mut args, agent, command, _isolated) = prepared(home.path(), &store, &spec);
+    args.max_task_cost = Some(1.0);
+    tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        super::super::run_process(&store, &spec, &args, agent.as_ref(), command),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let task = store.get_task("t-api-launch").unwrap().unwrap();
+    assert_eq!(task.status, crate::types::TaskStatus::Failed);
+    assert!(task.cost_usd.is_some_and(|cost| cost > 1.0));
+}

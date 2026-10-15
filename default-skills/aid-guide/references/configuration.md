@@ -66,9 +66,16 @@ Use the route ID wherever an agent name is accepted, including `aid run`, batch
 adapter. The route passes `--settings` JSON with exactly one setting:
 `apiKeyHelper`, for example `/usr/bin/security find-generic-password -s
 aid-anthropic-api -a account-ming -w`. Claude Code runs that helper and retrieves
-the password; aid never reads it. The route child removes `ANTHROPIC_API_KEY`,
-including inherited and explicitly forwarded values, so the helper is its only
-API-key source and agent shell commands cannot read the key from that variable.
+the password; aid never reads it or puts it in the child environment, process
+arguments or task logs. Any process running as the same user, including the
+agent's shell, can still invoke the same keychain command and read the password.
+The helper does not isolate the keychain from same-user processes.
+
+Route children scrub `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`,
+`ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK` and `CLAUDE_CODE_USE_VERTEX`,
+including inherited and explicitly forwarded values, so the helper key is used
+with Anthropic's API. API routes reject `--container` at dispatch because their
+helper requires the host keychain.
 An unreadable item is handled by Claude Code; aid does not preflight passwords.
 A subscription or environment-key init source stops the run and holds the route
 instead of silently accepting different billing. Plain `claude` keeps its existing

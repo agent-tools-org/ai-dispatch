@@ -133,7 +133,7 @@ fn billing_source_requires_helper_and_does_not_affect_subscription() {
 fn credit_refusal_holds_only_route_until_next_local_month() {
     let (_home, _guard) = setup();
     let route = adapter();
-    let line = r#"{"type":"result","is_error":true,"result":"Credit balance is too low"}"#;
+    let line = r#"{"type":"result","is_error":true,"error":{"type":"billing_error"},"result":"Credit balance is too low"}"#;
     assert!(stream_failure(&route, line).unwrap().is_some());
     let hold = std::fs::read_to_string(paths::aid_dir().join("rate-limit-claude-api-ming")).unwrap();
     let (_, next) = api_budget::month_bounds(chrono::Local::now()).unwrap();
@@ -201,7 +201,7 @@ fn structured_billing_refusals_match_all_supported_envelopes() {
     for line in [
         r#"{"type":"error","error":{"message":"credit-balance-too-low"}}"#,
         r#"{"type":"assistant","error":"billing_error","message":{"content":[]}}"#,
-        r#"{"type":"result","is_error":true,"result":"Insufficient credits"}"#,
+        r#"{"type":"result","is_error":true,"error":{"message":"Insufficient credits"},"result":"Insufficient credits"}"#,
     ] {
         assert!(credit_refusal(&serde_json::from_str(line).unwrap()));
     }
@@ -237,9 +237,12 @@ fn credit_refusal_preserves_reported_cost_before_stopping() {
         cost_usd: None,
         exit_code: None,
     };
-    let line = r#"{"type":"result","is_error":true,"result":"Credit balance is too low",
+    let line = r#"{"type":"result","is_error":true,"error":{"type":"billing_error"},"result":"Credit balance is too low",
         "total_cost_usd":0.05}"#;
     assert!(record_stream_failure(&adapter(), line, &store, &id, &mut info).unwrap());
     assert_eq!(info.cost_usd, Some(0.05));
     assert_eq!(info.status, TaskStatus::Failed);
 }
+
+#[path = "api_route_audit_tests.rs"]
+mod audit_tests;

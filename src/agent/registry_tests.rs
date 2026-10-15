@@ -228,3 +228,16 @@ delegate_to = "opencode"
     // Falls back to plain CustomAgent → command is "bash"
     assert_eq!(cmd.get_program().to_string_lossy(), "bash");
 }
+
+#[test]
+fn stale_api_placeholder_never_resolves_to_plain_claude() {
+    let config: crate::config::api_route::ApiRoute = toml::from_str(concat!(
+        "id = 'claude-api-ming'\nagent = 'claude'\nkeychain_service = 'test'\nmonthly_budget_usd = 200\n",
+    ))
+    .unwrap();
+    let map = HashMap::from([(
+        config.id.clone(),
+        super::super::api_route::registry_config(&config),
+    )]);
+    assert!(resolve_from_registry(&map, &config.id).is_none());
+}

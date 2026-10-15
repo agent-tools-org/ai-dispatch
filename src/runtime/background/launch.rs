@@ -52,7 +52,7 @@ pub(super) fn prepare_launch(
     crate::runtime::remote_build::configure_task(store, &spec.task_id, &mut std_cmd, home_guard.path())?;
     if let Some(temp_dir) = temp_dir { std_cmd.env("TMPDIR", temp_dir); }
     finish_env(store, spec, args, agent.kind(), &mut std_cmd, cargo_target_dir.as_deref())?;
-    crate::agent::api_route::validate_launch(&args.agent_name, store)?;
+    crate::agent::api_route::validate_launch(agent, store, args.container.is_some())?;
     agent.finalize_launch_env(&mut std_cmd);
     wrap_command(spec, args, agent.kind(), std_cmd)
 }

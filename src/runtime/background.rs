@@ -168,11 +168,12 @@ async fn run_process(
     let task_id = TaskId(spec.task_id.clone());
     let log_path = paths::log_path(&spec.task_id);
     let timeout_policy = crate::config::timeout_policy::TimeoutPolicy::from_env(args.env.as_ref());
+    let max_task_cost = agent::api_route::launch_cost_cap(agent, store, args.max_task_cost)?;
     if spec.interactive {
         crate::runtime::pty::runner::run_agent_process_with_control(
             agent, &std_cmd, &task_id, store, &log_path,
             args.output.as_deref(), args.model.as_deref(), agent.streaming(),
-            timeout_policy, args.max_task_cost, None,
+            timeout_policy, max_task_cost, None,
         )?;
         return Ok(());
     }
@@ -182,7 +183,7 @@ async fn run_process(
     crate::cmd::run::run_agent_process_with_cost(
         agent, tokio_cmd, &task_id, store, &log_path,
         args.output.as_deref(), args.model.as_deref(), agent.streaming(),
-        args.group.as_deref(), timeout_policy, args.max_task_cost,
+        args.group.as_deref(), timeout_policy, max_task_cost,
     )
     .await?;
     Ok(())

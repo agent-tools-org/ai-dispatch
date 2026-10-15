@@ -32,3 +32,29 @@ fn named_route_resolves_and_cascade_preserves_its_identity() {
     assert_eq!(setup.agent.rate_limit_name(), Some("claude-api-ming"));
     assert_eq!(args.agent_name, "claude-api-ming");
 }
+
+#[test]
+fn api_container_is_rejected_before_launch_without_holding_route() {
+    let home = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(home.path());
+    std::fs::write(
+        paths::config_path(),
+        concat!(
+            "[[api_route]]\nid = 'claude-api-ming'\nagent = 'claude'\n",
+            "keychain_service = 'test'\nmonthly_budget_usd = 200\n",
+        ),
+    )
+    .unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut args = RunArgs {
+        agent_name: "claude-api-ming".into(),
+        container: Some("image".into()),
+        ..Default::default()
+    };
+    let error = match resolve_agent_setup(&store, &mut args, None) {
+        Ok(_) => panic!("API route container must be rejected"),
+        Err(error) => error.to_string(),
+    };
+    assert!(error.contains("route claude-api-ming does not support --container"));
+    assert!(!paths::aid_dir().join("rate-limit-claude-api-ming").exists());
+}

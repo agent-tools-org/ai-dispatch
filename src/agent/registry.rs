@@ -93,10 +93,9 @@ fn resolve_from_registry(
     registry: &HashMap<String, CustomAgentConfig>,
     name: &str,
 ) -> Option<Box<dyn super::Agent>> {
-    if let Ok(Some(route)) = crate::config::api_route::find(name) {
-        return Some(Box::new(super::api_route::ApiRouteAgent(route)));
-    }
-    registry.get(name).map(|config| build_agent(config))
+    registry.get(name)
+        .filter(|config| config.delegate_to.as_deref() != Some("claude"))
+        .map(|config| build_agent(config))
 }
 
 fn build_agent(config: &CustomAgentConfig) -> Box<dyn super::Agent> {
@@ -147,7 +146,11 @@ fn parse_rate_limit_kind(config: &CustomAgentConfig) -> AgentKind {
 }
 
 pub fn resolve_custom_agent(name: &str) -> Option<Box<dyn super::Agent>> {
-    let registry = load_registry();
+    let config = crate::config::load_config().ok()?;
+    if let Some(route) = config.api_route.into_iter().find(|route| route.id == name) {
+        return Some(Box::new(super::api_route::ApiRouteAgent(route)));
+    }
+    let registry = load_from_dir(&agents_dir());
     resolve_from_registry(&registry, name)
 }
 

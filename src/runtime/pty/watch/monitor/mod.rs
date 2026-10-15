@@ -34,8 +34,7 @@ pub(crate) fn monitor_bridge(
                     return Err(error);
                 }
                 if state.info.status == TaskStatus::Failed
-                    && agent.rate_limit_name().is_some_and(|id|
-                        crate::config::api_route::find(id).ok().flatten().is_some())
+                    && agent.api_route().is_some()
                 {
                     let _ = bridge.kill_group();
                     break;

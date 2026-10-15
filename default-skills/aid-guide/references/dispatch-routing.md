@@ -229,13 +229,25 @@ provider identities, spend totals, scores and refusal markers. They do not draw
 on the Claude subscription pool or inherit its quota evidence. Configure them
 in [configuration](configuration.md#claude-api-account-routes).
 
-Month-to-date spend sums reported per-task USD costs for the route, using task
-creation dates within the local calendar month. This measures aid tasks only;
-external account activity is not included. Below the budget the state is
-`in_plan`. At or above it, `over_budget = "stop"` makes the route `exhausted`
-and prevents dispatch; `"bill"` makes it `overage`. The subscription billing
-profile rules above also apply to API-route advice: overage excludes free/cheap
-profiles and adds the applicable `billing` penalty for standard profiles.
+Month-to-date spend uses each task's reported USD cost, falling back to the
+existing token-based estimate when no result cost survives a stop, timeout,
+crash or credit refusal. Stored assistant usage supplies current estimates for
+running tasks, including runs without a final result. Completed tasks count in
+the local calendar month of completion; running tasks count in the current
+month. This measures aid tasks only; external account activity is not included.
+Below budget the state is `in_plan`. At or above it, `over_budget = "stop"` makes
+the route `exhausted` and prevents dispatch; `"bill"` makes it `overage`.
+
+For `stop`, launch checks include running estimates and pass the remaining
+budget as `max_task_cost` to both piped and PTY execution. An explicit lower
+per-task cap remains lower. New usage evidence updates aggregate route spend
+and stops work when the budget is exhausted. Enforcement is at launch plus the
+per-task cap and live estimate checks; in-flight requests and concurrent usage
+can exceed the target before their next usage report. Estimates depend on
+available token evidence and known model pricing. `bill` permits overage and
+keeps only explicitly configured per-task caps. Overage still excludes
+free/cheap advice profiles and applies the existing standard-profile `billing`
+penalty.
 
 A separate `pace` term subtracts 2.0 when spend exceeds
 `monthly_budget_usd × elapsed_fraction_of_month × 1.25`. Pace never excludes a
@@ -247,5 +259,8 @@ The Claude `system/init` stream event must report
 `apiKeySource = "apiKeyHelper"`. A missing field or any other value, including
 an environment-key source, stops the process and fails the task with `route <id> is not billed to its API key`.
 That route receives a needs-human hold. Fix the key or CLI billing configuration,
-then use `aid config clear-limit <id>`. Credit-balance or billing refusals hold
-only that route until midnight on the first day of the next local month.
+then use `aid config clear-limit <id>`. Structured provider error types and error
+messages identifying a credit-balance or billing refusal hold only that route
+until midnight on the first day of the next local month. Result prose and tool
+inputs never establish a monthly credit hold. The adapter retains the validated
+route selected at launch; later config edits do not reclassify its stream.

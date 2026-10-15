@@ -1,20 +1,14 @@
 // Batch task file parser: reads TOML batch configs and validates task DAGs.
 // Each batch file declares tasks with agent, prompt, overrides, and dependencies.
-#[path = "batch_interpolate.rs"]
-mod batch_interpolate;
-#[path = "batch_legacy_fields.rs"]
-mod batch_legacy_fields;
-#[path = "batch_serde.rs"]
-mod batch_serde;
-#[path = "batch/schema.rs"]
+mod interpolate;
+mod legacy_fields;
+mod serde_fields;
 mod schema;
-#[path = "batch/validate.rs"]
 mod validate;
-#[path = "batch/warnings.rs"]
 mod warnings;
 
-use self::batch_interpolate::{apply_defaults, interpolate_batch_config};
-use self::batch_legacy_fields::validate_legacy_field_renames;
+use self::interpolate::{apply_defaults, interpolate_batch_config};
+use self::legacy_fields::validate_legacy_field_renames;
 use self::validate::{
     validate_agents, validate_conditional_hooks, validate_dag, validate_fallback_agents,
 };
@@ -250,13 +244,10 @@ fn task_label(task: &BatchTask, task_idx: usize) -> String {
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
-#[path = "batch/task_profile_tests.rs"]
 mod task_profile_tests;
 
 #[cfg(test)]
-#[path = "batch/legacy_field_tests.rs"]
 mod legacy_field_tests;
 
 #[cfg(test)]
-#[path = "batch/max_concurrent_tests.rs"]
 mod max_concurrent_tests;

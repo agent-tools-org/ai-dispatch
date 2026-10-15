@@ -1,5 +1,5 @@
 // Serde visitors for batch TOML fields with bool-or-string and string-or-list forms.
-// Exports: parent-visible deserialization helpers for `src/batch.rs`.
+// Exports: parent-visible deserialization helpers for `src/batch/mod.rs`.
 // Deps: serde deserializer traits.
 
 use serde::de::{self, SeqAccess, Visitor};

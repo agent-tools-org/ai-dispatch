@@ -8,31 +8,18 @@ use std::fmt;
 #[cfg(test)]
 use std::{cell::RefCell, collections::VecDeque};
 
-#[path = "types/agent.rs"]
 mod agent;
-#[path = "types/attribution.rs"]
 mod attribution;
-#[path = "types/provider.rs"]
 mod provider;
-#[path = "types/route.rs"]
 mod route;
-#[path = "types/delivery.rs"]
 mod delivery;
-#[path = "types/message.rs"]
 mod message;
-#[path = "types/status.rs"]
 mod status;
-#[path = "types/status_sets.rs"]
 mod status_sets;
-#[path = "types/verify_status.rs"]
 mod verify_status;
-#[path = "types/task.rs"]
 mod task;
-#[path = "types/task_profile.rs"]
 mod task_profile;
-#[path = "types/memory.rs"]
 mod memory;
-#[path = "types/outcome.rs"]
 pub(crate) mod outcome;
 
 pub use self::agent::AgentKind;
@@ -125,9 +112,7 @@ impl fmt::Display for WorkgroupId {
 }
 
 #[cfg(test)]
-#[path = "types/tests.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "types/status_transition_tests.rs"]
 mod status_transition_tests;

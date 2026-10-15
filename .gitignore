@@ -46,3 +46,6 @@ result_*.md
 client/*.xcodeproj/
 client/DerivedData/
 client/Support/Info-*.plist
+
+# Local agent CLI settings
+.factory/

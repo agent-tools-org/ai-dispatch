@@ -205,7 +205,6 @@ fn append_message(base: String, message: &str) -> String {
 mod tests {
     use super::*;
     use std::env;
-    use std::fs;
 
     fn set_env(key: &str, value: impl AsRef<std::ffi::OsStr>) {
         unsafe { env::set_var(key, value) }

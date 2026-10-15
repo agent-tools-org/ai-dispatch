@@ -10,7 +10,6 @@ use crate::support::test_subprocess;
 use crate::types::{AgentKind, EventKind, TaskId};
 use crate::support::test_env::write_executable;
 use std::fs;
-use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;

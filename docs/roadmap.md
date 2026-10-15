@@ -9,10 +9,6 @@ source evidence and verification limits. Release validation is recorded separate
 Existing `wi-*` IDs are retained for reconciliation; source implementation status below
 does not assert board closure. New slices need board IDs before implementation.
 
-Source modules live under `src/{cli,cmd,agent,config,cost,prompt,routing,runtime,store,task,ui,workspace,support}/`.
-`ui` groups board, tui, web (feature gated), and output; `cli` owns dispatch and diagnostics.
-Batch and core types retain their existing root files and child directories.
-
 ## Current baseline
 
 - The current release is **v11.0.0** (2026-10-14): failure truthfulness; see
@@ -227,7 +223,7 @@ gates remain open. These changes do not constitute a release.
 | `wi-29bd`: project budget | Target identity enforcement/reporting committed in `d7dc85ef` and remotely tested; init/sync contract remains | Next budget work is slice 3 below |
 | `wi-e1a0`: merge conflict attribution | Distinct stash-restore result, durable stash identity, regression tests exist | Acceptance recheck; not an unimplemented feature |
 | `wi-5eef`: truthful release dry-run | Recorded in v10.47.0 and covered by release hygiene tests | Remove from implementation queue; keep release gate |
-| #152: module-tree migration | run/show/batch subdirectories landed (v10.46.0) | Continue only remaining clusters |
+| #152: module-tree migration | Done: every module lives in a layer directory; `src/main.rs` is the only root file | None |
 
 ## M0 — Restore a reproducible baseline (P0, next)
 
@@ -292,9 +288,10 @@ personal task history or undocumented local tooling. No release number is promis
 
 ## M3 — Reduce remaining maintenance cost (P2)
 
-- Continue #152 with rate-limit, worker/PTY and Store mutation boundaries; the
-  lifecycle boundary is tracked in the structural refactor program above.
-  Keep behavior-preserving extraction separate from semantic fixes.
+- #152 is done as a relocation. Directories still over ten files: `cmd` (148),
+  `cmd/run` (111), `agent` (105), `cli` (25), `cmd/show` (22), `store` (22),
+  `cmd/batch` (21), `types` (20), `batch` (16), `store/queries` (11). Split them only
+  alongside a behaviour change in that area; keep extraction separate from semantic fixes.
 - #160 adapter consolidation: OpenCode native/overlay and CLI probing are shared as of
   v10.50.0; reassess further sharing against captured protocol fixtures.
 - Re-triage [historical UX debt](ux-debt.md): batch dependency lineage (`wi-f4bf`),

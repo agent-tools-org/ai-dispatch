@@ -398,12 +398,6 @@ Use `aid run` to dispatch coding tasks to AI agents instead of writing code dire
 
 <!-- aid:end -->
 
-## Source layout
-
-Source modules live under `src/{cli,cmd,agent,config,cost,prompt,routing,runtime,store,task,ui,workspace,support}/`.
-`ui` groups board, tui, web (feature gated), and output; `cli` owns dispatch and diagnostics.
-Batch and core types retain their existing root files and child directories.
-
 ## Test Layout Rule
 
 One convention (audit 2026-07, issue #164): tests are **inline** (`#[cfg(test)] mod tests`) while the file stays ≤300 lines; otherwise a **sibling `<name>_tests.rs`** included via `#[path]`. Cross-binary integration tests live in `tests/`. Do not introduce new `*_tests/` subdirectories.

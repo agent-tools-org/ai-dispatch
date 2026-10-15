@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 use crate::agent::classifier::TaskCategory;
-use crate::background;
+use crate::runtime::background;
 use crate::cmd::advise;
 use crate::cmd::agent_json;
 use crate::cmd::ask;

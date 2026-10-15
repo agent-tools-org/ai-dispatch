@@ -2,9 +2,9 @@
 use super::*;
 
 pub(super) fn worker_is_settling(task_id: &str) -> Result<bool> {
-    let Some(spec) = crate::background::load_spec_if_exists(task_id)? else { return Ok(false); };
+    let Some(spec) = crate::runtime::background::load_spec_if_exists(task_id)? else { return Ok(false); };
     if let Some(pid) = spec.worker_pid
-        && !crate::background::is_process_running(pid)
+        && !crate::runtime::background::is_process_running(pid)
     {
         // A worker can remove the spec and exit between the read and PID probe.
         if !crate::support::paths::job_path(task_id).try_exists()? { return Ok(false); }

@@ -46,8 +46,8 @@ pub(crate) fn build_report(
     caller_model: Option<&str>,
 ) -> AdviceReport {
     let team = team.and_then(crate::config::team::resolve_team);
-    let model = crate::session::caller_model(caller_model);
-    let caller = crate::session::current_caller()
+    let model = crate::runtime::session::caller_model(caller_model);
+    let caller = crate::runtime::session::current_caller()
         .and_then(|session| caller_advice(&session.kind, model.as_deref(), kind.unwrap_or_else(|| {
             let normalized = prompt.trim().to_lowercase();
             crate::agent::classifier::classify(prompt,

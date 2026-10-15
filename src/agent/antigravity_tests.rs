@@ -53,7 +53,7 @@ fn build_command_with_sandbox_and_read_only_proceeds() {
     let mut opts = opts(true, vec![]);
     opts.sandbox = true;
 
-    assert!(crate::sandbox::can_sandbox(AgentKind::Antigravity));
+    assert!(crate::runtime::sandbox::can_sandbox(AgentKind::Antigravity));
     assert!(AntigravityAgent.build_command("test prompt", &opts).is_ok());
 }
 

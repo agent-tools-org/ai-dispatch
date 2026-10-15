@@ -201,7 +201,7 @@ fn provider_capacity_scope_cut_pty_merged_stderr_records_capacity_without_child(
     let envelope = serde_json::json!({"type": "error", "message": CAPACITY});
     let mut cmd = std::process::Command::new("/bin/sh");
     cmd.args(["-c", &format!("echo '{envelope}' >&2; exit 1")]);
-    crate::pty_runner::run_agent_process(
+    crate::runtime::pty::runner::run_agent_process(
         &crate::agent::codex::CodexAgent,
         &cmd,
         &row.id,

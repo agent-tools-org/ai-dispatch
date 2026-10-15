@@ -2,7 +2,7 @@
 // Exports: apply_board_filters, active_project_filter.
 // Deps: project identity helpers, session, store Task list.
 
-use crate::session;
+use crate::runtime::session;
 use crate::types::Task;
 
 /// Apply mine/group/project filters in memory (no per-row DB queries).

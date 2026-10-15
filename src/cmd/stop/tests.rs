@@ -80,7 +80,7 @@ fn kill_waiting_task_sets_stopped() {
 
 #[test]
 fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
-    use crate::background::{save_spec, BackgroundRunSpec};
+    use crate::runtime::background::{save_spec, BackgroundRunSpec};
     use tempfile::TempDir;
 
     let temp = TempDir::new().unwrap();

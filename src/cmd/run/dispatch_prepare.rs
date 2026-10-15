@@ -4,7 +4,7 @@
 use anyhow::Result;
 use chrono::Local;
 use std::{path::{Path, PathBuf}, sync::Arc};
-use crate::{agent, support::paths, config::project::{self, ProjectConfig}, session};
+use crate::{agent, support::paths, config::project::{self, ProjectConfig}, runtime::session};
 use crate::{store::Store, types::*};
 use super::run_dispatch_claim::insert_task_claiming_id;
 use super::run_dispatch_resolve::{AgentSetup, apply_project_defaults, maybe_insert_held_route_event, resolve_agent_setup};
@@ -87,7 +87,7 @@ fn resolve_dispatch_context(store: &Arc<Store>, args: &mut RunArgs) -> Result<Di
     }
     crate::command_diagnostics::validate_run_options(args)?;
     validate_egress(args)?;
-    crate::remote_build::resolve(args)?;
+    crate::runtime::remote_build::resolve(args)?;
     // Use the same resolved identity as task persistence, never the caller's cwd
     // inside budget enforcement. Explicit non-Git targets remain unattributed.
     let project_id = resolve_task_project_id(
@@ -220,7 +220,7 @@ fn finish_dispatch(
     store.update_task_dispatch_args(
         claimed.task_id.as_str(), &dispatch_args.dispatch_args_json()?,
     )?;
-    crate::remote_build::record(store, &claimed.task_id, args)?;
+    crate::runtime::remote_build::record(store, &claimed.task_id, args)?;
     let requested_skills = run_prompt::effective_skills(args, context.detected_project.as_ref());
     if args.skills.is_empty() && !requested_skills.is_empty() {
         aid_info!("[aid] Project default skill: {} (.aid/project.toml)", requested_skills.join(", "));

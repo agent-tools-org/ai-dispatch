@@ -114,7 +114,7 @@ async fn assert_finalization(pty: bool, streaming: bool, status: TaskStatus) {
     if pty {
         let mut cmd = Command::new("sh");
         cmd.args(["-c", "printf 'delivered\\n'; exit 0"]);
-        crate::pty_runner::run_agent_process_with_control(
+        crate::runtime::pty::runner::run_agent_process_with_control(
             &agent,
             &cmd,
             &agent.id,

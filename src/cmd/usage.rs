@@ -7,7 +7,7 @@ use serde_json::to_string;
 use std::sync::Arc;
 
 use crate::config;
-use crate::session;
+use crate::runtime::session;
 use crate::store::Store;
 use crate::config::team;
 use crate::types::TaskFilter;

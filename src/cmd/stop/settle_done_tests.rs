@@ -120,7 +120,7 @@ fn settle_done_provisional_success_still_fails_verification() {
 fn settle_done_worker_failure_can_win_before_success_settlement() {
     let (_home, _guard, store, id) = setup();
     assert!(
-        crate::background::record_failure(&store, id.as_str(), "worker failed", "worker failed")
+        crate::runtime::background::record_failure(&store, id.as_str(), "worker failed", "worker failed")
             .expect("worker failure")
     );
     let task = store.get_task(id.as_str()).expect("get").expect("task");

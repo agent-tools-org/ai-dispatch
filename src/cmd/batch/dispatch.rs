@@ -290,7 +290,7 @@ pub(super) fn reconcile_and_poll_completed_tasks(
     store: &Arc<Store>,
     active: &mut Vec<(usize, String)>,
 ) -> Result<Vec<super::batch_types::CompletedTask>> {
-    let _ = crate::background::check_zombie_tasks(store.as_ref())?;
+    let _ = crate::runtime::background::check_zombie_tasks(store.as_ref())?;
     poll_completed_tasks(store, active)
 }
 

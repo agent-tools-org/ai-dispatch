@@ -1,15 +1,15 @@
 // Shared helpers for manual and automatic unstick flows.
 // Exports: default_nudge_message, mark_task_stalled, and queue_auto_nudge.
-// Deps: crate::pty_watch_idle, crate::store::Store, crate::types.
+// Deps: crate::runtime::pty::watch_idle, crate::store::Store, crate::types.
 
 use anyhow::Result;
 
-use crate::pty_watch_idle;
+use crate::runtime::pty::watch_idle;
 use crate::store::Store;
 use crate::types::{MessageDirection, MessageSource, TaskStatus};
 
 pub fn default_nudge_message() -> String {
-    pty_watch_idle::default_nudge_message()
+    watch_idle::default_nudge_message()
 }
 
 pub fn queue_auto_nudge(store: &Store, task_id: &str, message: &str) -> Result<()> {

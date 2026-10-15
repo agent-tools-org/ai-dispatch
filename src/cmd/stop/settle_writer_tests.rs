@@ -165,7 +165,7 @@ fn settle_first_stop_refusal_reports_winning_terminal_reason_without_event() {
         .insert_task(&make_task("t-stop-lost", TaskStatus::Running))
         .expect("insert");
     crate::support::paths::ensure_dirs().expect("dirs");
-    crate::background::record_failure(&store, "t-stop-lost", "worker died", "worker died")
+    crate::runtime::background::record_failure(&store, "t-stop-lost", "worker died", "worker died")
         .expect("reaper wins");
     let before = store.get_events("t-stop-lost").expect("events");
     let err = stop(&store, "t-stop-lost").expect_err("terminal refusal");

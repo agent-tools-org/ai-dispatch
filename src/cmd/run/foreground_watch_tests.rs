@@ -4,7 +4,7 @@
 
 use super::*;
 use chrono::Local;
-use crate::background::{self, BackgroundRunSpec};
+use crate::runtime::background::{self, BackgroundRunSpec};
 use crate::support::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};

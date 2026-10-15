@@ -2,7 +2,7 @@
 // Preserves stdout/stderr bytes while timing lock notices through the job-start marker.
 // Deps: std pipe readers, synchronized clocks and verifier result handling.
 
-use crate::remote_build::LockQueue;
+use crate::runtime::remote_build::LockQueue;
 use anyhow::{Context, Result};
 use std::io::{BufRead, BufReader, Read};
 use std::process::Child;

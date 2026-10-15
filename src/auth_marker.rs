@@ -98,7 +98,7 @@ pub(crate) fn auth_failure_line(raw: &str, agent: AgentKind, channel: Channel) -
             return None;
         }
         return raw.lines().find_map(|line| {
-            let cleaned = crate::watcher::strip_terminal_escapes(line);
+            let cleaned = crate::runtime::watcher::strip_terminal_escapes(line);
             let value: serde_json::Value = serde_json::from_str(cleaned.trim()).ok()?;
             if !crate::quota_channel::is_error_envelope(value.as_object()?) {
                 return None;

@@ -6,7 +6,7 @@ use tokio::process::Command;
 
 use crate::{store::Store, types::*};
 use crate::cmd::run::RunArgs;
-use crate::process_group::cleanup_process_group;
+use crate::runtime::process::group::cleanup_process_group;
 use crate::store::TaskCompletionUpdate;
 
 use super::{clean_output_if_jsonl, fill_empty_output_from_log};
@@ -145,7 +145,7 @@ fn complete_agent(
     let model = args.model;
     let duration_ms = start.elapsed().as_millis() as i64;
     let exit_code = resolve_failure_exit_code(store.as_ref(), task_id, info.exit_code);
-    // Same split as pty_runner::record_completion: the observation stands alone,
+    // Same split as runner::record_completion: the observation stands alone,
     // only the cost estimate may fall back to what was requested.
     let (observed_model, attribution_source) = crate::agent::codex::grade_completion_observation(
         agent, store.as_ref(), task_id, info, model,

@@ -79,7 +79,7 @@ fn queue_wrap_up(store: &Store, task_id: &str) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::{run, wrap_up_before_timeout};
-    use crate::input_signal;
+    use crate::runtime::input_signal;
     use crate::support::paths::AidHomeGuard;
     use crate::store::Store;
     use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};

@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::App;
 use super::super::metrics::{get_process_metrics, ProcessMetrics};
-use crate::background;
+use crate::runtime::background;
 use crate::types::{Task, TaskFilter, TaskStatus};
 
 impl App {

@@ -8,8 +8,8 @@ use std::process::ExitStatus;
 use std::time::Duration;
 
 use super::VerifyResult;
-use crate::process_guard::ProcessGuard;
-use crate::remote_build::LockQueue;
+use crate::runtime::process::guard::ProcessGuard;
+use crate::runtime::remote_build::LockQueue;
 
 #[derive(Clone, Copy)]
 pub(crate) enum VerifyBudget {

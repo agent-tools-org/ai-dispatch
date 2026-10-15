@@ -4,7 +4,7 @@
 use anyhow::Result;
 use std::path::Path;
 use std::sync::Arc;
-use crate::background::{self, BackgroundRunSpec};
+use crate::runtime::background::{self, BackgroundRunSpec};
 use crate::commit;
 use crate::config::hooks;
 use crate::store::Store;

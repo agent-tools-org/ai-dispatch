@@ -4,7 +4,7 @@
 use anyhow::{Context, Result};
 
 use crate::cmd::reply::{InputCommand, ensure_interactive_input};
-use crate::input_signal;
+use crate::runtime::input_signal;
 use crate::store::Store;
 
 pub fn run(store: &Store, task_id: &str, input: Option<&str>, file: Option<&str>) -> Result<()> {
@@ -34,7 +34,7 @@ pub fn run(store: &Store, task_id: &str, input: Option<&str>, file: Option<&str>
 #[cfg(test)]
 mod tests {
     use super::run;
-    use crate::input_signal;
+    use crate::runtime::input_signal;
     use crate::support::paths::AidHomeGuard;
     use crate::store::Store;
     use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};

@@ -7,7 +7,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::background;
+use crate::runtime::background;
 use crate::cmd::run::capture_final_worktree_state;
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
@@ -124,7 +124,7 @@ fn signal_task(task_id: &str, task: &Task, graceful: bool, preserve_label: &str)
     if let Some(pid) = spec.as_ref().and_then(|spec| spec.agent_pid_for_signal()) {
         if graceful { background::kill_process(pid); } else { background::sigkill_process(pid); }
     }
-    crate::sandbox::kill_container(task_id);
+    crate::runtime::sandbox::kill_container(task_id);
     if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput
         | TaskStatus::Stalled | TaskStatus::Stopped | TaskStatus::Done)
     {

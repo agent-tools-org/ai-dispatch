@@ -7,7 +7,7 @@ use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use crate::process_guard::ProcessGuard;
+use crate::runtime::process::guard::ProcessGuard;
 use crate::store::Store;
 use crate::types::{TaskId, TaskStatus, VerifyStatus};
 
@@ -16,7 +16,7 @@ mod budget;
 #[path = "verify_output.rs"]
 mod output;
 use output::spawn_output_reader;
-use crate::remote_build::LockQueue;
+use crate::runtime::remote_build::LockQueue;
 pub(crate) use budget::VerifyBudget;
 
 pub(crate) static VERIFY_LOCK: Mutex<()> = Mutex::new(());
@@ -252,7 +252,7 @@ fn build_verify_command(
     }
     anyhow::ensure!(!cmd_str.is_empty(), "verify command is empty");
     let cmd = if let Some(container_name) = container_name {
-        crate::container::verify_in_container(
+        crate::runtime::container::verify_in_container(
             container_name,
             worktree_path,
             &cmd_str,

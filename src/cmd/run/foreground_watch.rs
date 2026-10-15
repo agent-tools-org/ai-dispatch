@@ -6,7 +6,7 @@ use std::io::IsTerminal;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 
-use crate::background;
+use crate::runtime::background;
 use crate::store::Store;
 use crate::types::{verify_required, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 

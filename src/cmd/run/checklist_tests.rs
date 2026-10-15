@@ -3,7 +3,7 @@
 // Deps: cmd::checklist helpers, run_prompt bundle builder, background spec serde.
 
 use super::*;
-use crate::background::BackgroundRunSpec;
+use crate::runtime::background::BackgroundRunSpec;
 use crate::cmd::checklist::merge_checklist_items;
 use crate::store::Store;
 

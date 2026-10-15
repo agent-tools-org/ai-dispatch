@@ -5,7 +5,7 @@ use crate::cli::{self, ExperimentCommands};
 use crate::cli::{ProjectAction, WorktreeAction};
 use crate::cmd;
 use crate::cmd::experiment_types::{ExperimentConfig, MetricDirection};
-use crate::{background, store};
+use crate::{runtime::background, store};
 use anyhow::Result;
 use std::sync::Arc;
 

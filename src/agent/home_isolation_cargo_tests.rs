@@ -39,7 +39,7 @@ fn remote_home_materializes_cargo_and_plain_home_keeps_symlink() {
     }
     let shim = cargo.join("bin/cargo");
     assert!(!fs::symlink_metadata(&shim).expect("shim").file_type().is_symlink());
-    assert_eq!(fs::read_to_string(&shim).expect("shim content"), include_str!("../remote_build/cargo.sh"));
+    assert_eq!(fs::read_to_string(&shim).expect("shim content"), include_str!("../runtime/remote_build/cargo.sh"));
     assert_ne!(fs::metadata(&shim).expect("mode").permissions().mode() & 0o111, 0);
     for entry in ["bin/rustup", "bin/rustc", "bin/cargo-clippy", "env", "config.toml", "credentials.toml", "registry", "git"] {
         assert_eq!(fs::read_link(cargo.join(entry)).expect("passthrough link"), real.join(".cargo").join(entry));
@@ -59,7 +59,7 @@ fn shell_command(guard: &IsolatedHomeGuard, real: &Path, shell: &str, script: &s
         .env("PATH", format!("{}:/usr/bin:/bin", real.join(".cargo/bin").display()))
         .env_remove("ZDOTDIR").env_remove("BASH_ENV").env_remove("ENV");
     guard.apply_toolchain_env(&mut command);
-    crate::remote_build::configure_task(&store, "t-home-cargo", &mut command, guard.path()).expect("shim PATH");
+    crate::runtime::remote_build::configure_task(&store, "t-home-cargo", &mut command, guard.path()).expect("shim PATH");
     command
 }
 

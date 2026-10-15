@@ -186,7 +186,7 @@ fn container_sandbox_home_interplay() {
     cmd.env("HOME", guard.path());
 
     // 1. Sandbox wrap_command test:
-    let wrapped_sandbox = crate::sandbox::wrap_command(&cmd, "t-test", crate::types::AgentKind::Claude, false);
+    let wrapped_sandbox = crate::runtime::sandbox::wrap_command(&cmd, "t-test", crate::types::AgentKind::Claude, false);
     let sandbox_args: Vec<String> = wrapped_sandbox
         .get_args()
         .map(|a| a.to_string_lossy().into_owned())
@@ -199,7 +199,7 @@ fn container_sandbox_home_interplay() {
     assert!(sandbox_args.iter().any(|arg| arg == "HOME=/root"));
 
     // 2. Container exec_in_container test:
-    let wrapped_container = crate::container::exec_in_container(&cmd, "aid-container");
+    let wrapped_container = crate::runtime::container::exec_in_container(&cmd, "aid-container");
     let container_args: Vec<String> = wrapped_container
         .get_args()
         .map(|a| a.to_string_lossy().into_owned())

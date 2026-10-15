@@ -10,7 +10,7 @@ use axum::Json;
 use super::api::get_task;
 use super::api_tests::make_task;
 use super::fleet::{FleetParams, ServerInfo, get_fleet};
-use crate::background::{BackgroundRunSpec, save_spec};
+use crate::runtime::background::{BackgroundRunSpec, save_spec};
 use crate::store::Store;
 use crate::types::{AttributionSource, TaskStatus};
 
@@ -34,7 +34,7 @@ async fn running_task_reports_measured_worker_rss_and_fleet_sums_it() {
     }))
     .unwrap();
     save_spec(&spec).unwrap();
-    assert_eq!(crate::background::load_worker_pid("t-memory").unwrap(), Some(worker_pid));
+    assert_eq!(crate::runtime::background::load_worker_pid("t-memory").unwrap(), Some(worker_pid));
     let sample_memory = || {
         crate::tui::metrics::get_process_metrics(worker_pid).unwrap().memory_mb.round() as i64
     };

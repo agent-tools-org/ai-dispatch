@@ -172,7 +172,7 @@ fn cost_components_explicit_creation_price_wins_over_input_multiplier() {
 #[test]
 fn watcher_completion_components_set_cost_and_replace_previous_totals() {
     use crate::types::{CompletionInfo, TaskStatus};
-    use crate::watcher::{
+    use crate::runtime::watcher::{
         StreamLineContext, SyntheticMilestoneTracker, handle_streaming_line_with_session,
     };
     let _guard = seed_prices(Some(0.125));

@@ -13,7 +13,7 @@ pub(super) fn spawn_agent(args: &mut RunProcessArgs<'_>) -> Result<Child> {
     let child = match args.store.with_running_task(args.task_id.as_str(), || {
         let child = args.cmd.spawn()?;
         if let Some(pid) = child.id() {
-            let _ = crate::background::update_agent_pid(args.task_id.as_str(), pid);
+            let _ = crate::runtime::background::update_agent_pid(args.task_id.as_str(), pid);
         }
         Ok(child)
     }) {
@@ -37,7 +37,7 @@ pub(super) async fn watch_agent(
     let limit = args.timeout_policy.max_duration.min(args.timeout_policy.hard_cap);
     let watch = async {
         if args.streaming {
-            crate::watcher::watch_streaming(
+            crate::runtime::watcher::watch_streaming(
                 args.agent,
                 child,
                 args.task_id,
@@ -49,7 +49,7 @@ pub(super) async fn watch_agent(
             )
             .await
         } else {
-            crate::watcher::watch_buffered(
+            crate::runtime::watcher::watch_buffered(
                 args.agent,
                 child,
                 args.task_id,
@@ -76,14 +76,14 @@ async fn settle_result(
     match result {
         Ok(Ok(info)) => Ok(info),
         Ok(Err(err)) => {
-            crate::process_group::force_kill_process_group(child);
+            crate::runtime::process::group::force_kill_process_group(child);
             let _ = child.kill().await;
             let _ = child.wait().await;
             settle_execution_failure(args, duration_ms, &err.to_string());
             Err(err)
         }
         Err(_) => {
-            crate::process_group::force_kill_process_group(child);
+            crate::runtime::process::group::force_kill_process_group(child);
             settle_execution_failure(
                 args, duration_ms, &format!("exceeded hard timeout of {} seconds", limit.as_secs()),
             );

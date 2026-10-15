@@ -1,8 +1,8 @@
 // Hung recovery retry policy for idle-timeout failures.
 // Exports retry limit, feedback text, and the auto-retry predicate.
-// Deps: crate::process_monitor, crate::types.
+// Deps: crate::runtime::process::monitor, crate::types.
 
-use crate::process_monitor::HungContext;
+use crate::runtime::process::monitor::HungContext;
 use crate::types::{Task, TaskStatus};
 
 pub const MAX_HUNG_RETRIES: u32 = 2;

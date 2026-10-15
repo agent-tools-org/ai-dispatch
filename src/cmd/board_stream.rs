@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::background;
+use crate::runtime::background;
 use crate::cmd::eta;
 use crate::store::Store;
 use crate::types::{Task, TaskFilter, TaskOutcome, TaskStatus};

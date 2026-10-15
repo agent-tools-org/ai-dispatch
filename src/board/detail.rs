@@ -3,7 +3,7 @@
 // Deps: parent board formatting helpers and task/event types.
 
 use crate::cost;
-use crate::session;
+use crate::runtime::session;
 use crate::types::{Task, TaskEvent, TaskStatus};
 use std::path::Path;
 use std::process::Command;

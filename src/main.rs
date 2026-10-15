@@ -21,10 +21,8 @@
 pub mod output;
 mod agent;
 mod backup;
-mod remote_build;
 mod aic;
 mod auth_marker;
-mod background;
 mod batch;
 mod board;
 mod command_diagnostics;
@@ -32,7 +30,6 @@ mod cmd;
 mod cmd_dispatch;
 mod commit;
 mod config;
-mod container;
 mod cost;
 pub mod credential_pool;
 mod failure_salvage;
@@ -42,28 +39,15 @@ pub mod gitbutler;
 mod live_quota;
 mod live_quota_refresh;
 mod route_availability;
-mod input_signal;
 mod model_catalog;
 mod model_health;
 mod provider_capacity;
 mod notify;
 mod prompt;
-pub mod process_group;
-mod process_guard;
-mod process_monitor;
-mod pty_bridge;
-mod pty_runner;
-mod pty_runner_control;
-mod pty_watch_idle;
-mod pty_watch;
 mod quota_channel;
 mod rate_limit;
 mod rate_limit_signatures;
 mod rate_limit_wait;
-mod sandbox;
-#[cfg(test)]
-mod sandbox_tests;
-mod session;
 mod state;
 #[cfg(test)]
 mod state_tests;
@@ -81,7 +65,6 @@ mod usage;
 pub mod usage_report;
 mod verify;
 mod verify_cargo;
-mod watcher;
 mod webhook;
 mod typesafe;
 #[cfg(feature = "web")]
@@ -93,6 +76,7 @@ mod worktree;
 mod worktree_layout;
 mod cli;
 mod support;
+mod runtime;
 
 use crate::cli::{Cli, Commands};
 use anyhow::Result;
@@ -111,7 +95,7 @@ fn run_cli(cli: Cli) -> Result<()> {
         return command_diagnostics::show(args);
     }
     if matches!(cli.command.as_ref(), Some(Commands::InternalRunTask(_)))
-        && background::daemonize_worker_if_requested()?
+        && runtime::background::daemonize_worker_if_requested()?
     {
         return Ok(());
     }
@@ -153,7 +137,7 @@ async fn async_main(cli: Cli) -> Result<()> {
     cost::maybe_refresh_prices();
     let store = Arc::new(store::Store::open(&support::paths::db_path())?);
     cost::warm_gemini_default_from_store(store.as_ref());
-    let _ = background::check_zombie_tasks(&store);
+    let _ = runtime::background::check_zombie_tasks(&store);
 
     let outcome = match command {
         Some(command) => cmd_dispatch::dispatch(store.clone(), command).await?,

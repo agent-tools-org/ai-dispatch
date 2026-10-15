@@ -54,7 +54,7 @@ async fn provider_capacity_round2_replayed_stderr_never_creates_hold_or_retry() 
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn().expect("child");
-    let info = crate::watcher::watch_streaming(
+    let info = crate::runtime::watcher::watch_streaming(
         &crate::agent::codex::CodexAgent, &mut child, &row.id, &store,
         &paths::log_path(row.id.as_str()), None,
         crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT, None,
@@ -149,11 +149,11 @@ fn provider_capacity_round2_classifies_decoded_turn_failure_and_reconnect_sequen
         row.status = TaskStatus::Running;
         store.insert_task(&row).expect("task");
         let mut info = crate::agent::Agent::parse_completion(&crate::agent::codex::CodexAgent, "");
-        let mut tracker = crate::watcher::SyntheticMilestoneTracker::new();
+        let mut tracker = crate::runtime::watcher::SyntheticMilestoneTracker::new();
         let mut count = 0;
         let mut session_saved = false;
         for line in lines {
-            crate::watcher::handle_streaming_line_with_session(crate::watcher::StreamLineContext {
+            crate::runtime::watcher::handle_streaming_line_with_session(crate::runtime::watcher::StreamLineContext {
                 agent: &crate::agent::codex::CodexAgent, task_id: &row.id, store: &store,
                 workgroup_id: None, synthetic_tracker: &mut tracker,
             }, &mut info, &mut count, &line.to_string(), &mut session_saved).expect("decode");

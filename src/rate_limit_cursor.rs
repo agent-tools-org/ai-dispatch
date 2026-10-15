@@ -68,7 +68,7 @@ mod tests {
             .arg(fixture)
             .stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped())
             .spawn().expect("replay process");
-        let info = crate::watcher::watch_streaming(
+        let info = crate::runtime::watcher::watch_streaming(
             &crate::agent::cursor::CursorAgent, &mut child, &task.id, &store,
             &crate::support::paths::log_path(task.id.as_str()), None,
             crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT, None,

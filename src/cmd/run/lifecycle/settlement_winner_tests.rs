@@ -278,10 +278,10 @@ fn rejected_transition_notice_preserves_settlement_winner() {
 #[test]
 fn hung_retry_notice_preserves_settlement_winner() {
     let f = Fixture::new(TaskStatus::Failed);
-    crate::process_monitor::insert_hung_retry_event(&f.store, &f.id).expect("retry notice");
+    crate::runtime::process::monitor::insert_hung_retry_event(&f.store, &f.id).expect("retry notice");
     f.assert_unchanged();
     let events = f.store.get_events(f.id.as_str()).expect("events");
-    assert!(crate::process_monitor::was_auto_retried_after_hang(&events));
+    assert!(crate::runtime::process::monitor::was_auto_retried_after_hang(&events));
     assert_eq!(
         events.last().expect("notice").event_kind,
         EventKind::Milestone

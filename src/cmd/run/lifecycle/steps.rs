@@ -8,7 +8,7 @@ mod settlement_winner_tests;
 
 pub(super) fn run_teardown_phase(task_id: &TaskId, args: &RunArgs, wt_path: Option<&String>) {
     if args.sandbox {
-        crate::sandbox::kill_container(task_id.as_str());
+        crate::runtime::sandbox::kill_container(task_id.as_str());
     }
     if let Some(wt) = wt_path {
         let _ = crate::worktree::clear_worktree_lock(std::path::Path::new(wt), task_id.as_str());

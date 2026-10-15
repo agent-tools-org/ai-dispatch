@@ -243,7 +243,7 @@ pub(crate) fn task_memory_mb(task: &Task) -> Option<i64> {
     if !matches!(task.status, crate::types::TaskStatus::Running | crate::types::TaskStatus::AwaitingInput) {
         return None;
     }
-    let worker_pid = crate::background::load_worker_pid(task.id.as_str()).ok().flatten()?;
+    let worker_pid = crate::runtime::background::load_worker_pid(task.id.as_str()).ok().flatten()?;
     crate::tui::metrics::get_process_metrics(worker_pid)
         .map(|metrics| metrics.memory_mb.round() as i64)
 }

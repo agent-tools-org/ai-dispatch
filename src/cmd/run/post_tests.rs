@@ -76,13 +76,13 @@ fn prior_hung_retry_count_counts_parent_chain_markers() {
     let child = failed_task_with_id("t-hung-child", Some(parent.id.as_str()));
     store.insert_task(&parent).expect("insert parent");
     store.insert_task(&child).expect("insert child");
-    process_monitor::insert_hung_retry_event(&store, &parent.id).expect("insert retry marker");
+    monitor::insert_hung_retry_event(&store, &parent.id).expect("insert retry marker");
 
     assert_eq!(prior_hung_retry_count(&store, &child).expect("retry count"), 1);
 }
 
-fn hung_context(transient: bool) -> process_monitor::HungContext {
-    process_monitor::HungContext {
+fn hung_context(transient: bool) -> monitor::HungContext {
+    monitor::HungContext {
         hung_duration_secs: 180,
         event_count: 1,
         last_event_detail: None,

@@ -1,7 +1,7 @@
 // Tests for batch helpers (path/workgroup/summary).
 // Exports: (tests only)
 // Deps: super::shared + batch_helpers
-use crate::background::{BackgroundRunSpec, save_spec};
+use crate::runtime::background::{BackgroundRunSpec, save_spec};
 use crate::batch;
 use super::shared::{make_task, seed_task};
 use crate::support::paths::AidHomeGuard;

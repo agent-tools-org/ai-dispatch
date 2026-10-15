@@ -123,7 +123,7 @@ impl RunArgs {
     /// stays None), the resolved budget mode and runtime state. `on_done` is
     /// the worker's own hook: it runs from the spec, so retries built from
     /// these args do not inherit it.
-    pub(crate) fn for_worker(store: &Store, spec: &crate::background::BackgroundRunSpec) -> Result<Self> {
+    pub(crate) fn for_worker(store: &Store, spec: &crate::runtime::background::BackgroundRunSpec) -> Result<Self> {
         let task_id = spec.task_id.as_str();
         let mut args = Self::saved_for_task(store, task_id)?
             .with_context(|| format!("Task {task_id} has no saved dispatch args"))?;

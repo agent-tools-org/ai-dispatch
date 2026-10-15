@@ -1,6 +1,6 @@
 // Worktree dependency preparation: setup hooks, dep-dir symlinks, and verify hints.
 // Exports: prepare_worktree_dependencies() and missing_deps_hint().
-// Deps: crate::process_guard, crate::store, crate::types, std fs/process/path helpers.
+// Deps: crate::runtime::process::guard, crate::store, crate::types, std fs/process/path helpers.
 use anyhow::{Context, Result};
 use chrono::Local;
 use std::collections::HashSet;
@@ -11,7 +11,7 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use crate::process_guard::ProcessGuard;
+use crate::runtime::process::guard::ProcessGuard;
 use crate::store::Store;
 use crate::types::{EventKind, TaskEvent, TaskId};
 

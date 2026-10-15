@@ -2,7 +2,7 @@
 // Reuses persisted retry configuration and overlays the worker runtime.
 use anyhow::Result;
 use std::sync::Arc;
-use crate::{process_monitor, store::Store, types::*};
+use crate::{runtime::process::monitor, store::Store, types::*};
 use crate::cmd::run_hung_recovery;
 use super::{switch_agent, take_next_cascade_agent};
 use super::super::{RunArgs, inherit_retry_base_branch, run, apply_retry_target};
@@ -20,7 +20,7 @@ pub(crate) async fn maybe_auto_retry_after_hang(
     }
 
     let events = store.get_events(task_id.as_str())?;
-    let Some(context) = process_monitor::hung_context(&events) else {
+    let Some(context) = monitor::hung_context(&events) else {
         return Ok(None);
     };
     let retry_count = prior_hung_retry_count(store.as_ref(), &task)?;
@@ -41,14 +41,14 @@ pub(crate) async fn maybe_auto_retry_after_hang(
         run_hung_recovery::build_hung_retry_feedback(&hung_task, context.hung_duration_secs);
     let retry_args = build_hung_retry_args(store, args, &task, &context, &feedback, &task.prompt)?;
 
-    process_monitor::insert_hung_retry_event(store.as_ref(), task_id)?;
+    monitor::insert_hung_retry_event(store.as_ref(), task_id)?;
     let retry_id = Box::pin(run(store.clone(), retry_args)).await?;
     Ok(Some(retry_id))
 }
 
 fn hung_retry_retries_left(
     args: &RunArgs,
-    context: &process_monitor::HungContext,
+    context: &monitor::HungContext,
     retry_count: u32,
 ) -> Option<u32> {
     if context.transient {
@@ -68,7 +68,7 @@ fn build_hung_retry_args(
     store: &Store,
     args: &RunArgs,
     task: &Task,
-    context: &process_monitor::HungContext,
+    context: &monitor::HungContext,
     feedback: &str,
     prompt: &str,
 ) -> Result<RunArgs> {
@@ -114,7 +114,7 @@ fn prior_hung_retry_count(store: &Store, task: &Task) -> Result<u32> {
         .into_iter()
         .filter(|entry| entry.id != task.id)
         .filter_map(|entry| store.get_events(entry.id.as_str()).ok())
-        .filter(|events| process_monitor::was_auto_retried_after_hang(events))
+        .filter(|events| monitor::was_auto_retried_after_hang(events))
         .count() as u32)
 }
 

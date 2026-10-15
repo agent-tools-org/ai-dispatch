@@ -3,7 +3,7 @@
 use super::RunArgs;
 use crate::agent::classifier::TaskCategory;
 use crate::agent::model_validation::ModelSource;
-use crate::background::{load_spec_if_exists, save_spec, BackgroundRunSpec};
+use crate::runtime::background::{load_spec_if_exists, save_spec, BackgroundRunSpec};
 use crate::store::Store;
 use crate::config::timeout_policy::TimeoutPolicy;
 use crate::types::*;
@@ -110,7 +110,7 @@ async fn worker_without_a_dispatched_dir_skips_verify() {
     save_spec(&job).unwrap();
     assert_eq!(RunArgs::for_worker(&store, &job).unwrap().dir, None);
 
-    crate::background::run_task(store.clone(), id).await.unwrap();
+    crate::runtime::background::run_task(store.clone(), id).await.unwrap();
 
     let done = store.get_task(id).unwrap().unwrap();
     assert_eq!(done.status, TaskStatus::Done);

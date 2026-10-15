@@ -3,7 +3,7 @@
 // Deps: stop command, isolated AID home, shell subprocess and Store.
 
 use super::{stop, tests::make_task};
-use crate::{background, support::paths, store::Store, types::TaskStatus};
+use crate::{runtime::background, support::paths, store::Store, types::TaskStatus};
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 use std::sync::Arc;

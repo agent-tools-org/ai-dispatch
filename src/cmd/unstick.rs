@@ -5,7 +5,7 @@
 use anyhow::{Result, anyhow, bail};
 use chrono::Local;
 
-use crate::background;
+use crate::runtime::background;
 use crate::cmd::reply::{self, InputCommand};
 use crate::store::Store;
 use crate::types::{EventKind, MessageSource, TaskEvent, TaskId, TaskStatus};
@@ -70,7 +70,7 @@ mod tests {
     use chrono::Local;
 
     use super::{ESCALATED_EVENT_DETAIL, run};
-    use crate::background::{self, BackgroundRunSpec};
+    use crate::runtime::background::{self, BackgroundRunSpec};
     use crate::support::paths;
     use crate::store::Store;
     use crate::types::{AgentKind, EventKind, Task, TaskId, TaskStatus, VerifyStatus};

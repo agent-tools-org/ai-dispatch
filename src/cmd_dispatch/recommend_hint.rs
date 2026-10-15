@@ -18,8 +18,8 @@ pub(super) fn recommendation_hint(
     if no_hint || prompt.chars().count() < MIN_HINT_PROMPT_CHARS {
         return None;
     }
-    let model = crate::session::caller_model(None);
-    let caller = crate::session::current_caller()
+    let model = crate::runtime::session::caller_model(None);
+    let caller = crate::runtime::session::current_caller()
         .and_then(|session| caller_advice(&session.kind, model.as_deref(), kind.unwrap_or_else(|| {
             let normalized = prompt.trim().to_lowercase();
             crate::agent::classifier::classify(prompt,

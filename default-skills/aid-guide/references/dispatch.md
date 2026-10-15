@@ -183,19 +183,6 @@ Important controls:
   Codex uses one native permission profile for fresh and resumed sessions. Read-only grants
   are canonicalized and rejected when they overlap the repository, worktree, or Git common directory.
   See [native Codex permissions and artifact delivery](dispatch-delivery.md#native-codex-permissions).
-  Host Codex runs probe `codex app-server` once per dispatch and use its stdio
-  protocol when available; unavailable app-server launches retain `codex exec`.
-  Container and sandbox wrappers retain their exec transport.
-  App-server preserves the native permission profile, approval review, requested
-  model, effort overrides, and working directory. Retry resumes through
-  `thread/resume` wherever exec would resume. `steer` and `reply` require a
-  confirmed `turn/steer` response; `respond` remains refused.
-  App-server uses a task-scoped `CODEX_HOME` whose top-level entries symlink to
-  the real Codex home, excluding `config.toml` and `config.toml.*`. Auth, sessions,
-  instructions, rules, hooks, and skills remain shared. The directory is removed
-  when the app-server process ends. Rate-limit notifications retain usage
-  percentages, reset times, window lengths, and account/spend-control evidence;
-  they do not supply aidbar billing data.
   Claude retains Bash for audit commands, alongside Read, Glob, and Grep. Without
   a result file it uses plan mode and denies Write, Edit, MultiEdit, and
   NotebookEdit. With a result file it uses `dontAsk`, allows Write, and denies

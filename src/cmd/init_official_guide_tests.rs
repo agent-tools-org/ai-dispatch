@@ -60,7 +60,6 @@ const UNDOCUMENTED_FLAGS: &[&str] = &[
     "--prompt-file",
     "--reset",
     "--running",
-    "--session",
     "--source",
     "--stats",
     "--stdin",

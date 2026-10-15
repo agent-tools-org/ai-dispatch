@@ -55,7 +55,10 @@ Start in your project's Git repository. This example uses Codex; choose an
 installed and authenticated agent for your task.
 
 ```sh
-aid run codex "Add request validation and regression tests"   --dir . --worktree feat/request-validation   --difficulty moderate --budget standard   --urgency normal --rigor standard --verify --bg
+aid run codex "Add request validation and regression tests" \
+  --dir . --worktree feat/request-validation \
+  --difficulty moderate --budget standard \
+  --urgency normal --rigor standard --verify --bg
 ```
 
 The task gets a separate worktree, and background dispatch returns a task ID.
@@ -97,7 +100,9 @@ See the [lifecycle guide](default-skills/aid-guide/references/task-lifecycle.md)
 Research can return a saved answer without creating a writable code worktree:
 
 ```sh
-aid run gemini "Summarize the design in README.md and cite relevant sections"   --dir . --read-only -o /tmp/aid-summary.md   --difficulty simple --budget standard --urgency normal --rigor draft
+aid run gemini "Summarize the design in README.md and cite relevant sections" \
+  --dir . --read-only -o /tmp/aid-summary.md \
+  --difficulty simple --budget standard --urgency normal --rigor draft
 ```
 
 Use your chosen research-capable agent. The answer is saved to the declared output
@@ -113,8 +118,10 @@ replacing `/path/to/change` with the checkout to inspect.
 
 ```sh
 audit="Read-only cross-audit of HEAD. Report SHIP/FIX/BLOCK with evidence. Do not modify files."
-aid run codex "$audit" --read-only --dir /path/to/change --bg   --kind debugging --difficulty moderate --budget standard --urgency normal --rigor standard
-aid run claude "$audit" --read-only --dir /path/to/change --bg   --kind debugging --difficulty moderate --budget standard --urgency normal --rigor standard
+aid run codex "$audit" --read-only --dir /path/to/change --bg \
+  --kind debugging --difficulty moderate --budget standard --urgency normal --rigor standard
+aid run claude "$audit" --read-only --dir /path/to/change --bg \
+  --kind debugging --difficulty moderate --budget standard --urgency normal --rigor standard
 ```
 
 Each task writes its own saved audit report. Replace the IDs below with the two
@@ -153,7 +160,8 @@ for saved output and transcript inspection.
 Preview routing without dispatching:
 
 ```sh
-aid advise "Add request validation and regression tests"   --difficulty moderate --budget standard --urgency normal --rigor standard
+aid advise "Add request validation and regression tests" \
+  --difficulty moderate --budget standard --urgency normal --rigor standard
 ```
 
 Supported built-in agents: `gemini`, `agy`, `qwen`, `codex`, `copilot`, `opencode`,

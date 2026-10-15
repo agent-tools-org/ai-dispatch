@@ -5,10 +5,12 @@ returned 100 matches, including timeout-recording and configuration-isolation gu
 The query `codex resume rollout home` returned 64 matches, including the warning that
 an isolated HOME does not isolate a CLI with its own config-directory variable.
 The query `codex resume mirror` returned 76 matches, including the same isolation warning.
+The query `codex mirror drift` returned 178 matches, including mirror-isolation and
+regression-evidence guidance.
 
 # Codex app-server configuration boundary
 
-Status: stable-home resume implemented; compilation and Rust suites for this revision
+Status: stable-home preconditions implemented; compilation and Rust suites for this revision
 remain pending. The baseline `4ab977eb` passed 3,538 default tests, 3,570 web tests,
 and clippy, and completed a writable task with a confirmed live steer. Its retry failed
 before producing exec events. The sanitized transcript is preserved at
@@ -45,6 +47,14 @@ existing links. Entries pointing at another home fail clearly rather than being 
 No entries are copied, and aid does not initialize or edit the real Codex home.
 Authentication refresh, session writes, instructions, hooks, rules, and skills still use
 the symlink targets. The mirror remains after all task processes and task state are gone.
+
+App-server requires existing `sessions/` and `state_5.sqlite` in the real home, the
+rollout state used by Codex 0.162.1. Missing state selects the native exec path with a
+diagnostic milestone. Refresh rejects any existing mirror `config.toml*` entry and any
+local non-symlink entry colliding with a real-home name. Local content is never deleted.
+Symlinks whose real targets have disappeared are removed; missing links are recreated.
+All precondition failures use the existing exec fallback without changing native launch
+settings or creating files in the real home.
 
 The supplied Codex 0.162.1 measurement establishes the boundary: this symlinked
 home reports on-request approval, readOnly sandbox, and default effort while still
@@ -117,19 +127,23 @@ same fallback command builder and their tests assert that exec emits events.
 `python3 tests/fixtures/codex-resume-home-probe.py` passed all three native checks on
 Codex 0.162.1: first process exit, task-state removal, and subsequent stable-home resume.
 No external model endpoint or real Codex home was used. Static checks passed across
-24 app-server Rust files with 53 registered test declarations. Tests cover idempotent
+25 app-server Rust files with 58 registered test declarations. Tests cover idempotent
 and concurrent mirror construction, exclusions, symlink identity, persistent local state,
-resume after task-state cleanup, and fallback events in both execution paths.
+resume after task-state cleanup, and fallback events in both execution paths. Five new
+regressions cover missing sessions through the production command builder, missing state
+database, explicit collision fallback, stale-link pruning, and rejected mirror config.
+These Rust regressions were written but not run here.
 
 The extra argument in the retry test's `insert_waiting_task` call is removed. No compilation
-or Rust suites ran here; there is no tested remote HEAD for this revision. The prior
-revision failed `scripts/remote-test.sh -- --bin aid` compilation with E0061. Independent cross-review and live resume verification
-remain pending; no side tasks were dispatched.
+or Rust suites ran here; there is no tested remote HEAD for this revision. The supplied `a8771aa4` baseline passed 3,541 default tests, 3,573 web tests, and clippy;
+live writable steer and same-thread retry also passed. That evidence does not verify this
+diff. Cross-review and suites for these precondition changes remain pending; no side tasks
+were dispatched.
 
 Existing threads indexed through deleted per-task homes are not migrated. Their app-server
 resume refusal selects fresh exec. Changing or removing AID_HOME also removes the stable
-path guarantee. A real home without session/state files may cause Codex to create persistent
-local state in the mirror; aid does not initialize real-home files. The earlier guide
+path guarantee. A real home without session/state files now uses exec; aid does not
+initialize real-home files. The earlier guide
 validator failure remains `ModuleNotFoundError: No module named 'yaml'`.
 
 Local inspection commands:
@@ -146,6 +160,7 @@ rustfmt --edition 2024 src/runtime/codex_app_server/command.rs src/runtime/codex
 python3 /private/tmp/aid-codex-audit-format.py
 python3 /private/tmp/aid-codex-audit-static-check.py
 python3 /private/tmp/aid-codex-stable-static-check.py
+python3 /private/tmp/aid-codex-drift-static-check.py
 python3 tests/fixtures/codex-resume-home-probe.py
 bash /Users/ming/.aid/skills/implementer/scripts/check-file-size.sh src/runtime/codex_app_server
 bash /Users/ming/.aid/skills/implementer/scripts/check-headers.sh src/runtime/codex_app_server

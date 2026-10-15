@@ -114,6 +114,8 @@ fn command(home: &std::path::Path, mode: &str) -> Command {
     use std::os::unix::fs::PermissionsExt;
     let real = home.join("real-codex");
     std::fs::create_dir(&real).unwrap();
+    std::fs::create_dir(real.join("sessions")).unwrap();
+    std::fs::write(real.join("state_5.sqlite"), "synthetic state").unwrap();
     std::fs::write(
         real.join("config.toml"),
         "sandbox_mode='danger-full-access'",

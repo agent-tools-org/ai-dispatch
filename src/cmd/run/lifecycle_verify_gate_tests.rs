@@ -39,7 +39,7 @@ fn init_repo() -> tempfile::TempDir {
 }
 
 fn create_worktree(repo: &Path, branch: &str) -> PathBuf {
-    let info = crate::worktree::create_worktree(repo, branch, None).unwrap();
+    let info = crate::workspace::worktree::create_worktree(repo, branch, None).unwrap();
     git(&info.path, &["config", "user.email", "test@example.com"]);
     git(&info.path, &["config", "user.name", "Test User"]);
     info.path

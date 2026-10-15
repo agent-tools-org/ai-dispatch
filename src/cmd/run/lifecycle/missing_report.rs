@@ -31,7 +31,7 @@ pub(crate) fn record_missing_report(
     if suppress_missing_report_event(store, task_id) {
         return;
     }
-    let event_kind = match crate::task_lifecycle::mark_failed(store, task_id) {
+    let event_kind = match crate::task::lifecycle::mark_failed(store, task_id) {
         Ok(true) => EventKind::Error,
         Ok(false) => EventKind::Milestone,
         Err(err) => {

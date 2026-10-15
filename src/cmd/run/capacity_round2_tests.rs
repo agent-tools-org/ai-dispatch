@@ -62,7 +62,7 @@ async fn provider_capacity_round2_replayed_stderr_never_creates_hold_or_retry() 
     assert_eq!(info.status, TaskStatus::Failed);
     assert!(std::fs::read_to_string(paths::log_path(row.id.as_str())).expect("log")
         .contains(CAPACITY), "stderr must still be replayed");
-    crate::task_lifecycle::mark_failed(&store, &row.id).expect("failed");
+    crate::task::lifecycle::mark_failed(&store, &row.id).expect("failed");
     assert!(rate_limit::dispatch_blocking_hold_for_model(
         &row.agent, None, row.requested_model.as_deref()).is_none(), "stderr created hold");
     assert!(continue_capacity(&store, &RunArgs::default(), &row.id)

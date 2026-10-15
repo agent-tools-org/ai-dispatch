@@ -5,7 +5,7 @@ use anyhow::Result;
 use std::path::Path;
 use std::sync::Arc;
 use crate::runtime::background::{self, BackgroundRunSpec};
-use crate::commit;
+use crate::workspace::commit;
 use crate::config::hooks;
 use crate::store::Store;
 use crate::types::TaskId;
@@ -33,7 +33,7 @@ pub(super) fn maybe_record_start_sha(
 
 fn capture_pre_task_dirty_paths(dir: Option<&String>) -> Option<Vec<String>> {
     let dir = dir?;
-    match crate::worktree::capture_worktree_snapshot(Path::new(dir)) {
+    match crate::workspace::worktree::capture_worktree_snapshot(Path::new(dir)) {
         Ok(snapshot) => Some(snapshot.status_lines),
         Err(err) => {
             aid_warn!("[aid] rescue: failed to capture pre-task dirty baseline in {dir}: {err}");
@@ -55,7 +55,7 @@ pub(super) fn run_background_task(
         match super::run_dirty::capture_baseline(store, &prepared.task_id, prepared.effective_dir.as_deref()) {
             Ok(baseline) => baseline,
             Err(err) => {
-                crate::task_lifecycle::mark_failed(store, &prepared.task_id)?;
+                crate::task::lifecycle::mark_failed(store, &prepared.task_id)?;
                 return Err(err);
             }
         }
@@ -130,13 +130,13 @@ pub(super) fn run_background_task(
         Ok(pid) => pid,
         Err(err) => {
             let _ = background::clear_spec(prepared.task_id.as_str());
-            crate::task_lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
+            crate::task::lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
             run_prompt::notify_task_completion(store, &prepared.task_id)?;
             return Err(err);
         }
     };
     if let Some(wt_path) = prepared.wt_path.as_deref()
-        && let Err(holder) = crate::worktree::rekey_worktree_lock_to_worker(
+        && let Err(holder) = crate::workspace::worktree::rekey_worktree_lock_to_worker(
             Path::new(wt_path),
             prepared.task_id.as_str(),
             worker_pid,
@@ -144,7 +144,7 @@ pub(super) fn run_background_task(
     {
         background::kill_process(worker_pid);
         let _ = background::clear_spec(prepared.task_id.as_str());
-        crate::task_lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
+        crate::task::lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
         run_prompt::notify_task_completion(store, &prepared.task_id)?;
         anyhow::bail!("Worktree {wt_path} lock is owned by task {holder}; background dispatch aborted");
     }

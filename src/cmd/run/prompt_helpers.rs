@@ -80,7 +80,7 @@ pub(super) fn format_batch_siblings(
         lines.push(format!("+ {remaining} more [{note}]"));
     }
     lines.push("</aid-batch-siblings>".to_string());
-    crate::workgroup::bound_auxiliary(&lines.join("\n"), "Batch Siblings", omissions)
+    crate::task::workgroup::bound_auxiliary(&lines.join("\n"), "Batch Siblings", omissions)
 }
 
 pub(crate) fn inject_skill(
@@ -107,7 +107,7 @@ pub(crate) fn inject_skill(
         sections.push(format!("--- Methodology ---\n{skill_text}"));
         append_skill_resources(name, &mut sections);
     }
-    let context = crate::workgroup::bound_auxiliary(
+    let context = crate::task::workgroup::bound_auxiliary(
         &sections.join("\n\n"), "Methodology", omissions,
     );
     Ok(format!("{prompt}\n\n{context}"))
@@ -219,12 +219,12 @@ pub(crate) fn resolve_worktree_paths(args: &RunArgs, repo_path: Option<&str>) ->
         // so worktrees inherit the latest state of whatever branch the user is on
         let default_base = args.base_branch.clone().or_else(|| current_branch(std::path::Path::new(&repo_dir)));
         let base = if args.base_branch.is_none() {
-            crate::worktree::branch_tip_resume_base(std::path::Path::new(&repo_dir), branch)?
+            crate::workspace::worktree::branch_tip_resume_base(std::path::Path::new(&repo_dir), branch)?
                 .or(default_base)
         } else {
             default_base
         };
-        let info = crate::worktree::create_worktree(std::path::Path::new(&repo_dir), branch, base.as_deref())?;
+        let info = crate::workspace::worktree::create_worktree(std::path::Path::new(&repo_dir), branch, base.as_deref())?;
         let p = info.path.to_string_lossy().to_string();
         return Ok((Some(p.clone()), Some(info.branch), Some(resolve_dir_in_target(&p, args.dir.as_deref(), Some(&repo_dir))), Some(repo_dir), info.created));
     }

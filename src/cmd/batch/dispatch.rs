@@ -171,7 +171,7 @@ async fn dispatch_with_dependencies(
                     None => {
                         outcomes[dispatch.index] = Some(BatchTaskOutcome::Failed);
                         // Mark waiting placeholder as skipped
-                        let _ = crate::task_lifecycle::mark_skipped(
+                        let _ = crate::task::lifecycle::mark_skipped(
                             store.as_ref(),
                             &waiting_ids[dispatch.index],
                         );
@@ -267,7 +267,7 @@ async fn dispatch_with_dependencies(
     // Mark any remaining waiting tasks as skipped (deps never resolved)
     for (i, outcome) in outcomes.iter().enumerate() {
         if outcome.is_none() {
-            let _ = crate::task_lifecycle::mark_skipped(store.as_ref(), &waiting_ids[i]);
+            let _ = crate::task::lifecycle::mark_skipped(store.as_ref(), &waiting_ids[i]);
         }
     }
     // Only add retry/fallback IDs that aren't already in waiting_ids.

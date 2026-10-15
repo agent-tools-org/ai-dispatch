@@ -20,50 +20,26 @@
 #[macro_use]
 pub mod output;
 mod agent;
-mod backup;
-mod aic;
 mod batch;
 mod board;
 mod command_diagnostics;
 mod cmd;
 mod cmd_dispatch;
-mod commit;
 mod config;
 mod cost;
-mod failure_salvage;
-mod delivery_guard;
-pub mod gitbutler;
-mod notify;
 mod prompt;
-mod state;
-#[cfg(test)]
-mod state_tests;
 mod store;
-mod store_workgroups;
-mod artifact_custody;
-mod task_actions;
-mod task_lifecycle;
-mod task_view;
-mod unstick;
 mod tui;
 mod types;
-mod usage;
-pub mod usage_report;
-mod verify;
-mod verify_cargo;
-mod webhook;
 mod typesafe;
 #[cfg(feature = "web")]
 mod web;
-mod workgroup;
-mod worktree_gc;
-mod worktree_deps;
-mod worktree;
-mod worktree_layout;
 mod cli;
 mod support;
 mod runtime;
 mod routing;
+mod task;
+mod workspace;
 
 use crate::cli::{Cli, Commands};
 use anyhow::Result;

@@ -14,7 +14,7 @@ pub(super) struct ProjectFile {
     #[serde(default)]
     pub audit: ProjectAuditConfig,
     #[serde(default)]
-    pub backup: Option<crate::backup::BackupProjectConfig>,
+    pub backup: Option<crate::workspace::backup::BackupProjectConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

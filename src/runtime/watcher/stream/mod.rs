@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::agent::Agent;
 use crate::routing::rate_limit;
 use crate::store::Store;
-use crate::delivery_guard::{DeliveryOutcome, DeliveryOutcome::MissingFinalDelivery};
+use crate::task::delivery_guard::{DeliveryOutcome, DeliveryOutcome::MissingFinalDelivery};
 use crate::types::{
     CompletionInfo, DeliveryAssessment, EventKind, TaskEvent, TaskId, TaskStatus,
 };

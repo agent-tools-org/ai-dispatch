@@ -84,7 +84,7 @@ pub(crate) fn auto_commit_uncommitted(wt_path: &str, branch: &str) -> bool {
         return false;
     }
     aid_info!("[aid] Worktree has uncommitted changes — auto-committing on {branch}");
-    if let Err(error) = crate::worktree::stage_aid_files(Path::new(wt_path), crate::worktree::AidStageMode::All, &["target/", "node_modules/", ".build/", "dist/", "__pycache__/"]) {
+    if let Err(error) = crate::workspace::worktree::stage_aid_files(Path::new(wt_path), crate::workspace::worktree::AidStageMode::All, &["target/", "node_modules/", ".build/", "dist/", "__pycache__/"]) {
         aid_warn!("[aid] Warning: failed to stage worktree changes: {error}");
         return false;
     }

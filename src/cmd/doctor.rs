@@ -1,12 +1,12 @@
 // `aid doctor` reports repository hygiene, leaked operator symlinks, and NeedsHuman holds.
 // Exports run() plus formatting helpers shared by tests.
-// Deps: crate::support::repo_root, crate::store::Store, crate::worktree_gc.
+// Deps: crate::support::repo_root, crate::store::Store, crate::workspace::worktree::gc.
 
 use crate::config::project;
 use crate::support::repo_root;
 use crate::store::Store;
 use crate::{agent::home_isolation, support::paths};
-use crate::worktree_gc::{
+use crate::workspace::worktree::gc::{
     DeletableBranch, DoctorReport, PrunableWorktree, collect_doctor_report,
     managed_branch_prefixes, tracked_worktree_paths,
 };
@@ -153,7 +153,7 @@ fn render_branch_section(
 #[cfg(test)]
 mod tests {
     use super::{format_held_agents, format_report, format_symlink_report};
-    use crate::worktree_gc::{DeletableBranch, DoctorReport, MergeReason, PrunableWorktree};
+    use crate::workspace::worktree::gc::{DeletableBranch, DoctorReport, MergeReason, PrunableWorktree};
 
     #[test]
     fn format_report_renders_two_sections() {

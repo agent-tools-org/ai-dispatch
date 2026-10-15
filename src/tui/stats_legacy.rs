@@ -133,7 +133,7 @@ fn render_legacy_summary(frame: &mut ratatui::Frame<'_>, app: &App, area: Rect) 
 fn budget_usage(app: &App) -> Vec<BudgetUsage> {
     app.config().usage.budgets.iter().filter_map(|budget| {
         let limit = budget.cost_limit_usd?;
-        let used = crate::usage::filter_budget_tasks(&app.tasks, budget).into_iter().filter_map(|task| task.cost_usd).sum::<f64>() + budget.external_cost_usd;
+        let used = crate::cost::usage::filter_budget_tasks(&app.tasks, budget).into_iter().filter_map(|task| task.cost_usd).sum::<f64>() + budget.external_cost_usd;
         Some(BudgetUsage { name: budget.name.clone(), used, limit })
     }).collect()
 }

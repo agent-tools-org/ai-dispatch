@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use crate::types::AgentKind;
-use crate::worktree_layout::{read_commondir, resolve_worktree_gitdir};
+use crate::workspace::worktree::layout::{read_commondir, resolve_worktree_gitdir};
 
 const CONTAINER_BIN: &str = "container";
 const SANDBOX_IMAGE: &str = "aid-sandbox:latest";

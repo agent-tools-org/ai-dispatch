@@ -10,7 +10,7 @@ use std::sync::{Arc, mpsc::{self, RecvTimeoutError}};
 use std::time::{Duration, Instant};
 
 use crate::agent::Agent;
-use crate::delivery_guard::{DeliveryEvidence, DeliveryOutcome};
+use crate::task::delivery_guard::{DeliveryEvidence, DeliveryOutcome};
 use crate::runtime::input_signal;
 use crate::runtime::process;
 use crate::prompt::PromptDetector;
@@ -151,7 +151,7 @@ impl MonitorState {
             }
             IdleAction::WarnEvent => {}
             IdleAction::SendNudge(message) => {
-                crate::unstick::queue_auto_nudge(store.as_ref(), task_id.as_str(), &message)?;
+                crate::task::unstick::queue_auto_nudge(store.as_ref(), task_id.as_str(), &message)?;
                 self.idle_nudged = true;
                 self.idle_warned = true;
                 store.insert_event(&TaskEvent {
@@ -164,7 +164,7 @@ impl MonitorState {
                     })),
                 })?;
             }
-            IdleAction::Escalate if crate::unstick::mark_task_stalled(store.as_ref(), task_id.as_str())? => {
+            IdleAction::Escalate if crate::task::unstick::mark_task_stalled(store.as_ref(), task_id.as_str())? => {
                 store.insert_event(&TaskEvent {
                     task_id: task_id.clone(),
                     timestamp: Local::now(),

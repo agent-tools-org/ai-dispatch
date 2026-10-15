@@ -4,7 +4,7 @@
 use super::resolve_group;
 use crate::cli::AgentCommands;
 use crate::cmd;
-use crate::{notify, store, tui};
+use crate::{task::notify, store, tui};
 use anyhow::Result;
 use std::sync::Arc;
 

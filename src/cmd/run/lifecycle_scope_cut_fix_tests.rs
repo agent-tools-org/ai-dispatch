@@ -69,7 +69,7 @@ async fn assert_not_delivered(f: &Fixture) {
     assert!(!crate::cmd::run::run_lifecycle::output_has_content(&task));
     let outputs = vec![
         crate::cmd::show::output_text(&f.store, f.id.as_str()).unwrap(),
-        crate::task_view::read_output(&task),
+        crate::task::view::read_output(&task),
     ];
     #[cfg(feature = "web")]
     let outputs = {

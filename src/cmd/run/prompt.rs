@@ -96,7 +96,7 @@ fn prepare_composed_prompt(
     agent_kind: &AgentKind,
     workgroup: Option<&Workgroup>,
 ) -> Result<(
-    crate::workgroup::ComposedPrompt,
+    crate::task::workgroup::ComposedPrompt,
     Vec<String>,
     agent::classifier::TaskCategory,
     bool,
@@ -137,7 +137,7 @@ fn compose_task_context(
     args: &RunArgs,
     agent_kind: &AgentKind,
     workgroup: Option<&Workgroup>,
-) -> Result<(crate::workgroup::ComposedPrompt, Vec<String>, String)> {
+) -> Result<(crate::task::workgroup::ComposedPrompt, Vec<String>, String)> {
     let (file_context, context_files) = build_context_flags(agent_kind, &args.context)?;
     let milestones = if let Some(group_id) = args.group.as_deref() {
         store.get_workgroup_milestones(group_id)?
@@ -150,7 +150,7 @@ fn compose_task_context(
         vec![]
     };
     let prompt = resolve_prompt(&args.prompt, args.template.as_deref())?;
-    let composed = crate::workgroup::compose_prompt(
+    let composed = crate::task::workgroup::compose_prompt(
         &prompt,
         file_context.as_deref(),
         workgroup,

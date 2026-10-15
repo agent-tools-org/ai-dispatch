@@ -160,7 +160,7 @@ fn reaps_alive_worker_when_events_are_stale_beyond_idle_margin() {
     let events = store.get_events("t-wedged").unwrap();
     assert!(events.iter().any(|event| event.detail.contains("monitor wedged")));
     assert!(events.iter().any(|event| event.detail == "hung_detected"));
-    let completions = crate::notify::read_recent(10).unwrap();
+    let completions = crate::task::notify::read_recent(10).unwrap();
     assert!(completions.contains("\"task_id\":\"t-wedged\""));
     let log = std::fs::read_to_string(paths::log_path("t-wedged")).unwrap();
     assert!(log.contains("=== AID TASK t-wedged FAILED (hung detected (monitor wedged):"));
@@ -490,7 +490,7 @@ fn reaps_running_task_kept_alive_only_by_nudge_echo_reasoning() {
             task_id: TaskId("t-nudge-echo-reaper".to_string()),
             timestamp: Local::now() - Duration::seconds(1),
             event_kind: EventKind::Reasoning,
-            detail: crate::unstick::default_nudge_message(),
+            detail: crate::task::unstick::default_nudge_message(),
             metadata: None,
         })
         .unwrap();
@@ -750,9 +750,9 @@ fn completion_notifications_are_written_as_jsonl() {
     task.cost_usd = Some(0.25);
     task.prompt = "x".repeat(120);
 
-    crate::notify::notify_completion(&task);
+    crate::task::notify::notify_completion(&task);
 
-    let line = crate::notify::read_recent(20).unwrap();
+    let line = crate::task::notify::read_recent(20).unwrap();
     let value: serde_json::Value = serde_json::from_str(&line).unwrap();
     assert_eq!(value["task_id"], "t-4d4d");
     assert_eq!(value["agent"], "codex");

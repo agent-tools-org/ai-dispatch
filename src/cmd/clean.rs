@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use crate::support::paths;
 use crate::store::Store;
-use crate::worktree::{aid_worktree_root, is_aid_managed_worktree_path};
+use crate::workspace::worktree::{aid_worktree_root, is_aid_managed_worktree_path};
 
 #[path = "clean_homes.rs"]
 mod homes;

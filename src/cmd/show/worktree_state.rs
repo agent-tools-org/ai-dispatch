@@ -4,7 +4,7 @@
 
 pub(crate) fn worktree_state_section(
     worktree_path: &str,
-    state: Option<&crate::worktree::LiveWorktreeState>,
+    state: Option<&crate::workspace::worktree::LiveWorktreeState>,
 ) -> String {
     let Some(state) = state else { return String::new() };
     let mut out = String::new();

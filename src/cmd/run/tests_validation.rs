@@ -10,7 +10,7 @@ fn terminal_failure_preserves_committed_work_non_standard_branch() {
 
     let wt_dir = quota_worktree(dir.path(), Some("feature-custom"));
 
-    let start_sha = crate::commit::head_sha(wt_dir.to_str().unwrap()).unwrap();
+    let start_sha = crate::workspace::commit::head_sha(wt_dir.to_str().unwrap()).unwrap();
 
     std::fs::write(
         paths::stderr_path("t-custom-branch"),

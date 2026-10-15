@@ -106,7 +106,7 @@ fn settle_execution_failure(args: &RunProcessArgs<'_>, duration_ms: i64, detail:
         detail: format!("Failed during execution: {detail}"),
         metadata: None,
     };
-    let _ = crate::task_lifecycle::complete_task_atomic(
+    let _ = crate::task::lifecycle::complete_task_atomic(
         args.store,
         TaskCompletionUpdate {
             id: args.task_id.as_str(),

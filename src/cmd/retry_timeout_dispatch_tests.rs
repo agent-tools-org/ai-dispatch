@@ -14,7 +14,7 @@ fn explicit_retry_launch_claim_uses_persisted_origin_after_parent_stop() {
         child.status = TaskStatus::Running;
         child.parent_task_id = Some(parent.id.to_string());
         store.insert_task_with_origin(&child, origin).unwrap();
-        assert!(crate::task_lifecycle::mark_stopped(&store, parent.id.as_str()).unwrap());
+        assert!(crate::task::lifecycle::mark_stopped(&store, parent.id.as_str()).unwrap());
         let mut launched = false;
 
         let result = store.with_worker_launch(child.id.as_str(), || {
@@ -52,7 +52,7 @@ fn explicit_retry_waiting_replacement_of_stopped_parent_launches() {
     store
         .replace_waiting_task_with_origin(&child, DispatchOrigin::ExplicitRetry)
         .unwrap();
-    assert!(crate::task_lifecycle::mark_running(&store, &child.id).unwrap());
+    assert!(crate::task::lifecycle::mark_running(&store, &child.id).unwrap());
     let mut launched = false;
     store
         .with_worker_launch(child.id.as_str(), || {
@@ -80,7 +80,7 @@ fn explicit_retry_origin_does_not_bypass_child_own_stop() {
     store
         .insert_task_with_origin(&child, DispatchOrigin::ExplicitRetry)
         .unwrap();
-    assert!(crate::task_lifecycle::mark_stopped(&store, child.id.as_str()).unwrap());
+    assert!(crate::task::lifecycle::mark_stopped(&store, child.id.as_str()).unwrap());
     let mut launched = false;
 
     assert!(

@@ -22,7 +22,7 @@ fn prompt_preservation_matches_show_and_sharegpt_stored_context() {
         "original task line\n".repeat(1000)
     );
     task.workgroup_id = Some(group.id.to_string());
-    task.resolved_prompt = Some(crate::workgroup::compose_prompt(
+    task.resolved_prompt = Some(crate::task::workgroup::compose_prompt(
         &task.prompt, None, Some(&group), &[], &[],
     ).text);
     store.insert_task(&task).unwrap();

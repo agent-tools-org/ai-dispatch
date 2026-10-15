@@ -22,8 +22,8 @@ use crate::store::Store;
 use crate::types::{
     DeclaredTaskProfile, Task, TaskBudget, TaskDifficulty, TaskFilter, TaskRigor, TaskUrgency,
 };
-use crate::usage;
-use crate::usage_report;
+use crate::cost::usage;
+use crate::cost::usage_report;
 
 #[cfg(test)]
 #[path = "mcp_tools_tests.rs"]

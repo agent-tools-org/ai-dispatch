@@ -37,17 +37,17 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str, force: bool) -> R
     if crate::config::project::detect_project_in(Path::new(&repo_dir))
         .unwrap_or_default()
         .gitbutler_mode()
-        == crate::gitbutler::Mode::Off
+        == crate::workspace::gitbutler::Mode::Off
     {
         return Err(anyhow!(
             "GitButler integration is off for this project. Set [project] gitbutler = \"auto\" in .aid/project.toml"
         ));
     }
 
-    if !crate::gitbutler::but_available() {
+    if !crate::workspace::gitbutler::but_available() {
         return Err(anyhow!("GitButler CLI not found. Install: https://gitbutler.com"));
     }
-    crate::gitbutler::ensure_setup(Path::new(&repo_dir))?;
+    crate::workspace::gitbutler::ensure_setup(Path::new(&repo_dir))?;
 
     let mut applied = 0;
     let mut skipped = 0;
@@ -74,10 +74,10 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str, force: bool) -> R
             skipped += 1;
             continue;
         }
-        match crate::gitbutler::apply_branch(Path::new(&repo_dir), branch) {
+        match crate::workspace::gitbutler::apply_branch(Path::new(&repo_dir), branch) {
             Ok(()) => {
                 aid_info!("[aid] Applied branch {branch} as GitButler lane");
-                crate::task_lifecycle::mark_merged(store, task.id.as_str())?;
+                crate::task::lifecycle::mark_merged(store, task.id.as_str())?;
                 applied += 1;
             }
             Err(err) => {

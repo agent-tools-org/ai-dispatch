@@ -31,7 +31,7 @@ async fn scope_cut_symlink_report_is_not_copied_by_official_persistence() {
 #[tokio::test]
 async fn read_only_violation_records_audit_verdict_when_report_exists() {
     let _permit = test_subprocess::acquire();
-    let _env = crate::aic::test_env_lock();
+    let _env = crate::task::aic::test_env_lock();
     let home = tempfile::tempdir().unwrap();
     let _guard = paths::AidHomeGuard::set(home.path());
     let mut f = Fixture::new(home.path(), true, false, false);

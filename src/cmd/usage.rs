@@ -11,8 +11,8 @@ use crate::runtime::session;
 use crate::store::Store;
 use crate::config::team;
 use crate::types::TaskFilter;
-use crate::usage;
-use crate::usage_report;
+use crate::cost::usage;
+use crate::cost::usage_report;
 
 pub fn run(
     store: &Arc<Store>,

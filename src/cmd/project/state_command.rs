@@ -4,7 +4,7 @@
 
 use super::current_git_root;
 use crate::config::project;
-use crate::state::{self, ProjectState};
+use crate::store::state::{self, ProjectState};
 use crate::store::Store;
 use anyhow::Result;
 use chrono::{DateTime, Local};
@@ -127,7 +127,7 @@ fn format_relative_time(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{render_state, AgentRate};
-    use crate::state::{ContextState, HealthState, PerformanceState, ProjectState};
+    use crate::store::state::{ContextState, HealthState, PerformanceState, ProjectState};
     use chrono::{Duration, Local};
     use std::collections::BTreeMap;
     use std::path::Path;

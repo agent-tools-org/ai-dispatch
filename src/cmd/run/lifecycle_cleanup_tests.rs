@@ -95,7 +95,7 @@ fn prompt_bundle() -> PromptBundle {
 }
 
 fn committed_worktree(repo: &Path, branch: &str) -> std::path::PathBuf {
-    let info = crate::worktree::create_worktree(repo, branch, None).unwrap();
+    let info = crate::workspace::worktree::create_worktree(repo, branch, None).unwrap();
     std::fs::write(info.path.join("done.txt"), "done\n").unwrap();
     git(&info.path, &["add", "done.txt"]);
     git(&info.path, &["commit", "-m", "done"]);

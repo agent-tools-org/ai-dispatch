@@ -104,7 +104,7 @@ fn settle_first_worker_failure_after_stop_leaves_row_and_events_unchanged() {
         .expect("insert");
     stop(&store, "t-stop-worker").expect("stop");
     let before = store.get_task("t-stop-worker").expect("get").expect("task");
-    assert!(!crate::task_lifecycle::mark_failed(&store, &before.id).expect("late failure"));
+    assert!(!crate::task::lifecycle::mark_failed(&store, &before.id).expect("late failure"));
     assert!(
         !store
             .complete_task_atomic(

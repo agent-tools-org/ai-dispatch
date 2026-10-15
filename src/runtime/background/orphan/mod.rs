@@ -92,7 +92,7 @@ fn is_idle_bookkeeping_event(event: &TaskEvent) -> bool {
     }
     // PTY echo of aid's auto-nudge is often stored as bare Reasoning with no metadata.
     if event.event_kind == EventKind::Reasoning
-        && event.detail.trim() == crate::unstick::default_nudge_message()
+        && event.detail.trim() == crate::task::unstick::default_nudge_message()
     {
         return true;
     }

@@ -103,10 +103,10 @@ fn merge_group_lanes_refuses_first_poisoned_task_before_gitbutler_setup() {
     .unwrap();
     let temp = tempfile::tempdir().unwrap();
     let setup_log = temp.path().join("setup.log");
-    crate::gitbutler::set_test_but_available(Some(true));
-    crate::gitbutler::set_test_project_present(Some(true));
+    crate::workspace::gitbutler::set_test_but_available(Some(true));
+    crate::workspace::gitbutler::set_test_project_present(Some(true));
     write_command(temp.path(), "but", &format!("pwd > '{}'\n", setup_log.display()));
-    crate::gitbutler::set_test_but_command(Some(temp.path().join("but").to_string_lossy().to_string()));
+    crate::workspace::gitbutler::set_test_but_command(Some(temp.path().join("but").to_string_lossy().to_string()));
     let store = Store::open_memory().unwrap();
     let group = "wg-poisoned-lanes";
     let mut task = grouped_task("t-poisoned-lanes-first", group, repo.path());
@@ -118,9 +118,9 @@ fn merge_group_lanes_refuses_first_poisoned_task_before_gitbutler_setup() {
     assert!(err.to_string().contains("recorded worktree path"));
     assert!(!setup_log.exists(), "GitButler setup ran before worktree validation");
     
-    crate::gitbutler::set_test_but_available(None);
-    crate::gitbutler::set_test_project_present(None);
-    crate::gitbutler::set_test_but_command(None);
+    crate::workspace::gitbutler::set_test_but_available(None);
+    crate::workspace::gitbutler::set_test_project_present(None);
+    crate::workspace::gitbutler::set_test_but_command(None);
 }
 
 #[test]
@@ -136,12 +136,12 @@ fn merge_group_lanes_refuses_failed_verification_without_force() {
     
     // Test that validation fails on vfail without force.
     // Use thread_local to ensure we don't bail out prematurely on AID_GITBUTLER=0 check if we reach it.
-    crate::gitbutler::set_test_but_available(Some(true));
+    crate::workspace::gitbutler::set_test_but_available(Some(true));
 
     let err = merge_lanes::merge_group_lanes(&store, group, false).unwrap_err();
 
     assert!(err.to_string().contains("verification failed"));
-    crate::gitbutler::set_test_but_available(None);
+    crate::workspace::gitbutler::set_test_but_available(None);
 }
 
 #[test]
@@ -164,9 +164,9 @@ fn merge_group_lanes_skips_an_already_merged_task() {
     
     // Instead of PathGuard, EnvGuard, CurrentDirGuard which mutate process-wide state,
     // we use thread-local overrides injected into gitbutler logic.
-    crate::gitbutler::set_test_but_available(Some(true));
-    crate::gitbutler::set_test_project_present(Some(true));
-    crate::gitbutler::set_test_but_command(Some(temp.path().join("but").to_string_lossy().to_string()));
+    crate::workspace::gitbutler::set_test_but_available(Some(true));
+    crate::workspace::gitbutler::set_test_project_present(Some(true));
+    crate::workspace::gitbutler::set_test_but_command(Some(temp.path().join("but").to_string_lossy().to_string()));
 
     write_command(
         temp.path(),
@@ -186,9 +186,9 @@ fn merge_group_lanes_skips_an_already_merged_task() {
     assert!(!apply_log.exists());
     assert_eq!(store.get_task(task.id.as_str()).unwrap().unwrap().status, TaskStatus::Merged);
 
-    crate::gitbutler::set_test_but_available(None);
-    crate::gitbutler::set_test_project_present(None);
-    crate::gitbutler::set_test_but_command(None);
+    crate::workspace::gitbutler::set_test_but_available(None);
+    crate::workspace::gitbutler::set_test_project_present(None);
+    crate::workspace::gitbutler::set_test_but_command(None);
 }
 
 fn write_command(dir: &Path, name: &str, body: &str) {

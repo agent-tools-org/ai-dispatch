@@ -1,6 +1,6 @@
 // Handler for `aid worktree` — explicit worktree lifecycle management.
 // Lets callers create, list, and remove worktrees outside of task dispatch.
-// Deps: crate::worktree
+// Deps: crate::workspace::worktree
 
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -26,14 +26,14 @@ struct WorktreeLock {
 
 /// Check if a path is an aid-managed worktree (delegates to shared sandbox guard).
 fn is_aid_worktree(path: &str) -> bool {
-    crate::worktree::is_aid_managed_worktree_path(Path::new(path))
+    crate::workspace::worktree::is_aid_managed_worktree_path(Path::new(path))
 }
 
 /// Create a worktree, print its path to stdout for capture.
 pub fn create(branch: &str, base: Option<&str>, repo: Option<&str>) -> Result<()> {
     let repo_dir = repo.unwrap_or(".");
     let repo_path = Path::new(repo_dir).canonicalize()?;
-    let info = crate::worktree::create_worktree(&repo_path, branch, base)?;
+    let info = crate::workspace::worktree::create_worktree(&repo_path, branch, base)?;
     println!("{}", info.path.display());
     aid_info!(
         "[aid] Created worktree on branch '{}' at {}",
@@ -71,7 +71,7 @@ pub fn prune(repo: Option<&str>) -> Result<()> {
         let path = Path::new(&entry.path);
         let was_stale = is_stale_worktree_path(path);
         if let Some(lock) = read_worktree_lock(path) {
-            if crate::worktree::process_alive_check(lock.pid) {
+            if crate::workspace::worktree::process_alive_check(lock.pid) {
                 if was_stale {
                     let task = lock.task_id.as_deref().unwrap_or("unknown");
                     aid_warn!(
@@ -116,7 +116,7 @@ pub(crate) fn stale_worktree_count(repo: Option<&str>) -> Result<usize> {
 pub fn remove(branch: &str, repo: Option<&str>) -> Result<()> {
     let repo_dir = repo.unwrap_or(".");
     let repo_path = Path::new(repo_dir).canonicalize()?;
-    let mut wt_path = crate::worktree::aid_worktree_path(&repo_path, branch);
+    let mut wt_path = crate::workspace::worktree::aid_worktree_path(&repo_path, branch);
     if !wt_path.exists() {
         let legacy_path = Path::new("/tmp").join(format!("aid-wt-{branch}"));
         if legacy_path.exists() {
@@ -219,7 +219,7 @@ fn read_worktree_lock(wt_path: &Path) -> Option<WorktreeLock> {
 
 fn live_worktree_lock(wt_path: &Path) -> Option<WorktreeLock> {
     let lock = read_worktree_lock(wt_path)?;
-    crate::worktree::process_alive_check(lock.pid).then_some(lock)
+    crate::workspace::worktree::process_alive_check(lock.pid).then_some(lock)
 }
 
 fn should_prune_worktree(wt_path: &str) -> bool {
@@ -233,10 +233,10 @@ fn should_prune_worktree(wt_path: &str) -> bool {
 }
 
 fn worktree_has_dirty_status(wt_path: &Path) -> bool {
-    let Ok(state) = crate::worktree::capture_live_worktree_state(wt_path) else {
+    let Ok(state) = crate::workspace::worktree::capture_live_worktree_state(wt_path) else {
         return false;
     };
-    state.status_lines.iter().any(|line| crate::worktree::status_line_path(line) != ".aid-lock")
+    state.status_lines.iter().any(|line| crate::workspace::worktree::status_line_path(line) != ".aid-lock")
 }
 
 fn is_stale_worktree_path(wt_path: &Path) -> bool {

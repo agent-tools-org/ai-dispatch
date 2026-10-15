@@ -34,7 +34,7 @@ pub struct AidConfig {
     #[serde(default)]
     pub updates: UpdateConfig,
     #[serde(default)]
-    pub backup: crate::backup::BackupGlobalConfig,
+    pub backup: crate::workspace::backup::BackupGlobalConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]

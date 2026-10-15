@@ -309,7 +309,7 @@ fn default_verify_for_language(language: Option<&str>) -> &'static str {
 }
 
 fn detect_gitbutler_mode() -> Result<Option<&'static str>> {
-    if crate::gitbutler::but_available() {
+    if crate::workspace::gitbutler::but_available() {
         if prompt_confirm("Enable GitButler auto-commit/oplog? [Y/n]", true)? {
             return Ok(Some("auto"));
         }

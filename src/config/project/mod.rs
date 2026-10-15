@@ -86,7 +86,7 @@ pub struct ProjectConfig {
     pub audit: ProjectAuditConfig,
     /// `[backup]` from the same file; never read from `[project]`.
     #[serde(skip)]
-    pub backup: Option<crate::backup::BackupProjectConfig>,
+    pub backup: Option<crate::workspace::backup::BackupProjectConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -150,18 +150,18 @@ impl ProjectConfig {
         self.audit.auto
     }
 
-    pub fn gitbutler_mode(&self) -> crate::gitbutler::Mode {
+    pub fn gitbutler_mode(&self) -> crate::workspace::gitbutler::Mode {
         let Some(value) = self.gitbutler.as_deref() else {
-            return crate::gitbutler::Mode::Off;
+            return crate::workspace::gitbutler::Mode::Off;
         };
 
-        match crate::gitbutler::Mode::from_str(value) {
+        match crate::workspace::gitbutler::Mode::from_str(value) {
             Ok(mode) => mode,
             Err(err) => {
                 aid_warn!(
                     "[aid] Warning: invalid project.gitbutler mode '{value}': {err}. Falling back to off."
                 );
-                crate::gitbutler::Mode::Off
+                crate::workspace::gitbutler::Mode::Off
             }
         }
     }

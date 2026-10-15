@@ -12,7 +12,7 @@ use crate::types::Task;
 pub(crate) fn retry_target(task: &Task) -> Result<(Option<String>, Option<String>)> {
     match task.worktree_path.as_ref() {
         Some(path) if Path::new(path).is_dir() => {
-            crate::worktree::ensure_consumed_worktree_path_is_isolated(
+            crate::workspace::worktree::ensure_consumed_worktree_path_is_isolated(
                 task.repo_path.as_deref(),
                 path,
                 &format!("recorded worktree path for task {}", task.id),
@@ -60,7 +60,7 @@ pub(crate) fn apply_retry_target(task: &Task, retry_args: &mut RunArgs) -> Resul
     }
     if let Some(branch) = worktree.clone().or_else(|| task.worktree_branch.clone()) {
         let repo = recover_repo_dir(task, retry_args, &branch)?;
-        let Some(base_branch) = crate::worktree::branch_tip_resume_base(Path::new(&repo), &branch)? else {
+        let Some(base_branch) = crate::workspace::worktree::branch_tip_resume_base(Path::new(&repo), &branch)? else {
             anyhow::bail!(
                 "cannot retry task {} on branch {}: recorded worktree is missing and branch does not exist in {}; refusing to run in repo root",
                 task.id,

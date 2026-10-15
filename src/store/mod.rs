@@ -118,3 +118,8 @@ impl Store {
         })
     }
 }
+
+pub(crate) mod workgroups;
+pub(crate) mod state;
+#[cfg(test)]
+mod state_tests;

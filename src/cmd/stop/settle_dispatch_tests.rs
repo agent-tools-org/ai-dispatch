@@ -112,7 +112,7 @@ fn settle_first_stopped_launch_claim_is_silent() {
     let task = make_task("t-stopped-claim", TaskStatus::Pending);
     store.insert_task(&task).expect("task");
     stop(&store, task.id.as_str()).expect("stop");
-    assert!(!crate::task_lifecycle::mark_running(&store, &task.id).expect("launch claim"));
+    assert!(!crate::task::lifecycle::mark_running(&store, &task.id).expect("launch claim"));
     let saved = store.get_task(task.id.as_str()).expect("get").expect("task");
     assert_eq!(saved.status, TaskStatus::Stopped);
     assert_eq!(store.get_events(task.id.as_str()).expect("events").len(), 1);

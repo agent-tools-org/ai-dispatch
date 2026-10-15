@@ -43,7 +43,7 @@ pub(crate) fn fail_task_on_agent_spawn(
         crate::support::paths::stderr_path(task_id.as_str()),
         format!("{detail}\n"),
     );
-    let _ = crate::task_lifecycle::complete_task_atomic(
+    let _ = crate::task::lifecycle::complete_task_atomic(
         store,
         TaskCompletionUpdate {
             id: task_id.as_str(),

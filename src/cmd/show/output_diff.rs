@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent};
-use crate::worktree::{capture_live_worktree_state, uncommitted_diff_text};
+use crate::workspace::worktree::{capture_live_worktree_state, uncommitted_diff_text};
 
 use super::show_output_artifacts::diff_artifact_fallback;
 use super::show_output_diff_base::{

@@ -62,7 +62,7 @@ fn retry_recreates_pruned_committed_worktree_at_branch_tip() {
     let _permit = crate::support::test_subprocess::acquire();
     let repo = init_repo();
     let branch = format!("fix/pruned-saved-base-{}", std::process::id());
-    let first = crate::worktree::create_worktree(repo.path(), &branch, Some("main")).unwrap();
+    let first = crate::workspace::worktree::create_worktree(repo.path(), &branch, Some("main")).unwrap();
     std::fs::write(first.path.join("agent.txt"), "agent\n").unwrap();
     git(&first.path, &["add", "agent.txt"]);
     git(&first.path, &["commit", "-m", "agent commit"]);
@@ -94,7 +94,7 @@ fn retry_recreates_pruned_committed_worktree_at_branch_tip() {
     }, false).unwrap();
 
     assert_eq!(retry.base_branch.as_deref(), Some(branch.as_str()));
-    let recreated = crate::worktree::create_worktree(
+    let recreated = crate::workspace::worktree::create_worktree(
         repo.path(), retry.worktree.as_deref().unwrap(), retry.base_branch.as_deref(),
     ).unwrap();
     assert_eq!(git_output(repo.path(), &["rev-parse", &branch]), branch_head);

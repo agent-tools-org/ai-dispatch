@@ -15,7 +15,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 fn env_lock() -> std::sync::MutexGuard<'static, ()> {
-    crate::aic::test_env_lock()
+    crate::task::aic::test_env_lock()
 }
 
 fn done_task(task_id: &str) -> Task {

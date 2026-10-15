@@ -88,7 +88,7 @@ fn pruned_retry_recreates_worktree_from_parent_branch_tip() {
     let store = Store::open_memory().unwrap();
     let repo = init_repo();
     let branch = format!("fix/retry-preserve-{}", std::process::id());
-    let worktree = crate::worktree::create_worktree(repo.path(), &branch, Some("main")).unwrap();
+    let worktree = crate::workspace::worktree::create_worktree(repo.path(), &branch, Some("main")).unwrap();
     std::fs::write(worktree.path.join("sentinel.txt"), "keep\n").unwrap();
     git(&worktree.path, &["add", "sentinel.txt"]);
     git(&worktree.path, &["commit", "-m", "parent commit"]);
@@ -101,7 +101,7 @@ fn pruned_retry_recreates_worktree_from_parent_branch_tip() {
     store.insert_task(&task).unwrap();
 
     let retry_args = retry_args_for(&store, &task).unwrap();
-    let recreated = crate::worktree::create_worktree(
+    let recreated = crate::workspace::worktree::create_worktree(
         repo.path(),
         retry_args.worktree.as_deref().unwrap(),
         retry_args.base_branch.as_deref(),

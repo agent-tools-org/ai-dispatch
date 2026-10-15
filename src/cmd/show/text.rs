@@ -156,7 +156,7 @@ pub fn summary_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     if let Some(ref wt_path) = task.worktree_path
         && Path::new(wt_path).exists()
     {
-        let state = crate::worktree::capture_live_worktree_state(Path::new(wt_path)).ok();
+        let state = crate::workspace::worktree::capture_live_worktree_state(Path::new(wt_path)).ok();
         live_dirty = state.as_ref().is_some_and(|state| state.is_dirty());
         out.push_str(&worktree_state_section(wt_path, state.as_ref()));
     }

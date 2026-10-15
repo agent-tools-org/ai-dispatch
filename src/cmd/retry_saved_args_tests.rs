@@ -133,7 +133,7 @@ fn retry_existing_worktree_overrides_saved_dir() {
     insert_task_with_saved_dir(&store, &task, "/tmp/original-repo");
 
     let args = retry_args(&store, &task, None);
-    let reused = crate::worktree::create_worktree(
+    let reused = crate::workspace::worktree::create_worktree(
         Path::new(args.repo.as_deref().expect("retry repo anchor")),
         args.worktree.as_deref().expect("retry worktree branch"),
         None,
@@ -164,7 +164,7 @@ fn retry_refuses_branch_checked_out_in_dispatching_checkout() {
     insert_task_with_saved_dir(&store, &task, &repo_path);
 
     let args = retry_args(&store, &task, None);
-    let err = crate::worktree::create_worktree(
+    let err = crate::workspace::worktree::create_worktree(
         Path::new(args.repo.as_deref().expect("retry repo anchor")),
         args.worktree.as_deref().expect("retry worktree branch"),
         None,

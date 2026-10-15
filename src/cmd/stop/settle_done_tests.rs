@@ -20,7 +20,7 @@ fn setup() -> (tempfile::TempDir, paths::AidHomeGuard, Arc<Store>, TaskId) {
     store
         .insert_task(&make_task(id.as_str(), TaskStatus::Running))
         .expect("task");
-    crate::task_lifecycle::update_task_completion(
+    crate::task::lifecycle::update_task_completion(
         &store,
         TaskCompletionUpdate {
             id: id.as_str(),
@@ -108,7 +108,7 @@ fn settle_done_provisional_success_still_fails_verification() {
     store
         .update_verify_status(id.as_str(), VerifyStatus::Failed)
         .expect("verify result");
-    crate::verify::enforce_verify_status(&store, &id);
+    crate::task::verify::enforce_verify_status(&store, &id);
     let task = store.get_task(id.as_str()).expect("get").expect("task");
     assert_eq!(task.status, TaskStatus::Failed);
     assert!(task.completed_at.is_some());

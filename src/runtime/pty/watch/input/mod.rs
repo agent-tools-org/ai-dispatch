@@ -146,7 +146,7 @@ impl MonitorState {
         if !self.awaiting_input {
             return Ok(());
         }
-        crate::task_lifecycle::mark_running(store.as_ref(), task_id)?;
+        crate::task::lifecycle::mark_running(store.as_ref(), task_id)?;
         self.awaiting_input = false;
         self.prompt_detector.reset_after_input();
         Ok(())

@@ -44,7 +44,7 @@ fn configured_remote_allowance_above_120_seconds_reaches_verify_runner() {
     let deadline = verify_deadline(&store, id.as_str(), now).expect("deadline");
     // The runner receives this deadline, preserving the allowance through preparation.
     assert_eq!(remaining_verify_time(deadline, now), Duration::from_secs(900));
-    assert!(remaining_verify_time(deadline, now) > crate::verify::VERIFY_TIMEOUT);
+    assert!(remaining_verify_time(deadline, now) > crate::task::verify::VERIFY_TIMEOUT);
     executable(&temp.path().join("verify"), "#!/bin/bash\nprintf '%s' \"$AID_BUILD_BOX\"\n");
     let result = verify_on(id.as_str(), "chosen-box", temp.path(), Some("./verify"), None, None, deadline)
         .expect("runner");
@@ -123,7 +123,7 @@ fn exhausted_task_deadline_launches_neither_verify_nor_remote_pick() {
     assert!(result.output.contains("no command launched"));
     assert!(!temp.path().join("launched").exists());
     assert!(!temp.path().join("picked").exists());
-    crate::verify::record_verify_status(&store, &id, &result);
+    crate::task::verify::record_verify_status(&store, &id, &result);
     let task = store.get_task(id.as_str()).expect("task").expect("exists");
     assert_eq!(task.verify_status, crate::types::VerifyStatus::TimedOut);
     assert_eq!(task.status, crate::types::TaskStatus::Pending);
@@ -213,5 +213,5 @@ fn local_and_legacy_verification_ignore_task_deadline_and_keep_120_seconds() {
         assert!(!result.timed_out);
         assert_eq!(result.output, "local\n");
     }
-    assert_eq!(crate::verify::VERIFY_TIMEOUT, Duration::from_secs(120));
+    assert_eq!(crate::task::verify::VERIFY_TIMEOUT, Duration::from_secs(120));
 }

@@ -35,7 +35,7 @@ fn isolated_runner(test: &str) -> bool {
 fn hold_verify_lock(shim: Option<PathBuf>, delay: Duration) -> thread::JoinHandle<()> {
     let (ready, held) = mpsc::channel();
     let holder = thread::spawn(move || {
-        let _lock = crate::verify::VERIFY_LOCK.lock().expect("verify lock");
+        let _lock = crate::task::verify::VERIFY_LOCK.lock().expect("verify lock");
         ready.send(()).expect("signal lock held");
         if let Some(shim) = shim {
             // Shim creation proves verify_on passed its early check and began setup.
@@ -52,7 +52,7 @@ fn hold_verify_lock(shim: Option<PathBuf>, delay: Duration) -> thread::JoinHandl
     holder
 }
 
-fn assert_timeout(result: &crate::verify::VerifyResult) {
+fn assert_timeout(result: &crate::task::verify::VerifyResult) {
     assert!(result.timed_out, "{result:?}");
     assert!(!result.success);
     assert!(!result.infrastructure_failure);
@@ -150,7 +150,7 @@ fn local_duration_starts_after_verify_lock_delay() {
         "#!/bin/bash\necho launched > launched\n/bin/sleep 0.2\necho local\n",
     );
     let holder = hold_verify_lock(None, Duration::from_millis(800));
-    let result = crate::verify::run_verify_with_timeout(
+    let result = crate::task::verify::run_verify_with_timeout(
         temp.path(),
         Some("./verify"),
         None,
@@ -169,10 +169,10 @@ fn local_duration_starts_after_verify_lock_delay() {
 #[test]
 fn expired_env_budget_preserves_explicit_skip_and_no_project_semantics() {
     let temp = tempfile::tempdir().expect("temp");
-    let budget = crate::verify::VerifyBudget::Deadline(Local::now() - chrono::Duration::seconds(1));
+    let budget = crate::task::verify::VerifyBudget::Deadline(Local::now() - chrono::Duration::seconds(1));
     for (command, success) in [(Some("skip"), false), (None, true)] {
         let result =
-            crate::verify::run_verify_with_env(temp.path(), command, None, None, budget, &[])
+            crate::task::verify::run_verify_with_env(temp.path(), command, None, None, budget, &[])
                 .expect("skipped verification");
         assert_eq!(result.success, success);
         assert!(!result.timed_out);

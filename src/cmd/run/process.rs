@@ -152,7 +152,7 @@ fn complete_agent(
     );
     let costing_model = observed_model.as_deref().or(model);
     let cost_usd = crate::cost::completion_cost(store, task_id, info, costing_model, agent.kind())?;
-    if !crate::task_lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
+    if !crate::task::lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
         id: task_id.as_str(),
         status: info.status,
         tokens: info.tokens,
@@ -235,7 +235,7 @@ fn print_completion(
 
 pub(crate) fn notify_task_completion(store: &Store, task_id: &TaskId) -> Result<()> {
     if let Some(task) = store.get_task(task_id.as_str())? {
-        crate::notify::notify_completion(&task);
+        crate::task::notify::notify_completion(&task);
     }
     Ok(())
 }
@@ -257,7 +257,7 @@ pub(crate) fn inherit_retry_base_branch_impl(repo_dir: Option<&str>, task: &Task
     let Some(branch) = task.worktree_branch.as_deref() else { return; };
     if retry_args.worktree.as_deref() == Some(branch) { return; }
     let repo_dir = std::path::Path::new(task.repo_path.as_deref().or(retry_args.repo.as_deref()).or(repo_dir).unwrap_or("."));
-    if let Ok(true) = crate::worktree::branch_has_commits_ahead_of_main(repo_dir, branch) { retry_args.base_branch = Some(branch.to_string()); }
+    if let Ok(true) = crate::workspace::worktree::branch_has_commits_ahead_of_main(repo_dir, branch) { retry_args.base_branch = Some(branch.to_string()); }
 }
 
 fn format_duration(ms: i64) -> String {

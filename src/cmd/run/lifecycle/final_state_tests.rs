@@ -82,7 +82,7 @@ async fn failed_lifecycle_captures_final_branch_before_fast_fail_cleanup() {
     let _permit = test_subprocess::acquire();
     let repo = init_repo();
     let branch = "fix/failure-final-capture";
-    let info = crate::worktree::create_worktree(repo.path(), branch, None).unwrap();
+    let info = crate::workspace::worktree::create_worktree(repo.path(), branch, None).unwrap();
     git(&info.path, &["switch", "-c", "agent/failure-final"]);
     std::fs::write(info.path.join("final.txt"), "final\n").unwrap();
     git(&info.path, &["add", "final.txt"]);

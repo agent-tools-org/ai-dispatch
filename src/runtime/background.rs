@@ -99,7 +99,7 @@ async fn handle_run_task_inner_error(
         }
     } else if let Some(task) = store.get_task(&spec.task_id)? {
         // Without saved args there is no lifecycle to notify on our behalf.
-        crate::notify::notify_completion(&task);
+        crate::task::notify::notify_completion(&task);
     }
     if let Some(ref cmd) = spec.on_done {
         let _ = spawn_on_done_command(cmd, &spec.task_id, "failed");

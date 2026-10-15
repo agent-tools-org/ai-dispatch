@@ -247,3 +247,6 @@ pub(crate) mod test_support;
 
 #[cfg(test)]
 mod process_tests;
+
+pub(crate) mod usage;
+pub mod usage_report;

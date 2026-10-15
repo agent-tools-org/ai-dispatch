@@ -1,6 +1,6 @@
 // GitButler-specific batch/watch helpers: enable prompt and merge-back hints.
 // Exports prompt gating plus shared summary text for batch and quiet watch flows.
-// Deps: crate::gitbutler, crate::config::project, anyhow, std::io/path.
+// Deps: crate::workspace::gitbutler, crate::config::project, anyhow, std::io/path.
 
 use anyhow::Result;
 use std::io::{self, IsTerminal, Write};
@@ -34,10 +34,10 @@ pub(crate) fn merge_back_hint(repo_dir: &Path, group_id: &str) -> Option<String>
         return None;
     }
     let project = crate::config::project::detect_project_in(repo_dir)?;
-    if matches!(project.gitbutler_mode(), crate::gitbutler::Mode::Off) {
+    if matches!(project.gitbutler_mode(), crate::workspace::gitbutler::Mode::Off) {
         return None;
     }
-    if !crate::gitbutler::but_available() {
+    if !crate::workspace::gitbutler::but_available() {
         return None;
     }
     Some(format!(
@@ -53,7 +53,7 @@ pub(crate) fn should_prompt_for_gitbutler_integration(
     if no_prompt || !interactive {
         return false;
     }
-    if !crate::gitbutler::but_available() || !crate::gitbutler::repo_has_markers(repo_dir) {
+    if !crate::workspace::gitbutler::but_available() || !crate::workspace::gitbutler::repo_has_markers(repo_dir) {
         return false;
     }
     match crate::config::project::detect_project_in(repo_dir) {
@@ -169,8 +169,8 @@ mod tests {
             .status()
             .unwrap()
             .success());
-        crate::gitbutler::set_test_but_available(Some(true));
-        crate::gitbutler::set_test_project_present(Some(true));
+        crate::workspace::gitbutler::set_test_but_available(Some(true));
+        crate::workspace::gitbutler::set_test_project_present(Some(true));
         let project_path = repo.path().join(".aid/project.toml");
         fs::create_dir_all(project_path.parent().unwrap()).unwrap();
         fs::write(&project_path, "[project]\nid = \"demo\"\ngitbutler = \"auto\"\n").unwrap();
@@ -179,7 +179,7 @@ mod tests {
         assert!(hint.contains("aid merge --lanes --group wg-demo"));
         assert!(hint.contains("aid merge --group wg-demo"));
 
-        crate::gitbutler::set_test_but_available(None);
-        crate::gitbutler::set_test_project_present(None);
+        crate::workspace::gitbutler::set_test_but_available(None);
+        crate::workspace::gitbutler::set_test_project_present(None);
     }
 }

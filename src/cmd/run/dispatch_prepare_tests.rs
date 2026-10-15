@@ -176,7 +176,7 @@ fn retry_prepare_persists_live_worktree_metadata() {
     let repo = init_repo();
     let store = Arc::new(Store::open_memory().unwrap());
     let branch = "fix/retry-live-persist";
-    let worktree = crate::worktree::create_worktree(repo.path(), branch, Some("main")).unwrap();
+    let worktree = crate::workspace::worktree::create_worktree(repo.path(), branch, Some("main")).unwrap();
     let worktree_path = worktree.path.to_string_lossy().to_string();
     let mut parent = test_task("t-parent-retry-live");
     parent.repo_path = Some(repo.path().display().to_string());

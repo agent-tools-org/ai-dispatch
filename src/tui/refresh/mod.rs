@@ -91,7 +91,7 @@ fn load_snapshot(
         if let Some(index) = app.tasks.iter().position(|task| task.id.as_str() == task_id) {
             app.selected = index;
             app.load_selected_events()?;
-            let output = crate::task_view::read_output(&app.tasks[index]);
+            let output = crate::task::view::read_output(&app.tasks[index]);
             app.output_cache.insert(task_id.clone(), output);
         }
     }

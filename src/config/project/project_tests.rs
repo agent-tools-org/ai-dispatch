@@ -152,7 +152,7 @@ suppress_gitbutler_prompt = true
 "#;
     let config = load_project(&write_project(dir.path(), contents)).unwrap();
     assert_eq!(config.gitbutler.as_deref(), Some("auto"));
-    assert_eq!(config.gitbutler_mode(), crate::gitbutler::Mode::Auto);
+    assert_eq!(config.gitbutler_mode(), crate::workspace::gitbutler::Mode::Auto);
     assert!(config.suppress_gitbutler_prompt);
 }
 
@@ -164,7 +164,7 @@ fn gitbutler_mode_falls_back_to_off_for_invalid_values() {
         ..Default::default()
     };
 
-    assert_eq!(config.gitbutler_mode(), crate::gitbutler::Mode::Off);
+    assert_eq!(config.gitbutler_mode(), crate::workspace::gitbutler::Mode::Off);
 }
 
 #[test]

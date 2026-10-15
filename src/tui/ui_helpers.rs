@@ -162,7 +162,7 @@ pub fn prompt_text(task: &Task) -> String {
 
 #[cfg(test)]
 pub fn read_task_output_for_tui(task: &Task) -> String {
-    crate::task_view::read_output(task)
+    crate::task::view::read_output(task)
 }
 
 pub fn detail_scroll_offset(detail_scroll: usize) -> u16 {

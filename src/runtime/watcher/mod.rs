@@ -29,7 +29,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Child;
 use tokio::time::Duration;
 use crate::agent::Agent;
-use crate::delivery_guard::{DeliveryEvidence, DeliveryOutcome};
+use crate::task::delivery_guard::{DeliveryEvidence, DeliveryOutcome};
 use crate::runtime::process::group::force_kill_process_group;
 use crate::runtime::process::monitor;
 use crate::routing::rate_limit;

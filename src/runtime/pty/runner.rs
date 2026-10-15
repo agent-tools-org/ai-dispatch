@@ -84,7 +84,7 @@ fn fail_task_on_spawn_error(
         detail: detail.to_string(),
         metadata: None,
     };
-    let _ = crate::task_lifecycle::complete_task_atomic(
+    let _ = crate::task::lifecycle::complete_task_atomic(
         store.as_ref(),
         TaskCompletionUpdate {
             id: task_id.as_str(),
@@ -99,7 +99,7 @@ fn fail_task_on_spawn_error(
         },
         &event,
     );
-    crate::state::refresh_project_state(store.as_ref(), task_id);
+    crate::store::state::refresh_project_state(store.as_ref(), task_id);
 }
 
 fn spawn_reader_thread(mut reader: Box<dyn Read + Send>) -> mpsc::Receiver<Vec<u8>> {
@@ -164,7 +164,7 @@ fn record_completion(
         ),
         metadata: None,
     };
-    if !crate::task_lifecycle::complete_task_atomic(
+    if !crate::task::lifecycle::complete_task_atomic(
         store.as_ref(),
         TaskCompletionUpdate {
             id: task_id.as_str(),
@@ -180,7 +180,7 @@ fn record_completion(
     )? {
         return Ok(());
     }
-    crate::state::refresh_project_state(store.as_ref(), task_id);
+    crate::store::state::refresh_project_state(store.as_ref(), task_id);
     println!(
         "Task {} {} ({}{}{})",
         task_id,

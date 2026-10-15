@@ -34,7 +34,7 @@ fn repository() -> (tempfile::TempDir, PathBuf, String) {
     std::fs::write(repo.path().join("base.txt"), "base\n").expect("base");
     git(repo.path(), &["add", "base.txt"]);
     git(repo.path(), &["commit", "-m", "base"]);
-    let worktree = crate::worktree::create_worktree(repo.path(), "fix/capacity-fixture", None)
+    let worktree = crate::workspace::worktree::create_worktree(repo.path(), "fix/capacity-fixture", None)
         .expect("worktree")
         .path;
     let initial_head = git(&worktree, &["rev-parse", "HEAD"]);

@@ -9,7 +9,7 @@ use super::kill::terminate_task_processes;
 use super::spec::{load_spec_for_reaper, BackgroundRunSpec};
 use super::waiting;
 use super::MAX_WORKERS;
-use crate::{config, notify, support::paths, support::sanitize};
+use crate::{config, task::notify, support::paths, support::sanitize};
 use crate::store::Store;
 use crate::types::{EventKind, PendingReason, Task, TaskEvent, TaskFilter, TaskId, TaskStatus};
 
@@ -151,9 +151,9 @@ pub(super) fn preserve_zombie_changes(store: &Store, task_id: &str, spec: &Backg
         && !spec.audit_report_mode
         && let Some(ref path) = task.worktree_path
         && std::path::Path::new(path).exists()
-        && crate::commit::has_uncommitted_changes(path).unwrap_or(false)
+        && crate::workspace::commit::has_uncommitted_changes(path).unwrap_or(false)
     {
-        let _ = crate::commit::auto_commit(path, task_id, &task.prompt);
+        let _ = crate::workspace::commit::auto_commit(path, task_id, &task.prompt);
         aid_info!("[aid] Preserved uncommitted changes for zombie task {task_id}");
     }
     Ok(())
@@ -219,7 +219,7 @@ pub(crate) fn fail_stale_pending_task(
     let Some(pending_reason) = infer_pending_reason(store, task)? else {
         return Ok(false);
     };
-    if !crate::task_lifecycle::fail_pending_with_reason(store, task_id, pending_reason)? {
+    if !crate::task::lifecycle::fail_pending_with_reason(store, task_id, pending_reason)? {
         return Ok(false);
     }
     store.insert_event(&TaskEvent {
@@ -259,7 +259,7 @@ fn infer_pending_reason(store: &Store, task: &Task) -> Result<Option<PendingReas
 
 pub(super) fn record_failure_skip_notify(store: &Store, task_id: &str, stderr_detail: &str, event_detail: &str) -> Result<bool> {
     sanitize::validate_task_id(task_id)?;
-    if !crate::task_lifecycle::fail_active_execution(store, task_id)? {
+    if !crate::task::lifecycle::fail_active_execution(store, task_id)? {
         return Ok(false);
     }
     let stderr_path = paths::stderr_path(task_id);

@@ -11,7 +11,7 @@ pub(super) fn run_teardown_phase(task_id: &TaskId, args: &RunArgs, wt_path: Opti
         crate::runtime::sandbox::kill_container(task_id.as_str());
     }
     if let Some(wt) = wt_path {
-        let _ = crate::worktree::clear_worktree_lock(std::path::Path::new(wt), task_id.as_str());
+        let _ = crate::workspace::worktree::clear_worktree_lock(std::path::Path::new(wt), task_id.as_str());
     }
 }
 
@@ -73,7 +73,7 @@ pub(super) fn run_verify_scope_phase(
         effective_dir,
         container_name,
     );
-    crate::verify::enforce_verify_status(store, task_id);
+    crate::task::verify::enforce_verify_status(store, task_id);
     if !args.read_only && !args.scope.is_empty() {
         run_agent::check_scope_violations(store, task_id, &args.scope, effective_dir);
     }
@@ -232,7 +232,7 @@ fn record_artifact_failure(store: &Store, task: &Task, native: bool, err: &anyho
     let _ = store.update_delivery_assessment(
         task.id.as_str(), Some(DeliveryAssessment::MissingFinalDelivery),
     );
-    let event_kind = if crate::task_lifecycle::mark_failed(store, &task.id).unwrap_or(false) {
+    let event_kind = if crate::task::lifecycle::mark_failed(store, &task.id).unwrap_or(false) {
         EventKind::Error
     } else { EventKind::Milestone };
     let label = if native { "Read-only artifact delivery failed" }

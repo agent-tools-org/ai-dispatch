@@ -10,7 +10,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result};
 use crate::types::{AgentKind, EventKind, TaskEvent, TaskId};
-use crate::worktree_layout::{read_commondir, resolve_worktree_gitdir};
+use crate::workspace::worktree::layout::{read_commondir, resolve_worktree_gitdir};
 
 pub(crate) fn ensure_directory(path: &Path) -> Result<()> {
     fs::create_dir_all(path)

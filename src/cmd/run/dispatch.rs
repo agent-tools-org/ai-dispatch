@@ -31,7 +31,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     }
     let prepared = prepare_dispatch(&store, &mut args).inspect_err(|error| {
         if let Some(id) = args.existing_task_id.as_ref() {
-            let _ = crate::task_lifecycle::fail_waiting_with_reason(&store, id.as_str(), &error.to_string());
+            let _ = crate::task::lifecycle::fail_waiting_with_reason(&store, id.as_str(), &error.to_string());
         }
     })?;
     let mut prompt_bundle = run_prompt::build_prompt_bundle(
@@ -54,7 +54,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     ensure_agent_binary_available(&store, &prepared, &args)?;
     let runtime_hooks = load_runtime_hooks(&args)?;
     maybe_record_start_sha(&store, &prepared.task_id, prepared.effective_dir.as_ref())?;
-    if !crate::task_lifecycle::mark_running(store.as_ref(), &prepared.task_id)? {
+    if !crate::task::lifecycle::mark_running(store.as_ref(), &prepared.task_id)? {
         anyhow::bail!(
             "Task {} could not transition to running (status changed underneath dispatch — likely stopped or timed out); aborting dispatch",
             prepared.task_id
@@ -92,7 +92,7 @@ fn ensure_agent_binary_available(
         agent::ensure_agent_binary_available(prepared.agent_kind, &prepared.agent_display_name)
     {
         let detail = err.to_string();
-        crate::task_lifecycle::complete_task_atomic(
+        crate::task::lifecycle::complete_task_atomic(
             store.as_ref(),
             TaskCompletionUpdate {
                 id: prepared.task_id.as_str(),
@@ -140,7 +140,7 @@ fn dry_run(
     // `Skipped` is the honest terminal state — the task was deliberately not
     // executed — and it is excluded from both the reaper and the success-rate
     // queries.
-    crate::task_lifecycle::mark_skipped(store.as_ref(), prepared.task_id.as_str())?;
+    crate::task::lifecycle::mark_skipped(store.as_ref(), prepared.task_id.as_str())?;
     let estimated_cost = crate::cost::estimate_cost(
         prompt_bundle.prompt_tokens,
         prepared.effective_model.as_deref(),
@@ -186,7 +186,7 @@ fn run_before_hook(
         runtime_hooks,
         true,
     ) {
-        crate::task_lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
+        crate::task::lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
         return Err(err);
     }
     Ok(())

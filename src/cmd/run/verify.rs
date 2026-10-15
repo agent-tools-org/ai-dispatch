@@ -55,10 +55,10 @@ pub(in crate::cmd) fn maybe_verify_impl(
         container_name,
     ) {
         Ok(result) => {
-            let report = crate::verify::format_verify_report(&result);
+            let report = crate::task::verify::format_verify_report(&result);
             println!("{report}");
             let target_permission_failure = result.infrastructure_failure
-                || crate::verify_cargo::target_dir_permission_failure(
+                || crate::task::verify::cargo::target_dir_permission_failure(
                     &result,
                     cargo_target_dir.as_deref(),
                 );
@@ -66,7 +66,7 @@ pub(in crate::cmd) fn maybe_verify_impl(
                 let detail = verify_infrastructure_detail(&result);
                 record_verify_infrastructure_detail(store, task_id, detail);
             } else {
-                crate::verify::record_verify_status(store, task_id, &result);
+                crate::task::verify::record_verify_status(store, task_id, &result);
             }
             if result.timed_out && !target_permission_failure {
                 outcome::record_verify_timed_out(store, task_id, &result);
@@ -116,7 +116,7 @@ fn record_verify_infrastructure_detail(store: &Store, task_id: &TaskId, detail: 
     });
 }
 
-fn verify_infrastructure_detail(result: &crate::verify::VerifyResult) -> String {
+fn verify_infrastructure_detail(result: &crate::task::verify::VerifyResult) -> String {
     match verify_output_excerpt(&result.output) {
         Some(output) => format!("{}\nOutput: {output}", result.command),
         None => result.command.clone(),
@@ -140,7 +140,7 @@ fn record_verify_failed(store: &Store, task_id: &TaskId, detail: String) {
         detail,
         metadata: None,
     });
-    crate::verify::enforce_verify_status(store, task_id);
+    crate::task::verify::enforce_verify_status(store, task_id);
 }
 
 fn stale_worktree_dir_error(dir: &str, branch: Option<&str>) -> String {
@@ -181,7 +181,7 @@ fn verify_failure_hint(store: &Store, task_id: &TaskId, output: &str) -> Option<
         .ok()
         .flatten()
         .and_then(|task| task.worktree_path)?;
-    crate::worktree_deps::missing_deps_hint(std::path::Path::new(&worktree)).map(str::to_string)
+    crate::workspace::worktree::deps::missing_deps_hint(std::path::Path::new(&worktree)).map(str::to_string)
 }
 
 fn verify_output_suggests_missing_deps(output: &str) -> bool {

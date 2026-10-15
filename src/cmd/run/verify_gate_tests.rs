@@ -168,7 +168,7 @@ fn rustc_error_does_not_emit_missing_npm_hint() {
     let dir_str = worktree.path().to_string_lossy().to_string();
     let store = Store::open_memory().unwrap();
     let task_id = TaskId("t-rustc-vfail".to_string());
-    crate::worktree_deps::prepare_worktree_dependencies(
+    crate::workspace::worktree::deps::prepare_worktree_dependencies(
         &store,
         &task_id,
         worktree.path(),

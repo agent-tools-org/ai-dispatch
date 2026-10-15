@@ -70,7 +70,7 @@ async fn read_only_shared_checkout_never_creates_a_recovery_ref() {
     let store = Arc::new(Store::open_memory().unwrap());
     let row = task("t-shared-readonly", TaskStatus::Done);
     store.insert_task(&row).unwrap();
-    let baseline = crate::worktree::capture_worktree_snapshot(dir.path()).unwrap()
+    let baseline = crate::workspace::worktree::capture_worktree_snapshot(dir.path()).unwrap()
         .read_only_state(dir.path()).unwrap();
     let args = RunArgs { read_only: true, ..Default::default() };
     let action = post_agent_dirty_worktree_cleanup(

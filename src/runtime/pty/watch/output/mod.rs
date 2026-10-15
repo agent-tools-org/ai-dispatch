@@ -164,7 +164,7 @@ pub(super) fn mark_awaiting_input(
     if *awaiting_input {
         return Ok(());
     }
-    crate::task_lifecycle::mark_awaiting_input(store.as_ref(), task_id)?;
+    crate::task::lifecycle::mark_awaiting_input(store.as_ref(), task_id)?;
     store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),

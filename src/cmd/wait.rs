@@ -10,7 +10,7 @@ use tokio::time::{sleep, Duration, Instant};
 use crate::cost;
 use crate::store::Store;
 use crate::types::{verify_required, Task, TaskFilter, TaskOutcome, TaskStatus, VerifyStatus};
-use crate::verify::VERIFY_TIMEOUT;
+use crate::task::verify::VERIFY_TIMEOUT;
 #[path = "wait_settlement.rs"]
 mod settlement;
 use settlement::worker_is_settling;

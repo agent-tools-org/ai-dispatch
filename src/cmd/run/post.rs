@@ -31,7 +31,7 @@ pub(crate) fn maybe_run_post_done_audit(
     if (task.status != TaskStatus::Done && !preserved_read_only_report) || task.audit_verdict.is_some() {
         return Ok(());
     }
-    if !crate::aic::is_available() {
+    if !crate::task::aic::is_available() {
         aid_warn!("[aid] --audit requested but 'aic' not found on PATH — skipping cross-audit");
         store.update_task_audit(task_id.as_str(), Some("skipped"), None)?;
         store.insert_event(&TaskEvent {
@@ -45,7 +45,7 @@ pub(crate) fn maybe_run_post_done_audit(
     }
 
     let audit_dir = audit_current_dir(effective_dir, repo_path);
-    let result = crate::aic::run_audit(task_id.as_str(), audit_dir.as_deref());
+    let result = crate::task::aic::run_audit(task_id.as_str(), audit_dir.as_deref());
     store.update_task_audit(
         task_id.as_str(),
         Some(result.verdict.as_str()),
@@ -120,7 +120,7 @@ pub(crate) fn worktree_is_empty_diff_with_base(
     worktree_dir: &Path,
     base_branch: Option<&str>,
 ) -> Option<bool> {
-    crate::worktree::capture_worktree_snapshot_with_base(worktree_dir, base_branch)
+    crate::workspace::worktree::capture_worktree_snapshot_with_base(worktree_dir, base_branch)
         .ok()
         .and_then(|snapshot| snapshot.empty_diff)
 }

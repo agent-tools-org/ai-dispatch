@@ -48,7 +48,7 @@ pub(super) fn print_candidates(report: &AdviceReport) {
         println!(
             concat!(
                 "  {}. {:<10} {:>5.1}  base {:.1}  {:+.1} model  {:+.1} budget  {:+.1} limit",
-                "  {:+.1} history  {:+.1} team  {:+.1} headroom  model {}{}"
+                "  {:+.1} history  {:+.1} team  {:+.1} headroom  {:+.1} billing  model {}{}  {}"
             ),
             index + 1,
             candidate.agent,
@@ -60,12 +60,14 @@ pub(super) fn print_candidates(report: &AdviceReport) {
             item.history_bonus,
             item.team_bonus,
             item.headroom_penalty,
+            item.billing,
             crate::agent::run_model::model_label(
                 candidate.model.as_deref(),
                 candidate.pinned,
                 candidate.source,
             ),
             availability,
+            candidate.billing.as_ref().map(|item| item.label()).unwrap_or_else(|| "billing unknown".into()),
         );
         for line in leaderboard_lines(&candidate.capability_evidence) {
             println!("{line}");

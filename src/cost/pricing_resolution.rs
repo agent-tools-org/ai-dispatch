@@ -17,6 +17,13 @@ pub(super) fn resolve_model_pricing(model: &str, agent: AgentKind) -> Option<Mod
         .or_else(|| exact_feed_pricing(model, agent))
 }
 
+pub(crate) fn estimate_overage_cost(tokens: i64, model: &str, agent: AgentKind) -> Option<f64> {
+    let pricing = override_pricing(model, agent)
+        .or_else(|| static_catalog_pricing(model, agent))
+        .or_else(|| exact_feed_pricing(model, agent))?;
+    Some(tokens as f64 * (pricing.input_per_m * 0.7 + pricing.output_per_m * 0.3) / 1_000_000.0)
+}
+
 /// Subscription metering is included (zero marginal cost) whatever the model.
 pub(super) fn subscription_pricing(agent: AgentKind) -> Option<ModelPricing> {
     matches!(provider_for_cli(agent).1, MeteringShape::Subscription).then_some(ModelPricing {

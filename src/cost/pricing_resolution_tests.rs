@@ -190,3 +190,15 @@ fn vendor_feed_rate_prices_only_the_vendor_cli_not_a_reseller() {
     }
     clear_feed_for_tests();
 }
+
+#[test]
+fn overage_estimates_bypass_subscription_zero_and_keep_unknown_prices_unknown() {
+    let (_temp, _home) = isolated();
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(_temp.path());
+    let row = AGENT_MODELS.iter().find(|row| row.agent == AgentKind::Cursor
+        && (row.input_per_m > 0.0 || row.output_per_m > 0.0)).expect("priced cursor model");
+    assert_eq!(estimate_cost(1_000_000, Some(row.model), AgentKind::Cursor), Some(0.0));
+    let expected = row.input_per_m * 0.7 + row.output_per_m * 0.3;
+    assert_eq!(estimate_overage_cost(1_000_000, row.model, AgentKind::Cursor), Some(expected));
+    assert_eq!(estimate_overage_cost(1_000_000, "unknown-model", AgentKind::Cursor), None);
+}

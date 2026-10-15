@@ -74,6 +74,8 @@ pub(crate) struct ScoreBreakdown {
     pub team_bonus: f64,
     #[serde(default)]
     pub headroom_penalty: f64,
+    #[serde(default)]
+    pub billing: f64,
     pub total: f64,
 }
 
@@ -118,6 +120,7 @@ pub(super) fn score_breakdown(
         history_bonus,
         team_bonus,
         headroom_penalty,
+        billing: 0.0,
         total: s,
     }
 }

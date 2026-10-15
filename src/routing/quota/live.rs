@@ -23,6 +23,7 @@ struct UsageSnapshot {
     provider: String,
     windows: Vec<UsageWindow>,
     fetched_at: DateTime<Utc>,
+    billing: Option<super::billing::Billing>,
 }
 
 #[derive(Deserialize)]
@@ -46,10 +47,23 @@ pub(crate) fn snapshot(agent: &AgentKind) -> Option<ProbeEvidence> {
 }
 
 pub(crate) fn snapshot_in_cache(agent: &AgentKind, cache_dir: &Path) -> Option<ProbeEvidence> {
+    let record = read_record(agent, cache_dir)?;
+    probe_from_record(&record, provider_name(agent)?)
+}
+
+fn read_record(agent: &AgentKind, cache_dir: &Path) -> Option<CachedRecord> {
     let provider = provider_name(agent)?;
     let raw = std::fs::read(cache_dir.join(format!("{provider}.json"))).ok()?;
-    let record: CachedRecord = serde_json::from_slice(&raw).ok()?;
-    probe_from_record(&record, provider)
+    serde_json::from_slice(&raw).ok()
+}
+
+pub(crate) fn billing(agent: &AgentKind) -> Option<super::billing::Billing> {
+    let record = read_record(agent, &cache_dir()?)?;
+    let probe = probe_from_record(&record, provider_name(agent)?)?;
+    if !probe.ok || probe.stale {
+        return None;
+    }
+    record.snapshot?.billing
 }
 
 fn probe_from_record(record: &CachedRecord, expected_provider: &str) -> Option<ProbeEvidence> {

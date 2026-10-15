@@ -93,6 +93,8 @@ pub(crate) struct AdviceCandidate {
     #[serde(default)]
     pub quota: CandidateQuota,
     #[serde(default)]
+    pub billing: Option<crate::routing::quota::billing::Billing>,
+    #[serde(default)]
     pub auth: AuthStatus,
     /// Served, unrated models newer than `model` in its family; never auto-selected.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -227,13 +229,9 @@ fn builtin_candidate(
     agy_installed: bool,
 ) -> RankedCandidate {
     let RunModel { model, pinned, source } = run_model;
-    let breakdown = score_breakdown(context, kind, model.as_deref());
+    let mut breakdown = score_breakdown(context, kind, model.as_deref());
     let mut exclusions = Exclusions::default();
-    let quota = selection_quota::candidate_quota(kind, None, model.as_deref());
-    if quota.status == "held" {
-        let avail = crate::routing::availability::availability_for_model(&kind, None, model.as_deref());
-        exclusions.push("held", avail.why);
-    }
+    let (quota, billing) = exclusions.quota_and_billing(kind, model.as_deref(), declared, &mut breakdown);
     exclusions.superseded_by_agy(kind, agy_installed);
     if let Some(blocker) = &blocker {
         exclusions.push(blocker.code(), blocker.reason());
@@ -269,7 +267,7 @@ fn builtin_candidate(
         quota,
         capability_evidence: crate::routing::scores::evidence(kind, model.as_deref(), context.profile.category),
         score: breakdown.total, model, pinned, source, breakdown, exclusion_reason, exclusion_codes,
-        demotion_reason, auth,
+        demotion_reason, auth, billing,
         unrated_served_models,
     };
     RankedCandidate { report, order, pool_excluded: verdict == PoolVerdict::Weaker, capability_note }
@@ -285,3 +283,7 @@ fn budget_allows(budget: TaskBudget, model: Option<&str>) -> bool {
 #[cfg(test)]
 #[path = "selection_advice_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "selection_advice_held_tests.rs"]
+mod held_tests;

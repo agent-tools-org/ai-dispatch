@@ -188,3 +188,26 @@ verify = "cargo test --bin app"
 Advice excludes held routes, including needs-human markers without a reset time,
 from recommendations, advised cascades, and automatic fallback. Background urgency
 can remove the numeric limit penalty; it does not make a needs-human route eligible.
+
+## Subscription billing state
+
+Fresh successful aidbar snapshots may include `billing.state`: `in_plan`,
+`overage`, or `exhausted`, with optional `credits.balance` and `credits.unlimited`.
+Balances retain provider credit units. Absent, stale, or failed billing evidence
+is unknown and preserves existing routing behavior.
+
+Overage routes are excluded from automatic selection for `free` and `cheap`
+budgets. A `standard` budget applies a separate −4.0 `billing` score term;
+`premium` or `critical` rigor removes that penalty. Critical rigor does not
+permit paid overage on a free or cheap budget. Exhausted routes are excluded
+regardless of profile. These rules apply to advice, advised cascades and automatic
+fallback. Candidate lines show billing state and balance; JSON candidates include
+`billing` (null when unknown) and `breakdown.billing`.
+
+Billing alone never blocks an explicit `aid run <agent>`. Dispatch prints one
+warning for an overage or exhausted route, including its balance when reported.
+A task dispatched in overage records one setup event such as
+`billing: overage (credits balance 48698.135)`; later cache changes do not alter it.
+`aid agent quota` displays `OVERAGE` with balance or `EXHAUSTED` in place of `OK`.
+Existing refusal markers still hold their routes until their recovery conditions
+are met.

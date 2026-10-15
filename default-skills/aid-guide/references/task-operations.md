@@ -361,3 +361,18 @@ activity in either place.
 5. Resolve ownership and review first; use acceptance and custody GC only at
    the end of the lifecycle.
 6. Use `aid doctor` for evidence; `aid doctor --apply` may safely rewrite leaked operator symlinks, but does not delete task artifacts.
+
+## Overage usage
+
+`aid usage` includes per-agent overage task counts and estimated costs alongside
+existing usage totals. `--agent`, `--session`, `--team`, and `--period` constrain
+these counts with the same task selection and period as the existing totals.
+Only persisted dispatch-time billing events identify overage; today's aidbar
+snapshot does not reclassify past tasks. Duplicate events count once per task.
+JSON adds an `overage` array with `agent`, `tasks`, `estimated_cost_usd`, and
+`unknown_cost_tasks`.
+
+Estimates use a positive recorded task cost when available, otherwise tokens and
+an exact known metered model price, bypassing subscription inclusion. Missing
+prices or usage remain unknown. Provider credit balances are not USD prices;
+these figures are estimates, not provider invoices.

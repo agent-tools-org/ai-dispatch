@@ -19,6 +19,24 @@ pub(super) struct Exclusions {
 }
 
 impl Exclusions {
+    pub(super) fn quota_and_billing(
+        &mut self, kind: AgentKind, model: Option<&str>, declared: crate::types::DeclaredTaskProfile,
+        breakdown: &mut super::ScoreBreakdown,
+    ) -> (super::CandidateQuota, Option<crate::routing::quota::billing::Billing>) {
+        let quota = super::selection_quota::candidate_quota(kind, None, model);
+        if quota.status == "held" {
+            let avail = crate::routing::availability::availability_for_model(&kind, None, model);
+            self.push("held", avail.why);
+        }
+        let billing = crate::routing::quota::live::billing(&kind);
+        if let Some(reason) = billing.as_ref().and_then(|item| item.exclusion(declared)) {
+            self.push("billing", reason);
+        }
+        breakdown.billing = billing.as_ref().map_or(0.0, |item| item.penalty(declared));
+        if breakdown.billing != 0.0 { breakdown.total += breakdown.billing; }
+        (quota, billing)
+    }
+
     pub(super) fn superseded_by_agy(&mut self, kind: AgentKind, agy_installed: bool) {
         if kind == AgentKind::Gemini && agy_installed {
             self.push("superseded_by_agy", "gemini individual tier superseded by agy (installed)".to_string());

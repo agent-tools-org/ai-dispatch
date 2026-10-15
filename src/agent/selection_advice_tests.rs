@@ -9,7 +9,7 @@ use crate::support::paths::AidHomeGuard;
 use crate::agent::run_model::RunModelSource;
 use crate::types::{TaskDifficulty, TaskRigor, TaskUrgency};
 
-fn isolated() -> (tempfile::TempDir, AidHomeGuard, CacheDirGuard) {
+pub(super) fn isolated() -> (tempfile::TempDir, AidHomeGuard, CacheDirGuard) {
     let temp = tempfile::tempdir().expect("temp dir");
     let home = AidHomeGuard::set(temp.path());
     let cache = temp.path().join("aidbar");
@@ -20,7 +20,7 @@ fn isolated() -> (tempfile::TempDir, AidHomeGuard, CacheDirGuard) {
     (temp, home, guard)
 }
 
-fn declared(difficulty: TaskDifficulty, budget: TaskBudget) -> DeclaredTaskProfile {
+pub(super) fn declared(difficulty: TaskDifficulty, budget: TaskBudget) -> DeclaredTaskProfile {
     DeclaredTaskProfile { difficulty, budget, urgency: TaskUrgency::Normal, rigor: TaskRigor::Standard }
 }
 
@@ -39,7 +39,7 @@ fn anthropic_caller(capability: Option<f64>) -> CallerAdvice {
     }
 }
 
-fn find<'a>(report: &'a AdviceReport, agent: &str) -> &'a AdviceCandidate {
+pub(super) fn find<'a>(report: &'a AdviceReport, agent: &str) -> &'a AdviceCandidate {
     report.candidates.iter().find(|item| item.agent == agent).expect("candidate")
 }
 
@@ -190,7 +190,7 @@ fn advised_model_group_hold_switches_route_but_other_group_does_not() {
     std::fs::write(temp.path().join("rate-limit-droid--standard"), hold).expect("model hold");
     let held = run(None);
     assert_eq!(find(&held, "droid").quota.status, "held");
-    assert!(find(&held, "droid").eligible);
+    assert!(!find(&held, "droid").eligible);
     assert!(!find(&held, "droid").launchable(None));
     let recommended = held.recommended.expect("recommendation");
     assert_eq!((&*recommended.agent, recommended.model.as_deref()), ("codex", Some("gpt-5.6-terra")));
@@ -297,6 +297,3 @@ fn advice_skips_disabled_installed_agents() {
 
 #[path = "selection_evidence_tests.rs"]
 mod evidence_tests;
-
-#[path = "selection_advice_held_tests.rs"]
-mod held_tests;

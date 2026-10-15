@@ -4,6 +4,7 @@
 
 pub(crate) mod price_feed;
 mod pricing_resolution;
+pub(crate) use pricing_resolution::estimate_overage_cost;
 mod components;
 pub(crate) use components::{apply_completion_usage_cost, completion_cost, task_cost};
 

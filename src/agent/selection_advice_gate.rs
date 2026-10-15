@@ -112,7 +112,9 @@ impl AdviceCandidate {
     }
 
     pub(crate) fn kind(&self) -> Option<AgentKind> {
-        AgentKind::parse_str(&self.agent)
+        AgentKind::parse_str(&self.agent).or_else(|| {
+            crate::config::api_route::find(&self.agent).ok().flatten().map(|_| AgentKind::Custom)
+        })
     }
 }
 

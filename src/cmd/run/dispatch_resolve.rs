@@ -97,6 +97,7 @@ pub(super) fn resolve_agent_setup(
     args: &mut RunArgs,
     project_id: Option<&str>,
 ) -> Result<AgentSetup> {
+    let _ = config::load_config()?;
     let (mut agent_kind, mut custom_agent_name) = if let Some(kind) = AgentKind::parse_str(&args.agent_name) {
         (kind, None)
     } else if agent::registry::custom_agent_exists(&args.agent_name) {
@@ -141,8 +142,14 @@ pub(super) fn resolve_agent_setup(
         aid_info!("[aid] Auto-set --dir . (git repo detected)");
     }
     super::advice_route::validate_candidate_route(args, agent_kind)?;
+    let api_hold = crate::config::api_route::find(resolved_agent_name)?
+        .map(|route| crate::routing::api_budget::for_route(&route, Some(store)))
+        .transpose()?.filter(|budget| budget.billing.state
+            == crate::routing::quota::billing::BillingState::Exhausted)
+        .map(|budget| budget.label());
     let mut substituted_from: Option<(String, String)> = None;
     if args.declared_urgency == Some(crate::types::TaskUrgency::Background)
+        && crate::config::api_route::find(resolved_agent_name)?.is_none()
         && held::background_keeps_hold(agent_kind, custom_agent_name.as_deref())
     {
         aid_warn!(
@@ -150,7 +157,7 @@ pub(super) fn resolve_agent_setup(
             resolved_agent_name
         );
     } else if let Some(hold) =
-        rate_limit::dispatch_blocking_hold(&agent_kind, custom_agent_name.as_deref())
+        api_hold.or_else(|| rate_limit::dispatch_blocking_hold(&agent_kind, custom_agent_name.as_deref()))
     {
         let original = custom_agent_name
             .as_deref()
@@ -267,3 +274,7 @@ pub(super) fn resolve_agent_setup(
     })
 }
 #[cfg(test)] #[path = "dispatch_resolve_tests.rs"] mod tests;
+
+#[cfg(test)]
+#[path = "dispatch_api_route_tests.rs"]
+mod api_route_tests;

@@ -1,13 +1,23 @@
 // Claude stream-json parsing helpers shared by the Claude adapter and tests.
 // Exports parse_event_line() plus internal helpers for assistant, tool, and result events.
 // Depends on serde_json for decoding and capped_detail for concise event details.
+#[path = "claude_model.rs"]
+mod model;
+use model::{extract_result_model, normalize_model};
 use chrono::Local;
 use serde_json::{Value, json};
 use super::truncate::{capped_detail, capped_detail_with};
 use crate::types::*;
 
 pub(crate) fn parse_event_line(task_id: &TaskId, line: &str) -> Option<TaskEvent> {
-    let trimmed = line.trim();
+    parse_event_line_for_route(task_id, line, None)
+}
+
+pub(crate) fn parse_event_line_for_route(
+    task_id: &TaskId, line: &str, route: Option<&str>,
+) -> Option<TaskEvent> {
+    let cleaned = crate::runtime::watcher::strip_terminal_escapes(line);
+    let trimmed = cleaned.trim();
     if trimmed.is_empty() {
         return None;
     }
@@ -28,7 +38,7 @@ pub(crate) fn parse_event_line(task_id: &TaskId, line: &str) -> Option<TaskEvent
         "result" => parse_result_event(task_id, &v, now),
         "system" => parse_system_event(task_id, &v, now),
         "user" => parse_user_event(task_id, &v, now),
-        "error" => parse_error_event(task_id, &v, now),
+        "error" => parse_error_event(task_id, &v, now, route),
         _ => None,
     }
 }
@@ -233,9 +243,13 @@ fn parse_user_event(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -
     Some(TaskEvent { task_id: task_id.clone(), timestamp: now, event_kind: EventKind::Error, detail, metadata })
 }
 
-fn parse_error_event(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
+fn parse_error_event(
+    task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>, route: Option<&str>,
+) -> Option<TaskEvent> {
     let detail = v.get("message").or_else(|| v.pointer("/error/message")).and_then(|value| value.as_str()).filter(|msg| !msg.is_empty())?;
-    crate::routing::quota::channel::mark_stream_refusal(AgentKind::Claude, None, &v.to_string());
+    if route.is_none() {
+        crate::routing::quota::channel::mark_stream_refusal(AgentKind::Claude, None, &v.to_string());
+    }
     let (detail, metadata) = capped_detail(detail);
     Some(TaskEvent {
         task_id: task_id.clone(),
@@ -260,28 +274,6 @@ fn base_metadata(model: Option<&str>, session_id: Option<&str>) -> Option<Value>
             Some(metadata)
         }
     }
-}
-
-fn extract_result_model(payload: &Value) -> Option<String> {
-    payload
-        .pointer("/modelUsage")
-        .and_then(Value::as_object)
-        .and_then(|models| {
-            let use_cost = models.values().all(|v| v.get("costUSD").and_then(Value::as_f64).is_some());
-            let tokens = |v: &Value| ["inputTokens", "outputTokens", "cacheReadInputTokens", "cacheCreationInputTokens"]
-                .iter().filter_map(|key| v.get(*key).and_then(Value::as_i64)).map(i128::from).sum::<i128>();
-            models.iter().rev().max_by(|(_, a), (_, b)| {
-                let cost = || a["costUSD"].as_f64().zip(b["costUSD"].as_f64()).and_then(|(a, b)| a.partial_cmp(&b));
-                let cost_order = if use_cost { cost() } else { None };
-                cost_order.filter(|order| !order.is_eq()).unwrap_or_else(|| tokens(a).cmp(&tokens(b)))
-            }).map(|(name, _)| name)
-        })
-        .map(|name| normalize_model(name))
-        .or_else(|| payload.get("model").and_then(Value::as_str).map(normalize_model))
-}
-
-fn normalize_model(model: &str) -> String {
-    model.split('[').next().unwrap_or(model).to_string()
 }
 
 fn extract_noop_reason(line: &str) -> String {

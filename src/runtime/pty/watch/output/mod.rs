@@ -41,6 +41,14 @@ impl MonitorState {
                 self.mark_progress();
             }
             if self.streaming && !is_echo {
+                if let Some(reason) = crate::agent::api_route::stream_failure(agent, &line)? {
+                    self.info.status = TaskStatus::Failed;
+                    store.insert_agent_event(&TaskEvent {
+                        task_id: task_id.clone(), timestamp: Local::now(),
+                        event_kind: EventKind::Error, detail: reason.clone(), metadata: None,
+                    })?;
+                    anyhow::bail!("{reason}");
+                }
                 if let Some(event_detail) = watcher::handle_streaming_line_with_session(
                     watcher::StreamLineContext {
                         agent,

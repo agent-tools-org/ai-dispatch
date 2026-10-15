@@ -29,7 +29,10 @@ pub(crate) fn monitor_bridge(
         }
         match rx.recv_timeout(INPUT_POLL_INTERVAL) {
             Ok(bytes) => {
-                handle_bytes(state, agent, task_id, store, log_file, &mut decoder, bytes)?;
+                if let Err(error) = handle_bytes(state, agent, task_id, store, log_file, &mut decoder, bytes) {
+                    let _ = bridge.kill_group();
+                    return Err(error);
+                }
                 if cost_exceeded(state, store, task_id, bridge, max_task_cost) {
                     break;
                 }

@@ -30,6 +30,46 @@ security add-generic-password -a "$USER" -s typesafe-api-key -U -w
 
 TypeSafe keys are keychain-only on macOS; other platforms skip this step.
 
+## Claude API account routes
+
+Define one `[[api_route]]` per API account in `~/.aid/config.toml`:
+
+```toml
+[[api_route]]
+id = "claude-api-ming"
+agent = "claude"
+keychain_service = "aid-anthropic-api"
+keychain_account = "account-ming"
+monthly_budget_usd = 200
+over_budget = "stop"
+
+[[api_route]]
+id = "claude-api-meet"
+agent = "claude"
+keychain_service = "aid-anthropic-api"
+keychain_account = "account-meet"
+monthly_budget_usd = 200
+```
+
+Only `agent = "claude"` is supported. IDs must be unique, must not name a built-in,
+and use letters, digits or hyphens. Budgets must be positive finite USD amounts.
+`keychain_account` defaults to the route ID; `over_budget` defaults to `"stop"`.
+Use `"bill"` to allow overage after the budget. Store the API keys as generic
+passwords in the macOS login keychain under the specified service and account;
+never put key values in TOML, prompts or dispatch environment arguments.
+
+Use the route ID wherever an agent name is accepted, including `aid run`, batch
+`agent`, fallback lists and `--cascade`. The route runs the existing Claude Code
+adapter. At launch aid reads its key using `/usr/bin/security` and gives it only
+to the child as `ANTHROPIC_API_KEY`. An unreadable item fails before launch with
+an infrastructure error naming the route and item; subscription login is never
+a fallback. Plain `claude` keeps its existing behavior. The `aid credential` pool
+is independent of dispatch.
+
+`aid agent list`, `aid agent quota` and `aid advise` include these routes;
+`aid usage` groups each route separately. See [routing](dispatch-routing.md#api-account-billing)
+for budget, pace and hold behavior.
+
 ## Project configuration
 
 Store project defaults in `.aid/project.toml`. Prefer `aid project init` over

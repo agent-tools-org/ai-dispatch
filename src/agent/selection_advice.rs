@@ -23,6 +23,8 @@ use crate::types::{AgentKind, DeclaredTaskProfile, TaskBudget, TaskUrgency};
 
 #[path = "selection_advice_custom.rs"]
 mod custom;
+#[path = "selection_advice_api.rs"]
+mod api;
 #[path = "selection_advice_gate.rs"]
 mod gate;
 #[path = "selection_advice_recommend.rs"]
@@ -151,6 +153,7 @@ pub(crate) fn advise(
     };
     let selection = crate::config::load_config().map(|config| config.selection).unwrap_or_default();
     let mut ranked = builtin_candidates(&context, declared, &selection, caller.as_ref());
+    ranked.extend(api::candidates(&context, declared, &selection, store));
     ranked.sort_by(|left, right| {
         rank_tier(left).cmp(&rank_tier(right))
             .then_with(|| ranking_score(right).partial_cmp(&ranking_score(left))

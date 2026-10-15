@@ -22,6 +22,7 @@ pub(super) fn custom_candidates(
     let floor = declared.difficulty.capability_floor();
     let mut candidates: Vec<_> = load_custom_agents().into_values()
         .filter(|config| AgentKind::parse_str(&config.id).is_none())
+        .filter(|config| crate::config::api_route::find(&config.id).ok().flatten().is_none())
         .filter(|config| !agent_config::is_agent_disabled(&config.id))
         .map(|config| {
             let category_capability = custom_category_score(&config, context.profile.category);

@@ -26,6 +26,7 @@ pub(crate) mod custom;
 pub(crate) mod cargo_target;
 pub(crate) mod egress;
 pub(crate) mod registry;
+pub(crate) mod api_route;
 pub mod classifier;
 pub(crate) mod selection;
 pub(crate) mod run_model;

@@ -56,6 +56,9 @@ impl Route {
     }
 
     pub fn metering(&self) -> MeteringShape {
+        if self.cli == AgentKind::Claude && self.provider.as_str().starts_with("anthropic-api-") {
+            return MeteringShape::SpendBudget;
+        }
         let (default_provider, shape) = provider_for_cli(self.cli);
         // A route pointed somewhere other than its CLI's default provider
         // cannot borrow that provider's metering shape: BYOK through opencode

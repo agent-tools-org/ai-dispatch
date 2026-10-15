@@ -221,3 +221,31 @@ A task dispatched in overage records one setup event such as
 `aid agent quota` displays `OVERAGE` with balance or `EXHAUSTED` in place of `OK`.
 Existing refusal markers still hold their routes until their recovery conditions
 are met.
+
+## API account billing
+
+Configured `[[api_route]]` accounts run Claude Code with separate route IDs,
+provider identities, spend totals, scores and refusal markers. They do not draw
+on the Claude subscription pool or inherit its quota evidence. Configure them
+in [configuration](configuration.md#claude-api-account-routes).
+
+Month-to-date spend sums reported per-task USD costs for the route, using task
+creation dates within the local calendar month. This measures aid tasks only;
+external account activity is not included. Below the budget the state is
+`in_plan`. At or above it, `over_budget = "stop"` makes the route `exhausted`
+and prevents dispatch; `"bill"` makes it `overage`. The subscription billing
+profile rules above also apply to API-route advice: overage excludes free/cheap
+profiles and adds the applicable `billing` penalty for standard profiles.
+
+A separate `pace` term subtracts 2.0 when spend exceeds
+`monthly_budget_usd × elapsed_fraction_of_month × 1.25`. Pace never excludes a
+candidate. Route history and team overrides use the route ID. Quota rows show,
+for example, `claude-api-ming  IN PLAN  $37.20 / $200 this month`; advice lines
+show the same monthly billing evidence and their own `pace` term.
+
+The Claude `system/init` stream event must report
+`apiKeySource = "ANTHROPIC_API_KEY"`. Any other value, including a missing field,
+stops the process and fails the task with `route <id> is not billed to its API key`.
+That route receives a needs-human hold. Fix the key or CLI billing configuration,
+then use `aid config clear-limit <id>`. Credit-balance or billing refusals hold
+only that route until midnight on the first day of the next local month.

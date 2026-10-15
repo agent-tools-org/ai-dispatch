@@ -6,7 +6,14 @@ use crate::store::Store;
 use crate::types::{AgentKind, EventKind, TaskEvent, TaskId};
 
 pub(super) fn record(store: &Store, task_id: &TaskId, agent: AgentKind) -> anyhow::Result<()> {
-    let Some(billing) = live::billing(&agent) else {
+    let api = store.get_task(task_id.as_str())?
+        .and_then(|task| task.custom_agent_name)
+        .map(|name| crate::config::api_route::find(&name)).transpose()?.flatten();
+    let billing = match api {
+        Some(route) => Some(crate::routing::api_budget::for_route(&route, Some(store))?.billing),
+        None => live::billing(&agent),
+    };
+    let Some(billing) = billing else {
         return Ok(());
     };
     if matches!(billing.state, BillingState::Overage | BillingState::Exhausted) {

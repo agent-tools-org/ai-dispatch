@@ -76,6 +76,11 @@ pub fn exec_in_container(cmd: &Command, container_name: &str) -> Command {
             continue;
         }
         if let Some(value) = value {
+            if key == std::ffi::OsStr::new("ANTHROPIC_API_KEY") {
+                wrapped.arg("-e").arg(key);
+                wrapped.env(key, value);
+                continue;
+            }
             wrapped.arg("-e").arg(format!(
                 "{}={}",
                 key.to_string_lossy(),
@@ -267,3 +272,7 @@ mod tests {
             .any(|pair| pair == ["-e", "CARGO_TARGET_DIR=/tmp/cache/_base"]));
     }
 }
+
+#[cfg(test)]
+#[path = "container_api_route_tests.rs"]
+mod api_route_tests;

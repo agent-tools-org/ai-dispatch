@@ -27,6 +27,8 @@ impl ApiKey {
 }
 
 pub(crate) fn read_api_key(item: &KeychainItem) -> Result<ApiKey> {
+    #[cfg(test)]
+    if let Some(result) = test_keychain::read(item) { return result; }
     read_with(Path::new(SECURITY), item)
 }
 
@@ -50,6 +52,10 @@ fn read_with(program: &Path, item: &KeychainItem) -> Result<ApiKey> {
     }
     Ok(ApiKey(value.to_string()))
 }
+
+#[cfg(test)]
+#[path = "keychain_test_seam.rs"]
+pub(crate) mod test_keychain;
 
 #[cfg(test)]
 #[path = "keychain_tests.rs"]

@@ -52,6 +52,8 @@ pub(super) fn prepare_launch(
     crate::runtime::remote_build::configure_task(store, &spec.task_id, &mut std_cmd, home_guard.path())?;
     if let Some(temp_dir) = temp_dir { std_cmd.env("TMPDIR", temp_dir); }
     finish_env(store, spec, args, agent.kind(), &mut std_cmd, cargo_target_dir.as_deref())?;
+    crate::agent::api_route::validate_launch(&args.agent_name, store)?;
+    crate::agent::api_route::inject_key(&args.agent_name, &mut std_cmd)?;
     wrap_command(spec, args, agent.kind(), std_cmd)
 }
 
@@ -208,3 +210,7 @@ mod tests {
         assert_eq!(args.output.as_deref(), Some("/outside/final.txt"));
     }
 }
+
+#[cfg(test)]
+#[path = "launch_api_route_tests.rs"]
+mod api_route_tests;

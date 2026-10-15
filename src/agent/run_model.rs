@@ -97,6 +97,11 @@ impl<'a> RunModelInput<'a> {
 }
 
 pub(crate) fn resolve_run_model(input: &RunModelInput) -> RunModel {
+    if input.kind == AgentKind::Custom
+        && crate::config::api_route::find(input.agent_name).ok().flatten().is_some()
+    {
+        return resolve_run_model(&RunModelInput { kind: AgentKind::Claude, custom: None, ..*input });
+    }
     let pinned = |model: String, source| RunModel { model: Some(model), pinned: true, source };
     if input.force_default {
         return RunModel { model: None, pinned: false, source: RunModelSource::ForcedDefault };

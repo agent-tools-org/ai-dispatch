@@ -1,6 +1,7 @@
 // Watcher engine: reads agent stdout/stderr and records events to store.
 // Exports streaming and buffered watchers plus shared watcher state.
 mod buffered;
+mod api_route;
 mod esc;
 mod extract;
 mod idle;
@@ -74,6 +75,7 @@ pub async fn watch_streaming(
     let mut event_count = 0u32;
     let mut session_saved = false;
     let mut saw_completion_event = false;
+    let mut api_route_failed = false;
     let mut synthetic_tracker = SyntheticMilestoneTracker::new();
     let mut delivery_evidence = DeliveryEvidence::default();
     let mut last_event_detail: Option<String> = None;
@@ -101,6 +103,11 @@ pub async fn watch_streaming(
                 break;
             }
         };
+        if api_route::stop_if_misbilled(agent, &line, child, store, task_id).await? {
+            info.status = TaskStatus::Failed;
+            api_route_failed = true;
+            break;
+        }
         if !line.trim().is_empty() { last_event_detail = Some(line.trim().to_string()); }
         if agent.kind() == AgentKind::Codex {
             delivery_evidence.observe_codex_jsonl(&line);
@@ -156,7 +163,7 @@ pub async fn watch_streaming(
     if let Some(handle) = stderr_handle {
         drain_stderr_capture(handle).await;
     }
-    let mut status = if exit_status.success() {
+    let mut status = if exit_status.success() && !api_route_failed {
         TaskStatus::Done
     } else {
         TaskStatus::Failed

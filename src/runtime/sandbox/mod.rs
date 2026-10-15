@@ -97,6 +97,11 @@ fn forward_command_envs(wrapped: &mut Command, cmd: &Command) {
             continue;
         }
         if let Some(value) = value {
+            if key == std::ffi::OsStr::new("ANTHROPIC_API_KEY") {
+                wrapped.arg("-e").arg(key);
+                wrapped.env(key, value);
+                continue;
+            }
             wrapped.arg("-e").arg(format!(
                 "{}={}",
                 key.to_string_lossy(),
@@ -224,3 +229,6 @@ pub fn kill_container(task_id: &str) {
         .stderr(Stdio::null())
         .status();
 }
+
+#[cfg(test)]
+mod api_route_tests;

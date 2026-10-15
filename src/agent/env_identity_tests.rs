@@ -3,12 +3,10 @@
 // Deps: temporary shell executables and the production probe runner.
 
 use super::*;
-use std::os::unix::fs::PermissionsExt;
 
 fn fake_binary(dir: &Path, body: &str) -> String {
     let path = dir.join("probe");
-    fs::write(&path, format!("#!/bin/sh\n{body}\n")).expect("write probe");
-    fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).expect("executable probe");
+    crate::support::test_env::write_executable(&path, &format!("#!/bin/sh\n{body}\n"));
     path.to_str().expect("probe path").to_string()
 }
 

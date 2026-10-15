@@ -8,21 +8,20 @@ use crate::agent::model_validation::MockServedModelsGuard;
 use crate::agent::{DetectAgentsGuard, cursor::CursorBinaryGuard};
 use crate::cmd::run::{RunArgs, advice_route};
 use crate::{support::paths, store::Store, types::*};
-use std::{fs, os::unix::fs::PermissionsExt, path::Path, sync::Arc};
+use std::{fs, path::Path, sync::Arc};
 
 fn install_agents(home: &Path) -> &'static str {
     let peer = home.join("peer.sh");
-    fs::write(
+    crate::support::test_env::write_executable(
         &peer,
-        format!(
+        &format!(
             "#!/bin/sh\ncase \"$1\" in models|--help) exit 0;; esac\n\
          printf '%s\\n' \"$AID_TASK_ID\" >> '{}'\n\
          printf '%s\\n' '{{\"type\":\"result\",\"is_error\":false,\"result\":\"fixture text\"}}'\n",
             home.join("peer-launches").display(),
         ),
-    )
-    .expect("peer script");
-    fs::set_permissions(&peer, fs::Permissions::from_mode(0o755)).expect("executable");
+    );
+
     fs::create_dir_all(home.join("agents")).expect("agents");
     fs::create_dir_all(home.join("sibling")).expect("sibling directory");
     fs::write(

@@ -159,9 +159,7 @@ fn foreign_agent_binary_blocks_cursor_in_advise_and_preflight_alike() {
     let _permit = crate::support::test_subprocess::acquire();
     let bin_dir = tempfile::tempdir().unwrap();
     let agent = bin_dir.path().join("agent");
-    std::fs::write(&agent, "#!/bin/sh\necho 'Grok Build TUI'\nexit 0\n").unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&agent, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::support::test_env::write_executable(&agent, "#!/bin/sh\necho 'Grok Build TUI'\nexit 0\n");
     let helper = "cmd::run::run_dispatch_prepare::preflight_tests::reports_cursor_route_for_subprocess";
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args(["--exact", helper, "--ignored", "--nocapture"])

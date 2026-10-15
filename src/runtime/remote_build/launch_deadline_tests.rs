@@ -3,9 +3,9 @@
 // Deps: saved remote policies, isolated child test processes and synchronized lock holder.
 
 use super::deadline_tests::{save_policy, timestamps};
-use super::shim_tests::executable;
 use super::tests::stored_task;
 use super::*;
+use crate::support::test_env::write_executable;
 use chrono::Local;
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -70,7 +70,7 @@ fn saved_remote_deadline_expires_while_waiting_for_verify_lock_without_launch() 
     let (store, id, _) = stored_task();
     let temp = tempfile::tempdir().expect("temp");
     let _home = crate::support::paths::AidHomeGuard::set(temp.path());
-    executable(
+    write_executable(
         &temp.path().join("verify"),
         "#!/bin/bash\necho launched > launched\necho finished\n",
     );
@@ -108,7 +108,7 @@ fn saved_remote_deadline_lock_delay_reduces_command_wait_allowance() {
     let (store, id, _) = stored_task();
     let temp = tempfile::tempdir().expect("temp");
     let _home = crate::support::paths::AidHomeGuard::set(temp.path());
-    executable(
+    write_executable(
         &temp.path().join("verify"),
         "#!/bin/bash\necho launched > launched\necho \"$AID_BUILD_BOX\"\nexec /bin/sleep 2\n",
     );
@@ -145,7 +145,7 @@ fn local_duration_starts_after_verify_lock_delay() {
         return;
     }
     let temp = tempfile::tempdir().expect("temp");
-    executable(
+    write_executable(
         &temp.path().join("verify"),
         "#!/bin/bash\necho launched > launched\n/bin/sleep 0.2\necho local\n",
     );

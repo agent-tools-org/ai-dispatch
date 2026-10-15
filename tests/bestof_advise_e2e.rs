@@ -5,7 +5,6 @@
 
 mod common;
 use common::aid_cmd_in;
-use std::os::unix::fs::PermissionsExt;
 use std::process::{Command, Output};
 use tempfile::TempDir;
 
@@ -33,8 +32,7 @@ impl Harness {
         std::fs::write(h.home.path().join("agent_config.toml"), config).expect("agent config");
         common::seed_codex_leaderboard(h.home.path());
         let script = h.bin.path().join("codex");
-        std::fs::write(&script, FAKE_CODEX).expect("fake codex");
-        std::fs::set_permissions(script, std::fs::Permissions::from_mode(0o755)).expect("executable");
+        common::write_executable(&script, FAKE_CODEX);
         h
     }
 

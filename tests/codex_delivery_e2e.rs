@@ -3,7 +3,6 @@
 // Deps: compiled aid binary, a PATH-injected fake Codex CLI, and SQLite.
 
 use rusqlite::Connection;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use tempfile::TempDir;
 
@@ -260,10 +259,7 @@ fn child_facts(conn: &Connection, parent_id: &str) -> (String, i64) {
 
 fn write_fake_codex(dir: &Path) {
     let path = dir.join("codex");
-    std::fs::write(&path, include_str!("fixtures/codex-delivery-cli.sh")).unwrap();
-    let mut permissions = std::fs::metadata(&path).unwrap().permissions();
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(path, permissions).unwrap();
+    common::write_executable(&path, include_str!("fixtures/codex-delivery-cli.sh"));
 }
 
 fn test_path(bin_dir: &Path) -> String {

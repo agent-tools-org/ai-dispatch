@@ -13,7 +13,7 @@ use crate::{
     types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus},
 };
 use chrono::Local;
-use std::{os::unix::fs::PermissionsExt, path::{Path, PathBuf}, process::Command, sync::Arc};
+use std::{path::{Path, PathBuf}, process::Command, sync::Arc};
 
 #[path = "lifecycle_read_only_backup_tests.rs"]
 mod read_only_backup_tests;
@@ -184,8 +184,7 @@ fn capturing_gws(home: &Path, capture: &Path) -> PathBuf {
         log.display(),
         capture.display()
     );
-    std::fs::write(&binary, script).unwrap();
-    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::support::test_env::write_executable(&binary, &script);
     std::fs::write(
         crate::support::paths::config_path(),
         format!("[backup.gdrive]\nbinary = '{}'\n", binary.display()),

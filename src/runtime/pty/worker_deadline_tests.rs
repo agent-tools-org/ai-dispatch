@@ -54,12 +54,7 @@ async fn assert_deadline(pty: bool, streaming: bool, script: &str, default_max: 
 
 fn prepare_remote_wait(dir: &Path) {
     let remote_wait = dir.join("ssh");
-    std::fs::write(&remote_wait, "#!/bin/sh\nsleep 6\n").expect("remote wait");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&remote_wait, std::fs::Permissions::from_mode(0o700)).expect("mode");
-    }
+    crate::support::test_env::write_executable(&remote_wait, "#!/bin/sh\nsleep 6\n");
 }
 
 fn assert_result(store: &Store, id: &TaskId, started: Instant, pty: bool) {

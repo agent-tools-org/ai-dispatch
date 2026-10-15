@@ -6,8 +6,6 @@ use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 
 mod common;
@@ -218,11 +216,6 @@ fn write_custom_agent(aid_home: &Path, id: &str, command: &Path) {
 
 fn write_script(dir: &Path, name: &str, contents: &str) -> PathBuf {
     let path = dir.join(name);
-    std::fs::write(&path, contents).unwrap();
-    #[cfg(unix)]
-    {
-        let permissions = std::fs::Permissions::from_mode(0o755);
-        std::fs::set_permissions(&path, permissions).unwrap();
-    }
+    common::write_executable(&path, contents);
     path
 }

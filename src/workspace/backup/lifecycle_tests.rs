@@ -9,7 +9,6 @@ use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 fn task(id: &str, status: TaskStatus) -> Task {
@@ -78,8 +77,7 @@ fn fake_gws(home: &Path, body: &str) -> std::path::PathBuf {
     let log = home.join("gws.log");
     let binary = home.join("gws");
     let script = format!("#!/bin/sh\necho \"$*\" >> '{}'\n{body}\n", log.display());
-    fs::write(&binary, script).unwrap();
-    fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
+    crate::support::test_env::write_executable(&binary, &script);
     fs::write(
         crate::support::paths::config_path(),
         format!("[backup.gdrive]\nbinary = '{}'\n", binary.display()),

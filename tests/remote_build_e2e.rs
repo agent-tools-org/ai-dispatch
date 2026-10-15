@@ -3,7 +3,6 @@
 // Deps: compiled aid, tempfile, Bash and git; executes only on remote test hosts.
 use std::path::Path;
 use std::process::{Command, Output};
-use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
 mod common;
 
@@ -39,8 +38,7 @@ impl Fixture {
     }
 }
 fn script(path: &Path, content: &str) {
-    std::fs::write(path, content).expect("script");
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).expect("permissions");
+    common::write_executable(path, content);
 }
 
 #[test]

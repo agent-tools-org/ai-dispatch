@@ -2,7 +2,8 @@
 // Covers remaining budgets, honest expiry, re-pick persistence and local fallback.
 // Deps: sibling fake fixtures, isolated AID home, chrono and in-memory Store.
 use super::*;
-use super::{shim_tests::executable, tests::{refusing_verify, stored_task}};
+use super::tests::{refusing_verify, stored_task};
+use crate::support::test_env::write_executable;
 use chrono::{DateTime, Local};
 use std::time::Duration;
 
@@ -45,7 +46,7 @@ fn configured_remote_allowance_above_120_seconds_reaches_verify_runner() {
     // The runner receives this deadline, preserving the allowance through preparation.
     assert_eq!(remaining_verify_time(deadline, now), Duration::from_secs(900));
     assert!(remaining_verify_time(deadline, now) > crate::task::verify::VERIFY_TIMEOUT);
-    executable(&temp.path().join("verify"), "#!/bin/bash\nprintf '%s' \"$AID_BUILD_BOX\"\n");
+    write_executable(&temp.path().join("verify"), "#!/bin/bash\nprintf '%s' \"$AID_BUILD_BOX\"\n");
     let result = verify_on(id.as_str(), "chosen-box", temp.path(), Some("./verify"), None, None, deadline)
         .expect("runner");
     assert!(result.success, "{}", result.output);
@@ -88,7 +89,7 @@ fn short_remote_cap_kills_the_command_and_remains_inconclusive() {
     let (store, id, _) = stored_task();
     let temp = tempfile::tempdir().expect("temp");
     let _home = crate::support::paths::AidHomeGuard::set(temp.path());
-    executable(&temp.path().join("verify"), "#!/bin/bash\necho launched > launched\nexec /bin/sleep 5\n");
+    write_executable(&temp.path().join("verify"), "#!/bin/bash\necho launched > launched\nexec /bin/sleep 5\n");
     save_policy(&store, &id, Duration::from_secs(900), Duration::from_millis(500));
     let now = Local::now();
     timestamps(&store, &id, now, Some(now));
@@ -106,9 +107,9 @@ fn exhausted_task_deadline_launches_neither_verify_nor_remote_pick() {
     let (store, id, _) = stored_task();
     let temp = tempfile::tempdir().expect("temp");
     let _home = crate::support::paths::AidHomeGuard::set(temp.path());
-    executable(&temp.path().join("verify"), "#!/bin/bash\necho launched > launched\nexit 69\n");
+    write_executable(&temp.path().join("verify"), "#!/bin/bash\necho launched > launched\nexit 69\n");
     let rbox = temp.path().join("rbox");
-    executable(&rbox, "#!/bin/bash\necho picked > picked\necho second-box\n");
+    write_executable(&rbox, "#!/bin/bash\necho picked > picked\necho second-box\n");
     save_policy(&store, &id, Duration::from_secs(30), Duration::from_secs(900));
     timestamps(&store, &id, Local::now() - chrono::Duration::seconds(31), None);
     let mut picker = Command::new(&rbox);
@@ -151,9 +152,9 @@ fn repick_consumes_original_deadline_and_persists_the_attempted_replacement() {
     let (store, id, _) = stored_task();
     let temp = tempfile::tempdir().expect("temp");
     let _home = crate::support::paths::AidHomeGuard::set(temp.path());
-    executable(&temp.path().join("verify"), "#!/bin/bash\necho \"$AID_BUILD_BOX\" >> attempts\nif [[ $AID_BUILD_BOX == chosen-box ]]; then\n  /bin/sleep 0.5\n  echo 'rbox: disk admission refused' >&2\n  exit 69\nfi\nexec /bin/sleep 1.5\n");
+    write_executable(&temp.path().join("verify"), "#!/bin/bash\necho \"$AID_BUILD_BOX\" >> attempts\nif [[ $AID_BUILD_BOX == chosen-box ]]; then\n  /bin/sleep 0.5\n  echo 'rbox: disk admission refused' >&2\n  exit 69\nfi\nexec /bin/sleep 1.5\n");
     let rbox = temp.path().join("rbox");
-    executable(&rbox, "#!/bin/bash\n/bin/sleep 0.5\necho second-box\n");
+    write_executable(&rbox, "#!/bin/bash\n/bin/sleep 0.5\necho second-box\n");
     save_policy(&store, &id, Duration::from_secs(2), Duration::from_secs(900));
     let now = Local::now();
     timestamps(&store, &id, now, Some(now));
@@ -178,7 +179,7 @@ fn deadline_exhausted_during_repick_skips_replacement_command() {
     let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     refusing_verify(temp.path(), "chosen-box");
     let rbox = temp.path().join("rbox");
-    executable(&rbox, "#!/bin/bash\n/bin/sleep 1\necho second-box\n");
+    write_executable(&rbox, "#!/bin/bash\n/bin/sleep 1\necho second-box\n");
     save_policy(&store, &id, Duration::from_millis(500), Duration::from_secs(900));
     let now = Local::now();
     timestamps(&store, &id, now, Some(now));
@@ -195,7 +196,7 @@ fn local_and_legacy_verification_ignore_task_deadline_and_keep_120_seconds() {
     let (store, id, _) = stored_task();
     let temp = tempfile::tempdir().expect("temp");
     let _home = crate::support::paths::AidHomeGuard::set(temp.path());
-    executable(&temp.path().join("verify"), "#!/bin/bash\n/bin/sleep 0.1\necho local\n");
+    write_executable(&temp.path().join("verify"), "#!/bin/bash\n/bin/sleep 0.1\necho local\n");
     timestamps(&store, &id, Local::now() - chrono::Duration::hours(2), None);
     let args = RunArgs { timeout_policy: crate::config::timeout_policy::TimeoutPolicy {
         max_duration: Duration::from_millis(1), ..Default::default()

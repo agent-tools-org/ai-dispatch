@@ -264,8 +264,6 @@ fn build_isolated_home_fails_when_real_home_unreadable() {
 #[cfg(unix)]
 #[test]
 fn cargo_build_uses_rustc_outside_isolated_home() {
-    use std::os::unix::fs::PermissionsExt;
-
     let temp = tempfile::tempdir().unwrap();
     let project = temp.path().join("project");
     fs::create_dir_all(project.join("src")).unwrap();
@@ -274,11 +272,7 @@ fn cargo_build_uses_rustc_outside_isolated_home() {
 
     let capture = temp.path().join("rustc-path");
     let wrapper = temp.path().join("rustc-wrapper.sh");
-    fs::write(&wrapper, "#!/bin/sh\nprintf '%s' \"$1\" > \"$AID_RUSTC_CAPTURE\"\nrustc=\"$1\"\nshift\nexec \"$rustc\" \"$@\"\n").unwrap();
-    let mut permissions = fs::metadata(&wrapper).unwrap().permissions();
-    permissions.set_mode(0o700);
-    fs::set_permissions(&wrapper, permissions).unwrap();
-
+    crate::support::test_env::write_executable(&wrapper, "#!/bin/sh\nprintf '%s' \"$1\" > \"$AID_RUSTC_CAPTURE\"\nrustc=\"$1\"\nshift\nexec \"$rustc\" \"$@\"\n");
     let (_aid_home, _aid_guard, guard) = isolated_home();
     let isolated_home = guard.path().to_path_buf();
     let mut cargo = Command::new("cargo");

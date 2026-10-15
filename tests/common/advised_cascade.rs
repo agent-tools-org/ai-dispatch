@@ -3,10 +3,7 @@
 // Deps: compiled aid, SQLite, tempfile, Unix shell executables.
 use crate::common::aid_cmd_in;
 use serde_json::Value;
-use std::{
-    os::unix::fs::PermissionsExt,
-    process::{Command, Output},
-};
+use std::process::{Command, Output};
 use tempfile::TempDir;
 
 pub const PROMPT: &str = "Compare documentation";
@@ -74,9 +71,7 @@ impl Harness {
             "[team]\nid = 'routes'\ndisplay_name = 'Routes'\npreferred_agents = ['claude']\ndefault_agent = 'claude'\n").expect("team");
         for (name, content) in [("codex", CODEX), ("oz", OZ), ("claude", CLAUDE)] {
             let script = h.bin.path().join(name);
-            std::fs::write(&script, content).expect("script");
-            std::fs::set_permissions(script, std::fs::Permissions::from_mode(0o755))
-                .expect("executable");
+            crate::common::write_executable(&script, content);
         }
         h.mode("quota");
         h

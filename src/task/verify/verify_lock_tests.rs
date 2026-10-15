@@ -4,11 +4,10 @@
 
 use super::*;
 use chrono::Local;
-use std::os::unix::fs::PermissionsExt;
 
 fn lock_wait_command(dir: &Path) {
     let script = dir.join("verify");
-    std::fs::write(
+    crate::support::test_env::write_executable(
         &script,
         concat!(
             "#!/bin/sh\n",
@@ -18,9 +17,7 @@ fn lock_wait_command(dir: &Path) {
             "sleep 0.1\n",
             "echo verified\n",
         ),
-    )
-    .expect("script");
-    std::fs::set_permissions(script, std::fs::Permissions::from_mode(0o755)).expect("mode");
+    );
 }
 
 #[test]

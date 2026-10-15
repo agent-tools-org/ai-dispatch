@@ -124,15 +124,13 @@ fn overlay_served_models_probe_behavior() {
         assert_eq!(std::fs::read_to_string(std::path::Path::new(&home).join("calls")).unwrap(), "models\n");
         return;
     }
-    use std::os::unix::fs::PermissionsExt;
     let temp = tempfile::tempdir().unwrap();
     let binary = temp.path().join("opencode");
-    std::fs::write(&binary, concat!(
+    crate::support::test_env::write_executable(&binary, concat!(
         "#!/bin/sh\n",
         "printf '%s\\n' \"$*\" >> \"$AID_TEST_OPENCODE_PROBE/calls\"\n",
         "printf 'Fetching available models...\\nprovider/native\\nprovider/native\\n'\n",
-    )).unwrap();
-    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
+    ));
     let output = Command::new(std::env::current_exe().unwrap())
         .args(["--exact", "agent::opencode_overlay::tests::overlay_served_models_probe_behavior", "--nocapture"])
         .env("PATH", temp.path())

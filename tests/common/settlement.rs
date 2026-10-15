@@ -3,7 +3,6 @@
 // Deps: tests/common aid_cmd_with_cwd, tempfile, rusqlite, and a POSIX shell.
 
 use rusqlite::Connection;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
@@ -172,7 +171,6 @@ fn write_custom_agent(aid_home: &Path, script: &Path) {
 
 fn write_script(dir: &Path, name: &str, contents: &str) -> PathBuf {
     let path = dir.join(name);
-    std::fs::write(&path, contents).unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::common::write_executable(&path, contents);
     path
 }

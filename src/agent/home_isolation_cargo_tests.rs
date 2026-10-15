@@ -9,8 +9,10 @@ fn fixture_home(root: &Path) -> PathBuf {
     fs::create_dir_all(cargo.join("bin")).expect("bin");
     for name in ["cargo", "rustup", "cargo-clippy"] {
         let path = cargo.join("bin").join(name);
-        fs::write(&path, "#!/bin/sh\nprintf 'real cargo %s\\n' \"$*\"\n").expect("tool");
-        fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("executable");
+        crate::support::test_env::write_executable(
+            &path,
+            &format!("#!/bin/sh\nprintf 'real cargo %s\\n' \"$*\"\n"),
+        );
     }
     symlink("rustup", cargo.join("bin/rustc")).expect("rustc link");
     for name in ["registry", "git"] {

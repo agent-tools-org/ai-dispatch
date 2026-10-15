@@ -88,8 +88,6 @@ Known limits found by review (open):
   substitutes an advised agent. Worker quota continuation can still select an advised
   peer without a declared fallback, and worker and coordinator can each launch one
   fallback child.
-- `lifecycle_read_only_backup_tests` can fail with `ETXTBSY` when it executes a fake
-  agent script immediately after writing it.
 
 ## Third-party capability evidence (v10.52.0, v10.52.1)
 

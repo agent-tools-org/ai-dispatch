@@ -2,7 +2,6 @@
 // Covers preflight, failures, JSON/text screening, streaming schema, and resume.
 
 use serde_json::{Value, json};
-use std::os::unix::fs::PermissionsExt;
 use std::process::Output;
 use tempfile::TempDir;
 
@@ -14,7 +13,7 @@ impl Fixture {
     fn new(items: &str) -> Self {
         let dir = tempfile::tempdir().expect("tempdir");
         let curl = dir.path().join("curl");
-        std::fs::write(
+        common::write_executable(
             &curl,
             concat!(
                 "#!/bin/sh\n",
@@ -23,9 +22,7 @@ impl Fixture {
                 "cat > \"$dir/body.$$\"\necho call >> \"$dir/calls\"\n",
                 "cat \"$dir/response\"\nprintf '\\n200'\n"
             ),
-        )
-        .expect("curl");
-        std::fs::set_permissions(&curl, std::fs::Permissions::from_mode(0o755)).expect("executable");
+        );
         std::fs::write(dir.path().join("in"), items).expect("input");
         std::fs::write(
             dir.path().join("response"),

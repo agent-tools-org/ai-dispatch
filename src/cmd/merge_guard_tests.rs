@@ -193,12 +193,5 @@ fn merge_group_lanes_skips_an_already_merged_task() {
 
 fn write_command(dir: &Path, name: &str, body: &str) {
     let path = dir.join(name);
-    std::fs::write(&path, format!("#!/bin/sh\n{body}")).unwrap();
-    let mut perms = std::fs::metadata(&path).unwrap().permissions();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        perms.set_mode(0o755);
-    }
-    std::fs::set_permissions(path, perms).unwrap();
+    crate::support::test_env::write_executable(&path, &format!("#!/bin/sh\n{body}"));
 }

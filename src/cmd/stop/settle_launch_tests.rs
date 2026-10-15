@@ -70,7 +70,7 @@ async fn settle_first_stopped_task_never_spawns_buffered_agent() {
         None,
         false,
         None,
-        crate::timeout_policy::TimeoutPolicy::default(),
+        crate::config::timeout_policy::TimeoutPolicy::default(),
         None,
     )
     .await;

@@ -9,7 +9,7 @@ use super::{RankedCandidate, RecommendedAdvice};
 use super::gate::claude_allowed;
 use crate::agent::classifier::TaskCategory;
 use crate::types::{AgentKind, DeclaredTaskProfile, TaskUrgency};
-use crate::team::TeamConfig;
+use crate::config::team::TeamConfig;
 
 /// First eligible recommendable route; otherwise the best installed route
 /// outside the caller's weaker-model exclusions. No available route means no pick.

@@ -1,6 +1,6 @@
 // Tests for folder-aware skill loading and discovery helpers.
 // Exports: none.
-// Deps: crate::skills, crate::support::paths, AgentKind, tempfile.
+// Deps: crate::prompt::skills, crate::support::paths, AgentKind, tempfile.
 
 use super::*;
 

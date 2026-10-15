@@ -170,7 +170,7 @@ fn default_command_and_args(command: Option<BuildCommandArg>) -> (BuildCommand, 
     if let Some(command) = command {
         return (BuildCommand::from(command), Vec::new());
     }
-    let Some(project) = crate::project::detect_project() else {
+    let Some(project) = crate::config::project::detect_project() else {
         return (BuildCommand::Check, Vec::new());
     };
     parse_verify_command(project.verify.as_deref())

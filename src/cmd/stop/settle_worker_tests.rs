@@ -66,7 +66,7 @@ async fn settle_worker_failure_after_stop_records_no_failure_event() {
         None,
         false,
         None,
-        crate::timeout_policy::TimeoutPolicy::default(),
+        crate::config::timeout_policy::TimeoutPolicy::default(),
         None,
     )
     .await

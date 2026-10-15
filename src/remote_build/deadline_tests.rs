@@ -197,7 +197,7 @@ fn local_and_legacy_verification_ignore_task_deadline_and_keep_120_seconds() {
     let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     executable(&temp.path().join("verify"), "#!/bin/bash\n/bin/sleep 0.1\necho local\n");
     timestamps(&store, &id, Local::now() - chrono::Duration::hours(2), None);
-    let args = RunArgs { timeout_policy: crate::timeout_policy::TimeoutPolicy {
+    let args = RunArgs { timeout_policy: crate::config::timeout_policy::TimeoutPolicy {
         max_duration: Duration::from_millis(1), ..Default::default()
     }, ..Default::default() };
     store.update_task_dispatch_args(id.as_str(), &args.dispatch_args_json().expect("args"))

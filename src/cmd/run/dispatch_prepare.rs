@@ -4,7 +4,7 @@
 use anyhow::Result;
 use chrono::Local;
 use std::{path::{Path, PathBuf}, sync::Arc};
-use crate::{agent, support::paths, project::{self, ProjectConfig}, session};
+use crate::{agent, support::paths, config::project::{self, ProjectConfig}, session};
 use crate::{store::Store, types::*};
 use super::run_dispatch_claim::insert_task_claiming_id;
 use super::run_dispatch_resolve::{AgentSetup, apply_project_defaults, maybe_insert_held_route_event, resolve_agent_setup};
@@ -97,12 +97,12 @@ fn resolve_dispatch_context(store: &Arc<Store>, args: &mut RunArgs) -> Result<Di
     );
     let agent_setup = resolve_agent_setup(store, args, project_id.as_deref())?;
     let agent_name = agent_setup.custom_agent_name.as_deref().unwrap_or_else(|| agent_setup.agent_kind.as_str());
-    let mut policy = crate::timeout_policy::TimeoutPolicy::resolve(agent_name, args.idle_timeout_secs, args.max_duration_mins, detected_project.as_ref());
+    let mut policy = crate::config::timeout_policy::TimeoutPolicy::resolve(agent_name, args.idle_timeout_secs, args.max_duration_mins, detected_project.as_ref());
     if let Some(timeout) = args.timeout {
         policy.max_duration = std::time::Duration::from_secs(timeout);
     }
     args.timeout_policy = policy; args.max_duration_mins = Some(policy.max_duration_mins());
-    args.env = crate::timeout_policy::env_with_policy(args.env.take(), policy);
+    args.env = crate::config::timeout_policy::env_with_policy(args.env.take(), policy);
     Ok(DispatchContext { project_root, detected_project, agent_setup, had_explicit_result_file })
 }
 

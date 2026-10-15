@@ -84,7 +84,7 @@ fn observed_auth_failure_excludes_candidate() {
 fn same_pool_weaker_model_is_excluded_with_known_caller_model() {
     let (_temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Claude, AgentKind::Codex]);
-    crate::agent_config::save_agent_default_model("claude", Some("sonnet")).expect("sticky");
+    crate::config::agent::save_agent_default_model("claude", Some("sonnet")).expect("sticky");
     crate::scores::test_support::seed_live();
     let report = run(Some(anthropic_caller(Some(99.0))));
     let claude = find(&report, "claude");
@@ -102,7 +102,7 @@ fn same_pool_is_demoted_not_excluded_with_unknown_caller_model() {
     let fleet = vec![AgentKind::Claude, AgentKind::Codex, AgentKind::Droid, AgentKind::Copilot];
     let _fleet = crate::agent::DetectAgentsGuard::set(fleet);
     crate::scores::test_support::seed_live();
-    crate::agent_config::save_agent_default_model("claude", Some("opus")).expect("model");
+    crate::config::agent::save_agent_default_model("claude", Some("opus")).expect("model");
     let baseline = run(None);
     assert_eq!(baseline.candidates[0].agent, "claude", "claude must outrank others without a caller");
     let report = run(Some(anthropic_caller(None)));
@@ -172,10 +172,10 @@ fn cheap_budget_keeps_the_catalog_budget_model() {
 fn advised_model_group_hold_switches_route_but_other_group_does_not() {
     let (temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Droid, AgentKind::Codex]);
-    crate::agent_config::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
+    crate::config::agent::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
     // Live capture: droid's gpt-5.3-codex has Epoch ECI 156.77 (about 7.4 after rescale);
     // gpt-5.6-terra is absent from the trimmed capture, so codex is unrated (neutral 6.0).
-    crate::agent_config::save_agent_default_model("codex", Some("gpt-5.6-terra")).expect("model");
+    crate::config::agent::save_agent_default_model("codex", Some("gpt-5.6-terra")).expect("model");
     crate::scores::test_support::seed_live();
     let baseline = run(None).recommended.expect("recommendation");
     assert_eq!((&*baseline.agent, baseline.model.as_deref()), ("droid", Some("gpt-5.3-codex")));
@@ -226,7 +226,7 @@ fn no_installed_routes_or_only_weaker_caller_pool_routes_have_no_recommendation(
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![]);
     assert!(run(None).recommended.is_none());
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
-    crate::agent_config::save_agent_default_model("codex", Some("openai/gpt-5.6-sol")).expect("model");
+    crate::config::agent::save_agent_default_model("codex", Some("openai/gpt-5.6-sol")).expect("model");
     crate::scores::test_support::seed_live();
     let caller = caller_advice("codex", Some("openai/gpt-5.6-sol"), TaskCategory::ComplexImpl).expect("caller");
     let caller = CallerAdvice { capability: Some(99.0), ..caller };
@@ -246,7 +246,7 @@ fn research_and_frontend_advice_recommend_the_expected_installed_agent() {
     ] {
         let _fleet = crate::agent::DetectAgentsGuard::set(fleet.to_vec());
         let model = match expected { "gemini" | "agy" => "gemini-3.7-flash-high", _ => "opus" };
-        crate::agent_config::save_agent_default_model(expected, Some(model)).expect("model");
+        crate::config::agent::save_agent_default_model(expected, Some(model)).expect("model");
         let report = advise(prompt, declared(TaskDifficulty::Moderate, TaskBudget::Standard), None, None, None, 0, None);
         assert_eq!(report.recommended.expect("recommendation").agent, expected);
     }
@@ -288,7 +288,7 @@ fn team_override_changes_the_advised_agent() {
 fn advice_skips_disabled_installed_agents() {
     let (_temp, _home, _cache) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Gemini, AgentKind::Qwen]);
-    crate::agent_config::save_agent_disabled("gemini", true).expect("disable");
+    crate::config::agent::save_agent_disabled("gemini", true).expect("disable");
     let report = advise("Explain the authentication flow and compare the docs?",
         declared(TaskDifficulty::Moderate, TaskBudget::Standard), None, None, None, 0, None);
     assert_eq!(report.recommended.expect("recommendation").agent, "qwen");

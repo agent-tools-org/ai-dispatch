@@ -104,7 +104,7 @@ pub(crate) fn resolve_run_model(input: &RunModelInput) -> RunModel {
     if let Some(model) = input.explicit_model {
         return pinned(model.to_string(), RunModelSource::Explicit);
     }
-    if let Some(model) = crate::agent_config::get_default_model(input.agent_name) {
+    if let Some(model) = crate::config::agent::get_default_model(input.agent_name) {
         return pinned(model, RunModelSource::Sticky);
     }
     if let Some(custom) = input.custom {

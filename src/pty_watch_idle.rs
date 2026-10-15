@@ -48,15 +48,15 @@ pub(crate) struct IdleDetector {
 impl Default for IdleDetector {
     fn default() -> Self {
         Self {
-            warn_after: Duration::from_secs(crate::timeout_policy::DEFAULT_WARN_SECS),
-            nudge_after: Duration::from_secs(crate::timeout_policy::DEFAULT_NUDGE_SECS),
-            escalate_after: Duration::from_secs(crate::timeout_policy::DEFAULT_ESCALATE_SECS),
+            warn_after: Duration::from_secs(crate::config::timeout_policy::DEFAULT_WARN_SECS),
+            nudge_after: Duration::from_secs(crate::config::timeout_policy::DEFAULT_NUDGE_SECS),
+            escalate_after: Duration::from_secs(crate::config::timeout_policy::DEFAULT_ESCALATE_SECS),
         }
     }
 }
 
 impl IdleDetector {
-    pub(crate) fn from_policy(policy: crate::timeout_policy::TimeoutPolicy) -> Self {
+    pub(crate) fn from_policy(policy: crate::config::timeout_policy::TimeoutPolicy) -> Self {
         Self {
             warn_after: policy.nudge_ladder.warn,
             nudge_after: policy.nudge_ladder.nudge,

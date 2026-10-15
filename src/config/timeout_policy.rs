@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::time::Duration;
 
-use crate::project::ProjectConfig;
+use crate::config::project::ProjectConfig;
 
 pub(crate) const DEFAULT_IDLE_SECS: u64 = 600;
 pub(crate) const DEFAULT_FIRST_TOKEN_SECS: u64 = 180;
@@ -65,7 +65,7 @@ impl TimeoutPolicy {
         project: Option<&ProjectConfig>,
     ) -> Self {
         let defaults = Self::default();
-        let agent_idle_secs = crate::agent_config::get_default_idle_timeout(agent_name);
+        let agent_idle_secs = crate::config::agent::get_default_idle_timeout(agent_name);
         let project_idle_secs = project.and_then(|project| project.idle_timeout);
         
         let configured_idle = first_u64([cli_idle_secs, agent_idle_secs, project_idle_secs]);
@@ -211,4 +211,5 @@ fn env_i64(env: &HashMap<String, String>, key: &str) -> Option<i64> {
 }
 
 #[cfg(test)]
+#[path = "timeout_policy_tests.rs"]
 mod tests;

@@ -3,7 +3,7 @@
 // Deps: run.rs wrappers, hooks, retry/judge flow, store, and task types.
 use anyhow::Result;
 use std::{path::Path, sync::Arc};
-use crate::{hooks, rate_limit, store::Store, types::*};
+use crate::{config::hooks, rate_limit, store::Store, types::*};
 use crate::cmd::{checklist_scan, judge, retry_logic, show};
 #[path = "lifecycle/final_state.rs"]
 mod final_state;

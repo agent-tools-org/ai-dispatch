@@ -3,7 +3,7 @@
 // Deps: crate::{paths, project, state, store}, anyhow, chrono.
 
 use super::current_git_root;
-use crate::project;
+use crate::config::project;
 use crate::state::{self, ProjectState};
 use crate::store::Store;
 use anyhow::Result;

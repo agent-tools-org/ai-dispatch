@@ -1,13 +1,13 @@
 // Handler for `aid tool` subcommands — manage team toolbox definitions.
 // Exports: run_tool_command.
-// Deps: crate::toolbox, crate::support::sanitize, anyhow, std::fs.
+// Deps: crate::config::toolbox, crate::support::sanitize, anyhow, std::fs.
 
 use anyhow::{bail, Context, Result};
 use std::fs;
 
 use crate::cli::ToolAction;
 use crate::support::sanitize;
-use crate::toolbox;
+use crate::config::toolbox;
 
 const TOOL_TEMPLATE: &str = r#"[tool]
 id = "{name}"

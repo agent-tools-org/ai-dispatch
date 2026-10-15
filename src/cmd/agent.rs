@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use crate::agent::custom::parse_config;
 use crate::agent::registry;
-use crate::agent_config;
+use crate::config::agent as agent_config;
 use crate::support::paths;
 use crate::support::sanitize;
 use crate::types::AgentKind;

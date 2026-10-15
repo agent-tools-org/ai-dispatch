@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::agent::classifier::TaskCategory;
-use crate::team::TeamConfig;
+use crate::config::team::TeamConfig;
 use crate::types::{provider_for_cli, AgentKind, TaskBudget, TaskDifficulty};
 use super::AdviceCandidate;
 

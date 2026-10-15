@@ -1,11 +1,11 @@
 // Knowledge compaction helpers.
 // Exports: compact_to_budget.
-// Deps: crate::templates.
+// Deps: crate::prompt::templates.
 
 /// Truncate text to fit within a token budget, preserving structure.
 /// Keeps the first `budget` tokens worth of content, adding a truncation marker.
 pub fn compact_to_budget(text: &str, max_tokens: usize) -> String {
-    let estimated = crate::templates::estimate_tokens(text);
+    let estimated = crate::prompt::templates::estimate_tokens(text);
     if estimated == 0 || estimated <= max_tokens {
         return text.to_string();
     }

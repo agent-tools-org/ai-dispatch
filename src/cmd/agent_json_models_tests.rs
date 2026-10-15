@@ -123,7 +123,7 @@ fn codex_default_is_the_resolver_model_and_never_a_catalog_guess() {
         Some("cli_config")
     );
 
-    crate::agent_config::save_agent_default_model("codex", Some("gpt-5.6-luna")).expect("sticky");
+    crate::config::agent::save_agent_default_model("codex", Some("gpt-5.6-luna")).expect("sticky");
     let sticky = agent("codex");
     set_test_codex_home(None);
     assert_eq!(sticky.models.default.as_deref(), Some("gpt-5.6-luna"));

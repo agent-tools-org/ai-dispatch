@@ -36,7 +36,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::process::Command;
 
-use crate::prompt_scan::scan_for_injection;
+use crate::prompt::scan::scan_for_injection;
 use crate::types::*;
 pub mod home_isolation;
 pub(crate) mod env;

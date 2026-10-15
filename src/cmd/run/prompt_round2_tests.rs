@@ -80,7 +80,7 @@ fn round2_preservation_toolbox_bounds_large_description_and_many_tools() {
 fn round2_preservation_knowledge_and_memory_caps_share_warning() {
     let temp = tempfile::tempdir().unwrap();
     let _home = crate::support::paths::AidHomeGuard::set(temp.path());
-    let team = crate::team::teams_dir().join("round2");
+    let team = crate::config::team::teams_dir().join("round2");
     std::fs::create_dir_all(&team).unwrap();
     let index = (0..6)
         .map(|n| format!("- [rust memory {n}] — rust memory reference\n"))

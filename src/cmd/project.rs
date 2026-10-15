@@ -1,10 +1,10 @@
 // Project command handlers for the `aid project` CLI group.
 // Exports: run_project_command.
-// Deps: crate::config, crate::project, serde_json, std::{fs, io, path, process}.
+// Deps: crate::config, crate::config::project, serde_json, std::{fs, io, path, process}.
 mod state_command;
 
 use crate::cli::ProjectAction;
-use crate::{config as aid_config, project};
+use crate::{config as aid_config, config::project};
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::Value;
 use std::fs;
@@ -48,7 +48,7 @@ fn init() -> Result<()> {
     aid_config::upsert_budget(&project_id, budget_cost, budget_window.as_deref())?;
     println!("  Budget synced to ~/.aid/config.toml");
     let config = project::load_project(&project_path)?;
-    crate::claudemd::sync_claude_md(&git_root, &config)?;
+    crate::prompt::claudemd::sync_claude_md(&git_root, &config)?;
     println!("  CLAUDE.md updated with aid section");
     println!("Project: {}", config.id);
     println!("  Profile: {}", config.profile.as_deref().unwrap_or("-"));
@@ -73,7 +73,7 @@ fn sync() -> Result<()> {
         println!("Budget synced to ~/.aid/config.toml");
     }
 
-    crate::claudemd::sync_claude_md(&git_root, &config)?;
+    crate::prompt::claudemd::sync_claude_md(&git_root, &config)?;
     println!("CLAUDE.md updated with aid section");
 
     Ok(())

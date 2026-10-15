@@ -34,7 +34,7 @@ fn pinned(model: &str, source: RunModelSource) -> RunModel {
 #[test]
 fn explicit_model_is_pinned_over_sticky() {
     let _env = isolated();
-    crate::agent_config::save_agent_default_model("gemini", Some("pro")).expect("sticky");
+    crate::config::agent::save_agent_default_model("gemini", Some("pro")).expect("sticky");
     let resolved = resolve_run_model(&RunModelInput {
         explicit_model: Some("flash"), declared_budget: Some(TaskBudget::Cheap), ..input(AgentKind::Gemini)
     });
@@ -54,7 +54,7 @@ fn forced_default_passes_nothing_even_with_explicit_model() {
 #[test]
 fn sticky_default_beats_declared_cheap_catalog() {
     let _env = isolated();
-    crate::agent_config::save_agent_default_model("gemini", Some("pro")).expect("sticky");
+    crate::config::agent::save_agent_default_model("gemini", Some("pro")).expect("sticky");
     let resolved = resolve_run_model(&RunModelInput {
         declared_budget: Some(TaskBudget::Cheap), budget_mode: true, ..input(AgentKind::Gemini)
     });

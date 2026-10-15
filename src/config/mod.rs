@@ -1,6 +1,14 @@
 // Config loading for aid usage budgets and future prompt settings.
 // Exports AidConfig plus load_config() from ~/.aid/config.toml.
 
+pub(crate) mod agent;
+pub(crate) mod project;
+pub(crate) mod team;
+pub(crate) mod toolbox;
+pub(crate) mod hooks;
+pub(crate) mod timeout_policy;
+pub(crate) mod idle_timeout;
+
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::{fs, path::Path};
@@ -9,7 +17,7 @@ use toml::value::{Table, Value};
 use crate::support::paths;
 
 pub(crate) const DEFAULT_MAX_TASK_DURATION_MINS: i64 =
-    crate::timeout_policy::DEFAULT_MAX_DURATION_MINS;
+    crate::config::timeout_policy::DEFAULT_MAX_DURATION_MINS;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct AidConfig {

@@ -6,8 +6,8 @@ use chrono::Local;
 use std::collections::{HashMap, HashSet};
 
 use crate::store::Store;
-use crate::team::KnowledgeEntry;
-use crate::templates;
+use crate::config::team::KnowledgeEntry;
+use crate::prompt::templates;
 use crate::types::*;
 
 #[path = "prompt_memory.rs"]
@@ -77,7 +77,7 @@ fn memory_tier_rank(tier: MemoryTier) -> u8 {
     }
 }
 
-pub(super) fn inject_project_state(project: &crate::project::ProjectConfig, root: &std::path::Path) -> Option<String> {
+pub(super) fn inject_project_state(project: &crate::config::project::ProjectConfig, root: &std::path::Path) -> Option<String> {
     let contents = std::fs::read_to_string(root.join(".aid/state.toml")).ok()?;
     let state: crate::state::ProjectState = toml::from_str(&contents).ok()?;
     let updated = chrono::DateTime::parse_from_rfc3339(&state.last_updated).ok()?;

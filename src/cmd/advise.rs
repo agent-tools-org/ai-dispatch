@@ -45,7 +45,7 @@ pub(crate) fn build_report(
     top: usize,
     caller_model: Option<&str>,
 ) -> AdviceReport {
-    let team = team.and_then(crate::team::resolve_team);
+    let team = team.and_then(crate::config::team::resolve_team);
     let model = crate::session::caller_model(caller_model);
     let caller = crate::session::current_caller()
         .and_then(|session| caller_advice(&session.kind, model.as_deref(), kind.unwrap_or_else(|| {
@@ -156,7 +156,7 @@ mod tests {
         ]);
         crate::scores::test_support::seed_live();
         // Pin rated evidence: the floor no longer reads Cursor's CLI score (6).
-        crate::agent_config::save_agent_default_model("cursor", Some("openai/gpt-4o-mini"))
+        crate::config::agent::save_agent_default_model("cursor", Some("openai/gpt-4o-mini"))
             .expect("cursor model");
         let declared = DeclaredTaskProfile {
             difficulty: crate::types::TaskDifficulty::Complex,

@@ -60,9 +60,9 @@ fn prompt_bundle(store: &Store, spec: &BackgroundRunSpec) -> Result<crate::cmd::
     })
 }
 
-fn load_background_runtime_hooks(args: &crate::cmd::run::RunArgs) -> Result<Vec<crate::hooks::Hook>> {
-    let mut runtime_hooks = crate::hooks::load_hooks()?;
-    runtime_hooks.extend(crate::hooks::parse_cli_hooks(&args.hooks)?);
+fn load_background_runtime_hooks(args: &crate::cmd::run::RunArgs) -> Result<Vec<crate::config::hooks::Hook>> {
+    let mut runtime_hooks = crate::config::hooks::load_hooks()?;
+    runtime_hooks.extend(crate::config::hooks::parse_cli_hooks(&args.hooks)?);
     Ok(runtime_hooks)
 }
 

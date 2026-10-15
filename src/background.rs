@@ -176,7 +176,7 @@ async fn run_process(
 ) -> Result<()> {
     let task_id = TaskId(spec.task_id.clone());
     let log_path = paths::log_path(&spec.task_id);
-    let timeout_policy = crate::timeout_policy::TimeoutPolicy::from_env(args.env.as_ref());
+    let timeout_policy = crate::config::timeout_policy::TimeoutPolicy::from_env(args.env.as_ref());
     if spec.interactive {
         crate::pty_runner::run_agent_process_with_control(
             agent, &std_cmd, &task_id, store, &log_path,

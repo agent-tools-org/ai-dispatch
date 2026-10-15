@@ -5,7 +5,7 @@ use crate::agent::classifier::TaskCategory;
 use crate::agent::model_validation::ModelSource;
 use crate::background::{load_spec_if_exists, save_spec, BackgroundRunSpec};
 use crate::store::Store;
-use crate::timeout_policy::TimeoutPolicy;
+use crate::config::timeout_policy::TimeoutPolicy;
 use crate::types::*;
 use chrono::Local;
 use serde_json::{json, Value};

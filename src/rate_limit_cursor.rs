@@ -71,7 +71,7 @@ mod tests {
         let info = crate::watcher::watch_streaming(
             &crate::agent::cursor::CursorAgent, &mut child, &task.id, &store,
             &crate::support::paths::log_path(task.id.as_str()), None,
-            crate::idle_timeout::DEFAULT_IDLE_TIMEOUT, None,
+            crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT, None,
         ).await.expect("finished watcher");
         assert_eq!(info.status, crate::types::TaskStatus::Failed);
         assert_eq!(info.exit_code, Some(1));

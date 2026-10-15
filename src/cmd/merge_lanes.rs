@@ -34,7 +34,7 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str, force: bool) -> R
     if std::env::var("AID_GITBUTLER").is_ok_and(|value| value == "0") {
         return Err(anyhow!("GitButler integration disabled via AID_GITBUTLER=0"));
     }
-    if crate::project::detect_project_in(Path::new(&repo_dir))
+    if crate::config::project::detect_project_in(Path::new(&repo_dir))
         .unwrap_or_default()
         .gitbutler_mode()
         == crate::gitbutler::Mode::Off

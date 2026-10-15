@@ -7,7 +7,7 @@ use chrono::{DateTime, Local};
 
 use super::background_kill::terminate_task_processes;
 use super::background_spec::{load_spec_for_reaper, BackgroundRunSpec};
-use crate::idle_timeout::DEFAULT_IDLE_TIMEOUT_SECS;
+use crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT_SECS;
 use crate::process_monitor;
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
@@ -32,7 +32,7 @@ where
         }
         let Ok(spec) = load_spec_for_reaper(task_id) else { continue; };
         if spec.is_none()
-            && (now - task.created_at).num_hours() > crate::timeout_policy::DEFAULT_HARD_CAP_HOURS
+            && (now - task.created_at).num_hours() > crate::config::timeout_policy::DEFAULT_HARD_CAP_HOURS
         {
             continue;
         }
@@ -221,7 +221,7 @@ fn wedged_stale_after_secs(saw_progress: bool, idle_secs: u64, spec: &Background
     if saw_progress {
         idle_secs.saturating_mul(LIVE_WORKER_IDLE_MARGIN)
     } else {
-        crate::timeout_policy::TimeoutPolicy::from_env(spec.env.as_ref())
+        crate::config::timeout_policy::TimeoutPolicy::from_env(spec.env.as_ref())
             .first_token
             .as_secs()
     }

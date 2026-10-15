@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::config;
 use crate::session;
 use crate::store::Store;
-use crate::team;
+use crate::config::team;
 use crate::types::TaskFilter;
 use crate::usage;
 use crate::usage_report;

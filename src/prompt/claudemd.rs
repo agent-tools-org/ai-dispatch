@@ -1,8 +1,8 @@
 // CLAUDE.md aid section management — inject/update aid config into project CLAUDE.md.
 // Exports: sync_claude_md, read_aid_section.
-// Deps: crate::project::ProjectConfig, std::{fs, path}.
+// Deps: crate::config::project::ProjectConfig, std::{fs, path}.
 
-use crate::project::ProjectConfig;
+use crate::config::project::ProjectConfig;
 use anyhow::Result;
 use std::fs;
 use std::path::Path;

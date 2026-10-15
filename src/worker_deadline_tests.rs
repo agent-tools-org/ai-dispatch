@@ -16,7 +16,7 @@ async fn assert_deadline(pty: bool, streaming: bool, script: &str, default_max: 
     prepare_remote_wait(temp.path());
     let mut cmd = std::process::Command::new("sh");
     cmd.args(["-c", script]).current_dir(temp.path());
-    let mut policy = crate::timeout_policy::TimeoutPolicy::default();
+    let mut policy = crate::config::timeout_policy::TimeoutPolicy::default();
     if default_max {
         assert_eq!(policy.max_duration, Duration::from_secs(3600));
         assert_eq!(policy.hard_cap, Duration::from_secs(86400));

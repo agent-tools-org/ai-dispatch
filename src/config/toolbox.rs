@@ -66,7 +66,7 @@ pub fn tools_dir() -> PathBuf {
 }
 
 pub fn team_tools_dir(team_id: &str) -> PathBuf {
-    crate::team::teams_dir().join(team_id).join("tools")
+    crate::config::team::teams_dir().join(team_id).join("tools")
 }
 
 fn load_tool_from_toml(path: &Path, scope: ToolScope) -> Option<ToolMeta> {

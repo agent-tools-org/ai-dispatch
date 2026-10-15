@@ -99,7 +99,7 @@ fn refresh_child_activity(
         task_id.as_str(),
         bridge.child_pid(),
         idle.unwrap_or(Duration::from_secs(
-            crate::timeout_policy::DEFAULT_IDLE_SECS,
+            crate::config::timeout_policy::DEFAULT_IDLE_SECS,
         )),
     ) && activity > *last_activity
     {

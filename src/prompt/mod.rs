@@ -1,6 +1,13 @@
 // Prompt detection for PTY-backed agent output.
 // Tracks partial lines and exposes immediate and idle-based input heuristics.
 
+pub(crate) mod scan;
+pub(crate) mod templates;
+pub(crate) mod compaction;
+pub(crate) mod context;
+pub(crate) mod skills;
+pub(crate) mod claudemd;
+
 use std::time::{Duration, Instant};
 
 const PROMPT_IDLE_TIMEOUT: Duration = Duration::from_secs(2);

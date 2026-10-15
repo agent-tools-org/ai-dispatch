@@ -117,7 +117,7 @@ async fn streaming_watch_populates_success_exit_code() {
         &store,
         &log_path,
         None,
-        crate::idle_timeout::DEFAULT_IDLE_TIMEOUT,
+        crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT,
         None,
     )
     .await
@@ -147,7 +147,7 @@ async fn streaming_watch_logs_report_containing_milestone_and_emits_event() {
 
     let info = watch_streaming(
         &StubStreamingAgent, &mut child, &task_id, &store, &log_path, None,
-        crate::idle_timeout::DEFAULT_IDLE_TIMEOUT, None,
+        crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT, None,
     )
     .await
     .unwrap();
@@ -188,7 +188,7 @@ async fn streaming_watch_fast_fail_preserves_stderr_in_log() {
         &store,
         &log_path,
         None,
-        crate::idle_timeout::DEFAULT_IDLE_TIMEOUT,
+        crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT,
         None,
     )
     .await
@@ -263,7 +263,7 @@ async fn streaming_watch_caps_preserved_stderr() {
         &store,
         &log_path,
         None,
-        crate::idle_timeout::DEFAULT_IDLE_TIMEOUT,
+        crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT,
         None,
     )
     .await
@@ -309,7 +309,7 @@ async fn droid_osc_prefixed_completion_line_yields_completion_event() {
         &store,
         &log_path,
         None,
-        crate::idle_timeout::DEFAULT_IDLE_TIMEOUT,
+        crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT,
         None,
     )
     .await

@@ -35,7 +35,7 @@ fn write_override(agent: AgentKind, model: &str, input: f64, output: f64) {
 
 fn route_score(agent: AgentKind, model: &str, budget: TaskBudget) -> AdviceCandidate {
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![agent]);
-    crate::agent_config::save_agent_default_model(agent.as_str(), Some(model)).expect("sticky model");
+    crate::config::agent::save_agent_default_model(agent.as_str(), Some(model)).expect("sticky model");
     let profile = TaskProfile {
         category: TaskCategory::SimpleEdit,
         complexity: Complexity::Low,

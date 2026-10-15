@@ -36,7 +36,7 @@ pub(super) fn append_grouped_task_rows(
         if last_project != Some(project_key) {
             out.push_str(&format!(
                 "── {} ──\n",
-                crate::project::project_display(project_key)
+                crate::config::project::project_display(project_key)
             ));
             last_project = Some(project_key);
         }
@@ -94,7 +94,7 @@ fn append_task_row(
         cost::format_cost_label(task.cost_usd, task.agent)
     };
     let parent = short_parent(task.parent_task_id.as_deref());
-    let project = truncate(crate::project::project_display(task.project_id.as_deref()), 14);
+    let project = truncate(crate::config::project::project_display(task.project_id.as_deref()), 14);
     let group = short_group(task.workgroup_id.as_deref());
     let repo = short_repo(task.repo_path.as_deref());
     let caller = session::display(task);
@@ -118,6 +118,6 @@ fn append_task_row(
 fn project_sort_key(project_id: Option<&str>) -> (u8, &str) {
     match project_id {
         Some(id) => (0, id),
-        None => (1, crate::project::UNATTRIBUTED),
+        None => (1, crate::config::project::UNATTRIBUTED),
     }
 }

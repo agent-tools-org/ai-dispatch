@@ -1,14 +1,14 @@
 // Handler for `aid team` subcommands — manage team definitions.
 // Exports: run_team_command.
-// Deps: crate::team, crate::support::paths, std::fs.
+// Deps: crate::config::team, crate::support::paths, std::fs.
 
 use anyhow::{bail, Result};
 use std::fs;
 
 use crate::cli::TeamAction;
 use crate::support::sanitize;
-use crate::team;
-use crate::toolbox;
+use crate::config::team;
+use crate::config::toolbox;
 
 const TEAM_TEMPLATE: &str = r#"[team]
 id = "{name}"

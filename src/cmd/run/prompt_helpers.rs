@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 
 use crate::{
-    agent, skills, store::Store, templates, types::*,
+    agent, prompt::skills, store::Store, prompt::templates, types::*,
 };
 use crate::cmd::run::{RunArgs, NO_SKILL_SENTINEL};
 
@@ -144,19 +144,19 @@ fn append_skill_resources(name: &str, sections: &mut Vec<String>) {
 
 pub(crate) fn build_context_flags(agent_kind: &AgentKind, context_args: &[String]) -> Result<(Option<String>, Vec<String>)> {
     if context_args.is_empty() { return Ok((None, vec![])); }
-    let specs = crate::context::parse_context_specs(context_args)?;
+    let specs = crate::prompt::context::parse_context_specs(context_args)?;
     let context_files = expand_context_paths(&specs);
     if *agent_kind == AgentKind::OpenCode || *agent_kind == AgentKind::Kilo || *agent_kind == AgentKind::MiMoCode {
         let hints: Vec<String> = specs.iter().filter_map(|spec| spec.items.as_ref().map(|items| format!("Focus on: {} in {}", items.join(", "), spec.file))).collect();
         let file_context = (!hints.is_empty()).then(|| hints.join("\n"));
         return Ok((file_context, context_files));
     }
-    if agent::agent_has_fs_access(agent_kind) { return Ok((Some(crate::context::resolve_context_pointers(&specs)), vec![])); }
+    if agent::agent_has_fs_access(agent_kind) { return Ok((Some(crate::prompt::context::resolve_context_pointers(&specs)), vec![])); }
     let file_context = if specs.iter().all(|spec| spec.items.is_none()) {
         let mut blocks = Vec::new();
         for spec in &specs { let content = read_context_file(&spec.file)?; blocks.push(format_context_block(&spec.file, &content)); }
         blocks.join("\n\n")
-    } else { crate::context::resolve_context(&specs)? };
+    } else { crate::prompt::context::resolve_context(&specs)? };
     Ok((Some(file_context), vec![]))
 }
 
@@ -164,7 +164,7 @@ pub(crate) fn rust_cache_prompt_line(dir: Option<&str>) -> Option<&'static str> 
     agent::is_rust_project(dir).then_some(RUST_CACHE_PROMPT_LINE)
 }
 
-pub(crate) fn expand_context_paths(specs: &[crate::context::ContextSpec]) -> Vec<String> { specs.iter().map(|spec| spec.file.clone()).collect() }
+pub(crate) fn expand_context_paths(specs: &[crate::prompt::context::ContextSpec]) -> Vec<String> { specs.iter().map(|spec| spec.file.clone()).collect() }
 
 pub(crate) fn read_context_file(path: &str) -> Result<String> { std::fs::read_to_string(path).with_context(|| format!("Failed to read context file: {}", path)) }
 
@@ -172,7 +172,7 @@ pub(crate) fn format_context_block(path: &str, content: &str) -> String { format
 
 /// Explicit skills override defaults from the dispatch's resolved project;
 /// read-only runs receive no project default.
-pub(crate) fn effective_skills(args: &RunArgs, project: Option<&crate::project::ProjectConfig>) -> Vec<String> {
+pub(crate) fn effective_skills(args: &RunArgs, project: Option<&crate::config::project::ProjectConfig>) -> Vec<String> {
     let declared: Vec<String> = args
         .skills
         .iter()

@@ -183,7 +183,7 @@ mod tests {
             budget = "cheap"
             "#,
         );
-        crate::agent_config::save_agent_default_model("gemini", Some("pro")).expect("save config");
+        crate::config::agent::save_agent_default_model("gemini", Some("pro")).expect("save config");
         let store = Arc::new(Store::open_memory().expect("in-memory store"));
 
         let args = task_to_run_args(&task, &[], false, &store, None);
@@ -205,7 +205,7 @@ mod tests {
             model = "flash"
             "#,
         );
-        crate::agent_config::save_agent_default_model("gemini", Some("pro")).expect("save config");
+        crate::config::agent::save_agent_default_model("gemini", Some("pro")).expect("save config");
         let store = Arc::new(Store::open_memory().expect("in-memory store"));
 
         let args = task_to_run_args(&task, &[], false, &store, None);

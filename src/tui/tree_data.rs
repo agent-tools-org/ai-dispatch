@@ -113,7 +113,7 @@ fn group_label(
     tasks: &[&Task], header: &Task, project: Option<&str>,
     creators: &HashMap<String, String>, collapsed: bool,
 ) -> String {
-    let label = crate::project::project_display(project);
+    let label = crate::config::project::project_display(project);
     let marker = if collapsed { "▸" } else { "▾" };
     let total = tasks.len();
     let done = tasks.iter().filter(|task| task.status.is_terminal()).count();

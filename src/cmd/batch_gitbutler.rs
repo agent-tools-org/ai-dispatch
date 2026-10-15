@@ -1,6 +1,6 @@
 // GitButler-specific batch/watch helpers: enable prompt and merge-back hints.
 // Exports prompt gating plus shared summary text for batch and quiet watch flows.
-// Deps: crate::gitbutler, crate::project, anyhow, std::io/path.
+// Deps: crate::gitbutler, crate::config::project, anyhow, std::io/path.
 
 use anyhow::Result;
 use std::io::{self, IsTerminal, Write};
@@ -20,10 +20,10 @@ pub(crate) fn maybe_prompt_gitbutler_batch_integration(
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     if accepts_gitbutler_prompt(&input) {
-        let path = crate::project::upsert_gitbutler_mode(repo_dir, "auto")?;
+        let path = crate::config::project::upsert_gitbutler_mode(repo_dir, "auto")?;
         aid_info!("[aid] Enabled GitButler integration in {}", path.display());
     } else {
-        let path = crate::project::upsert_gitbutler_prompt_suppressed(repo_dir, true)?;
+        let path = crate::config::project::upsert_gitbutler_prompt_suppressed(repo_dir, true)?;
         aid_info!("[aid] Suppressed future GitButler batch prompts in {}", path.display());
     }
     Ok(())
@@ -33,7 +33,7 @@ pub(crate) fn merge_back_hint(repo_dir: &Path, group_id: &str) -> Option<String>
     if std::env::var("AID_GITBUTLER").is_ok_and(|value| value == "0") {
         return None;
     }
-    let project = crate::project::detect_project_in(repo_dir)?;
+    let project = crate::config::project::detect_project_in(repo_dir)?;
     if matches!(project.gitbutler_mode(), crate::gitbutler::Mode::Off) {
         return None;
     }
@@ -56,7 +56,7 @@ pub(crate) fn should_prompt_for_gitbutler_integration(
     if !crate::gitbutler::but_available() || !crate::gitbutler::repo_has_markers(repo_dir) {
         return false;
     }
-    match crate::project::detect_project_in(repo_dir) {
+    match crate::config::project::detect_project_in(repo_dir) {
         Some(project) => project.gitbutler.is_none() && !project.suppress_gitbutler_prompt,
         None => true,
     }

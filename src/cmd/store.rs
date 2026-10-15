@@ -4,7 +4,7 @@
 
 use crate::cli::StoreCommands;
 use crate::cmd::store_lock::{add_lock_entry, read_lockfile};
-use crate::hooks::Hook;
+use crate::config::hooks::Hook;
 use crate::support::paths;
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};

@@ -170,7 +170,7 @@ pub(crate) fn resolve_for_task(store: &Store, task_id: &str) -> Result<Option<Ba
 
 fn project_backup(task: &Task) -> Option<BackupProjectConfig> {
     let dir = task.repo_path.as_deref().or(task.worktree_path.as_deref())?;
-    crate::project::detect_project_in(Path::new(dir))?.backup
+    crate::config::project::detect_project_in(Path::new(dir))?.backup
 }
 
 /// Expands `{project}`, `{date}`, `{task_id}` and `{branch}`.

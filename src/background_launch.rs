@@ -110,7 +110,7 @@ fn wrap_command(
             .as_deref()
             .map(std::path::Path::new)
             .unwrap_or_else(|| std::path::Path::new("."));
-        let project_id = crate::project::detect_project_in(project_dir)
+        let project_id = crate::config::project::detect_project_in(project_dir)
             .map(|project| project.id)
             .unwrap_or_else(|| spec.task_id.clone());
         Some(crate::container::start_or_reuse(image, project_dir, &project_id)?)

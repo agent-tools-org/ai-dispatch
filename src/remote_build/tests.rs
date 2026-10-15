@@ -91,7 +91,7 @@ fn verify_receives_stored_box() {
 
 #[test]
 fn project_and_batch_accept_remote_build_defaults_and_overrides() {
-    let config: crate::project::ProjectConfig = toml::from_str("id = 'project'\nremote_build = 'auto'").expect("project");
+    let config: crate::config::project::ProjectConfig = toml::from_str("id = 'project'\nremote_build = 'auto'").expect("project");
     assert_eq!(config.remote_build.as_deref(), Some("auto"));
     let temp = tempfile::tempdir().expect("temp");
     let file = temp.path().join("batch.toml");

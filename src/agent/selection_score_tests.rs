@@ -16,7 +16,7 @@ use super::advise;
 use crate::agent::classifier::{Complexity, TaskCategory, TaskProfile};
 use crate::live_quota::CacheDirGuard;
 use crate::support::paths::AidHomeGuard;
-use crate::team::TeamConfig;
+use crate::config::team::TeamConfig;
 use crate::types::{
     AgentKind, DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency,
 };

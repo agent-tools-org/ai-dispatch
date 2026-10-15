@@ -1,7 +1,7 @@
 // Context injection: read files and extract specific items to prepend to prompts.
 // Supports whole-file injection or targeted extraction of pub struct/trait/fn/enum.
 
-use crate::skills;
+use crate::prompt::skills;
 use anyhow::{Context, Result};
 
 #[derive(Debug, Clone)]

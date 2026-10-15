@@ -129,7 +129,7 @@ mod tests {
     #[test]
     fn idle_prompt_uses_warning_window_from_task_policy() {
         let (_temp, _home, store, id, _) = fixture();
-        let mut policy = crate::timeout_policy::TimeoutPolicy::default();
+        let mut policy = crate::config::timeout_policy::TimeoutPolicy::default();
         policy.nudge_ladder.warn = Duration::from_secs(10);
         let mut state = MonitorState::with_policy(false, None, policy);
         partial(&mut state, BUFFERED_PROGRESS);

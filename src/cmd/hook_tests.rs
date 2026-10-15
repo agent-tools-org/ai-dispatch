@@ -1,8 +1,8 @@
 // Session-start hook tests: fleet line is silent unless a hold or Degraded exists.
 
 use super::{QuotaState, render_agents_status_line, render_session_start};
-use crate::project::{ProjectAgents, ProjectBudget, ProjectConfig};
-use crate::team::TeamConfig;
+use crate::config::project::{ProjectAgents, ProjectBudget, ProjectConfig};
+use crate::config::team::TeamConfig;
 use std::collections::HashMap;
 
 fn ok() -> QuotaState {

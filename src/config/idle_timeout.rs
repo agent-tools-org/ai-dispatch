@@ -4,9 +4,9 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-pub(crate) const DEFAULT_IDLE_TIMEOUT_SECS: u64 = crate::timeout_policy::DEFAULT_IDLE_SECS;
+pub(crate) const DEFAULT_IDLE_TIMEOUT_SECS: u64 = crate::config::timeout_policy::DEFAULT_IDLE_SECS;
 pub(crate) const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(DEFAULT_IDLE_TIMEOUT_SECS);
-pub(crate) const IDLE_TIMEOUT_ENV: &str = crate::timeout_policy::ENV_IDLE_SECS;
+pub(crate) const IDLE_TIMEOUT_ENV: &str = crate::config::timeout_policy::ENV_IDLE_SECS;
 
 pub(crate) fn env_with_idle_timeout(
     env: Option<HashMap<String, String>>,
@@ -26,11 +26,11 @@ pub(crate) fn idle_timeout_secs_from_env(env: Option<&HashMap<String, String>>) 
 }
 
 pub(crate) fn idle_timeout_from_command(cmd: &std::process::Command) -> Duration {
-    crate::timeout_policy::TimeoutPolicy::from_command(cmd).idle
+    crate::config::timeout_policy::TimeoutPolicy::from_command(cmd).idle
 }
 
 pub(crate) fn idle_timeout_from_tokio_command(cmd: &tokio::process::Command) -> Duration {
-    crate::timeout_policy::TimeoutPolicy::from_tokio_command(cmd).idle
+    crate::config::timeout_policy::TimeoutPolicy::from_tokio_command(cmd).idle
 }
 
 fn parse_idle_timeout_secs(value: &str) -> Option<u64> {

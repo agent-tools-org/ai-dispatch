@@ -7,7 +7,7 @@ use crate::cmd::run::RunArgs;
 use crate::agent::model_validation::ModelSource;
 use crate::agent::selection::AdviceCandidate;
 use crate::store::Store;
-use crate::team::TeamConfig;
+use crate::config::team::TeamConfig;
 use crate::types::DeclaredTaskProfile;
 
 pub(super) fn advised_plan(
@@ -15,7 +15,7 @@ pub(super) fn advised_plan(
 ) -> Result<(DeclaredTaskProfile, Vec<AdviceCandidate>)> {
     let report = super::super::advice_route::report(Some(store), args);
     let declared = report.declared;
-    let team = args.team.as_deref().and_then(crate::team::resolve_team);
+    let team = args.team.as_deref().and_then(crate::config::team::resolve_team);
     Ok((declared, expand_best_of_plan(report.candidates, team.as_ref(), n)?))
 }
 
@@ -88,11 +88,11 @@ mod tests {
     fn plan_filters_unavailable_disabled_auth_failed_and_below_floor() {
         let (_temp, _home, _cache) = isolated();
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid, AgentKind::Qwen, AgentKind::Grok]);
-        crate::agent_config::save_agent_disabled("grok", true).expect("disable");
+        crate::config::agent::save_agent_disabled("grok", true).expect("disable");
         crate::auth_marker::record_failure_at(AgentKind::Droid, "Not signed in.", chrono::Local::now());
         crate::scores::test_support::seed_live();
         // Rated Qwen (0.0) is below the complex floor (8); an unrated route stays eligible.
-        crate::agent_config::save_agent_default_model("qwen", Some("openai/gpt-4o-mini")).expect("model");
+        crate::config::agent::save_agent_default_model("qwen", Some("openai/gpt-4o-mini")).expect("model");
         let declared = DeclaredTaskProfile { difficulty: TaskDifficulty::Complex, ..profile() };
         let all = advise("refactor the scheduler", declared,
             Some(TaskCategory::Refactoring), None, None, 0, None).candidates;
@@ -109,7 +109,7 @@ mod tests {
     fn plan_excludes_agent_and_selected_model_group_holds_even_in_background() {
         let (temp, _home, _cache) = isolated();
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Droid, AgentKind::Codex]);
-        crate::agent_config::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
+        crate::config::agent::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
         for (route, excluded, expected) in [("codex", "codex", "droid"), ("droid--standard", "droid", "codex")] {
             hold(temp.path(), route);
             let declared = DeclaredTaskProfile { urgency: TaskUrgency::Background, ..profile() };
@@ -140,7 +140,7 @@ mod tests {
     fn plan_excludes_weaker_caller_pool_and_rejects_ineligible_recommendation_fallback() {
         let (temp, _home, _cache) = isolated();
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid]);
-        crate::agent_config::save_agent_default_model("codex", Some("openai/gpt-5.6-sol")).expect("model");
+        crate::config::agent::save_agent_default_model("codex", Some("openai/gpt-5.6-sol")).expect("model");
         crate::scores::test_support::seed_live();
         let mut caller = caller_advice("codex", Some("openai/gpt-5.6-sol"), TaskCategory::ComplexImpl).expect("caller");
         caller.capability = Some(99.0);
@@ -159,8 +159,8 @@ mod tests {
     fn plan_keeps_ranked_full_candidates_then_cycles_without_replacing_models() {
         let (_temp, _home, _cache) = isolated();
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid, AgentKind::Cursor]);
-        crate::agent_config::save_agent_default_model("codex", Some("gpt-5.6-sol")).expect("model");
-        crate::agent_config::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
+        crate::config::agent::save_agent_default_model("codex", Some("gpt-5.6-sol")).expect("model");
+        crate::config::agent::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
         let all: Vec<_> = candidates().into_iter().filter(|c| c.launchable(None)).collect();
         assert_eq!(all.len(), 3);
         assert_eq!(expand_best_of_plan(all.clone(), None, 2).expect("top two"), all[..2]);
@@ -174,7 +174,7 @@ mod tests {
         let (_temp, _home, _cache) = isolated();
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid]);
         for agent in ["codex", "droid"] {
-            crate::agent_config::save_agent_default_model(agent, Some("gpt-5.3-codex")).expect("model");
+            crate::config::agent::save_agent_default_model(agent, Some("gpt-5.3-codex")).expect("model");
         }
         let parent = RunArgs {
             agent_name: "codex".into(), model: Some("parent-model".into()), session_id: Some("parent-session".into()),

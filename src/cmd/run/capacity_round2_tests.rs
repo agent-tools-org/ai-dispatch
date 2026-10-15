@@ -57,7 +57,7 @@ async fn provider_capacity_round2_replayed_stderr_never_creates_hold_or_retry() 
     let info = crate::watcher::watch_streaming(
         &crate::agent::codex::CodexAgent, &mut child, &row.id, &store,
         &paths::log_path(row.id.as_str()), None,
-        crate::idle_timeout::DEFAULT_IDLE_TIMEOUT, None,
+        crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT, None,
     ).await.expect("watch");
     assert_eq!(info.status, TaskStatus::Failed);
     assert!(std::fs::read_to_string(paths::log_path(row.id.as_str())).expect("log")
@@ -76,7 +76,7 @@ async fn provider_capacity_ordinary_retry_refreshed_hold_never_substitutes_or_cl
     let _home = paths::AidHomeGuard::set(home.path());
     let _cache = crate::live_quota::CacheDirGuard::set(home.path());
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid]);
-    crate::agent_config::save_agent_default_model("droid", Some("gpt-5.3-codex"))
+    crate::config::agent::save_agent_default_model("droid", Some("gpt-5.3-codex"))
         .expect("peer model");
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut row = task("t-round2-refresh", home.path());

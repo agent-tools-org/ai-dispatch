@@ -328,7 +328,7 @@ mod tests {
             caller_kind: None,
             caller_session_id: None,
             agent_session_id: None,
-            repo_path: None, project_id: crate::project::current_project_id(),
+            repo_path: None, project_id: crate::config::project::current_project_id(),
             worktree_path: None, effective_dir: None,
             worktree_branch: None,
             final_head_sha: None,

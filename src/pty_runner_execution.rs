@@ -45,7 +45,7 @@ pub(super) fn monitor_process(
     bridge: &mut PtyBridge,
     log_path: &Path,
     streaming: bool,
-    timeout_policy: crate::timeout_policy::TimeoutPolicy,
+    timeout_policy: crate::config::timeout_policy::TimeoutPolicy,
     max_task_cost: Option<f64>,
     start: Instant,
 ) -> Result<MonitorState> {

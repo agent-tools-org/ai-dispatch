@@ -8,7 +8,7 @@ use super::{
     run_lifecycle::{merge_hint_for_task, LifecycleMode, post_run_lifecycle},
     run_prompt::PromptBundle,
 };
-use crate::{hooks::Hook, store::Store, support::test_subprocess, types::*};
+use crate::{config::hooks::Hook, store::Store, support::test_subprocess, types::*};
 use chrono::Local;
 use std::{path::Path, process::Command, sync::Arc};
 

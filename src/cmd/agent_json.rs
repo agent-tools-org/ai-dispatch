@@ -143,7 +143,7 @@ fn build_agent_json(
     } else {
         installed_agents.contains(&kind)
     };
-    let disabled = crate::agent_config::is_agent_disabled(&name);
+    let disabled = crate::config::agent::is_agent_disabled(&name);
     
     let (description, trust_tier, provider, metering) = agent_metadata(kind, custom_config);
     let supports_session_resume = !is_custom && kind.supports_session_resume();

@@ -98,7 +98,7 @@ async fn run_piped(agent: &FinalizingAgent, streaming: bool, ceiling: Option<f64
         Some("component-test-model"),
         streaming,
         None,
-        crate::timeout_policy::TimeoutPolicy::default(),
+        crate::config::timeout_policy::TimeoutPolicy::default(),
         ceiling,
     )
     .await
@@ -123,7 +123,7 @@ async fn assert_finalization(pty: bool, streaming: bool, status: TaskStatus) {
             None,
             None,
             streaming,
-            crate::timeout_policy::TimeoutPolicy::default(),
+            crate::config::timeout_policy::TimeoutPolicy::default(),
             None,
             None,
         )

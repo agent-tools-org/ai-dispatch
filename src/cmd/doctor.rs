@@ -2,7 +2,7 @@
 // Exports run() plus formatting helpers shared by tests.
 // Deps: crate::support::repo_root, crate::store::Store, crate::worktree_gc.
 
-use crate::project;
+use crate::config::project;
 use crate::support::repo_root;
 use crate::store::Store;
 use crate::{agent::home_isolation, support::paths};

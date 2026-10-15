@@ -69,10 +69,10 @@ fn automatic_uses_first_report_route_with_complete_profile_kind_team_and_store()
         AgentKind::Claude,
         AgentKind::Oz,
     ]);
-    std::fs::create_dir(crate::team::teams_dir()).expect("teams");
-    std::fs::write(crate::team::teams_dir().join("routes.toml"),
+    std::fs::create_dir(crate::config::team::teams_dir()).expect("teams");
+    std::fs::write(crate::config::team::teams_dir().join("routes.toml"),
         "[team]\nid = 'routes'\ndisplay_name = 'Routes'\npreferred_agents = ['claude', 'droid']\ndefault_agent = 'claude'\n").expect("team");
-    crate::agent_config::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
+    crate::config::agent::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
     let store = Store::open_memory().expect("store");
     let args = RunArgs {
         team: Some("routes".into()),
@@ -109,8 +109,8 @@ fn automatic_excludes_missing_disabled_auth_failed_below_floor_and_exhausted() {
     ]);
     crate::scores::test_support::seed_live();
     // Keep a below-floor route with model evidence instead of the removed CLI score.
-    crate::agent_config::save_agent_default_model("qwen", Some("openai/gpt-4o-mini")).expect("model");
-    crate::agent_config::save_agent_disabled("grok", true).expect("disable");
+    crate::config::agent::save_agent_default_model("qwen", Some("openai/gpt-4o-mini")).expect("model");
+    crate::config::agent::save_agent_disabled("grok", true).expect("disable");
     crate::auth_marker::record_failure_at(AgentKind::Droid, "Not signed in.", chrono::Local::now());
     let args = RunArgs {
         agent_name: "codex".into(),
@@ -141,7 +141,7 @@ fn automatic_excludes_missing_disabled_auth_failed_below_floor_and_exhausted() {
 fn automatic_excludes_selected_model_group_holds_even_background_and_advisory_rescue() {
     let (dir, _home, _cache) = isolated();
     let _fleet = DetectAgentsGuard::set(vec![AgentKind::Droid, AgentKind::Codex]);
-    crate::agent_config::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
+    crate::config::agent::save_agent_default_model("droid", Some("gpt-5.3-codex")).expect("model");
     hold(dir.path(), "droid--standard");
     let args = RunArgs {
         agent_name: "codex".into(),
@@ -205,7 +205,7 @@ fn resolver_excludes_uppercase_and_alias_primary_by_builtin_kind() {
     let (dir, _home, _cache) = isolated();
     let store = Arc::new(Store::open_memory().expect("store"));
     let _fleet = DetectAgentsGuard::set(vec![AgentKind::Antigravity, AgentKind::Codex]);
-    crate::agent_config::save_agent_default_model("codex", Some("gpt-6-sol")).expect("model");
+    crate::config::agent::save_agent_default_model("codex", Some("gpt-6-sol")).expect("model");
     let _served = crate::agent::model_validation::MockServedModelsGuard::set(AgentKind::Codex, None);
     for name in ["AGY", "antigravity", "ANTIGRAVITY"] {
         hold(dir.path(), "agy");

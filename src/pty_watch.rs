@@ -81,14 +81,14 @@ impl MonitorState {
         Self::with_policy(
             streaming,
             workgroup_id,
-            crate::timeout_policy::TimeoutPolicy::default(),
+            crate::config::timeout_policy::TimeoutPolicy::default(),
         )
     }
 
     pub(crate) fn with_policy(
         streaming: bool,
         workgroup_id: Option<String>,
-        timeout_policy: crate::timeout_policy::TimeoutPolicy,
+        timeout_policy: crate::config::timeout_policy::TimeoutPolicy,
     ) -> Self {
         Self {
             absolute_deadline: Instant::now() + timeout_policy.max_duration.min(timeout_policy.hard_cap),

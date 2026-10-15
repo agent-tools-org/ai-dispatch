@@ -8,7 +8,7 @@ use crate::agent;
 use crate::agent::classifier::TaskCategory;
 use crate::cmd_dispatch::recommend_hint;
 use crate::store;
-use crate::team;
+use crate::config::team;
 use crate::types::{
     DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskEgress, TaskRigor, TaskUrgency,
 };
@@ -26,7 +26,7 @@ pub(super) fn validate_task_profile(
         rigor.is_none().then_some("rigor"),
     ].into_iter().flatten().collect::<Vec<_>>();
     if missing.is_empty() { return Ok(()) }
-    let project = crate::project::detect_project();
+    let project = crate::config::project::detect_project();
     if project.as_ref().is_some_and(|item| item.require_task_profile) {
         anyhow::bail!("Task profile is required; missing --{}", missing.join(", --"));
     }

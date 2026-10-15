@@ -8,20 +8,14 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
-#[path = "project/audit.rs"]
 mod audit;
-#[path = "project/edit.rs"]
 mod edit;
-#[path = "project/identity.rs"]
 mod identity;
 mod discovery;
 pub use discovery::detect_project_in;
 pub(crate) use discovery::resolve_project_in;
-#[path = "project/profile.rs"]
 mod profile;
-#[path = "project/team.rs"]
 mod project_team;
-#[path = "project/worktree.rs"]
 pub(crate) mod worktree;
 
 use self::audit::ProjectFile;
@@ -276,11 +270,9 @@ fn find_git_root_from(start_dir: &Path) -> Option<PathBuf> {
 }
 
 #[cfg(test)]
-#[path = "project/tests.rs"]
+#[path = "project_tests.rs"]
 mod tests;
 #[cfg(test)]
-#[path = "project/edit_tests.rs"]
 mod edit_tests;
 #[cfg(test)]
-#[path = "project/discovery_tests.rs"]
 mod discovery_tests;

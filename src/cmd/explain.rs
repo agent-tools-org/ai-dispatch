@@ -4,7 +4,7 @@
 use anyhow::Result;
 use std::sync::Arc;
 
-use crate::agent_config;
+use crate::config::agent as agent_config;
 use crate::cmd::run::{self, RunArgs};
 use crate::cmd::show::{load_task, read_tail};
 use crate::support::paths;

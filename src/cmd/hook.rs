@@ -1,11 +1,11 @@
 // Hook subcommands for lightweight Claude Code integration.
-// Exports: session_start; depends on crate::project and crate::team.
+// Exports: session_start; depends on crate::config::project and crate::config::team.
 
 use anyhow::Result;
 use chrono::NaiveDateTime;
 
-use crate::project::{self, ProjectConfig};
-use crate::team::TeamConfig;
+use crate::config::project::{self, ProjectConfig};
+use crate::config::team::TeamConfig;
 use crate::types::AgentKind;
 
 /// Injected into every session, so it is the one place a dispatcher reliably
@@ -43,7 +43,7 @@ pub fn session_start() -> Result<()> {
     let team = project
         .as_ref()
         .and_then(|config| config.team.as_deref())
-        .and_then(crate::team::resolve_team);
+        .and_then(crate::config::team::resolve_team);
     let mut rendered = render_session_start(project.as_ref(), team.as_ref());
     if let Some(line) = agents_status_line() {
         rendered.push('\n');
@@ -139,11 +139,11 @@ fn agents_status_line() -> Option<String> {
         .iter()
         .copied()
         .filter(|kind| installed.contains(kind))
-        .filter(|kind| !crate::agent_config::is_agent_disabled(kind.as_str()))
+        .filter(|kind| !crate::config::agent::is_agent_disabled(kind.as_str()))
         .map(|kind| (kind.as_str().to_string(), quota_state_for(kind, None)))
         .collect::<Vec<_>>();
     for config in crate::agent::registry::list_custom_agents() {
-        if crate::agent_config::is_agent_disabled(&config.id) {
+        if crate::config::agent::is_agent_disabled(&config.id) {
             continue;
         }
         let state = quota_state_for(AgentKind::Custom, Some(config.id.as_str()));

@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::support::paths::AidHomeGuard;
-use crate::project::{ProjectConfig, ProjectUnstickConfig};
+use crate::config::project::{ProjectConfig, ProjectUnstickConfig};
 use std::fs;
 
 static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -17,7 +17,7 @@ fn policy_resolution_precedence_is_cli_agent_project_default() {
     }
     let dir = tempfile::tempdir().expect("tempdir");
     let _guard = AidHomeGuard::set(dir.path());
-    crate::agent_config::save_agent_idle_timeout("codex", Some(420)).expect("save config");
+    crate::config::agent::save_agent_idle_timeout("codex", Some(420)).expect("save config");
     let project = ProjectConfig {
         idle_timeout: Some(300),
         max_duration_mins: Some(20),
@@ -113,7 +113,7 @@ escalate_after_secs = 44
     )
     .expect("write project");
 
-    let project = crate::project::load_project(&path).expect("load project");
+    let project = crate::config::project::load_project(&path).expect("load project");
     let policy = TimeoutPolicy::resolve("project-only-agent", None, None, Some(&project));
 
     assert_eq!(policy.idle, Duration::from_secs(222));
@@ -145,5 +145,5 @@ fn std_and_tokio_command_pipelines_read_same_idle_value() {
         TimeoutPolicy::from_tokio_command(&tokio_cmd).first_token,
         policy.first_token
     );
-    assert_eq!(crate::idle_timeout::idle_timeout_from_tokio_command(&tokio_cmd), policy.idle);
+    assert_eq!(crate::config::idle_timeout::idle_timeout_from_tokio_command(&tokio_cmd), policy.idle);
 }

@@ -1,7 +1,7 @@
 // Prompt assembly and run helpers for `aid run`.
 // Deps: resolved project context, store, skills, team, and execution helpers.
 use crate::cmd::summary::{CompletionSummary, format_summary_for_injection};
-use crate::{agent, project, store::Store, team, templates, toolbox, types::*};
+use crate::{agent, config::project, store::Store, config::team, prompt::templates, config::toolbox, types::*};
 use anyhow::Result;
 use serde_json;
 mod prompt_context;

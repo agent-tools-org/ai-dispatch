@@ -15,7 +15,7 @@ use crate::types::{EventKind, PendingReason, Task, TaskEvent, TaskFilter, TaskId
 
 pub(crate) const ZOMBIE_FAILURE_DETAIL: &str = "Background worker died unexpectedly";
 const PENDING_TASK_TIMEOUT_SECS: i64 = 600;
-const MAX_RUN_HOURS: i64 = crate::timeout_policy::DEFAULT_HARD_CAP_HOURS;
+const MAX_RUN_HOURS: i64 = crate::config::timeout_policy::DEFAULT_HARD_CAP_HOURS;
 
 pub(super) fn record_worker_failure_skip_notify(store: &Store, task_id: &str, err: &anyhow::Error) -> Result<bool> {
     record_failure_skip_notify(store, task_id, &format!("{err:#}"), &format!("Background worker failed: {err}"))
@@ -172,7 +172,7 @@ fn cleanup_old_running_tasks(
         let elapsed = (Local::now() - task.created_at).num_hours();
         let Ok(spec) = load_spec_for_reaper(task_id) else { continue; };
         let max_run_hours = spec.as_ref().map(|spec| {
-            crate::timeout_policy::TimeoutPolicy::from_env(spec.env.as_ref()).hard_cap_hours()
+            crate::config::timeout_policy::TimeoutPolicy::from_env(spec.env.as_ref()).hard_cap_hours()
         }).unwrap_or(MAX_RUN_HOURS);
         if elapsed <= max_run_hours {
             continue;

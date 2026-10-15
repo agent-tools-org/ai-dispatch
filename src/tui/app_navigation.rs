@@ -179,7 +179,7 @@ impl App {
         let query = self.search_query.to_lowercase();
         task.id.as_str().to_lowercase().contains(&query)
             || task.prompt.to_lowercase().contains(&query)
-            || crate::project::project_display(task.project_id.as_deref())
+            || crate::config::project::project_display(task.project_id.as_deref())
                 .to_lowercase()
                 .contains(&query)
     }

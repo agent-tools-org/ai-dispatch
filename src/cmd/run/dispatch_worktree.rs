@@ -7,7 +7,7 @@ use chrono::Local;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::project::{self, ProjectConfig};
+use crate::config::project::{self, ProjectConfig};
 use crate::store::{Store, TaskCompletionUpdate};
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
 
@@ -244,7 +244,7 @@ pub(super) fn prepare_worktree_deps(
         Path::new(wt),
         args.setup.as_deref(),
         args.link_deps,
-        crate::idle_timeout::idle_timeout_secs_from_env(args.env.as_ref()),
+        crate::config::idle_timeout::idle_timeout_secs_from_env(args.env.as_ref()),
         setup.fresh_worktree,
         setup.wt_branch.as_deref(),
     ) {

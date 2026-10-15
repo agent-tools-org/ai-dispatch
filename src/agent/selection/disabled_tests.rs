@@ -2,7 +2,7 @@
 // Exports: test cases only.
 // Deps: selection helpers, agent_config, Store, AidHomeGuard.
 
-use crate::agent_config;
+use crate::config::agent as agent_config;
 use crate::support::paths::AidHomeGuard;
 use crate::types::AgentKind;
 

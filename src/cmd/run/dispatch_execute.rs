@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 use crate::background::{self, BackgroundRunSpec};
 use crate::commit;
-use crate::hooks;
+use crate::config::hooks;
 use crate::store::Store;
 use crate::types::TaskId;
 use super::run_dispatch_prepare::PreparedDispatch;

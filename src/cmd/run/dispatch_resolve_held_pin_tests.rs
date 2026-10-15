@@ -133,7 +133,7 @@ fn substituted_route_keeps_agent_config_model_despite_served_list_miss() {
     // The fallback (codex) has a configured default model that is NOT in its
     // served-list snapshot — the cache shape that drops an aid-resolved model
     // on a non-substituted route.
-    crate::agent_config::save_agent_default_model("codex", Some("codex-stale-config-model"))
+    crate::config::agent::save_agent_default_model("codex", Some("codex-stale-config-model"))
         .expect("save codex default");
     let _served = crate::agent::model_validation::MockServedModelsGuard::set(
         AgentKind::Codex,

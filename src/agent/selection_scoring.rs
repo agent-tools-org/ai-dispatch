@@ -4,7 +4,7 @@
 
 use crate::agent::classifier::{self, TaskCategory};
 use crate::route_availability::{availability_for_model, RouteStatus};
-use crate::team::TeamConfig;
+use crate::config::team::TeamConfig;
 use crate::types::AgentKind;
 use std::cmp::Ordering;
 use std::collections::HashMap;

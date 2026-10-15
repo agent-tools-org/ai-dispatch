@@ -6,7 +6,7 @@ use crate::agent::registry::load_custom_agents;
 use super::super::selection_capabilities::{custom_category_score, custom_strength_bonus};
 use super::super::selection_scoring::CandidateContext;
 use crate::agent::run_model::{RunModelInput, resolve_run_model};
-use crate::agent_config;
+use crate::config::agent as agent_config;
 use crate::config::SelectionConfig;
 use crate::model_catalog::AGENT_MODELS;
 use crate::types::{AgentKind, DeclaredTaskProfile, TaskBudget};

@@ -15,10 +15,10 @@ use super::selection_scoring::{
 use crate::agent::RouteBlocker;
 use crate::agent::run_model::{RunModel, RunModelInput, RunModelSource, resolve_run_model};
 use crate::config::SelectionConfig;
-use crate::agent_config;
+use crate::config::agent as agent_config;
 use crate::auth_marker::AuthStatus;
 use crate::store::Store;
-use crate::team::TeamConfig;
+use crate::config::team::TeamConfig;
 use crate::types::{AgentKind, DeclaredTaskProfile, TaskBudget, TaskUrgency};
 
 #[path = "selection_advice_custom.rs"]

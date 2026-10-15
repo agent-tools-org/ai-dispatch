@@ -4,9 +4,9 @@
 use anyhow::Result;
 use std::sync::Arc;
 use crate::agent;
-use crate::agent_config;
+use crate::config::agent as agent_config;
 use crate::config;
-use crate::project::ProjectConfig;
+use crate::config::project::ProjectConfig;
 use crate::rate_limit;
 use crate::store::Store;
 use crate::types::AgentKind;

@@ -55,7 +55,7 @@ async fn watch_exit0(agent: &dyn Agent, output: &str, task_id: &str) -> TaskStat
         &store,
         &log_path,
         None,
-        crate::idle_timeout::DEFAULT_IDLE_TIMEOUT,
+        crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT,
         None,
     )
     .await

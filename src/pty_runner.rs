@@ -42,7 +42,7 @@ pub fn run_agent_process(
         output_path,
         model,
         streaming,
-        crate::timeout_policy::TimeoutPolicy::from_command(cmd),
+        crate::config::timeout_policy::TimeoutPolicy::from_command(cmd),
         None,
         None,
     )
@@ -58,7 +58,7 @@ pub(crate) fn run_agent_process_with_control(
     output_path: Option<&str>,
     model: Option<&str>,
     streaming: bool,
-    timeout_policy: crate::timeout_policy::TimeoutPolicy,
+    timeout_policy: crate::config::timeout_policy::TimeoutPolicy,
     max_task_cost: Option<f64>,
     control: Option<PtyRunControl>,
 ) -> Result<()> {

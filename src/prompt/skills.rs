@@ -3,7 +3,7 @@
 // Deps: crate::support::paths, crate::types, anyhow, std::fs.
 
 use anyhow::{Context, Result};
-use crate::prompt_scan::scan_for_injection;
+use crate::prompt::scan::scan_for_injection;
 use crate::types::AgentKind;
 use crate::support::sanitize;
 use std::collections::BTreeSet;
@@ -245,5 +245,5 @@ pub fn list_skill_references(name: &str) -> Vec<String> {
 }
 
 #[cfg(test)]
-#[path = "skills/tests.rs"]
+#[path = "skills_tests.rs"]
 mod tests;

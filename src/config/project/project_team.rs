@@ -1,11 +1,11 @@
 // Project-scoped knowledge loading helpers.
 // Exports: project_knowledge_dir() and read_project_knowledge().
-// Deps: std::fs/path and crate::team knowledge parsing.
+// Deps: std::fs/path and crate::config::team knowledge parsing.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::team::{self, KnowledgeEntry};
+use crate::config::team::{self, KnowledgeEntry};
 
 pub fn project_knowledge_dir(git_root: &Path) -> PathBuf {
     git_root.join(".aid").join("knowledge")

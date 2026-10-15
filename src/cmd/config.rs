@@ -10,12 +10,12 @@ use std::sync::Arc;
 
 use crate::agent;
 use crate::agent::registry;
-use crate::agent_config;
+use crate::config::agent as agent_config;
 use crate::cli::ConfigAction;
 use crate::rate_limit;
-use crate::skills;
+use crate::prompt::skills;
 use crate::store::Store;
-use crate::templates;
+use crate::prompt::templates;
 use crate::types::{AgentKind, TaskFilter};
 
 #[path = "config_display.rs"]

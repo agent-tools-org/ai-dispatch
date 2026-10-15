@@ -31,7 +31,7 @@ pub(crate) struct RunProcessArgs<'a> {
     pub store: &'a Arc<Store>, pub log_path: &'a std::path::Path,
     pub output_path: Option<&'a str>, pub model: Option<&'a str>, pub streaming: bool,
     pub workgroup_id: Option<&'a str>,
-    pub timeout_policy: crate::timeout_policy::TimeoutPolicy,
+    pub timeout_policy: crate::config::timeout_policy::TimeoutPolicy,
     pub max_task_cost: Option<f64>,
 }
 

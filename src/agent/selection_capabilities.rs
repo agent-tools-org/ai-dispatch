@@ -4,7 +4,7 @@
 
 use crate::agent::classifier::TaskCategory;
 use crate::agent::custom::CustomAgentConfig;
-use crate::team::TeamConfig;
+use crate::config::team::TeamConfig;
 
 pub(super) fn custom_category_score(config: &CustomAgentConfig, category: TaskCategory) -> i32 {
     let caps = &config.capabilities;

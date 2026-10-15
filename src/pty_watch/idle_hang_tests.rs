@@ -5,7 +5,7 @@ use super::MonitorState;
 use crate::support::paths;
 use crate::pty_watch_idle::{IdleAction, IdleDetector, MonitorTaskStatus};
 use crate::store::Store;
-use crate::timeout_policy::{NudgeLadder, TimeoutPolicy};
+use crate::config::timeout_policy::{NudgeLadder, TimeoutPolicy};
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::sync::Arc;

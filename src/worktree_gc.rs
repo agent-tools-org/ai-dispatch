@@ -1,8 +1,8 @@
 // Read-only worktree and branch diagnostics for doctor.
 // Exports candidate discovery and merge heuristics.
-// Deps: anyhow, crate::project::ProjectConfig, std::process::Command.
+// Deps: anyhow, crate::config::project::ProjectConfig, std::process::Command.
 
-use crate::project::ProjectConfig;
+use crate::config::project::ProjectConfig;
 use crate::worktree::is_aid_managed_worktree_path;
 use anyhow::{Context, Result};
 use std::collections::BTreeSet;

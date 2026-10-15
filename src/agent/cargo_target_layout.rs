@@ -23,8 +23,8 @@ pub(super) fn layout_for_project(
 }
 
 fn routed_root(configured_root: &Path, project_dir: &Path) -> Option<PathBuf> {
-    let caller_id = crate::project::current_project_id()?;
-    let target_id = crate::project::resolve_project_id(project_dir)?;
+    let caller_id = crate::config::project::current_project_id()?;
+    let target_id = crate::config::project::resolve_project_id(project_dir)?;
     if caller_id == target_id {
         return None;
     }

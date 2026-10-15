@@ -5,7 +5,7 @@ use anyhow::Result;
 use chrono::Local;
 use std::sync::Arc;
 use crate::agent;
-use crate::hooks;
+use crate::config::hooks;
 use crate::cmd::show;
 use crate::store::Store;
 use crate::store::TaskCompletionUpdate;
@@ -45,7 +45,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         prepared.project_root.as_deref(),
     )?;
     crate::remote_build::append_prompt(&mut prompt_bundle.effective_prompt, args.remote_build.as_deref());
-    prompt_bundle.prompt_tokens = crate::templates::estimate_tokens(&prompt_bundle.effective_prompt) as i64;
+    prompt_bundle.prompt_tokens = crate::prompt::templates::estimate_tokens(&prompt_bundle.effective_prompt) as i64;
     store.update_resolved_prompt(prepared.task_id.as_str(), &prompt_bundle.effective_prompt)?;
     store.update_prompt_tokens(prepared.task_id.as_str(), prompt_bundle.prompt_tokens)?;
     if args.dry_run {

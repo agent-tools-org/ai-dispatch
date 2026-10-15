@@ -4,7 +4,7 @@
 
 use super::{RunArgs, maybe_run_post_done_audit};
 use crate::batch::parse_batch_file;
-use crate::project::{ProjectAuditConfig, ProjectConfig};
+use crate::config::project::{ProjectAuditConfig, ProjectConfig};
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;

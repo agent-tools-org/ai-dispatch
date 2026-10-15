@@ -36,7 +36,7 @@ async fn run_capture(ceiling: f64) -> Task {
         task.requested_model.as_deref(),
         true,
         None,
-        crate::timeout_policy::TimeoutPolicy::default(),
+        crate::config::timeout_policy::TimeoutPolicy::default(),
         Some(ceiling),
     )
     .await

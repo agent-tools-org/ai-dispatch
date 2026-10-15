@@ -78,8 +78,8 @@ fn context_text_prefers_stored_resolved_prompt() {
 #[test]
 fn context_text_reports_missing_resolved_prompt_without_loading_skills() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    let dir = crate::paths::aid_dir().join("skills");
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let dir = crate::support::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
 
@@ -104,8 +104,8 @@ fn context_text_reports_missing_resolved_prompt_without_loading_skills() {
 #[test]
 fn context_text_reports_no_skills_when_none_were_dispatched() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    let dir = crate::paths::aid_dir().join("skills");
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let dir = crate::support::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
 

@@ -55,9 +55,9 @@ mod tests {
     #[tokio::test]
     async fn captured_cursor_stderr_replay_through_watcher_writes_auto_hold() {
         let temp = tempfile::tempdir().expect("temp home");
-        let _home = crate::paths::AidHomeGuard::set(temp.path());
+        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
         let _cache = crate::live_quota::CacheDirGuard::set(temp.path());
-        crate::paths::ensure_dirs().expect("aid directories");
+        crate::support::paths::ensure_dirs().expect("aid directories");
         let store = std::sync::Arc::new(crate::store::Store::open_memory().expect("store"));
         let task = running_cursor_task();
         store.insert_task(&task).expect("task");
@@ -70,7 +70,7 @@ mod tests {
             .spawn().expect("replay process");
         let info = crate::watcher::watch_streaming(
             &crate::agent::cursor::CursorAgent, &mut child, &task.id, &store,
-            &crate::paths::log_path(task.id.as_str()), None,
+            &crate::support::paths::log_path(task.id.as_str()), None,
             crate::idle_timeout::DEFAULT_IDLE_TIMEOUT, None,
         ).await.expect("finished watcher");
         assert_eq!(info.status, crate::types::TaskStatus::Failed);
@@ -88,11 +88,11 @@ mod tests {
     #[test]
     fn captured_cursor_refusal_classifies_finished_output_and_writes_cycle_hold() {
         let temp = tempfile::tempdir().expect("temp home");
-        let _home = crate::paths::AidHomeGuard::set(temp.path());
+        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
         let _cache = crate::live_quota::CacheDirGuard::set(temp.path());
-        crate::paths::ensure_dirs().expect("aid directories");
+        crate::support::paths::ensure_dirs().expect("aid directories");
         let task = TaskId("t-cursor-monthly-capture".to_string());
-        std::fs::write(crate::paths::stderr_path(task.as_str()), CAPTURE).expect("stderr");
+        std::fs::write(crate::support::paths::stderr_path(task.as_str()), CAPTURE).expect("stderr");
         let refusal = crate::cmd::run::read_quota_error_message(&task, &AgentKind::Cursor)
             .expect("finished task must classify as a quota failure");
         assert_eq!(refusal, CAPTURE.trim());
@@ -116,7 +116,7 @@ mod tests {
     #[test]
     fn cursor_monthly_hold_blocks_only_the_dispatched_model_group() {
         let temp = tempfile::tempdir().expect("temp home");
-        let _home = crate::paths::AidHomeGuard::set(temp.path());
+        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
         let _cache = crate::live_quota::CacheDirGuard::set(temp.path());
         let refusal = CAPTURE.replace("9/23/2026", "9/23/2099");
         for (model, group, other) in [("Auto", "auto", "composer-2.5"), ("composer-2.5", "premium", "auto")] {
@@ -132,7 +132,7 @@ mod tests {
     #[test]
     fn cursor_missing_or_invalid_cycle_date_holds_for_thirty_days() {
         let temp = tempfile::tempdir().expect("temp home");
-        let _home = crate::paths::AidHomeGuard::set(temp.path());
+        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
         let _cache = crate::live_quota::CacheDirGuard::set(temp.path());
         for date in ["", "not-a-date", "2/30/2099", "13/1/2099", "9/23/26"] {
             let refusal = CAPTURE.replace("9/23/2026", date);
@@ -149,7 +149,7 @@ mod tests {
     #[test]
     fn cursor_refusal_requires_error_line_and_rejects_agent_authored_envelopes() {
         let temp = tempfile::tempdir().expect("temp home");
-        let _home = crate::paths::AidHomeGuard::set(temp.path());
+        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
         for prose in [
             CAPTURE.replace("ActionRequiredError: ", ""),
             format!("The CLI reported: {CAPTURE}"),

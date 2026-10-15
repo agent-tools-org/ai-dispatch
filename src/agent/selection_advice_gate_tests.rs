@@ -55,7 +55,7 @@ fn same_pool_is_demoted_when_caller_model_unknown() {
 #[test]
 fn caller_advice_resolves_pool_and_leaderboard_capability() {
     let home = tempfile::tempdir().expect("home");
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     crate::scores::test_support::seed_live();
     let advice = caller_advice("claude-code", Some("opus"), crate::agent::classifier::TaskCategory::ComplexImpl).expect("claude pool");
     assert_eq!(advice.provider, "anthropic");

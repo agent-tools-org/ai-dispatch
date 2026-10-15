@@ -15,7 +15,7 @@ use super::selection_scoring::{
 use super::advise;
 use crate::agent::classifier::{Complexity, TaskCategory, TaskProfile};
 use crate::live_quota::CacheDirGuard;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::team::TeamConfig;
 use crate::types::{
     AgentKind, DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency,
@@ -133,7 +133,7 @@ fn breakdown_is_bit_identical_to_pre_decomposition_value() {
 fn discovered_agy_model_keeps_base_score_when_capability_is_unknown() {
     let temp = TempDir::new().expect("temp dir");
     let _home = AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().expect("aid dirs");
+    crate::support::paths::ensure_dirs().expect("aid dirs");
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("current time")
@@ -142,7 +142,7 @@ fn discovered_agy_model_keeps_base_score_when_capability_is_unknown() {
         "agy": {"models": ["gemini-3.7-flash-high"], "updated_at_secs": now}
     });
     std::fs::write(
-        crate::paths::aid_dir().join("served_models_cache.json"),
+        crate::support::paths::aid_dir().join("served_models_cache.json"),
         cache.to_string(),
     )
     .expect("served-model cache");

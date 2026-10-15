@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::paths;
+use crate::support::paths;
 use crate::types::Task;
 
 /// Resolve the declared `-o` path to a file proven to belong to this task.

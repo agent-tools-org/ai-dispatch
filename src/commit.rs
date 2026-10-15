@@ -155,7 +155,7 @@ fn strip_aid_tags(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{auto_commit, extract_task_summary, has_changes_since, has_uncommitted_changes, strip_aid_tags};
-    use crate::test_subprocess;
+    use crate::support::test_subprocess;
     use std::{path::Path, process::Command};
 
     fn git(dir: &Path, args: &[&str]) {

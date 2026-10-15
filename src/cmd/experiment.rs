@@ -145,7 +145,7 @@ fn git_commit(dir: &str, message: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::git_commit;
-    use crate::test_subprocess;
+    use crate::support::test_subprocess;
     use std::process::Command;
 
     fn git(dir: &std::path::Path, args: &[&str]) {

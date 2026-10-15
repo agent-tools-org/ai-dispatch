@@ -9,7 +9,7 @@ use super::background_kill::terminate_task_processes;
 use super::background_spec::{load_spec_for_reaper, BackgroundRunSpec};
 use super::background_waiting;
 use super::MAX_WORKERS;
-use crate::{config, notify, paths, sanitize};
+use crate::{config, notify, support::paths, support::sanitize};
 use crate::store::Store;
 use crate::types::{EventKind, PendingReason, Task, TaskEvent, TaskFilter, TaskId, TaskStatus};
 

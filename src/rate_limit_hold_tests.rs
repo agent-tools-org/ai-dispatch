@@ -43,7 +43,7 @@ fn write_probe_held(cache_dir: &std::path::Path, provider: &str) {
 #[test]
 fn a_transient_refusal_with_no_stated_time_expires_on_its_own() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     mark_rate_limited(&AgentKind::Claude, None, "HTTP 429 Too Many Requests");
 
@@ -69,7 +69,7 @@ fn a_transient_refusal_with_no_stated_time_expires_on_its_own() {
 #[test]
 fn a_windowed_grok_hold_is_not_released_by_elapsed_time() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let _cache = isolate_cache(&temp);
     write_probe_held(&temp.path().join("aidbar"), "grok");
 
@@ -96,7 +96,7 @@ fn a_windowed_grok_hold_is_not_released_by_elapsed_time() {
 #[test]
 fn every_human_ended_refusal_holds_without_an_invented_reset_time() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     for (agent, message) in [
         (AgentKind::Copilot, "You have exceeded your monthly quota"),
@@ -139,7 +139,7 @@ fn every_human_ended_refusal_holds_without_an_invented_reset_time() {
 #[test]
 fn clock_ended_refusals_still_get_a_recovery_time() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     for (agent, message) in [
         (AgentKind::Qwen, "Quota exhausted: Your token-plan 5-hour quota has been exhausted."),
@@ -172,7 +172,7 @@ fn clock_ended_refusals_still_get_a_recovery_time() {
 #[test]
 fn a_stated_reset_time_wins_over_the_class_default() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     mark_rate_limited(&AgentKind::Droid, None, "402 payment required: reload your tokens (resets in 2 hours)");
     let info = get_rate_limit_info(&AgentKind::Droid, None).expect("marker written");
@@ -186,7 +186,7 @@ fn a_stated_reset_time_wins_over_the_class_default() {
 #[test]
 fn an_unparseable_recovery_phrase_falls_back_to_the_cooldown() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let path = marker_path(&AgentKind::Qwen, None);
     std::fs::write(&path, "recovery_at: tomorrow morning\nmessage: out of quota\n")
@@ -219,7 +219,7 @@ fn an_unparseable_recovery_phrase_falls_back_to_the_cooldown() {
 #[test]
 fn live_markers_with_a_future_reset_time_still_read_as_out() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     for (agent, fixture) in [
         (AgentKind::Codex, "rate-limit-codex"),
@@ -244,7 +244,7 @@ fn live_markers_with_a_future_reset_time_still_read_as_out() {
 #[test]
 fn a_marker_whose_stated_time_has_passed_reads_as_recovered() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let content = with_relative_recovery_time(&read_fixture("rate-limit-oz"), Duration::minutes(-1));
     std::fs::write(marker_path(&AgentKind::Oz, None), content)
@@ -260,7 +260,7 @@ fn a_marker_whose_stated_time_has_passed_reads_as_recovered() {
 #[test]
 fn a_marker_without_a_hold_field_is_not_permanent() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let path = marker_path(&AgentKind::Copilot, None);
     std::fs::write(&path, "recovery_at: \nmessage: some old refusal\n").expect("write marker");
@@ -273,7 +273,7 @@ fn a_marker_without_a_hold_field_is_not_permanent() {
 #[test]
 fn a_group_marker_holds_for_a_person_too() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let _cache = isolate_cache(&temp);
     write_probe_held(&temp.path().join("aidbar"), "cursor");
 
@@ -309,7 +309,7 @@ fn a_group_marker_holds_for_a_person_too() {
 #[test]
 fn a_cursor_premium_refusal_with_no_model_in_hand_holds_only_the_premium_pool() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let cursor = AgentKind::Cursor;
     mark_rate_limited_for_message(&cursor, None, "ActionRequiredError: Increase limits for faster responses You're out of usage. \
@@ -332,7 +332,7 @@ fn a_cursor_premium_refusal_with_no_model_in_hand_holds_only_the_premium_pool() 
 #[test]
 fn cursors_premium_refusal_is_read_off_the_stderr_channel() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let stderr = "ActionRequiredError: Increase limits for faster responses You're out of usage. \
                   Switch to Auto, or ask your admin to increase your limit to continue.";
@@ -354,7 +354,7 @@ fn cursors_premium_refusal_is_read_off_the_stderr_channel() {
 #[test]
 fn oz_invalid_credentials_are_read_off_the_stderr_channel() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let stderr = "Error: Your credentials are invalid. Please log in again with `oz login`.";
     let refusal = refusal_on_channel(
@@ -384,7 +384,7 @@ fn oz_invalid_credentials_are_read_off_the_stderr_channel() {
 #[test]
 fn a_cursor_refusal_naming_no_tier_still_marks_the_agent() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let cursor = AgentKind::Cursor;
     mark_rate_limited_for_message(&cursor, None, "Quota exceeded for this workspace");
@@ -398,7 +398,7 @@ fn a_cursor_refusal_naming_no_tier_still_marks_the_agent() {
 #[test]
 fn a_droid_standard_402_with_no_model_holds_only_the_standard_pool() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let body = r#"{"type":"error","source":"agent_loop","message":"402 {\"detail\":\"You've reached your weekly standard usage limit (resets in 2 days).\nSwitch to Droid Core or enable Extra Usage to continue.\",\"status\":402,\"title\":\"Payment Required\",\"displayToUser\":true}"}"#;
     mark_rate_limited_for_message(&AgentKind::Droid, None, body);
@@ -415,7 +415,7 @@ fn a_droid_standard_402_with_no_model_holds_only_the_standard_pool() {
 #[test]
 fn a_droid_core_402_with_no_model_holds_only_the_core_pool() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let body = r#"402 {"detail":"You've reached your weekly Droid Core usage limit (resets in 2 days).\nReload Extra Usage credits or wait for your limits to reset.","status":402,"title":"Payment Required","displayToUser":true}"#;
     mark_rate_limited_for_message(&AgentKind::Droid, None, body);
@@ -432,7 +432,7 @@ fn a_droid_core_402_with_no_model_holds_only_the_core_pool() {
 #[test]
 fn a_droid_refusal_naming_no_tier_still_marks_the_agent() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     mark_rate_limited_for_message(
         &AgentKind::Droid,
@@ -450,7 +450,7 @@ fn a_droid_refusal_naming_no_tier_still_marks_the_agent() {
 #[test]
 fn a_droid_standard_402_with_a_model_in_hand_holds_only_the_standard_pool() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let body = r#"{"type":"error","source":"agent_loop","message":"402 {\"detail\":\"You've reached your weekly standard usage limit (resets in 2 days).\nSwitch to Droid Core or enable Extra Usage to continue.\",\"status\":402,\"title\":\"Payment Required\",\"displayToUser\":true}"}"#;
     mark_rate_limited_for_model(&AgentKind::Droid, None, Some("claude-opus-5"), body);
@@ -468,7 +468,7 @@ fn a_droid_standard_402_with_a_model_in_hand_holds_only_the_standard_pool() {
 #[test]
 fn a_droid_standard_402_with_a_core_model_in_hand_still_holds_only_standard() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let body = r#"{"type":"error","source":"agent_loop","message":"402 {\"detail\":\"You've reached your weekly standard usage limit (resets in 2 days).\nSwitch to Droid Core or enable Extra Usage to continue.\",\"status\":402,\"title\":\"Payment Required\",\"displayToUser\":true}"}"#;
     mark_rate_limited_for_model(&AgentKind::Droid, None, Some("glm-5.2"), body);
@@ -484,7 +484,7 @@ fn a_droid_standard_402_with_a_core_model_in_hand_still_holds_only_standard() {
 #[test]
 fn a_droid_reload_tokens_402_with_a_model_in_hand_marks_the_agent() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     mark_rate_limited_for_model(
         &AgentKind::Droid,
@@ -510,7 +510,7 @@ fn a_droid_reload_tokens_402_with_a_model_in_hand_marks_the_agent() {
 #[test]
 fn a_windowed_hold_blocks_dispatch_and_names_the_way_out() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let _cache = isolate_cache(&temp);
     write_probe_held(&temp.path().join("aidbar"), "grok");
 
@@ -534,7 +534,7 @@ fn a_windowed_hold_blocks_dispatch_and_names_the_way_out() {
 #[test]
 fn a_probeless_windowed_refusal_states_a_human_clear_not_a_missing_snapshot() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let _cache = isolate_cache(&temp);
 
     mark_rate_limited(&AgentKind::Grok, None, "API error (status 402 Payment Required): Grok Build usage balance exhausted");
@@ -572,7 +572,7 @@ fn a_probeless_windowed_refusal_states_a_human_clear_not_a_missing_snapshot() {
 #[test]
 fn a_stated_time_blocks_dispatch_only_until_it_passes() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let content = with_relative_recovery_time(&read_fixture("rate-limit-codex"), Duration::days(1));
     let stated = content
@@ -602,7 +602,7 @@ fn a_stated_time_blocks_dispatch_only_until_it_passes() {
 #[test]
 fn a_transient_cooldown_does_not_divert_dispatch() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     mark_rate_limited(&AgentKind::Claude, None, "HTTP 429 Too Many Requests");
     assert!(
@@ -620,7 +620,7 @@ fn a_transient_cooldown_does_not_divert_dispatch() {
 #[test]
 fn a_legacy_marker_is_reclassified_from_the_refusal_it_stored() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let _cache = isolate_cache(&temp);
     write_probe_held(&temp.path().join("aidbar"), "grok");
 
@@ -660,7 +660,7 @@ fn a_legacy_marker_is_reclassified_from_the_refusal_it_stored() {
 #[test]
 fn a_legacy_marker_with_an_unrecognised_refusal_still_expires() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let path = marker_path(&AgentKind::Claude, None);
     std::fs::write(&path, "recovery_at: \nmessage: 429 Too Many Requests\n")
@@ -684,7 +684,7 @@ fn a_legacy_marker_with_an_unrecognised_refusal_still_expires() {
 #[test]
 fn a_stored_refusal_only_speaks_for_the_agent_whose_marker_it_is() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let stored = "recovery_at: \nmessage: QuotaSignature { needle: \"insufficient balance\", \
                   recovery: QuotaRecovery::NeedsHuman }\n";

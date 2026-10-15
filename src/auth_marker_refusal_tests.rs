@@ -2,19 +2,19 @@
 // Deps: auth_marker, paths::AidHomeGuard, temporary credential metadata.
 
 use super::*;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 
 #[test]
 fn opencode_structured_401_sets_auth_marker_refusal_regression() {
     let home = tempfile::tempdir().expect("home");
     let _guard = AidHomeGuard::set(home.path());
-    std::fs::create_dir_all(crate::paths::logs_dir()).expect("logs");
+    std::fs::create_dir_all(crate::support::paths::logs_dir()).expect("logs");
     let error = serde_json::json!({"type": "error", "error": {"name": "APIError", "data": {
         "statusCode": 401, "message": "Unauthorized",
         "responseBody": r#"{"errors":[{"code":10000,"message":"Authentication error"}]}"#
     }}})
     .to_string();
-    std::fs::write(crate::paths::log_path("t-auth"), &error).expect("log");
+    std::fs::write(crate::support::paths::log_path("t-auth"), &error).expect("log");
     let store = failed_opencode_store("t-auth");
     let task = store.get_task("t-auth").expect("task").expect("task");
     let event = crate::agent::get_agent(AgentKind::OpenCode)
@@ -43,7 +43,7 @@ fn opencode_auth_hold_waits_for_credentials_change_refusal_regression() {
     let at = Local::now();
     record_failure_at(AgentKind::OpenCode, "APIError statusCode 401", at);
     assert!(auth_status_at(AgentKind::OpenCode, None, at + Duration::days(2)).failed());
-    let credentials = crate::paths::aid_dir().join("opencode-auth.json");
+    let credentials = crate::support::paths::aid_dir().join("opencode-auth.json");
     std::fs::write(&credentials, "synthetic authentication state").expect("new credentials");
     assert!(!auth_status(AgentKind::OpenCode, None).failed());
     record_failure_at(AgentKind::OpenCode, "APIError statusCode 401", at);
@@ -74,10 +74,10 @@ fn opencode_401_billing_and_tool_errors_do_not_set_auth_markers() {
 fn assert_run_has_no_auth_marker(output: &str, stderr: bool) {
     let home = tempfile::tempdir().expect("home");
     let _guard = AidHomeGuard::set(home.path());
-    crate::paths::ensure_dirs().expect("directories");
-    std::fs::write(crate::paths::log_path("t-fixture"), output).expect("log");
+    crate::support::paths::ensure_dirs().expect("directories");
+    std::fs::write(crate::support::paths::log_path("t-fixture"), output).expect("log");
     if stderr {
-        std::fs::write(crate::paths::stderr_path("t-fixture"), output).expect("stderr");
+        std::fs::write(crate::support::paths::stderr_path("t-fixture"), output).expect("stderr");
     }
     let store = failed_opencode_store("t-fixture");
     let task = store.get_task("t-fixture").expect("task").expect("task");

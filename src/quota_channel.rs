@@ -107,7 +107,7 @@ pub(crate) fn provider_attributable(
 }
 
 pub(crate) fn read_run_stream(task_id: &str) -> Option<String> {
-    let raw = std::fs::read_to_string(crate::paths::log_path(task_id)).ok()?;
+    let raw = std::fs::read_to_string(crate::support::paths::log_path(task_id)).ok()?;
     // Failed stderr-only runs replay a capped diagnostic into the empty log.
     if crate::watcher::read_capped_stderr(task_id)
         .is_some_and(|stderr| raw.trim_end() == stderr.trim_end())

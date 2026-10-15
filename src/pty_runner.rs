@@ -78,7 +78,7 @@ fn fail_task_on_spawn_error(
     duration_ms: i64,
     detail: &str,
 ) {
-    let _ = std::fs::write(crate::paths::stderr_path(task_id.as_str()), format!("{detail}\n"));
+    let _ = std::fs::write(crate::support::paths::stderr_path(task_id.as_str()), format!("{detail}\n"));
     let event = TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),

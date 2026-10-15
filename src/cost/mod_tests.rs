@@ -3,7 +3,7 @@
 
 use super::*;
 use tempfile::TempDir;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 
 fn isolated() -> (TempDir, AidHomeGuard) {
     let temp = tempfile::tempdir().unwrap();

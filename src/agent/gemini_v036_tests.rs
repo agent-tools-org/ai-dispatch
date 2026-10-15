@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::agent::{Agent, RunOpts};
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use std::sync::{Mutex, OnceLock};
 use tempfile::TempDir;
 

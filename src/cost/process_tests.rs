@@ -13,7 +13,7 @@ const CODEX_MESSAGE: &str = concat!(
 );
 
 async fn run_capture(ceiling: f64) -> Task {
-    crate::paths::ensure_dirs().expect("aid dirs");
+    crate::support::paths::ensure_dirs().expect("aid dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut task = task(AgentKind::Codex, 238_440, None);
     task.status = TaskStatus::Running;
@@ -31,7 +31,7 @@ async fn run_capture(ceiling: f64) -> Task {
         cmd,
         &task.id,
         &store,
-        &crate::paths::log_path(task.id.as_str()),
+        &crate::support::paths::log_path(task.id.as_str()),
         None,
         task.requested_model.as_deref(),
         true,

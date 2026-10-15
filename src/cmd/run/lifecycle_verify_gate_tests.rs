@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
     store::Store,
-    test_subprocess,
+    support::test_subprocess,
     types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus},
 };
 use chrono::Local;
@@ -187,7 +187,7 @@ fn capturing_gws(home: &Path, capture: &Path) -> PathBuf {
     std::fs::write(&binary, script).unwrap();
     std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
     std::fs::write(
-        crate::paths::config_path(),
+        crate::support::paths::config_path(),
         format!("[backup.gdrive]\nbinary = '{}'\n", binary.display()),
     )
     .unwrap();
@@ -198,7 +198,7 @@ fn capturing_gws(home: &Path, capture: &Path) -> PathBuf {
 async fn backup_runs_once_after_the_verify_gate_settles_the_task() {
     let _permit = test_subprocess::acquire();
     let home = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(home.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(home.path());
     let capture = home.path().join("capture");
     std::fs::create_dir_all(&capture).unwrap();
     let log = capturing_gws(home.path(), &capture);

@@ -2,7 +2,7 @@
 // Deps: agent_display helpers, rate_limit markers, AidHomeGuard.
 
 use super::*;
-use crate::paths::{self, AidHomeGuard};
+use crate::support::paths::{self, AidHomeGuard};
 use crate::rate_limit::{
     clear_all_rate_limits_for_agent, is_rate_limited, mark_group_rate_limited, mark_rate_limited,
 };

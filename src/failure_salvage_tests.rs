@@ -2,7 +2,7 @@
 // Covers dirty WIP commit creation, clean no-op behavior, and best-effort failure.
 // Deps: failure_salvage module, Store, AidHomeGuard, git CLI.
 
-use crate::paths::{self, AidHomeGuard};
+use crate::support::paths::{self, AidHomeGuard};
 use crate::store::{Store, TaskCompletionUpdate};
 use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;

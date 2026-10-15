@@ -3,7 +3,7 @@
 // Deps: timeout_policy internals, project config, and command builders.
 
 use super::*;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::project::{ProjectConfig, ProjectUnstickConfig};
 use std::fs;
 

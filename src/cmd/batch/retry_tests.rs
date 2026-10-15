@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::cmd::run::RunArgs;
-use crate::paths;
+use crate::support::paths;
 use crate::rate_limit::{clear_rate_limit, mark_rate_limited};
 use crate::types::{AgentKind, TaskId, VerifyStatus};
 use chrono::Local;

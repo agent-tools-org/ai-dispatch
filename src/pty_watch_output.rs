@@ -186,6 +186,6 @@ pub(super) fn write_output_file(agent: AgentKind, path: &str, buffer: &str) -> R
 }
 
 pub(super) fn persist_transcript(task_id: &TaskId, buffer: &str) {
-    let _ = std::fs::create_dir_all(crate::paths::task_dir(task_id.as_str()));
-    let _ = std::fs::write(crate::paths::transcript_path(task_id.as_str()), buffer);
+    let _ = std::fs::create_dir_all(crate::support::paths::task_dir(task_id.as_str()));
+    let _ = std::fs::write(crate::support::paths::transcript_path(task_id.as_str()), buffer);
 }

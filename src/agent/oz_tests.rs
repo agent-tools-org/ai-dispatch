@@ -6,7 +6,7 @@ use super::super::truncate::EVENT_DETAIL_MAX;
 use super::OzAgent;
 use crate::agent::{Agent, RunOpts};
 use crate::types::{AgentKind, EventKind, TaskId};
-use crate::{paths, rate_limit};
+use crate::{support::paths, rate_limit};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 

@@ -1,12 +1,12 @@
 // Tests for Cursor binary selection and alias detection.
 // Exports: none (test module).
-// Deps: super::{cursor::CursorAgent, detect_agents, RunOpts}, crate::test_subprocess, tempfile.
+// Deps: super::{cursor::CursorAgent, detect_agents, RunOpts}, crate::support::test_subprocess, tempfile.
 
 use super::{
     cursor::{CursorAgent, CursorBinaryGuard}, detect_agents, ensure_resolved_binary_available, Agent,
     RunOpts,
 };
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use crate::types::{AgentKind, EventKind, TaskId};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

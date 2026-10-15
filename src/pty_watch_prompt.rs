@@ -55,14 +55,14 @@ impl MonitorState {
 }
 
 fn log_sizes(task_id: &TaskId) -> [u64; 3] {
-    crate::paths::agent_byte_paths(task_id.as_str())
+    crate::support::paths::agent_byte_paths(task_id.as_str())
         .map(|path| std::fs::metadata(path).map(|meta| meta.len()).unwrap_or_default())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths;
+    use crate::support::paths;
     use crate::pty_watch::tests::pty_task;
     use crate::types::TaskStatus;
     use std::time::{Duration, SystemTime};

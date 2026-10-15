@@ -1,6 +1,6 @@
 // Per-agent default config for persisted model, timeout, and disabled overrides.
 // Exports: AgentDefaults, load/save helpers, get_default_model, is_agent_disabled.
-// Deps: anyhow, serde, toml, HashMap, crate::paths, crate::types.
+// Deps: anyhow, serde, toml, HashMap, crate::support::paths, crate::types.
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -20,7 +20,7 @@ pub struct AgentDefaults {
 type AgentConfigMap = HashMap<String, AgentDefaults>;
 
 fn config_path() -> PathBuf {
-    crate::paths::aid_dir().join("agent_config.toml")
+    crate::support::paths::aid_dir().join("agent_config.toml")
 }
 
 fn load_from(path: &Path) -> AgentConfigMap {
@@ -114,7 +114,7 @@ impl AgentDefaults {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths::AidHomeGuard;
+    use crate::support::paths::AidHomeGuard;
 
     #[test]
     fn save_and_load_default_model_roundtrip() {

@@ -4,7 +4,7 @@
 use crate::background::{BackgroundRunSpec, save_spec};
 use crate::batch;
 use super::shared::{make_task, seed_task};
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
 use crate::types::{AgentKind, TaskFilter, TaskStatus};
 use std::fs;
@@ -43,7 +43,7 @@ fn resolve_batch_path_uses_aid_batches_fallback() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
 
-    let batches_dir = crate::paths::aid_dir().join("batches");
+    let batches_dir = crate::support::paths::aid_dir().join("batches");
     fs::create_dir_all(&batches_dir).unwrap();
     let fallback = batches_dir.join("deploy.toml");
     fs::write(&fallback, "tasks = []\n").unwrap();
@@ -100,7 +100,7 @@ fn ensure_batch_workgroup_creates_shared_dir_when_enabled() {
     assert_eq!(workgroup_id, "wg-custom");
     assert_eq!(
         shared_path,
-        crate::shared_dir::shared_dir_path("wg-custom")
+        crate::support::shared_dir::shared_dir_path("wg-custom")
     );
     assert!(shared_path.as_ref().is_some_and(|path| path.is_dir()));
 }
@@ -307,14 +307,14 @@ fn failed_batch_reports_and_archives_before_returning_error() {
     .unwrap_err();
 
     assert!(error.to_string().contains("t-failed"));
-    let archives = fs::read_dir(crate::paths::aid_dir().join("batches")).unwrap().count();
+    let archives = fs::read_dir(crate::support::paths::aid_dir().join("batches")).unwrap().count();
     assert_eq!(archives, 1);
 }
 #[test]
 fn reconcile_and_poll_completed_tasks_marks_zombies_failed() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     store
         .insert_task(&super::shared::make_stored_task(

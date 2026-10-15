@@ -53,9 +53,9 @@ mod tests {
     use crate::agent::selection::{advise, caller_advice};
     use crate::types::{AgentKind, TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
 
-    fn isolated() -> (tempfile::TempDir, crate::paths::AidHomeGuard, crate::live_quota::CacheDirGuard) {
+    fn isolated() -> (tempfile::TempDir, crate::support::paths::AidHomeGuard, crate::live_quota::CacheDirGuard) {
         let temp = tempfile::tempdir().expect("home");
-        let home = crate::paths::AidHomeGuard::set(temp.path());
+        let home = crate::support::paths::AidHomeGuard::set(temp.path());
         let cache = crate::live_quota::CacheDirGuard::set(temp.path());
         crate::agent::codex::cli_config::set_test_codex_home(Some(temp.path().join("no-codex")));
         (temp, home, cache)

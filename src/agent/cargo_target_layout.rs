@@ -28,7 +28,7 @@ fn routed_root(configured_root: &Path, project_dir: &Path) -> Option<PathBuf> {
     if caller_id == target_id {
         return None;
     }
-    if crate::sanitize::validate_name(&target_id, "project").is_err() {
+    if crate::support::sanitize::validate_name(&target_id, "project").is_err() {
         return None;
     }
     rewrite_project_namespace(configured_root, &caller_id, &target_id)

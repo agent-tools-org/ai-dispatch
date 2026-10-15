@@ -5,14 +5,14 @@
 use super::*;
 
 fn write_served_cache(agent: &str, models: &[&str]) {
-    crate::paths::ensure_dirs().expect("aid dirs");
+    crate::support::paths::ensure_dirs().expect("aid dirs");
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("current time")
         .as_secs();
     let cache = serde_json::json!({ agent: {"models": models, "updated_at_secs": now} });
     std::fs::write(
-        crate::paths::aid_dir().join("served_models_cache.json"),
+        crate::support::paths::aid_dir().join("served_models_cache.json"),
         cache.to_string(),
     )
     .expect("served-model cache");
@@ -37,7 +37,7 @@ fn family_version_splits_family_and_numeric_version() {
 #[test]
 fn served_only_rows_are_unrated_and_skip_catalog_rows() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     write_served_cache("codex", &["gpt-5.6-sol", "gpt-6-sol"]);
     let rows = served_only_models(AgentKind::Codex);
     assert_eq!(rows.len(), 1, "catalog row gpt-5.6-sol is not repeated");
@@ -51,7 +51,7 @@ fn served_only_rows_are_unrated_and_skip_catalog_rows() {
 #[test]
 fn unrated_newer_models_are_same_family_and_higher_version_only() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     write_served_cache(
         "codex",
         &[
@@ -73,7 +73,7 @@ fn unrated_newer_models_are_same_family_and_higher_version_only() {
 #[test]
 fn missing_cache_yields_no_served_rows() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     assert!(served_only_models(AgentKind::Codex).is_empty());
 }
 
@@ -100,7 +100,7 @@ fn agents_outside_probe_list_use_the_default_served_models() {
 #[test]
 fn newer_served_model_with_leaderboard_evidence_is_not_labelled_unrated() {
     let home = tempfile::tempdir().expect("home");
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     write_served_cache("codex", &["gpt-6-sol"]);
     // Live capture: gpt-6-sol resolves through its bare price alias to openai/gpt-6-sol,
     // which has Epoch ECI 162.72 and a codex Terminal-Bench 4.0 row (49.39).

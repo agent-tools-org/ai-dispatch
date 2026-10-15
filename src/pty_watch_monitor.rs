@@ -91,7 +91,7 @@ fn refresh_child_activity(
     last_activity: &mut std::time::SystemTime,
 ) {
     let saw_output = state.received_raw_bytes
-        || crate::paths::agent_has_produced_bytes(task_id.as_str(), state.start_system_time);
+        || crate::support::paths::agent_has_produced_bytes(task_id.as_str(), state.start_system_time);
     if !saw_output {
         return;
     }

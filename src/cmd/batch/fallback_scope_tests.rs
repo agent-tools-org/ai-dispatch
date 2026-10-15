@@ -7,7 +7,7 @@ use super::shared::make_stored_task;
 use crate::agent::model_validation::MockServedModelsGuard;
 use crate::agent::{DetectAgentsGuard, cursor::CursorBinaryGuard};
 use crate::cmd::run::{RunArgs, advice_route};
-use crate::{paths, store::Store, types::*};
+use crate::{support::paths, store::Store, types::*};
 use std::{fs, os::unix::fs::PermissionsExt, path::Path, sync::Arc};
 
 fn install_agents(home: &Path) -> &'static str {

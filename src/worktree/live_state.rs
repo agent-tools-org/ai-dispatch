@@ -125,7 +125,7 @@ fn push_stat_block(out: &mut String, label: &str, stat: &str) {
 #[cfg(test)]
 mod tests {
     use super::{capture_live_worktree_state, worktree_has_uncommitted_changes};
-    use crate::test_subprocess;
+    use crate::support::test_subprocess;
     use std::path::Path;
     use std::process::Command;
 

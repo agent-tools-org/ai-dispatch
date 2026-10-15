@@ -3,7 +3,7 @@
 // Deps: stop command, isolated AID home, shell subprocess and Store.
 
 use super::{stop, tests::make_task};
-use crate::{background, paths, store::Store, types::TaskStatus};
+use crate::{background, support::paths, store::Store, types::TaskStatus};
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
@@ -20,7 +20,7 @@ pub(super) fn save_worker(id: &str, pid: u32) {
 }
 
 fn signal_observation(reap: bool) {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let home = tempfile::tempdir().expect("home");
     let _guard = paths::AidHomeGuard::set(home.path());
     paths::ensure_dirs().expect("dirs");
@@ -120,7 +120,7 @@ fn settle_first_reaper_snapshot_before_stop_cannot_record_failure() {
 
 #[test]
 fn settle_first_restop_signals_live_worker_without_duplicate_event() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let home = tempfile::tempdir().expect("home");
     let _guard = paths::AidHomeGuard::set(home.path());
     paths::ensure_dirs().expect("dirs");
@@ -133,7 +133,7 @@ fn settle_first_restop_signals_live_worker_without_duplicate_event() {
     let mut worker = Command::new("sleep").arg("30").spawn().expect("worker");
     save_worker("t-stop-interrupted", worker.id());
     let result = stop(&store, "t-stop-interrupted");
-    let live = crate::test_subprocess::is_live(worker.id() as i32);
+    let live = crate::support::test_subprocess::is_live(worker.id() as i32);
     let _ = worker.kill();
     if let Err(err) = worker.wait() {
         assert_eq!(err.raw_os_error(), Some(libc::ECHILD), "worker reap: {err}");

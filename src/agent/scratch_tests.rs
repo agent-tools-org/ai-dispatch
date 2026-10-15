@@ -17,7 +17,7 @@ fn opts(dir: &Path) -> RunOpts {
 fn non_worktree_rust_task_creates_base_target() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("cache");
-    let target_guard = crate::test_env::CargoTargetDirGuard::set(&root);
+    let target_guard = crate::support::test_env::CargoTargetDirGuard::set(&root);
     fs::write(temp.path().join("Cargo.toml"), "[package]\nname = 'scratch'\n").unwrap();
     let target = crate::agent::rust_build_cache_target_dir(temp.path().to_str(), None).unwrap();
     assert_eq!(Path::new(&target), root.join("_base"));
@@ -240,7 +240,7 @@ fn read_only_git_metadata_is_omitted_with_a_named_warning() {
 #[test]
 fn read_only_launch_roots_include_only_staging_without_git_or_target_grants() {
     let temp = tempfile::tempdir().unwrap();
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let repo = temp.path().join("repo");
     fs::create_dir_all(repo.join(".git")).unwrap();
     let scratch = create_temp_dir(temp.path()).unwrap();

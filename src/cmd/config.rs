@@ -51,7 +51,7 @@ fn maybe_refresh_pricing_if_stale() {
     if std::env::var_os("AID_NO_PRICING_REFRESH").is_some() {
         return;
     }
-    let path = crate::paths::pricing_path();
+    let path = crate::support::paths::pricing_path();
     const DAY_SECS: u64 = 24 * 60 * 60;
     let needs_refresh = match fs::metadata(&path) {
         Err(_) => true,
@@ -198,7 +198,7 @@ fn print_templates() {
 fn print_pricing(update: bool) -> Result<()> {
     if update {
         let updated = update_pricing_file()?;
-        println!("Updated {updated} models in {}.", crate::paths::pricing_path().display());
+        println!("Updated {updated} models in {}.", crate::support::paths::pricing_path().display());
     }
     print!("{}", pricing_table()?);
     Ok(())
@@ -268,7 +268,7 @@ fn update_pricing_file() -> Result<usize> {
     }
     let body = String::from_utf8(output.stdout)?;
     let response: PricingResponse = serde_json::from_str(&body)?;
-    let path = crate::paths::pricing_path();
+    let path = crate::support::paths::pricing_path();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }

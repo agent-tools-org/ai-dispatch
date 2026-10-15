@@ -5,8 +5,8 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::paths;
-use crate::sanitize;
+use crate::support::paths;
+use crate::support::sanitize;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackgroundRunSpec {

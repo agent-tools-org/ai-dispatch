@@ -40,7 +40,7 @@ pub(crate) fn fail_task_on_agent_spawn(
         detail.push_str(stderr);
     }
     let _ = std::fs::write(
-        crate::paths::stderr_path(task_id.as_str()),
+        crate::support::paths::stderr_path(task_id.as_str()),
         format!("{detail}\n"),
     );
     let _ = crate::task_lifecycle::complete_task_atomic(

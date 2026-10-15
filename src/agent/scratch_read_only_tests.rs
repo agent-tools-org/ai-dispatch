@@ -7,7 +7,7 @@ use super::*;
 #[test]
 fn scope_cut_read_only_grants_only_empty_staging_outside_trusted_writers() {
     let home = tempfile::tempdir().unwrap();
-    let _home = crate::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::paths::AidHomeGuard::set(home.path());
     let repo = home.path().join("repo");
     repository(&repo);
     let staging = create_temp_dir(home.path()).unwrap();
@@ -21,7 +21,7 @@ fn scope_cut_read_only_grants_only_empty_staging_outside_trusted_writers() {
     assert_eq!(roots, vec![staging.clone()]);
     assert_eq!(fs::read_dir(staging).unwrap().count(), 0);
     for name in ["result.md", "output.md", "transcript.md"] {
-        let trusted = crate::paths::task_dir(task.as_str()).join(name);
+        let trusted = crate::support::paths::task_dir(task.as_str()).join(name);
         assert!(!roots.iter().any(|root| trusted.starts_with(root)));
     }
 }
@@ -49,7 +49,7 @@ fn rejected(repo: &Path, target: Option<&Path>, scratch: &Path) {
 #[test]
 fn fix_round_one_read_only_rejects_nested_staging_directory() {
     let temp = tempfile::tempdir().unwrap();
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     repository(temp.path());
     let scratch = create_temp_dir(temp.path()).unwrap();
     rejected(temp.path(), None, &scratch);
@@ -58,8 +58,8 @@ fn fix_round_one_read_only_rejects_nested_staging_directory() {
 #[test]
 fn fix_round_one_read_only_rejects_staging_directory_containing_checkout() {
     let temp = tempfile::tempdir().unwrap();
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
-    let repo = crate::paths::task_dir("t-overlap").join("checkout");
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let repo = crate::support::paths::task_dir("t-overlap").join("checkout");
     repository(&repo);
     rejected(&repo, None, temp.path());
 }
@@ -68,7 +68,7 @@ fn fix_round_one_read_only_rejects_staging_directory_containing_checkout() {
 fn fix_round_one_read_only_rejects_ancestor_target() {
     let temp = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
-    let _home = crate::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::paths::AidHomeGuard::set(home.path());
     let repo = temp.path().join("repo");
     repository(&repo);
     let scratch = create_temp_dir(home.path()).unwrap();
@@ -78,7 +78,7 @@ fn fix_round_one_read_only_rejects_ancestor_target() {
 #[test]
 fn fix_round_one_read_only_rejects_symlink_and_parent_traversal_roots() {
     let temp = tempfile::tempdir().unwrap();
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let repo = temp.path().join("repo");
     repository(&repo);
     let target = repo.join("target");
@@ -93,7 +93,7 @@ fn fix_round_one_read_only_rejects_symlink_and_parent_traversal_roots() {
 #[test]
 fn fix_round_one_read_only_rejects_common_git_directory_from_subdirectory() {
     let temp = tempfile::tempdir().unwrap();
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let repo = temp.path().join("repo");
     let wt = temp.path().join("worktree");
     repository(&repo);

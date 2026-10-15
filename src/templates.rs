@@ -1,12 +1,12 @@
 // Prompt template loading plus shared prompt injections.
 // Exports: list_templates(), load_template(), apply_template(), inject_* helpers.
-// Deps: crate::paths, anyhow, std::fs.
+// Deps: crate::support::paths, anyhow, std::fs.
 
 use anyhow::{Context, Result};
 
-use crate::sanitize;
+use crate::support::sanitize;
 
-fn templates_dir() -> std::path::PathBuf { crate::paths::aid_dir().join("templates") }
+fn templates_dir() -> std::path::PathBuf { crate::support::paths::aid_dir().join("templates") }
 
 pub fn list_templates() -> Vec<String> {
     let Ok(entries) = std::fs::read_dir(templates_dir()) else { return vec![] };

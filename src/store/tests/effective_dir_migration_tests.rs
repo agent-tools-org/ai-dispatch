@@ -5,7 +5,7 @@
 
 use crate::cmd::run::RunArgs;
 use crate::cmd::show::{missing_owned_output_absence, owned_output_path, read_task_output};
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
 use rusqlite::Connection;
 use std::path::Path;

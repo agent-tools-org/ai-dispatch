@@ -3,7 +3,7 @@
 // Deps: create_worktree, existing_worktree_path, real git temp repos.
 
 use super::*;
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;

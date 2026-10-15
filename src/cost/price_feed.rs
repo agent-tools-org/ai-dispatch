@@ -2,7 +2,7 @@
 // cached under the aid home. Only exact ids and aliases price a model; the
 // cache is refreshed out of band so the dispatch path never blocks on the network.
 // Exports: Feed, feed_lookup, maybe_refresh
-// Deps: crate::paths, crate::feed_refresh, chrono, serde, serde_json
+// Deps: crate::support::paths, crate::feed_refresh, chrono, serde, serde_json
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -79,7 +79,7 @@ pub fn feed_lookup<'a>(feed: &'a Feed, index: &HashMap<String, usize>, model: &s
 /// Where the refresh result is written. Cache lives under the aid home so a
 /// cold or stale cache never delays a run — serving is a local file read.
 fn cache_path() -> std::path::PathBuf {
-    crate::paths::aid_dir().join(CACHE_FILE)
+    crate::support::paths::aid_dir().join(CACHE_FILE)
 }
 
 /// Read the cached feed, if any. Errors are swallowed: a missing or corrupt
@@ -115,7 +115,7 @@ pub fn maybe_refresh() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths::AidHomeGuard;
+    use crate::support::paths::AidHomeGuard;
 
     fn sample_feed() -> Feed {
         Feed {
@@ -184,7 +184,7 @@ mod tests {
     fn cache_round_trip_under_aid_home() {
         let temp = tempfile::tempdir().unwrap();
         let _guard = AidHomeGuard::set(temp.path());
-        std::fs::create_dir_all(crate::paths::aid_dir()).unwrap();
+        std::fs::create_dir_all(crate::support::paths::aid_dir()).unwrap();
         let feed = sample_feed();
         fs::write(cache_path(), serde_json::to_vec(&feed).unwrap()).unwrap();
         assert_eq!(load_cache().unwrap(), feed);

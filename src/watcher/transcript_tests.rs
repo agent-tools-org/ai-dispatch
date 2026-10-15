@@ -3,7 +3,7 @@
 // Deps: watcher::watch_buffered, Agent trait, Store, tempfile.
 use super::watch_buffered;
 use crate::agent::{Agent, RunOpts};
-use crate::paths;
+use crate::support::paths;
 use crate::rate_limit;
 use crate::store::Store;
 use crate::types::{

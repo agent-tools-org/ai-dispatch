@@ -1,6 +1,6 @@
 // Task lifecycle hooks loader and runner for aid tasks.
 // Exports load/parse helpers plus runtime execution helpers.
-// Deps: anyhow, serde, serde_json, std::process, crate::paths.
+// Deps: anyhow, serde, serde_json, std::process, crate::support::paths.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,7 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-use crate::paths;
+use crate::support::paths;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Hook {

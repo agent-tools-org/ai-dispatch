@@ -1,6 +1,6 @@
 // Helpers for tracking installed store packages via lockfile entries.
 // Exports: read_lockfile, add_lock_entry.
-// Deps: anyhow, chrono, serde, toml, std::fs, crate::paths.
+// Deps: anyhow, chrono, serde, toml, std::fs, crate::support::paths.
 
 use anyhow::{Context, Result};
 use chrono::Local;
@@ -8,7 +8,7 @@ use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::paths;
+use crate::support::paths;
 
 #[derive(Deserialize, Clone)]
 pub(crate) struct LockEntry {

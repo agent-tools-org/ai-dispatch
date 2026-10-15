@@ -16,7 +16,7 @@ fn payload_text(result: &Value) -> &str {
 #[tokio::test]
 async fn agents_tool_returns_fleet_payload() {
     let temp_dir = std::env::temp_dir().join("aid-mcp-agents-tool-test");
-    let _home = crate::paths::AidHomeGuard::set(&temp_dir);
+    let _home = crate::support::paths::AidHomeGuard::set(&temp_dir);
     let store = Arc::new(Store::open_memory().expect("memory store"));
 
     let result = call_tool(store, "aid_agents", json!({}))
@@ -35,7 +35,7 @@ async fn agents_tool_returns_fleet_payload() {
 #[tokio::test]
 async fn advise_tool_returns_declared_advice_payload() {
     let temp_dir = std::env::temp_dir().join("aid-mcp-advise-tool-test");
-    let _home = crate::paths::AidHomeGuard::set(&temp_dir);
+    let _home = crate::support::paths::AidHomeGuard::set(&temp_dir);
     let store = Arc::new(Store::open_memory().expect("memory store"));
 
     let result = call_tool(

@@ -26,7 +26,7 @@ fn git(dir: &std::path::Path, args: &[&str]) {
 async fn dry_run_with_explicit_repo_rejects_missing_effective_dir() {
     let aid_home = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(aid_home.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let repo = TempDir::new().unwrap();
     git(repo.path(), &["init", "-b", "main"]);
     git(repo.path(), &["config", "user.email", "aid@example.com"]);

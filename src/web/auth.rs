@@ -74,8 +74,8 @@ pub(crate) fn resolve_token(host: &str, token: Option<String>) -> Result<Option<
 }
 
 pub(crate) fn persist_token(token: &str) -> Result<PathBuf> {
-    let path = crate::paths::aid_dir().join("web_token");
-    std::fs::create_dir_all(crate::paths::aid_dir())?;
+    let path = crate::support::paths::aid_dir().join("web_token");
+    std::fs::create_dir_all(crate::support::paths::aid_dir())?;
     let mut options = OpenOptions::new();
     options.write(true).create(true).truncate(true);
     #[cfg(unix)]
@@ -91,7 +91,7 @@ pub(crate) fn persist_token(token: &str) -> Result<PathBuf> {
 }
 
 fn read_persisted_token() -> Result<Option<String>> {
-    let path = crate::paths::aid_dir().join("web_token");
+    let path = crate::support::paths::aid_dir().join("web_token");
     match fs::read_to_string(path) {
         Ok(token) => Ok((!token.trim().is_empty()).then(|| token.trim().to_string())),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -216,7 +216,7 @@ mod tests {
     #[test]
     fn non_loopback_token_is_generated_and_reused() {
         let home = tempfile::tempdir().expect("temporary AID home");
-        let _home = crate::paths::AidHomeGuard::set(home.path());
+        let _home = crate::support::paths::AidHomeGuard::set(home.path());
         let generated = resolve_token("0.0.0.0", None).expect("generate token").expect("token");
         let reused = resolve_token("0.0.0.0", None).expect("read token").expect("token");
         assert_eq!(generated, reused);

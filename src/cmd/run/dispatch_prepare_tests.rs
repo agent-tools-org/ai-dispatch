@@ -9,9 +9,9 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
 
-fn isolated_home() -> crate::paths::AidHomeGuard {
+fn isolated_home() -> crate::support::paths::AidHomeGuard {
     let temp = tempfile::tempdir().unwrap();
-    crate::paths::AidHomeGuard::set(temp.path())
+    crate::support::paths::AidHomeGuard::set(temp.path())
 }
 
 fn test_task(id: &str) -> Task {
@@ -133,7 +133,7 @@ fn generated_id_collision_retries_and_dispatch_succeeds() {
 #[test]
 fn generated_id_exhaustion_does_not_reset_worktree_branch() {
     let _guard = isolated_home();
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let repo = init_repo();
     let store = Arc::new(Store::open_memory().unwrap());
     let branch = "fix/collision-branch";
@@ -172,7 +172,7 @@ fn generated_id_exhaustion_does_not_reset_worktree_branch() {
 #[test]
 fn retry_prepare_persists_live_worktree_metadata() {
     let _guard = isolated_home();
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let repo = init_repo();
     let store = Arc::new(Store::open_memory().unwrap());
     let branch = "fix/retry-live-persist";
@@ -201,7 +201,7 @@ fn retry_prepare_persists_live_worktree_metadata() {
 #[test]
 fn prepare_dispatch_updates_log_path_when_id_is_auto_suffixed() {
     let temp = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = Arc::new(Store::open_memory().unwrap());
     let mut first = RunArgs {
         agent_name: "codex".to_string(),
@@ -219,7 +219,7 @@ fn prepare_dispatch_updates_log_path_when_id_is_auto_suffixed() {
     };
     let prepared = prepare_dispatch_with(&store, &mut second, |_| true).unwrap();
 
-    let expected = crate::paths::log_path("t-ebcf-2");
+    let expected = crate::support::paths::log_path("t-ebcf-2");
     let saved = store.get_task("t-ebcf-2").unwrap().unwrap();
     assert_eq!(prepared.task_id.as_str(), "t-ebcf-2");
     assert_eq!(prepared.log_path, expected);
@@ -245,7 +245,7 @@ fn prepare_dispatch_keeps_write_intent_out_of_report_mode() {
 #[test]
 fn prepare_dispatch_rejects_requested_worktree_when_it_is_the_repo_root() {
     let _guard = isolated_home();
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let repo = init_repo();
     let store = Arc::new(Store::open_memory().unwrap());
     git(repo.path(), &["checkout", "-b", "chore/main-dispatch"]);

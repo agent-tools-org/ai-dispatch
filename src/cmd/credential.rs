@@ -23,7 +23,7 @@ fn list_credentials() -> Result<()> {
     let Some(pool) = credential_pool::load_pool() else {
         println!(
             "No credential pool configured at {}",
-            crate::paths::aid_dir().join("credentials.toml").display()
+            crate::support::paths::aid_dir().join("credentials.toml").display()
         );
         return Ok(());
     };
@@ -58,7 +58,7 @@ fn render_credential_list(pool: &credential_pool::CredentialPool) -> String {
 mod tests {
     use super::{CredentialAction, render_credential_list, run_credential_command};
     use crate::credential_pool::{load_pool, mark_exhausted, set_test_env};
-    use crate::paths::AidHomeGuard;
+    use crate::support::paths::AidHomeGuard;
     use std::fs;
     use tempfile::TempDir;
 

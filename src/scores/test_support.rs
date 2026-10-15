@@ -64,9 +64,9 @@ pub(crate) fn seed_live() -> Feed {
 }
 
 fn write_scores(feed: &Feed) {
-    crate::paths::ensure_dirs().expect("dirs");
+    crate::support::paths::ensure_dirs().expect("dirs");
     std::fs::write(
-        crate::paths::aid_dir().join("scores.json"),
+        crate::support::paths::aid_dir().join("scores.json"),
         serde_json::to_vec(feed).expect("scores JSON"),
     )
     .expect("scores");

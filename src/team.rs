@@ -1,13 +1,13 @@
 // Team definitions loaded from ~/.aid/teams/*.toml.
 // Exports: TeamConfig, load_teams, resolve_team, list_teams, teams_dir.
-// Deps: serde, toml, std::fs, crate::paths.
+// Deps: serde, toml, std::fs, crate::support::paths.
 
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::paths;
+use crate::support::paths;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct TeamFile {
@@ -196,7 +196,7 @@ pub(crate) fn parse_knowledge_line(line: &str, base_dir: &Path) -> Option<Knowle
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths;
+    use crate::support::paths;
     use std::path::{Path, PathBuf};
     use tempfile::TempDir;
 

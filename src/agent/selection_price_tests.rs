@@ -10,7 +10,7 @@ use crate::agent::classifier::{Complexity, TaskCategory, TaskProfile};
 use crate::agent::run_model::RunModelSource;
 use crate::cost::clear_feed_for_tests;
 use crate::live_quota::CacheDirGuard;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::types::{AgentKind, DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
 use tempfile::TempDir;
 
@@ -18,7 +18,7 @@ fn isolated() -> (TempDir, AidHomeGuard, CacheDirGuard) {
     let temp = TempDir::new().expect("temporary pricing home");
     let home = AidHomeGuard::set(temp.path());
     let cache = CacheDirGuard::set(&temp.path().join("quota"));
-    crate::paths::ensure_dirs().expect("pricing directories");
+    crate::support::paths::ensure_dirs().expect("pricing directories");
     clear_feed_for_tests();
     (temp, home, cache)
 }
@@ -29,7 +29,7 @@ fn write_override(agent: AgentKind, model: &str, input: f64, output: f64) {
         "output_per_m": output, "tier": "premium", "description": "Synthetic test price",
         "updated": "2026-10-03"
     }]});
-    std::fs::write(crate::paths::pricing_path(), body.to_string()).expect("pricing override");
+    std::fs::write(crate::support::paths::pricing_path(), body.to_string()).expect("pricing override");
     clear_feed_for_tests();
 }
 
@@ -144,8 +144,8 @@ fn resolved_price_positive_exact_override_prices_free_subscription_and_unknown()
         (AgentKind::Cursor, "composer-2.5"),
         (AgentKind::Droid, "synthetic-unknown-model"),
     ] {
-        if crate::paths::pricing_path().exists() {
-            std::fs::remove_file(crate::paths::pricing_path()).expect("reset synthetic override");
+        if crate::support::paths::pricing_path().exists() {
+            std::fs::remove_file(crate::support::paths::pricing_path()).expect("reset synthetic override");
         }
         clear_feed_for_tests();
         let before = assert_penalty(agent, model, 0.0);
@@ -173,7 +173,7 @@ fn resolved_price_vendor_exact_feed_is_paid_only_on_its_vendor() {
             "models": [{"id": model, "input_per_mtok": input, "output_per_mtok": output,
                 "cached_input_per_mtok": null, "context_length": null, "source": null}]
         });
-        std::fs::write(crate::paths::aid_dir().join("prices.json"), feed.to_string()).expect("feed");
+        std::fs::write(crate::support::paths::aid_dir().join("prices.json"), feed.to_string()).expect("feed");
         clear_feed_for_tests();
         let price = crate::cost::resolve_pricing(Some(model), AgentKind::Claude).expect("exact feed");
         assert_eq!((price.input_per_m, price.output_per_m), (input, output));

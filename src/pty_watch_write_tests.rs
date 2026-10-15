@@ -45,9 +45,9 @@ fn spawn_reader_with_error_delay(
 
 #[test]
 fn queued_message_after_child_exit_does_not_fail_monitor() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let temp_home = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp_home.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp_home.path());
     let task = super::tests::pty_task("t-closed-pty", TaskStatus::Running);
     let store = Arc::new(Store::open_memory().unwrap());
     store.insert_task(&task).unwrap();
@@ -113,9 +113,9 @@ fn queued_message_after_child_exit_does_not_fail_monitor() {
 
 #[test]
 fn failed_pending_reply_is_reported_once_after_successful_steer() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let temp_home = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp_home.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp_home.path());
     let task = super::tests::pty_task("t-write-event-once", TaskStatus::Running);
     let store = Arc::new(Store::open_memory().unwrap());
     store.insert_task(&task).unwrap();
@@ -190,9 +190,9 @@ fn failed_pending_reply_is_reported_once_after_successful_steer() {
 
 #[test]
 fn noninteractive_agent_leaves_queued_input_untouched() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let temp_home = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp_home.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp_home.path());
     let task = super::tests::pty_task("t-noninteractive-input", TaskStatus::Running);
     let store = Arc::new(Store::open_memory().unwrap());
     store.insert_task(&task).unwrap();
@@ -237,9 +237,9 @@ fn noninteractive_agent_leaves_queued_input_untouched() {
 /// no longer takes PTY input, so an input-accepting adapter stands in for it.
 #[test]
 fn input_to_child_that_never_reads_does_not_wedge_monitor() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let temp_home = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp_home.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp_home.path());
     let task = super::tests::pty_task("t-unread-tty", TaskStatus::Running);
     let store = Arc::new(Store::open_memory().unwrap());
     store.insert_task(&task).unwrap();

@@ -8,7 +8,7 @@ use crate::cmd::judge;
 use crate::store::Store;
 use crate::types::*;
 #[cfg(test)]
-pub(crate) use crate::paths;
+pub(crate) use crate::support::paths;
 #[path = "args.rs"]
 mod run_args;
 #[path = "validate.rs"]
@@ -86,7 +86,7 @@ impl WorkspaceSymlinkGuard {
         let Some(group_id) = group_id else {
             return Ok(Self { link_path: None });
         };
-        let workspace = crate::paths::workspace_dir(group_id)?;
+        let workspace = crate::support::paths::workspace_dir(group_id)?;
         if !workspace.is_dir() {
             return Ok(Self { link_path: None });
         }

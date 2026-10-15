@@ -46,7 +46,7 @@ pub(super) fn recommendation_hint(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths::AidHomeGuard;
+    use crate::support::paths::AidHomeGuard;
     use crate::types::{TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
     use tempfile::TempDir;
 

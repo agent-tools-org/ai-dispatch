@@ -4,7 +4,7 @@
 
 use super::DroidAgent;
 use crate::agent::{Agent, RunOpts};
-use crate::paths;
+use crate::support::paths;
 use crate::rate_limit;
 use crate::types::{AgentKind, EventKind, TaskId};
 

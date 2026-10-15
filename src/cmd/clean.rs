@@ -1,6 +1,6 @@
 // CLI handler for `aid clean` — removes old tasks, orphaned logs, and worktrees.
 // Exports: run().
-// Deps: crate::paths, crate::store::Store, chrono, rusqlite.
+// Deps: crate::support::paths, crate::store::Store, chrono, rusqlite.
 
 use anyhow::Result;
 use chrono::{Duration, Local};
@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::paths;
+use crate::support::paths;
 use crate::store::Store;
 use crate::worktree::{aid_worktree_root, is_aid_managed_worktree_path};
 
@@ -110,7 +110,7 @@ fn clean_orphaned_logs(store: &Store, dry_run: bool) -> Result<u64> {
 
 fn clean_orphaned_shared_dirs(store: &Store, dry_run: bool) -> Result<u64> {
     let known_wgs = query_string_set(store, WORKGROUP_IDS_SQL)?;
-    let shared_base = crate::paths::aid_dir().join("shared");
+    let shared_base = crate::support::paths::aid_dir().join("shared");
     if !shared_base.exists() {
         return Ok(0);
     }
@@ -130,7 +130,7 @@ fn clean_orphaned_shared_dirs(store: &Store, dry_run: bool) -> Result<u64> {
             println!("[dry-run] Would remove orphaned shared dir {} ({})", entry.path().display(), format_bytes(size));
             bytes += size;
         } else {
-            crate::shared_dir::cleanup_shared_dir(&wg_id);
+            crate::support::shared_dir::cleanup_shared_dir(&wg_id);
             println!("Removed orphaned shared dir {} ({})", entry.path().display(), format_bytes(size));
             bytes += size;
         }

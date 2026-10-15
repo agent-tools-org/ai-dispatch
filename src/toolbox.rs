@@ -1,7 +1,7 @@
 // Team toolbox: loadable CLI tools for prompt injection.
 // Exports: ToolMeta, ToolScope, tools_dir, team_tools_dir, list_tools, list_team_tools,
 //          resolve_toolbox, filter_by_auto_inject, find_tool, format_toolbox_instructions.
-// Deps: crate::paths, crate::sanitize, anyhow, serde, toml, std::fs.
+// Deps: crate::support::paths, crate::support::sanitize, anyhow, serde, toml, std::fs.
 
 use anyhow::Result;
 use serde::Deserialize;
@@ -62,7 +62,7 @@ fn default_output_format() -> String {
 }
 
 pub fn tools_dir() -> PathBuf {
-    crate::paths::aid_dir().join("tools")
+    crate::support::paths::aid_dir().join("tools")
 }
 
 pub fn team_tools_dir(team_id: &str) -> PathBuf {
@@ -204,7 +204,7 @@ pub fn filter_by_task_category(tools: Vec<ToolMeta>, category: &str) -> Vec<Tool
 }
 
 pub fn find_tool(name: &str, team_id: Option<&str>, project_dir: Option<&Path>) -> Result<ToolMeta> {
-    crate::sanitize::validate_name(name, "tool")?;
+    crate::support::sanitize::validate_name(name, "tool")?;
     resolve_toolbox(team_id, project_dir)
         .into_iter()
         .find(|t| t.name == name)
@@ -227,7 +227,7 @@ pub fn format_toolbox_instructions(tools: &[ToolMeta]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths;
+    use crate::support::paths;
     use std::fs;
     use tempfile::TempDir;
 

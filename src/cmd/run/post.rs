@@ -27,7 +27,7 @@ pub(crate) fn maybe_run_post_done_audit(
         return Ok(());
     };
     let preserved_read_only_report = task.read_only && task.status == TaskStatus::Failed
-        && crate::paths::task_dir(task_id.as_str()).join("result.md").is_file();
+        && crate::support::paths::task_dir(task_id.as_str()).join("result.md").is_file();
     if (task.status != TaskStatus::Done && !preserved_read_only_report) || task.audit_verdict.is_some() {
         return Ok(());
     }
@@ -92,12 +92,12 @@ pub(crate) fn maybe_flag_empty_worktree_diff(
 }
 
 pub(crate) fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> {
-    let transcript = crate::paths::transcript_path(task.id.as_str());
+    let transcript = crate::support::paths::transcript_path(task.id.as_str());
     let log_path = task
         .log_path
         .as_deref()
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| crate::paths::log_path(task.id.as_str()));
+        .unwrap_or_else(|| crate::support::paths::log_path(task.id.as_str()));
     let Some(content) = [transcript, log_path]
         .into_iter()
         .find_map(|path| super::run_prompt::extract_output_fallback_from_path(&path, Some(task.agent_display_name())))
@@ -105,7 +105,7 @@ pub(crate) fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> {
     else {
         return Ok(());
     };
-    let output_dir = crate::paths::task_dir(task.id.as_str());
+    let output_dir = crate::support::paths::task_dir(task.id.as_str());
     std::fs::create_dir_all(&output_dir)?;
     let output_path = output_dir.join("output.md");
     std::fs::write(&output_path, &content)?;
@@ -126,7 +126,7 @@ pub(crate) fn worktree_is_empty_diff_with_base(
 }
 
 pub(crate) fn read_quota_error_message(task_id: &TaskId, agent: &crate::types::AgentKind) -> Option<String> {
-    let stderr_path = crate::paths::stderr_path(task_id.as_str());
+    let stderr_path = crate::support::paths::stderr_path(task_id.as_str());
     if let Ok(stderr) = std::fs::read_to_string(&stderr_path)
         && let Some(line) = find_rate_limit_line_stderr(&stderr, agent)
     {

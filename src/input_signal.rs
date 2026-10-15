@@ -3,8 +3,8 @@
 
 use anyhow::Result;
 
-use crate::paths;
-use crate::sanitize;
+use crate::support::paths;
+use crate::support::sanitize;
 
 pub fn write_response(task_id: &str, input: &str) -> Result<()> {
     sanitize::validate_task_id(task_id)?;
@@ -68,7 +68,7 @@ pub fn clear_steer(task_id: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{take_response, write_response, take_steer, write_steer};
-    use crate::paths;
+    use crate::support::paths;
 
     #[test]
     fn writes_and_consumes_response_file() {

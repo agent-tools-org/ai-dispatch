@@ -8,7 +8,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 use crate::agent::selection::AdviceCandidate;
 use crate::cmd::judge;
-use crate::sanitize::{is_valid_task_id, validate_task_id};
+use crate::support::sanitize::{is_valid_task_id, validate_task_id};
 use crate::store::Store;
 use crate::types::*;
 use super::run_validate::{IdConflict, resolve_id_conflict};

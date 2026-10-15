@@ -95,8 +95,8 @@ fn matrix_removal_team_override_wins_over_rated_model() {
 #[test]
 fn matrix_removal_custom_floor_keeps_declared_capability_and_strength() {
     let (_temp, _home, _cache) = isolated();
-    crate::paths::ensure_dirs().expect("aid dirs");
-    let dir = crate::paths::aid_dir().join("agents");
+    crate::support::paths::ensure_dirs().expect("aid dirs");
+    let dir = crate::support::paths::aid_dir().join("agents");
     std::fs::create_dir_all(&dir).expect("agents dir");
     for (strengths, eligible) in [("[]", false), ("['testing']", true)] {
         std::fs::write(
@@ -132,8 +132,8 @@ fn matrix_removal_custom_floor_keeps_declared_capability_and_strength() {
 #[test]
 fn matrix_removal_agent_list_json_has_no_agent_capability_map() {
     let (_temp, _home, _cache) = isolated();
-    crate::paths::ensure_dirs().expect("aid dirs");
-    let dir = crate::paths::aid_dir().join("agents");
+    crate::support::paths::ensure_dirs().expect("aid dirs");
+    let dir = crate::support::paths::aid_dir().join("agents");
     std::fs::create_dir_all(&dir).expect("agents dir");
     std::fs::write(
         dir.join("custom-json.toml"),
@@ -157,7 +157,7 @@ fn matrix_removal_agent_list_json_has_no_agent_capability_map() {
 fn discovered_agy_model_uses_neutral_base_when_capability_is_unknown() {
     let temp = TempDir::new().expect("temp dir");
     let _home = AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().expect("aid dirs");
+    crate::support::paths::ensure_dirs().expect("aid dirs");
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("current time")
@@ -166,7 +166,7 @@ fn discovered_agy_model_uses_neutral_base_when_capability_is_unknown() {
         "agy": {"models": ["gemini-3.7-flash-high"], "updated_at_secs": now}
     });
     std::fs::write(
-        crate::paths::aid_dir().join("served_models_cache.json"),
+        crate::support::paths::aid_dir().join("served_models_cache.json"),
         cache.to_string(),
     )
     .expect("served-model cache");

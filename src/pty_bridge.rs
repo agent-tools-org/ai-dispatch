@@ -159,7 +159,7 @@ impl PtyBridge {
 #[cfg(test)]
 mod tests {
     use super::PtyBridge;
-    use crate::test_subprocess;
+    use crate::support::test_subprocess;
 
     #[test]
     fn spawns_echo_in_a_pty() {

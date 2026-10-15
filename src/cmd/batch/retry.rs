@@ -40,7 +40,7 @@ pub async fn retry_failed(
     agent_override: Option<&str>,
     include_waiting: bool,
 ) -> Result<()> {
-    crate::sanitize::validate_workgroup_id(group_id)?;
+    crate::support::sanitize::validate_workgroup_id(group_id)?;
     let tasks = store.list_tasks_by_group(group_id)?;
     let total = tasks.len();
     let retry_tasks: Vec<_> = tasks

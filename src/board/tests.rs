@@ -7,7 +7,7 @@ use chrono::Local;
 use serde_json::json;
 use tempfile::TempDir;
 
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
 
 fn make_task(id: &str, agent: AgentKind, status: TaskStatus) -> Task {

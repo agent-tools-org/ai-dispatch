@@ -1,11 +1,11 @@
 // Skill loading for methodology prompt injection.
 // Exports: load_skill(), load_skill_gotchas(), list_skill_scripts(), list_skill_references().
-// Deps: crate::paths, crate::types, anyhow, std::fs.
+// Deps: crate::support::paths, crate::types, anyhow, std::fs.
 
 use anyhow::{Context, Result};
 use crate::prompt_scan::scan_for_injection;
 use crate::types::AgentKind;
-use crate::sanitize;
+use crate::support::sanitize;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -19,7 +19,7 @@ pub struct ScriptMeta {
 }
 
 fn skills_dir() -> std::path::PathBuf {
-    crate::paths::aid_dir().join("skills")
+    crate::support::paths::aid_dir().join("skills")
 }
 
 fn skill_dir(name: &str) -> PathBuf {

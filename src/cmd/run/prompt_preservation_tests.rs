@@ -5,7 +5,7 @@ use super::*;
 #[test]
 fn retry_task_above_token_budget_keeps_feedback_and_original_whole() {
     let temp = tempfile::tempdir().unwrap();
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = Store::open_memory().unwrap();
     let feedback = "feedback line\n".repeat(600);
     let original = "original task line\n".repeat(9000);
@@ -36,7 +36,7 @@ fn auxiliary_omission_records_one_visible_warning_event() {
     }
     crate::output::set_quiet(true);
     let temp = tempfile::tempdir().unwrap();
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = Store::open_memory().unwrap();
     insert_prompt_task(&store, "task-warning");
     let group = store
@@ -75,7 +75,7 @@ fn auxiliary_omission_records_one_visible_warning_event() {
 }
 
 fn assert_single_warning_line() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -122,7 +122,7 @@ fn insert_prompt_task(store: &Store, task_id: &str) {
 #[test]
 fn task_over_6500_chars_is_delivered_whole_with_context_flag_without_a_warning() {
     let temp = tempfile::tempdir().unwrap();
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = Store::open_memory().unwrap();
     let context = temp.path().join("context.md");
     std::fs::write(&context, "caller context").unwrap();
@@ -154,7 +154,7 @@ fn task_over_6500_chars_is_delivered_whole_with_context_flag_without_a_warning()
 #[test]
 fn stored_context_preservation_bounds_memory_and_rules_with_one_warning() {
     let home = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     let store = Store::open_memory().unwrap();
     insert_prompt_task(&store, "task-warning");
     store.insert_memory(&large_memory(home.path())).unwrap();

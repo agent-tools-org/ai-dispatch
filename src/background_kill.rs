@@ -96,7 +96,7 @@ impl KillTargets {
 mod tests {
     use super::*;
     #[cfg(unix)]
-    use crate::test_subprocess::is_live;
+    use crate::support::test_subprocess::is_live;
 
     fn spec(agent_pid: Option<u32>) -> BackgroundRunSpec {
         BackgroundRunSpec {
@@ -170,7 +170,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn detached_kill_rejects_reused_or_missing_agent_identity() {
-        let _permit = crate::test_subprocess::acquire();
+        let _permit = crate::support::test_subprocess::acquire();
         for started in [Some("previous-launch".to_string()), None] {
             let (mut parent, child) = spawn_tree(&["sh"]);
             let mut spec = spec(Some(parent.id()));
@@ -190,7 +190,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn detached_timeout_kills_agent_with_matching_launch_identity() {
-        let _permit = crate::test_subprocess::acquire();
+        let _permit = crate::support::test_subprocess::acquire();
         let mut command = std::process::Command::new("sleep");
         command.arg("60");
         let mut root = crate::process_guard::ProcessGuard::spawn(&mut command).expect("agent");
@@ -206,7 +206,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn detached_kill_rechecks_identity_after_target_selection() {
-        let _permit = crate::test_subprocess::acquire();
+        let _permit = crate::support::test_subprocess::acquire();
         let mut command = std::process::Command::new("sleep");
         command.arg("60");
         let mut root = crate::process_guard::ProcessGuard::spawn(&mut command).expect("agent");
@@ -236,7 +236,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn reused_worker_pid_leaves_unrelated_process_and_child_alive() {
-        let _permit = crate::test_subprocess::acquire();
+        let _permit = crate::support::test_subprocess::acquire();
         let (mut parent, child) = spawn_tree(&["sh"]);
         signal_targets(Some(parent.id()), &spec(None));
         std::thread::sleep(std::time::Duration::from_millis(300));
@@ -251,7 +251,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn verified_worker_and_its_descendant_are_killed() {
-        let _permit = crate::test_subprocess::acquire();
+        let _permit = crate::support::test_subprocess::acquire();
         let (mut parent, child) = spawn_tree(&["__run-task", "t-kill"]);
         signal_targets(Some(parent.id()), &spec(None));
 

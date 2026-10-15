@@ -7,7 +7,7 @@ use std::process::Stdio;
 use std::task::Poll;
 
 use super::{append_stderr_to_log, drain_stderr_capture, spawn_stderr_capture};
-use crate::{paths, types::TaskId};
+use crate::{support::paths, types::TaskId};
 
 #[test]
 fn stderr_replay_waits_for_pending_log_write() {

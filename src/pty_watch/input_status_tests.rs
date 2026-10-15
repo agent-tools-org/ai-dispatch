@@ -26,9 +26,9 @@ fn auto_unstick_queue_status_audit_regression() {
 
 #[test]
 fn steer_pty_write_status_audit_regression() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let home = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = super::tests::pty_task("t-steer-stage", TaskStatus::Running);
     task.agent = AgentKind::Gemini;

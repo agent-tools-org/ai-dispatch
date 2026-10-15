@@ -4,7 +4,7 @@
 use anyhow::{Context, Result, anyhow};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use crate::sanitize;
+use crate::support::sanitize;
 #[path = "worktree/reconcile.rs"]
 mod reconcile;
 #[path = "worktree/staging.rs"]

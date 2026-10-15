@@ -26,7 +26,7 @@ fn repo(commit: bool) -> tempfile::TempDir {
 
 #[test]
 fn shared_checkpoint_preserves_head_index_and_working_files() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let repo = repo(true);
     let root = repo.path();
     let head = git(root, &["rev-parse", "HEAD"]);
@@ -49,7 +49,7 @@ fn shared_checkpoint_preserves_head_index_and_working_files() {
 
 #[test]
 fn unborn_shared_checkout_keeps_head_unborn_and_index_absent() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let repo = repo(false);
     std::fs::write(repo.path().join("first.txt"), "first\n").unwrap();
     let saved = preserve_shared_checkout(repo.path(), "t-unborn").unwrap().unwrap();
@@ -62,7 +62,7 @@ fn unborn_shared_checkout_keeps_head_unborn_and_index_absent() {
 
 #[test]
 fn tagged_head_and_prior_recovery_refs_survive_repeated_checkpoints() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let repo = repo(true);
     let head = git(repo.path(), &["rev-parse", "HEAD"]);
     git(repo.path(), &["tag", "v1"]);
@@ -79,7 +79,7 @@ fn tagged_head_and_prior_recovery_refs_survive_repeated_checkpoints() {
 
 #[test]
 fn checkpoint_records_deletions_and_renames_from_a_nested_directory() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let repo = repo(true);
     std::fs::create_dir(repo.path().join("nested")).unwrap();
     std::fs::rename(repo.path().join("source.txt"), repo.path().join("nested/renamed.txt")).unwrap();
@@ -90,7 +90,7 @@ fn checkpoint_records_deletions_and_renames_from_a_nested_directory() {
 
 #[test]
 fn clean_or_bookkeeping_only_checkout_does_not_create_recovery_ref() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let repo = repo(true);
     assert!(preserve_shared_checkout(repo.path(), "t-clean").unwrap().is_none());
     std::fs::write(repo.path().join(".aid-lock"), "lock").unwrap();
@@ -103,7 +103,7 @@ fn clean_or_bookkeeping_only_checkout_does_not_create_recovery_ref() {
 
 #[test]
 fn checkpoint_failure_never_changes_principal_index_or_head() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let repo = repo(true);
     let head = git(repo.path(), &["rev-parse", "HEAD"]);
     let index = std::fs::read(repo.path().join(".git/index")).unwrap();
@@ -119,7 +119,7 @@ fn checkpoint_failure_never_changes_principal_index_or_head() {
 
 #[test]
 fn non_git_directory_is_left_untouched() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("result.txt"), "result").unwrap();
     assert!(preserve_shared_checkout(dir.path(), "t-no-git").unwrap().is_none());

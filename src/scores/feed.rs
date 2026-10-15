@@ -58,7 +58,7 @@ pub(crate) struct Feed {
 }
 
 pub(crate) fn load_cache() -> Option<Feed> {
-    let bytes = fs::read(crate::paths::aid_dir().join("scores.json")).ok()?;
+    let bytes = fs::read(crate::support::paths::aid_dir().join("scores.json")).ok()?;
     let feed: Feed = serde_json::from_slice(&bytes).ok()?;
     (!feed.models.is_empty()).then_some(feed)
 }
@@ -80,7 +80,7 @@ fn usable(feed: &Feed) -> bool {
 }
 
 pub(crate) fn maybe_refresh() {
-    let path = crate::paths::aid_dir().join("scores.json");
+    let path = crate::support::paths::aid_dir().join("scores.json");
     crate::feed_refresh::maybe_refresh(
         &path,
         URL,

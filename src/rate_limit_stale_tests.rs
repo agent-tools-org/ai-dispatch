@@ -10,7 +10,7 @@ use crate::types::AgentKind;
 #[test]
 fn a_marker_written_during_the_run_is_not_cleared_by_success() {
     let temp = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     clear_rate_limit(&AgentKind::Qwen, None);
 
     let task_start = Local::now() - chrono::Duration::minutes(5);
@@ -33,7 +33,7 @@ fn a_marker_written_during_the_run_is_not_cleared_by_success() {
 #[test]
 fn a_marker_from_an_earlier_run_is_still_cleared() {
     let temp = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     clear_rate_limit(&AgentKind::Qwen, None);
 
     mark_rate_limited(
@@ -54,7 +54,7 @@ fn a_marker_from_an_earlier_run_is_still_cleared() {
 #[test]
 fn clear_group_rate_limit_if_stale_clears_only_matching_group() {
     let temp = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let agent = AgentKind::Antigravity;
     clear_all_rate_limits_for_agent(&agent, None);
@@ -90,7 +90,7 @@ fn clear_group_rate_limit_if_stale_clears_only_matching_group() {
 #[test]
 fn clear_rate_limit_does_not_clear_group_markers() {
     let temp = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let agent = AgentKind::Antigravity;
     clear_all_rate_limits_for_agent(&agent, None);
@@ -112,7 +112,7 @@ fn clear_rate_limit_does_not_clear_group_markers() {
 #[test]
 fn clear_all_rate_limits_clears_agent_and_all_groups() {
     let temp = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let agent = AgentKind::Antigravity;
     clear_all_rate_limits_for_agent(&agent, None);

@@ -9,9 +9,9 @@ use super::{
     run_prompt::PromptBundle,
 };
 use crate::{
-    paths::{self, AidHomeGuard},
+    support::paths::{self, AidHomeGuard},
     store::Store,
-    test_subprocess,
+    support::test_subprocess,
     types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus},
 };
 use chrono::Local;

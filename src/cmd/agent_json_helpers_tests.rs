@@ -3,7 +3,7 @@
 
 use super::build_quota_json;
 use crate::live_quota::CacheDirGuard;
-use crate::paths::{self, AidHomeGuard};
+use crate::support::paths::{self, AidHomeGuard};
 use crate::types::AgentKind;
 use chrono::Utc;
 

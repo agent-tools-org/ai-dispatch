@@ -72,9 +72,9 @@ fn assert_displays_resolved_price(displays: &Displays, agent: AgentKind, model: 
     shown
 }
 
-fn isolated() -> (tempfile::TempDir, crate::paths::AidHomeGuard) {
+fn isolated() -> (tempfile::TempDir, crate::support::paths::AidHomeGuard) {
     let temp = tempfile::tempdir().expect("tempdir");
-    let guard = crate::paths::AidHomeGuard::set(temp.path());
+    let guard = crate::support::paths::AidHomeGuard::set(temp.path());
     clear_feed_for_tests();
     (temp, guard)
 }
@@ -99,13 +99,13 @@ fn every_catalog_row_displays_the_resolved_price() {
 #[test]
 fn pricing_override_is_what_every_display_shows() {
     let _home = isolated();
-    crate::paths::ensure_dirs().expect("aid dirs");
+    crate::support::paths::ensure_dirs().expect("aid dirs");
     let rows = [("codex", "gpt-5.6-sol", 1.0, 2.0), ("cursor", "composer-2.5", 5.0, 5.0), ("codex", "gpt-9-uncatalogued", 3.0, 4.0)];
     let models: Vec<_> = rows.iter().map(|(agent, model, input, output)| serde_json::json!({
         "agent": agent, "model": model, "input_per_m": input, "output_per_m": output,
         "tier": "premium", "description": "operator price", "updated": "2026-09-30"
     })).collect();
-    std::fs::write(crate::paths::pricing_path(), serde_json::json!({ "models": models }).to_string())
+    std::fs::write(crate::support::paths::pricing_path(), serde_json::json!({ "models": models }).to_string())
         .expect("pricing overrides");
     clear_feed_for_tests();
     let displays = displays();

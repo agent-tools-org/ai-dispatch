@@ -39,7 +39,7 @@ pub(super) fn render_log_text(task_id: &str, full: bool) -> Result<String> {
 }
 
 pub(super) fn result_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
-    let path = crate::paths::task_dir(task_id).join("result.md");
+    let path = crate::support::paths::task_dir(task_id).join("result.md");
     let banner = load_task(store, task_id)
         .ok()
         .and_then(|task| audit_result_missing_banner(store, &task));
@@ -95,7 +95,7 @@ pub(super) fn audit_result_missing_banner(
     // assessment recorded at persist time outranks the file merely existing.
     let missing_delivery =
         task.delivery_assessment() == Some(crate::types::DeliveryAssessment::MissingFinalDelivery);
-    let result_path = crate::paths::task_dir(&task.id.0).join("result.md");
+    let result_path = crate::support::paths::task_dir(&task.id.0).join("result.md");
     if result_path.exists() && !missing_delivery {
         return None;
     }
@@ -111,7 +111,7 @@ pub(super) fn audit_result_missing_banner(
 }
 
 pub(super) fn transcript_text(task_id: &str) -> Result<String> {
-    let path = crate::paths::transcript_path(task_id);
+    let path = crate::support::paths::transcript_path(task_id);
     std::fs::read_to_string(&path)
         .with_context(|| format!("Failed to read transcript {}", path.display()))
 }
@@ -122,7 +122,7 @@ pub(super) fn terminal_missing_result_notice(task: &crate::types::Task) -> Optio
     if !matches!(task.status, TaskStatus::Done | TaskStatus::Failed) {
         return None;
     }
-    let result_path = crate::paths::task_dir(task.id.as_str()).join("result.md");
+    let result_path = crate::support::paths::task_dir(task.id.as_str()).join("result.md");
     if result_path.exists() {
         return None;
     }

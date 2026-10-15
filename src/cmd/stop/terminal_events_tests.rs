@@ -93,7 +93,7 @@ async fn run_piped(agent: &FinalizingAgent, streaming: bool, ceiling: Option<f64
         cmd,
         &agent.id,
         &agent.store,
-        &crate::paths::log_path(agent.id.as_str()),
+        &crate::support::paths::log_path(agent.id.as_str()),
         None,
         Some("component-test-model"),
         streaming,
@@ -106,9 +106,9 @@ async fn run_piped(agent: &FinalizingAgent, streaming: bool, ceiling: Option<f64
 }
 
 async fn assert_finalization(pty: bool, streaming: bool, status: TaskStatus) {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let (_home, _guard) = crate::cost::test_support::seed_prices(None);
-    crate::paths::ensure_dirs().expect("dirs");
+    crate::support::paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let agent = agent(&store, true, status);
     if pty {
@@ -119,7 +119,7 @@ async fn assert_finalization(pty: bool, streaming: bool, status: TaskStatus) {
             &cmd,
             &agent.id,
             &store,
-            &crate::paths::log_path(agent.id.as_str()),
+            &crate::support::paths::log_path(agent.id.as_str()),
             None,
             None,
             streaming,
@@ -166,9 +166,9 @@ async fn pty_buffered_stop_at_failure_finalization_preserves_terminal_truth() {
 
 #[tokio::test]
 async fn buffered_exit_zero_estimated_cost_ceiling_keeps_failure_reason() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let (_home, _guard) = crate::cost::test_support::seed_prices(None);
-    crate::paths::ensure_dirs().expect("dirs");
+    crate::support::paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let agent = agent(&store, false, TaskStatus::Done);
     run_piped(&agent, false, Some(0.01)).await;

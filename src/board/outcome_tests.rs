@@ -6,7 +6,7 @@ use super::render_board;
 use chrono::Local;
 use tempfile::TempDir;
 
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 

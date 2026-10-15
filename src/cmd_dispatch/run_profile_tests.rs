@@ -3,7 +3,7 @@
 // Deps: explicit_agent, AidHomeGuard, TaskEgress.
 
 use super::*;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::types::TaskEgress;
 
 fn isolated_home() -> (tempfile::TempDir, AidHomeGuard) {

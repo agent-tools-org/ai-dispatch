@@ -5,7 +5,7 @@
 use super::CopilotAgent;
 use crate::agent::{Agent, RunOpts};
 use crate::types::{AgentKind, EventKind, TaskId};
-use crate::{paths, rate_limit};
+use crate::{support::paths, rate_limit};
 
 fn opts() -> RunOpts {
     RunOpts {

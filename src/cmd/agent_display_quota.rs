@@ -152,7 +152,7 @@ fn group_holds_detail(
 mod probe_tests {
     use super::*;
     use crate::live_quota::CacheDirGuard;
-    use crate::paths::{self, AidHomeGuard};
+    use crate::support::paths::{self, AidHomeGuard};
     use crate::rate_limit::is_rate_limited;
     use chrono::{Duration as ChronoDuration, Utc};
 

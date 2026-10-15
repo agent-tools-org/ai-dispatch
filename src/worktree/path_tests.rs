@@ -7,8 +7,8 @@ use super::{
     is_aid_managed_worktree_path, is_safe_worktree_path, remove_worktree,
 };
 use super::path::WorktreeHomeGuard;
-use crate::test_env::CargoTargetDirGuard;
-use crate::test_subprocess;
+use crate::support::test_env::CargoTargetDirGuard;
+use crate::support::test_subprocess;
 use std::path::Path;
 use std::process::Command;
 
@@ -61,7 +61,7 @@ fn remove_worktree_cleans_up_properly() {
     let branch = unique_branch("cleanup");
     // Use /tmp/aid-wt-* path to pass sandbox guard; guard cleans on panic too.
     let wt_path = format!("/tmp/aid-wt-test-{branch}");
-    let _guard = crate::test_env::TmpWorktreeGuard::with_repo(repo.path(), wt_path.clone());
+    let _guard = crate::support::test_env::TmpWorktreeGuard::with_repo(repo.path(), wt_path.clone());
     git(repo.path(), &["worktree", "add", &wt_path, "-b", &branch]);
 
     // Should not panic and worktree dir should be gone
@@ -81,12 +81,12 @@ fn remove_worktree_cleans_up_properly() {
 fn remove_worktree_reaps_branch_target_and_keeps_base() {
     let _permit = test_subprocess::acquire();
     let aid_home = tempfile::tempdir().unwrap();
-    let _aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+    let _aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
     let repo = tempfile::tempdir().unwrap();
     init_repo(repo.path());
     let branch = unique_branch("feat/reap-target");
     let wt_path = format!("/tmp/aid-wt-test-{}", branch.replace('/', "-"));
-    let _guard = crate::test_env::TmpWorktreeGuard::with_repo(repo.path(), wt_path.clone());
+    let _guard = crate::support::test_env::TmpWorktreeGuard::with_repo(repo.path(), wt_path.clone());
     let target_root = aid_home.path().join("cargo-target");
     let _target_guard = CargoTargetDirGuard::set(&target_root);
     let base = target_root.join("_base");

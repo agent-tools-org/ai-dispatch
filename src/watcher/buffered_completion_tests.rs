@@ -3,7 +3,7 @@
 
 use super::watch_buffered;
 use crate::agent::antigravity::AntigravityAgent;
-use crate::paths;
+use crate::support::paths;
 use crate::rate_limit;
 use crate::store::Store;
 use crate::types::{AgentKind, EventKind, Task, TaskId, TaskStatus, VerifyStatus};

@@ -9,7 +9,7 @@ use std::io::Read;
 use std::process::{Child, Command, Stdio};
 
 #[cfg(not(test))]
-use crate::sanitize;
+use crate::support::sanitize;
 
 #[cfg(not(test))]
 pub(crate) fn spawn_worker(task_id: &str) -> Result<(Child, u32)> {

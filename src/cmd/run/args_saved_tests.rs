@@ -16,9 +16,9 @@ use std::time::Duration;
 #[test]
 fn worker_rebuild_keeps_every_saved_field() {
     let home = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
-    crate::paths::ensure_dirs().unwrap();
-    let store = Store::open(&crate::paths::db_path()).unwrap();
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    crate::support::paths::ensure_dirs().unwrap();
+    let store = Store::open(&crate::support::paths::db_path()).unwrap();
     let id = "t-every-field";
     let saved = every_field_set();
     assert_every_field_differs_from_default(&saved);
@@ -35,7 +35,7 @@ fn worker_rebuild_keeps_every_saved_field() {
     // store, runtime facts from the job file.
     save_spec(&spec(id)).unwrap();
     let loaded = load_spec_if_exists(id).unwrap().unwrap();
-    let reopened = Store::open(&crate::paths::db_path()).unwrap();
+    let reopened = Store::open(&crate::support::paths::db_path()).unwrap();
     let worker = RunArgs::for_worker(&reopened, &loaded).unwrap();
 
     let mut expected = serde_json::to_value(&saved).unwrap();
@@ -63,11 +63,11 @@ fn worker_rebuild_keeps_every_saved_field() {
 #[test]
 fn dispatch_saves_the_callers_budget_request_not_the_resolved_mode() {
     let home = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
-    crate::paths::ensure_dirs().unwrap();
-    std::fs::write(crate::paths::config_path(), "[selection]\nbudget_mode = true\n").unwrap();
-    std::fs::create_dir_all(crate::paths::aid_dir().join("agents")).unwrap();
-    std::fs::write(crate::paths::aid_dir().join("agents/budget-test.toml"),
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    crate::support::paths::ensure_dirs().unwrap();
+    std::fs::write(crate::support::paths::config_path(), "[selection]\nbudget_mode = true\n").unwrap();
+    std::fs::create_dir_all(crate::support::paths::aid_dir().join("agents")).unwrap();
+    std::fs::write(crate::support::paths::aid_dir().join("agents/budget-test.toml"),
         "[agent]\nid = \"budget-test\"\ndisplay_name = \"Budget Test\"\ncommand = \"/bin/sh\"\nprompt_mode = \"arg\"\ninteractive_input = false\n").unwrap();
     let dir = tempfile::tempdir().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
@@ -86,10 +86,10 @@ fn dispatch_saves_the_callers_budget_request_not_the_resolved_mode() {
 #[tokio::test]
 async fn worker_without_a_dispatched_dir_skips_verify() {
     let home = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
-    crate::paths::ensure_dirs().unwrap();
-    std::fs::create_dir_all(crate::paths::aid_dir().join("agents")).unwrap();
-    std::fs::write(crate::paths::aid_dir().join("agents/noop-test.toml"),
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    crate::support::paths::ensure_dirs().unwrap();
+    std::fs::create_dir_all(crate::support::paths::aid_dir().join("agents")).unwrap();
+    std::fs::write(crate::support::paths::aid_dir().join("agents/noop-test.toml"),
         "[agent]\nid = \"noop-test\"\ndisplay_name = \"Noop Test\"\ncommand = \"/bin/sh\"\nprompt_mode = \"arg\"\nfixed_args = [\"-c\", \"true\"]\ninteractive_input = false\n").unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let id = "t-no-dir";

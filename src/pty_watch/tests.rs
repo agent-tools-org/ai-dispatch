@@ -5,7 +5,7 @@
 use super::{
     MonitorState, extract_awaiting_prompt, finalize_streaming, mark_awaiting_input,
 };
-use crate::paths;
+use crate::support::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;

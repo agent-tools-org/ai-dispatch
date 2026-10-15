@@ -3,7 +3,7 @@
 // Deps: MonitorState and std time controls.
 
 use super::MonitorState;
-use crate::paths;
+use crate::support::paths;
 use std::time::{Duration, Instant};
 
 #[test]

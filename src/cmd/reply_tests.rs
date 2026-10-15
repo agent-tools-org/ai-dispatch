@@ -6,7 +6,7 @@ use std::time::Duration;
 use chrono::Local;
 
 use super::{InputCommand, ReplyOutcome, run, run_with_hook, run_with_hook_and_sleep};
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
 use crate::types::{AgentKind, MessageSource, Task, TaskId, TaskStatus, VerifyStatus};
 

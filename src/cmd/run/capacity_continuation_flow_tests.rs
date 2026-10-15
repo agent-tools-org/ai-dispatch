@@ -236,7 +236,7 @@ impl Fixture {
 }
 
 async fn flow(repeated: bool, read_only: bool) {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let fixture = Fixture::new(repeated, read_only);
     fixture.fail_initial_agent().await;
     let final_id = fixture.continue_task().await;

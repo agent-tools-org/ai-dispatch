@@ -120,7 +120,7 @@ pub(super) fn inject_workspace(
 
     // Inject workspace path if workgroup has one (appended to avoid commit message pollution)
     if let Some(ref group_id) = args.group {
-        let workspace = crate::paths::workspace_dir(group_id)?;
+        let workspace = crate::support::paths::workspace_dir(group_id)?;
         if workspace.is_dir() {
             let workspace_ref = if agent_kind.sandboxed_fs() {
                 ".aid-workspace".to_string()

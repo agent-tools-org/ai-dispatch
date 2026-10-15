@@ -1,6 +1,6 @@
 // Credential pool: multiple API keys per provider with rotation strategies.
 // Exports: CredentialPool, load_pool(), get_credential(), mark_exhausted().
-// Deps: serde/toml, std::fs, chrono, crate::paths.
+// Deps: serde/toml, std::fs, chrono, crate::support::paths.
 
 use chrono::{DateTime, Duration, Local};
 use serde::Deserialize;
@@ -52,7 +52,7 @@ pub enum Strategy {
 }
 
 pub fn load_pool() -> Option<CredentialPool> {
-    load_pool_from_path(&crate::paths::aid_dir().join("credentials.toml"))
+    load_pool_from_path(&crate::support::paths::aid_dir().join("credentials.toml"))
 }
 
 pub fn get_credential(pool: &CredentialPool, agent: &str) -> Option<(String, String)> {
@@ -157,7 +157,7 @@ pub(crate) fn credential_is_set(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{CredentialPool, Strategy, get_credential, load_pool, load_pool_from_path, mark_exhausted};
-    use crate::paths::AidHomeGuard;
+    use crate::support::paths::AidHomeGuard;
     use std::collections::HashMap;
     use std::fs;
     use tempfile::TempDir;

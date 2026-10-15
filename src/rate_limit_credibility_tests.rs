@@ -14,7 +14,7 @@ fn isolated() -> tempfile::TempDir {
 #[test]
 fn opencode_model_refusal_holds_only_the_nvidia_provider() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let agent = AgentKind::OpenCode;
 
     crate::agent::stream_completion::record_quota_exhaustion(
@@ -34,7 +34,7 @@ fn opencode_model_refusal_holds_only_the_nvidia_provider() {
 #[test]
 fn opencode_provider_route_markers_are_case_insensitive() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let agent = AgentKind::OpenCode;
 
     mark_rate_limited_for_model(
@@ -52,7 +52,7 @@ fn opencode_provider_route_markers_are_case_insensitive() {
 #[test]
 fn unknown_opencode_provider_is_recorded_and_stays_conservative() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let agent = AgentKind::OpenCode;
 
     mark_rate_limited_for_message(&agent, None, "Insufficient balance.");
@@ -65,7 +65,7 @@ fn unknown_opencode_provider_is_recorded_and_stays_conservative() {
 #[test]
 fn explicitly_named_opencode_provider_is_narrowed_without_a_model() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let agent = AgentKind::OpenCode;
 
     mark_rate_limited_for_message(
@@ -81,7 +81,7 @@ fn explicitly_named_opencode_provider_is_narrowed_without_a_model() {
 #[test]
 fn explicitly_unknown_opencode_provider_stays_agent_wide() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let agent = AgentKind::OpenCode;
 
     mark_rate_limited_for_message(
@@ -97,7 +97,7 @@ fn explicitly_unknown_opencode_provider_stays_agent_wide() {
 #[test]
 fn opencode_error_for_one_provider_does_not_hold_another_model_route() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let agent = AgentKind::OpenCode;
     let error = serde_json::json!({
         "type": "error",
@@ -120,7 +120,7 @@ fn opencode_error_for_one_provider_does_not_hold_another_model_route() {
 #[test]
 fn opencode_error_still_blocks_the_provider_that_refused() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let agent = AgentKind::OpenCode;
     let error = serde_json::json!({
         "type": "error",
@@ -143,7 +143,7 @@ fn opencode_error_still_blocks_the_provider_that_refused() {
 #[test]
 fn opencode_provider_key_beats_provider_text_in_error_message() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let agent = AgentKind::OpenCode;
     let error = serde_json::json!({
         "type": "error",
@@ -166,7 +166,7 @@ fn opencode_provider_key_beats_provider_text_in_error_message() {
 #[test]
 fn opencode_missing_provider_key_stays_agent_wide() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let agent = AgentKind::OpenCode;
     let error = serde_json::json!({
         "type": "error",
@@ -187,7 +187,7 @@ fn opencode_missing_provider_key_stays_agent_wide() {
 #[test]
 fn long_refusal_keeps_an_iso_reset_timestamp_after_the_old_cutoff() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let prefix = "diagnostic detail ".repeat(20);
     let message = format!("{prefix} Insufficient balance; resetAt=2099-01-02T03:04:05Z");
 
@@ -209,7 +209,7 @@ fn long_refusal_keeps_an_iso_reset_timestamp_after_the_old_cutoff() {
 #[test]
 fn real_opencode_refusal_without_provider_key_scopes_to_dispatched_route() {
     let temp = isolated();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let agent = AgentKind::OpenCode;
     let error = serde_json::json!({
         "type": "error",

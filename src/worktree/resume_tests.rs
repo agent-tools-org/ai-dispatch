@@ -3,7 +3,7 @@
 // Deps: super worktree helpers, git CLI, tempfile.
 
 use super::*;
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use std::path::Path;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};

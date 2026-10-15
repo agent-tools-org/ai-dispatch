@@ -2,7 +2,7 @@
 // Frozen stored_hold order: Windowed before hold: manual; unmatched manual stays NeedsHuman.
 
 use super::*;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::rate_limit::{self, dispatch_blocking_hold, format_hold_end, mark_rate_limited};
 use crate::types::AgentKind;
 use chrono::{Duration as ChronoDuration, Local, Utc};

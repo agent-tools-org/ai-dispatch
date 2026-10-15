@@ -3,7 +3,7 @@
 
 use super::run_agent_process;
 use crate::agent::get_agent;
-use crate::paths;
+use crate::support::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
@@ -12,8 +12,8 @@ use std::sync::Arc;
 #[test]
 fn run_agent_process_marks_task_failed_when_spawn_fails() {
     let aid_home = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(aid_home.path());
-    crate::paths::ensure_dirs().unwrap();
+    let _guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = TaskId("t-kilo-missing".to_string());
     store

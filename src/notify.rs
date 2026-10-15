@@ -6,7 +6,7 @@ use anyhow::Result;
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};
 
-use crate::paths;
+use crate::support::paths;
 use crate::types::Task;
 
 pub fn notify_completion(task: &Task) {
@@ -67,8 +67,8 @@ mod tests {
     #[test]
     fn notify_completion_records_unobserved_as_unverified() {
         let temp = tempfile::tempdir().unwrap();
-        let _guard = crate::paths::AidHomeGuard::set(temp.path());
-        crate::paths::ensure_dirs().unwrap();
+        let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
+        crate::support::paths::ensure_dirs().unwrap();
         let task = crate::types::Task {
             id: crate::types::TaskId("t-unobs".to_string()),
             agent: crate::types::AgentKind::Codex,
@@ -112,7 +112,7 @@ mod tests {
             delivery_assessment: None,
         };
         notify_completion(&task);
-        let path = crate::paths::aid_dir().join("completions.jsonl");
+        let path = crate::support::paths::aid_dir().join("completions.jsonl");
         let line = std::fs::read_to_string(path).unwrap();
         let event: serde_json::Value = serde_json::from_str(line.lines().next().unwrap()).unwrap();
         assert_eq!(event["status"], "DONE");

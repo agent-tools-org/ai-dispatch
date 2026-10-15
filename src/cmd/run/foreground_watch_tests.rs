@@ -5,7 +5,7 @@
 use super::*;
 use chrono::Local;
 use crate::background::{self, BackgroundRunSpec};
-use crate::paths;
+use crate::support::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use std::fs;

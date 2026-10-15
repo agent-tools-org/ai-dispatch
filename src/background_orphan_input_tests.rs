@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 #[test]
 fn operator_input_bookkeeping_does_not_postpone_the_reaper() {
     let temp = tempfile::tempdir().expect("temp dir");
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = Store::open_memory().expect("store");
     let task = make_task("t-input-bookkeeping");
     store.insert_task(&task).expect("insert task");

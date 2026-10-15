@@ -227,7 +227,7 @@ fn claude_allowed_event_with_rejected_overage_does_not_hold() {
     // Captured Claude stream-json line; overageStatus is not the limit status.
     let allowed = r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1790750400,"rateLimitType":"five_hour","overageStatus":"rejected","overageDisabledReason":"org_level_disabled_until","isUsingOverage":false,"unifiedWindows":{"five_hour":{"utilization":0.76,"resetsAt":1790750400},"seven_day":{"utilization":0.7,"resetsAt":1790748000}}},"uuid":"0433b702-fa48-4e68-ae32-414ffeee1b33","session_id":"3eaf9e7b-31e3-482c-bb96-66e14f3bf04a"}"#;
     let temp = tempfile::tempdir().expect("temp dir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     assert_eq!(
         crate::rate_limit::refusal_on_channel(
             allowed,
@@ -250,7 +250,7 @@ fn claude_rejected_status_uses_the_structured_reset() {
     let reset = chrono::Utc::now().timestamp() + 7200;
     event["rate_limit_info"]["resetsAt"] = serde_json::json!(reset);
     let temp = tempfile::tempdir().expect("temp dir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     assert!(crate::rate_limit::refusal_on_channel(&event.to_string(), AgentKind::Claude, crate::quota_channel::Channel::CliStream).is_some());
     let outcome = crate::agent::stream_completion::record_quota_exhaustion(
         &event.to_string(), AgentKind::Claude, None, None

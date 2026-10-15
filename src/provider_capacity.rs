@@ -3,7 +3,7 @@
 // Deps: quota channels, rate_limit markers and route availability.
 
 use crate::quota_channel::{Channel, provider_attributable};
-use crate::{paths, rate_limit, route_availability as routes, types::*};
+use crate::{support::paths, rate_limit, route_availability as routes, types::*};
 
 pub(crate) const HOLD_MINUTES: i64 = 2;
 const REFUSAL: &str = "selected model is at capacity. please try a different model.";

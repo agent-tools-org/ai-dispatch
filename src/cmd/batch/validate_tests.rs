@@ -2,7 +2,7 @@
 // Exports: none.
 // Deps: super::batch_validate, crate::batch, crate::rate_limit, crate::store
 use super::*;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::rate_limit;
 use crate::store::Store;
 use crate::types::TaskOutcome;
@@ -175,7 +175,7 @@ fn find_ready_skips_tasks_with_failed_deps() {
 fn test_rate_limit_precheck_does_not_panic() {
     let temp = TempDir::new().unwrap();
     let guard = AidHomeGuard::set(temp.path());
-    std::fs::create_dir_all(crate::paths::aid_dir()).ok();
+    std::fs::create_dir_all(crate::support::paths::aid_dir()).ok();
     rate_limit::mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded; try again at Mar 19th, 2026 2:27 PM.");
     let tasks = vec![stub_task("first", None), stub_task("second", None)];
     rate_limit_precheck(&tasks);

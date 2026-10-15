@@ -89,10 +89,10 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
     let shared_dir_enabled = config.defaults.shared_dir.unwrap_or(false);
     let configured_repo_root = args.repo_root.clone()
         .or_else(|| config.defaults.repo_root.as_ref().map(|value| resolve_config_path(path, value)));
-    let explicit_repo_path = crate::repo_root::resolve_explicit_repo_path(configured_repo_root.as_deref(), None)?;
+    let explicit_repo_path = crate::support::repo_root::resolve_explicit_repo_path(configured_repo_root.as_deref(), None)?;
     let batch_repo_path = explicit_repo_path
         .clone()
-        .or_else(|| crate::repo_root::resolve_git_root_string(".").ok());
+        .or_else(|| crate::support::repo_root::resolve_git_root_string(".").ok());
     if let Some(repo_path) = batch_repo_path.as_deref() {
         crate::cmd::batch_gitbutler::maybe_prompt_gitbutler_batch_integration(
             Path::new(repo_path),
@@ -153,7 +153,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
             .tasks
             .first()
             .and_then(|task| task.group.as_deref())
-            .and_then(crate::shared_dir::shared_dir_path)
+            .and_then(crate::support::shared_dir::shared_dir_path)
             .map(|path| path.display().to_string())
     } else {
         None

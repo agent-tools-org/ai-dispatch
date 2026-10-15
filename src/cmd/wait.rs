@@ -53,7 +53,7 @@ pub async fn run(
     {
         WaitOutcome::Completed => {
             if let Some(group_id) = tracked_group
-                && let Ok(repo_path) = crate::repo_root::resolve_git_root_string(".")
+                && let Ok(repo_path) = crate::support::repo_root::resolve_git_root_string(".")
                 && let Some(hint) =
                     crate::cmd::batch_gitbutler::merge_back_hint(std::path::Path::new(&repo_path), group_id)
             {

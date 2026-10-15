@@ -155,7 +155,7 @@ pub fn env_with_agent_log(
     let mut env = env.unwrap_or_default();
     env.insert(
         AGENT_LOG_ENV.to_string(),
-        crate::paths::agent_log_path(task_id).to_string_lossy().into_owned(),
+        crate::support::paths::agent_log_path(task_id).to_string_lossy().into_owned(),
     );
     Some(env)
 }

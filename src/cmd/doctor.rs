@@ -1,11 +1,11 @@
 // `aid doctor` reports repository hygiene, leaked operator symlinks, and NeedsHuman holds.
 // Exports run() plus formatting helpers shared by tests.
-// Deps: crate::repo_root, crate::store::Store, crate::worktree_gc.
+// Deps: crate::support::repo_root, crate::store::Store, crate::worktree_gc.
 
 use crate::project;
-use crate::repo_root;
+use crate::support::repo_root;
 use crate::store::Store;
-use crate::{agent::home_isolation, paths};
+use crate::{agent::home_isolation, support::paths};
 use crate::worktree_gc::{
     DeletableBranch, DoctorReport, PrunableWorktree, collect_doctor_report,
     managed_branch_prefixes, tracked_worktree_paths,
@@ -180,8 +180,8 @@ mod tests {
     #[test]
     fn doctor_lists_needs_human_hold_reason() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let _guard = crate::paths::AidHomeGuard::set(temp.path());
-        std::fs::create_dir_all(crate::paths::aid_dir()).expect("aid dir");
+        let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
+        std::fs::create_dir_all(crate::support::paths::aid_dir()).expect("aid dir");
         crate::rate_limit::mark_rate_limited(
             &crate::types::AgentKind::Oz,
             None,

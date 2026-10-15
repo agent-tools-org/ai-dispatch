@@ -7,7 +7,7 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 
 use crate::agent::{Agent, RunOpts};
-use crate::paths;
+use crate::support::paths;
 use crate::store::Store;
 use crate::types::{
     AgentKind, CompletionInfo, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus,
@@ -167,7 +167,7 @@ async fn streaming_watch_logs_report_containing_milestone_and_emits_event() {
 async fn streaming_watch_fast_fail_preserves_stderr_in_log() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = TaskId("t-stderr-log".to_string());
     insert_running_task(store.as_ref(), &task_id);
@@ -203,7 +203,7 @@ async fn streaming_watch_fast_fail_preserves_stderr_in_log() {
 async fn streaming_watch_signal_killed_process_does_not_replay_stderr() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = TaskId("t-stderr-kill".to_string());
     insert_running_task(store.as_ref(), &task_id);
@@ -242,7 +242,7 @@ async fn streaming_watch_signal_killed_process_does_not_replay_stderr() {
 async fn streaming_watch_caps_preserved_stderr() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = TaskId("t-stderr-cap".to_string());
     insert_running_task(store.as_ref(), &task_id);

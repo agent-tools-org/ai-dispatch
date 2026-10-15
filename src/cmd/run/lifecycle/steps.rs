@@ -205,7 +205,7 @@ pub(super) fn persist_result_file(
         .log_path
         .as_deref()
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| crate::paths::log_path(task_id.as_str()));
+        .unwrap_or_else(|| crate::support::paths::log_path(task_id.as_str()));
     let delivery = if native {
         super::super::read_only_delivery::publish(
             args, task.agent, effective_dir.map(String::as_str), task_id.as_str(),

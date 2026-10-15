@@ -111,13 +111,13 @@ fn read_only_reaper_never_queues_wrap_up_fix_regression() {
     spec.max_duration_secs = Some(600);
     spec.idle_timeout_secs = Some(10_000);
     save_spec(&spec).expect("spec");
-    std::fs::write(crate::paths::log_path(task.id.as_str()), "agent working").expect("progress");
+    std::fs::write(crate::support::paths::log_path(task.id.as_str()), "agent working").expect("progress");
     check_zombie_tasks_with(&store, |_| true).expect("reap");
     assert_eq!(store.get_task(task.id.as_str()).expect("task").expect("task").status,
         TaskStatus::Running);
     assert!(store.get_events(task.id.as_str()).expect("events").is_empty());
     assert!(store.list_messages_for_task(task.id.as_str()).expect("messages").is_empty());
-    assert!(!crate::paths::steer_signal_path(task.id.as_str()).exists());
+    assert!(!crate::support::paths::steer_signal_path(task.id.as_str()).exists());
 }
 
 #[test]
@@ -128,7 +128,7 @@ fn wrap_up_delivery_failure_can_recover_once_fix_regression() {
     task.agent = AgentKind::Gemini;
     task.read_only = false;
     store.insert_task(&task).expect("task");
-    let signal = crate::paths::steer_signal_path(task.id.as_str());
+    let signal = crate::support::paths::steer_signal_path(task.id.as_str());
     store.db().execute_batch(
         "CREATE TRIGGER fail_wrap_insert BEFORE INSERT ON task_messages BEGIN
            SELECT RAISE(ABORT, 'synthetic publication failure'); END;",

@@ -3,7 +3,7 @@
 // Deps: run_lifecycle helper, RunArgs, task domain types.
 
 use super::{run_lifecycle::inherit_cascade_target, RunArgs};
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::path::Path;
@@ -159,10 +159,10 @@ fn terminal_failure_preserves_failed_status_for_cascade() {
     git(repo.path(), &["worktree", "add", "-b", "feat/cascade-refuse", &linked.to_string_lossy()]);
 
     let home_dir = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(home_dir.path());
-    std::fs::create_dir_all(crate::paths::logs_dir()).unwrap();
+    let _guard = crate::support::paths::AidHomeGuard::set(home_dir.path());
+    std::fs::create_dir_all(crate::support::paths::logs_dir()).unwrap();
     std::fs::write(
-        crate::paths::stderr_path("t-empty-cascade"),
+        crate::support::paths::stderr_path("t-empty-cascade"),
         "Error: Quota limit reached.",
     )
     .unwrap();

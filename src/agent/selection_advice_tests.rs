@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::live_quota::CacheDirGuard;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::agent::run_model::RunModelSource;
 use crate::types::{TaskDifficulty, TaskRigor, TaskUrgency};
 

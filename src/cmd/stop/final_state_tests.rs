@@ -4,7 +4,7 @@
 
 use super::{kill, stop};
 use crate::store::Store;
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::path::Path;
@@ -124,7 +124,7 @@ fn detached_stop_and_force_kill_reject_unverified_agent_identity() {
     for action in [stop, kill] {
         for started in [Some("previous-launch".to_string()), None] {
             let home = tempfile::tempdir().expect("home");
-            let _home = crate::paths::AidHomeGuard::set(home.path());
+            let _home = crate::support::paths::AidHomeGuard::set(home.path());
             let store = Arc::new(Store::open_memory().expect("store"));
             let mut task = running_task("t-stop-identity", home.path(), home.path(), "unused");
             task.worktree_path = None;
@@ -156,7 +156,7 @@ fn detached_stop_and_force_kill_signal_matching_agent_identity() {
     let _permit = test_subprocess::acquire();
     for action in [stop, kill] {
         let home = tempfile::tempdir().expect("home");
-        let _home = crate::paths::AidHomeGuard::set(home.path());
+        let _home = crate::support::paths::AidHomeGuard::set(home.path());
         let store = Arc::new(Store::open_memory().expect("store"));
         let mut task = running_task("t-stop-owned", home.path(), home.path(), "unused");
         task.worktree_path = None;

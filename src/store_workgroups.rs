@@ -84,7 +84,7 @@ impl Store {
 }
 
 fn remove_workspace_dir(id: &str) -> Result<()> {
-    let workspace_dir = crate::paths::workspace_dir(id)?;
+    let workspace_dir = crate::support::paths::workspace_dir(id)?;
     let ws = workspace_dir.to_string_lossy();
     let safe_prefix =
         ws.starts_with("/tmp/aid-wg-") || ws.starts_with("/private/tmp/aid-wg-");

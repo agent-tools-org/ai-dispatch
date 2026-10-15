@@ -6,9 +6,9 @@ use super::*;
 use std::io::Read;
 
 fn monitor(script: &str) -> TaskStatus {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = Arc::new(Store::open_memory().expect("store"));
     let task = super::tests::pty_task("t-child-pty", TaskStatus::Running);
     store.insert_task(&task).expect("task");

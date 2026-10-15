@@ -3,7 +3,7 @@
 // Deps: process_group internals, test_subprocess, sh and perl.
 
 use super::{descendants_in_table, kill_with_grace, parse_table, unchanged_pids};
-use crate::test_subprocess::{self, is_live};
+use crate::support::test_subprocess::{self, is_live};
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::process::Command;
 use std::time::Duration;

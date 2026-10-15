@@ -3,7 +3,7 @@
 // Deps: super helpers, crate::store, tempfile.
 
 use super::*;
-use crate::test_env::CargoTargetDirGuard;
+use crate::support::test_env::CargoTargetDirGuard;
 use crate::types::{AgentKind, Task, TaskStatus, VerifyStatus};
 use chrono::Local;
 use tempfile::TempDir;

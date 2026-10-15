@@ -1,7 +1,7 @@
 // Wait-policy tests. Prepaid must return immediately and must not poll.
 
 use super::*;
-use crate::paths::{self, AidHomeGuard};
+use crate::support::paths::{self, AidHomeGuard};
 use crate::rate_limit::{is_rate_limited, mark_rate_limited};
 use crate::store::Store;
 use crate::types::{AgentKind, TaskProfileDeclaration, TaskUrgency};

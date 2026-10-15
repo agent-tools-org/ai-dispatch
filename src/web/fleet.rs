@@ -139,7 +139,7 @@ pub async fn get_fleet(
             host: server.host,
             port: server.port,
             started_at: server.started_at,
-            aid_home: crate::paths::aid_dir().display().to_string(),
+            aid_home: crate::support::paths::aid_dir().display().to_string(),
         },
         summary,
         sectors,

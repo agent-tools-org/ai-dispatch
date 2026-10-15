@@ -8,7 +8,7 @@ use super::{
     RunArgs,
 };
 use crate::store::Store;
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::path::Path;

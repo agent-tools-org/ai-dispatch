@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::store::Store;
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use crate::types::{AgentKind, VerifyStatus};
 use chrono::Local;
 use std::path::Path;

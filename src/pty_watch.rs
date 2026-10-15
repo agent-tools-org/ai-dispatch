@@ -206,7 +206,7 @@ impl MonitorState {
             self.progress_count() <= 1
         } else {
             !self.received_raw_bytes
-                && !crate::paths::agent_has_produced_bytes(task_id, self.start_system_time)
+                && !crate::support::paths::agent_has_produced_bytes(task_id, self.start_system_time)
         };
         awaiting_first_output && self.last_raw_chunk_time.elapsed() > first_token_timeout
     }
@@ -250,7 +250,7 @@ impl MonitorState {
         let window_start = std::time::SystemTime::now()
             .checked_sub(window)
             .unwrap_or(std::time::UNIX_EPOCH);
-        crate::paths::agent_has_produced_bytes(task_id, window_start)
+        crate::support::paths::agent_has_produced_bytes(task_id, window_start)
     }
 
     fn last_progress_detail(&self) -> Option<String> {

@@ -221,7 +221,7 @@ fn no_adapter_writes_a_marker_from_a_shape_the_model_can_author() {
     for (agent_kind, line) in cases {
         let temp = tempfile::tempdir().expect("temp dir");
         std::fs::create_dir_all(temp.path().join(".aid")).expect("aid dir");
-        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+        let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
 
         let agent = crate::agent::get_agent(agent_kind);
         let _ = agent.parse_event(&crate::types::TaskId("t-forge".to_string()), &line);
@@ -274,7 +274,7 @@ fn adapters_under_test() -> Vec<AgentKind> {
 }
 
 fn markers_on_disk() -> Vec<String> {
-    let Ok(entries) = std::fs::read_dir(crate::paths::aid_dir()) else {
+    let Ok(entries) = std::fs::read_dir(crate::support::paths::aid_dir()) else {
         return Vec::new();
     };
     entries

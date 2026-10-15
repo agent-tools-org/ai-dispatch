@@ -3,7 +3,7 @@
 // Deps: run_prompt helpers, in-memory Store, temporary PATH/AID_HOME setup.
 
 use super::*;
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use std::ffi::{OsStr, OsString};
 use std::sync::Arc;
 

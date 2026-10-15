@@ -5,7 +5,7 @@
 use super::super::resolve_agent_setup;
 use crate::agent::model_validation::{ModelSource, MockServedModelsGuard};
 use crate::cmd::run::RunArgs;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
 use crate::types::AgentKind;
 use std::sync::Arc;

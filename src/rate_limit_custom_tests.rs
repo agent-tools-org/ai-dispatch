@@ -2,7 +2,7 @@
 // Verifies two customs do not share a hold, and built-in paths stay unchanged.
 
 use super::*;
-use crate::paths::{self, AidHomeGuard};
+use crate::support::paths::{self, AidHomeGuard};
 use crate::types::AgentKind;
 
 #[test]

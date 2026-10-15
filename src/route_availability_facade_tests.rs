@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::agent::model_group::healthy_model_for;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::rate_limit::{
     active_group_holds, dispatch_blocking_hold_for_model, is_group_rate_limited, is_rate_limited,
     mark_group_rate_limited, mark_rate_limited,

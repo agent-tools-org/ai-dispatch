@@ -60,7 +60,7 @@ pub(crate) fn capture_failure_context(store: &Store, task_id: &TaskId, cmd: &Com
 }
 
 pub(crate) fn stderr_excerpt(task_id: &TaskId) -> Option<String> {
-    let stderr_path = crate::paths::stderr_path(task_id.as_str());
+    let stderr_path = crate::support::paths::stderr_path(task_id.as_str());
     let content = std::fs::read_to_string(stderr_path).ok()?;
     let lines: Vec<&str> = content
         .lines()

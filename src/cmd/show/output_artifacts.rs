@@ -4,7 +4,7 @@
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
-use crate::paths;
+use crate::support::paths;
 use crate::types::Task;
 
 use super::show_output_messages::read_task_output;

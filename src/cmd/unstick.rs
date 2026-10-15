@@ -71,7 +71,7 @@ mod tests {
 
     use super::{ESCALATED_EVENT_DETAIL, run};
     use crate::background::{self, BackgroundRunSpec};
-    use crate::paths;
+    use crate::support::paths;
     use crate::store::Store;
     use crate::types::{AgentKind, EventKind, Task, TaskId, TaskStatus, VerifyStatus};
 

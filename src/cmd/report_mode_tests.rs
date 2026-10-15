@@ -274,6 +274,6 @@ fn apply_defaults_skips_result_file_when_output_is_set() {
 
 #[test]
 fn read_only_host_report_is_inside_task_directory() {
-    assert_eq!(task_result_file("t-123"), crate::paths::task_dir("t-123").join("result.md")
+    assert_eq!(task_result_file("t-123"), crate::support::paths::task_dir("t-123").join("result.md")
         .to_string_lossy());
 }

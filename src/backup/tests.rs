@@ -4,7 +4,7 @@
 use super::config::{expand_folder, parse_cli_spec, resolve, Artifact};
 use super::lifecycle_tests::settle;
 use super::*;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
@@ -104,7 +104,7 @@ fn bundle_packs_export_diff_and_transcript() {
     let store = Store::open_memory().unwrap();
     let task = task("t-bundle");
     store.insert_task(&task).unwrap();
-    let log = crate::paths::log_path("t-bundle");
+    let log = crate::support::paths::log_path("t-bundle");
     fs::create_dir_all(log.parent().unwrap()).unwrap();
     fs::write(&log, "{\"line\":1}\n").unwrap();
 

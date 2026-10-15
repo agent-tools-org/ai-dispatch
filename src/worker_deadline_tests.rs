@@ -6,10 +6,10 @@ use super::*;
 use std::time::{Duration, Instant};
 
 async fn assert_deadline(pty: bool, streaming: bool, script: &str, default_max: bool) {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().expect("dirs");
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let id = TaskId("t-detached-deadline".into());
     store.insert_task(&super::tests::task_fixture(&id, TaskStatus::Running)).expect("task");
@@ -24,7 +24,7 @@ async fn assert_deadline(pty: bool, streaming: bool, script: &str, default_max: 
     } else {
         policy.max_duration = Duration::from_millis(400);
     }
-    let log = crate::paths::log_path(id.as_str());
+    let log = crate::support::paths::log_path(id.as_str());
     let started = Instant::now();
     let agent = crate::watcher::idle_tests::FakeAgent;
     if pty {

@@ -3,7 +3,7 @@
 // Deps: show::read_task_output / owned_output_path, Task fixtures.
 
 use crate::cmd::show::{missing_owned_output_absence, owned_output_path, read_task_output};
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::path::Path;

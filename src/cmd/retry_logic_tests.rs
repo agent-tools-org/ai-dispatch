@@ -63,7 +63,7 @@ fn retry_args_for(store: &Store, task: &Task) -> Result<RunArgs> {
 
 #[test]
 fn failed_retry_with_pruned_worktree_keeps_branch_target() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let store = Store::open_memory().unwrap();
     let repo = init_repo();
     let branch = format!("fix/retry-pruned-{}", std::process::id());
@@ -84,7 +84,7 @@ fn failed_retry_with_pruned_worktree_keeps_branch_target() {
 
 #[test]
 fn pruned_retry_recreates_worktree_from_parent_branch_tip() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let store = Store::open_memory().unwrap();
     let repo = init_repo();
     let branch = format!("fix/retry-preserve-{}", std::process::id());
@@ -114,7 +114,7 @@ fn pruned_retry_recreates_worktree_from_parent_branch_tip() {
 
 #[test]
 fn failed_retry_errors_when_recorded_branch_is_gone() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let store = Store::open_memory().unwrap();
     let repo = init_repo();
     let branch = format!("fix/retry-missing-{}", std::process::id());

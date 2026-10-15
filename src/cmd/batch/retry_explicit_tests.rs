@@ -50,7 +50,7 @@ async fn explicit_retry_batch_stopped_parent_launches() {
 }
 
 fn install_explicit_retry_agent(repo: &std::path::Path) {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     assert!(
         std::process::Command::new("git")
             .args(["init", "-b", "main"])

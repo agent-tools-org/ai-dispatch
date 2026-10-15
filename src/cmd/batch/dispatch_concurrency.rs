@@ -18,7 +18,7 @@ pub(super) fn effective_max_active(
     // Default: use system resource recommendation capped at task count.
     // Previously this was further capped by unique_effective_agent_count,
     // which serialized all-same-agent batches to 1 (#100).
-    Ok(crate::system_resources::recommended_max_concurrent()
+    Ok(crate::support::system_resources::recommended_max_concurrent()
         .min(tasks.len())
         .max(1))
 }

@@ -53,10 +53,10 @@ async fn idle_task_past_deadline_times_out() {
 }
 
 async fn assert_worker_timeout(script: &str) {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().expect("dirs");
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let task_id = TaskId("t-active-deadline".into());
     store.insert_task(&task(&task_id, TaskStatus::Running)).expect("task");
@@ -91,8 +91,8 @@ fn foreground_default_duration_uses_shared_config_constant() {
 #[tokio::test]
 async fn max_duration_timeout_reaches_on_fail_lifecycle() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = TaskId("t-foreground-timeout".to_string());
     store.insert_task(&task(&task_id, TaskStatus::Running)).unwrap();
@@ -157,8 +157,8 @@ async fn run_failure_hook(store: &Arc<Store>, task_id: &TaskId, hook_path: &std:
 #[tokio::test]
 async fn spawn_failure_marks_task_failed_not_running() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = TaskId("t-spawn-miss".to_string());
     store.insert_task(&task(&task_id, TaskStatus::Running)).unwrap();
@@ -214,7 +214,7 @@ fn task(task_id: &TaskId, status: TaskStatus) -> Task {
 #[test]
 fn process_foreground_completion_records_component_usage() {
     let _guard = crate::cost::test_support::seed_prices(Some(0.125));
-    crate::paths::ensure_dirs().expect("aid dirs");
+    crate::support::paths::ensure_dirs().expect("aid dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut task = crate::cost::test_support::task(crate::types::AgentKind::Codex, 238_440, None);
     task.status = TaskStatus::Running;
@@ -235,7 +235,7 @@ fn process_foreground_completion_records_component_usage() {
         cmd: Command::new("true"),
         task_id: &task.id,
         store: &store,
-        log_path: &crate::paths::log_path(task.id.as_str()),
+        log_path: &crate::support::paths::log_path(task.id.as_str()),
         output_path: None,
         model: task.requested_model.as_deref(),
         streaming: true,

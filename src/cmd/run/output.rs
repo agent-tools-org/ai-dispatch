@@ -37,7 +37,7 @@ pub(in crate::cmd) fn persist_result_file(
     if !file_has_content(&source) {
         return persist_result_from_log(task_id, log_path, agent_name);
     }
-    let dest = crate::paths::task_dir(task_id).join("result.md");
+    let dest = crate::support::paths::task_dir(task_id).join("result.md");
     if source.as_path() == dest.as_path() {
         return Ok(ResultDelivery::File);
     }
@@ -57,7 +57,7 @@ fn persist_result_from_log(
     let Some(content) = extract_output_fallback_from_log(log_path, agent_name) else {
         return Ok(ResultDelivery::MissingFile { fallback_saved: false });
     };
-    let dest = crate::paths::task_dir(task_id).join("result.md");
+    let dest = crate::support::paths::task_dir(task_id).join("result.md");
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -205,12 +205,12 @@ mod tests {
     #[test]
     fn persist_result_file_resolves_relative_path_from_base_dir() {
         let temp = tempdir().unwrap();
-        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+        let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
         let work_dir = temp.path().join("work");
         std::fs::create_dir_all(&work_dir).unwrap();
         std::fs::write(work_dir.join("result.md"), "structured result").unwrap();
 
-        let log_path = crate::paths::log_path("t-result");
+        let log_path = crate::support::paths::log_path("t-result");
         let delivery = persist_result_file(
             "t-result",
             Some("result.md"),
@@ -220,7 +220,7 @@ mod tests {
         )
         .unwrap();
 
-        let saved = crate::paths::task_dir("t-result").join("result.md");
+        let saved = crate::support::paths::task_dir("t-result").join("result.md");
         assert_eq!(std::fs::read_to_string(saved).unwrap(), "structured result");
         assert_eq!(delivery, ResultDelivery::File);
     }
@@ -230,8 +230,8 @@ mod tests {
     #[test]
     fn persist_result_file_flags_narration_only_log_fallback() {
         let temp = tempdir().unwrap();
-        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-        let log_path = crate::paths::log_path("t-narration-result");
+        let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+        let log_path = crate::support::paths::log_path("t-narration-result");
         std::fs::create_dir_all(log_path.parent().unwrap()).unwrap();
         let narration = "I will run `git diff main..HEAD` to get the list of changes made in the branch.\n\
 I will read the generated diff file using the `view_file` tool to inspect the full set of changes.\n\
@@ -248,23 +248,23 @@ I will inspect the indexer snapshot file to answer the second question about det
     #[test]
     fn persist_result_file_uses_log_when_source_missing() {
         let temp = tempdir().unwrap();
-        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-        let log_path = crate::paths::log_path("t-log-result");
+        let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+        let log_path = crate::support::paths::log_path("t-log-result");
         std::fs::create_dir_all(log_path.parent().unwrap()).unwrap();
         std::fs::write(&log_path, "{\"type\":\"text\",\"content\":\"stdout report\"}\n").unwrap();
 
         persist_result_file("t-log-result", Some("result.md"), Some("/missing"), &log_path, None)
             .unwrap();
 
-        let saved = crate::paths::task_dir("t-log-result").join("result.md");
+        let saved = crate::support::paths::task_dir("t-log-result").join("result.md");
         assert_eq!(std::fs::read_to_string(saved).unwrap(), "stdout report");
     }
 
     #[test]
     fn persist_result_file_uses_raw_text_log_when_source_missing() {
         let temp = tempdir().unwrap();
-        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-        let log_path = crate::paths::log_path("t-raw-log-result");
+        let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+        let log_path = crate::support::paths::log_path("t-raw-log-result");
         std::fs::create_dir_all(log_path.parent().unwrap()).unwrap();
         std::fs::write(&log_path, "plain text report\nwith final findings").unwrap();
 
@@ -272,7 +272,7 @@ I will inspect the indexer snapshot file to answer the second question about det
             persist_result_file("t-raw-log-result", Some("result.md"), Some("/missing"), &log_path, None)
                 .unwrap();
 
-        let saved = crate::paths::task_dir("t-raw-log-result").join("result.md");
+        let saved = crate::support::paths::task_dir("t-raw-log-result").join("result.md");
         assert_eq!(
             std::fs::read_to_string(saved).unwrap(),
             "plain text report\nwith final findings"
@@ -283,8 +283,8 @@ I will inspect the indexer snapshot file to answer the second question about det
     #[test]
     fn persist_result_file_skips_empty_or_missing_log_when_source_missing() {
         let temp = tempdir().unwrap();
-        let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-        let missing_log = crate::paths::log_path("t-missing-log-result");
+        let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+        let missing_log = crate::support::paths::log_path("t-missing-log-result");
 
         persist_result_file(
             "t-missing-log-result",
@@ -295,10 +295,10 @@ I will inspect the indexer snapshot file to answer the second question about det
         )
         .unwrap();
 
-        let missing_saved = crate::paths::task_dir("t-missing-log-result").join("result.md");
+        let missing_saved = crate::support::paths::task_dir("t-missing-log-result").join("result.md");
         assert!(!missing_saved.exists());
 
-        let empty_log = crate::paths::log_path("t-empty-log-result");
+        let empty_log = crate::support::paths::log_path("t-empty-log-result");
         std::fs::create_dir_all(empty_log.parent().unwrap()).unwrap();
         std::fs::write(&empty_log, "").unwrap();
 
@@ -311,7 +311,7 @@ I will inspect the indexer snapshot file to answer the second question about det
         )
         .unwrap();
 
-        let empty_saved = crate::paths::task_dir("t-empty-log-result").join("result.md");
+        let empty_saved = crate::support::paths::task_dir("t-empty-log-result").join("result.md");
         assert!(!empty_saved.exists());
     }
 }

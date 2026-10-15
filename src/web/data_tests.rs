@@ -17,7 +17,7 @@ use crate::types::{AttributionSource, TaskStatus};
 #[tokio::test(flavor = "current_thread")]
 async fn running_task_reports_measured_worker_rss_and_fleet_sums_it() {
     let home = tempfile::tempdir().unwrap();
-    let _home = crate::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::paths::AidHomeGuard::set(home.path());
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = make_task("t-memory");
     task.status = TaskStatus::Pending;
@@ -65,7 +65,7 @@ async fn running_task_reports_measured_worker_rss_and_fleet_sums_it() {
 #[tokio::test(flavor = "current_thread")]
 async fn sector_workgroup_is_derived_from_any_task_in_the_sector() {
     let home = tempfile::tempdir().unwrap();
-    let _home = crate::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::paths::AidHomeGuard::set(home.path());
     let store = Arc::new(Store::open_memory().unwrap());
     let mut first = make_task("t-sector-first");
     first.project_id = Some("shared-sector".to_string());
@@ -101,7 +101,7 @@ async fn sector_workgroup_is_derived_from_any_task_in_the_sector() {
 #[tokio::test(flavor = "current_thread")]
 async fn fleet_reports_the_latest_observed_model_for_an_agent() {
     let home = tempfile::tempdir().unwrap();
-    let _home = crate::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::paths::AidHomeGuard::set(home.path());
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = make_task("t-observed-model");
     task.observed_model = Some("gpt-observed".to_string());

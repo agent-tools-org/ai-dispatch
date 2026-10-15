@@ -2,7 +2,7 @@
 // Uses auth_marker helpers and isolated AID homes.
 
 use super::*;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 
 const GROK_ERROR: &str = concat!(
     r#"{"type":"error","message":"Not signed in. To authenticate without a browser, run:"#,
@@ -22,8 +22,8 @@ fn no_evidence_is_unknown() {
 fn not_signed_in_run_sets_failed_with_observed_time() {
     let home = tempfile::tempdir().expect("home");
     let _guard = AidHomeGuard::set(home.path());
-    std::fs::create_dir_all(crate::paths::logs_dir()).expect("logs");
-    std::fs::write(crate::paths::log_path("t-auth"), format!("{GROK_ERROR}\n")).expect("log");
+    std::fs::create_dir_all(crate::support::paths::logs_dir()).expect("logs");
+    std::fs::write(crate::support::paths::log_path("t-auth"), format!("{GROK_ERROR}\n")).expect("log");
     assert!(record_from_run(
         "t-auth",
         AgentKind::Grok,

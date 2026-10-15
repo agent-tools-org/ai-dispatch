@@ -3,11 +3,11 @@
 // Deps: feed cache helpers, isolated AidHomeGuard, tempfile.
 
 use super::*;
-use crate::{paths::AidHomeGuard, scores::test_support::sample};
+use crate::{support::paths::AidHomeGuard, scores::test_support::sample};
 use std::path::Path;
 
 fn store_response(path: &Path, body: Option<&[u8]>) -> anyhow::Result<()> {
-    fs::create_dir_all(crate::paths::aid_dir())?;
+    fs::create_dir_all(crate::support::paths::aid_dir())?;
     fs::write(path.with_extension("json.part"), b"reserved")?;
     if let Some(body) = body {
         fs::write(path.with_extension("json.ready"), body)?;
@@ -21,7 +21,7 @@ fn store_response(path: &Path, body: Option<&[u8]>) -> anyhow::Result<()> {
 fn cache_refresh_keeps_old_sample_on_failure_empty_stale_or_malformed() {
     let dir = tempfile::tempdir().expect("dir");
     let _guard = AidHomeGuard::set(dir.path());
-    let path = crate::paths::aid_dir().join("scores.json");
+    let path = crate::support::paths::aid_dir().join("scores.json");
     let old = sample();
     store_response(&path, Some(&serde_json::to_vec(&old).expect("sample"))).expect("store");
     for body in [None, Some(b"broken JSON".as_slice())] {
@@ -45,7 +45,7 @@ fn cache_refresh_keeps_old_sample_on_failure_empty_stale_or_malformed() {
     store_response(&path, Some(&serde_json::to_vec(&new).expect("new"))).expect("store");
     assert_eq!(load_cache(), Some(new));
     assert_eq!(
-        fs::read_dir(crate::paths::aid_dir())
+        fs::read_dir(crate::support::paths::aid_dir())
             .expect("cache dir")
             .filter_map(Result::ok)
             .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
@@ -59,8 +59,8 @@ fn missing_corrupt_or_empty_cache_is_unknown() {
     let dir = tempfile::tempdir().expect("dir");
     let _guard = AidHomeGuard::set(dir.path());
     assert_eq!(load_cache(), None);
-    fs::create_dir_all(crate::paths::aid_dir()).expect("dir");
-    let path = crate::paths::aid_dir().join("scores.json");
+    fs::create_dir_all(crate::support::paths::aid_dir()).expect("dir");
+    let path = crate::support::paths::aid_dir().join("scores.json");
     fs::write(&path, b"bad").expect("cache");
     assert_eq!(load_cache(), None);
     let mut feed = sample();
@@ -75,9 +75,9 @@ fn stale_local_cache_serves_evidence_but_needs_refresh_after_24_hours() {
     let _guard = AidHomeGuard::set(dir.path());
     let mut feed = sample();
     feed.built_at = (Utc::now() - chrono::Duration::hours(25)).to_rfc3339();
-    fs::create_dir_all(crate::paths::aid_dir()).expect("dir");
+    fs::create_dir_all(crate::support::paths::aid_dir()).expect("dir");
     fs::write(
-        crate::paths::aid_dir().join("scores.json"),
+        crate::support::paths::aid_dir().join("scores.json"),
         serde_json::to_vec(&feed).expect("feed"),
     )
     .expect("cache");

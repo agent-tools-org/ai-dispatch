@@ -107,9 +107,9 @@ fn parse_diff_stat_empty_text() {
 #[test]
 fn diff_text_falls_back_to_default_log_output() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    std::fs::create_dir_all(crate::paths::logs_dir()).unwrap();
-    std::fs::write(crate::paths::log_path("t-log-fallback"), "log output\n").unwrap();
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(crate::support::paths::logs_dir()).unwrap();
+    std::fs::write(crate::support::paths::log_path("t-log-fallback"), "log output\n").unwrap();
 
     let store = Arc::new(Store::open_memory().unwrap());
     let task = test_task("t-log-fallback");
@@ -260,9 +260,9 @@ fn extract_messages_full_skips_truncation() {
 #[test]
 fn output_text_for_task_prefers_extracted_messages_to_raw_log() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    std::fs::create_dir_all(crate::paths::logs_dir()).unwrap();
-    let log_path = crate::paths::log_path("t-output-messages");
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(crate::support::paths::logs_dir()).unwrap();
+    let log_path = crate::support::paths::log_path("t-output-messages");
     let log_content = [
         json!({
             "type": "message",
@@ -327,9 +327,9 @@ fn extract_messages_research_relaxed_limits() {
 #[test]
 fn output_text_uses_research_mode_for_no_worktree() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    std::fs::create_dir_all(crate::paths::logs_dir()).unwrap();
-    let log_path = crate::paths::log_path("t-research-output");
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(crate::support::paths::logs_dir()).unwrap();
+    let log_path = crate::support::paths::log_path("t-research-output");
     write_log(&log_path, numbered_assistant_log(12, 1_200));
 
     let store = Arc::new(Store::open_memory().unwrap());

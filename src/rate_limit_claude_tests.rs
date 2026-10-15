@@ -10,7 +10,7 @@ use crate::types::AgentKind;
 #[test]
 fn droid_default_can_launch_with_only_core_held_refusal_regression() {
     let temp = tempfile::tempdir().expect("home");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let droid = AgentKind::Droid;
     rate_limit::mark_rate_limited_for_message(
         &droid,
@@ -33,7 +33,7 @@ fn monthly_droid_core_provider_error_holds_until_reset_refusal_regression() {
     );
     for channel in [Channel::CliStream, Channel::CliStderr] {
         let temp = tempfile::tempdir().expect("home");
-        let _home = crate::paths::AidHomeGuard::set(temp.path());
+        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
         let event = serde_json::json!({"type": "error", "message": message}).to_string();
         if channel == Channel::CliStderr {
             assert_eq!(refusal_on_channel(&event, AgentKind::Droid, channel), None);
@@ -66,7 +66,7 @@ fn monthly_droid_core_provider_error_holds_until_reset_refusal_regression() {
 #[test]
 fn claude_seven_day_hold_lasts_until_structured_reset_refusal_regression() {
     let temp = tempfile::tempdir().expect("home");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let reset = Utc::now().timestamp().div_euclid(60) * 60 + 7 * 24 * 3600;
     let event = serde_json::json!({
         "type": "rate_limit_event",
@@ -97,7 +97,7 @@ fn claude_seven_day_hold_lasts_until_structured_reset_refusal_regression() {
 #[test]
 fn expired_claude_seven_day_reset_releases_hold_refusal_regression() {
     let temp = tempfile::tempdir().expect("home");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let event = serde_json::json!({
         "type": "rate_limit_event",
         "rate_limit_info": {"status": "rejected", "rateLimitType": "seven_day",
@@ -113,7 +113,7 @@ fn unrelated_429_with_unix_trace_does_not_create_a_dated_hold() {
     let message = "HTTP 429 downloading an artifact; trace|1893456000";
     assert_eq!(parse_recovery_time(message), None);
     let temp = tempfile::tempdir().expect("temp dir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let event = serde_json::json!({"type": "error", "message": message}).to_string();
     let refusal = refusal_on_channel(&event, AgentKind::Cursor, Channel::CliStream)
         .expect("429 in error envelope");
@@ -126,7 +126,7 @@ fn unrelated_429_with_unix_trace_does_not_create_a_dated_hold() {
 #[test]
 fn unwrapped_claude_prose_cannot_create_a_hold() {
     let temp = tempfile::tempdir().expect("temp dir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     for line in [
         "Fixture says You've hit your limit",
         "Fixture says You've hit your limit|1893456000",
@@ -150,7 +150,7 @@ fn unwrapped_claude_prose_cannot_create_a_hold() {
 #[test]
 fn rejected_claude_event_uses_its_nearby_unix_reset() {
     let temp = tempfile::tempdir().expect("temp dir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let reset = Utc::now().timestamp() + 7200;
     let event = serde_json::json!({
         "type": "rate_limit_event",
@@ -168,7 +168,7 @@ fn rejected_claude_event_uses_its_nearby_unix_reset() {
 #[test]
 fn far_future_claude_reset_falls_back_to_signature_window() {
     let temp = tempfile::tempdir().expect("temp dir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let reset = Utc::now().timestamp() + 30 * 24 * 3600;
     let event = serde_json::json!({
         "type": "rate_limit_event",

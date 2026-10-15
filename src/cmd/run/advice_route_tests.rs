@@ -8,11 +8,11 @@ use std::sync::Arc;
 
 fn isolated() -> (
     tempfile::TempDir,
-    crate::paths::AidHomeGuard,
+    crate::support::paths::AidHomeGuard,
     crate::live_quota::CacheDirGuard,
 ) {
     let dir = tempfile::tempdir().expect("home");
-    let home = crate::paths::AidHomeGuard::set(dir.path());
+    let home = crate::support::paths::AidHomeGuard::set(dir.path());
     let cache = crate::live_quota::CacheDirGuard::set(dir.path());
     crate::agent::codex::cli_config::set_test_codex_home(Some(dir.path().join("no-codex")));
     (dir, home, cache)

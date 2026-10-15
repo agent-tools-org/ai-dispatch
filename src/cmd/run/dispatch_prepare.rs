@@ -4,7 +4,7 @@
 use anyhow::Result;
 use chrono::Local;
 use std::{path::{Path, PathBuf}, sync::Arc};
-use crate::{agent, paths, project::{self, ProjectConfig}, session};
+use crate::{agent, support::paths, project::{self, ProjectConfig}, session};
 use crate::{store::Store, types::*};
 use super::run_dispatch_claim::insert_task_claiming_id;
 use super::run_dispatch_resolve::{AgentSetup, apply_project_defaults, maybe_insert_held_route_event, resolve_agent_setup};
@@ -118,7 +118,7 @@ where
     let explicit_id = args.existing_task_id.is_some(); let mut task_id = initial_task_id(args)?;
     let mut log_path = paths::log_path(task_id.as_str());
     let workgroup = run_prompt::load_workgroup(store, args.group.as_deref())?;
-    let explicit_repo_path = crate::repo_root::resolve_explicit_repo_path(args.repo_root.as_deref(), args.repo.as_deref())?;
+    let explicit_repo_path = crate::support::repo_root::resolve_explicit_repo_path(args.repo_root.as_deref(), args.repo.as_deref())?;
     let caller = session::current_caller();
     let mut task = pending_task(
         args,
@@ -240,7 +240,7 @@ fn finish_dispatch(
 
 fn initial_task_id(args: &RunArgs) -> Result<TaskId> {
     let Some(id) = args.existing_task_id.clone() else { return Ok(TaskId::generate()) };
-    crate::sanitize::validate_task_id(id.as_str())?;
+    crate::support::sanitize::validate_task_id(id.as_str())?;
     Ok(id)
 }
 

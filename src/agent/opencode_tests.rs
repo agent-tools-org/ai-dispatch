@@ -3,7 +3,7 @@
 
 use super::super::{Agent, RunOpts, get_agent};
 use super::*;
-use crate::{paths, rate_limit};
+use crate::{support::paths, rate_limit};
 
 #[test]
 fn parses_new_milestone_events() {

@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn spawn_and_wait() {
-        let _permit = crate::test_subprocess::acquire();
+        let _permit = crate::support::test_subprocess::acquire();
         let mut cmd = Command::new("echo");
         cmd.arg("hello");
         let mut guard = ProcessGuard::spawn(&mut cmd).unwrap();
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn spawn_detached() {
-        let _permit = crate::test_subprocess::acquire();
+        let _permit = crate::support::test_subprocess::acquire();
         let mut cmd = Command::new("echo");
         cmd.arg("hello");
         let mut guard = ProcessGuard::spawn_detached(&mut cmd).unwrap();
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn wait_with_timeout_completes() {
-        let _permit = crate::test_subprocess::acquire();
+        let _permit = crate::support::test_subprocess::acquire();
         let mut cmd = Command::new("echo");
         cmd.arg("hello");
         let mut guard = ProcessGuard::spawn(&mut cmd).unwrap();
@@ -171,7 +171,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn wait_with_timeout_kills_on_expiry() {
-        let _permit = crate::test_subprocess::acquire();
+        let _permit = crate::support::test_subprocess::acquire();
         let mut cmd = Command::new("sleep");
         cmd.arg("60");
         let mut guard = ProcessGuard::spawn(&mut cmd).unwrap();
@@ -184,7 +184,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn drop_cleans_up_process_group() {
-        let _permit = crate::test_subprocess::acquire();
+        let _permit = crate::support::test_subprocess::acquire();
         let mut cmd = Command::new("sleep");
         cmd.arg("60");
         let guard = ProcessGuard::spawn(&mut cmd).unwrap();

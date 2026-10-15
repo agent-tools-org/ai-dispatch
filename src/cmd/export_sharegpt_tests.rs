@@ -2,7 +2,7 @@
 // Exports: module-local tests for export_sharegpt.rs.
 // Deps: export_sharegpt helpers, Store, AidHomeGuard, tempfile.
 use super::{ShareGptRecord, export_sharegpt};
-use crate::paths::{self, AidHomeGuard};
+use crate::support::paths::{self, AidHomeGuard};
 use crate::store::Store;
 use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;

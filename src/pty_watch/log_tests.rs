@@ -34,7 +34,7 @@ fn handle_chunk_strips_terminal_escapes_before_log_write() {
 #[test]
 fn output_after_pty_write_never_acknowledges_input() {
     use crate::types::{MessageDirection, MessageSource};
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = pty_task("t-unconfirmed-input");
     task.agent = AgentKind::Gemini;

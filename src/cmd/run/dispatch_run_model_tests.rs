@@ -2,7 +2,7 @@
 // Deps: dispatch_run_model::input, RunModelInput::declared, isolated AID_HOME and codex home.
 
 use super::*;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::types::{DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
 
 #[test]

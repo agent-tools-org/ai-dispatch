@@ -28,7 +28,7 @@ fn setup() -> (
     RunArgs,
 ) {
     let home = tempfile::tempdir().unwrap();
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     assert!(
         std::process::Command::new("git")
             .args(["init", "-b", "main"])
@@ -129,7 +129,7 @@ async fn stop_followup_judge_retry_after_parent_stop_creates_nothing() {
 #[tokio::test]
 async fn stop_followup_iteration_after_parent_stop_creates_nothing() {
     let (home, _guard, store, parent, args) = setup();
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let socket = home.path().join("eval.sock");
     let listener = UnixListener::bind(&socket).unwrap();
     let stop_store = store.clone();

@@ -2,7 +2,7 @@
 // Deps: resolve_run_model, isolated AID_HOME, test codex home, custom agent config parser.
 
 use super::*;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 
 struct Isolated {
     _temp: tempfile::TempDir,

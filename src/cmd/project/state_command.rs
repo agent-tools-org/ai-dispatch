@@ -15,7 +15,7 @@ type AgentRate = (String, f64, usize);
 pub(super) fn run() -> Result<()> {
     let git_root = current_git_root()?;
     let repo_path = git_root.to_string_lossy().into_owned();
-    let store = Store::open(&crate::paths::db_path())?;
+    let store = Store::open(&crate::support::paths::db_path())?;
     let state = state::compute_state(&store, &repo_path)?;
     state::save_state(&state)?;
     let agent_rates = store.project_agent_success_rates(&repo_path)?;

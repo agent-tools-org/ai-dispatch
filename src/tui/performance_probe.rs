@@ -14,7 +14,7 @@ use super::{RunOptions, app::App};
 fn profile_tui_snapshot() {
     let path = std::env::var("AID_TUI_PROFILE_DB").expect("explicit snapshot path required");
     let home = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     let store = Arc::new(Store::open_read_only(std::path::Path::new(&path)).unwrap().unwrap());
     crate::store::optimize_for_concurrency(&store.db()).unwrap();
     let mut app = measure("app_new", || App::new(store.clone(), RunOptions::default()).unwrap());

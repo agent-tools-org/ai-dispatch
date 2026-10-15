@@ -3,7 +3,7 @@
 // Deps: board::render_task_detail, git CLI, Task fixtures.
 
 use super::render_task_detail;
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::path::Path;

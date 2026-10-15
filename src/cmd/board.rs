@@ -54,7 +54,7 @@ pub fn run(
     let truncation = apply_limit(&mut tasks, limit, running, today, mine, group);
 
     let fingerprint = task_fingerprint(&tasks);
-    let marker_path = crate::paths::aid_dir().join("board-last.txt");
+    let marker_path = crate::support::paths::aid_dir().join("board-last.txt");
     let now = Local::now().timestamp();
     let mut repeat_count = 0;
     let mut force_state = ForceMarkerState::default();
@@ -162,7 +162,7 @@ fn terminal_missing_result_notices(tasks: &[Task]) -> Option<String> {
         if !matches!(task.status, TaskStatus::Done | TaskStatus::Failed) {
             continue;
         }
-        let result_path = crate::paths::task_dir(task.id.as_str()).join("result.md");
+        let result_path = crate::support::paths::task_dir(task.id.as_str()).join("result.md");
         if result_path.exists() {
             continue;
         }

@@ -80,7 +80,7 @@ fn auto_save_creates_output_for_research_task() {
     task.log_path = Some(log_path.display().to_string());
     store.insert_task(&task).unwrap();
     auto_save_task_output(&store, &task).unwrap();
-    let output_path = crate::paths::task_dir(task.id.as_str()).join("output.md");
+    let output_path = crate::support::paths::task_dir(task.id.as_str()).join("output.md");
     assert_eq!(std::fs::read_to_string(&output_path).unwrap(), "saved output");
     assert_eq!(store.get_task(task.id.as_str()).unwrap().unwrap().output_path, Some(output_path.display().to_string()));
 }
@@ -89,7 +89,7 @@ fn auto_save_creates_output_for_research_task() {
 async fn dry_run_returns_without_starting_task() {
     let temp = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = run(
         store.clone(),
@@ -115,7 +115,7 @@ async fn dry_run_returns_without_starting_task() {
 async fn run_records_worktree_setup_failure_event() {
     let temp = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = TaskId("t-worktree-fail".to_string());
 
@@ -150,7 +150,7 @@ async fn run_records_worktree_setup_failure_event() {
 async fn rate_limited_agent_without_cascade_fails_early() {
     let temp = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     // No installed peers → category-aware fallback correctly returns None.
     let _agents = crate::agent::DetectAgentsGuard::set(vec![AgentKind::MiMoCode]);
     let stated = crate::rate_limit::test_future_recovery_time();
@@ -173,7 +173,7 @@ async fn rate_limited_agent_without_cascade_fails_early() {
 async fn rate_limited_agent_with_cascade_proceeds() {
     let temp = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     crate::rate_limit::mark_rate_limited(
         &AgentKind::Kilo,

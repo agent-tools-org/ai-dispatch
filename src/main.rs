@@ -37,7 +37,6 @@ mod container;
 mod context;
 mod cost;
 pub mod credential_pool;
-mod explore;
 mod failure_salvage;
 mod feed_refresh;
 mod delivery_guard;
@@ -52,7 +51,6 @@ mod model_catalog;
 mod model_health;
 mod provider_capacity;
 mod notify;
-mod paths;
 mod prompt;
 mod prompt_scan;
 pub mod process_group;
@@ -67,13 +65,10 @@ mod quota_channel;
 mod rate_limit;
 mod rate_limit_signatures;
 mod rate_limit_wait;
-mod repo_root;
-pub(crate) mod sanitize;
 mod sandbox;
 #[cfg(test)]
 mod sandbox_tests;
 mod session;
-mod shared_dir;
 mod skills;
 mod state;
 #[cfg(test)]
@@ -90,17 +85,11 @@ mod templates;
 mod timeout_policy;
 mod toolbox;
 mod unstick;
-#[cfg(test)]
-mod test_subprocess;
-#[cfg(test)]
-mod test_env;
 mod compaction;
 pub mod claudemd;
 mod tui;
-mod system_resources;
 mod scores;
 mod types;
-mod update_check;
 mod usage;
 pub mod usage_report;
 mod verify;
@@ -116,6 +105,7 @@ mod worktree_deps;
 mod worktree;
 mod worktree_layout;
 mod cli;
+mod support;
 
 use crate::cli::{Cli, Commands};
 use anyhow::Result;
@@ -154,10 +144,10 @@ async fn async_main(cli: Cli) -> Result<()> {
         Some(Commands::Advise(args)) => {
             // Advise reads the score feed, so it starts the detached refresh too, but only
             // in an initialised aid home: advise must not create state in a fresh one.
-            if paths::db_path().exists() {
+            if support::paths::db_path().exists() {
                 cost::maybe_refresh_prices();
             }
-            let store = store::Store::open_read_only(&paths::db_path())?;
+            let store = store::Store::open_read_only(&support::paths::db_path())?;
             cmd::advise::run(store.as_ref(), args)?;
             return Ok(());
         }
@@ -166,15 +156,15 @@ async fn async_main(cli: Cli) -> Result<()> {
         other => other,
     };
 
-    paths::ensure_dirs()?;
+    support::paths::ensure_dirs()?;
     let config = config::load_config().unwrap_or_default();
     if config.updates.check {
-        update_check::maybe_check_update();
+        support::update_check::maybe_check_update();
     }
     // Refresh the model price feed out of band: never on the dispatch path, so
     // a cold or stale cache cannot delay or fail a run.
     cost::maybe_refresh_prices();
-    let store = Arc::new(store::Store::open(&paths::db_path())?);
+    let store = Arc::new(store::Store::open(&support::paths::db_path())?);
     cost::warm_gemini_default_from_store(store.as_ref());
     let _ = background::check_zombie_tasks(&store);
 

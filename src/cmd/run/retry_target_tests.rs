@@ -44,7 +44,7 @@ fn failed_task(id: &str) -> Task {
 
 #[test]
 fn live_worktree_retry_without_repo_path_derives_repo_anchor() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let repo = init_repo();
     let worktree_root = tempfile::tempdir().unwrap();
     let worktree = worktree_root.path().join("linked");

@@ -4,7 +4,7 @@
 // `gws` scripts stand in for the real binary.
 
 use super::*;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
@@ -81,7 +81,7 @@ fn fake_gws(home: &Path, body: &str) -> std::path::PathBuf {
     fs::write(&binary, script).unwrap();
     fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
     fs::write(
-        crate::paths::config_path(),
+        crate::support::paths::config_path(),
         format!("[backup.gdrive]\nbinary = '{}'\n", binary.display()),
     )
     .unwrap();
@@ -103,7 +103,7 @@ pub(super) fn settle(store: &Store, task_id: &str, status: TaskStatus) {
 
 #[test]
 fn settled_done_task_uploads_exactly_once() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let home = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(home.path());
     let log = working_gws(home.path());
@@ -210,7 +210,7 @@ fn failed_backup_keeps_the_agent_error_as_latest_error() {
 
 #[test]
 fn two_settlement_contenders_upload_exactly_once() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let home = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(home.path());
     let log = working_gws(home.path());
@@ -247,7 +247,7 @@ fn two_settlement_contenders_upload_exactly_once() {
 
 #[test]
 fn failed_event_write_does_not_allow_another_backup_attempt() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let home = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(home.path());
     let log = failing_gws(home.path());

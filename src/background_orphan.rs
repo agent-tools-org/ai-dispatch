@@ -119,12 +119,12 @@ fn is_idle_bookkeeping_event(event: &TaskEvent) -> bool {
 /// first-token budget onto 2x idle. The file has to have been written after the task
 /// started to say anything about this run.
 fn agent_has_produced_bytes(task_id: &str, started_at: DateTime<Local>) -> bool {
-    crate::paths::agent_has_produced_bytes(task_id, started_at.into())
+    crate::support::paths::agent_has_produced_bytes(task_id, started_at.into())
 }
 
 fn agent_bytes_mtime(task_id: &str) -> Option<DateTime<Local>> {
     let mut best: Option<DateTime<Local>> = None;
-    for path in crate::paths::agent_byte_paths(task_id) {
+    for path in crate::support::paths::agent_byte_paths(task_id) {
         let Ok(meta) = std::fs::metadata(&path) else {
             continue;
         };

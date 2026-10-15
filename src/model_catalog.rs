@@ -1,6 +1,6 @@
 // Shared agent model catalog: per-agent model/pricing data and catalog queries.
 // Exports: static and resolved model queries, pricing overrides, budget selection.
-// Deps: crate::types::AgentKind, crate::paths, serde, model_catalog_data
+// Deps: crate::types::AgentKind, crate::support::paths, serde, model_catalog_data
 
 use std::cmp::Ordering;
 use std::fs;

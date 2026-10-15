@@ -159,10 +159,10 @@ fn sandboxed_agents_identified() {
 fn build_prompt_bundle_uses_relative_workspace_for_sandboxed_agents() {
     let temp = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Store::open_memory().unwrap();
     let group = store.create_workgroup("batch", "desc", Some("seed"), None).unwrap();
-    let workspace = crate::paths::workspace_dir(group.id.as_str()).unwrap();
+    let workspace = crate::support::paths::workspace_dir(group.id.as_str()).unwrap();
     let bundle = run_prompt::build_prompt_bundle(
         &store,
         &RunArgs {
@@ -189,10 +189,10 @@ fn build_prompt_bundle_uses_relative_workspace_for_sandboxed_agents() {
 fn build_prompt_bundle_keeps_absolute_workspace_for_non_sandboxed_agents() {
     let temp = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Store::open_memory().unwrap();
     let group = store.create_workgroup("batch", "desc", Some("seed"), None).unwrap();
-    let workspace = crate::paths::workspace_dir(group.id.as_str()).unwrap();
+    let workspace = crate::support::paths::workspace_dir(group.id.as_str()).unwrap();
     let bundle = run_prompt::build_prompt_bundle(
         &store,
         &RunArgs {
@@ -218,7 +218,7 @@ fn build_prompt_bundle_keeps_absolute_workspace_for_non_sandboxed_agents() {
 #[test]
 fn workspace_symlink_guard_creates_and_cleans_up_link() {
     let group_id = format!("wg-symlink-{:04x}", rand::random::<u16>());
-    let workspace = crate::paths::workspace_dir(&group_id).unwrap();
+    let workspace = crate::support::paths::workspace_dir(&group_id).unwrap();
     std::fs::create_dir_all(&workspace).unwrap();
     let work_dir = TempDir::new().unwrap();
     let link_path = work_dir.path().join(".aid-workspace");

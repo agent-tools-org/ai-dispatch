@@ -2,7 +2,7 @@
 // Covers eval success/failure flow, prompt feedback, and iteration limits.
 
 use super::*;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
 use crate::types::{AgentKind, VerifyStatus};
 use std::path::Path;

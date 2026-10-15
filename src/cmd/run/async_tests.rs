@@ -11,7 +11,7 @@ use tempfile::TempDir;
 async fn dry_run_returns_without_starting_task() {
     let temp = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = run(store.clone(), RunArgs {
         agent_name: "codex".to_string(),
@@ -32,7 +32,7 @@ async fn dry_run_returns_without_starting_task() {
 async fn rate_limited_agent_without_cascade_fails_early() {
     let temp = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     // No installed peers → category-aware fallback correctly returns None.
     let _agents = crate::agent::DetectAgentsGuard::set(vec![AgentKind::MiMoCode]);
     let stated = crate::rate_limit::test_future_recovery_time();
@@ -55,7 +55,7 @@ async fn rate_limited_agent_without_cascade_fails_early() {
 async fn rate_limited_agent_with_cascade_proceeds() {
     let temp = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     crate::rate_limit::mark_rate_limited(
         &AgentKind::Kilo,
@@ -80,12 +80,12 @@ async fn rate_limited_agent_with_cascade_proceeds() {
 async fn background_urgency_does_not_invoke_needs_human_child() {
     let temp = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let _agents = crate::agent::DetectAgentsGuard::set(vec![]);
     let sentinel = temp.path().join("spawned");
     let script = temp.path().join("spy.sh");
     std::fs::write(&script, format!("echo invoked > \"{}\"\n", sentinel.display())).unwrap();
-    let agents_dir = crate::paths::aid_dir().join("agents");
+    let agents_dir = crate::support::paths::aid_dir().join("agents");
     std::fs::create_dir_all(&agents_dir).unwrap();
     std::fs::write(
         agents_dir.join("spy.toml"),
@@ -117,7 +117,7 @@ async fn background_urgency_does_not_invoke_needs_human_child() {
 async fn background_urgency_keeps_clock_hold() {
     let temp = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let _agents = crate::agent::DetectAgentsGuard::set(vec![AgentKind::MiMoCode]);
     crate::rate_limit::mark_rate_limited(
         &AgentKind::MiMoCode,
@@ -144,7 +144,7 @@ async fn background_urgency_keeps_clock_hold() {
 async fn background_urgency_blocks_oz_needs_human_hold() {
     let temp = TempDir::new().unwrap();
     let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    crate::support::paths::ensure_dirs().unwrap();
     let _agents = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Oz]);
     crate::rate_limit::mark_rate_limited(
         &AgentKind::Oz,

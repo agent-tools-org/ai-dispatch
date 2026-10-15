@@ -25,7 +25,7 @@ fn lock_wait_command(dir: &Path) {
 
 #[test]
 fn verify_lock_queue_time_does_not_consume_verify_timeout() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let dir = tempfile::tempdir().expect("temp");
     lock_wait_command(dir.path());
     let result = run_verify_with_timeout(
@@ -43,7 +43,7 @@ fn verify_lock_queue_time_does_not_consume_verify_timeout() {
 
 #[test]
 fn verify_lock_queue_still_obeys_task_deadline() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let dir = tempfile::tempdir().expect("temp");
     lock_wait_command(dir.path());
     let result = run_verify_with_env(

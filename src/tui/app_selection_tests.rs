@@ -53,7 +53,7 @@ fn make_task(id: &str) -> Task {
 #[test]
 fn selection_follows_task_identity_when_newer_task_appears() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = Arc::new(Store::open_memory().unwrap());
 
     let mut older = make_task("t-sel-old");
@@ -104,7 +104,7 @@ fn selection_follows_task_identity_when_newer_task_appears() {
 #[test]
 fn detail_scroll_clamps_to_content() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = Arc::new(Store::open_memory().unwrap());
     store.insert_task(&make_task("t-scroll-1")).unwrap();
     let mut app = App::new(

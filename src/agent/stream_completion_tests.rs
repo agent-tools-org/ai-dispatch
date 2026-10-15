@@ -43,7 +43,7 @@ fn nested_opencode_error_type_fails() {
 #[test]
 fn record_quota_exhaustion_ignores_agent_prose_about_rate_limits() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Cursor, None);
 
     let report = format!(
@@ -58,7 +58,7 @@ fn record_quota_exhaustion_ignores_agent_prose_about_rate_limits() {
 #[test]
 fn record_quota_exhaustion_detects_provider_refusal_templates() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
 
     crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
     let qwen_out = crate::quota_channel::test_qwen_result_envelope(
@@ -95,7 +95,7 @@ fn prose_rate_limit_tokens_are_not_quota_failures() {
 #[test]
 fn explicit_delivery_survives_a_later_quota_refusal() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
 
     let mut report = String::from("## Findings\n\n");
@@ -115,7 +115,7 @@ fn explicit_delivery_survives_a_later_quota_refusal() {
 #[test]
 fn markdown_shape_does_not_turn_a_refusal_into_delivery() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
 
     let output = "# Error\nQuota exhausted: Your token-plan 5-hour quota has been exhausted.";
@@ -131,7 +131,7 @@ fn markdown_shape_does_not_turn_a_refusal_into_delivery() {
 #[test]
 fn unobserved_providers_are_not_guessed_from_generic_prose() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
 
     for agent in [crate::types::AgentKind::Claude, crate::types::AgentKind::Grok] {
         crate::rate_limit::clear_rate_limit(&agent, None);
@@ -216,7 +216,7 @@ fn quota_line_keeps_a_reset_time_embedded_in_json() {
 #[test]
 fn a_report_quoting_this_repos_own_fixture_never_marks_the_agent() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     let cursor = crate::types::AgentKind::Cursor;
     crate::rate_limit::clear_all_rate_limits_for_agent(&cursor, None);
 
@@ -241,7 +241,7 @@ fn a_report_quoting_this_repos_own_fixture_never_marks_the_agent() {
 #[test]
 fn no_shipped_signature_can_be_quoted_into_a_marker() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
 
     for signature in crate::rate_limit_signatures::QUOTA_SIGNATURES {
         crate::rate_limit::clear_all_rate_limits_for_agent(&signature.agent, None);
@@ -273,7 +273,7 @@ fn no_shipped_signature_can_be_quoted_into_a_marker() {
 #[test]
 fn copilots_real_session_error_envelope_is_recorded() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     let copilot = crate::types::AgentKind::Copilot;
     crate::rate_limit::clear_all_rate_limits_for_agent(&copilot, None);
 
@@ -292,7 +292,7 @@ fn copilots_real_session_error_envelope_is_recorded() {
 #[test]
 fn the_same_needle_in_a_cli_error_envelope_still_marks() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     let cursor = crate::types::AgentKind::Cursor;
     crate::rate_limit::clear_all_rate_limits_for_agent(&cursor, None);
 
@@ -308,7 +308,7 @@ fn the_same_needle_in_a_cli_error_envelope_still_marks() {
 #[test]
 fn a_delivered_run_that_hit_a_refusal_keeps_its_marker() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     crate::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
 
     let mut report = String::from("## Findings\n\n");
@@ -422,7 +422,7 @@ fn buffered_grok_prose_about_rate_limits_never_marks_it() {
     // the buffered watcher safe for grok, whose buffer also carries aid's own
     // terminal sentinel and echoed idle nudges.
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     let agent = crate::types::AgentKind::Grok;
     crate::rate_limit::clear_rate_limit(&agent, None);
 
@@ -446,7 +446,7 @@ fn buffered_grok_prose_about_rate_limits_never_marks_it() {
 #[test]
 fn a_cursor_premium_refusal_with_no_recorded_model_marks_only_the_premium_pool() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
 
     let cursor = crate::types::AgentKind::Cursor;
     crate::rate_limit::clear_all_rate_limits_for_agent(&cursor, None);

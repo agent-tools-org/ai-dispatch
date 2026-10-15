@@ -59,7 +59,7 @@ fn failed_task(repo: &Path, worktree: &Path, branch: &str) -> Task {
 
 #[test]
 fn retry_recreates_pruned_committed_worktree_at_branch_tip() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let repo = init_repo();
     let branch = format!("fix/pruned-saved-base-{}", std::process::id());
     let first = crate::worktree::create_worktree(repo.path(), &branch, Some("main")).unwrap();

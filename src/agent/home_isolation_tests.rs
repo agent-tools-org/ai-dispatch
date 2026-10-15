@@ -5,16 +5,16 @@ use super::*;
 use std::fs;
 use std::process::Command;
 
-fn isolated_home() -> (tempfile::TempDir, crate::paths::AidHomeGuard, IsolatedHomeGuard) {
+fn isolated_home() -> (tempfile::TempDir, crate::support::paths::AidHomeGuard, IsolatedHomeGuard) {
     let aid_home = tempfile::tempdir().unwrap();
-    let aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+    let aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
     let home = IsolatedHomeGuard::create(None).unwrap();
     (aid_home, aid_guard, home)
 }
 
-fn test_aid_home() -> (tempfile::TempDir, crate::paths::AidHomeGuard) {
+fn test_aid_home() -> (tempfile::TempDir, crate::support::paths::AidHomeGuard) {
     let aid_home = tempfile::tempdir().unwrap();
-    let aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+    let aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
     (aid_home, aid_guard)
 }
 

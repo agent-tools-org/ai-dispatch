@@ -6,15 +6,15 @@ use super::*;
 #[test]
 fn advise_surfaces_newer_unrated_served_codex_model() {
     let home = tempfile::tempdir().expect("temp aid home");
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
-    crate::paths::ensure_dirs().expect("aid dirs");
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    crate::support::paths::ensure_dirs().expect("aid dirs");
     let codex_home = home.path().join("codex");
     std::fs::create_dir_all(&codex_home).expect("codex home");
     std::fs::write(codex_home.join("config.toml"), "model = \"gpt-5.6-sol\"\n").expect("config");
     crate::agent::codex::cli_config::set_test_codex_home(Some(codex_home));
     let now = chrono::Utc::now().timestamp();
     let cache = serde_json::json!({"codex": {"models": ["gpt-6-sol"], "updated_at_secs": now}});
-    std::fs::write(crate::paths::aid_dir().join("served_models_cache.json"), cache.to_string())
+    std::fs::write(crate::support::paths::aid_dir().join("served_models_cache.json"), cache.to_string())
         .expect("served-model cache");
     let declared = DeclaredTaskProfile {
         difficulty: crate::types::TaskDifficulty::Complex,

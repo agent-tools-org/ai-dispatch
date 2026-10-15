@@ -78,8 +78,8 @@ fn test_agent_list_json_serialization_roundtrip() {
 #[test]
 fn agent_list_marks_discovered_agy_metadata_unknown() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().expect("aid dirs");
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().expect("aid dirs");
     crate::agent::model_validation::clear_served_models_cache();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -89,7 +89,7 @@ fn agent_list_marks_discovered_agy_metadata_unknown() {
         "agy": {"models": ["gemini-3.7-flash-high"], "updated_at_secs": now}
     });
     std::fs::write(
-        crate::paths::aid_dir().join("served_models_cache.json"),
+        crate::support::paths::aid_dir().join("served_models_cache.json"),
         cache.to_string(),
     )
     .expect("served-model cache");
@@ -169,13 +169,13 @@ fn delegate_opencode_without_endpoint_uses_own_custom_marker() {
 
 fn isolated_home() -> (
     tempfile::TempDir,
-    crate::paths::AidHomeGuard,
+    crate::support::paths::AidHomeGuard,
     crate::live_quota::CacheDirGuard,
 ) {
     let tmp = tempfile::tempdir().expect("tempdir");
     let _ = std::fs::create_dir_all(tmp.path().join(".aid"));
-    let guard = crate::paths::AidHomeGuard::set(tmp.path());
-    std::fs::create_dir_all(crate::paths::aid_dir()).ok();
+    let guard = crate::support::paths::AidHomeGuard::set(tmp.path());
+    std::fs::create_dir_all(crate::support::paths::aid_dir()).ok();
     let aidbar = tmp.path().join("aidbar");
     std::fs::create_dir_all(&aidbar).ok();
     let cache = crate::live_quota::CacheDirGuard::set(&aidbar);

@@ -5,7 +5,7 @@ use super::{
     apply_completion_event, exceeds_cost_ceiling, parse_milestone_event, SyntheticMilestoneTracker,
 };
 use crate::agent::Agent;
-use crate::paths;
+use crate::support::paths;
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus, Task, AgentKind};
 use chrono::Local;
 use serde_json::json;
@@ -330,7 +330,7 @@ fn streamed_opencode_refusal_holds_only_the_dispatched_provider() {
 #[test]
 fn tool_error_events_do_not_mark_quota() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = std::sync::Arc::new(crate::store::Store::open_memory().unwrap());
     let task = running_task("t-copilot-tool", AgentKind::Copilot);
     store.insert_task(&task).unwrap();

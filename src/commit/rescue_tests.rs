@@ -4,7 +4,7 @@
 use super::{
     detect_untracked_source_files, rescue_dirty_worktree, rescue_dirty_worktree_with_baseline,
 };
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use std::{path::Path, process::Command};
 
 fn git(dir: &Path, args: &[&str]) {

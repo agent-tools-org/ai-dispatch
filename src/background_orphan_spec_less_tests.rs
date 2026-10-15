@@ -4,7 +4,7 @@
 
 use super::{cleanup_orphaned_idle_tasks, insert_event, make_task};
 use crate::types::{EventKind, TaskStatus};
-use crate::{paths, store::Store};
+use crate::{support::paths, store::Store};
 
 struct TestHome {
     _temp: tempfile::TempDir,

@@ -9,7 +9,7 @@ use std::process::Stdio;
 
 #[tokio::test]
 async fn cargo_verify_lock_queue_time_does_not_consume_verify_timeout() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let store = Store::open_memory().expect("store");
     let mut child = tokio::process::Command::new("sh")
         .args([

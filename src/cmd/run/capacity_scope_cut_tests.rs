@@ -47,7 +47,7 @@ async fn provider_capacity_scope_cut_retry_zero_creates_no_child() {
 
 #[tokio::test]
 async fn provider_capacity_scope_cut_retry_one_runs_ordinary_retry_once() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());
     let (store, row, args, marker) = ordinary_retry_fixture(home.path());
@@ -91,7 +91,7 @@ async fn provider_capacity_scope_cut_retry_one_runs_ordinary_retry_once() {
 
 #[tokio::test]
 async fn provider_capacity_scope_cut_decoded_failure_records_model_reason_and_hold() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     for envelope in [
         serde_json::json!({"type": "error", "message": CAPACITY}),
         serde_json::json!({"type": "turn.failed", "error": {"message": CAPACITY}}),
@@ -190,7 +190,7 @@ fn assert_capacity_failure(store: &Store, row: &Task) {
 
 #[test]
 fn provider_capacity_scope_cut_pty_merged_stderr_records_capacity_without_child() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());
     paths::ensure_dirs().expect("dirs");

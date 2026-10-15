@@ -73,7 +73,7 @@ mod tests {
     #[test]
     fn pty_child_does_not_inherit_a_removed_variable() {
         use std::io::Read;
-        let _permit = crate::test_subprocess::acquire();
+        let _permit = crate::support::test_subprocess::acquire();
         assert!(std::env::var_os("HOME").is_some(), "test needs an inherited HOME");
         let mut cmd = std::process::Command::new("/bin/sh");
         cmd.args(["-c", "echo \"[${HOME-unset}]\""]).env_remove("HOME");

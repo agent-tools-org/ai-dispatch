@@ -82,7 +82,7 @@ fn task_command_overrides_ambient_box_and_installs_shim() {
 fn verify_receives_stored_box() {
     let (store, id, _) = stored_task();
     let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     executable(&temp.path().join("verify"), "#!/bin/bash\nprintf '%s' \"$AID_BUILD_BOX\"\n");
     let result = verify(&store, id.as_str(), temp.path(), Some("./verify"), None, None).expect("verify");
     assert!(result.success);
@@ -119,7 +119,7 @@ fn shim_installation_never_follows_operator_aid_symlink() {
 #[test]
 fn nested_task_home_gets_its_own_real_shim_dir() {
     let aid_home = tempfile::tempdir().expect("aid home");
-    let _aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+    let _aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
     let parent = tempfile::tempdir().expect("parent home");
     std::fs::create_dir(parent.path().join(".aid-build-shims")).expect("parent shims");
     std::fs::create_dir(parent.path().join(".aid-tmp-abc")).expect("parent tmp");
@@ -183,7 +183,7 @@ pub(super) fn refusing_verify(dir: &Path, refusing: &str) {
 fn refused_verify_repicks_once_persists_box_and_reruns() {
     let (store, id, _) = stored_task();
     let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     refusing_verify(temp.path(), "chosen-box");
     let rbox = temp.path().join("rbox");
     let argv = temp.path().join("argv");
@@ -203,7 +203,7 @@ fn refused_verify_repicks_once_persists_box_and_reruns() {
 fn second_refusal_or_failed_repick_is_infrastructure_failure_naming_the_box() {
     let (store, id, _) = stored_task();
     let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     refusing_verify(temp.path(), "chosen-box|second-box");
     let rbox = temp.path().join("rbox");
     executable(&rbox, "#!/bin/bash\necho second-box\n");

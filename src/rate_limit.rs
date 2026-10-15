@@ -4,7 +4,7 @@
 // dispatch_blocking_hold, get_rate_limit_info, active_group_holds,
 // format_hold_end, clear_*.
 
-use crate::paths::aid_dir;
+use crate::support::paths::aid_dir;
 use crate::route_availability::{
     Hold, HoldEnd, MANUAL_HOLD, RouteAvailability, RouteStatus, StoredHold, availability,
     availability_for_group, availability_for_model, classify_hold, format_hold_end_for,
@@ -48,7 +48,7 @@ pub(crate) const RATE_LIMIT_WINDOW_SECS: u64 = 300;
 
 #[cfg(test)]
 fn assert_marker_path_isolated() {
-    crate::paths::assert_aid_home_isolated("rate_limit::marker_path");
+    crate::support::paths::assert_aid_home_isolated("rate_limit::marker_path");
 }
 
 /// Resolve a CLI agent name into kind + optional custom id for marker paths.
@@ -144,7 +144,7 @@ mod custom_tests;
 #[cfg(test)]
 mod home_guard_tests {
     use super::*;
-    use crate::paths::{self, AidHomeGuard};
+    use crate::support::paths::{self, AidHomeGuard};
 
     #[test]
     fn marker_path_writes_under_isolated_home() {

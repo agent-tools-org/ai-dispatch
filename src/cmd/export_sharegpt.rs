@@ -5,7 +5,7 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::paths;
+use crate::support::paths;
 use crate::store::Store;
 use crate::types::{EventKind, TaskEvent};
 

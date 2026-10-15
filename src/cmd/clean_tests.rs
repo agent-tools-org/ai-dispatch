@@ -42,22 +42,22 @@ use rusqlite::params;
     #[test]
     fn clean_orphaned_shared_dirs_removes_unknown_workgroup_dirs() {
         let temp = tempfile::tempdir().unwrap();
-        let _guard = crate::paths::AidHomeGuard::set(temp.path());
+        let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
         let store = Store::open_memory().unwrap();
-        crate::shared_dir::create_shared_dir("wg-orphanned").unwrap();
-        crate::shared_dir::create_shared_dir("wg-known").unwrap();
+        crate::support::shared_dir::create_shared_dir("wg-orphanned").unwrap();
+        crate::support::shared_dir::create_shared_dir("wg-known").unwrap();
         store.create_workgroup("Known", "", None, Some("wg-known")).unwrap();
 
         clean_orphaned_shared_dirs(&store, false).unwrap();
 
-        assert!(crate::shared_dir::shared_dir_path("wg-orphanned").is_none());
-        assert!(crate::shared_dir::shared_dir_path("wg-known").is_some());
+        assert!(crate::support::shared_dir::shared_dir_path("wg-orphanned").is_none());
+        assert!(crate::support::shared_dir::shared_dir_path("wg-known").is_some());
     }
 
     #[test]
     fn failed_task_home_removal_does_not_abort_later_homes() {
         let aid_home = tempfile::tempdir().unwrap();
-        let _aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+        let _aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
         let store = Store::open_memory().unwrap();
         for (id, created_at) in [("t-failed-home", "2026-01-02T00:00:00Z"), ("t-good-home", "2026-01-01T00:00:00Z")] {
             store.db().execute(
@@ -66,11 +66,11 @@ use rusqlite::params;
             ).unwrap();
         }
 
-        let failed_home = crate::paths::task_dir("t-failed-home").join("home");
+        let failed_home = crate::support::paths::task_dir("t-failed-home").join("home");
         fs::create_dir_all(&failed_home).unwrap();
         fs::write(failed_home.join("payload"), "keep").unwrap();
 
-        let good_home = crate::paths::task_dir("t-good-home").join("home");
+        let good_home = crate::support::paths::task_dir("t-good-home").join("home");
         fs::create_dir_all(&good_home).unwrap();
         fs::write(good_home.join("payload"), "remove").unwrap();
 
@@ -116,13 +116,13 @@ use rusqlite::params;
         }
 
         let aid_home = tempfile::tempdir().unwrap();
-        let _aid_guard = crate::paths::AidHomeGuard::set(aid_home.path());
+        let _aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
         let store = Store::open_memory().unwrap();
         store.db().execute(
             "INSERT INTO tasks (id, agent, prompt, status, created_at) VALUES ('t-unresolved-home', 'codex', 'test', 'done', '2026-01-01T00:00:00Z')",
             [],
         ).unwrap();
-        let home = crate::paths::task_dir("t-unresolved-home").join("home");
+        let home = crate::support::paths::task_dir("t-unresolved-home").join("home");
         fs::create_dir_all(&home).unwrap();
         let previous = std::env::var_os("HOME");
         let _home_guard = HomeGuard(previous);

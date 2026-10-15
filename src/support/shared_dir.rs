@@ -1,6 +1,6 @@
 // Shared directory helpers for batch workgroups.
 // Exports: create_shared_dir, cleanup_shared_dir, shared_dir_path.
-// Deps: crate::paths, std::fs, tempfile tests.
+// Deps: crate::support::paths, std::fs, tempfile tests.
 use anyhow::Result;
 use std::path::PathBuf;
 
@@ -21,7 +21,7 @@ pub fn shared_dir_path(workgroup_id: &str) -> Option<PathBuf> {
 }
 
 fn shared_dir_base() -> PathBuf {
-    crate::paths::aid_dir().join("shared")
+    crate::support::paths::aid_dir().join("shared")
 }
 
 #[cfg(test)]
@@ -31,7 +31,7 @@ mod tests {
     #[test]
     fn create_shared_dir_creates_directory() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let _guard = crate::paths::AidHomeGuard::set(temp.path());
+        let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
         let path = create_shared_dir("wg-shared").expect("create shared dir");
 
@@ -42,7 +42,7 @@ mod tests {
     #[test]
     fn cleanup_shared_dir_removes_directory() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let _guard = crate::paths::AidHomeGuard::set(temp.path());
+        let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
         let path = create_shared_dir("wg-shared").expect("create shared dir");
 
         cleanup_shared_dir("wg-shared");
@@ -53,7 +53,7 @@ mod tests {
     #[test]
     fn shared_dir_path_returns_none_when_missing() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let _guard = crate::paths::AidHomeGuard::set(temp.path());
+        let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
         assert_eq!(shared_dir_path("wg-missing"), None);
     }

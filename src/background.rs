@@ -31,10 +31,10 @@ use self::background_reaper::record_worker_failure_skip_notify;
 use self::background_spec::{load_spec, remove_spec};
 use crate::agent;
 use crate::cmd::run::RunArgs;
-use crate::paths;
-use crate::sanitize;
+use crate::support::paths;
+use crate::support::sanitize;
 use crate::store::Store;
-use crate::system_resources;
+use crate::support::system_resources;
 use crate::types::{AgentKind, TaskFilter, TaskId};
 
 /// Hard limit on concurrent background workers — prevents process exhaustion.

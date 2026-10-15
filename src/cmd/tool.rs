@@ -1,12 +1,12 @@
 // Handler for `aid tool` subcommands — manage team toolbox definitions.
 // Exports: run_tool_command.
-// Deps: crate::toolbox, crate::sanitize, anyhow, std::fs.
+// Deps: crate::toolbox, crate::support::sanitize, anyhow, std::fs.
 
 use anyhow::{bail, Context, Result};
 use std::fs;
 
 use crate::cli::ToolAction;
-use crate::sanitize;
+use crate::support::sanitize;
 use crate::toolbox;
 
 const TOOL_TEMPLATE: &str = r#"[tool]
@@ -153,7 +153,7 @@ fn truncate_str(s: &str, max: usize) -> String {
 mod tests {
     use super::*;
     use crate::cli::ToolAction;
-    use crate::paths::AidHomeGuard;
+    use crate::support::paths::AidHomeGuard;
     use std::{fs, path::PathBuf};
     use tempfile::TempDir;
 

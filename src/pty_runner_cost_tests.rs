@@ -24,7 +24,7 @@ fn record(
     event: Option<&TaskEvent>,
     reported_cost: Option<f64>,
 ) -> (Arc<Store>, Task) {
-    crate::paths::ensure_dirs().expect("aid dirs");
+    crate::support::paths::ensure_dirs().expect("aid dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut task = task.clone();
     task.status = TaskStatus::Running;

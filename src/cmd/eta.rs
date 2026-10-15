@@ -80,7 +80,7 @@ mod tests {
     use super::*;
     use chrono::Duration;
     use tempfile::TempDir;
-    use crate::paths::AidHomeGuard;
+    use crate::support::paths::AidHomeGuard;
     use crate::store::Store;
     use crate::types::{AgentKind, TaskId, VerifyStatus};
 

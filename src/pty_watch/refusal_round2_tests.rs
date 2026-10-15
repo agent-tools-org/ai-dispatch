@@ -2,7 +2,7 @@
 // Exercises real PTY capture, monitor input forwarding, and SQLite commit failures.
 
 use crate::agent::get_agent;
-use crate::paths::{self, AidHomeGuard};
+use crate::support::paths::{self, AidHomeGuard};
 use crate::pty_bridge::PtyBridge;
 use crate::pty_watch::MonitorState;
 use crate::store::Store;
@@ -16,7 +16,7 @@ const ERROR: &str = concat!(
 const ASSISTANT: &str = r#"{"type":"text","part":{"text":"Continuing normally"}}"#;
 
 fn captured_auth(output: &str, exit: i32) -> bool {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let home = tempfile::tempdir().expect("home");
     let _guard = AidHomeGuard::set(home.path());
     paths::ensure_dirs().expect("directories");
@@ -139,7 +139,7 @@ fn consume_twice(store: &Arc<Store>, id: &crate::types::TaskId, bridge: &mut Pty
 
 #[test]
 fn monitor_races_wrap_up_producer_delivers_once_round2_regression() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let (_home, _guard, store, id, mut bridge) = wrap_fixture();
     let mut state = MonitorState::new(true, None);
     state
@@ -155,7 +155,7 @@ fn monitor_races_wrap_up_producer_delivers_once_round2_regression() {
 
 #[test]
 fn failed_commit_leaves_no_signal_and_retry_delivers_once_round2_regression() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let (_home, _guard, store, id, mut bridge) = wrap_fixture();
     store.db().execute_batch(
         "CREATE TABLE commit_failure (task_id TEXT REFERENCES tasks(id) DEFERRABLE INITIALLY DEFERRED);
@@ -191,7 +191,7 @@ fn failed_commit_leaves_no_signal_and_retry_delivers_once_round2_regression() {
 
 #[test]
 fn failed_message_insert_can_retry_once_round2_regression() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let (_home, _guard, store, id, mut bridge) = wrap_fixture();
     store
         .db()
@@ -223,7 +223,7 @@ fn failed_message_insert_can_retry_once_round2_regression() {
 
 #[test]
 fn operator_steer_remains_allowed_for_read_only_round2_regression() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let (_home, _guard, store, id, mut bridge) = wrap_fixture();
     store
         .db()

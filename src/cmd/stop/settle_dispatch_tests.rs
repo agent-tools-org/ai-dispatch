@@ -31,7 +31,7 @@ fn race_stopped_write(replace: bool) {
     let (release_tx, release_rx) = mpsc::channel();
     let dispatch_home = home.path().to_path_buf();
     let handle = std::thread::spawn(move || {
-        let _guard = crate::paths::AidHomeGuard::set(&dispatch_home);
+        let _guard = crate::support::paths::AidHomeGuard::set(&dispatch_home);
         WRITE_BARRIER.with(|barrier| *barrier.borrow_mut() = Some((ready_tx, release_rx)));
         dispatch
             .db()
@@ -73,9 +73,9 @@ fn race_stopped_write(replace: bool) {
     assert_eq!(events[0].detail, "Task stopped by user");
 }
 
-fn setup_race(replace: bool) -> (tempfile::TempDir, crate::paths::AidHomeGuard, Arc<Store>, Store) {
+fn setup_race(replace: bool) -> (tempfile::TempDir, crate::support::paths::AidHomeGuard, Arc<Store>, Store) {
     let home = tempfile::tempdir().expect("home");
-    let guard = crate::paths::AidHomeGuard::set(home.path());
+    let guard = crate::support::paths::AidHomeGuard::set(home.path());
     let path = home.path().join("race.db");
     let writer = Arc::new(Store::open(&path).expect("writer"));
     let dispatch = Store::open(&path).expect("dispatch");
@@ -107,7 +107,7 @@ fn settle_first_launch_cannot_revive_concurrent_stop() {
 #[test]
 fn settle_first_stopped_launch_claim_is_silent() {
     let home = tempfile::tempdir().expect("home");
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     let store = Arc::new(Store::open_memory().expect("store"));
     let task = make_task("t-stopped-claim", TaskStatus::Pending);
     store.insert_task(&task).expect("task");

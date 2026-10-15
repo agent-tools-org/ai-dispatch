@@ -5,10 +5,10 @@
 use super::get_agents_list;
 use crate::types::AgentKind;
 
-fn isolated() -> (tempfile::TempDir, crate::paths::AidHomeGuard, crate::live_quota::CacheDirGuard) {
+fn isolated() -> (tempfile::TempDir, crate::support::paths::AidHomeGuard, crate::live_quota::CacheDirGuard) {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let guard = crate::paths::AidHomeGuard::set(tmp.path());
-    std::fs::create_dir_all(crate::paths::aid_dir()).ok();
+    let guard = crate::support::paths::AidHomeGuard::set(tmp.path());
+    std::fs::create_dir_all(crate::support::paths::aid_dir()).ok();
     let aidbar = tmp.path().join("aidbar");
     std::fs::create_dir_all(&aidbar).ok();
     let cache = crate::live_quota::CacheDirGuard::set(&aidbar);

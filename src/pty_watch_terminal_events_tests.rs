@@ -7,13 +7,13 @@ use crate::store::TaskCompletionUpdate;
 
 fn setup() -> (
     tempfile::TempDir,
-    crate::paths::AidHomeGuard,
+    crate::support::paths::AidHomeGuard,
     Arc<Store>,
     TaskId,
 ) {
     let home = tempfile::tempdir().expect("home");
-    let guard = crate::paths::AidHomeGuard::set(home.path());
-    crate::paths::ensure_dirs().expect("dirs");
+    let guard = crate::support::paths::AidHomeGuard::set(home.path());
+    crate::support::paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let id = TaskId("t-terminal-events-deadline".into());
     let task = crate::cost::test_support::task(AgentKind::Gemini, 0, None);
@@ -60,7 +60,7 @@ fn stop_wins_deadline_before_pty_failure_finalization() {
         &id,
         &store,
         None,
-        &crate::paths::log_path(id.as_str()),
+        &crate::support::paths::log_path(id.as_str()),
         true,
         &portable_pty::ExitStatus::with_exit_code(1),
         &mut state,
@@ -111,7 +111,7 @@ fn buffered_pty_nonzero_exit_emits_error_instead_of_completion() {
         &id,
         &store,
         None,
-        &crate::paths::log_path(id.as_str()),
+        &crate::support::paths::log_path(id.as_str()),
         false,
         &portable_pty::ExitStatus::with_exit_code(1),
         &mut state,

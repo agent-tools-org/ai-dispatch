@@ -2,7 +2,7 @@
 // Deps: parent rate-limit facade and isolated aid home.
 
 use super::*;
-use crate::paths;
+use crate::support::paths;
 
 /// The exact string codex produced on 2026-08-05. If this fails to parse,
 /// `is_rate_limited` falls back to a 300-second mtime window and a six-day

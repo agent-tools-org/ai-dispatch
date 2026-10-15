@@ -3,7 +3,7 @@
 // Deps: selection helpers, agent_config, Store, AidHomeGuard.
 
 use crate::agent_config;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::types::AgentKind;
 
 #[test]

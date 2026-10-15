@@ -192,7 +192,7 @@ pub(crate) fn effective_skills(args: &RunArgs, project: Option<&crate::project::
 }
 
 pub(crate) fn resolve_repo_path(path: &str) -> Result<String> {
-    crate::repo_root::resolve_git_root_string(path)
+    crate::support::repo_root::resolve_git_root_string(path)
 }
 
 pub(crate) fn resolve_dir_in_target(base_dir: &str, dir: Option<&str>, repo_dir: Option<&str>) -> String {

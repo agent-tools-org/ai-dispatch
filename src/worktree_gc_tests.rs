@@ -1,12 +1,12 @@
 // Tests for worktree GC candidate detection and merge heuristics.
 // Covers branch prefix filtering, merge detection, and safe tmp-path matching.
-// Deps: super, crate::test_subprocess, tempfile, std::process::Command.
+// Deps: super, crate::support::test_subprocess, tempfile, std::process::Command.
 
 use super::{
     MergeReason, branch_merge_reason, is_managed_branch, merge_reason_from_outputs,
     same_tmp_worktree_path,
 };
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use crate::worktree::is_aid_managed_worktree_path;
 use std::path::Path;
 use std::process::Command;

@@ -3,7 +3,7 @@
 // Deps: background spec loader, isolated AID_HOME, and fixture JSON.
 
 use super::load_spec_if_exists;
-use crate::paths;
+use crate::support::paths;
 
 #[test]
 fn pid_updates_publish_complete_specs_to_concurrent_readers() {

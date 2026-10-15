@@ -27,7 +27,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         && !args.suppress_nested_repo_warning
         && args.worktree.is_some()
     {
-        crate::repo_root::warn_if_nested_repo(args.repo.as_deref().or(args.dir.as_deref()).unwrap_or("."));
+        crate::support::repo_root::warn_if_nested_repo(args.repo.as_deref().or(args.dir.as_deref()).unwrap_or("."));
     }
     let prepared = prepare_dispatch(&store, &mut args).inspect_err(|error| {
         if let Some(id) = args.existing_task_id.as_ref() {

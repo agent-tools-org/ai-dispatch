@@ -11,7 +11,7 @@ use crate::agent::cursor::CursorAgent;
 use crate::types::AgentKind;
 use crate::agent::qwen::QwenAgent;
 use crate::agent::Agent;
-use crate::paths;
+use crate::support::paths;
 use crate::store::Store;
 use crate::types::TaskStatus;
 

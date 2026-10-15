@@ -36,7 +36,7 @@ fn parse_available_mb(line: &str) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_subprocess;
+    use crate::support::test_subprocess;
 
     #[test]
     fn recommended_max_concurrent_is_in_range() {

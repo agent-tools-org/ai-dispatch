@@ -5,8 +5,8 @@ use super::*;
 #[test]
 fn build_prompt_bundle_skips_sibling_context_for_opencode() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Store::open_memory().unwrap();
     let group = store
         .create_workgroup("batch", "desc", Some("seed"), Some("wg-opencode-test"))
@@ -86,8 +86,8 @@ fn build_prompt_bundle_skips_sibling_context_for_opencode() {
 #[test]
 fn build_prompt_bundle_skips_sibling_context_for_kilo() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Store::open_memory().unwrap();
     let group = store
         .create_workgroup("batch", "desc", Some("seed"), Some("wg-kilo-test"))
@@ -167,8 +167,8 @@ fn build_prompt_bundle_skips_sibling_context_for_kilo() {
 #[test]
 fn build_prompt_bundle_includes_sibling_context_for_codex() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().unwrap();
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().unwrap();
     let store = Store::open_memory().unwrap();
     let group = store
         .create_workgroup("batch", "desc", Some("seed"), Some("wg-codex-test"))

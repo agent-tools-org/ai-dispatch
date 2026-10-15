@@ -1,7 +1,7 @@
 // PR-3 live seams: Windowed grok/cursor release; prepaid and plan-change stay held.
 
 use super::*;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::rate_limit::{
     dispatch_blocking_hold, dispatch_blocking_hold_for_model, format_hold_end, get_rate_limit_info,
     is_group_rate_limited, is_rate_limited, mark_rate_limited, mark_rate_limited_for_message,

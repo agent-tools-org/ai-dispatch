@@ -164,7 +164,7 @@ mod tests {
     #[test]
     fn non_loopback_startup_without_token_resolves_auth() {
         let home = tempfile::tempdir().expect("temporary AID home");
-        let _home = crate::paths::AidHomeGuard::set(home.path());
+        let _home = crate::support::paths::AidHomeGuard::set(home.path());
         let token = auth::resolve_token("0.0.0.0", None)
             .expect("resolve token")
             .expect("generated token");
@@ -174,7 +174,7 @@ mod tests {
     #[tokio::test]
     async fn assembled_router_authenticates_fleet_and_agents() {
         let home = tempfile::tempdir().expect("temporary AID home");
-        let _home = crate::paths::AidHomeGuard::set(home.path());
+        let _home = crate::support::paths::AidHomeGuard::set(home.path());
         let store = std::sync::Arc::new(crate::store::Store::open_memory().expect("store"));
         let app = build_router(store, 8080, "127.0.0.1".to_string(), Some("secret".to_string()));
         for uri in ["/api/fleet?window=all", "/api/agents"] {

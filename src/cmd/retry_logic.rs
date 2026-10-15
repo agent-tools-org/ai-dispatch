@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::time::{Duration, sleep};
 
 use super::run::{RunArgs, apply_retry_target};
-use crate::paths;
+use crate::support::paths;
 use crate::store::Store;
 use crate::types::{Task, TaskId, TaskStatus};
 

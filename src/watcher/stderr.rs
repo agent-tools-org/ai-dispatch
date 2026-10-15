@@ -8,7 +8,7 @@ use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, Instant};
 
-use crate::paths;
+use crate::support::paths;
 use crate::types::{TaskId, TaskStatus};
 use crate::{agent::Agent, rate_limit};
 

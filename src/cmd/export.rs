@@ -4,7 +4,7 @@
 use anyhow::{anyhow, Context, Result};
 use serde::Serialize;
 use std::{fs, sync::Arc};
-use crate::{cmd::show::worktree_diff, paths, store::Store, types::{Task, TaskEvent}};
+use crate::{cmd::show::worktree_diff, support::paths, store::Store, types::{Task, TaskEvent}};
 
 #[path = "export_sharegpt.rs"]
 mod export_sharegpt;
@@ -171,7 +171,7 @@ struct ExportPayload<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths::AidHomeGuard;
+    use crate::support::paths::AidHomeGuard;
     use crate::types::{AgentKind, TaskId, TaskStatus, VerifyStatus};
     use chrono::Local;
 

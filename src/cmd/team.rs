@@ -1,12 +1,12 @@
 // Handler for `aid team` subcommands — manage team definitions.
 // Exports: run_team_command.
-// Deps: crate::team, crate::paths, std::fs.
+// Deps: crate::team, crate::support::paths, std::fs.
 
 use anyhow::{bail, Result};
 use std::fs;
 
 use crate::cli::TeamAction;
-use crate::sanitize;
+use crate::support::sanitize;
 use crate::team;
 use crate::toolbox;
 
@@ -202,7 +202,7 @@ fn title_case(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths::AidHomeGuard;
+    use crate::support::paths::AidHomeGuard;
     use std::{fs, path::PathBuf};
     use tempfile::TempDir;
 

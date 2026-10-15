@@ -3,7 +3,7 @@
 
 use super::{task, TimeoutTestAgent};
 use crate::{
-    paths,
+    support::paths,
     store::Store,
     types::{TaskId, TaskStatus},
 };

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[cfg(test)]
 use std::cell::RefCell;
 
-use crate::sanitize;
+use crate::support::sanitize;
 
 #[cfg(test)]
 thread_local! {

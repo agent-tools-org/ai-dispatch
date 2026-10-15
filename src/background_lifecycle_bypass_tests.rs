@@ -4,7 +4,7 @@
 
 use super::{handle_run_task_inner_error, BackgroundRunSpec};
 use crate::cmd::run::RunArgs;
-use crate::paths;
+use crate::support::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;

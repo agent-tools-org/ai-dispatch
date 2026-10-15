@@ -82,7 +82,7 @@ fn prepare_request(
 
 fn detect_context_files(prompt: &str, files: Vec<String>) -> Vec<String> {
     if files.is_empty() {
-        crate::explore::auto_detect_files(prompt, Path::new("."))
+        crate::support::explore::auto_detect_files(prompt, Path::new("."))
     } else {
         files
     }
@@ -134,7 +134,7 @@ fn read_answer(task_id: &TaskId, capture_path: &Path) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths::AidHomeGuard;
+    use crate::support::paths::AidHomeGuard;
 
     #[test]
     fn prepare_request_rejects_disabled_default_agent() {

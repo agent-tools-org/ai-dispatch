@@ -8,9 +8,9 @@ use crate::cmd::run::{
     run_lifecycle::{LifecycleMode, post_run_lifecycle},
 };
 use crate::{
-    paths,
+    support::paths,
     store::Store,
-    test_subprocess,
+    support::test_subprocess,
     types::{AgentKind, EventKind, TaskId, TaskStatus, VerifyStatus},
 };
 use std::{

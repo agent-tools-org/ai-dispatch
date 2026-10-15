@@ -1,11 +1,11 @@
 // Handler for `aid store` subcommands — browse, install, show, update agents from the community store.
 // Exports: run_store.
-// Deps: serde, serde_json, toml, std::fs, std::process::Command (curl), crate::paths.
+// Deps: serde, serde_json, toml, std::fs, std::process::Command (curl), crate::support::paths.
 
 use crate::cli::StoreCommands;
 use crate::cmd::store_lock::{add_lock_entry, read_lockfile};
 use crate::hooks::Hook;
-use crate::paths;
+use crate::support::paths;
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;

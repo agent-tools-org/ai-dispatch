@@ -53,7 +53,7 @@ fn stage_artifacts(store: &Store, task: &Task, include: &[Artifact], stage: &Pat
                 fs::write(stage.join("diff.patch"), diff)?;
             }
             Artifact::Transcript => {
-                let log = crate::paths::log_path(task.id.as_str());
+                let log = crate::support::paths::log_path(task.id.as_str());
                 if !log.is_file() {
                     continue;
                 }

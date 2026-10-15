@@ -103,16 +103,16 @@ fn explicit_retry_setup(
     status: TaskStatus,
 ) -> (
     tempfile::TempDir,
-    crate::paths::AidHomeGuard,
+    crate::support::paths::AidHomeGuard,
     std::sync::Arc<Store>,
     Task,
 ) {
     let home = tempfile::tempdir().unwrap();
-    let guard = crate::paths::AidHomeGuard::set(home.path());
-    crate::paths::ensure_dirs().unwrap();
-    std::fs::create_dir_all(crate::paths::aid_dir().join("agents")).unwrap();
+    let guard = crate::support::paths::AidHomeGuard::set(home.path());
+    crate::support::paths::ensure_dirs().unwrap();
+    std::fs::create_dir_all(crate::support::paths::aid_dir().join("agents")).unwrap();
     std::fs::write(
-        crate::paths::aid_dir().join("agents/explicit-retry.toml"),
+        crate::support::paths::aid_dir().join("agents/explicit-retry.toml"),
         concat!(
             "[agent]\nid = \"explicit-retry\"\ndisplay_name = \"Explicit Retry\"\n",
             "command = \"/bin/sh\"\nprompt_mode = \"arg\"\n",
@@ -154,7 +154,7 @@ async fn assert_explicit_retry_launched(store: std::sync::Arc<Store>, task: &Tas
         store.get_task(task.id.as_str()).unwrap().unwrap().status,
         TaskStatus::Stopped
     );
-    let log = std::fs::read_to_string(crate::paths::log_path(retry_id.as_str())).unwrap();
+    let log = std::fs::read_to_string(crate::support::paths::log_path(retry_id.as_str())).unwrap();
     assert!(
         log.contains("retried-with-feedback"),
         "worker must run the fake agent: {log}"
@@ -203,17 +203,17 @@ async fn explicit_retry_supersedes_running_parent_and_launches() {
         store.get_task(child_id.as_str()).unwrap().unwrap().status,
         TaskStatus::Done
     );
-    let log = std::fs::read_to_string(crate::paths::log_path(child_id.as_str())).unwrap();
+    let log = std::fs::read_to_string(crate::support::paths::log_path(child_id.as_str())).unwrap();
     assert!(log.contains("retried-with-feedback"));
 }
 
 #[tokio::test]
 async fn idle_override_recomputes_first_token_and_preserves_exact_hard_timeout() {
     let home = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
-    crate::paths::ensure_dirs().unwrap();
-    std::fs::create_dir_all(crate::paths::aid_dir().join("agents")).unwrap();
-    std::fs::write(crate::paths::aid_dir().join("agents/retry-policy.toml"),
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    crate::support::paths::ensure_dirs().unwrap();
+    std::fs::create_dir_all(crate::support::paths::aid_dir().join("agents")).unwrap();
+    std::fs::write(crate::support::paths::aid_dir().join("agents/retry-policy.toml"),
         "[agent]\nid = \"retry-policy\"\ndisplay_name = \"Retry Policy\"\ncommand = \"/bin/sh\"\nprompt_mode = \"arg\"\nfixed_args = [\"-c\", \"echo completed\"]\ninteractive_input = false\n").unwrap();
     let store = std::sync::Arc::new(Store::open_memory().unwrap());
     let mut task = failed_task("t-idle-dispatch");

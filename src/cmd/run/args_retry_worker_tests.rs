@@ -2,7 +2,7 @@
 // Proves persisted config, live runtime, and single completion-hook execution.
 use super::RunArgs;
 use crate::cmd::{checklist_scan::*, run::*};
-use crate::{paths, store::Store};
+use crate::{support::paths, store::Store};
 use chrono::Local;
 use std::{collections::HashMap, sync::Arc};
 

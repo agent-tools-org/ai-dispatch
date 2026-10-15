@@ -30,8 +30,8 @@ fn repo_with_backup_project() -> tempfile::TempDir {
 #[test]
 fn setup_failure_with_no_backup_makes_zero_backup_attempts() {
     let temp = tempfile::tempdir().unwrap();
-    let _guard = crate::paths::AidHomeGuard::set(temp.path());
-    let _permit = crate::test_subprocess::acquire();
+    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _permit = crate::support::test_subprocess::acquire();
     let repo = repo_with_backup_project();
     let store = Arc::new(Store::open_memory().unwrap());
     git(repo.path(), &["checkout", "-b", "chore/root-branch"]);

@@ -8,7 +8,7 @@ use crate::types::AgentKind;
 #[test]
 fn leaderboard_rule_uses_epoch_eci_instead_of_catalog_rating() {
     let home = tempfile::tempdir().expect("home");
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     crate::scores::test_support::seed();
     assert_eq!(
         model_capability_score(
@@ -23,7 +23,7 @@ fn leaderboard_rule_uses_epoch_eci_instead_of_catalog_rating() {
 #[test]
 fn leaderboard_alias_resolution_is_shared_and_unmapped_models_are_unrated() {
     let home = tempfile::tempdir().expect("home");
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     crate::scores::test_support::seed_live();
     use crate::agent::classifier::TaskCategory;
     assert_eq!(
@@ -49,7 +49,7 @@ fn leaderboard_complexity_has_no_self_assigned_bonus() {
     use super::selection_scoring::{CandidateContext, score_breakdown};
     use crate::agent::classifier::{Complexity, TaskCategory, TaskProfile};
     let home = tempfile::tempdir().expect("home");
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     let high = TaskProfile {
         category: TaskCategory::ComplexImpl,
         complexity: Complexity::High,
@@ -88,7 +88,7 @@ fn leaderboard_complexity_has_no_self_assigned_bonus() {
 fn leaderboard_uses_configured_codex_effort_for_exact_harness() {
     use crate::agent::classifier::TaskCategory;
     let home = tempfile::tempdir().expect("home");
-    let _guard = crate::paths::AidHomeGuard::set(home.path());
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     crate::scores::test_support::seed_live();
     let codex = home.path().join("codex");
     std::fs::create_dir_all(&codex).expect("codex home");

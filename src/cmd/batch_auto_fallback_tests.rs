@@ -8,7 +8,7 @@ use tempfile::TempDir;
 use super::batch::{
     BatchTaskOutcome, auto_fallback_args, pre_dispatch_fallback_choice, should_auto_fallback,
 };
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::rate_limit::{clear_rate_limit, mark_rate_limited};
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
@@ -57,7 +57,7 @@ fn stored_task(id: &str, agent: AgentKind) -> Task {
 fn isolated_rate_limit_home() -> (TempDir, AidHomeGuard) {
     let temp_dir = TempDir::new().unwrap();
     let guard = AidHomeGuard::set(temp_dir.path());
-    std::fs::create_dir_all(crate::paths::aid_dir()).unwrap();
+    std::fs::create_dir_all(crate::support::paths::aid_dir()).unwrap();
     (temp_dir, guard)
 }
 
@@ -155,7 +155,7 @@ fn auto_fallback_skips_rate_limited_toml_fallbacks() {
 }
 
 fn write_custom_agent(name: &str) {
-    let agents_dir = crate::paths::aid_dir().join("agents");
+    let agents_dir = crate::support::paths::aid_dir().join("agents");
     std::fs::create_dir_all(&agents_dir).unwrap();
     std::fs::write(
         agents_dir.join(format!("{name}.toml")),

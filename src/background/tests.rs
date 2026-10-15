@@ -9,9 +9,9 @@ use super::{
     fail_stale_pending_task, save_spec, BackgroundRunSpec,
     ZOMBIE_FAILURE_DETAIL,
 };
-use crate::paths;
+use crate::support::paths;
 use crate::store::Store;
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use crate::types::{AgentKind, EventKind, PendingReason, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 
 #[test]

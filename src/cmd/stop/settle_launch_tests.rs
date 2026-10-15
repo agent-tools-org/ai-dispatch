@@ -4,7 +4,7 @@
 
 use super::{stop, tests::make_task};
 use crate::{
-    agent, paths,
+    agent, support::paths,
     store::Store,
     types::{AgentKind, TaskId, TaskStatus},
 };

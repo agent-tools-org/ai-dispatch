@@ -1,9 +1,9 @@
 // Linked-worktree validation tests for shared-ref worktree detection.
 // Exports: none.
-// Deps: super helpers, tempfile, crate::test_subprocess, std::process::Command.
+// Deps: super helpers, tempfile, crate::support::test_subprocess, std::process::Command.
 
 use super::{aid_worktree_path, create_worktree, ensure_worktree_path_is_isolated, is_valid_git_worktree};
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -83,7 +83,7 @@ fn is_valid_git_worktree_accepts_tmp_and_private_tmp_spellings() {
     let _permit = test_subprocess::acquire();
     let main_repo = init_repo();
     let worktree = unique_worktree_path("aid-94-alias");
-    let _guard = crate::test_env::TmpWorktreeGuard::with_repo(main_repo.path(), worktree.clone());
+    let _guard = crate::support::test_env::TmpWorktreeGuard::with_repo(main_repo.path(), worktree.clone());
     let private_worktree = PathBuf::from(
         worktree
             .to_string_lossy()

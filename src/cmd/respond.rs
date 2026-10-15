@@ -35,7 +35,7 @@ pub fn run(store: &Store, task_id: &str, input: Option<&str>, file: Option<&str>
 mod tests {
     use super::run;
     use crate::input_signal;
-    use crate::paths::AidHomeGuard;
+    use crate::support::paths::AidHomeGuard;
     use crate::store::Store;
     use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
     use chrono::Local;

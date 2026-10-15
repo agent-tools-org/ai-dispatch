@@ -5,7 +5,7 @@
 use super::{stop, tests::make_task};
 use crate::{
     cmd::run,
-    paths,
+    support::paths,
     store::{Store, TaskCompletionUpdate},
     types::*,
 };

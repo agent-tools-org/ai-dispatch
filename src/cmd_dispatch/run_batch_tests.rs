@@ -168,7 +168,7 @@ fn cli_run_conversion_does_not_drop_any_configurable_field() {
 #[tokio::test]
 async fn cli_run_resolves_agent_before_reading_checklist_file() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = Arc::new(store::Store::open_memory().expect("store"));
     let mut cli = cli_args(&[
         "--difficulty", "moderate", "--budget", "standard", "--urgency", "normal",
@@ -183,7 +183,7 @@ async fn cli_run_resolves_agent_before_reading_checklist_file() {
 #[tokio::test]
 async fn cli_run_reads_checklist_file_after_agent_resolution() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = Arc::new(store::Store::open_memory().expect("store"));
     let cli = cli_args(&[
         "--difficulty", "moderate", "--budget", "standard", "--urgency", "normal",
@@ -196,8 +196,8 @@ async fn cli_run_reads_checklist_file_after_agent_resolution() {
 #[tokio::test]
 async fn cli_run_dry_run_persists_merged_checklist_prompt_and_budget_mode() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().expect("aid dirs");
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().expect("aid dirs");
     let agents = temp.path().join("agents");
     std::fs::create_dir_all(&agents).expect("agents dir");
     std::fs::write(agents.join("fixture.toml"),
@@ -211,7 +211,7 @@ async fn cli_run_dry_run_persists_merged_checklist_prompt_and_budget_mode() {
     for (budget, configured_budget, expected_budget) in [
         ("standard", false, false), ("cheap", false, true), ("standard", true, true),
     ] {
-        std::fs::write(crate::paths::config_path(),
+        std::fs::write(crate::support::paths::config_path(),
             format!("[selection]\nbudget_mode = {configured_budget}\n")).expect("config");
         let cli = Cli::try_parse_from([
             "aid", "run", "fixture", "--prompt-file", prompt.to_str().expect("prompt path"),

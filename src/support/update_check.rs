@@ -5,7 +5,7 @@ use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path, process::Command};
 
-use crate::paths;
+use crate::support::paths;
 
 const CACHE_FILE: &str = "update-check.json";
 const CRATE_URL: &str = "https://crates.io/api/v1/crates/ai-dispatch";
@@ -94,7 +94,7 @@ fn parse_version(value: &str) -> Option<[u32; 3]> {
 #[cfg(test)]
 mod tests {
     use super::{UpdateCache, maybe_check_update, parse_crates_io_response, read_cache, version_is_newer, write_cache};
-    use crate::paths::AidHomeGuard;
+    use crate::support::paths::AidHomeGuard;
     use tempfile::TempDir;
 
     #[test]

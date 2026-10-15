@@ -55,7 +55,7 @@ fn write_partial_work(
     state: &crate::worktree::LiveWorktreeState,
     events: &[TaskEvent],
 ) -> Result<()> {
-    let task_dir = crate::paths::task_dir(task_id.as_str());
+    let task_dir = crate::support::paths::task_dir(task_id.as_str());
     std::fs::create_dir_all(&task_dir)?;
     let mut out = String::new();
     out.push_str(&format!("# Partial Work Salvage for {task_id}\n\n"));

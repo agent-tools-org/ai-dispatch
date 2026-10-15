@@ -50,7 +50,7 @@ impl AuthStatus {
 }
 
 fn marker_path(agent: AgentKind) -> PathBuf {
-    crate::paths::aid_dir().join(format!("auth-failed-{}", agent.as_str()))
+    crate::support::paths::aid_dir().join(format!("auth-failed-{}", agent.as_str()))
 }
 
 pub(crate) fn auth_status(agent: AgentKind, custom_name: Option<&str>) -> AuthStatus {
@@ -157,8 +157,8 @@ pub(crate) fn record_from_run(task_id: &str, agent: AgentKind, store: &Store) ->
         })
     } else {
         let sources = [
-            (crate::paths::stderr_path(task_id), Channel::CliStderr),
-            (crate::paths::log_path(task_id), Channel::CliStream),
+            (crate::support::paths::stderr_path(task_id), Channel::CliStderr),
+            (crate::support::paths::log_path(task_id), Channel::CliStream),
         ];
         sources.iter().find_map(|(path, channel)| {
             let raw = if *channel == Channel::CliStream {
@@ -221,7 +221,7 @@ fn credential_stamp(paths: &[PathBuf]) -> String {
 
 fn opencode_credential_stamp() -> String {
     #[cfg(test)]
-    return credential_stamp(&[crate::paths::aid_dir().join("opencode-auth.json")]);
+    return credential_stamp(&[crate::support::paths::aid_dir().join("opencode-auth.json")]);
     #[cfg(not(test))]
     {
         let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();

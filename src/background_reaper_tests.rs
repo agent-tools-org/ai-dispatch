@@ -8,7 +8,7 @@ use super::{check_zombie_tasks_with, save_spec, BackgroundRunSpec};
 
 #[path = "background_wrap_up_tests.rs"]
 mod wrap_up;
-use crate::paths;
+use crate::support::paths;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 

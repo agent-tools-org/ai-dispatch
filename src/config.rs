@@ -6,7 +6,7 @@ use serde::Deserialize;
 use std::{fs, path::Path};
 use toml::value::{Table, Value};
 
-use crate::paths;
+use crate::support::paths;
 
 pub(crate) const DEFAULT_MAX_TASK_DURATION_MINS: i64 =
     crate::timeout_policy::DEFAULT_MAX_DURATION_MINS;

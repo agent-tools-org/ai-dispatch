@@ -87,7 +87,7 @@ pub struct PricingResponse {
 }
 
 pub fn load_pricing_overrides() -> Result<Vec<PricingFileModel>> {
-    let path = crate::paths::pricing_path();
+    let path = crate::support::paths::pricing_path();
     if !path.exists() {
         return Ok(Vec::new());
     }

@@ -2,7 +2,7 @@
 // Deps: MonitorState, paths::agent_log_path, AidHomeGuard.
 
 use super::MonitorState;
-use crate::paths;
+use crate::support::paths;
 use crate::pty_watch_idle::{IdleAction, IdleDetector, MonitorTaskStatus};
 use crate::store::Store;
 use crate::timeout_policy::{NudgeLadder, TimeoutPolicy};

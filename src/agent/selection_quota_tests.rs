@@ -6,7 +6,7 @@ use tempfile::TempDir;
 
 use super::headroom_penalty;
 use crate::live_quota::CacheDirGuard;
-use crate::paths::AidHomeGuard;
+use crate::support::paths::AidHomeGuard;
 use crate::types::AgentKind;
 
 fn isolated() -> (TempDir, AidHomeGuard, CacheDirGuard) {

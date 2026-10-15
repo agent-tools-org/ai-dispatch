@@ -3,7 +3,7 @@
 // Deps: run_prompt helpers, git subprocess fixtures, tempfile.
 
 use super::*;
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use std::path::Path;
 use std::process::Command;
 

@@ -3,7 +3,7 @@
 // Deps: merge handlers, Store, temp repos, command shims.
 
 use super::*;
-use crate::test_subprocess;
+use crate::support::test_subprocess;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::path::Path;

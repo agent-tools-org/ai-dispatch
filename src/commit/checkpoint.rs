@@ -18,7 +18,7 @@ pub(crate) fn preserve_shared_checkout(
     dir: &Path,
     task_id: &str,
 ) -> Result<Option<CheckoutCheckpoint>> {
-    crate::sanitize::validate_task_id(task_id)?;
+    crate::support::sanitize::validate_task_id(task_id)?;
     let probe = Command::new("git")
         .arg("-C").arg(dir)
         .env("LC_ALL", "C")

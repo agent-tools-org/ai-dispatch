@@ -38,7 +38,7 @@ pub(crate) fn latest_owned(
     if !root_matches(root, Some(started)) {
         return None;
     }
-    let path = crate::paths::task_dir(task_id).join("child-activity.json");
+    let path = crate::support::paths::task_dir(task_id).join("child-activity.json");
     let previous = std::fs::read(&path)
         .ok()
         .and_then(|bytes| serde_json::from_slice::<Sample>(&bytes).ok())

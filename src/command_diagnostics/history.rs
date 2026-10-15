@@ -48,8 +48,8 @@ pub(super) fn record(stage: &str, exit_code: i32, issues: Vec<Issue>) {
 fn append(record: &Record) -> Result<()> {
     let mut bytes = serde_json::to_vec(record)?;
     bytes.push(b'\n');
-    let path = crate::paths::logs_dir().join(LOG_NAME);
-    std::fs::create_dir_all(crate::paths::logs_dir())?;
+    let path = crate::support::paths::logs_dir().join(LOG_NAME);
+    std::fs::create_dir_all(crate::support::paths::logs_dir())?;
     let mut options = OpenOptions::new();
     options.create(true).append(true);
     #[cfg(unix)]
@@ -108,7 +108,7 @@ pub(crate) fn show(args: &ErrorsArgs) -> Result<()> {
 }
 
 fn recent(limit: usize) -> Result<Vec<Record>> {
-    let file = match File::open(crate::paths::logs_dir().join(LOG_NAME)) {
+    let file = match File::open(crate::support::paths::logs_dir().join(LOG_NAME)) {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(error) => return Err(error.into()),

@@ -8,10 +8,10 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 fn reaped(script: &str, saw_output: bool) -> bool {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().expect("task directories");
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().expect("task directories");
     let store = Store::open_memory().expect("store");
     let task = make_task("t-child-reaper");
     store.insert_task(&task).expect("task");
@@ -50,10 +50,10 @@ fn background_cpu_descendant_does_not_extend_first_token_timeout() {
 
 #[test]
 fn detached_reused_root_cannot_refresh_liveness_even_with_cached_activity() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
-    crate::paths::ensure_dirs().expect("dirs");
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    crate::support::paths::ensure_dirs().expect("dirs");
     let mut command = Command::new("sh");
     command.args(["-c", "sleep 10 & wait"]).stdout(Stdio::null()).stderr(Stdio::null());
     let root = crate::process_guard::ProcessGuard::spawn(&mut command).expect("replacement root");
@@ -76,9 +76,9 @@ fn detached_reused_root_cannot_refresh_liveness_even_with_cached_activity() {
 
 #[test]
 fn detached_launch_persists_root_start_identity_with_pid() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let mut command = Command::new("sleep");
     command.arg("10");
     let root = crate::process_guard::ProcessGuard::spawn(&mut command).expect("root");
@@ -86,7 +86,7 @@ fn detached_launch_persists_root_start_identity_with_pid() {
     super::super::background_spec::save_spec(&spec).expect("spec");
     super::super::background_process::update_agent_pid(&spec.task_id, root.id()).expect("launch");
     let json: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(crate::paths::job_path(&spec.task_id)).expect("persisted spec"),
+        &std::fs::read(crate::support::paths::job_path(&spec.task_id)).expect("persisted spec"),
     )
     .expect("json");
     assert_eq!(json["agent_pid"].as_u64(), Some(u64::from(root.id())));

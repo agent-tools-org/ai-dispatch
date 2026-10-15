@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::store::Store;
 
 pub async fn run(port: u16, host: String, token: Option<String>) -> Result<()> {
-    let store = Arc::new(Store::open(&crate::paths::db_path())?);
+    let store = Arc::new(Store::open(&crate::support::paths::db_path())?);
     crate::web::serve(store, port, host, token).await
 }
 

@@ -2,7 +2,7 @@
 // Fallback readers use command-layer advice; scoring stays agent-owned.
 // Deps: run advice routes, scoring, isolated AID_HOME and installed agents.
 
-use crate::paths::{self, AidHomeGuard};
+use crate::support::paths::{self, AidHomeGuard};
 use crate::types::AgentKind;
 use tempfile::TempDir;
 

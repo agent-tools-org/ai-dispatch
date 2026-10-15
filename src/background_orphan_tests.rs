@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::background::{save_spec, BackgroundRunSpec};
-use crate::paths;
+use crate::support::paths;
 use crate::store::Store;
 use crate::types::{
     AgentKind, EventKind, Task, TaskEvent, TaskStatus, VerifyStatus,

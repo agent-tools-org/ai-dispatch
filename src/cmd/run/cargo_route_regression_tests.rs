@@ -25,7 +25,7 @@ fn task(id: &str, dir: &str) -> Task {
 
 #[test]
 fn genuine_cargo_test_failure_remains_broken() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("Cargo.toml"),
         "[package]\nname = \"verify-failure\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
@@ -50,7 +50,7 @@ fn genuine_cargo_test_failure_remains_broken() {
 /// target-path diagnostic may downgrade a task to Unverified.
 #[test]
 fn non_cargo_verify_failure_remains_broken() {
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let dir = tempfile::tempdir().unwrap();
     let dir_str = dir.path().to_string_lossy().to_string();
     let store = Store::open_memory().unwrap();

@@ -16,7 +16,7 @@ fn isolated_runner(test: &str) -> bool {
     if std::env::var("AID_LAUNCH_DEADLINE_CHILD").as_deref() == Ok(test) {
         return true;
     }
-    let _permit = crate::test_subprocess::acquire();
+    let _permit = crate::support::test_subprocess::acquire();
     let temp = tempfile::tempdir().expect("child home");
     let output = Command::new(std::env::current_exe().expect("test binary"))
         .args([
@@ -69,7 +69,7 @@ fn saved_remote_deadline_expires_while_waiting_for_verify_lock_without_launch() 
     }
     let (store, id, _) = stored_task();
     let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     executable(
         &temp.path().join("verify"),
         "#!/bin/bash\necho launched > launched\necho finished\n",
@@ -80,7 +80,7 @@ fn saved_remote_deadline_expires_while_waiting_for_verify_lock_without_launch() 
         Duration::from_secs(1),
         Duration::from_secs(900),
     );
-    let shim = crate::paths::task_dir(id.as_str()).join("home/.aid-build-shims/cargo");
+    let shim = crate::support::paths::task_dir(id.as_str()).join("home/.aid-build-shims/cargo");
     let holder = hold_verify_lock(Some(shim.clone()), Duration::from_millis(1500));
     let now = Local::now();
     timestamps(&store, &id, now, Some(now));
@@ -107,7 +107,7 @@ fn saved_remote_deadline_lock_delay_reduces_command_wait_allowance() {
     }
     let (store, id, _) = stored_task();
     let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::paths::AidHomeGuard::set(temp.path());
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     executable(
         &temp.path().join("verify"),
         "#!/bin/bash\necho launched > launched\necho \"$AID_BUILD_BOX\"\nexec /bin/sleep 2\n",
@@ -118,7 +118,7 @@ fn saved_remote_deadline_lock_delay_reduces_command_wait_allowance() {
         Duration::from_secs(3),
         Duration::from_secs(900),
     );
-    let shim = crate::paths::task_dir(id.as_str()).join("home/.aid-build-shims/cargo");
+    let shim = crate::support::paths::task_dir(id.as_str()).join("home/.aid-build-shims/cargo");
     let holder = hold_verify_lock(Some(shim), Duration::from_secs(2));
     let now = Local::now();
     timestamps(&store, &id, now, Some(now));

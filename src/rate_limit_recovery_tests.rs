@@ -2,7 +2,7 @@
 // Deps: parent rate-limit facade and isolated aid home.
 
 use super::*;
-use crate::paths;
+use crate::support::paths;
 
 #[test]
 fn test_is_rate_limited_returns_false_for_fresh_agents() {

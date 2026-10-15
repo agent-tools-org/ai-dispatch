@@ -67,9 +67,9 @@ fn numbered_assistant_log(count: usize, body_len: usize) -> String {
 #[test]
 fn output_text_defaults_to_full() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    std::fs::create_dir_all(crate::paths::logs_dir()).unwrap();
-    std::fs::write(crate::paths::log_path("t-output-full"), numbered_assistant_log(22, 500))
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(crate::support::paths::logs_dir()).unwrap();
+    std::fs::write(crate::support::paths::log_path("t-output-full"), numbered_assistant_log(22, 500))
         .unwrap();
 
     let store = Arc::new(Store::open_memory().unwrap());
@@ -87,9 +87,9 @@ fn output_text_defaults_to_full() {
 #[test]
 fn output_text_brief_truncates() {
     let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::paths::AidHomeGuard::set(temp.path());
-    std::fs::create_dir_all(crate::paths::logs_dir()).unwrap();
-    std::fs::write(crate::paths::log_path("t-output-brief"), numbered_assistant_log(22, 500))
+    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    std::fs::create_dir_all(crate::support::paths::logs_dir()).unwrap();
+    std::fs::write(crate::support::paths::log_path("t-output-brief"), numbered_assistant_log(22, 500))
         .unwrap();
 
     let store = Arc::new(Store::open_memory().unwrap());

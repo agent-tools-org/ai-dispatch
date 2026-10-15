@@ -115,3 +115,34 @@ fn cache_cases() -> [CacheCase; 6] {
         ),
     ]
 }
+
+#[test]
+fn malformed_billing_preserves_probe_and_marker_release() {
+    let temp = tempfile::tempdir().expect("temp");
+    let _home = AidHomeGuard::set(temp.path());
+    let _cache = CacheDirGuard::set(temp.path());
+    let marker = temp.path().join("rate-limit-codex");
+    std::fs::write(&marker, "recovery_at: Jan 01, 2099 2:23 PM\nmessage: usage limit\n")
+        .expect("marker");
+    for billing in [
+        serde_json::json!({"state":"overage","credits":{"balance":null,"unlimited":false}}),
+        serde_json::json!({"credits":{"balance":1,"unlimited":false}}),
+        serde_json::json!({"state":"overage","credits":{"balance":"bad","unlimited":false}}),
+        serde_json::json!({"state":"overage","credits":{"balance":1}}),
+        serde_json::json!({"state":"future_state"}),
+        serde_json::json!({"state":"overage","credits":{"balance":"overflow-number","unlimited":false}}),
+        serde_json::json!(["overage"]),
+    ] {
+        let raw = serde_json::json!({"ok":true,"snapshot":{"provider":"codex",
+            "windows":[{"label":"Weekly","used_percent":12.5}],
+            "fetched_at":"2099-01-01T00:00:00Z","billing":billing}});
+        let raw = raw.to_string().replace(r#""overflow-number""#, "1e999");
+        std::fs::write(temp.path().join("codex.json"), raw).expect("cache");
+        let probe = live::snapshot(&AgentKind::Codex).expect("probe survives malformed billing");
+        assert_eq!(probe.windows[0].used_percent, 12.5);
+        assert!(live::billing(&AgentKind::Codex).is_none());
+        assert!(crate::routing::availability::overrides_marker_at_in_cache(
+            &AgentKind::Codex, &marker, temp.path(),
+        ));
+    }
+}

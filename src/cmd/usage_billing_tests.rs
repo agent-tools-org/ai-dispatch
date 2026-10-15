@@ -132,3 +132,20 @@ fn json_preserves_existing_usage_view_and_adds_overage_rows() {
     assert_eq!(value["overage"][0]["tasks"], 2);
     assert_eq!(value["overage"][0]["unknown_cost_tasks"], 1);
 }
+
+#[test]
+fn usage_ignores_overage_metadata_on_non_dispatch_events() {
+    let temp = tempfile::tempdir().expect("temp");
+    let _home = AidHomeGuard::set(temp.path());
+    let _cache = CacheDirGuard::set(temp.path());
+    let store = Store::open_memory().expect("store");
+    let task = task();
+    store.insert_task(&task).expect("task");
+    store.insert_event(&TaskEvent {
+        task_id: task.id.clone(), timestamp: Local::now(), event_kind: EventKind::Completion,
+        detail: "unrelated completion metadata".into(),
+        metadata: Some(serde_json::json!({"billing_state":"overage"})),
+    }).expect("event");
+    let rows = collect(&store, &[task], None, UsageWindow::All, Local::now()).expect("usage");
+    assert!(rows.is_empty(), "only dispatch setup events identify overage");
+}

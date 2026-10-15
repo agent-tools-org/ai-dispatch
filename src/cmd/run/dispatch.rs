@@ -83,7 +83,9 @@ fn start_dispatch(
             prepared.task_id
         );
     }
-    billing::record(store, &prepared.task_id, prepared.agent_kind)?;
+    if let Err(error) = billing::record(store, &prepared.task_id, prepared.agent_kind) {
+        aid_warn!("[aid] Could not record billing for {}: {error}", prepared.task_id);
+    }
     run_before_hook(
         store,
         prepared,

@@ -376,3 +376,8 @@ Estimates use a positive recorded task cost when available, otherwise tokens and
 an exact known metered model price, bypassing subscription inclusion. Missing
 prices or usage remain unknown. Provider credit balances are not USD prices;
 these figures are estimates, not provider invoices.
+
+Overage usage reads dispatch setup events in one indexed query for the selected
+task creation period. It does not load each task's event history, and unrelated
+event kinds cannot classify a task as overage. The partial billing index excludes
+non-overage events, so an empty overage history stays cheap to query.

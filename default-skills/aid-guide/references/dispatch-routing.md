@@ -198,7 +198,10 @@ needs-human refusal eligible.
 Fresh successful aidbar snapshots may include `billing.state`: `in_plan`,
 `overage`, or `exhausted`, with optional `credits.balance` and `credits.unlimited`.
 Balances retain provider credit units. Absent, stale, or failed billing evidence
-is unknown and preserves existing routing behavior.
+is unknown and preserves existing routing behavior. Malformed billing fields do
+not discard the quota snapshot or prevent a fresh probe from releasing a hold.
+Unknown billing adds no text or score term to candidate lines; JSON keeps its
+additive billing fields.
 
 Overage routes are excluded from automatic selection for `free` and `cheap`
 budgets. A `standard` budget applies a separate −4.0 `billing` score term;
@@ -210,6 +213,9 @@ fallback. Candidate lines show billing state and balance; JSON candidates includ
 
 Billing alone never blocks an explicit `aid run <agent>`. Dispatch prints one
 warning for an overage or exhausted route, including its balance when reported.
+A fresh login refusal is excluded from recommendation fallback even when no
+other candidate is eligible. Billing-event storage failures print a warning and
+allow explicit dispatch to continue.
 A task dispatched in overage records one setup event such as
 `billing: overage (credits balance 48698.135)`; later cache changes do not alter it.
 `aid agent quota` displays `OVERAGE` with balance or `EXHAUSTED` in place of `OK`.

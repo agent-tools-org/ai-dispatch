@@ -125,3 +125,17 @@ fn ordinary_holds_remain_advisory_but_human_action_refusals_do_not() {
         assert_eq!(report.recommended.is_none(), excluded);
     }
 }
+
+#[test]
+fn auth_failed_route_is_not_an_advisory_fallback_when_no_other_route_is_eligible() {
+    let (_temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Grok]);
+    crate::routing::auth_marker::record_failure_at(
+        AgentKind::Grok, "Not signed in.", chrono::Local::now(),
+    );
+    let report = billing_report(declared(TaskDifficulty::Moderate, TaskBudget::Standard));
+    let grok = find(&report, "grok");
+    assert!(grok.exclusion_codes.iter().any(|code| code == "auth_failed"));
+    assert!(!grok.launchable(None));
+    assert!(report.recommended.is_none());
+}

@@ -30,6 +30,16 @@ const NORMALIZE_BACKUP_ATTEMPTS_SQL: &str = "UPDATE tasks SET backup_url = ''
                    ELSE 0 END
     );";
 
+pub(super) fn migrate_billing_index(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_events_overage ON events(task_id)
+         WHERE event_type = 'setup'
+           AND json_extract(CASE WHEN json_valid(metadata) THEN metadata END,
+                            '$.billing_state') = 'overage';",
+    )?;
+    Ok(())
+}
+
 pub(super) fn migrate_task_messages(conn: &Connection) -> Result<()> {
     conn.execute_batch(CREATE_TASK_MESSAGES_SQL)?;
     Ok(())

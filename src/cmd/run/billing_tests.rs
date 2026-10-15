@@ -82,3 +82,48 @@ fn dispatch_records_overage_once_and_does_not_block_exhausted() {
         }
     }
 }
+
+#[test]
+fn billing_insert_failure_does_not_abort_dispatch_after_running_transition() {
+    let temp = tempfile::tempdir().expect("temp");
+    let _home = AidHomeGuard::set(temp.path());
+    let _cache = CacheDirGuard::set(temp.path());
+    let store = std::sync::Arc::new(Store::open_memory().expect("store"));
+    let mut task = task();
+    task.status = TaskStatus::Pending;
+    store.insert_task(&task).expect("task");
+    std::fs::write(temp.path().join("codex.json"), serde_json::json!({"ok":true,
+        "snapshot":{"provider":"codex","windows":[],"fetched_at":"2099-01-01T00:00:00Z",
+            "billing":{"state":"overage"}}}).to_string()).expect("cache");
+    store.db().execute_batch(concat!(
+        "CREATE TRIGGER reject_billing BEFORE INSERT ON events ",
+        "WHEN NEW.detail LIKE 'billing:%' BEGIN SELECT RAISE(FAIL, 'billing test failure'); END;"
+    )).expect("trigger");
+    assert!(record(&store, &task.id, task.agent).is_err(), "fault must be exercised");
+    let prepared = prepared(task, temp.path());
+    super::super::start_dispatch(&store, &prepared, &[]).expect("billing is advisory");
+    let saved = store.get_task(prepared.task_id.as_str()).expect("query").expect("task");
+    assert_eq!(saved.status, TaskStatus::Running);
+    assert!(store.get_events(prepared.task_id.as_str()).expect("events")
+        .iter().all(|event| !event.detail.starts_with("billing:")));
+}
+
+fn prepared(task: Task, dir: &std::path::Path) -> super::super::PreparedDispatch {
+    super::super::PreparedDispatch {
+        detected_project: None,
+        project_root: None,
+        agent_kind: task.agent,
+        agent_display_name: task.agent.as_str().into(),
+        requested_skills: Vec::new(),
+        effective_model: None,
+        budget_active: false,
+        agent: crate::agent::get_agent(task.agent),
+        task_id: task.id.clone(),
+        task,
+        log_path: dir.join("task.log"),
+        workgroup: None,
+        repo_path: None,
+        wt_path: None,
+        effective_dir: None,
+    }
+}

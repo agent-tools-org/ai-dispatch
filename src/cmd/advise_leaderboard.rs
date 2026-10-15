@@ -38,37 +38,7 @@ pub(super) fn leaderboard_lines(evidence: &crate::routing::scores::Evidence) -> 
 
 pub(super) fn print_candidates(report: &AdviceReport) {
     for (index, candidate) in report.candidates.iter().enumerate() {
-        let availability = candidate_mark(
-            candidate
-                .exclusion_reason
-                .as_deref()
-                .or(candidate.demotion_reason.as_deref()),
-        );
-        let item = &candidate.breakdown;
-        println!(
-            concat!(
-                "  {}. {:<10} {:>5.1}  base {:.1}  {:+.1} model  {:+.1} budget  {:+.1} limit",
-                "  {:+.1} history  {:+.1} team  {:+.1} headroom  {:+.1} billing  model {}{}  {}"
-            ),
-            index + 1,
-            candidate.agent,
-            candidate.score,
-            item.base,
-            item.model_capability,
-            item.budget_penalty,
-            item.rate_limit_penalty,
-            item.history_bonus,
-            item.team_bonus,
-            item.headroom_penalty,
-            item.billing,
-            crate::agent::run_model::model_label(
-                candidate.model.as_deref(),
-                candidate.pinned,
-                candidate.source,
-            ),
-            availability,
-            candidate.billing.as_ref().map(|item| item.label()).unwrap_or_else(|| "billing unknown".into()),
-        );
+        println!("{}", candidate_line(index, candidate));
         for line in leaderboard_lines(&candidate.capability_evidence) {
             println!("{line}");
         }
@@ -77,6 +47,27 @@ pub(super) fn print_candidates(report: &AdviceReport) {
         }
     }
     print_custom_candidates(report);
+}
+
+fn candidate_line(index: usize, candidate: &crate::agent::selection::AdviceCandidate) -> String {
+    let availability = candidate_mark(candidate.exclusion_reason.as_deref()
+        .or(candidate.demotion_reason.as_deref()));
+    let item = &candidate.breakdown;
+    let billing_term = candidate.billing.as_ref()
+        .map(|_| format!("  {:+.1} billing", item.billing)).unwrap_or_default();
+    let billing_state = candidate.billing.as_ref()
+        .map(|billing| format!("  {}", billing.label())).unwrap_or_default();
+    format!(
+        concat!(
+            "  {}. {:<10} {:>5.1}  base {:.1}  {:+.1} model  {:+.1} budget  {:+.1} limit",
+            "  {:+.1} history  {:+.1} team  {:+.1} headroom{}  model {}{}{}"
+        ),
+        index + 1, candidate.agent, candidate.score, item.base, item.model_capability,
+        item.budget_penalty, item.rate_limit_penalty, item.history_bonus, item.team_bonus,
+        item.headroom_penalty, billing_term,
+        crate::agent::run_model::model_label(candidate.model.as_deref(), candidate.pinned, candidate.source),
+        availability, billing_state,
+    )
 }
 
 fn print_custom_candidates(report: &AdviceReport) {
@@ -103,3 +94,7 @@ fn print_custom_candidates(report: &AdviceReport) {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "advise_leaderboard_tests.rs"]
+mod tests;

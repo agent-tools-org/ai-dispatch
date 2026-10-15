@@ -24,6 +24,10 @@ pub(super) fn collect(
     window: UsageWindow,
     now: DateTime<Local>,
 ) -> anyhow::Result<Vec<OverageUsage>> {
+    let overage_tasks = store.overage_task_ids(window.range(now))?;
+    if overage_tasks.is_empty() {
+        return Ok(Vec::new());
+    }
     let mut rows = BTreeMap::<String, OverageUsage>::new();
     for task in tasks {
         let name = task.agent_display_name();
@@ -34,14 +38,7 @@ pub(super) fn collect(
         {
             continue;
         }
-        if !store.get_events(task.id.as_str())?.iter().any(|event| {
-            event
-                .metadata
-                .as_ref()
-                .and_then(|meta| meta.get("billing_state"))
-                .and_then(serde_json::Value::as_str)
-                == Some("overage")
-        }) {
+        if !overage_tasks.contains(task.id.as_str()) {
             continue;
         }
         let row = rows.entry(name.to_string()).or_insert_with(|| OverageUsage {

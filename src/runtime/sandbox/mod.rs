@@ -96,6 +96,9 @@ fn forward_command_envs(wrapped: &mut Command, cmd: &Command) {
         if key == std::ffi::OsStr::new("HOME") {
             continue;
         }
+        if key == std::ffi::OsStr::new("ANTHROPIC_API_KEY") && value.is_none() {
+            wrapped.env_remove(key);
+        }
         if let Some(value) = value {
             if key == std::ffi::OsStr::new("ANTHROPIC_API_KEY") {
                 wrapped.arg("-e").arg(key);

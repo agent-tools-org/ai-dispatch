@@ -54,17 +54,25 @@ monthly_budget_usd = 200
 Only `agent = "claude"` is supported. IDs must be unique, must not name a built-in,
 and use letters, digits or hyphens. Budgets must be positive finite USD amounts.
 `keychain_account` defaults to the route ID; `over_budget` defaults to `"stop"`.
+Both `keychain_service` and the effective `keychain_account` must be non-empty and
+contain only `[A-Za-z0-9._-]+`. Shell syntax, whitespace and newlines are rejected
+when loading configuration.
 Use `"bill"` to allow overage after the budget. Store the API keys as generic
 passwords in the macOS login keychain under the specified service and account;
 never put key values in TOML, prompts or dispatch environment arguments.
 
 Use the route ID wherever an agent name is accepted, including `aid run`, batch
 `agent`, fallback lists and `--cascade`. The route runs the existing Claude Code
-adapter. At launch aid reads its key using `/usr/bin/security` and gives it only
-to the child as `ANTHROPIC_API_KEY`. An unreadable item fails before launch with
-an infrastructure error naming the route and item; subscription login is never
-a fallback. Plain `claude` keeps its existing behavior. The `aid credential` pool
-is independent of dispatch.
+adapter. The route passes `--settings` JSON with exactly one setting:
+`apiKeyHelper`, for example `/usr/bin/security find-generic-password -s
+aid-anthropic-api -a account-ming -w`. Claude Code runs that helper and retrieves
+the password; aid never reads it. The route child removes `ANTHROPIC_API_KEY`,
+including inherited and explicitly forwarded values, so the helper is its only
+API-key source and agent shell commands cannot read the key from that variable.
+An unreadable item is handled by Claude Code; aid does not preflight passwords.
+A subscription or environment-key init source stops the run and holds the route
+instead of silently accepting different billing. Plain `claude` keeps its existing
+behavior. The `aid credential` pool is independent of dispatch.
 
 `aid agent list`, `aid agent quota` and `aid advise` include these routes;
 `aid usage` groups each route separately. See [routing](dispatch-routing.md#api-account-billing)

@@ -53,7 +53,7 @@ pub(super) fn prepare_launch(
     if let Some(temp_dir) = temp_dir { std_cmd.env("TMPDIR", temp_dir); }
     finish_env(store, spec, args, agent.kind(), &mut std_cmd, cargo_target_dir.as_deref())?;
     crate::agent::api_route::validate_launch(&args.agent_name, store)?;
-    crate::agent::api_route::inject_key(&args.agent_name, &mut std_cmd)?;
+    agent.finalize_launch_env(&mut std_cmd);
     wrap_command(spec, args, agent.kind(), std_cmd)
 }
 

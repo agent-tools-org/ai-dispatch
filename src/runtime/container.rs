@@ -75,6 +75,9 @@ pub fn exec_in_container(cmd: &Command, container_name: &str) -> Command {
         if key == std::ffi::OsStr::new("HOME") {
             continue;
         }
+        if key == std::ffi::OsStr::new("ANTHROPIC_API_KEY") && value.is_none() {
+            wrapped.env_remove(key);
+        }
         if let Some(value) = value {
             if key == std::ffi::OsStr::new("ANTHROPIC_API_KEY") {
                 wrapped.arg("-e").arg(key);

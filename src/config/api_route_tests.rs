@@ -12,15 +12,15 @@ fn document(extra: &str) -> String {
 
 #[test]
 fn defaults_and_explicit_account_and_bill() {
-    let config: AidConfig = toml::from_str(&document("")).unwrap();
+    let config: AidConfig = crate::config::parse_config(&document("")).unwrap();
     let route = &config.api_route[0];
-    assert_eq!(route.item().account, "claude-api-ming");
+    assert_eq!(route.account(), "claude-api-ming");
     assert_eq!(route.over_budget, OverBudget::Stop);
-    let config: AidConfig = toml::from_str(&document(
+    let config: AidConfig = crate::config::parse_config(&document(
         "keychain_account = 'account-ming'\nover_budget = 'bill'",
     ))
     .unwrap();
-    assert_eq!(config.api_route[0].item().account, "account-ming");
+    assert_eq!(config.api_route[0].account(), "account-ming");
     assert_eq!(config.api_route[0].over_budget, OverBudget::Bill);
 }
 
@@ -38,10 +38,52 @@ fn rejects_invalid_routes() {
         document("").replace("aid-anthropic-api", ""),
         format!("{}\n{}", document(""), document("")),
     ] {
-        assert!(toml::from_str::<AidConfig>(&invalid).is_err());
+        assert!(crate::config::parse_config(&invalid).is_err());
     }
-    let error = toml::from_str::<AidConfig>(&document("").replace("agent = 'claude'", "agent = 'codex'"))
+    let error = crate::config::parse_config(&document("").replace("agent = 'claude'", "agent = 'codex'"))
         .unwrap_err()
         .to_string();
     assert!(error.contains("only agent = \"claude\" is supported"));
+}
+
+#[test]
+fn keychain_identifiers_reject_shell_syntax_at_config_load() {
+    let home = tempfile::tempdir().unwrap();
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    for field in ["keychain_service", "keychain_account"] {
+        for value in [
+            "",
+            "has space",
+            "'quote",
+            "\"quote",
+            ";id",
+            "$(id)",
+            "`id`",
+            "line\nbreak",
+        ] {
+            let mut config: toml::Value = toml::from_str(&document("")).unwrap();
+            config["api_route"][0][field] = toml::Value::String(value.into());
+            std::fs::write(
+                crate::support::paths::config_path(),
+                toml::to_string(&config).unwrap(),
+            )
+            .unwrap();
+            let error = crate::config::load_config().unwrap_err();
+            assert!(format!("{error:#}").contains(&format!("{field} must match [A-Za-z0-9._-]+")));
+        }
+    }
+}
+
+#[test]
+fn keychain_identifiers_accept_only_safe_word_characters() {
+    let config = crate::config::parse_config(&document("keychain_account = 'Account_1.test-meet'")).unwrap();
+    assert_eq!(
+        config.api_route[0].helper_command().unwrap(),
+        "/usr/bin/security find-generic-password -s aid-anthropic-api -a Account_1.test-meet -w"
+    );
+}
+
+#[test]
+fn unsupported_over_budget_numeric_value_is_not_a_default() {
+    assert!(crate::config::parse_config(&document("over_budget = 0")).is_err());
 }

@@ -86,6 +86,8 @@ pub trait Agent: Send + Sync {
 
     /// Build the OS command to execute this agent
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command>;
+    /// Apply adapter environment constraints after shared launch environment setup.
+    fn finalize_launch_env(&self, _cmd: &mut Command) {}
     /// Validate the installed host CLI contract before a task row is claimed.
     fn validate_cli(&self, _model: Option<&str>, _run: &CliCommandRunner<'_>) -> Result<()> {
         Ok(())

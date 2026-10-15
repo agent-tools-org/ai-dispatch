@@ -1,59 +1,146 @@
-// Worker launch injects the API key after shared environment setup.
-// Missing credentials stop command preparation before a child can be spawned.
+// Worker launch and PTY regressions for helper-backed API routes.
+// A fake Claude validates settings and key absence without invoking the keychain.
 use super::*;
-use crate::routing::keychain::test_keychain::Guard;
 use crate::support::paths::{self, AidHomeGuard};
 
-#[test]
-fn launch_reads_key_after_env_setup_and_fails_before_spawn_if_missing() {
+fn fixture() -> (tempfile::TempDir, AidHomeGuard, Arc<Store>) {
     let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let guard = AidHomeGuard::set(home.path());
     paths::ensure_dirs().unwrap();
     std::fs::write(
         paths::config_path(),
         concat!(
             "[[api_route]]\nid = 'claude-api-ming'\nagent = 'claude'\n",
-            "keychain_service = 'test'\nmonthly_budget_usd = 200\n",
+            "keychain_service = 'test'\nkeychain_account = 'account-ming'\nmonthly_budget_usd = 200\n",
         ),
     )
     .unwrap();
-    let route = crate::config::api_route::find("claude-api-ming")
-        .unwrap()
-        .unwrap();
-    let item = route.item();
-    let agent = crate::agent::api_route::ApiRouteAgent(route);
-    let spec: BackgroundRunSpec = serde_json::from_value(serde_json::json!({
-        "task_id": "t-api-launch", "agent_name": "claude-api-ming", "prompt": "test",
-        "dir": null, "output": null, "verify": null, "retry": 0, "group": null
-    }))
-    .unwrap();
-    let args = RunArgs {
-        agent_name: "claude-api-ming".into(),
-        dry_run: true,
-        sandbox: true,
-        ..Default::default()
-    };
-    let isolated =
-        agent::home_isolation::IsolatedHomeGuard::create_from_home(Some(home.path()), Some("t-api-launch"))
-            .unwrap();
+    crate::support::test_env::write_executable(&home.path().join("bin/claude"), FAKE_CLAUDE);
     let store = Arc::new(Store::open_memory().unwrap());
-    let _fake = Guard::set(item.clone(), true);
-    let (command, _) = prepare_launch(&store, &spec, &args, &agent, &isolated).unwrap();
+    store
+        .insert_waiting_task(
+            "t-api-launch",
+            "claude-api-ming",
+            "test",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            false,
+        )
+        .unwrap();
+    store
+        .db()
+        .execute(
+            "UPDATE tasks SET status = 'running', agent = 'custom',
+        custom_agent_name = 'claude-api-ming' WHERE id = 't-api-launch'",
+            [],
+        )
+        .unwrap();
+    (home, guard, store)
+}
+
+fn spec(interactive: bool) -> BackgroundRunSpec {
+    serde_json::from_value(serde_json::json!({
+        "task_id": "t-api-launch", "agent_name": "claude-api-ming", "prompt": "test",
+        "dir": null, "output": null, "verify": null, "retry": 0, "group": null,
+        "interactive": interactive,
+    }))
+    .unwrap()
+}
+
+fn args(home: &std::path::Path) -> RunArgs {
+    RunArgs {
+        agent_name: "claude-api-ming".into(),
+        dir: Some(home.display().to_string()),
+        sandbox: true,
+        env: Some(std::collections::HashMap::from([
+            ("PATH".into(), home.join("bin").display().to_string()),
+            ("ANTHROPIC_API_KEY".into(), "synthetic-operator-key".into()),
+        ])),
+        ..Default::default()
+    }
+}
+
+fn prepared(
+    home: &std::path::Path,
+    store: &Arc<Store>,
+    spec: &BackgroundRunSpec,
+) -> (
+    RunArgs,
+    Box<dyn agent::Agent>,
+    std::process::Command,
+    agent::home_isolation::IsolatedHomeGuard,
+) {
+    let args = args(home);
+    let agent = agent::registry::resolve_custom_agent(&args.agent_name).unwrap();
+    let isolated =
+        agent::home_isolation::IsolatedHomeGuard::create_from_home(Some(home), Some("t-api-launch")).unwrap();
+    let (command, _) = prepare_launch(store, spec, &args, agent.as_ref(), &isolated).unwrap();
+    assert!(command.get_args().any(|arg| arg == "--settings"));
     assert!(
         command
             .get_envs()
-            .any(|(key, value)| key == "ANTHROPIC_API_KEY" && value.is_some())
+            .any(|(key, value)| key == "ANTHROPIC_API_KEY" && value.is_none())
     );
+    (args, agent, command, isolated)
+}
+
+#[test]
+fn launch_removes_explicit_env_key_after_shared_environment_setup() {
+    let (home, _guard, store) = fixture();
+    let (_, _, command, _isolated) = prepared(home.path(), &store, &spec(false));
     assert!(
         !command
             .get_args()
-            .any(|arg| arg.to_string_lossy().contains("synthetic-route-test-value"))
+            .any(|arg| arg.to_string_lossy().contains("synthetic-operator-key"))
     );
-    let _missing = Guard::set(item, false);
-    let error = match prepare_launch(&store, &spec, &args, &agent, &isolated) {
-        Ok(_) => panic!("unreadable key must fail before launch"),
-        Err(error) => format!("{error:#}"),
-    };
-    assert!(error.contains("infrastructure error: route claude-api-ming"));
-    assert!(!error.contains("synthetic-route-test-value"));
 }
+
+#[tokio::test]
+async fn piped_worker_launch_uses_route_helper_and_no_env_key() {
+    let _permit = crate::support::test_subprocess::acquire();
+    let (home, _guard, store) = fixture();
+    let spec = spec(false);
+    let (args, agent, command, _isolated) = prepared(home.path(), &store, &spec);
+    super::super::run_process(&store, &spec, &args, agent.as_ref(), command)
+        .await
+        .unwrap();
+    assert_eq!(
+        store.get_task("t-api-launch").unwrap().unwrap().status,
+        crate::types::TaskStatus::Done
+    );
+}
+
+#[tokio::test]
+async fn foreground_pty_launch_uses_route_helper_and_no_env_key() {
+    let _permit = crate::support::test_subprocess::acquire();
+    let (home, _guard, store) = fixture();
+    let spec = spec(true);
+    let (args, agent, command, _isolated) = prepared(home.path(), &store, &spec);
+    super::super::run_process(&store, &spec, &args, agent.as_ref(), command)
+        .await
+        .unwrap();
+    assert_eq!(
+        store.get_task("t-api-launch").unwrap().unwrap().status,
+        crate::types::TaskStatus::Done
+    );
+}
+
+const FAKE_CLAUDE: &str = r#"#!/bin/sh
+settings=
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --settings) settings=$2; shift 2 ;;
+        *) shift ;;
+    esac
+done
+expected='{"apiKeyHelper":"/usr/bin/security find-generic-password -s test -a account-ming -w"}'
+[ "$settings" = "$expected" ] || exit 91
+[ "${ANTHROPIC_API_KEY+x}" != x ] || exit 92
+printf '%s\n' '{"type":"system","subtype":"init","apiKeySource":"apiKeyHelper"}'
+printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0}'
+"#;

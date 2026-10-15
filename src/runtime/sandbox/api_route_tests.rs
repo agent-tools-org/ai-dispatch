@@ -20,3 +20,17 @@ fn sandbox_forwards_anthropic_key_by_name_only() {
             .any(|(key, value)| key == "ANTHROPIC_API_KEY" && value.is_some())
     );
 }
+
+#[test]
+fn sandbox_wrapper_preserves_route_api_key_removal() {
+    let mut inner = std::process::Command::new("claude");
+    inner.env_remove("ANTHROPIC_API_KEY");
+    let mut outer = std::process::Command::new("container");
+    forward_command_envs(&mut outer, &inner);
+    assert!(
+        outer
+            .get_envs()
+            .any(|(key, value)| key == "ANTHROPIC_API_KEY" && value.is_none())
+    );
+    assert!(!outer.get_args().any(|arg| arg == "ANTHROPIC_API_KEY"));
+}

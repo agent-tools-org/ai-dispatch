@@ -26,7 +26,7 @@ async fn api_source_mismatch_kills_child_and_records_route_hold() {
         .args([
             "-c",
             concat!(
-                "printf '\033]2;title\007{\"type\":\"system\",\"subtype\":\"init\",",
+                "printf '\\033]2;title\\007{\"type\":\"system\",\"subtype\":\"init\",",
                 "\"apiKeySource\":\"none\"}\n'; sleep 30; touch should-not-run",
             ),
         ])
@@ -35,6 +35,12 @@ async fn api_source_mismatch_kills_child_and_records_route_hold() {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    assert!(
+        command
+            .as_std()
+            .get_args()
+            .all(|arg| !arg.to_string_lossy().contains('\0'))
+    );
     let mut child = command.spawn().unwrap();
     let result = tokio::time::timeout(
         Duration::from_secs(5),

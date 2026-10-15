@@ -122,3 +122,10 @@ fn pace_penalty_starts_strictly_above_the_elapsed_threshold() {
     assert_eq!(above_threshold.pace, -2.0);
     assert_eq!(above_threshold.billing.state, BillingState::InPlan);
 }
+
+#[test]
+fn empty_spend_is_positive_zero_in_quota_display() {
+    let budget = calculate(&route(false), &[], Local::now()).unwrap();
+    assert!(budget.spent.is_sign_positive());
+    assert_eq!(budget.detail(), "$0.00 / $200 this month");
+}

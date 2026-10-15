@@ -207,9 +207,15 @@ impl<'de> serde::Deserializer<'de> for Fields<'_> {
         visitor.visit_map(MapDeserializer::new(keys.iter().map(|key| (*key, self))))
     }
 
+    fn deserialize_enum<V: Visitor<'de>>(
+        self, _name: &'static str, variants: &'static [&'static str], visitor: V,
+    ) -> Result<V::Value, Error> {
+        visitor.visit_enum(variants[0].into_deserializer())
+    }
+
     serde::forward_to_deserialize_any! {
         i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char bytes byte_buf unit
-        unit_struct newtype_struct tuple_struct map enum identifier ignored_any
+        unit_struct newtype_struct tuple_struct map identifier ignored_any
     }
 
     fn deserialize_string<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
@@ -229,4 +235,15 @@ fn official_guide_bundles_dispatch_references_within_file_limits() {
         let content = reference(&format!("references/{name}"));
         assert!(content.lines().count() <= 300, "{name} exceeds 300 lines");
     }
+}
+
+#[test]
+fn official_guide_api_route_examples_pass_configuration_validation() {
+    let configs: Vec<_> = reference("references/configuration.md").split("```toml").skip(1)
+        .map(|block| block.split("```").next().expect("TOML example"))
+        .filter(|block| block.contains("[[api_route]]"))
+        .map(|block| crate::config::parse_config(block).expect("valid API route example"))
+        .collect();
+    assert!(!configs.is_empty());
+    assert!(configs.iter().all(|config| !config.api_route.is_empty()));
 }

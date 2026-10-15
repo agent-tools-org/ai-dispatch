@@ -7,7 +7,6 @@ pub(crate) mod availability;
 pub(crate) mod model_catalog;
 pub(crate) mod model_health;
 pub mod credentials;
-pub(crate) mod keychain;
 pub(crate) mod api_budget;
 pub(crate) mod auth_marker;
 pub(crate) mod scores;

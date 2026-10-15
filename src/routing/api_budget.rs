@@ -50,7 +50,7 @@ pub(crate) fn calculate(route: &ApiRoute, tasks: &[Task], now: DateTime<Local>) 
                 && task.created_at < end
         })
         .filter_map(|task| task.cost_usd)
-        .sum::<f64>();
+        .fold(0.0, |spent, cost| spent + cost);
     let elapsed = (now - start).num_seconds() as f64 / (end - start).num_seconds() as f64;
     let state = if spent < route.monthly_budget_usd {
         BillingState::InPlan

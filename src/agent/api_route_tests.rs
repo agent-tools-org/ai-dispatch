@@ -1,7 +1,6 @@
 // API-route registry, launch boundary, stream-source and refusal regressions.
 // All account material is synthetic and scoped to a temporary aid home.
 use super::*;
-use crate::routing::keychain::test_keychain::Guard;
 use crate::support::paths::{self, AidHomeGuard};
 
 fn setup() -> (tempfile::TempDir, AidHomeGuard) {
@@ -58,7 +57,10 @@ fn routes_resolve_through_registry_batch_and_marker_names() {
         let cmd = agent.build_command("test", &opts()).unwrap();
         assert_eq!(cmd.get_program(), "claude");
         assert!(cmd.get_args().any(|arg| arg == "--verbose"));
-        assert!(cmd.get_envs().all(|(key, _)| key != "ANTHROPIC_API_KEY"));
+        assert!(
+            cmd.get_envs()
+                .any(|(key, value)| key == "ANTHROPIC_API_KEY" && value.is_none())
+        );
     }
     let registry = super::super::registry::load_custom_agents();
     assert_ne!(
@@ -68,43 +70,50 @@ fn routes_resolve_through_registry_batch_and_marker_names() {
 }
 
 #[test]
-fn key_injected_only_at_route_launch_and_unreadable_item_fails_safely() {
+fn helper_settings_are_route_only_and_do_not_read_a_key() {
     let (_home, _guard) = setup();
-    let route = adapter();
-    let _fake = Guard::set(route.0.item(), true);
-    let mut command = route.build_command("test", &opts()).unwrap();
-    inject_key(&route.0.id, &mut command).unwrap();
+    for id in ["claude-api-ming", "claude-api-meet"] {
+        let agent = super::super::registry::resolve_custom_agent(id).unwrap();
+        let cmd = agent.build_command("test", &opts()).unwrap();
+        let args: Vec<_> = cmd.get_args().collect();
+        let settings = args.windows(2).find(|pair| pair[0] == "--settings").unwrap()[1];
+        let value: serde_json::Value = serde_json::from_str(settings.to_str().unwrap()).unwrap();
+        let account = if id == "claude-api-ming" {
+            "account-ming"
+        } else {
+            "account-meet"
+        };
+        assert_eq!(value.as_object().unwrap().len(), 1);
+        assert_eq!(
+            value["apiKeyHelper"],
+            format!("/usr/bin/security find-generic-password -s aid-anthropic-api -a {account} -w",)
+        );
+        assert!(
+            cmd.get_envs()
+                .any(|(key, value)| key == "ANTHROPIC_API_KEY" && value.is_none())
+        );
+    }
+    let mut plain = ClaudeAgent.build_command("test", &opts()).unwrap();
+    assert!(!plain.get_args().any(|arg| arg == "--settings"));
+    assert!(plain.get_envs().all(|(key, _)| key != "ANTHROPIC_API_KEY"));
+    plain.env("ANTHROPIC_API_KEY", "synthetic-plain-value");
+    ClaudeAgent.finalize_launch_env(&mut plain);
     assert!(
-        command
+        plain
             .get_envs()
             .any(|(key, value)| key == "ANTHROPIC_API_KEY" && value.is_some())
     );
-    assert!(
-        !command
-            .get_args()
-            .any(|arg| arg.to_string_lossy().contains("synthetic-route-test-value"))
-    );
-    let mut plain = ClaudeAgent.build_command("test", &opts()).unwrap();
-    inject_key("claude", &mut plain).unwrap();
-    assert!(plain.get_envs().all(|(key, _)| key != "ANTHROPIC_API_KEY"));
-    let mut missing = Command::new("claude");
-    let error = inject_key("claude-api-meet", &mut missing).unwrap_err();
-    let error = format!("{error:#}");
-    assert!(error.contains("infrastructure error: route claude-api-meet"));
-    assert!(error.contains("aid-anthropic-api/account-meet"));
-    assert!(!error.contains("synthetic-route-test-value"));
-    assert!(missing.get_envs().all(|(key, _)| key != "ANTHROPIC_API_KEY"));
 }
 
 #[test]
-fn billing_source_requires_env_key_and_does_not_affect_subscription() {
+fn billing_source_requires_helper_and_does_not_affect_subscription() {
     let (_home, _guard) = setup();
     let route = adapter();
     let good = "\x1b]2;title\x07{\"type\":\"system\",\"subtype\":\"init\",\
-        \"apiKeySource\":\"ANTHROPIC_API_KEY\",\"model\":\"claude-haiku\"}";
+        \"apiKeySource\":\"apiKeyHelper\",\"model\":\"claude-haiku\"}";
     assert!(stream_failure(&route, good).unwrap().is_none());
     assert!(route.parse_event(&TaskId("t-init".into()), good).is_some());
-    for source in ["\"none\"", "null", "\"other\""] {
+    for source in ["\"none\"", "null", "\"other\"", "\"ANTHROPIC_API_KEY\""] {
         let line = format!("{{\"type\":\"system\",\"subtype\":\"init\",\"apiKeySource\":{source}}}");
         assert_eq!(
             stream_failure(&route, &line).unwrap().as_deref(),

@@ -20,7 +20,7 @@ pub(crate) const DEFAULT_MAX_TASK_DURATION_MINS: i64 =
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct AidConfig {
-    #[serde(default, deserialize_with = "api_route::deserialize_routes")]
+    #[serde(default)]
     pub(crate) api_route: Vec<api_route::ApiRoute>,
     #[serde(default)]
     pub usage: UsageConfig,
@@ -170,8 +170,13 @@ pub fn load_config() -> Result<AidConfig> {
 
     let content = std::fs::read_to_string(&path)
         .with_context(|| format!("Failed to read {}", path.display()))?;
-    toml::from_str(&content)
-        .with_context(|| format!("Failed to parse {}", path.display()))
+    parse_config(&content).with_context(|| format!("Failed to parse {}", path.display()))
+}
+
+pub(crate) fn parse_config(content: &str) -> Result<AidConfig> {
+    let config: AidConfig = toml::from_str(content)?;
+    api_route::validate_routes(&config.api_route)?;
+    Ok(config)
 }
 
 mod budgets;

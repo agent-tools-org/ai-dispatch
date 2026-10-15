@@ -244,8 +244,8 @@ for example, `claude-api-ming  IN PLAN  $37.20 / $200 this month`; advice lines
 show the same monthly billing evidence and their own `pace` term.
 
 The Claude `system/init` stream event must report
-`apiKeySource = "ANTHROPIC_API_KEY"`. Any other value, including a missing field,
-stops the process and fails the task with `route <id> is not billed to its API key`.
+`apiKeySource = "apiKeyHelper"`. A missing field or any other value, including
+an environment-key source, stops the process and fails the task with `route <id> is not billed to its API key`.
 That route receives a needs-human hold. Fix the key or CLI billing configuration,
 then use `aid config clear-limit <id>`. Credit-balance or billing refusals hold
 only that route until midnight on the first day of the next local month.

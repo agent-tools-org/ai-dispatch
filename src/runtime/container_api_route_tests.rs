@@ -19,3 +19,16 @@ fn container_forwards_anthropic_key_by_name_only() {
             .any(|(key, value)| key == "ANTHROPIC_API_KEY" && value.is_some())
     );
 }
+
+#[test]
+fn container_wrapper_preserves_route_api_key_removal() {
+    let mut inner = std::process::Command::new("claude");
+    inner.env_remove("ANTHROPIC_API_KEY");
+    let command = exec_in_container(&inner, "test-container");
+    assert!(
+        command
+            .get_envs()
+            .any(|(key, value)| key == "ANTHROPIC_API_KEY" && value.is_none())
+    );
+    assert!(!command.get_args().any(|arg| arg == "ANTHROPIC_API_KEY"));
+}

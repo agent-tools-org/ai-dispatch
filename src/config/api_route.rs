@@ -1,9 +1,8 @@
 // Named Claude API accounts and validation for [[api_route]] configuration.
 // Secrets remain in the keychain; this module contains item identifiers only.
-use crate::routing::keychain::KeychainItem;
 use crate::types::AgentKind;
 use anyhow::{Result, bail};
-use serde::{Deserialize, Deserializer, de::Error};
+use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -26,11 +25,17 @@ pub(crate) enum OverBudget {
 }
 
 impl ApiRoute {
-    pub(crate) fn item(&self) -> KeychainItem {
-        KeychainItem {
-            service: self.keychain_service.clone(),
-            account: self.keychain_account.clone().unwrap_or_else(|| self.id.clone()),
-        }
+    pub(crate) fn account(&self) -> &str {
+        self.keychain_account.as_deref().unwrap_or(&self.id)
+    }
+
+    pub(crate) fn helper_command(&self) -> Result<String> {
+        self.validate()?;
+        Ok(format!(
+            "/usr/bin/security find-generic-password -s {} -a {} -w",
+            self.keychain_service,
+            self.account(),
+        ))
     }
 
     fn validate(&self) -> Result<()> {
@@ -49,26 +54,31 @@ impl ApiRoute {
                 self.id
             );
         }
-        if self.keychain_service.trim().is_empty() || self.item().account.trim().is_empty() {
-            bail!(
-                "API route {}: keychain service and account must not be empty",
-                self.id
-            );
+        for (field, value) in [
+            ("keychain_service", self.keychain_service.as_str()),
+            ("keychain_account", self.account()),
+        ] {
+            if value.is_empty()
+                || !value
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+            {
+                bail!("API route {}: {field} must match [A-Za-z0-9._-]+", self.id);
+            }
         }
         Ok(())
     }
 }
 
-pub(crate) fn deserialize_routes<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<ApiRoute>, D::Error> {
-    let routes = Vec::<ApiRoute>::deserialize(d)?;
+pub(crate) fn validate_routes(routes: &[ApiRoute]) -> Result<()> {
     let mut ids = std::collections::HashSet::new();
-    for route in &routes {
-        route.validate().map_err(D::Error::custom)?;
+    for route in routes {
+        route.validate()?;
         if !ids.insert(&route.id) {
-            return Err(D::Error::custom(format!("duplicate API route {}", route.id)));
+            bail!("duplicate API route {}", route.id);
         }
     }
-    Ok(routes)
+    Ok(())
 }
 
 pub(crate) fn find(id: &str) -> Result<Option<ApiRoute>> {

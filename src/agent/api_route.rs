@@ -1,10 +1,10 @@
 // Claude adapter overlay for named, independently billed API accounts.
-// Reuses Claude command/event handling; keys enter only the final child environment.
+// Claude retrieves its own key through a validated absolute-path apiKeyHelper.
 use super::{Agent, RunOpts, claude::ClaudeAgent, custom::CustomAgentConfig};
 use crate::config::api_route::ApiRoute;
-use crate::routing::{api_budget, keychain};
+use crate::routing::api_budget;
 use crate::types::*;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::process::Command;
 
 pub(crate) struct ApiRouteAgent(pub ApiRoute);
@@ -23,7 +23,14 @@ impl Agent for ApiRouteAgent {
         false
     }
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
-        ClaudeAgent.build_command(prompt, opts)
+        let mut cmd = ClaudeAgent.build_command(prompt, opts)?;
+        let settings = serde_json::json!({"apiKeyHelper": self.0.helper_command()?});
+        cmd.args(["--settings", &serde_json::to_string(&settings)?]);
+        cmd.env_remove("ANTHROPIC_API_KEY");
+        Ok(cmd)
+    }
+    fn finalize_launch_env(&self, cmd: &mut Command) {
+        cmd.env_remove("ANTHROPIC_API_KEY");
     }
     fn parse_event(&self, task_id: &TaskId, line: &str) -> Option<TaskEvent> {
         super::claude_events::parse_event_line_for_route(task_id, line, Some(&self.0.id))
@@ -47,22 +54,6 @@ pub(crate) fn validate_launch(id: &str, store: &crate::store::Store) -> Result<(
     Ok(())
 }
 
-pub(crate) fn inject_key(id: &str, cmd: &mut Command) -> Result<()> {
-    let Some(route) = crate::config::api_route::find(id)? else {
-        return Ok(());
-    };
-    let item = route.item();
-    keychain::read_api_key(&item)
-        .with_context(|| {
-            format!(
-                "infrastructure error: route {id}: keychain item {}/{}",
-                item.service, item.account
-            )
-        })?
-        .apply_to(cmd, "ANTHROPIC_API_KEY");
-    Ok(())
-}
-
 pub(crate) fn stream_failure(agent: &dyn Agent, line: &str) -> Result<Option<String>> {
     let Some(id) = agent.rate_limit_name() else {
         return Ok(None);
@@ -75,7 +66,7 @@ pub(crate) fn stream_failure(agent: &dyn Agent, line: &str) -> Result<Option<Str
         return Ok(None);
     };
     let init = value["type"] == "system" && value["subtype"] == "init";
-    if init && value["apiKeySource"] != "ANTHROPIC_API_KEY" {
+    if init && value["apiKeySource"] != "apiKeyHelper" {
         let reason = format!("route {id} is not billed to its API key");
         api_budget::hold(id, &reason, false)?;
         return Ok(Some(reason));

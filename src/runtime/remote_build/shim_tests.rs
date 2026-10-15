@@ -163,7 +163,7 @@ fn plain_cargo_verify_uses_task_shim() {
     }
     let f = Fixture::new();
     let output = Command::new(std::env::current_exe().expect("test binary"))
-        .args(["--exact", "remote_build::shim_tests::plain_cargo_verify_uses_task_shim", "--nocapture"])
+        .args(["--exact", "runtime::remote_build::shim_tests::plain_cargo_verify_uses_task_shim", "--nocapture"])
         .current_dir(f.temp.path()).env("AID_VERIFY_SHIM_CHILD", "1")
         .env("AID_HOME", f.temp.path().join("aid-home"))
         .env("PATH", format!("{}:{}", f.bin.display(), std::env::var("PATH").expect("PATH")))

@@ -297,3 +297,6 @@ fn advice_skips_disabled_installed_agents() {
 
 #[path = "selection_evidence_tests.rs"]
 mod evidence_tests;
+
+#[path = "selection_advice_held_tests.rs"]
+mod held_tests;

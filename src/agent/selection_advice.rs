@@ -229,6 +229,11 @@ fn builtin_candidate(
     let RunModel { model, pinned, source } = run_model;
     let breakdown = score_breakdown(context, kind, model.as_deref());
     let mut exclusions = Exclusions::default();
+    let quota = selection_quota::candidate_quota(kind, None, model.as_deref());
+    if quota.status == "held" {
+        let avail = crate::routing::availability::availability_for_model(&kind, None, model.as_deref());
+        exclusions.push("held", avail.why);
+    }
     exclusions.superseded_by_agy(kind, agy_installed);
     if let Some(blocker) = &blocker {
         exclusions.push(blocker.code(), blocker.reason());
@@ -261,7 +266,7 @@ fn builtin_candidate(
         .unwrap_or_default();
     let report = AdviceCandidate {
         agent: kind.as_str().to_string(), installed: blocker.is_none(), eligible,
-        quota: selection_quota::candidate_quota(kind, None, model.as_deref()),
+        quota,
         capability_evidence: crate::routing::scores::evidence(kind, model.as_deref(), context.profile.category),
         score: breakdown.total, model, pinned, source, breakdown, exclusion_reason, exclusion_codes,
         demotion_reason, auth,

@@ -182,3 +182,9 @@ Prefer a project verify command for consistent results:
 id = "example"
 verify = "cargo test --bin app"
 ```
+
+## Automatic route holds
+
+Advice excludes held routes, including needs-human markers without a reset time,
+from recommendations, advised cascades, and automatic fallback. Background urgency
+can remove the numeric limit penalty; it does not make a needs-human route eligible.

@@ -10,6 +10,8 @@ pub(super) struct Launch {
     pub thread: Value,
     pub prompt: String,
     pub resume: bool,
+    pub effort: Option<Value>,
+    pub isolated: bool,
 }
 
 pub(crate) fn available(cmd: &Command) -> bool {
@@ -42,9 +44,11 @@ pub(super) fn translate(cmd: &Command) -> Result<Launch> {
     let resume = args.get(1).is_some_and(|arg| arg == "resume");
     let mut launch = Launch {
         command: Command::new(cmd.get_program()),
-        thread: json!({"approvalPolicy":"never"}),
+        thread: json!({}),
         prompt: String::new(),
         resume,
+        effort: None,
+        isolated: false,
     };
     launch.command.arg("app-server");
     if let Some(dir) = cmd.get_current_dir() {
@@ -68,21 +72,16 @@ fn parse_args(launch: &mut Launch, args: &[String]) -> Result<()> {
         match args[index].as_str() {
             "--json" | "--skip-git-repo-check" => {}
             "--ignore-user-config" => {
-                bail!("Codex app-server cannot preserve --ignore-user-config isolation")
+                launch.isolated = true;
             }
             "-c" | "--config" => {
                 let value = args.get(index + 1).context("Missing Codex config value")?;
-                // App-server accepts the same global TOML overrides as exec.
-                launch.command.args(["-c", value]);
+                configure(launch, value)?;
                 index += 1;
             }
             "-m" | "--model" | "-C" | "--cd" | "-o" | "--output-last-message" => {
                 let value = args.get(index + 1).context("Missing Codex option value")?;
-                match args[index].as_str() {
-                    "-m" | "--model" => launch.thread["model"] = json!(value),
-                    "-C" | "--cd" => launch.thread["cwd"] = json!(value),
-                    _ => {}
-                }
+                option(launch, &args[index], value);
                 index += 1;
             }
             value if value.starts_with('-') => {
@@ -92,6 +91,10 @@ fn parse_args(launch: &mut Launch, args: &[String]) -> Result<()> {
         }
         index += 1;
     }
+    finish(launch, positional)
+}
+
+fn finish(launch: &mut Launch, mut positional: Vec<String>) -> Result<()> {
     launch.prompt = positional.pop().context("Missing Codex prompt")?;
     if launch.resume {
         launch.thread["threadId"] = json!(positional.pop().context("Missing session")?);
@@ -109,6 +112,38 @@ fn parse_args(launch: &mut Launch, args: &[String]) -> Result<()> {
                 .unwrap_or(std::env::current_dir()?)
         );
     }
+    Ok(())
+}
+
+fn option(launch: &mut Launch, key: &str, value: &str) {
+    match key {
+        "-m" | "--model" => launch.thread["model"] = json!(value),
+        "-C" | "--cd" => launch.thread["cwd"] = json!(value),
+        _ => {}
+    }
+}
+
+fn configure(launch: &mut Launch, setting: &str) -> Result<()> {
+    let (key, raw) = setting
+        .split_once('=')
+        .context("Invalid Codex configuration override")?;
+    let value: toml::Value = toml::from_str::<toml::Table>(&format!("value={raw}"))
+        .ok()
+        .and_then(|mut table| table.remove("value"))
+        .unwrap_or_else(|| toml::Value::String(raw.to_string()));
+    let value = serde_json::to_value(value)?;
+    if launch.thread.get("config").is_none() {
+        launch.thread["config"] = json!({});
+    }
+    launch.thread["config"][key] = value.clone();
+    match key {
+        "approval_policy" => launch.thread["approvalPolicy"] = value,
+        "approvals_reviewer" => launch.thread["approvalsReviewer"] = value,
+        "model" => launch.thread["model"] = value,
+        "model_reasoning_effort" => launch.effort = Some(value),
+        _ => {}
+    }
+    launch.command.args(["-c", setting]);
     Ok(())
 }
 

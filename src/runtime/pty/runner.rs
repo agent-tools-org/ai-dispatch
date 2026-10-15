@@ -61,6 +61,17 @@ pub(crate) fn run_agent_process_with_control(
     control: Option<PtyRunControl>,
 ) -> Result<()> {
     let start = std::time::Instant::now();
+    if agent.kind() == crate::types::AgentKind::Codex
+        && crate::runtime::codex_app_server::available(cmd)
+    {
+        let group = store.get_task(task_id.as_str())?.and_then(|task| task.workgroup_id);
+        let info = crate::runtime::codex_app_server::run(crate::runtime::codex_app_server::Run {
+            agent, command:cmd, task:task_id, store, log:log_path, output:output_path,
+            group:group.as_deref(), policy:timeout_policy, max_cost:max_task_cost,
+            control:control.as_ref(),
+        })?;
+        return record_completion(agent,task_id,store,model,start.elapsed().as_millis() as i64,&info);
+    }
     let mut bridge = execution::spawn_for_task(cmd, log_path, store, task_id, start, control.as_ref())?;
     let mut state = execution::monitor_process(
         agent, task_id, store, &mut bridge, log_path, streaming, timeout_policy, max_task_cost, start,

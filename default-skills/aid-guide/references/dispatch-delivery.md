@@ -65,9 +65,11 @@ Fresh and resumed Codex sessions explicitly select a permissions profile. Read-o
 approval review. The adapter uses `permissions` and `default_permissions`, without legacy
 `sandbox_mode`, `sandbox_workspace_write`, `--sandbox`, or write approval shortcut flags.
 
-`--ignore-user-config` prevents user sandbox defaults from overriding the profile. Authentication
-still uses `CODEX_HOME`; the requested model is passed explicitly when configured by aid. Other
-user config settings are not loaded for these launches. Project config layers require trust in
+The exec fallback uses `--ignore-user-config` to exclude user sandbox defaults. App-server
+instead uses a task-scoped `CODEX_HOME` with symlinks to every real-home top-level entry except
+`config.toml` and `config.toml.*`. Authentication, session storage, instructions, hooks, rules,
+and skills remain shared; the task-scoped directory is removed after execution. The requested
+model is passed explicitly when configured by aid. Other user config settings are not loaded. Project config layers require trust in
 Codex; absent user trust records, they remain inactive. Managed requirements can reject profiles.
 
 The read-only staging root is resolved through symlinks and parent traversal. A root containing

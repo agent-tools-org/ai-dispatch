@@ -80,9 +80,16 @@ aid unstick <task-id>
   leaves the PTY write unconfirmed.
 - Use `steer` to queue updated direction for a PTY-capable adapter. Queuing
   is not delivery. Output lines, including echoes, never acknowledge input.
-- Codex `steer`, `reply`, and `respond` are refused before aid inserts a message
-  or writes a signal: `codex exec` cannot consume mid-run PTY input. Use
-  `aid retry <id> -f "<feedback>"`, or stop then retry, to change direction.
+- Codex app-server tasks accept `steer` and `reply` through the pending-message
+  queue. Success is reported only after the `turn/steer` response:
+  `accepted by codex (turn <id>)`. A rejection records Codex's error; a timeout
+  leaves acceptance unconfirmed. `reply --async` only confirms queuing.
+- Codex `respond` is refused; app-server does not expose approval input through
+  that command. Exec fallback tasks refuse `steer`, `reply`, and `respond`
+  before queuing input. Use `aid retry <id> -f "<feedback>"`, or stop then retry,
+  to change direction on an exec fallback task.
+- `aid stop` asks an active Codex app-server turn to interrupt before the existing
+  process termination path runs if it does not end promptly.
 - `steer` and `reply` are also refused for the one-shot print-mode `agy`, `grok`
   and `claude` CLIs; they receive no idle nudges.
 - `respond` is refused for those same one-shot CLIs before aid writes a

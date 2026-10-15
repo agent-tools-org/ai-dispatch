@@ -86,6 +86,9 @@ fn terminate(
             return already_terminal(store, task_id);
         }
     }
+    if graceful && task.agent == crate::types::AgentKind::Codex {
+        crate::runtime::codex_app_server::wait_for_interrupt(task_id);
+    }
     signal_task(task_id, &task, graceful, preserve_label)?;
     capture_final_worktree_state(store.as_ref(), &TaskId(task_id.to_string()))?;
     if let Some(ref path) = task.worktree_path

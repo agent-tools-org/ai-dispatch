@@ -2,6 +2,7 @@
 // Exports CodexAgent for streaming runs plus helpers for tool and usage events.
 // Depends on serde_json for metadata-rich completion events.
 
+pub(crate) mod app_server;
 mod capabilities;
 pub(crate) mod cli_config;
 mod output_classifier;

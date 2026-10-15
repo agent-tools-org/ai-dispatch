@@ -65,9 +65,13 @@ Fresh and resumed Codex sessions explicitly select a permissions profile. Read-o
 approval review. The adapter uses `permissions` and `default_permissions`, without legacy
 `sandbox_mode`, `sandbox_workspace_write`, `--sandbox`, or write approval shortcut flags.
 
-`--ignore-user-config` prevents user sandbox defaults from overriding the profile. Authentication
-still uses `CODEX_HOME`; the requested model is passed explicitly when configured by aid. Other
-user config settings are not loaded for these launches. Project config layers require trust in
+The exec fallback uses `--ignore-user-config` to exclude user sandbox defaults. App-server
+instead uses a task-scoped `CODEX_HOME` with symlinks to every real-home top-level entry except
+`config.toml` and `config.toml.*`. Authentication, session storage, instructions, hooks, rules,
+and skills remain shared; the task-scoped directory is removed after execution.
+The next Codex launch sweeps directories and markers left by dead workers, checking PID start
+identities before preserving a live process or terminating an orphaned task server. The requested
+model is passed explicitly when configured by aid. Other user config settings are not loaded. Project config layers require trust in
 Codex; absent user trust records, they remain inactive. Managed requirements can reject profiles.
 
 The read-only staging root is resolved through symlinks and parent traversal. A root containing
@@ -189,3 +193,34 @@ and temp dirs), `aid build` / `aid test` retries once under the system temp
 directory (`aid-build-target/<project-key>/`) and records the fallback paths in
 the digest. Do not preflight with a generic write probe — the fallback is keyed
 off cargo's real permission error.
+
+## Codex app-server transport
+
+Host Codex runs probe `codex app-server` once per dispatch and use its stdio
+protocol when available; unavailable app-server launches retain `codex exec`.
+Container and sandbox wrappers retain their exec transport.
+App-server preserves the native permission profile, approval review, requested
+model, effort overrides, and working directory. Retry resumes through
+`thread/resume` wherever exec would resume. `steer` and `reply` require a
+confirmed `turn/steer` response; `respond` remains refused.
+App-server uses a task-scoped `CODEX_HOME` whose top-level entries symlink to
+the real Codex home, excluding `config.toml` and `config.toml.*`. Auth, sessions,
+instructions, rules, hooks, and skills remain shared. The directory is removed
+when the app-server process ends. Rate-limit notifications retain usage
+percentages, reset times, window lengths, and account/spend-control evidence;
+they do not supply aidbar billing data.
+
+### App-server recovery and completion
+
+Startup RPCs share the piped exec first-output budget (`idle-timeout`), and `thread/resume`
+sets `excludeTurns`. A startup failure before a turn is submitted records its cause and uses
+exec for the same task. A submitted turn with an unconfirmed start is never replayed in exec.
+Silent descendant CPU work and remote waits use the same activity probe and hung-retry evidence
+as the exec watcher; the hard deadline still applies.
+
+Automatic approval review remains server-controlled. Client approval requests are declined without
+ending the turn; permission requests receive no grant. Input requests receive an empty answer and
+MCP elicitation is canceled. Requests that require unavailable client capabilities fail clearly.
+After completion, aid closes input and drains final notifications and session writes within a
+bounded shutdown window. Rate-limit windows at 100% do not create a hold when paid or unlimited
+credits remain available; explicit credit/spend-control refusals remain evidence of a hold.

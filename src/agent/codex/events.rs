@@ -183,12 +183,16 @@ pub(super) fn parse_thread_started(
     now: chrono::DateTime<Local>,
 ) -> Option<TaskEvent> {
     let thread_id = v.get("thread_id")?.as_str()?;
+    let mut metadata = json!({ "agent_session_id": thread_id });
+    if let Some(model) = v.get("model").and_then(Value::as_str) {
+        metadata["model"] = json!(model);
+    }
     Some(TaskEvent {
         task_id: task_id.clone(),
         timestamp: now,
         event_kind: EventKind::Milestone,
         detail: format!("session {}", thread_id),
-        metadata: Some(json!({ "agent_session_id": thread_id })),
+        metadata: Some(metadata),
     })
 }
 

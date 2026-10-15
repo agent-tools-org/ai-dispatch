@@ -66,11 +66,6 @@ pub fn resolve_agent(name: &str) -> (AgentKind, Option<&str>) {
 /// that moving the caller off the agent they asked for costs more than the wait,
 /// and gating on it was never the previous behaviour either.
 pub fn dispatch_blocking_hold(agent: &AgentKind, custom_name: Option<&str>) -> Option<String> {
-    if let Some(name) = custom_name
-        && let Some(reason) = crate::routing::api_budget::blocking_reason(name)
-    {
-        return Some(reason);
-    }
     hold_text(agent, custom_name, &availability(agent, custom_name))
 }
 

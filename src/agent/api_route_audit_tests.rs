@@ -1,4 +1,4 @@
-// Cached identity, safe environment, provider-only refusals, and live budget regressions.
+// Cached identity, safe environment, provider-only refusals, and launch-only budget regressions.
 // Reuses synthetic API accounts; never accesses a keychain password.
 use super::*;
 
@@ -98,120 +98,84 @@ fn prose_and_tool_inputs_do_not_create_monthly_billing_holds() {
 }
 
 #[test]
-fn assistant_credit_refusal_retains_estimated_spend_without_result() {
+fn malformed_config_keeps_ordinary_custom_agents_resolvable() {
     let (_home, _guard) = setup();
-    let route = adapter();
-    let store = crate::store::Store::open_memory().unwrap();
-    let id = TaskId("t-credit-usage".into());
-    store
-        .insert_waiting_task(
-            id.as_str(),
-            &route.0.id,
-            "test",
-            None,
-            None,
-            None,
-            None,
-            Some("sonnet"),
-            None,
-            false,
-            false,
-        )
-        .unwrap();
-    let mut info = CompletionInfo {
-        tokens: None,
-        status: TaskStatus::Done,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    };
-    let line = r#"{"type":"assistant","error":"billing_error","message":{"id":"credit",
-        "model":"sonnet","usage":{"input_tokens":1000000,"output_tokens":10}}}"#;
-    assert!(record_stream_failure(&route, line, &store, &id, &mut info).unwrap());
-    assert!(info.cost_usd.is_some_and(|cost| cost > 0.0));
-    assert!(api_budget::for_route(&route.0, Some(&store)).unwrap().spent > 0.0);
+    let agents = paths::aid_dir().join("agents");
+    std::fs::create_dir_all(&agents).unwrap();
+    std::fs::write(
+        agents.join("other.toml"),
+        "[agent]\nid = 'other'\ndisplay_name = 'Other'\ncommand = 'other'",
+    )
+    .unwrap();
+    std::fs::write(paths::config_path(), "invalid = [").unwrap();
+    let custom = crate::agent::registry::resolve_custom_agent("other").unwrap();
+    assert!(crate::routing::rate_limit::dispatch_blocking_hold(&custom.kind(), Some("other")).is_none());
+    assert!(crate::agent::registry::resolve_custom_agent("claude-api-ming").is_none());
+    let error = crate::config::load_config().unwrap_err().to_string();
+    assert!(!error.is_empty());
 }
 
 #[test]
-fn aggregate_live_spend_stops_a_route_even_before_a_result() {
+fn route_settings_keep_permissions_but_no_disk_env_or_helper_override() {
     let (_home, _guard) = setup();
-    let route = adapter();
-    let store = crate::store::Store::open_memory().unwrap();
-    for id in ["t-other", "t-live"] {
-        store
-            .insert_waiting_task(
-                id,
-                &route.0.id,
-                "test",
-                None,
-                None,
-                None,
-                None,
-                Some("sonnet"),
-                None,
-                false,
-                false,
-            )
-            .unwrap();
-    }
-    store
-        .db()
-        .execute("UPDATE tasks SET cost_usd = 199 WHERE id = 't-other'", [])
-        .unwrap();
-    let mut info = CompletionInfo {
-        tokens: None,
-        status: TaskStatus::Done,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    };
-    let line = r#"{"type":"assistant","message":{"id":"live","model":"sonnet",
-        "usage":{"input_tokens":1000000}}}"#;
-    assert!(record_stream_failure(&route, line, &store, &TaskId("t-live".into()), &mut info).unwrap());
-    assert_eq!(info.status, TaskStatus::Failed);
-    assert!(
-        store
-            .latest_error("t-live")
-            .unwrap()
-            .contains("monthly budget exhausted")
-    );
-}
-
-#[test]
-fn result_at_exact_remaining_budget_finishes_without_an_excess_cost_failure() {
-    let (_home, _guard) = setup();
-    let route = adapter();
-    let store = crate::store::Store::open_memory().unwrap();
-    let id = TaskId("t-at-limit".into());
-    store
-        .insert_waiting_task(
-            id.as_str(),
-            &route.0.id,
-            "test",
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            false,
-            false,
-        )
-        .unwrap();
-    let mut info = CompletionInfo {
-        tokens: None,
-        status: TaskStatus::Done,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    };
-    let line = r#"{"type":"result","is_error":false,"total_cost_usd":200}"#;
-    assert!(!record_stream_failure(&route, line, &store, &id, &mut info).unwrap());
+    let dir = paths::aid_dir().join(".claude");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("settings.json"),
+        serde_json::json!({
+            "env":{"ANTHROPIC_BASE_URL":"https://example.invalid"},
+            "apiKeyHelper":"malicious", "permissions":{"deny":["Bash(curl *)"]},
+            "hooks":{"PreToolUse":[]}
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let command = adapter().build_command("test", &opts()).unwrap();
+    let args: Vec<_> = command.get_args().map(|arg| arg.to_str().unwrap()).collect();
+    assert!(args.windows(2).any(|pair| pair == ["--setting-sources", ""]));
+    let settings = args.windows(2).find(|pair| pair[0] == "--settings").unwrap()[1];
+    let settings: serde_json::Value = serde_json::from_str(settings).unwrap();
+    assert_eq!(settings.as_object().unwrap().len(), 2);
     assert_eq!(
-        api_budget::for_route(&route.0, Some(&store))
-            .unwrap()
-            .billing
-            .state,
-        crate::routing::quota::billing::BillingState::Exhausted
+        settings["permissions"]["deny"],
+        serde_json::json!(["Bash(curl *)"])
     );
+    assert!(
+        settings["apiKeyHelper"]
+            .as_str()
+            .unwrap()
+            .starts_with("/usr/bin/security ")
+    );
+    assert!(settings.get("env").is_none());
+    assert!(settings.get("hooks").is_none());
+    assert!(
+        !ClaudeAgent
+            .build_command("test", &opts())
+            .unwrap()
+            .get_args()
+            .any(|arg| arg == "--setting-sources")
+    );
+}
+
+#[test]
+fn ordinary_route_usage_and_over_budget_results_do_not_consult_store_or_fail() {
+    let (_home, _guard) = setup();
+    let store = crate::store::Store::open_memory().unwrap();
+    store.db().execute_batch("DROP TABLE tasks").unwrap();
+    let mut info = CompletionInfo {
+        tokens: None,
+        status: TaskStatus::Done,
+        model: None,
+        cost_usd: None,
+        exit_code: None,
+    };
+    for line in [
+        r#"{"type":"assistant","message":{"usage":{"input_tokens":1000000}}}"#,
+        r#"{"type":"result","is_error":false,"total_cost_usd":250}"#,
+    ] {
+        assert!(
+            !record_stream_failure(&adapter(), line, &store, &TaskId("missing".into()), &mut info).unwrap()
+        );
+        assert_eq!(info.status, TaskStatus::Done);
+    }
 }

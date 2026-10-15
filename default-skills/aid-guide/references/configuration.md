@@ -63,8 +63,7 @@ never put key values in TOML, prompts or dispatch environment arguments.
 
 Use the route ID wherever an agent name is accepted, including `aid run`, batch
 `agent`, fallback lists and `--cascade`. The route runs the existing Claude Code
-adapter. The route passes `--settings` JSON with exactly one setting:
-`apiKeyHelper`, for example `/usr/bin/security find-generic-password -s
+adapter. The route passes `--settings` JSON with `apiKeyHelper`, for example `/usr/bin/security find-generic-password -s
 aid-anthropic-api -a account-ming -w`. Claude Code runs that helper and retrieves
 the password; aid never reads it or puts it in the child environment, process
 arguments or task logs. Any process running as the same user, including the
@@ -74,7 +73,13 @@ The helper does not isolate the keychain from same-user processes.
 Route children scrub `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`,
 `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK` and `CLAUDE_CODE_USE_VERTEX`,
 including inherited and explicitly forwarded values, so the helper key is used
-with Anthropic's API. API routes reject `--container` at dispatch because their
+with Anthropic's API. Routes also pass `--setting-sources ""` to disable
+user, project and local settings sources. Only their `permissions` objects are
+carried forward into the aid-provided JSON (permission lists accumulate; scalar
+values use the last source). Their `env`, hooks and helper overrides are not
+loaded. Administrator-managed Claude settings still apply; this flag cannot
+disable managed policy, including managed environment overrides. Plain `claude`
+settings are unchanged. API routes reject `--container` at dispatch because their
 helper requires the host keychain.
 An unreadable item is handled by Claude Code; aid does not preflight passwords.
 A subscription or environment-key init source stops the run and holds the route

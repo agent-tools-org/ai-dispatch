@@ -1,4 +1,4 @@
-// Monthly accounting, local reset boundaries, pace and route independence.
+// Monthly accounting, UTC reset boundaries, pace and route independence.
 // Synthetic task costs exercise the production calculator without provider calls.
 use super::*;
 use crate::types::{AgentKind, TaskId, TaskStatus, VerifyStatus};
@@ -12,7 +12,7 @@ fn route(bill: bool) -> ApiRoute {
     .unwrap()
 }
 
-fn task(id: &str, at: DateTime<Local>, cost: f64) -> Task {
+fn task(id: &str, at: DateTime<Utc>, cost: f64) -> Task {
     Task {
         id: TaskId(id.into()),
         agent: AgentKind::Custom,
@@ -35,8 +35,8 @@ fn task(id: &str, at: DateTime<Local>, cost: f64) -> Task {
         duration_ms: None,
         requested_model: None,
         cost_usd: Some(cost),
-        created_at: at,
-        completed_at: Some(at),
+        created_at: at.with_timezone(&Local),
+        completed_at: Some(at.with_timezone(&Local)),
         verify: None,
         read_only: false,
         budget: false,
@@ -59,7 +59,7 @@ fn task(id: &str, at: DateTime<Local>, cost: f64) -> Task {
 
 #[test]
 fn monthly_spend_excludes_other_routes_subscription_previous_and_future_months() {
-    let now = Local.with_ymd_and_hms(2026, 10, 15, 12, 0, 0).unwrap();
+    let now = Utc.with_ymd_and_hms(2026, 10, 15, 12, 0, 0).unwrap();
     let (start, end) = month_bounds(now).unwrap();
     let mut other = task("other", now, 100.0);
     other.custom_agent_name = Some("claude-api-meet".into());
@@ -82,7 +82,7 @@ fn monthly_spend_excludes_other_routes_subscription_previous_and_future_months()
 
 #[test]
 fn budget_threshold_and_pace_are_separate() {
-    let now = Local.with_ymd_and_hms(2026, 10, 2, 0, 0, 0).unwrap();
+    let now = Utc.with_ymd_and_hms(2026, 10, 2, 0, 0, 0).unwrap();
     for (cost, bill, state, pace) in [
         (0.0, false, BillingState::InPlan, 0.0),
         (199.99, false, BillingState::InPlan, -2.0),
@@ -98,16 +98,16 @@ fn budget_threshold_and_pace_are_separate() {
 }
 
 #[test]
-fn december_rolls_to_next_year_at_local_midnight() {
-    let now = Local.with_ymd_and_hms(2026, 12, 31, 23, 59, 59).unwrap();
+fn december_rolls_to_next_year_at_utc_midnight() {
+    let now = Utc.with_ymd_and_hms(2026, 12, 31, 23, 59, 59).unwrap();
     let (_, end) = month_bounds(now).unwrap();
-    assert_eq!(end, Local.with_ymd_and_hms(2027, 1, 1, 0, 0, 0).unwrap());
+    assert_eq!(end, Utc.with_ymd_and_hms(2027, 1, 1, 0, 0, 0).unwrap());
 }
 
 #[test]
 fn read_only_accounting_uses_persisted_route_costs() {
     let store = Store::open_memory().unwrap();
-    let now = Local::now();
+    let now = Utc::now();
     store.insert_task(&task("persisted", now, 37.2)).unwrap();
     let budget = for_route(&route(false), Some(&store)).unwrap();
     assert_eq!(budget.spent, 37.2);
@@ -115,7 +115,7 @@ fn read_only_accounting_uses_persisted_route_costs() {
 
 #[test]
 fn pace_penalty_starts_strictly_above_the_elapsed_threshold() {
-    let now = Local.with_ymd_and_hms(2026, 10, 16, 12, 0, 0).unwrap();
+    let now = Utc.with_ymd_and_hms(2026, 10, 16, 12, 0, 0).unwrap();
     let at_threshold = calculate(&route(false), &[task("pace", now, 125.0)], now).unwrap();
     let above_threshold = calculate(&route(false), &[task("pace", now, 125.01)], now).unwrap();
     assert_eq!(at_threshold.pace, 0.0);
@@ -125,10 +125,10 @@ fn pace_penalty_starts_strictly_above_the_elapsed_threshold() {
 
 #[test]
 fn empty_spend_is_positive_zero_in_quota_display() {
-    let budget = calculate(&route(false), &[], Local::now()).unwrap();
+    let budget = calculate(&route(false), &[], Utc::now()).unwrap();
     assert!(budget.spent.is_sign_positive());
     assert_eq!(budget.detail(), "$0.00 / $200 this month");
 }
 
-#[path = "api_budget_admission_tests.rs"]
-mod admission_tests;
+#[path = "api_budget_month_tests.rs"]
+mod month_tests;

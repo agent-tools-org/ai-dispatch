@@ -59,6 +59,7 @@ fn args(home: &std::path::Path) -> RunArgs {
         sandbox: true,
         env: Some(std::collections::HashMap::from([
             ("PATH".into(), home.join("bin").display().to_string()),
+            ("HOME".into(), home.display().to_string()),
             ("ANTHROPIC_API_KEY".into(), "synthetic-operator-key".into()),
             ("ANTHROPIC_BASE_URL".into(), "https://example.invalid".into()),
             ("ANTHROPIC_AUTH_TOKEN".into(), "synthetic".into()),
@@ -85,6 +86,11 @@ fn prepared(
         agent::home_isolation::IsolatedHomeGuard::create_from_home(Some(home), Some("t-api-launch")).unwrap();
     let (command, _) = prepare_launch(store, spec, &args, agent.as_ref(), &isolated).unwrap();
     assert!(command.get_args().any(|arg| arg == "--settings"));
+    let argv: Vec<_> = command.get_args().collect();
+    assert!(
+        argv.windows(2)
+            .any(|pair| pair[0] == "--setting-sources" && pair[1].is_empty())
+    );
     assert!(
         command
             .get_envs()
@@ -152,31 +158,3 @@ expected='{"apiKeyHelper":"/usr/bin/security find-generic-password -s test -a ac
 printf '%s\n' '{"type":"system","subtype":"init","apiKeySource":"apiKeyHelper"}'
 printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0}'
 "#;
-
-#[tokio::test]
-async fn route_cost_cap_stops_assistant_usage_without_a_result() {
-    let _permit = crate::support::test_subprocess::acquire();
-    let (home, _guard, store) = fixture();
-    crate::support::test_env::write_executable(
-        &home.path().join("bin/claude"),
-        concat!(
-            "#!/bin/sh\n",
-            "printf '%s\\n' '{\"type\":\"assistant\",\"message\":{\"id\":\"cap\",",
-            "\"model\":\"sonnet\",\"usage\":{\"input_tokens\":1000000}}}'\n",
-            "/bin/sleep 30\n",
-        ),
-    );
-    let spec = spec(false);
-    let (mut args, agent, command, _isolated) = prepared(home.path(), &store, &spec);
-    args.max_task_cost = Some(1.0);
-    tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        super::super::run_process(&store, &spec, &args, agent.as_ref(), command),
-    )
-    .await
-    .unwrap()
-    .unwrap();
-    let task = store.get_task("t-api-launch").unwrap().unwrap();
-    assert_eq!(task.status, crate::types::TaskStatus::Failed);
-    assert!(task.cost_usd.is_some_and(|cost| cost > 1.0));
-}

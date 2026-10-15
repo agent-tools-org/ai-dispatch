@@ -146,9 +146,13 @@ fn parse_rate_limit_kind(config: &CustomAgentConfig) -> AgentKind {
 }
 
 pub fn resolve_custom_agent(name: &str) -> Option<Box<dyn super::Agent>> {
-    let config = crate::config::load_config().ok()?;
-    if let Some(route) = config.api_route.into_iter().find(|route| route.id == name) {
-        return Some(Box::new(super::api_route::ApiRouteAgent(route)));
+    match crate::config::load_config() {
+        Ok(config) => {
+            if let Some(route) = config.api_route.into_iter().find(|route| route.id == name) {
+                return Some(Box::new(super::api_route::ApiRouteAgent(route)));
+            }
+        }
+        Err(error) => aid_warn!("Cannot load API routes: {error:#}"),
     }
     let registry = load_from_dir(&agents_dir());
     resolve_from_registry(&registry, name)

@@ -229,31 +229,33 @@ provider identities, spend totals, scores and refusal markers. They do not draw
 on the Claude subscription pool or inherit its quota evidence. Configure them
 in [configuration](configuration.md#claude-api-account-routes).
 
-Month-to-date spend uses each task's reported USD cost, falling back to the
-existing token-based estimate when no result cost survives a stop, timeout,
-crash or credit refusal. Stored assistant usage supplies current estimates for
-running tasks, including runs without a final result. Completed tasks count in
-the local calendar month of completion; running tasks count in the current
-month. This measures aid tasks only; external account activity is not included.
-Below budget the state is `in_plan`. At or above it, `over_budget = "stop"` makes
-the route `exhausted` and prevents dispatch; `"bill"` makes it `overage`.
+Month-to-date spend sums completed tasks on this route, selected in SQL by
+completion time in the UTC calendar month. Anthropic promotional credits expire
+at 00:00 UTC on the first day of the next month. Reported USD costs take
+precedence; a task with no reported cost uses a token estimate priced from the
+feed using its observed model (or requested model when unobserved). Claude's
+numeric version spelling is normalized, for example `claude-opus-5-5` resolves
+to `anthropic/claude-opus-5.5`. Unknown prices or missing token evidence add
+`(N tasks unpriced)` beside the known total; they are never silently priced at
+zero. Billing state and pace use the known subtotal when tasks are unpriced.
+This measures aid tasks only; external account activity is not included.
 
-For `stop`, launch checks include running estimates and pass the remaining
-budget as `max_task_cost` to both piped and PTY execution. An explicit lower
-per-task cap remains lower. New usage evidence updates aggregate route spend
-and stops work when the budget is exhausted. Enforcement is at launch plus the
-per-task cap and live estimate checks; in-flight requests and concurrent usage
-can exceed the target before their next usage report. Estimates depend on
-available token evidence and known model pricing. `bill` permits overage and
-keeps only explicitly configured per-task caps. Overage still excludes
-free/cheap advice profiles and applies the existing standard-profile `billing`
-penalty.
+Below budget the state is `in_plan`. At or above it, `over_budget = "stop"` makes
+the route `exhausted` and prevents launch; `"bill"` makes it `overage`. Budget
+checking happens once at launch. Running-task estimates, remaining-budget task
+caps and budget-driven kills are not used: concurrent or long tasks can finish
+above the budget, and crossing it does not fail a successful run. Explicit
+`max_task_cost` settings retain their existing behavior. Overage still excludes
+free/cheap advice profiles and applies the standard-profile `billing` penalty.
 
 A separate `pace` term subtracts 2.0 when spend exceeds
-`monthly_budget_usd × elapsed_fraction_of_month × 1.25`. Pace never excludes a
-candidate. Route history and team overrides use the route ID. Quota rows show,
-for example, `claude-api-ming  IN PLAN  $37.20 / $200 this month`; advice lines
-show the same monthly billing evidence and their own `pace` term.
+`monthly_budget_usd × elapsed_fraction_of_month × 1.25`. With strictly less
+than seven days remaining, it instead adds 1.0 when spend is below 80% of
+`monthly_budget_usd × elapsed_fraction_of_month`, favoring use of expiring
+credits. Otherwise it is zero. Pace never excludes a candidate. Route history
+and team overrides use the route ID. Quota rows show, for example,
+`claude-api-ming  IN PLAN  $37.20 / $200 this month`; advice lines show the same
+monthly evidence and their own `pace` term.
 
 The Claude `system/init` stream event must report
 `apiKeySource = "apiKeyHelper"`. A missing field or any other value, including
@@ -261,6 +263,6 @@ an environment-key source, stops the process and fails the task with `route <id>
 That route receives a needs-human hold. Fix the key or CLI billing configuration,
 then use `aid config clear-limit <id>`. Structured provider error types and error
 messages identifying a credit-balance or billing refusal hold only that route
-until midnight on the first day of the next local month. Result prose and tool
+until midnight on the first day of the next UTC month. Result prose and tool
 inputs never establish a monthly credit hold. The adapter retains the validated
 route selected at launch; later config edits do not reclassify its stream.

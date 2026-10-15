@@ -24,8 +24,13 @@ impl Agent for ApiRouteAgent {
     }
     fn build_command(&self, prompt: &str, opts: &RunOpts) -> Result<Command> {
         let mut cmd = ClaudeAgent.build_command(prompt, opts)?;
-        let settings = serde_json::json!({"apiKeyHelper": self.0.helper_command()?});
-        cmd.args(["--settings", &serde_json::to_string(&settings)?]);
+        let settings = settings::route_settings(&self.0, opts)?;
+        cmd.args([
+            "--setting-sources",
+            "",
+            "--settings",
+            &serde_json::to_string(&settings)?,
+        ]);
         scrub_env(&mut cmd);
         Ok(cmd)
     }
@@ -48,7 +53,10 @@ pub(crate) fn validate_launch(agent: &dyn Agent, store: &crate::store::Store, co
         return Ok(());
     };
     reject_container(agent, container)?;
-    launch_cost_cap(agent, store, None)?;
+    let budget = api_budget::for_route(route, Some(store))?;
+    if budget.billing.state == crate::routing::quota::billing::BillingState::Exhausted {
+        anyhow::bail!("route {}: {}", route.id, budget.label());
+    }
     if let Some(hold) =
         crate::routing::rate_limit::dispatch_blocking_hold(&AgentKind::Custom, Some(&route.id))
     {
@@ -67,25 +75,6 @@ pub(crate) fn reject_container(agent: &dyn Agent, container: bool) -> Result<()>
         );
     }
     Ok(())
-}
-
-pub(crate) fn launch_cost_cap(
-    agent: &dyn Agent,
-    store: &crate::store::Store,
-    requested: Option<f64>,
-) -> Result<Option<f64>> {
-    let Some(route) = agent.api_route() else {
-        return Ok(requested);
-    };
-    if route.over_budget == crate::config::api_route::OverBudget::Bill {
-        return Ok(requested);
-    }
-    let budget = api_budget::for_route(route, Some(store))?;
-    let remaining = budget.budget - budget.spent;
-    if remaining <= 0.0 {
-        anyhow::bail!("route {}: {}", route.id, budget.label());
-    }
-    Ok(Some(requested.map_or(remaining, |cap| cap.min(remaining))))
 }
 
 pub(crate) const ROUTE_ENV_REMOVALS: &[&str] = &[
@@ -132,18 +121,7 @@ pub(crate) fn record_stream_failure(
     task_id: &TaskId,
     info: &mut CompletionInfo,
 ) -> Result<bool> {
-    let Some(route) = agent.api_route() else {
-        return Ok(false);
-    };
-    let observed = crate::cost::api_route::observe_usage(store, task_id, line, info)?;
     let reason = stream_failure(agent, line)?;
-    if reason.is_none() && !observed {
-        return Ok(false);
-    }
-    let reason = match reason {
-        Some(reason) => Some(reason),
-        None => budget_failure(route, store, line)?,
-    };
     let Some(reason) = reason else { return Ok(false) };
     if let Some(event) = agent.parse_event(task_id, line)
         && event.event_kind == EventKind::Completion
@@ -167,28 +145,10 @@ pub(crate) fn record_stream_failure(
     Ok(true)
 }
 
-fn budget_failure(route: &ApiRoute, store: &crate::store::Store, line: &str) -> Result<Option<String>> {
-    let budget = api_budget::for_route(route, Some(store))?;
-    let result = serde_json::from_str::<serde_json::Value>(
-        crate::runtime::watcher::strip_terminal_escapes(line).trim(),
-    )
-    .ok()
-    .is_some_and(|event| event["type"] == "result");
-    Ok(
-        (budget.billing.state == crate::routing::quota::billing::BillingState::Exhausted
-            && (!result || budget.spent > budget.budget))
-            .then(|| {
-                format!(
-                    "route {}: monthly budget exhausted ({})",
-                    route.id,
-                    budget.detail()
-                )
-            }),
-    )
-}
-
 #[path = "api_route_refusal.rs"]
 mod refusal;
+#[path = "api_route_settings.rs"]
+mod settings;
 use refusal::credit_refusal;
 
 pub(crate) fn registry_config(route: &ApiRoute) -> CustomAgentConfig {

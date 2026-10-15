@@ -1,127 +1,36 @@
-// API-route token estimates survive missing results and preserve actual provider costs.
-// Uses persisted usage events and existing Claude model pricing without live providers.
+// Real Claude version spellings resolve to feed prices, never legacy family prices.
+// Uses an isolated synthetic feed with the measured canonical model identity.
 use super::*;
 
-fn home() -> (tempfile::TempDir, crate::support::paths::AidHomeGuard) {
+#[test]
+fn opus_55_numeric_id_and_alias_use_the_feed_not_static_opus() {
     let home = tempfile::tempdir().unwrap();
-    let guard = crate::support::paths::AidHomeGuard::set(home.path());
-    (home, guard)
-}
-
-fn task(store: &Store, id: &str) -> Task {
-    store
-        .insert_waiting_task(
-            id,
-            "claude-api-ming",
-            "test",
-            None,
-            None,
-            None,
-            None,
-            Some("sonnet"),
-            None,
-            false,
-            false,
-        )
-        .unwrap();
-    store
-        .db()
-        .execute(
-            "UPDATE tasks SET agent = 'custom', custom_agent_name = 'claude-api-ming',
-        tokens = 1000000 WHERE id = ?1",
-            [id],
-        )
-        .unwrap();
-    store.get_task(id).unwrap().unwrap()
-}
-
-#[test]
-fn stopped_timed_out_and_crashed_tasks_use_existing_token_estimate() {
-    let (_home, _guard) = home();
-    let store = Store::open_memory().unwrap();
-    let original = task(&store, "t-estimate");
-    let expected =
-        crate::cost::estimate_cost(1_000_000, original.costing_model(), AgentKind::Claude).unwrap();
-    assert!(expected > 0.0);
-    for status in [
-        crate::types::TaskStatus::Stopped,
-        crate::types::TaskStatus::Failed,
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    super::super::clear_feed_for_tests();
+    super::super::set_feed_for_tests(price_feed::Feed {
+        built_at: chrono::Utc::now().to_rfc3339(),
+        age_seconds: Some(0),
+        stale: Some(false),
+        count: Some(1),
+        models: vec![price_feed::FeedModel {
+            id: "anthropic/claude-opus-5.5".into(),
+            aliases: vec!["opus".into()],
+            input_per_mtok: 4.0,
+            output_per_mtok: 20.0,
+            cached_input_per_mtok: Some(0.2),
+            context_length: None,
+            source: None,
+        }],
+    });
+    for model in [
+        "claude-opus-5-5",
+        "claude-opus-5.5",
+        "anthropic/claude-opus-5.5",
+        "opus",
     ] {
-        let mut stopped = original.clone();
-        stopped.status = status;
-        assert_eq!(task_cost(&store, &stopped).unwrap(), Some(expected));
+        assert_eq!(estimate(Some(1_000_000), Some(model)), Some(8.8));
     }
-    let mut reported = original;
-    reported.cost_usd = Some(0.25);
-    assert_eq!(task_cost(&store, &reported).unwrap(), Some(0.25));
-}
-
-#[test]
-fn running_assistant_usage_is_estimated_and_deduplicated_without_result() {
-    let (_home, _guard) = home();
-    let store = Store::open_memory().unwrap();
-    let mut task = task(&store, "t-running");
-    task.tokens = None;
-    let mut info = CompletionInfo {
-        tokens: None,
-        status: crate::types::TaskStatus::Done,
-        cost_usd: None,
-        model: None,
-        exit_code: None,
-    };
-    let line = r#"{"type":"assistant","message":{"id":"message-1","model":"sonnet",
-        "usage":{"input_tokens":1000000,"output_tokens":1000}}}"#;
-    observe_usage(&store, &task.id, line, &mut info).unwrap();
-    let once = task_cost(&store, &task).unwrap().unwrap();
-    assert!(once > 0.0);
-    observe_usage(&store, &task.id, line, &mut info).unwrap();
-    assert_eq!(task_cost(&store, &task).unwrap(), Some(once));
-    assert_eq!(info.tokens, Some(1_001_000));
-    observe_usage(
-        &store,
-        &task.id,
-        r#"{"type":"result","total_cost_usd":0.75}"#,
-        &mut info,
-    )
-    .unwrap();
-    assert_eq!(task_cost(&store, &task).unwrap(), Some(0.75));
-}
-
-#[test]
-fn historical_provider_stdout_usage_is_estimated_without_a_result() {
-    let (_home, _guard) = home();
-    let store = Store::open_memory().unwrap();
-    let mut task = task(&store, "t-legacy-usage");
-    task.tokens = None;
-    store
-        .insert_agent_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: chrono::Local::now(),
-            event_kind: EventKind::Reasoning,
-            detail: "assistant output".into(),
-            metadata: Some(json!({"provider_stdout":
-                r#"{"type":"assistant","message":{"id":"legacy","model":"sonnet",
-                    "usage":{"input_tokens":1000000,"output_tokens":1000}}}"#,
-            })),
-        })
-        .unwrap();
-    assert!(task_cost(&store, &task).unwrap().is_some_and(|cost| cost > 0.0));
-}
-
-#[test]
-fn provider_result_replaces_a_previously_stored_estimate() {
-    let (_home, _guard) = home();
-    let store = Store::open_memory().unwrap();
-    let mut task = task(&store, "t-final-authority");
-    task.cost_usd = Some(0.5);
-    store
-        .insert_agent_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: chrono::Local::now(),
-            event_kind: EventKind::Completion,
-            detail: "reported cost".into(),
-            metadata: Some(json!({"cost_usd": 0.75})),
-        })
-        .unwrap();
-    assert_eq!(task_cost(&store, &task).unwrap(), Some(0.75));
+    assert_eq!(estimate(Some(1_000_000), Some("claude-opus-99-9")), None);
+    assert_eq!(estimate(None, Some("opus")), None);
+    assert_eq!(estimate(Some(1_000_000), None), None);
 }

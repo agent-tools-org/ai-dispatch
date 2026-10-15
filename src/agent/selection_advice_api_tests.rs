@@ -37,7 +37,7 @@ fn named_api_candidates_have_independent_billing_pace_and_holds() {
         .db()
         .execute(
             "UPDATE tasks SET agent = 'custom', custom_agent_name = 'claude-api-ming',
-        cost_usd = 200 WHERE id = 't-spend'",
+        cost_usd = 200, status = 'done', completed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = 't-spend'",
             [],
         )
         .unwrap();
@@ -78,7 +78,19 @@ fn named_api_candidates_have_independent_billing_pace_and_holds() {
     );
     assert_eq!(meet.quota.status, "held");
     assert_eq!(ming.quota.status, "unknown");
-    assert_eq!(meet.breakdown.pace, 0.0);
+    assert_eq!(
+        meet.breakdown.pace,
+        if (crate::routing::api_budget::month_bounds(chrono::Utc::now())
+            .unwrap()
+            .1
+            - chrono::Utc::now())
+            < chrono::Duration::days(7)
+        {
+            1.0
+        } else {
+            0.0
+        }
+    );
     assert!(
         !report
             .custom_candidates

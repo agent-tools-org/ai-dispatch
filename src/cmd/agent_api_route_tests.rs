@@ -43,7 +43,7 @@ fn api_quota_displays_exhausted_and_bill_overage() {
         .db()
         .execute(
             "UPDATE tasks SET agent = 'custom', custom_agent_name = 'claude-api-meet',
-        cost_usd = 200 WHERE id = 't-spend'",
+        cost_usd = 200, status = 'done', completed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = 't-spend'",
             [],
         )
         .unwrap();
@@ -57,4 +57,45 @@ fn api_quota_displays_exhausted_and_bill_overage() {
             .unwrap()
             .contains("OVERAGE")
     );
+}
+
+#[test]
+fn quota_displays_unknown_completed_task_prices() {
+    let home = tempfile::tempdir().unwrap();
+    let _guard = AidHomeGuard::set(home.path());
+    std::fs::write(
+        paths::config_path(),
+        concat!(
+            "[[api_route]]\nid = 'claude-api-ming'\nagent = 'claude'\n",
+            "keychain_service = 'test'\nmonthly_budget_usd = 200\n"
+        ),
+    )
+    .unwrap();
+    let store = crate::store::Store::open(&paths::db_path()).unwrap();
+    store
+        .insert_waiting_task(
+            "t-unpriced",
+            "claude-api-ming",
+            "test",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            false,
+        )
+        .unwrap();
+    store
+        .db()
+        .execute(
+            "UPDATE tasks SET agent = 'custom', custom_agent_name = 'claude-api-ming',
+        status = 'failed', completed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+        observed_model = 'claude-opus-99-9', tokens = 100 WHERE id = 't-unpriced'",
+            [],
+        )
+        .unwrap();
+    let line = api_quota_line("claude-api-ming").unwrap().unwrap();
+    assert!(line.contains("$0.00 / $200 this month (1 tasks unpriced)"));
 }

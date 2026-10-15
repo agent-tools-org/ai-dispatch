@@ -31,7 +31,7 @@ fn adapter() -> ApiRouteAgent {
 
 fn opts() -> RunOpts {
     RunOpts {
-        dir: None,
+        dir: Some(paths::aid_dir().display().to_string()),
         output: None,
         result_file: None,
         model: None,
@@ -40,7 +40,10 @@ fn opts() -> RunOpts {
         sandbox: false,
         context_files: vec![],
         session_id: None,
-        env: None,
+        env: Some(std::collections::HashMap::from([(
+            "HOME".into(),
+            paths::aid_dir().display().to_string(),
+        )])),
         env_forward: None,
     }
 }
@@ -130,14 +133,16 @@ fn billing_source_requires_helper_and_does_not_affect_subscription() {
 }
 
 #[test]
-fn credit_refusal_holds_only_route_until_next_local_month() {
+fn credit_refusal_holds_only_route_until_next_utc_month() {
     let (_home, _guard) = setup();
     let route = adapter();
     let line = r#"{"type":"result","is_error":true,"error":{"type":"billing_error"},"result":"Credit balance is too low"}"#;
     assert!(stream_failure(&route, line).unwrap().is_some());
     let hold = std::fs::read_to_string(paths::aid_dir().join("rate-limit-claude-api-ming")).unwrap();
-    let (_, next) = api_budget::month_bounds(chrono::Local::now()).unwrap();
-    assert!(hold.contains(&crate::routing::rate_limit::format_recovery(next.naive_local())));
+    let (_, next) = api_budget::month_bounds(chrono::Utc::now()).unwrap();
+    assert!(hold.contains(&crate::routing::rate_limit::format_recovery(
+        next.with_timezone(&chrono::Local).naive_local()
+    )));
     assert!(
         crate::routing::rate_limit::dispatch_blocking_hold(&AgentKind::Custom, Some(&route.0.id)).is_some()
     );

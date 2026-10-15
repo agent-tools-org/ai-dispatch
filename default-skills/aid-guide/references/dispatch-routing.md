@@ -185,9 +185,13 @@ verify = "cargo test --bin app"
 
 ## Automatic route holds
 
-Advice excludes held routes, including needs-human markers without a reset time,
-from recommendations, advised cascades, and automatic fallback. Background urgency
-can remove the numeric limit penalty; it does not make a needs-human route eligible.
+Ordinary quota holds may remain advisory recommendations, but held routes are
+never launchable through advised cascades or automatic fallback. A needs-human
+limit marker carrying a payment, authentication, or recognized human-action
+refusal is excluded from recommendations as well (`needs_human`). A generic
+manual hold without such refusal evidence retains ordinary advisory behavior.
+Background urgency can remove the numeric limit penalty; it does not make a
+needs-human refusal eligible.
 
 ## Subscription billing state
 

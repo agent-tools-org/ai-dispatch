@@ -23,7 +23,7 @@ fn needs_human_route_is_never_recommended_even_for_background() {
         let grok = find(&report, "grok");
         assert_eq!(grok.quota.status, "held");
         assert!(!grok.eligible);
-        assert!(grok.exclusion_codes.iter().any(|code| code == "held"));
+        assert!(grok.exclusion_codes.iter().any(|code| code == "needs_human"));
         assert!(report.recommended.is_none());
     }
 }
@@ -98,4 +98,30 @@ fn billing_report(profile: DeclaredTaskProfile) -> AdviceReport {
         0,
         None,
     )
+}
+
+#[test]
+fn ordinary_holds_remain_advisory_but_human_action_refusals_do_not() {
+    let (_temp, _home, _cache) = isolated();
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Grok]);
+    let marker = crate::routing::rate_limit::marker_path(&AgentKind::Grok, None);
+    std::fs::create_dir_all(marker.parent().expect("parent")).expect("aid dir");
+    for (message, excluded) in [
+        ("quota exhausted", false),
+        ("API error (status 402 Payment Required)", true),
+        ("Not signed in. To authenticate run grok login", true),
+    ] {
+        std::fs::write(&marker, format!("hold: manual\nmessage: {message}\n")).expect("marker");
+        let mut profile = declared(TaskDifficulty::Moderate, TaskBudget::Standard);
+        profile.urgency = TaskUrgency::Background;
+        let report = advise("refactor scheduler", profile, None, None, None, 0, None);
+        let grok = find(&report, "grok");
+        assert_eq!(grok.quota.status, "held");
+        assert!(!grok.launchable(None));
+        assert_eq!(
+            grok.exclusion_codes.iter().any(|code| code == "needs_human"),
+            excluded
+        );
+        assert_eq!(report.recommended.is_none(), excluded);
+    }
 }

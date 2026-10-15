@@ -20,7 +20,7 @@ pub(super) fn recommendation(
 ) -> Option<RecommendedAdvice> {
     let mut candidates = ranked.iter().filter(|item| item.report.installed && !item.pool_excluded
         && !item.report.exclusion_codes.iter().any(|code| {
-            matches!(code.as_str(), "superseded_by_agy" | "held" | "billing")
+            matches!(code.as_str(), "superseded_by_agy" | "needs_human" | "billing")
         })
         && claude_allowed(item.order.kind, team));
     let selected = candidates.clone().find(|item| item.report.eligible)

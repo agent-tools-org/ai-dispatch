@@ -24,9 +24,9 @@ impl Exclusions {
         breakdown: &mut super::ScoreBreakdown,
     ) -> (super::CandidateQuota, Option<crate::routing::quota::billing::Billing>) {
         let quota = super::selection_quota::candidate_quota(kind, None, model);
-        if quota.status == "held" {
+        if quota.status == "held" && needs_human_refusal(kind, model) {
             let avail = crate::routing::availability::availability_for_model(&kind, None, model);
-            self.push("held", avail.why);
+            self.push("needs_human", avail.why);
         }
         let billing = crate::routing::quota::live::billing(&kind);
         if let Some(reason) = billing.as_ref().and_then(|item| item.exclusion(declared)) {
@@ -77,6 +77,27 @@ impl Exclusions {
         let reason = (!self.reasons.is_empty()).then(|| self.reasons.join("; "));
         (reason, self.codes)
     }
+}
+
+fn needs_human_refusal(kind: AgentKind, model: Option<&str>) -> bool {
+    use crate::routing::rate_limit::{active_group_holds, get_rate_limit_info};
+    let group = crate::agent::model_group::model_group(kind, model);
+    let group_holds = active_group_holds(&kind, None).into_iter()
+        .filter(|(name, _)| group == Some(name.as_str())).map(|(_, info)| info);
+    get_rate_limit_info(&kind, None).into_iter().chain(group_holds).any(|info| {
+        info.needs_human && info.marker.lines().any(|line| human_action_line(kind, line))
+    })
+}
+
+fn human_action_line(kind: AgentKind, line: &str) -> bool {
+    use crate::routing::quota::channel::Channel;
+    use crate::routing::rate_limit::signatures::{match_quota_signature_for_agent, QuotaRecovery};
+    let message = line.strip_prefix("message: ").unwrap_or(line);
+    message.to_ascii_lowercase().contains("payment required")
+        || match_quota_signature_for_agent(message, kind) == Some(QuotaRecovery::NeedsHuman)
+        || [Channel::CliStream, Channel::CliStderr].into_iter().any(|channel| {
+            crate::routing::auth_marker::auth_failure_line(message, kind, channel).is_some()
+        })
 }
 
 pub(super) fn claude_allowed(kind: AgentKind, team: Option<&TeamConfig>) -> bool {

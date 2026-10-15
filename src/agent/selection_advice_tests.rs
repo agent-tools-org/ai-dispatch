@@ -190,7 +190,7 @@ fn advised_model_group_hold_switches_route_but_other_group_does_not() {
     std::fs::write(temp.path().join("rate-limit-droid--standard"), hold).expect("model hold");
     let held = run(None);
     assert_eq!(find(&held, "droid").quota.status, "held");
-    assert!(!find(&held, "droid").eligible);
+    assert!(find(&held, "droid").eligible);
     assert!(!find(&held, "droid").launchable(None));
     let recommended = held.recommended.expect("recommendation");
     assert_eq!((&*recommended.agent, recommended.model.as_deref()), ("codex", Some("gpt-5.6-terra")));

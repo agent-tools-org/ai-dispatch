@@ -62,6 +62,7 @@ fn queued_message_after_child_exit_does_not_fail_monitor() {
 
     let command = vec!["/usr/bin/true".to_string()];
     let mut bridge = PtyBridge::spawn(&command, None, vec![]).unwrap();
+    assert!(bridge.wait().unwrap().success());
     let receiver = spawn_reader(&mut bridge);
     let mut log = tempfile::NamedTempFile::new().unwrap();
     let mut state = MonitorState::new(true, None);
@@ -83,7 +84,6 @@ fn queued_message_after_child_exit_does_not_fail_monitor() {
         result.is_ok(),
         "PTY write failure must not fail the monitor: {result:?}"
     );
-    assert!(bridge.wait().unwrap().success());
 
     let message = store.list_messages_for_task(task.id.as_str()).unwrap();
     assert!(message[0].delivered_at.is_none());

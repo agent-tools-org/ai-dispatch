@@ -28,7 +28,7 @@ done
 [[ -n "$BOX" ]] || { echo "AID_BUILD_BOX is not set; export the configured rbox build box name" >&2; exit 2; }
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-source "${script_dir}/../src/remote_build/cargo.sh"
+source "${script_dir}/../src/runtime/remote_build/cargo.sh"
 remote_checkout_layout
 remote_cmd="export CARGO_TARGET_DIR=${remote_target}; exec cargo test --workspace \"\$@\""
 command=(rbox exec "$BOX" "$repo_root" --to "$remote_dir" --jobs "$JOBS"

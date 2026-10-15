@@ -158,6 +158,11 @@ impl super::Agent for CodexAgent {
         let event_type = v.get("type")?.as_str()?;
         match event_type {
             "item.started" | "item.completed" => parse_item_event(task_id, &v, now),
+            "codex.reasoning" => {
+                let mut item = v.clone();
+                item["item"]["type"] = json!("agent_message");
+                parse_item_event(task_id,&item,now)
+            },
             "turn.completed" => parse_turn_completed(task_id, &v, now),
             "thread.started" => parse_thread_started(task_id, &v, now),
             "error" | "turn.failed" => parse_error_event(task_id, &v, now),

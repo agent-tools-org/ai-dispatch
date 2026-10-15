@@ -116,3 +116,36 @@ fn assert_delivered(store: &Store, task: &TaskId, index: usize) {
             .is_some()
     );
 }
+
+#[test]
+fn timeout_receipt_records_unknown_acceptance_instead_of_refusal() {
+    let home = tempfile::tempdir().unwrap();
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let store = Store::open_memory().unwrap();
+    let task = TaskId("t-receipt".into());
+    insert_task(&store, &task);
+    let message = store
+        .insert_message(
+            task.as_str(),
+            MessageDirection::In,
+            "pivot",
+            MessageSource::Steer,
+        )
+        .unwrap();
+    control::record(
+        &store,
+        &task,
+        message.id,
+        Err(control::Unconfirmed("steer response timed out; acceptance unconfirmed".into()).into()),
+    )
+    .unwrap();
+    let events = store.get_events(task.as_str()).unwrap();
+    let metadata = events.last().unwrap().metadata.as_ref().unwrap();
+    assert!(metadata["accepted"].is_null());
+    assert_eq!(metadata["unconfirmed"], true);
+    assert!(
+        store.list_messages_for_task(task.as_str()).unwrap()[0]
+            .delivered_at
+            .is_none()
+    );
+}

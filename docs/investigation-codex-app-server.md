@@ -1,11 +1,13 @@
 KB consulted: `~/Develop/knowledge/eng-knowledge-base/kb codex app-server steer`
 returned 16 matches, including the warning that writing to a CLI which never reads
-its PTY can wedge the steering writer.
+its PTY can wedge the steering writer. The follow-up query `codex app-server idle approval`
+returned 100 matches, including timeout-recording and configuration-isolation guidance.
 
 # Codex app-server configuration boundary
 
-Status: implementation wired; remote compilation, suites, cross-review, and a live
-Codex steer remain unverified. The sanitized transcript is preserved at
+Status: audit fixes implemented; compilation, suites, and live verification of this revision
+remain pending. The supplied baseline evidence reports a passing workspace at `4d2ebe0a`
+and a live read-only steer accepted and completed in 12 seconds. The sanitized transcript is preserved at
 `tests/fixtures/codex-app-server-steer.jsonl` and drives normalization and fake-server tests.
 
 ## Confirmed facts
@@ -61,27 +63,47 @@ uses `thread/resume` only when the existing exec command selected a session.
 - Keep steer requests in the existing pending inbound queue. Persist a receipt event
   keyed by message ID, marking delivered only after a matching successful turn ID.
   Refusals remain undelivered and are not automatically resent during the run.
-- Bound RPC reads and writes at ten seconds. Task hard/idle deadlines remain bounded.
-  Stop requests interrupt the current turn before the existing termination fallback.
-- Reject unsupported interactive server requests explicitly. Approval review remains
-  server-controlled through the native profile; respond remains refused.
+- Startup responses share the piped exec first-output idle budget. Resume excludes
+  replayed turns. Startup failures known to precede a submitted turn record their cause
+  and fall back to the original exec command. A turn/start timeout after submission is
+  ambiguous and is not replayed: the original turn might already have performed work.
+- Descendant progress uses the existing activity sampler; genuine idle failures write
+  the existing hung-recovery metadata. Steer waits 30 seconds and records timeouts as
+  unconfirmed, not refused. Interrupt response and completion waits fit the five-second
+  stop grace. Input closes before a bounded final-notification and session-write drain.
+- Automatic review remains server-controlled. Client approval requests decline, permission
+  requests grant nothing, user-input requests return no answers, and elicitation cancels.
+  Legacy approval methods decline as well. Unsupported credential/attestation requests
+  fail clearly. Respond remains refused. The installed protocol response schemas are
+  authoritative for these payloads; current upstream exec also does not approve client
+  requests ([upstream exec request handling](https://github.com/openai/codex/blob/main/codex-rs/exec/src/lib.rs)).
+- Dead-worker state is swept on the next launch. Live worker start identities protect
+  in-progress handshakes; owned orphan servers terminate before home removal. Unknown
+  live markers from the earlier transport remain preserved because worker custody is absent.
+- Tool and other non-message items remain in normalized logs and delivery ordering.
+  Exec reasoning summaries retain their prior ignored behavior; app-server reasoning
+  has its own envelope. Failure logs and events include capped stderr diagnostics.
 - Preserve sparse rate-limit snapshots in event metadata. Exhausted windows feed the
-  existing rate-limit marker API; null fields never clear a hold. No billing contract
+  existing rate-limit marker API only when credits do not permit paid overage; explicit
+  spend-control and workspace credit refusals still mark holds. Null fields never clear a hold. No billing contract
   or aidbar integration changes are included.
 
 ## Validation and remaining work
 
 No compilation, Rust tests, fake-server execution, browser tests, or live model
-calls ran in this session. There is no tested remote HEAD. Twenty-three registered
-fixture, launch, home, receipt, and dispatch tests are present for remote execution.
-Cross-review remains pending; no side tasks were dispatched.
+calls ran here. There is no tested remote HEAD for this revision. The baseline results
+above are supplied evidence, not a verification of these fixes. Fifty registered
+fixture, launch, home, cleanup, receipt, watchdog, startup, and dispatch tests are present.
+The independent audit returned FIX; a review of the fixes and live writable/long-resume
+runs remain pending. No side tasks were dispatched.
 
-Local checks: Python AST parsing of the fake-server script passed. Fifteen new
-app-server Rust files passed the size, header, line-length, function-length, and
-production-unwrap checks. Whitespace and credential scans passed. The supplied
-unwrap script reported 50 occurrences from test-only modules; those modules are
-registered under cfg(test), and a separate production-only scan found zero. The guide validator could not run:
-`ModuleNotFoundError: No module named 'yaml'`. No dependency fallback was attempted.
+Static checks passed across 24 app-server Rust files: size, headers, function/line length,
+production unwrap exclusions, sibling-module paths, and Python fixture syntax. Whitespace
+and staged credential scans passed. The guide validator remains blocked by
+`ModuleNotFoundError: No module named 'yaml'`; no dependency fallback was attempted. Existing uncertainty:
+Codex may retain noncanonical rollout paths under the task-scoped home, and a real home
+without session/state files can create task-local state. No change to real-home initialization
+is included; the long-resume run must verify persistence through the symlinked state.
 
 Local inspection commands:
 
@@ -94,7 +116,8 @@ codex --ignore-user-config app-server --help
 codex app-server --ignore-user-config --help
 rg -n 'ignore.user.config|configOverrides|configRequirements' /private/tmp/aid-codex-schema
 rustfmt --edition 2024 src/runtime/codex_app_server/command.rs src/runtime/codex_app_server/command_tests.rs
-python3 /private/tmp/aid-codex-static-check.py
+python3 /private/tmp/aid-codex-audit-format.py
+python3 /private/tmp/aid-codex-audit-static-check.py
 bash /Users/ming/.aid/skills/implementer/scripts/check-file-size.sh src/runtime/codex_app_server
 bash /Users/ming/.aid/skills/implementer/scripts/check-headers.sh src/runtime/codex_app_server
 bash /Users/ming/.aid/skills/implementer/scripts/check-unwrap.sh src/runtime/codex_app_server

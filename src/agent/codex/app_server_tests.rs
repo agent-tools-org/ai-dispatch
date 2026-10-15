@@ -119,3 +119,78 @@ fn resumed_thread_usage_excludes_previous_turns_and_duplicate_updates() {
     assert_eq!(next[0]["usage"]["input_tokens"], 200);
     assert_eq!(next[0]["usage"]["cached_input_tokens"], 100);
 }
+
+#[test]
+fn usage_windows_with_paid_or_unlimited_credits_do_not_hold_codex() {
+    for credits in [json!({"hasCredits":true}), json!({"unlimited":true})] {
+        let snapshot = json!({"primary":{"usedPercent":100},"secondary":{"usedPercent":100},
+            "rateLimitReachedType":"rate_limit_reached","credits":credits});
+        assert!(quota_message(&snapshot).is_none());
+    }
+    assert!(
+        quota_message(&json!({"primary":{"usedPercent":100},"credits":{"hasCredits":false}}))
+            .is_some()
+    );
+    assert!(
+        quota_message(&json!({"credits":{"hasCredits":true},"spendControlReached":true})).is_some()
+    );
+}
+
+#[test]
+fn tool_items_remain_in_logs_and_final_delivery_ordering() {
+    use crate::task::delivery_guard::{DeliveryEvidence, DeliveryOutcome};
+    for (kind, normalized) in [
+        ("mcpToolCall", "mcp_tool_call"),
+        ("webSearch", "web_search"),
+        ("collabAgentToolCall", "collab_tool_call"),
+        ("imageGeneration", "image_generation"),
+        ("dynamicToolCall", "dynamic_tool_call"),
+    ] {
+        let mut events = Events::default();
+        let items = events.notification(&json!({"method":"item/completed",
+            "params":{"item":{"type":kind,"id":"tool","status":"completed"}}}));
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["item"]["type"], normalized);
+        let mut delivery = DeliveryEvidence::default();
+        delivery.observe_codex_jsonl(
+            r#"{"type":"item.completed","item":{"type":"agent_message","text":"earlier"}}"#,
+        );
+        delivery.observe_codex_jsonl(&items[0].to_string());
+        assert!(matches!(
+            delivery.validate(),
+            DeliveryOutcome::MissingFinalDelivery { .. }
+        ));
+    }
+}
+
+#[test]
+fn exec_reasoning_stays_ignored_while_app_server_reasoning_is_mapped() {
+    let task = TaskId("t-reasoning".into());
+    let exec = r#"{"type":"item.completed","item":{"type":"reasoning","text":"summary"}}"#;
+    assert!(CodexAgent.parse_event(&task, exec).is_none());
+    let mut events = Events::default();
+    let app = events.notification(&json!({"method":"item/completed",
+        "params":{"item":{"type":"reasoning","summary":["summary"]}}}));
+    assert_eq!(
+        CodexAgent
+            .parse_event(&task, &app[0].to_string())
+            .unwrap()
+            .event_kind,
+        EventKind::Reasoning
+    );
+}
+
+#[test]
+fn final_items_are_recovered_once_from_the_completion_envelope() {
+    let mut events = Events::default();
+    let message = json!({"method":"turn/completed","params":{"turn":{"status":"completed",
+        "error":null,"items":[{"id":"final","type":"agentMessage","text":"delivered"}]}}});
+    let first = events.notification(&message);
+    assert_eq!(first[0]["item"]["text"], "delivered");
+    let repeated = events.notification(&message);
+    assert!(
+        repeated
+            .iter()
+            .all(|event| event["type"] != "item.completed")
+    );
+}

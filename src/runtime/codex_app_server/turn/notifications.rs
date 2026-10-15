@@ -9,12 +9,7 @@ impl Turn<'_> {
             if message.get("method").is_none() {
                 return Ok(());
             }
-            self.rpc.send(json!({"id":id,"error":{"code":-32601,
-                "message":"aid does not accept interactive app-server requests"}}))?;
-            bail!(
-                "Unexpected Codex protocol request or response: {}",
-                message["method"]
-            );
+            return self.server_request(id, &message);
         }
         if let Some(thread) = message["params"]["threadId"].as_str() {
             if !self.thread.is_empty() && thread != self.thread {
@@ -45,9 +40,12 @@ impl Turn<'_> {
             }
             Some("turn/completed") => {
                 self.completed = true;
-                self.turn = None;
+                self.terminal = Some(message.clone());
             }
             _ => {}
+        }
+        if message["method"] == "turn/completed" {
+            return Ok(());
         }
         for event in self.events.notification(&message) {
             self.sink.event(event)?;
@@ -62,7 +60,7 @@ impl Turn<'_> {
             || method == "error"
         {
             self.has_output = true;
-            self.last_progress = Instant::now();
+            self.last_progress = std::time::SystemTime::now();
         }
     }
 }

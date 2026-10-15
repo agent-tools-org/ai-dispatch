@@ -39,8 +39,14 @@ impl Fixture {
     }
 
     pub fn dispatch(&self) {
+        let mut policy = crate::config::timeout_policy::TimeoutPolicy::default();
+        policy.idle = std::time::Duration::from_secs(2);
+        self.dispatch_with_policy(policy);
+    }
+
+    pub fn dispatch_with_policy(&self, policy: crate::config::timeout_policy::TimeoutPolicy) {
         let _permit = crate::support::test_subprocess::acquire();
-        crate::runtime::pty::runner::run_agent_process(
+        crate::runtime::pty::runner::run_agent_process_with_control(
             &crate::agent::codex::CodexAgent,
             &self.command,
             &self.task,
@@ -49,6 +55,9 @@ impl Fixture {
             Some(self.output.to_str().unwrap()),
             None,
             true,
+            policy,
+            None,
+            None,
         )
         .unwrap();
     }
@@ -131,17 +140,23 @@ fn command(home: &std::path::Path, mode: &str) -> Command {
         "literal\n{\"method\":\"turn/interrupt\"}",
         "--ignore-user-config",
     ]);
+    command.arg("-o").arg(home.join("output.txt"));
     command
         .env("CODEX_HOME", real)
         .env("AID_FAKE_FIXTURE", fixture)
         .env("AID_FAKE_MODE", mode)
-        .env("AID_FAKE_INTERRUPTED", home.join("interrupted"));
+        .env("AID_FAKE_INTERRUPTED", home.join("interrupted"))
+        .env("AID_FAKE_FLUSHED", home.join("flushed"));
     command
 }
 
 fn act(store: &Arc<Store>, task: &TaskId, mode: &str) {
-    if mode == "stop" {
+    if mode == "stop" || mode == "timed-stop" {
+        let start = std::time::Instant::now();
         crate::cmd::stop::stop(store, task.as_str()).unwrap();
+        if mode == "timed-stop" {
+            assert!(start.elapsed() >= std::time::Duration::from_millis(2400));
+        }
     } else if mode == "steer" {
         crate::cmd::steer::run(store, task.as_str(), "steered direction").unwrap();
     } else {

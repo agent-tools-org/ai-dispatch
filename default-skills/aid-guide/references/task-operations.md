@@ -83,7 +83,8 @@ aid unstick <task-id>
 - Codex app-server tasks accept `steer` and `reply` through the pending-message
   queue. Success is reported only after the `turn/steer` response:
   `accepted by codex (turn <id>)`. A rejection records Codex's error; a timeout
-  leaves acceptance unconfirmed. `reply --async` only confirms queuing.
+  leaves acceptance unconfirmed. The steer response window is 30 seconds;
+  a timeout is not a refusal and never marks delivery. `reply --async` only confirms queuing.
 - Codex `respond` is refused; app-server does not expose approval input through
   that command. Exec fallback tasks refuse `steer`, `reply`, and `respond`
   before queuing input. Use `aid retry <id> -f "<feedback>"`, or stop then retry,

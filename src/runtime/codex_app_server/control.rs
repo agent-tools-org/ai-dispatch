@@ -5,6 +5,20 @@ use crate::{store::Store, support::paths, types::*};
 use anyhow::{Result, bail};
 use serde_json::{Value, json};
 
+pub(super) const STEER_WINDOW: std::time::Duration = std::time::Duration::from_secs(30);
+pub(super) const INTERRUPT_GRACE: std::time::Duration = std::time::Duration::from_secs(5);
+
+#[derive(Debug)]
+pub(super) struct Unconfirmed(pub String);
+
+impl std::fmt::Display for Unconfirmed {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for Unconfirmed {}
+
 pub(super) fn marker(task_id: &str) -> std::path::PathBuf {
     paths::task_dir(task_id).join("codex-app-server.json")
 }
@@ -16,6 +30,9 @@ pub(crate) fn active(task_id: &str) -> bool {
     else {
         return false;
     };
+    if value["ready"] == false {
+        return false;
+    }
     let Some(pid) = value["pid"]
         .as_u64()
         .and_then(|pid| u32::try_from(pid).ok())
@@ -29,12 +46,26 @@ pub(super) struct Active(pub String);
 
 impl Active {
     pub fn create(task_id: &str, pid: u32) -> Result<Self> {
+        let active = Self::starting(task_id, pid)?;
+        active.ready()?;
+        Ok(active)
+    }
+
+    pub fn starting(task_id: &str, pid: u32) -> Result<Self> {
         let started = crate::runtime::process::monitor::activity::root_started(pid);
         std::fs::write(
             marker(task_id),
-            json!({"pid":pid,"started":started}).to_string(),
+            json!({"pid":pid,"started":started,"ready":false}).to_string(),
         )?;
         Ok(Self(task_id.to_string()))
+    }
+
+    pub fn ready(&self) -> Result<()> {
+        let path = marker(&self.0);
+        let mut value: Value = serde_json::from_slice(&std::fs::read(&path)?)?;
+        value["ready"] = json!(true);
+        std::fs::write(path, value.to_string())?;
+        Ok(())
     }
 }
 
@@ -45,9 +76,17 @@ impl Drop for Active {
 }
 
 pub(super) fn record(store: &Store, task: &TaskId, id: i64, result: Result<String>) -> Result<()> {
-    let (accepted, text, turn) = match result {
-        Ok(turn) => (true, format!("accepted by codex (turn {turn})"), Some(turn)),
-        Err(error) => (false, error.to_string(), None),
+    let (accepted, text, turn, unconfirmed) = match result {
+        Ok(turn) => (
+            true,
+            format!("accepted by codex (turn {turn})"),
+            Some(turn),
+            false,
+        ),
+        Err(error) => {
+            let unconfirmed = error.is::<Unconfirmed>();
+            (false, error.to_string(), None, unconfirmed)
+        }
     };
     store.insert_event(&TaskEvent {
         task_id: task.clone(),
@@ -58,8 +97,12 @@ pub(super) fn record(store: &Store, task: &TaskId, id: i64, result: Result<Strin
             EventKind::Error
         },
         detail: text.clone(),
-        metadata: Some(json!({"codex_steer_message_id":id,
-            "accepted":accepted,"turn_id":turn,"error":if accepted {None} else {Some(text)}})),
+        metadata: Some(json!({
+            "codex_steer_message_id":id,
+            "accepted":if unconfirmed {None} else {Some(accepted)},
+            "unconfirmed":unconfirmed,"turn_id":turn,
+            "error":if accepted {None} else {Some(text)}
+        })),
     })?;
     if accepted {
         store.mark_delivered(id)?;
@@ -87,8 +130,8 @@ pub(crate) fn receipt(store: &Store, task_id: &str, id: i64) -> Result<Option<St
 }
 
 pub(crate) fn wait_for_interrupt(task_id: &str) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-    while active(task_id) && std::time::Instant::now() < deadline {
+    let deadline = std::time::Instant::now() + INTERRUPT_GRACE;
+    while marker(task_id).exists() && std::time::Instant::now() < deadline {
         std::thread::park_timeout(std::time::Duration::from_millis(25));
     }
 }

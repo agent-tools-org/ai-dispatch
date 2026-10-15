@@ -119,7 +119,7 @@ fn resume_uses_thread_resume_and_keeps_final_output() {
 }
 
 #[test]
-fn malformed_protocol_and_missing_terminal_notification_fail() {
+fn malformed_startup_falls_back_but_missing_terminal_notification_fails() {
     for mode in ["invalid", "eof"] {
         let fixture = Fixture::new(mode);
         fixture.dispatch();
@@ -130,7 +130,11 @@ fn malformed_protocol_and_missing_terminal_notification_fail() {
                 .unwrap()
                 .unwrap()
                 .status,
-            TaskStatus::Failed
+            if mode == "invalid" {
+                TaskStatus::Done
+            } else {
+                TaskStatus::Failed
+            }
         );
         assert!(
             !crate::support::paths::task_dir(fixture.task.as_str())
@@ -141,7 +145,7 @@ fn malformed_protocol_and_missing_terminal_notification_fail() {
 }
 
 #[test]
-fn initialize_timeout_is_bounded_and_fails_clearly() {
+fn initialize_timeout_is_bounded_and_falls_back_clearly() {
     let fixture = Fixture::new("silent-init");
     let started = std::time::Instant::now();
     fixture.dispatch();
@@ -159,7 +163,7 @@ fn initialize_timeout_is_bounded_and_fails_clearly() {
             .unwrap()
             .unwrap()
             .status,
-        TaskStatus::Failed
+        TaskStatus::Done
     );
 }
 
@@ -208,7 +212,7 @@ fn steer_timeout_never_marks_delivery_even_when_turn_finishes() {
     let started = std::time::Instant::now();
     fixture.dispatch();
     actor.join().unwrap();
-    assert!(started.elapsed() < std::time::Duration::from_secs(15));
+    assert!(started.elapsed() < std::time::Duration::from_secs(35));
     let messages = fixture
         .store
         .list_messages_for_task(fixture.task.as_str())
@@ -216,11 +220,11 @@ fn steer_timeout_never_marks_delivery_even_when_turn_finishes() {
     assert_eq!(messages.len(), 1);
     assert!(messages[0].delivered_at.is_none());
     let error = receipt(&fixture.store, fixture.task.as_str(), messages[0].id).unwrap_err();
-    assert!(error.to_string().contains("turn/steer response timed out"));
+    assert!(error.to_string().contains("acceptance unconfirmed"));
 }
 
 #[test]
-fn thread_start_timeout_is_bounded_and_fails_clearly() {
+fn thread_start_timeout_is_bounded_and_falls_back_clearly() {
     let fixture = Fixture::new("silent-thread");
     let started = std::time::Instant::now();
     fixture.dispatch();
@@ -238,7 +242,7 @@ fn thread_start_timeout_is_bounded_and_fails_clearly() {
             .unwrap()
             .unwrap()
             .status,
-        TaskStatus::Failed
+        TaskStatus::Done
     );
 }
 

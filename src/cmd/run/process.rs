@@ -128,12 +128,13 @@ pub(crate) async fn run_agent_process_impl(mut args: RunProcessArgs<'_>) -> Resu
     if args.agent.kind() == AgentKind::Codex
         && crate::runtime::codex_app_server::available(args.cmd.as_std())
     {
-        let mut info = crate::runtime::codex_app_server::run(crate::runtime::codex_app_server::Run {
+        if let Some(mut info) = crate::runtime::codex_app_server::run(crate::runtime::codex_app_server::Run {
             agent:args.agent,command:args.cmd.as_std(),task:args.task_id,store:args.store,
             log:args.log_path,output:args.output_path,group:args.workgroup_id,
             policy:args.timeout_policy,max_cost:args.max_task_cost,control:None,
-        })?;
-        return complete_agent(&args,&mut info,start,&failure_context);
+        })? {
+            return complete_agent(&args,&mut info,start,&failure_context);
+        }
     }
     let mut child = execution::spawn_agent(&mut args)?;
     let mut info = execution::watch_agent(&args, &mut child, start).await?;

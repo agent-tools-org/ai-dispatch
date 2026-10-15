@@ -1,14 +1,13 @@
 // App-server handshake, notification pumping, and persisted pending-message delivery.
 // All RPC responses have deadlines; only turn/completed ends a successful run.
 
+mod finish;
 mod notifications;
+mod requests;
 mod sink;
-use super::{
-    Run,
-    command::Launch,
-    control,
-    io::{RESPONSE_TIMEOUT, Rpc},
-};
+mod startup;
+mod watchdog;
+use super::{Run, command::Launch, control, io::Rpc};
 use crate::agent::codex::app_server::Events;
 use crate::types::*;
 use anyhow::{Context, Result, bail};
@@ -26,7 +25,10 @@ pub(super) struct Turn<'a> {
     completed: bool,
     attempted: HashSet<i64>,
     deadline: Instant,
-    last_progress: Instant,
+    last_progress: std::time::SystemTime,
+    startup_deadline: Instant,
+    start_requested: bool,
+    terminal: Option<Value>,
     has_output: bool,
 }
 
@@ -41,74 +43,16 @@ impl<'a> Turn<'a> {
             completed: false,
             attempted: HashSet::new(),
             deadline: Instant::now() + run.policy.max_duration.min(run.policy.hard_cap),
-            last_progress: Instant::now(),
+            last_progress: std::time::SystemTime::now(),
+            startup_deadline: Instant::now()
+                + run
+                    .policy
+                    .idle
+                    .min(run.policy.max_duration.min(run.policy.hard_cap)),
+            start_requested: false,
+            terminal: None,
             has_output: false,
         })
-    }
-
-    pub fn start(&mut self, launch: Launch) -> Result<()> {
-        self.request(
-            "initialize",
-            json!({"clientInfo":{"name":"aid","version":env!("CARGO_PKG_VERSION")}}),
-        )?;
-        self.rpc.send(json!({"method":"initialized"}))?;
-        let response = self.request(
-            if launch.resume {
-                "thread/resume"
-            } else {
-                "thread/start"
-            },
-            launch.thread,
-        )?;
-        self.thread = response["thread"]["id"]
-            .as_str()
-            .context("Missing Codex thread id")?
-            .to_string();
-        self.events.model = response["model"].as_str().map(str::to_string);
-        self.sink.event(
-            json!({"type":"thread.started","thread_id":self.thread,"model":self.events.model}),
-        )?;
-        let mut params =
-            json!({"threadId":self.thread,"input":[{"type":"text","text":launch.prompt}]});
-        if let Some(effort) = launch.effort {
-            params["effort"] = effort;
-        }
-        let response = self.request("turn/start", params)?;
-        self.turn = Some(
-            response["turn"]["id"]
-                .as_str()
-                .context("Missing Codex turn id")?
-                .to_string(),
-        );
-        Ok(())
-    }
-
-    fn request(&mut self, method: &str, params: Value) -> Result<Value> {
-        let id = self.rpc.request(method, params)?;
-        let deadline = (Instant::now() + RESPONSE_TIMEOUT).min(self.deadline);
-        loop {
-            if method != "turn/interrupt" && self.stopped()? {
-                self.interrupt()?;
-                bail!("Codex {method} cancelled because the task is stopping");
-            }
-            anyhow::ensure!(
-                Instant::now() < deadline,
-                "Codex {method} response timed out"
-            );
-            let Some(message) = self.rpc.receive(Duration::from_millis(100))? else {
-                continue;
-            };
-            if message["id"].as_u64() == Some(id) && message.get("method").is_none() {
-                if let Some(error) = message.get("error") {
-                    bail!("Codex {method}: {error}");
-                }
-                return message
-                    .get("result")
-                    .cloned()
-                    .context("Missing Codex RPC result");
-            }
-            self.notification(message)?;
-        }
     }
 
     pub fn pid(&self) -> u32 {
@@ -126,11 +70,16 @@ impl<'a> Turn<'a> {
         } else {
             self.refuse_pending("Codex turn is finished; no active turn")?;
         }
+        if let Err(error) = self.flush_terminal() {
+            self.sink.info.status = TaskStatus::Failed;
+            self.sink
+                .event(json!({"type":"error","message":error.to_string()}))
+                .ok();
+        }
         self.sink.finish()
     }
 
     fn monitor_until_completed(&mut self) -> Result<()> {
-        let run = self.sink.run;
         while !self.completed {
             anyhow::ensure!(
                 Instant::now() < self.deadline,
@@ -145,17 +94,11 @@ impl<'a> Turn<'a> {
             if self.completed {
                 break;
             }
-            let idle = if self.has_output {
-                run.policy.idle
-            } else {
-                run.policy.first_token
-            };
-            anyhow::ensure!(
-                self.last_progress.elapsed() < idle,
-                "Codex app-server idle timeout"
-            );
             if let Some(message) = self.rpc.receive(Duration::from_millis(100))? {
                 self.notification(message)?;
+            }
+            if !self.completed {
+                self.check_idle()?;
             }
         }
         Ok(())
@@ -188,6 +131,7 @@ impl<'a> Turn<'a> {
     }
 
     fn deliver(&mut self, text: &str) -> Result<String> {
+        anyhow::ensure!(!self.completed, "Codex turn is finished; no active turn");
         let expected = self
             .turn
             .clone()
@@ -195,23 +139,6 @@ impl<'a> Turn<'a> {
         let params = control::steer(&self.thread, Some(&expected), text)?;
         let response = self.request("turn/steer", params)?;
         control::accepted(&response, &expected)
-    }
-
-    fn interrupt(&mut self) -> Result<()> {
-        if let Some(turn) = self.turn.clone() {
-            self.request(
-                "turn/interrupt",
-                json!({"threadId":self.thread,"turnId":turn}),
-            )?;
-            let deadline = Instant::now() + Duration::from_secs(1);
-            while !self.completed && Instant::now() < deadline {
-                if let Some(message) = self.rpc.receive(Duration::from_millis(100))? {
-                    self.notification(message)?;
-                }
-            }
-        }
-        self.sink.info.status = TaskStatus::Stopped;
-        Ok(())
     }
 
     fn refuse_pending(&mut self, detail: &str) -> Result<()> {

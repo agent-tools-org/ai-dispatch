@@ -8,6 +8,7 @@ pub(crate) struct Events {
     pub usage: Value,
     pub model: Option<String>,
     baseline: Option<Value>,
+    completed_items: std::collections::HashSet<String>,
 }
 
 impl Events {
@@ -20,7 +21,15 @@ impl Events {
                 self.usage = self.turn_usage(&params["tokenUsage"]);
                 vec![json!({"type":"turn.usage", "usage":self.usage, "model":self.model})]
             }
-            "item/started" | "item/completed" => item(message).into_iter().collect(),
+            "item/started" | "item/completed" => {
+                let event = item(message);
+                if event.is_some() && message["method"] == "item/completed" {
+                    if let Some(id) = params["item"]["id"].as_str() {
+                        self.completed_items.insert(id.to_string());
+                    }
+                }
+                event.into_iter().collect()
+            }
             "turn/completed" => self.completed(params),
             "error" => vec![json!({"type":"error", "message":params["error"]["message"]})],
             "account/rateLimits/updated" => vec![json!({"type":"codex.rate_limits",
@@ -36,13 +45,29 @@ impl Events {
         subtract(&total, baseline)
     }
 
-    fn completed(&self, params: &Value) -> Vec<Value> {
+    fn final_items(&mut self, turn: &Value) -> Vec<Value> {
+        let mut events = Vec::new();
+        for value in turn["items"].as_array().into_iter().flatten() {
+            if let Some(id) = value["id"].as_str() {
+                if !self.completed_items.insert(id.to_string()) {
+                    continue;
+                }
+            }
+            if let Some(event) = item(&json!({"method":"item/completed","params":{"item":value}})) {
+                events.push(event);
+            }
+        }
+        events
+    }
+
+    fn completed(&mut self, params: &Value) -> Vec<Value> {
         let turn = &params["turn"];
-        let mut events = vec![
+        let mut events = self.final_items(turn);
+        events.push(
             json!({"type":"turn.completed", "usage":if self.usage.is_null() {
             json!({"input_tokens":0,"output_tokens":0,"cached_input_tokens":0})
         } else { self.usage.clone() }, "model":self.model}),
-        ];
+        );
         if turn["status"] != "completed" || !turn["error"].is_null() {
             let message = turn["error"]["message"]
                 .as_str()
@@ -87,10 +112,42 @@ fn item(message: &Value) -> Option<Value> {
             "command_execution"
         }
         "fileChange" if completed => "file_change",
-        _ => return None,
+        "mcpToolCall" => "mcp_tool_call",
+        "webSearch" => "web_search",
+        "collabAgentToolCall" => "collab_tool_call",
+        "imageGeneration" => "image_generation",
+        "plan" => "todo_list",
+        _ => return generic_item(message),
     };
     item["type"] = json!(kind);
-    Some(json!({"type":if completed {"item.completed"} else {"item.started"}, "item":item}))
+    let envelope = if kind == "reasoning" {
+        "codex.reasoning"
+    } else if completed {
+        "item.completed"
+    } else {
+        "item.started"
+    };
+    Some(json!({"type":envelope, "item":item}))
+}
+
+fn generic_item(message: &Value) -> Option<Value> {
+    let mut item = message["params"]["item"].clone();
+    let kind = item["type"].as_str()?;
+    if kind == "userMessage" || kind == "agentMessage" || kind == "reasoning" {
+        return None;
+    }
+    let mut normalized = String::new();
+    for ch in kind.chars() {
+        if ch.is_uppercase() {
+            normalized.push('_');
+        }
+        normalized.extend(ch.to_lowercase());
+    }
+    item["type"] = json!(normalized);
+    Some(
+        json!({"type":if message["method"] == "item/completed" {"item.completed"}
+        else {"item.started"},"item":item}),
+    )
 }
 
 fn reasoning(item: &Value) -> String {
@@ -116,14 +173,16 @@ pub(crate) fn quota_message(snapshot: &Value) -> Option<String> {
     let reached = matches!(
         snapshot["rateLimitReachedType"].as_str(),
         Some(
-            "rate_limit_reached"
-                | "workspace_owner_credits_depleted"
+            "workspace_owner_credits_depleted"
                 | "workspace_member_credits_depleted"
                 | "workspace_owner_usage_limit_reached"
                 | "workspace_member_usage_limit_reached"
         )
     );
-    if exhausted.is_empty() && snapshot["spendControlReached"] != true && !reached {
+    let overage =
+        snapshot["credits"]["hasCredits"] == true || snapshot["credits"]["unlimited"] == true;
+    let window = !exhausted.is_empty() || snapshot["rateLimitReachedType"] == "rate_limit_reached";
+    if (!window || overage) && snapshot["spendControlReached"] != true && !reached {
         return None;
     }
     let reset = exhausted

@@ -15,7 +15,8 @@ pub(super) struct Sink<'a> {
     log: std::fs::File,
     tracker: SyntheticMilestoneTracker,
     delivery: DeliveryEvidence,
-    count: u32,
+    pub(super) count: u32,
+    pub(super) last_detail: Option<String>,
     saved: bool,
     quota: bool,
 }
@@ -35,6 +36,7 @@ impl<'a> Sink<'a> {
             tracker: SyntheticMilestoneTracker::new(),
             delivery: DeliveryEvidence::default(),
             count: 0,
+            last_detail: None,
             saved: false,
             quota: false,
         })
@@ -51,7 +53,7 @@ impl<'a> Sink<'a> {
         if event["type"] == "codex.rate_limits" {
             return self.quota(&event["rate_limits"]);
         }
-        watcher::handle_streaming_line_with_session(
+        let detail = watcher::handle_streaming_line_with_session(
             StreamLineContext {
                 agent: self.run.agent,
                 task_id: self.run.task,
@@ -64,13 +66,16 @@ impl<'a> Sink<'a> {
             &line,
             &mut self.saved,
         )?;
+        if let Some(detail) = detail {
+            self.last_detail = Some(detail.detail);
+        }
         self.quota |= crate::routing::rate_limit::refusal_on_channel(
             &line,
             AgentKind::Codex,
             crate::routing::quota::channel::Channel::CliStream,
         )
         .is_some();
-        if event["type"] == "turn.failed" {
+        if event["type"] == "turn.failed" && self.info.status != TaskStatus::Stopped {
             self.info.status = TaskStatus::Failed;
         }
         self.check_cost()
@@ -130,8 +135,43 @@ impl<'a> Sink<'a> {
         Ok(())
     }
 
+    fn failure_stderr(&mut self) -> Result<()> {
+        if self.info.status != TaskStatus::Failed {
+            return Ok(());
+        }
+        let Some(stderr) = watcher::read_capped_stderr(self.run.task.as_str()) else {
+            return Ok(());
+        };
+        if let Some(message) = crate::routing::rate_limit::refusal_on_channel(
+            &stderr,
+            AgentKind::Codex,
+            crate::routing::quota::channel::Channel::CliStderr,
+        ) {
+            crate::routing::rate_limit::mark_rate_limited_for_model(
+                &AgentKind::Codex,
+                None,
+                self.info.model.as_deref(),
+                &message,
+            );
+            self.quota = true;
+        }
+        let (detail, metadata) = crate::agent::truncate::capped_detail(&stderr);
+        self.run.store.insert_agent_event(&TaskEvent {
+            task_id: self.run.task.clone(),
+            timestamp: chrono::Local::now(),
+            event_kind: EventKind::Error,
+            detail,
+            metadata,
+        })?;
+        writeln!(
+            self.log,
+            "{}",
+            serde_json::json!({"type":"error","source":"stderr","message":stderr})
+        )?;
+        Ok(())
+    }
+
     pub fn finish(mut self) -> Result<CompletionInfo> {
-        self.log.flush()?;
         let delivered = matches!(self.delivery.validate(), DeliveryOutcome::Delivered);
         self.info.status = watcher::apply_codex_delivery_guard(
             self.run.store,
@@ -143,6 +183,8 @@ impl<'a> Sink<'a> {
         if !delivered && self.quota {
             self.info.status = TaskStatus::Failed;
         }
+        self.failure_stderr()?;
+        self.log.flush()?;
         if self.info.status == TaskStatus::Done && !self.quota {
             crate::routing::rate_limit::clear_rate_limit_for_model(
                 &AgentKind::Codex,

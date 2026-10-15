@@ -1,12 +1,23 @@
 // Bounded JSON-RPC stdio transport with owned process-group cleanup.
 // Reader and writer threads keep pipe backpressure outside worker deadline enforcement.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use serde_json::Value;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::time::Duration;
+
+#[derive(Debug)]
+pub(super) struct Closed;
+
+impl std::fmt::Display for Closed {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("Codex app-server closed stdout before turn/completed")
+    }
+}
+
+impl std::error::Error for Closed {}
 
 pub(super) const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 type WriteRequest = (Vec<u8>, mpsc::Sender<std::io::Result<()>>);
@@ -14,7 +25,8 @@ type WriteRequest = (Vec<u8>, mpsc::Sender<std::io::Result<()>>);
 pub(super) struct Rpc {
     child: Child,
     incoming: Receiver<Result<Value>>,
-    outgoing: SyncSender<WriteRequest>,
+    outgoing: Option<SyncSender<WriteRequest>>,
+    reaped: bool,
     next_id: u64,
 }
 
@@ -34,7 +46,8 @@ impl Rpc {
         Ok(Self {
             child,
             incoming: reader(stdout),
-            outgoing: writer(stdin),
+            outgoing: Some(writer(stdin)),
+            reaped: false,
             next_id: 1,
         })
     }
@@ -55,6 +68,8 @@ impl Rpc {
         bytes.push(b'\n');
         let (sent, received) = mpsc::channel();
         self.outgoing
+            .as_ref()
+            .context("Codex protocol input closed")?
             .try_send((bytes, sent))
             .context("Codex protocol writer unavailable")?;
         received
@@ -63,17 +78,36 @@ impl Rpc {
         Ok(())
     }
 
+    pub fn close_input(&mut self) {
+        self.outgoing.take();
+    }
+
+    pub fn wait_until(&mut self, deadline: std::time::Instant) -> Result<()> {
+        while std::time::Instant::now() < deadline {
+            if let Some(status) = self.child.try_wait()? {
+                self.reaped = true;
+                anyhow::ensure!(status.success(), "Codex app-server exited with {status}");
+                break;
+            }
+            std::thread::park_timeout(Duration::from_millis(10));
+        }
+        Ok(())
+    }
+
     pub fn receive(&self, timeout: Duration) -> Result<Option<Value>> {
         match self.incoming.recv_timeout(timeout) {
             Ok(value) => value.map(Some),
             Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),
-            Err(_) => bail!("Codex app-server closed stdout before turn/completed"),
+            Err(_) => Err(Closed.into()),
         }
     }
 }
 
 impl Drop for Rpc {
     fn drop(&mut self) {
+        if self.reaped {
+            return;
+        }
         #[cfg(unix)]
         crate::runtime::process::group::kill_with_grace(
             self.child.id() as i32,

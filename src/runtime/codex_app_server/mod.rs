@@ -1,6 +1,7 @@
 // Codex app-server execution selected once per dispatch, retaining exec as capability fallback.
 // Shares normalized task events, completion accounting, and persisted steering requests.
 
+mod cleanup;
 mod command;
 mod control;
 mod home;
@@ -29,49 +30,118 @@ pub(crate) struct Run<'a> {
     pub control: Option<&'a PtyRunControl>,
 }
 
-pub(crate) fn run(args: Run<'_>) -> Result<CompletionInfo> {
-    let result = run_inner(&args);
-    let info = match result {
+pub(crate) fn run(args: Run<'_>) -> Result<Option<CompletionInfo>> {
+    let started = std::time::Instant::now();
+    let info = match run_inner(&args) {
         Ok(info) => info,
         Err(error) => {
-            let detail = format!("Codex app-server: {error:#}");
-            args.store.insert_agent_event(&TaskEvent {
-                task_id: args.task.clone(),
-                timestamp: chrono::Local::now(),
-                event_kind: EventKind::Error,
-                detail: detail.clone(),
-                metadata: None,
-            })?;
-            for message in args.store.pending_inbound_for_task(args.task.as_str())? {
-                if matches!(
-                    receipt(args.store, args.task.as_str(), message.id),
-                    Ok(None)
-                ) {
-                    control::record(
-                        args.store,
-                        args.task,
-                        message.id,
-                        Err(anyhow::anyhow!("{detail}")),
-                    )?;
-                }
-            }
-            CompletionInfo {
-                status: TaskStatus::Failed,
-                tokens: None,
-                model: None,
-                cost_usd: None,
-                exit_code: None,
+            if started.elapsed() >= args.policy.max_duration.min(args.policy.hard_cap)
+                || args
+                    .store
+                    .get_task(args.task.as_str())?
+                    .is_none_or(|task| task.status.is_terminal())
+            {
+                Some(failed(&args, &error.to_string())?)
+            } else {
+                fallback(&args, &format!("{error:#}"))?;
+                None
             }
         }
     };
-    write_output(&args)?;
+    if info.is_some() {
+        write_output(&args)?;
+    }
     Ok(info)
 }
 
-fn run_inner(args: &Run<'_>) -> Result<CompletionInfo> {
+fn fallback(args: &Run<'_>, reason: &str) -> Result<()> {
+    let stderr =
+        crate::runtime::watcher::read_capped_stderr(args.task.as_str()).unwrap_or_default();
+    args.store.insert_event(&TaskEvent {
+        task_id: args.task.clone(),
+        timestamp: chrono::Local::now(),
+        event_kind: EventKind::Milestone,
+        detail: format!("Codex app-server startup failed; falling back to exec: {reason}"),
+        metadata: Some(
+            serde_json::json!({"codex_app_server_fallback":true,"reason":reason,"stderr":stderr}),
+        ),
+    })?;
+    Ok(())
+}
+
+fn failed(args: &Run<'_>, reason: &str) -> Result<CompletionInfo> {
+    let stderr =
+        crate::runtime::watcher::read_capped_stderr(args.task.as_str()).unwrap_or_default();
+    let message = format!("Codex app-server: {reason}\n{stderr}");
+    let (detail, metadata) = crate::agent::truncate::capped_detail(&message);
+    use std::io::Write;
+    let mut log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(args.log)?;
+    writeln!(
+        log,
+        "{}",
+        serde_json::json!({"type":"error","message":message})
+    )?;
+    args.store.insert_agent_event(&TaskEvent {
+        task_id: args.task.clone(),
+        timestamp: chrono::Local::now(),
+        event_kind: EventKind::Error,
+        detail,
+        metadata,
+    })?;
+    for message in args.store.pending_inbound_for_task(args.task.as_str())? {
+        if matches!(
+            receipt(args.store, args.task.as_str(), message.id),
+            Ok(None)
+        ) {
+            control::record(
+                args.store,
+                args.task,
+                message.id,
+                Err(anyhow::anyhow!("{reason}")),
+            )?;
+        }
+    }
+    Ok(CompletionInfo {
+        status: TaskStatus::Failed,
+        tokens: None,
+        model: None,
+        cost_usd: None,
+        exit_code: None,
+    })
+}
+
+fn run_inner(args: &Run<'_>) -> Result<Option<CompletionInfo>> {
+    let (mut launch, _home, _owner) = prepare(args)?;
+    let rpc = spawn(args, &mut launch)?;
+    let active = control::Active::starting(args.task.as_str(), rpc.pid())?;
+    let mut turn = turn::Turn::new(args, rpc)?;
+    if let Err(error) = turn.start(launch) {
+        if turn.fallback_safe() {
+            return Err(error);
+        }
+        return failed(args, &error.to_string()).map(Some);
+    }
+    if let Err(error) = active.ready() {
+        return failed(args, &error.to_string()).map(Some);
+    }
+    let result = match turn.monitor() {
+        Ok(info) => Ok(Some(info)),
+        Err(error) => failed(args, &error.to_string()).map(Some),
+    };
+    drop(_home);
+    drop(active);
+    result
+}
+
+fn prepare(args: &Run<'_>) -> Result<(command::Launch, Option<home::Home>, cleanup::Owner)> {
     let mut launch = command::translate(args.command)?;
     let task_dir = crate::support::paths::task_dir(args.task.as_str());
     std::fs::create_dir_all(&task_dir)?;
+    cleanup::sweep()?;
+    let _owner = cleanup::Owner::create(args.task.as_str())?;
     let _home = if launch.isolated {
         let home = home::Home::for_command(args.command, &task_dir)?;
         launch.command.env("CODEX_HOME", &home.path);
@@ -79,7 +149,11 @@ fn run_inner(args: &Run<'_>) -> Result<CompletionInfo> {
     } else {
         None
     };
-    let rpc = args.store.with_running_task(args.task.as_str(), || {
+    Ok((launch, _home, _owner))
+}
+
+fn spawn(args: &Run<'_>, launch: &mut command::Launch) -> Result<io::Rpc> {
+    args.store.with_running_task(args.task.as_str(), || {
         let rpc = io::Rpc::spawn(
             &mut launch.command,
             &crate::support::paths::stderr_path(args.task.as_str()),
@@ -89,14 +163,7 @@ fn run_inner(args: &Run<'_>) -> Result<CompletionInfo> {
             control.set_agent_pid(rpc.pid());
         }
         Ok(rpc)
-    })?;
-    let mut turn = turn::Turn::new(args, rpc)?;
-    turn.start(launch)?;
-    let active = control::Active::create(args.task.as_str(), turn.pid())?;
-    let result = turn.monitor();
-    drop(_home);
-    drop(active);
-    result
+    })
 }
 
 fn write_output(args: &Run<'_>) -> Result<()> {

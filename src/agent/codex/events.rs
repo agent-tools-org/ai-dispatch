@@ -13,7 +13,7 @@ pub(super) fn parse_item_event(
     let item_type = item.get("type")?.as_str()?;
 
     match item_type {
-        "agent_message" | "reasoning" => {
+        "agent_message" => {
             let text = item
                 .get("text")
                 .or_else(|| item.get("content"))

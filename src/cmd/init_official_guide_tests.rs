@@ -13,7 +13,6 @@ use super::GUIDE_FILES;
 // Existing undocumented flags only. Remove entries as documented; never add gaps.
 const UNDOCUMENTED_FLAGS: &[&str] = &[
     "--active",
-    "--agent",
     "--agents",
     "--as",
     "--as-of",

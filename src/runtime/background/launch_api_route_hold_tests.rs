@@ -22,7 +22,8 @@ fn next_launch(home: &std::path::Path, store: &Arc<Store>) -> anyhow::Result<()>
         crate::task::lifecycle::mark_running(store, &crate::types::TaskId(next.task_id.clone()))?;
     }
     let args = args(home);
-    let agent = agent::registry::resolve_custom_agent(&args.agent_name)?;
+    let agent = agent::registry::resolve_custom_agent(&args.agent_name)
+        .ok_or_else(|| anyhow::anyhow!("route agent did not resolve"))?;
     let isolated = agent::home_isolation::IsolatedHomeGuard::create_from_home(
         Some(home),
         Some(&next.task_id),

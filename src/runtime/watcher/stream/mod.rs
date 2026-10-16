@@ -102,11 +102,11 @@ pub(crate) fn handle_streaming_line_with_session(
         append_to_broadcast(group_id, task_id.as_str(), &finding);
     }
 
-    if let Some(event) = parse_milestone_event(task_id, line) {
-        synthetic_tracker.observe(&event);
-        store.insert_agent_event(&event)?;
+    let milestone = parse_milestone_event(task_id, line);
+    if let Some(event) = &milestone {
+        synthetic_tracker.observe(event);
+        store.insert_agent_event(event)?;
         *event_count += 1;
-        return Ok(Some(EventDetail::from_event(&event)));
     }
 
     if let Some(mut event) = agent.parse_event(task_id, line) {
@@ -142,7 +142,7 @@ pub(crate) fn handle_streaming_line_with_session(
         return Ok(Some(EventDetail::from_event(&event)));
     }
 
-    Ok(None)
+    Ok(milestone.as_ref().map(EventDetail::from_event))
 }
 
 fn mark_stream_rate_limit(

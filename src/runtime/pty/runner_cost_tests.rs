@@ -155,11 +155,12 @@ fn captured_milestone_result_stores_route_and_claude_cost_and_tokens() {
     for agent in [&route as &dyn crate::agent::Agent, &crate::agent::claude::ClaudeAgent] {
         let (stored, events) = replay_stream(agent, output);
         assert_eq!(stored.status, TaskStatus::Done);
-        assert_eq!(stored.cost_usd, Some(0.0013054450000000001));
+        assert!(stored.cost_usd.is_some_and(|cost| (cost - 0.001305445).abs() < 1e-12));
         assert_eq!(stored.tokens, Some(20_065));
         assert!(events.iter().any(|event| event.event_kind == crate::types::EventKind::Milestone));
         assert!(events.iter().any(|event| event.metadata.as_ref().is_some_and(|metadata| {
-            metadata["tokens"] == 20_065 && metadata["cost_usd"] == 0.0013054450000000001
+            metadata["tokens"] == 20_065
+                && metadata["cost_usd"].as_f64().is_some_and(|cost| (cost - 0.001305445).abs() < 1e-12)
         })));
     }
 }

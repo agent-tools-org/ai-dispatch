@@ -123,3 +123,15 @@ fn swept_task_is_counted_once_after_clear() {
     next_launch(home.path(), &store).unwrap();
     assert_eq!(sweep_count(&store), 1);
 }
+
+#[test]
+fn renamed_route_task_without_init_holds_next_launch() {
+    let (home, _guard, store) = fixture();
+    let (_, _, _, _isolated) = prepared(home.path(), &store, &spec(false));
+    crate::cmd::stop::stop(&store, "t-api-launch").unwrap();
+    store
+        .db()
+        .execute("UPDATE tasks SET custom_agent_name = 'other' WHERE id = 't-api-launch'", [])
+        .unwrap();
+    assert_next_launch_held_then_cleared(home.path(), &store);
+}

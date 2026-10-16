@@ -160,8 +160,9 @@ pub(crate) fn record_stream_failure(
 
 fn sweep_unverified_tasks(store: &crate::store::Store, route: &str) -> Result<Option<String>> {
     let mut swept = None;
-    for task in store.list_tasks(TaskFilter::All)? {
-        if !task.status.is_terminal() || task.custom_agent_name.as_deref() != Some(route) {
+    for id in store.route_launch_task_ids(route)? {
+        let Some(task) = store.get_task(&id)? else { continue };
+        if !task.status.is_terminal() {
             continue;
         }
         let events = store.get_events(task.id.as_str())?;

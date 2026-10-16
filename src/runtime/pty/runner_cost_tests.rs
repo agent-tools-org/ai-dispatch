@@ -106,3 +106,87 @@ fn process_completion_claude_reported_cost_stays_authoritative() {
     let (_, stored) = record(&task, Some(&event), Some(0.14359275));
     assert_eq!(stored.cost_usd, Some(0.14359275));
 }
+
+fn replay_stream(agent: &dyn crate::agent::Agent, output: &str) -> (Task, Vec<TaskEvent>) {
+    let _permit = crate::support::test_subprocess::acquire();
+    let home = tempfile::tempdir().expect("home");
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    crate::support::paths::ensure_dirs().expect("aid dirs");
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut task = task(agent.kind(), 0, None);
+    task.status = TaskStatus::Running;
+    task.tokens = None;
+    task.requested_model = Some("claude-haiku-5-5".into());
+    task.custom_agent_name = agent.rate_limit_name().map(str::to_owned);
+    store.insert_task(&task).expect("task");
+    let input = home.path().join("captured.jsonl");
+    std::fs::write(&input, output).expect("fixture");
+    let mut command = std::process::Command::new("/bin/cat");
+    command.arg(input);
+    super::run_agent_process(
+        agent,
+        &command,
+        &task.id,
+        &store,
+        &crate::support::paths::log_path(task.id.as_str()),
+        None,
+        task.requested_model.as_deref(),
+        true,
+    )
+    .expect("replay through PTY runner");
+    let stored = store.get_task(task.id.as_str()).expect("query").expect("stored task");
+    let events = store.get_events(task.id.as_str()).expect("events");
+    (stored, events)
+}
+
+#[test]
+fn captured_milestone_result_stores_route_and_claude_cost_and_tokens() {
+    use crate::agent::api_route::ApiRouteAgent;
+    use crate::config::api_route::{ApiRoute, OverBudget};
+    let route = ApiRouteAgent(ApiRoute {
+        id: "claude-api-fixture".into(),
+        agent: "claude".into(),
+        keychain_service: "fixture".into(),
+        keychain_account: None,
+        monthly_budget_usd: 10.0,
+        over_budget: OverBudget::Stop,
+    });
+    let output = include_str!("../../../tests/fixtures/streaming_completion/claude-route-unpriced.jsonl");
+    for agent in [&route as &dyn crate::agent::Agent, &crate::agent::claude::ClaudeAgent] {
+        let (stored, events) = replay_stream(agent, output);
+        assert_eq!(stored.status, TaskStatus::Done);
+        assert!(stored.cost_usd.is_some_and(|cost| (cost - 0.001305445).abs() < 1e-12));
+        assert_eq!(stored.tokens, Some(20_065));
+        assert!(events.iter().any(|event| event.event_kind == crate::types::EventKind::Milestone));
+        assert!(events.iter().any(|event| event.metadata.as_ref().is_some_and(|metadata| {
+            metadata["tokens"] == 20_065
+                && metadata["cost_usd"].as_f64().is_some_and(|cost| (cost - 0.001305445).abs() < 1e-12)
+        })));
+    }
+}
+
+#[test]
+fn cursor_milestone_result_still_stores_protocol_usage() {
+    let output = concat!(
+        r#"{"type":"result","result":"[MILESTONE] finished","usage":{"inputTokens":3,"#,
+        r#""outputTokens":5,"cacheReadTokens":12260,"totalCostUSD":0.0123}}"#,
+        "\n",
+    );
+    let (stored, events) = replay_stream(&crate::agent::cursor::CursorAgent, output);
+    assert_eq!(stored.status, TaskStatus::Done);
+    assert_eq!(stored.tokens, Some(12_268));
+    assert_eq!(stored.cost_usd, Some(0.0123));
+    assert!(events.iter().any(|event| event.event_kind == crate::types::EventKind::Milestone));
+}
+
+#[test]
+fn milestone_line_without_completion_is_published_once() {
+    let agent = crate::agent::get_agent(crate::types::AgentKind::OpenCode);
+    let output = concat!(r#"{"type":"auto_compact","message":"[MILESTONE] compacted"}"#, "\n");
+    let (_, events) = replay_stream(agent.as_ref(), output);
+    let milestones = events
+        .iter()
+        .filter(|event| event.event_kind == crate::types::EventKind::Milestone)
+        .count();
+    assert_eq!(milestones, 1, "{events:?}");
+}

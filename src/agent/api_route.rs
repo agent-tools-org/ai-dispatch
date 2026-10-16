@@ -62,7 +62,13 @@ pub(crate) fn validate_launch(
     if budget.billing.state == crate::routing::quota::billing::BillingState::Exhausted {
         anyhow::bail!("route {}: {}", route.id, budget.label());
     }
-    sweep_unverified_tasks(store, &route.id)?;
+    if let Some(reason) = sweep_unverified_tasks(store, &route.id)? {
+        anyhow::bail!(
+            "route {} is held: {reason}; clear with `aid config clear-limit {}`",
+            route.id,
+            route.id
+        );
+    }
     if let Some(hold) =
         crate::routing::rate_limit::dispatch_blocking_hold(&AgentKind::Custom, Some(&route.id))
     {
@@ -152,7 +158,8 @@ pub(crate) fn record_stream_failure(
     Ok(true)
 }
 
-fn sweep_unverified_tasks(store: &crate::store::Store, route: &str) -> Result<()> {
+fn sweep_unverified_tasks(store: &crate::store::Store, route: &str) -> Result<Option<String>> {
+    let mut swept = None;
     for task in store.list_tasks(TaskFilter::All)? {
         if !task.status.is_terminal() || task.custom_agent_name.as_deref() != Some(route) {
             continue;
@@ -183,14 +190,15 @@ fn sweep_unverified_tasks(store: &crate::store::Store, route: &str) -> Result<()
         let reason = format!("route {route} is not billed to its API key");
         api_budget::hold(route, &reason, false)?;
         store.insert_event(&TaskEvent {
-            task_id: task.id,
+            task_id: task.id.clone(),
             timestamp: chrono::Local::now(),
             event_kind: EventKind::Error,
-            detail: reason,
+            detail: reason.clone(),
             metadata: Some(serde_json::json!({"api_route_unverified_held": true})),
         })?;
+        swept = Some(format!("{reason} (task {})", task.id.as_str()));
     }
-    Ok(())
+    Ok(swept)
 }
 
 #[path = "api_route_refusal.rs"]

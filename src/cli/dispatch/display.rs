@@ -148,7 +148,7 @@ pub(super) fn agent(store: Arc<store::Store>, action: AgentCommands) -> Result<(
         AgentCommands::Add { name } => AgentAction::Add { name },
         AgentCommands::Remove { name } => AgentAction::Remove { name },
         AgentCommands::Fork { name, new_name } => AgentAction::Fork { name, new_name },
-        AgentCommands::Quota => AgentAction::Quota,
+        AgentCommands::Quota { json } => AgentAction::Quota { json },
     };
     run_agent_command(&store, action)
 }

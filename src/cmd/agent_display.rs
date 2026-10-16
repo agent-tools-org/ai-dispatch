@@ -104,17 +104,49 @@ fn print_api_quota(id: &str) -> anyhow::Result<bool> {
     Ok(true)
 }
 
-fn print_quota_row(name: &str, row: QuotaRow) {
+fn quota_fields(row: QuotaRow) -> (&'static str, String) {
     match row {
-        QuotaRow::Ok { detail } if detail == NO_PROBE => {
-            println!("{name:<12} {:<10} {detail}", "UNKNOWN")
-        }
-        QuotaRow::Ok { detail } => println!("{name:<12} {:<10} {detail}", "OK"),
-        QuotaRow::Overage { detail } => println!("{name:<12} {:<10} {detail}", "OVERAGE"),
-        QuotaRow::Exhausted { detail } => println!("{name:<12} {:<10} {detail}", "EXHAUSTED"),
-        QuotaRow::Limited { detail } => println!("{name:<12} {:<10} {detail}", "LIMITED"),
-        QuotaRow::Partial { detail } => println!("{name:<12} {:<10} {detail}", "PARTIAL"),
+        QuotaRow::Ok { detail } if detail == NO_PROBE => ("UNKNOWN", detail),
+        QuotaRow::Ok { detail } => ("OK", detail),
+        QuotaRow::Overage { detail } => ("OVERAGE", detail),
+        QuotaRow::Exhausted { detail } => ("EXHAUSTED", detail),
+        QuotaRow::Limited { detail } => ("LIMITED", detail),
+        QuotaRow::Partial { detail } => ("PARTIAL", detail),
     }
+}
+
+fn print_quota_row(name: &str, row: QuotaRow) {
+    let (status, detail) = quota_fields(row);
+    println!("{name:<12} {status:<10} {detail}");
+}
+
+pub(super) fn show_quota_json() -> anyhow::Result<()> {
+    use serde_json::json;
+    crate::routing::quota::refresh::refresh_stale_if_enabled();
+    let mut rows = Vec::new();
+    let agent_row = |id: &str, row| {
+        let (status, detail) = quota_fields(row);
+        json!({"id": id, "kind": "agent", "status": status, "detail": detail})
+    };
+    for kind in crate::agent::routable_builtins() {
+        rows.push(agent_row(kind.as_str(), quota_row(kind, None)));
+    }
+    for config in crate::agent::registry::list_custom_agents() {
+        if let Some(route) = crate::config::api_route::find(&config.id)? {
+            let budget = crate::routing::api_budget::for_route(&route, None)?;
+            rows.push(json!({
+                "id": route.id, "kind": "api_route", "month": budget.month,
+                "spend_usd": budget.spent, "budget_usd": budget.budget,
+                "unpriced_tasks": budget.unpriced, "state": budget.billing.state,
+                "pace_penalty": budget.pace < 0.0,
+                "resets_at": budget.resets_at.to_rfc3339(),
+            }));
+        } else {
+            rows.push(agent_row(&config.id, quota_row(AgentKind::Custom, Some(&config.id))));
+        }
+    }
+    println!("{}", serde_json::to_string(&rows)?);
+    Ok(())
 }
 
 pub(super) fn list_agents() -> anyhow::Result<()> {

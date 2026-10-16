@@ -178,3 +178,15 @@ fn cursor_milestone_result_still_stores_protocol_usage() {
     assert_eq!(stored.cost_usd, Some(0.0123));
     assert!(events.iter().any(|event| event.event_kind == crate::types::EventKind::Milestone));
 }
+
+#[test]
+fn milestone_line_without_completion_is_published_once() {
+    let agent = crate::agent::get_agent(crate::types::AgentKind::OpenCode);
+    let output = concat!(r#"{"type":"auto_compact","message":"[MILESTONE] compacted"}"#, "\n");
+    let (_, events) = replay_stream(agent.as_ref(), output);
+    let milestones = events
+        .iter()
+        .filter(|event| event.event_kind == crate::types::EventKind::Milestone)
+        .count();
+    assert_eq!(milestones, 1, "{events:?}");
+}

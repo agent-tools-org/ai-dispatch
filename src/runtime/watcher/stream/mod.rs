@@ -108,8 +108,16 @@ pub(crate) fn handle_streaming_line_with_session(
         store.insert_agent_event(event)?;
         *event_count += 1;
     }
+    // A milestone line is published once; only a completion on the same line
+    // (which carries cost and usage) is still processed by the adapter.
+    let parsed = agent.parse_event(task_id, line);
+    if let Some(event) = &milestone
+        && !parsed.as_ref().is_some_and(|event| event.event_kind == EventKind::Completion)
+    {
+        return Ok(Some(EventDetail::from_event(event)));
+    }
 
-    if let Some(mut event) = agent.parse_event(task_id, line) {
+    if let Some(mut event) = parsed {
         if let Some(metadata) = event.metadata.get_or_insert_with(|| serde_json::json!({})).as_object_mut() {
             metadata.insert("provider_stdout".into(), serde_json::json!(line));
         }
@@ -142,7 +150,7 @@ pub(crate) fn handle_streaming_line_with_session(
         return Ok(Some(EventDetail::from_event(&event)));
     }
 
-    Ok(milestone.as_ref().map(EventDetail::from_event))
+    Ok(None)
 }
 
 fn mark_stream_rate_limit(

@@ -95,9 +95,9 @@ Agent rows (including ordinary custom agents) contain `id`, `kind: "agent"`,
 API-route rows contain `id`, `kind: "api_route"`, `month` (`YYYY-MM`, UTC),
 `spend_usd`, `budget_usd`, `unpriced_tasks`, `state` (`in_plan`, `overage`, or
 `exhausted`), `pace_penalty` (true when the monthly pacing adjustment is negative),
-and `resets_at` (the first day of the next UTC month at midnight, RFC 3339).
-API-route `state` describes billing even when the text row displays a rate-limit
-hold. Field names are stable for menu consumers. No key or keychain identifiers
+`resets_at` (the first day of the next UTC month at midnight, RFC 3339), and
+`hold` (the text view's hold detail when the route is held, otherwise `null`).
+API-route `state` describes billing; a hold is reported only in `hold`. Field names are stable for menu consumers. No key or keychain identifiers
 are included.
 
 `aid agent list`, `aid agent quota` and `aid advise` include these routes;

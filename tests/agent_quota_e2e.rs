@@ -53,7 +53,8 @@ fn quota_json_command_includes_configured_route_and_matches_text_rows() {
     assert_eq!(route["unpriced_tasks"], 0);
     assert_eq!(route["state"], "in_plan");
     assert_eq!(route["pace_penalty"], false);
-    assert_eq!(route.as_object().expect("route object").len(), 9);
+    assert_eq!(route["hold"], Value::Null);
+    assert_eq!(route.as_object().expect("route object").len(), 10);
     let month = chrono::NaiveDate::parse_from_str(
         &format!("{}-01", route["month"].as_str().expect("month")),
         "%Y-%m-%d",

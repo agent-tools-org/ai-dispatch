@@ -134,12 +134,16 @@ pub(super) fn show_quota_json() -> anyhow::Result<()> {
     for config in crate::agent::registry::list_custom_agents() {
         if let Some(route) = crate::config::api_route::find(&config.id)? {
             let budget = crate::routing::api_budget::for_route(&route, None)?;
+            let hold = match quota_row(AgentKind::Custom, Some(&route.id)) {
+                QuotaRow::Limited { detail } => Some(detail),
+                _ => None,
+            };
             rows.push(json!({
                 "id": route.id, "kind": "api_route", "month": budget.month,
                 "spend_usd": budget.spent, "budget_usd": budget.budget,
                 "unpriced_tasks": budget.unpriced, "state": budget.billing.state,
                 "pace_penalty": budget.pace < 0.0,
-                "resets_at": budget.resets_at.to_rfc3339(),
+                "resets_at": budget.resets_at.to_rfc3339(), "hold": hold,
             }));
         } else {
             rows.push(agent_row(&config.id, quota_row(AgentKind::Custom, Some(&config.id))));

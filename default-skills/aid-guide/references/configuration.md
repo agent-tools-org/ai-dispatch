@@ -89,6 +89,17 @@ A subscription or environment-key init source stops the run and holds the route
 instead of silently accepting different billing. Plain `claude` keeps its existing
 behavior. The `aid credential` pool is independent of dispatch.
 
+`aid agent quota --json` emits one JSON array with the same rows as the text view.
+Agent rows (including ordinary custom agents) contain `id`, `kind: "agent"`,
+`status` (the text view's uppercase label), and `detail` (the text detail).
+API-route rows contain `id`, `kind: "api_route"`, `month` (`YYYY-MM`, UTC),
+`spend_usd`, `budget_usd`, `unpriced_tasks`, `state` (`in_plan`, `overage`, or
+`exhausted`), `pace_penalty` (true when the monthly pacing adjustment is negative),
+`resets_at` (the first day of the next UTC month at midnight, RFC 3339), and
+`hold` (the text view's hold detail when the route is held, otherwise `null`).
+API-route `state` describes billing; a hold is reported only in `hold`. Field names are stable for menu consumers. No key or keychain identifiers
+are included.
+
 `aid agent list`, `aid agent quota` and `aid advise` include these routes;
 `aid usage` groups each route separately. See [routing](dispatch-routing.md#api-account-billing)
 for budget, pace and hold behavior.

@@ -9,6 +9,8 @@ use chrono::{DateTime, Datelike, Local, TimeZone, Utc};
 
 pub(crate) struct ApiBudget {
     pub billing: Billing,
+    pub month: String,
+    pub resets_at: DateTime<Utc>,
     pub spent: f64,
     pub budget: f64,
     pub pace: f64,
@@ -73,6 +75,8 @@ pub(crate) fn calculate(route: &ApiRoute, tasks: &[Task], now: DateTime<Utc>) ->
     };
     Ok(ApiBudget {
         billing: Billing { state, credits: None },
+        month: start.format("%Y-%m").to_string(),
+        resets_at: end,
         spent,
         budget: route.monthly_budget_usd,
         unpriced,

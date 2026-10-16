@@ -46,7 +46,7 @@ pub enum AgentAction {
         name: String,
         new_name: Option<String>,
     },
-    Quota,
+    Quota { json: bool },
 }
 
 pub fn run_agent_command(store: &Store, action: AgentAction) -> Result<()> {
@@ -71,7 +71,13 @@ pub fn run_agent_command(store: &Store, action: AgentAction) -> Result<()> {
         AgentAction::Add { name } => add_agent(&name),
         AgentAction::Remove { name } => remove_agent(&name),
         AgentAction::Fork { name, new_name } => fork_agent(&name, new_name.as_deref()),
-        AgentAction::Quota => show_quota(),
+        AgentAction::Quota { json } => {
+            if json {
+                crate::cmd::agent_display::show_quota_json()
+            } else {
+                show_quota()
+            }
+        }
     }
 }
 

@@ -53,7 +53,10 @@ pub enum AgentCommands {
         new_name: Option<String>,
     },
     /// Show rate-limit / quota status for all agents
-    Quota,
+    Quota {
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Args)]

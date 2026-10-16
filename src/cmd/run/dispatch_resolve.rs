@@ -97,9 +97,11 @@ pub(super) fn resolve_agent_setup(
     args: &mut RunArgs,
     project_id: Option<&str>,
 ) -> Result<AgentSetup> {
+    let cfg = config::load_dispatch_config()?;
+    let requested_api = config::api_route::find_for_dispatch(&args.agent_name)?;
     let (mut agent_kind, mut custom_agent_name) = if let Some(kind) = AgentKind::parse_str(&args.agent_name) {
         (kind, None)
-    } else if agent::registry::custom_agent_exists(&args.agent_name) {
+    } else if requested_api.is_some() || agent::registry::custom_agent_exists(&args.agent_name) {
         (AgentKind::Custom, Some(args.agent_name.clone()))
     } else {
         let custom = agent::registry::list_custom_agents();
@@ -141,8 +143,14 @@ pub(super) fn resolve_agent_setup(
         aid_info!("[aid] Auto-set --dir . (git repo detected)");
     }
     super::advice_route::validate_candidate_route(args, agent_kind)?;
+    let api_hold = crate::config::api_route::find_for_dispatch(resolved_agent_name)?
+        .map(|route| crate::routing::api_budget::for_route(&route, Some(store)))
+        .transpose()?.filter(|budget| budget.billing.state
+            == crate::routing::quota::billing::BillingState::Exhausted)
+        .map(|budget| budget.label());
     let mut substituted_from: Option<(String, String)> = None;
     if args.declared_urgency == Some(crate::types::TaskUrgency::Background)
+        && crate::config::api_route::find_for_dispatch(resolved_agent_name)?.is_none()
         && held::background_keeps_hold(agent_kind, custom_agent_name.as_deref())
     {
         aid_warn!(
@@ -150,7 +158,7 @@ pub(super) fn resolve_agent_setup(
             resolved_agent_name
         );
     } else if let Some(hold) =
-        rate_limit::dispatch_blocking_hold(&agent_kind, custom_agent_name.as_deref())
+        api_hold.or_else(|| rate_limit::dispatch_blocking_hold(&agent_kind, custom_agent_name.as_deref()))
     {
         let original = custom_agent_name
             .as_deref()
@@ -167,7 +175,6 @@ pub(super) fn resolve_agent_setup(
     }
     held::warn_if_degraded(agent_kind, custom_agent_name.as_deref());
     let custom_name = custom_agent_name.as_deref();
-    let cfg = config::load_config()?;
     let budget_status = usage::check_budget_status_for_project(store, &cfg, project_id)?;
     if budget_status.over_limit {
         if let Some(msg) = budget_status.message {
@@ -244,6 +251,7 @@ pub(super) fn resolve_agent_setup(
     } else {
         agent::get_agent(agent_kind)
     };
+    agent::api_route::reject_container(agent.as_ref(), args.container.is_some())?;
     let model_source = if args.model.is_some() || args.model_source == agent::model_validation::ModelSource::Advised { args.model_source } else { agent::model_validation::ModelSource::AidResolved };
     args.model_source = model_source;
     if let Some(ref model) = effective_model
@@ -267,3 +275,7 @@ pub(super) fn resolve_agent_setup(
     })
 }
 #[cfg(test)] #[path = "dispatch_resolve_tests.rs"] mod tests;
+
+#[cfg(test)]
+#[path = "dispatch_api_route_tests.rs"]
+mod api_route_tests;

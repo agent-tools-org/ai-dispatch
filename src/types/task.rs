@@ -6,7 +6,7 @@ use chrono::{DateTime, Local};
 use serde::Serialize;
 
 use super::{
-    provider_for_cli, AgentKind, AttributionSource, DeliveryAssessment, EventKind, Route, TaskId,
+    AgentKind, AttributionSource, DeliveryAssessment, EventKind, Route, TaskId,
     TaskOutcome, TaskStatus, VerifyStatus, WorkgroupId,
 };
 
@@ -127,14 +127,21 @@ impl Task {
     /// The structured route for this task. Model is the observation only — a
     /// request that was never confirmed stays `None` rather than being filled in.
     pub fn route(&self) -> Route {
-        Route::for_cli(self.agent).with_model(self.attributed_model())
+        let route = Route::for_cli(self.agent).with_model(self.attributed_model());
+        if let Some(name) = self.custom_agent_name.as_deref()
+            && let Ok(Some(_)) = crate::config::api_route::find(name)
+        {
+            return Route::for_cli(AgentKind::Claude).with_model(self.attributed_model())
+                .via(crate::types::ProviderId::new(format!("anthropic-api-{name}")));
+        }
+        route
     }
 
     /// Human route label: `cli/provider/model` with attribution on the model
     /// segment. An unknown model stays `unknown` — never a default or the CLI
     /// name. Provider comes from `provider_for_cli`, the single source.
     pub fn display_route(&self) -> String {
-        let (provider, _) = provider_for_cli(self.agent);
+        let provider = self.route().provider;
         let model = self
             .display_model()
             .unwrap_or_else(|| "unknown".to_string());

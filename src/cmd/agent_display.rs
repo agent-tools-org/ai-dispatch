@@ -83,9 +83,25 @@ pub(super) fn show_quota() -> anyhow::Result<()> {
         print_quota_row(kind.as_str(), quota_row(kind, None));
     }
     for config in registry::list_custom_agents() {
+        if print_api_quota(&config.id)? { continue; }
         print_quota_row(&config.id, quota_row(AgentKind::Custom, Some(config.id.as_str())));
     }
     Ok(())
+}
+
+fn api_quota_line(id: &str) -> anyhow::Result<Option<String>> {
+    let Some(route) = crate::config::api_route::find(id)? else { return Ok(None) };
+    let budget = crate::routing::api_budget::for_route(&route, None)?;
+    let state = budget.billing.label().replace('_', " ").to_uppercase();
+    Ok(Some(format!("{id:<20} {state:<10} {}", budget.detail())))
+}
+
+fn print_api_quota(id: &str) -> anyhow::Result<bool> {
+    let Some(line) = api_quota_line(id)? else { return Ok(false) };
+    let row = quota_row(AgentKind::Custom, Some(id));
+    if matches!(row, QuotaRow::Limited { .. }) { print_quota_row(id, row); }
+    else { println!("{line}"); }
+    Ok(true)
 }
 
 fn print_quota_row(name: &str, row: QuotaRow) {
@@ -138,8 +154,10 @@ pub(super) fn list_agents() -> anyhow::Result<()> {
             );
         }
     }
+    for route in crate::config::load_config()?.api_route { print_api_quota(&route.id)?; }
     println!("\nCustom agents:");
-    let custom = registry::list_custom_agents();
+    let custom: Vec<_> = registry::list_custom_agents().into_iter()
+        .filter(|config| crate::config::api_route::find(&config.id).ok().flatten().is_none()).collect();
     if custom.is_empty() {
         println!("  (none installed — use `aid agent add <name>` to create one)");
         return Ok(());
@@ -196,3 +214,7 @@ fn quota_status_label(kind: AgentKind, custom: Option<&str>, row: &QuotaRow) -> 
 #[cfg(test)]
 #[path = "agent_display_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "agent_api_route_tests.rs"]
+mod api_route_tests;

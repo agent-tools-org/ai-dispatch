@@ -90,11 +90,7 @@ pub(crate) fn update_task_completion(
     store: &Store,
     payload: TaskCompletionUpdate<'_>,
 ) -> Result<bool> {
-    let task_id = TaskId(payload.id.to_string());
-    let status = payload.status;
-    let changed = store.record_agent_completion(payload, None)?;
-    salvage_failed_transition(store, &task_id, status, changed);
-    Ok(changed)
+    record_completion(store, payload, None)
 }
 
 pub(crate) fn complete_task_atomic(
@@ -102,9 +98,17 @@ pub(crate) fn complete_task_atomic(
     payload: TaskCompletionUpdate<'_>,
     event: &TaskEvent,
 ) -> Result<bool> {
+    record_completion(store, payload, Some(event))
+}
+
+fn record_completion(
+    store: &Store,
+    payload: TaskCompletionUpdate<'_>,
+    event: Option<&TaskEvent>,
+) -> Result<bool> {
     let task_id = TaskId(payload.id.to_string());
     let status = payload.status;
-    let changed = store.record_agent_completion(payload, Some(event))?;
+    let changed = store.record_agent_completion(payload, event)?;
     salvage_failed_transition(store, &task_id, status, changed);
     Ok(changed)
 }

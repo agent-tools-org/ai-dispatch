@@ -264,4 +264,17 @@ impl Store {
         let rows = stmt.query_map(params![task_id], row_to_event)?;
         rows.map(|row| Ok(row?)).collect()
     }
+
+    /// Task IDs with an `api_route_launch` event naming this route.
+    pub fn route_launch_task_ids(&self, route: &str) -> Result<Vec<String>> {
+        let conn = self.db();
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT task_id FROM events
+             WHERE metadata LIKE '%api_route_launch%'
+               AND json_extract(CASE WHEN json_valid(metadata) THEN metadata END,
+                                '$.api_route_launch') = ?1",
+        )?;
+        let rows = stmt.query_map(params![route], |row| row.get(0))?;
+        rows.map(|row| Ok(row?)).collect()
+    }
 }

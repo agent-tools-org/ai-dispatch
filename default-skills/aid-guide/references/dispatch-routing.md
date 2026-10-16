@@ -221,3 +221,54 @@ A task dispatched in overage records one setup event such as
 `aid agent quota` displays `OVERAGE` with balance or `EXHAUSTED` in place of `OK`.
 Existing refusal markers still hold their routes until their recovery conditions
 are met.
+
+## API account billing
+
+Configured `[[api_route]]` accounts run Claude Code with separate route IDs,
+provider identities, spend totals, scores and refusal markers. They do not draw
+on the Claude subscription pool or inherit its quota evidence. Configure them
+in [configuration](configuration.md#claude-api-account-routes).
+
+Month-to-date spend sums completed tasks on this route, selected in SQL by
+completion time in the UTC calendar month. Anthropic promotional credits expire
+at 00:00 UTC on the first day of the next month. Reported USD costs take
+precedence; a task with no reported cost uses a token estimate priced from the
+feed using its observed model (or requested model when unobserved). Claude's
+numeric version spelling is normalized, for example `claude-opus-5-5` resolves
+to `anthropic/claude-opus-5.5`. Unknown prices or missing token evidence add
+`(N tasks unpriced)` beside the known total; they are never silently priced at
+zero. Billing state and pace use the known subtotal when tasks are unpriced.
+This measures aid tasks only; external account activity is not included.
+
+Below budget the state is `in_plan`. At or above it, `over_budget = "stop"` makes
+the route `exhausted` and prevents launch; `"bill"` makes it `overage`. Budget
+checking happens once at launch. Running-task estimates, remaining-budget task
+caps and budget-driven kills are not used: concurrent or long tasks can finish
+above the budget, and crossing it does not fail a successful run. Explicit
+`max_task_cost` settings retain their existing behavior. Overage still excludes
+free/cheap advice profiles and applies the standard-profile −4.0 `billing` penalty
+(subject to the premium/critical-rigor exception described above). `bill` permits
+real paid overage; it is not a warning-only mode.
+
+A separate `pace` term subtracts 2.0 when spend exceeds
+`monthly_budget_usd × elapsed_fraction_of_month × 1.25`. With strictly less
+than seven days remaining, it instead adds 1.0 when spend is below 80% of
+`monthly_budget_usd × elapsed_fraction_of_month`, favoring use of expiring
+credits. Otherwise it is zero. Pace never excludes a candidate. Route history
+and team overrides use the route ID. Quota rows show, for example,
+`claude-api-ming  IN PLAN  $37.20 / $200 this month`; advice lines show the same
+monthly evidence and their own `pace` term.
+
+The Claude `system/init` stream event must report
+`apiKeySource = "apiKeyHelper"`. A missing field or any other value, including
+an environment-key source, stops the process and fails the task with `route <id> is not billed to its API key`.
+Before the next launch, any terminal task whose last route launch lacks a later
+verified init receives the same needs-human credential hold, including stopped
+tasks and dead workers. Its completion status is preserved. Running tasks are not
+swept. Each unverified launch is marked once, so clearing its hold allows launch
+again. Fix the key or CLI billing configuration,
+then use `aid config clear-limit <id>`. Structured provider error types and error
+messages identifying a credit-balance or billing refusal hold only that route
+until midnight on the first day of the next UTC month. Result prose and tool
+inputs never establish a monthly credit hold. The adapter retains the validated
+route selected at launch; later config edits do not reclassify its stream.

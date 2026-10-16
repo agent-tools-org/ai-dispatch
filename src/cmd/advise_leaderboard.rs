@@ -57,6 +57,12 @@ fn candidate_line(index: usize, candidate: &crate::agent::selection::AdviceCandi
         .map(|_| format!("  {:+.1} billing", item.billing)).unwrap_or_default();
     let billing_state = candidate.billing.as_ref()
         .map(|billing| format!("  {}", billing.label())).unwrap_or_default();
+    let billing_state = crate::config::api_route::find(&candidate.agent).ok().flatten()
+        .and_then(|route| crate::routing::api_budget::for_route(&route, None).ok())
+        .map(|budget| format!("  {}", budget.label())).unwrap_or(billing_state);
+    let billing_term = if crate::config::api_route::find(&candidate.agent).ok().flatten().is_some() {
+        format!("{billing_term}  {:+.1} pace", item.pace)
+    } else { billing_term };
     format!(
         concat!(
             "  {}. {:<10} {:>5.1}  base {:.1}  {:+.1} model  {:+.1} budget  {:+.1} limit",

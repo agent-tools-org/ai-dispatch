@@ -7,8 +7,8 @@ use std::cmp::Ordering;
 use crate::config::UsageBudget;
 use crate::cost;
 use crate::support::paths;
-use crate::types::{AgentKind, Task};
-use crate::cost::usage::{filter_budget_tasks, AgentAnalytics, AgentUsageRow, BudgetUsageRow, TaskSummary, UsageSnapshot};
+use crate::types::Task;
+use crate::cost::usage::{filter_budget_tasks, AgentAnalytics, BudgetUsageRow, TaskSummary, UsageSnapshot};
 
 pub fn render_usage(snapshot: &UsageSnapshot) -> String {
     let mut out = String::new();
@@ -134,74 +134,8 @@ pub fn render_agent_analytics(analytics: &AgentAnalytics) -> String {
     out
 }
 
-pub(crate) fn collect_agent_rows(tasks: &[Task]) -> Vec<AgentUsageRow> {
-    let mut rows = Vec::new();
-    for agent in [
-        AgentKind::Codex,
-        AgentKind::Gemini,
-        AgentKind::Antigravity,
-        AgentKind::Qwen,
-        AgentKind::Copilot,
-        AgentKind::OpenCode,
-        AgentKind::CommandCode,
-        AgentKind::Kilo,
-        AgentKind::MiMoCode,
-        AgentKind::Cursor,
-        AgentKind::Droid,
-        AgentKind::Grok,
-    ] {
-        let agent_tasks: Vec<&Task> = tasks.iter().filter(|task| task.agent == agent).collect();
-        if agent_tasks.is_empty() {
-            continue;
-        }
-
-        let done_count = agent_tasks
-            .iter()
-            .filter(|task| task.outcome().is_success())
-            .count();
-        let retry_count = agent_tasks
-            .iter()
-            .filter(|task| task.parent_task_id.is_some())
-            .count();
-        let completed_durations: Vec<i64> = agent_tasks
-            .iter()
-            .filter(|task| task.status.is_terminal())
-            .filter_map(|task| task.duration_ms)
-            .collect();
-        let measured_count = agent_tasks
-            .iter()
-            .filter(|task| task.outcome() != crate::types::TaskOutcome::Stopped)
-            .count();
-        let success_rate = if measured_count == 0 {
-            0.0
-        } else {
-            (done_count as f64 * 100.0) / measured_count as f64
-        };
-        let avg_duration_secs = if completed_durations.is_empty() {
-            0.0
-        } else {
-            completed_durations.iter().sum::<i64>() as f64
-                / completed_durations.len() as f64
-                / 1000.0
-        };
-        let tokens = agent_tasks.iter().filter_map(|task| task.tokens).sum();
-        let cost_usd = agent_tasks.iter().filter_map(|task| task.cost_usd).sum();
-        let unknown_cost_tasks = cost::unknown_cost_tasks(agent_tasks.iter().copied());
-        let last_task_at = agent_tasks.iter().map(|task| task.created_at).max();
-        rows.push(AgentUsageRow {
-            name: agent.as_str(),
-            tasks: agent_tasks.len(),
-            tokens,
-            cost_usd,
-            unknown_cost_tasks,
-            success_rate,
-            avg_duration_secs,
-            retry_count,
-            last_task_at,
-        });
-    }
-    rows
-}
+mod agent_rows;
+pub(crate) use agent_rows::collect_agent_rows;
 
 pub(crate) fn collect_budget_rows(tasks: &[Task], budgets: &[UsageBudget]) -> Vec<BudgetUsageRow> {
     budgets
@@ -319,3 +253,7 @@ fn format_ratio_f64(current: f64, unknown: usize, limit: Option<f64>) -> String 
         .map(|limit| format!("{spent}/{}", cost::format_cost(Some(limit))))
         .unwrap_or(spent)
 }
+
+#[cfg(test)]
+#[path = "api_route_tests.rs"]
+mod api_route_tests;

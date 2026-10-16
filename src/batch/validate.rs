@@ -43,6 +43,10 @@ pub(super) fn validate_fallback_agents(tasks: &[BatchTask]) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+#[path = "api_route_tests.rs"]
+mod api_route_tests;
+
 pub(crate) fn is_valid_agent(agent: &str) -> bool {
     crate::types::AgentKind::parse_str(agent).is_some()
         || crate::agent::registry::custom_agent_exists(agent)

@@ -30,6 +30,69 @@ security add-generic-password -a "$USER" -s typesafe-api-key -U -w
 
 TypeSafe keys are keychain-only on macOS; other platforms skip this step.
 
+## Claude API account routes
+
+Define one `[[api_route]]` per API account in `~/.aid/config.toml`:
+
+```toml
+[[api_route]]
+id = "claude-api-ming"
+agent = "claude"
+keychain_service = "aid-anthropic-api"
+keychain_account = "account-ming"
+monthly_budget_usd = 200
+over_budget = "stop"
+
+[[api_route]]
+id = "claude-api-meet"
+agent = "claude"
+keychain_service = "aid-anthropic-api"
+keychain_account = "account-meet"
+monthly_budget_usd = 200
+```
+
+Only `agent = "claude"` is supported. IDs must be unique, must not name a built-in,
+and use letters, digits or hyphens. Budgets must be positive finite USD amounts.
+`keychain_account` defaults to the route ID; `over_budget` defaults to `"stop"`.
+Both `keychain_service` and the effective `keychain_account` must be non-empty and
+contain only `[A-Za-z0-9._-]+`. Shell syntax, whitespace and newlines are rejected
+when loading configuration.
+Use `"bill"` to allow overage after the budget. Store the API keys as generic
+passwords in the macOS login keychain under the specified service and account;
+never put key values in TOML, prompts or dispatch environment arguments.
+
+Use the route ID wherever an agent name is accepted, including `aid run`, batch
+`agent`, fallback lists and `--cascade`. The route runs the existing Claude Code
+adapter. The route passes `--settings` JSON with `apiKeyHelper`, for example `/usr/bin/security find-generic-password -s
+aid-anthropic-api -a account-ming -w`. Claude Code runs that helper and retrieves
+the password; aid never reads it or puts it in the child environment, process
+arguments or task logs. Any process running as the same user, including the
+agent's shell, can still invoke the same keychain command and read the password.
+The helper does not isolate the keychain from same-user processes.
+
+Route children scrub `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`,
+`ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX` and `CLAUDE_CODE_USE_FOUNDRY`,
+including inherited and explicitly forwarded values, so the helper key is used
+with Anthropic's API. Routes also pass `--setting-sources ""` to disable
+user, project and local settings sources. Only their `permissions` objects are
+carried forward into the aid-provided JSON (permission lists accumulate; scalar
+values use the last source). Their `env`, hooks and helper overrides are not
+loaded. Because administrator-managed settings outrank the inline helper, API
+routes refuse launch when `/Library/Application Support/ClaudeCode/managed-settings.json`,
+the adjacent `managed-settings.d` directory, or a `com.anthropic.claudecode.plist`
+in `/Library/Managed Preferences` (including user subdirectories) exists. The
+error names the source path without reading its contents. Plain `claude`
+settings are unchanged. API routes reject `--container` at dispatch because their
+helper requires the host keychain.
+An unreadable item is handled by Claude Code; aid does not preflight passwords.
+A subscription or environment-key init source stops the run and holds the route
+instead of silently accepting different billing. Plain `claude` keeps its existing
+behavior. The `aid credential` pool is independent of dispatch.
+
+`aid agent list`, `aid agent quota` and `aid advise` include these routes;
+`aid usage` groups each route separately. See [routing](dispatch-routing.md#api-account-billing)
+for budget, pace and hold behavior.
+
 ## Project configuration
 
 Store project defaults in `.aid/project.toml`. Prefer `aid project init` over

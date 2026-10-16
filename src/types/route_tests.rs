@@ -1,3 +1,5 @@
+// Execution route identity and metering regression tests.
+// Covers provider pools and named API account isolation.
 use super::*;
 
 #[test]
@@ -79,4 +81,14 @@ fn a_subscription_shares_across_models() {
     let a = Route::for_cli(AgentKind::Cursor).with_model(Some("composer-2"));
     let b = Route::for_cli(AgentKind::Cursor).with_model(Some("claude-opus-5-thinking-high"));
     assert!(a.shares_pool_with(&b));
+}
+
+#[test]
+fn api_account_routes_have_independent_spend_pools() {
+    let ming = Route::for_cli(AgentKind::Claude).via(ProviderId::new("anthropic-api-claude-api-ming"));
+    let meet = Route::for_cli(AgentKind::Claude).via(ProviderId::new("anthropic-api-claude-api-meet"));
+    assert_eq!(ming.metering(), MeteringShape::SpendBudget);
+    assert!(ming.shares_pool_with(&ming));
+    assert!(!ming.shares_pool_with(&meet));
+    assert!(!ming.shares_pool_with(&Route::for_cli(AgentKind::Claude)));
 }

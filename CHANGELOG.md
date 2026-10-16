@@ -1,3 +1,11 @@
+## v11.3.0 (2026-10-16)
+- Claude API account routes: `[[api_route]]` entries run Claude Code against one Anthropic API account whose key stays in the macOS keychain (inline apiKeyHelper, provider env scrubbed, disk setting sources disabled, launch refused when Claude Code managed settings exist)
+- Route spend is the month-to-date cost of completed route tasks in the UTC month, checked at launch against `monthly_budget_usd` with `over_budget = "stop"` or `"bill"`; credit-balance refusals hold the route until the next UTC month
+- A route task that never reports `apiKeySource = "apiKeyHelper"` holds its route before the next launch, however the task ended; an observed mismatch kills the task and holds the route; clear with `aid config clear-limit <id>`
+- `aid agent quota --json` prints agent rows and API-route rows (month, spend, budget, unpriced tasks, billing state, pace penalty, reset time, hold) with stable field names
+- Stream result lines whose text starts with `[MILESTONE]` now keep their cost and token usage; a milestone line is recorded once unless it also completes the task
+
+
 ## v11.2.0 (2026-10-16)
 - Codex mid-run steering: Codex tasks run on `codex app-server`, so `aid steer` reaches the running turn and records a receipt only after Codex accepts it; startup or precondition failures fall back to `codex exec`
 - App-server uses one stable `$AID_HOME/codex-home` mirror of the real Codex home (symlinks only, user `config.toml` excluded), so `aid retry` resumes the same Codex thread

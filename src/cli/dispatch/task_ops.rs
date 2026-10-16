@@ -102,11 +102,18 @@ pub(super) fn reply(
         timeout_secs,
     )? {
         cmd::reply::ReplyOutcome::Queued { id } => println!("Queued reply {id} for {task_id}"),
+        cmd::reply::ReplyOutcome::Accepted { turn_id } => {
+            println!("accepted by codex (turn {turn_id})");
+        }
         cmd::reply::ReplyOutcome::Written => {
             println!("Reply for {task_id} written to PTY; consumption unconfirmed");
         }
         cmd::reply::ReplyOutcome::TimedOut => {
-            println!("Reply for {task_id}: PTY write unconfirmed after timeout; consumption unconfirmed");
+            if crate::runtime::codex_app_server::active(&task_id) {
+                println!("Reply for {task_id}: Codex response unconfirmed after timeout");
+            } else {
+                println!("Reply for {task_id}: PTY write unconfirmed after timeout; consumption unconfirmed");
+            }
         }
     }
     Ok(())

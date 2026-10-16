@@ -16,7 +16,6 @@ const UNDOCUMENTED_FLAGS: &[&str] = &[
     "--agents",
     "--as",
     "--as-of",
-    "--async",
     "--auto",
     "--base",
     "--brief",

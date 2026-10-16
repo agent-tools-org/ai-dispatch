@@ -1,3 +1,11 @@
+## v11.2.0 (2026-10-16)
+- Codex mid-run steering: Codex tasks run on `codex app-server`, so `aid steer` reaches the running turn and records a receipt only after Codex accepts it; startup or precondition failures fall back to `codex exec`
+- App-server uses one stable `$AID_HOME/codex-home` mirror of the real Codex home (symlinks only, user `config.toml` excluded), so `aid retry` resumes the same Codex thread
+- Plan-aware routing: subscription overage billing is distinguished from in-plan usage when choosing routes
+- Modules moved into layer directories (#152); README rewritten; Factory CLI settings no longer tracked
+- Test executables are created without holding a write descriptor (no ETXTBSY); the cargo shim is sourced from its runtime path; PTY queued-reply test waits for child exit
+
+
 ## v11.1.0 (2026-10-14)
 - Input truthfulness: `aid steer`, `reply`, `respond`, `unstick`, auto-nudge, group broadcast and wrap-up now report what aid actually did (queued, file published, or written to the PTY with consumption unconfirmed) instead of claiming the agent received or acknowledged the message
 - Codex tasks refuse interactive input: `codex exec` never reads its terminal, so steering a Codex task fails with a pointer to `aid retry -f`

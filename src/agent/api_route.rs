@@ -49,7 +49,11 @@ impl Agent for ApiRouteAgent {
     }
 }
 
-pub(crate) fn validate_launch(agent: &dyn Agent, store: &crate::store::Store, container: bool) -> Result<()> {
+pub(crate) fn validate_launch(
+    agent: &dyn Agent,
+    store: &crate::store::Store,
+    container: bool,
+) -> Result<()> {
     let Some(route) = agent.api_route() else {
         return Ok(());
     };
@@ -58,6 +62,7 @@ pub(crate) fn validate_launch(agent: &dyn Agent, store: &crate::store::Store, co
     if budget.billing.state == crate::routing::quota::billing::BillingState::Exhausted {
         anyhow::bail!("route {}: {}", route.id, budget.label());
     }
+    sweep_unverified_tasks(store, &route.id)?;
     if let Some(hold) =
         crate::routing::rate_limit::dispatch_blocking_hold(&AgentKind::Custom, Some(&route.id))
     {
@@ -147,37 +152,45 @@ pub(crate) fn record_stream_failure(
     Ok(true)
 }
 
-pub(crate) fn completion_failure(store: &crate::store::Store, id: &str) -> Result<Option<String>> {
-    let events = store.get_events(id)?;
-    let Some(launch) = events.iter().rposition(|event| {
-        event
+fn sweep_unverified_tasks(store: &crate::store::Store, route: &str) -> Result<()> {
+    for task in store.list_tasks(TaskFilter::All)? {
+        if !task.status.is_terminal() {
+            continue;
+        }
+        let events = store.get_events(task.id.as_str())?;
+        let Some(launch) = events.iter().rposition(|event| {
+            event
+                .metadata
+                .as_ref()
+                .is_some_and(|value| value.get("api_route_launch").is_some())
+        }) else {
+            continue;
+        };
+        if events[launch]
             .metadata
             .as_ref()
-            .and_then(|value| value.get("api_route_launch"))
-            .is_some()
-    }) else {
-        return Ok(None);
-    };
-    if events[launch + 1..].iter().any(|event| {
-        event
-            .metadata
-            .as_ref()
-            .and_then(|value| value.get("api_route_init_verified"))
-            == Some(&serde_json::Value::Bool(true))
-    }) {
-        return Ok(None);
+            .and_then(|value| value["api_route_launch"].as_str())
+            != Some(route)
+            || events[launch + 1..].iter().any(|event| {
+                event.metadata.as_ref().is_some_and(|value| {
+                    value["api_route_init_verified"] == true
+                        || value["api_route_unverified_held"] == true
+                })
+            })
+        {
+            continue;
+        }
+        let reason = format!("route {route} is not billed to its API key");
+        api_budget::hold(route, &reason, false)?;
+        store.insert_event(&TaskEvent {
+            task_id: task.id,
+            timestamp: chrono::Local::now(),
+            event_kind: EventKind::Error,
+            detail: reason,
+            metadata: Some(serde_json::json!({"api_route_unverified_held": true})),
+        })?;
     }
-    let Some(route) = events[launch]
-        .metadata
-        .as_ref()
-        .and_then(|value| value.get("api_route_launch"))
-        .and_then(serde_json::Value::as_str)
-    else {
-        return Ok(None);
-    };
-    let reason = format!("route {route} is not billed to its API key");
-    api_budget::hold(route, &reason, false)?;
-    Ok(Some(reason))
+    Ok(())
 }
 
 #[path = "api_route_refusal.rs"]

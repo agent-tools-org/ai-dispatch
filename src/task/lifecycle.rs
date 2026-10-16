@@ -103,18 +103,12 @@ pub(crate) fn complete_task_atomic(
 
 fn record_completion(
     store: &Store,
-    mut payload: TaskCompletionUpdate<'_>,
+    payload: TaskCompletionUpdate<'_>,
     event: Option<&TaskEvent>,
 ) -> Result<bool> {
     let task_id = TaskId(payload.id.to_string());
-    let failure = crate::agent::api_route::completion_failure(store, payload.id)?;
-    let failure_event = failure.map(|detail| {
-        payload.status = TaskStatus::Failed;
-        TaskEvent { task_id: task_id.clone(), timestamp: chrono::Local::now(),
-            event_kind: crate::types::EventKind::Error, detail, metadata: None }
-    });
     let status = payload.status;
-    let changed = store.record_agent_completion(payload, failure_event.as_ref().or(event))?;
+    let changed = store.record_agent_completion(payload, event)?;
     salvage_failed_transition(store, &task_id, status, changed);
     Ok(changed)
 }

@@ -262,8 +262,11 @@ monthly evidence and their own `pace` term.
 The Claude `system/init` stream event must report
 `apiKeySource = "apiKeyHelper"`. A missing field or any other value, including
 an environment-key source, stops the process and fails the task with `route <id> is not billed to its API key`.
-A route that finishes without a verified init also fails and receives the same
-credential hold. That route receives a needs-human hold. Fix the key or CLI billing configuration,
+Before the next launch, any terminal task whose last route launch lacks a later
+verified init receives the same needs-human credential hold, including stopped
+tasks and dead workers. Its completion status is preserved. Running tasks are not
+swept. Each unverified launch is marked once, so clearing its hold allows launch
+again. Fix the key or CLI billing configuration,
 then use `aid config clear-limit <id>`. Structured provider error types and error
 messages identifying a credit-balance or billing refusal hold only that route
 until midnight on the first day of the next UTC month. Result prose and tool

@@ -32,7 +32,8 @@ fn fixture() -> (tempfile::TempDir, AidHomeGuard, Arc<Store>) {
             false,
         )
         .unwrap();
-    crate::task::lifecycle::mark_running(&store, &crate::types::TaskId("t-api-launch".into())).unwrap();
+    crate::task::lifecycle::mark_running(&store, &crate::types::TaskId("t-api-launch".into()))
+        .unwrap();
     (home, guard, store)
 }
 
@@ -54,7 +55,10 @@ fn args(home: &std::path::Path) -> RunArgs {
             ("PATH".into(), home.join("bin").display().to_string()),
             ("HOME".into(), home.display().to_string()),
             ("ANTHROPIC_API_KEY".into(), "synthetic-operator-key".into()),
-            ("ANTHROPIC_BASE_URL".into(), "https://example.invalid".into()),
+            (
+                "ANTHROPIC_BASE_URL".into(),
+                "https://example.invalid".into(),
+            ),
             ("ANTHROPIC_AUTH_TOKEN".into(), "synthetic".into()),
             ("CLAUDE_CODE_USE_BEDROCK".into(), "1".into()),
             ("CLAUDE_CODE_USE_VERTEX".into(), "1".into()),
@@ -76,8 +80,11 @@ fn prepared(
 ) {
     let args = args(home);
     let agent = agent::registry::resolve_custom_agent(&args.agent_name).unwrap();
-    let isolated =
-        agent::home_isolation::IsolatedHomeGuard::create_from_home(Some(home), Some("t-api-launch")).unwrap();
+    let isolated = agent::home_isolation::IsolatedHomeGuard::create_from_home(
+        Some(home),
+        Some("t-api-launch"),
+    )
+    .unwrap();
     let (command, _) = prepare_launch(store, spec, &args, agent.as_ref(), &isolated).unwrap();
     assert!(command.get_args().any(|arg| arg == "--settings"));
     let argv: Vec<_> = command.get_args().collect();
@@ -154,7 +161,7 @@ printf '%s\n' '{"type":"system","subtype":"init","apiKeySource":"apiKeyHelper"}'
 printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0}'
 "#;
 
-async fn route_without_init_fails_and_holds(interactive: bool) {
+async fn route_without_init_holds_next_launch(interactive: bool) {
     let _permit = crate::support::test_subprocess::acquire();
     let (home, _guard, store) = fixture();
     crate::support::test_env::write_executable(
@@ -171,20 +178,20 @@ async fn route_without_init_fails_and_holds(interactive: bool) {
         .await
         .unwrap();
     let task = store.get_task("t-api-launch").unwrap().unwrap();
-    assert_eq!(task.status, crate::types::TaskStatus::Failed);
-    let reason = "route claude-api-ming is not billed to its API key";
-    assert!(store.latest_error("t-api-launch").unwrap().contains(reason));
-    let hold = std::fs::read_to_string(paths::aid_dir().join("rate-limit-claude-api-ming")).unwrap();
-    assert!(hold.contains("hold: manual"));
-    assert!(hold.contains(reason));
+    assert_eq!(task.status, crate::types::TaskStatus::Done);
+    assert_next_launch_held_then_cleared(home.path(), &store);
 }
 
 #[tokio::test]
-async fn piped_route_without_init_fails_and_holds() {
-    route_without_init_fails_and_holds(false).await;
+async fn piped_route_without_init_holds_next_launch() {
+    route_without_init_holds_next_launch(false).await;
 }
 
 #[tokio::test]
-async fn pty_route_without_init_fails_and_holds() {
-    route_without_init_fails_and_holds(true).await;
+async fn pty_route_without_init_holds_next_launch() {
+    route_without_init_holds_next_launch(true).await;
 }
+
+#[path = "launch_api_route_hold_tests.rs"]
+mod hold_tests;
+use hold_tests::assert_next_launch_held_then_cleared;

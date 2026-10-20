@@ -90,7 +90,9 @@ aid unstick <task-id>
   A write alone is sent, unconfirmed; uncertain deliveries are never automatically resent.
   `steer` waits up to 30 seconds; `reply --async` confirms only queuing.
   Acceptance confirms receipt, not interruption of a tool or completion of the request.
-  stdin closes after submitted work settles; remaining stdout results are still drained.
+  A replayed queued message requires a subsequent result before stdin closes; remaining
+  stdout results are still drained. A closed input pipe leaves delivery unconfirmed;
+  startup refusals still settle from the child exit and output.
   Older Claude workers without the input transport refuse input before queuing.
 - Codex `respond` is refused; app-server does not expose approval input through
   that command. Exec fallback tasks refuse `steer`, `reply`, and `respond`

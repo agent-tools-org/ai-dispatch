@@ -3,6 +3,7 @@
 # Exercises multiple results, stdin EOF, and unacknowledged delivery.
 import json
 import pathlib
+import select
 import sys
 
 mode, fixture, output = sys.argv[1:4]
@@ -27,6 +28,7 @@ if mode == 'ack':
     emit(rows[2])
 if mode == 'eof':
     sys.exit(0)
+assert not select.select([sys.stdin], [], [], 0.3)[0], 'stdin closed before final result'
 emit(rows[3])
 assert sys.stdin.read() == ''
 pathlib.Path(output + '.closed').touch()

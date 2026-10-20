@@ -152,6 +152,9 @@ impl Session {
             result: false,
         };
         session.send(None, prompt, store, task).await?;
+        if session.stdin.is_none() {
+            return Ok(None);
+        }
         let pid = std::process::id();
         std::fs::create_dir_all(crate::support::paths::task_dir(task.as_str()))?;
         std::fs::write(
@@ -190,11 +193,19 @@ impl Session {
             .stdin
             .as_mut()
             .ok_or_else(|| anyhow!("Claude stdin closed"))?;
-        tokio::time::timeout(Duration::from_secs(5), async {
+        let written = tokio::time::timeout(Duration::from_secs(5), async {
             stdin.write_all(envelope(&uuid, text).as_bytes()).await?;
             stdin.flush().await
         })
-        .await??;
+        .await?;
+        if let Err(error) = written {
+            if error.kind() != std::io::ErrorKind::BrokenPipe {
+                return Err(error.into());
+            }
+            self.stdin.take();
+            let _ = std::fs::remove_file(marker(&self.task));
+            return Ok(());
+        }
         if let Some(id) = id {
             record(store, task, id, &uuid, false, true)?;
         }
@@ -217,6 +228,7 @@ impl Session {
                 record(store, task, id, uuid, true, true)?;
             }
             pending.acknowledged = true;
+            self.result = false;
         }
         if value["type"] == "result" {
             self.result = true;
@@ -246,6 +258,9 @@ impl Session {
             }
             self.send(Some(message.id), &message.content, store, task)
                 .await?;
+            if self.stdin.is_none() {
+                break;
+            }
         }
         if self.result
             && self.pending.values().all(|pending| {
@@ -268,3 +283,7 @@ impl Drop for Session {
 #[cfg(test)]
 #[path = "claude_input_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "claude_input_exit_tests.rs"]
+mod exit_tests;

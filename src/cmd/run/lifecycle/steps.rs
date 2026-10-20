@@ -253,20 +253,8 @@ pub(super) fn handle_failed_postprocess(
     _repo_path: Option<&String>,
     runtime_hooks: &[hooks::Hook],
 ) -> Option<String> {
-    let quota_error_message = read_quota_error_message(task_id, &agent_kind);
+    let quota_error_message = super::super::run_post::record_failed_quota(task, agent_kind);
     crate::routing::auth_marker::record_from_run(task_id.as_str(), agent_kind, store);
-    if let Some(message) = quota_error_message.as_deref() {
-        let model = task
-            .requested_model
-            .as_deref()
-            .or(task.observed_model.as_deref());
-        rate_limit::mark_rate_limited_for_model(
-            &agent_kind,
-            task.custom_agent_name.as_deref(),
-            model,
-            message,
-        );
-    }
     run_fail_hook(task_id, task, agent_display_name, effective_dir, runtime_hooks);
     quota_error_message
 }

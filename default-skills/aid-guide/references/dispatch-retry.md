@@ -48,7 +48,9 @@ field; unrelated timestamps and window lengths are ignored. Holds longer than
 24 hours and holds requiring a person require stderr, a typed error envelope,
 or a provider JSON field. CLI-written diagnostic logs use the stderr evidence
 class. Unsplit PTY/output text records at most a transient
-excerpt and cannot turn an exit-zero run into a failure. Grok reads only its
+excerpt and cannot turn an exit-zero run into a failure. An already-failed run
+can use its own agent's quota signature in that excerpt to launch a quota
+continuation; the excerpt's hold stays transient. Grok reads only its
 `type:error` message; generic status tokens give a transient hold. Codex
 app-server uses typed error notifications and rate-limit snapshots instead of
 matching raw lines when typed evidence is available. Typed refusal messages

@@ -1,6 +1,51 @@
 // Extracted quota tests from tests.rs.
 // Deps: parent test fixtures and module imports.
 use super::*;
+use crate::routing::rate_limit;
+
+#[test]
+fn failed_pty_quota_excerpt_allows_continuation_without_promoting_its_hold() {
+    let home = TempDir::new().expect("home");
+    let _guard = paths::AidHomeGuard::set(home.path());
+    paths::ensure_dirs().expect("directories");
+    let mut task = make_failed_task("t-oz-pty-quota");
+    task.agent = AgentKind::Oz;
+    let message = "Error: Quota limit reached.";
+    std::fs::write(paths::log_path(task.id.as_str()), message).expect("PTY log");
+    assert_eq!(read_quota_error_message(&task.id, &task.agent), None);
+    assert_eq!(
+        run_post::record_failed_quota(&task, task.agent).as_deref(),
+        Some(message)
+    );
+    let marker = std::fs::read_to_string(rate_limit::marker_path(&task.agent, None))
+        .expect("transient marker");
+    assert_eq!(
+        crate::routing::availability::stored_hold(&marker, &task.agent),
+        crate::routing::availability::StoredHold::Transient
+    );
+    task.status = TaskStatus::Done;
+    assert_eq!(run_post::record_failed_quota(&task, task.agent), None);
+    task.status = TaskStatus::Failed;
+    for text in [
+        "You have exceeded your monthly quota",
+        "429 Too Many Requests",
+        r#"{"type":"agent","text":"Error: Quota limit reached."}"#,
+    ] {
+        std::fs::write(paths::log_path(task.id.as_str()), text).expect("log");
+        assert_eq!(run_post::record_failed_quota(&task, task.agent), None);
+    }
+    std::fs::write(paths::stderr_path(task.id.as_str()), message).expect("stderr");
+    assert_eq!(
+        run_post::record_failed_quota(&task, task.agent).as_deref(),
+        Some(message)
+    );
+    let marker = std::fs::read_to_string(rate_limit::marker_path(&task.agent, None))
+        .expect("attributed marker");
+    assert!(matches!(
+        crate::routing::availability::stored_hold(&marker, &task.agent),
+        crate::routing::availability::StoredHold::Until(_)
+    ));
+}
 
 #[test]
 fn empty_diff_detection_respects_worktree_state() {

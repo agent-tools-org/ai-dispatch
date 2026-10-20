@@ -149,6 +149,31 @@ pub(crate) fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<Str
     }
 }
 
+pub(super) fn record_failed_quota(task: &Task, agent: AgentKind) -> Option<String> {
+    if task.status != TaskStatus::Failed {
+        return None;
+    }
+    let model = task.requested_model.as_deref().or(task.observed_model.as_deref());
+    if let Some(message) = read_quota_error_message(&task.id, &agent) {
+        rate_limit::mark_rate_limited_for_model(
+            &agent, task.custom_agent_name.as_deref(), model, &message,
+        );
+        return Some(message);
+    }
+    if agent == AgentKind::Grok {
+        return None;
+    }
+    let log = crate::routing::quota::channel::read_run_stream(task.id.as_str())?;
+    let kept = crate::routing::quota::channel::provider_attributable(
+        &log, agent, crate::routing::quota::channel::Channel::CliStream,
+    );
+    let message = crate::agent::stream_completion::quota_line(&kept.unsplit, agent)?;
+    rate_limit::mark_untrusted_for_model(
+        &agent, task.custom_agent_name.as_deref(), model, &message,
+    );
+    Some(message)
+}
+
 fn audit_current_dir(effective_dir: Option<&str>, repo_path: Option<&str>) -> Option<PathBuf> {
     effective_dir
         .or(repo_path)

@@ -90,7 +90,10 @@ async fn background_urgency_does_not_invoke_needs_human_child() {
     std::fs::write(
         agents_dir.join("spy.toml"),
         format!(
-            "[agent]\nid = \"spy\"\ndisplay_name = \"Spy\"\ncommand = \"/bin/sh\"\nfixed_args = [\"{}\"]\n",
+            concat!(
+                "[agent]\nid = \"spy\"\ndisplay_name = \"Spy\"\n",
+                "rate_limit_kind = \"oz\"\ncommand = \"/bin/sh\"\nfixed_args = [\"{}\"]\n",
+            ),
             script.display()
         ),
     )

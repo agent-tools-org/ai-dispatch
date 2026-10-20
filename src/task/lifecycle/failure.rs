@@ -35,6 +35,9 @@ pub(super) fn record_unclassified(store: &Store, task_id: &TaskId) {
         return;
     }
     let excerpt = diagnostic_excerpt(&stderr, &stdout, task.agent);
+    if excerpt.is_empty() {
+        return;
+    }
     let _ = store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),

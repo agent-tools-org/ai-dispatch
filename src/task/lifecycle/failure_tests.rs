@@ -141,3 +141,21 @@ fn assert_unknown_marker(store: &Store, id: &TaskId) {
     assert_eq!(errors.len(), 1);
     assert_eq!(errors[0].detail, "Original connection failure");
 }
+
+#[test]
+fn failures_without_provider_output_do_not_record_an_empty_unknown_marker() {
+    let home = tempfile::tempdir().expect("home");
+    let _guard = paths::AidHomeGuard::set(home.path());
+    paths::ensure_dirs().expect("directories");
+    let store = Store::open_memory().expect("store");
+    let id = TaskId("t-no-provider-output".into());
+    insert_task(&store, &id);
+    super::super::mark_failed(&store, &id).expect("failure");
+    assert!(store.get_events(id.as_str()).expect("events").is_empty());
+    std::fs::write(paths::stderr_path(id.as_str()), "Provider connection closed unexpectedly")
+        .expect("late provider diagnostic");
+    super::super::salvage_failed_task(&store, &id);
+    let events = store.get_events(id.as_str()).expect("events");
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].metadata.as_ref().expect("metadata")["unclassified_failure"], true);
+}

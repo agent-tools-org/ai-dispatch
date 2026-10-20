@@ -38,7 +38,12 @@ A live hold blocks the requested route; an explicit `--cascade` can divert dispa
 A held model never triggers automatic agent substitution. A hold may end on a stated
 time, a dated aidbar window, or only when a person runs
 `aid config clear-limit <agent>` (see `references/configuration.md` for the
-four hold classes). Signatures match only the refusing agent. Reset times must
+four hold classes). Signatures match only the refusing agent. A custom id keeps
+its own marker path while classification uses its configured `rate_limit_kind`
+(OpenCode by default); overlay error parsing supplies its declared signature kind.
+Markers retain that identity for readback without borrowing another built-in's
+signatures. An explicit `try again at <date>` marker retains its stated date
+and display spelling, including for custom ids. Reset times must
 follow that agent's known reset phrase directly or come from a typed provider
 field; unrelated timestamps and window lengths are ignored. Holds longer than
 24 hours and holds requiring a person require stderr, a typed error envelope,
@@ -50,7 +55,8 @@ app-server uses typed error notifications and rate-limit snapshots instead of
 matching raw lines when typed evidence is available. Typed refusal messages
 retain their reset dates; a later shorter hold cannot replace a longer active
 dated hold for the same provider marker. Unrecognised failures
-record one milestone event with `unclassified_failure: true`, the agent, and a capped
+record one milestone event when a provider-attributed excerpt exists, with
+`unclassified_failure: true`, the agent, and a capped
 `provider_excerpt`; this metadata does not change routing or task status and
 does not replace the original error reason.
 A marker whose stated

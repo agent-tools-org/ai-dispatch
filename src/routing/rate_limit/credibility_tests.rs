@@ -18,7 +18,7 @@ fn opencode_model_refusal_holds_only_the_nvidia_provider() {
     let agent = AgentKind::OpenCode;
 
     crate::agent::stream_completion::record_quota_exhaustion(
-        "Insufficient balance. Manage your billing here.",
+        r#"{"type":"error","message":"Insufficient balance. Manage your billing here."}"#,
         agent,
         None,
         Some("nvidia/llama-4-maverick"),

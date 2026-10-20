@@ -8,7 +8,7 @@ use std::time::SystemTime;
 
 use crate::routing::quota::live as live_quota;
 use crate::routing::rate_limit::{
-    format_recovery, marker_field, marker_slug, parse_recovery_datetime,
+    format_recovery, marker_field, marker_slug, parse_recovery_datetime, parse_recovery_time,
 };
 use crate::routing::rate_limit::signatures::{
     match_quota_signature_for_agent, recovery_for_agent, QuotaRecovery,
@@ -63,7 +63,9 @@ pub(crate) fn classify_hold(message: &str, agent: AgentKind) -> Hold {
             + chrono::Duration::minutes(crate::routing::capacity::HOLD_MINUTES)));
     }
     if let Some(at) = recovery_for_agent(message, agent) {
-        return Hold::Until(format_recovery(at));
+        let stated = parse_recovery_time(message)
+            .filter(|stated| parse_recovery_datetime(stated) == Some(at));
+        return Hold::Until(stated.unwrap_or_else(|| format_recovery(at)));
     }
     match match_quota_signature_for_agent(message, agent) {
         Some(QuotaRecovery::NeedsHuman) => Hold::NeedsHuman,
@@ -104,9 +106,10 @@ pub(crate) fn stored_hold(content: &str, agent: &AgentKind) -> StoredHold {
 }
 
 fn stored_refusal_matches(content: &str, agent: &AgentKind, want: QuotaRecovery) -> bool {
+    let signature_agent = crate::routing::rate_limit::stored_signature_agent(content, *agent);
     content.lines().any(|line| {
-        recovery_for_agent(line, *agent).is_none()
-            && match_quota_signature_for_agent(line, *agent) == Some(want)
+        recovery_for_agent(line, signature_agent).is_none()
+            && match_quota_signature_for_agent(line, signature_agent) == Some(want)
     })
 }
 
@@ -126,11 +129,12 @@ pub(crate) fn wall_of(agent: &AgentKind, content: &str) -> QuotaWall {
 }
 
 fn signature_needle(agent: &AgentKind, content: &str) -> Option<&'static str> {
+    let signature_agent = crate::routing::rate_limit::stored_signature_agent(content, *agent);
     content.lines().find_map(|line| {
         let lower = line.to_lowercase();
         QUOTA_SIGNATURES
             .iter()
-            .find(|signature| signature.agent == *agent && lower.contains(signature.needle))
+            .find(|signature| signature.agent == signature_agent && lower.contains(signature.needle))
             .map(|signature| signature.needle)
     })
 }

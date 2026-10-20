@@ -8,6 +8,11 @@ use chrono::{Datelike, Duration, Local, NaiveDateTime};
 pub(crate) fn recovery_for_agent(message: &str, agent: AgentKind) -> Option<NaiveDateTime> {
     use crate::routing::rate_limit::{parse_recovery_datetime, parse_recovery_time};
     let lower = message.to_lowercase();
+    if let Some(rest) = lower.trim_start().strip_prefix("try again at ") {
+        return super::super::detection::parse_iso_recovery_time(rest)
+            .or_else(|| parse_recovery_time(message))
+            .as_deref().and_then(parse_recovery_datetime);
+    }
     if super::match_quota_signature_for_agent(message, agent).is_none()
         && !(agent == AgentKind::Codex && lower.starts_with("codex rate limit exceeded"))
     {

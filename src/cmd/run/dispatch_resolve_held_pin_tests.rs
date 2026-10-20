@@ -126,7 +126,7 @@ fn substituted_route_keeps_agent_config_model_despite_served_list_miss() {
         &AgentKind::Grok,
         None,
         &format!(
-            "Individual quota reached. Please upgrade your subscription. try again at {}.",
+            "try again at {}.",
             crate::routing::rate_limit::test_future_recovery_time()
         ),
     );

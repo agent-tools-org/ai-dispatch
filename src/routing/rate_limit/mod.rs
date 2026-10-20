@@ -20,6 +20,9 @@ use std::path::PathBuf;
 mod claude;
 pub(crate) use claude::{claude_rejected_limit, parse_claude_reset_clock, parse_recovery_time};
 
+mod identity;
+pub(crate) use identity::stored_signature_agent;
+
 mod markers;
 pub use markers::*;
 mod state;

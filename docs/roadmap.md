@@ -11,7 +11,8 @@ does not assert board closure. New slices need board IDs before implementation.
 
 ## Current baseline
 
-- The current release is **v11.3.0** (2026-10-16): Claude API account routes. v11.2.0
+- The current release is **v11.4.0** (2026-10-20): truthful outcomes under concurrency and
+  long runs; see that section below. v11.3.0 (2026-10-16): Claude API account routes. v11.2.0
   (2026-10-16) moved Codex to `codex app-server` with mid-run steering; v11.1.0
   (2026-10-14) made input commands report what aid actually did. See the CHANGELOG.
 - v11.0.0 (2026-10-14): failure truthfulness; see
@@ -35,7 +36,18 @@ does not assert board closure. New slices need board IDs before implementation.
   re-run for this release.
 - Earlier baseline notes (v10.47.x custody and budget work) remain below for reconciliation.
 
-## Next release: truthful outcomes under concurrency and long runs (v11.4.0)
+## Next release (in progress)
+
+| Slice | Board | Acceptance contract |
+| --- | --- | --- |
+| Codex keeps the user's provider | wi-3856 | `model_provider` and the selected `[model_providers.<id>]` table reach exec, app-server and exec fallback identically as overrides; inline secrets refuse the launch; a custom provider is its own route; read-only provenance stays proven |
+| Remove Gemini CLI and Qwen Code | wi-08c8 | Both built-in agents and their signatures are deleted; naming them fails with a migration hint; stored history with those agent names still loads and displays |
+| Error classification, slice 1 | wi-1ad2 | Hold classification uses only the marker's own agent; recovery times come only from reset phrases or typed fields; holds over 24 h or needing a human require a provider-attributed source; unrecognised failures are recorded for review |
+
+Later in wi-1ad2: typed pre-command results from rbox, and model-assisted review of recorded
+unrecognised failures as advice only (never on agent output, never setting a hold).
+
+## Truthful outcomes under concurrency and long runs (v11.4.0)
 
 Source: [failed-task review 2026-10-20](investigation-failed-tasks-20261020.md).
 
@@ -48,7 +60,13 @@ Source: [failed-task review 2026-10-20](investigation-failed-tasks-20261020.md).
 | D. Infrastructure verify outcome | A remote verify that failed before the command ran records the infrastructure outcome, not a failed verify; an auto-picked box retries once on another box within the deadline |
 | E. Diagnostics kept | The reaper appends to agent stderr; worker stderr goes to a task log; preparation errors after the pending row settle with their own text |
 
-Follow-ups, not in v11.4.0: Claude read-only under Claude Code's own sandbox (would let
+All six slices landed with independent audits. Integration found two cross-slice defects
+before release, both fixed: the idle watchdog's first activity probe could outlast a short
+idle window (now the window starts at the first sample), and a production path used a
+dev-only crate. The release candidate passed the full workspace suite on the build box
+(42 test binaries, 3,707 passed, 0 failed, 16 ignored).
+
+Follow-ups: Claude read-only under Claude Code's own sandbox (would let
 slice A cover Claude); snapshotting ignored files written by advisory agents; rbox ensure-stamp
 mismatches seen on two boxes.
 

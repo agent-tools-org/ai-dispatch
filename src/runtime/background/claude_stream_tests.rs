@@ -245,3 +245,9 @@ async fn timed_out_steer_write_closes_input_without_failing_background_task() {
 
 #[path = "claude_stream_policy_tests.rs"]
 mod policy_tests;
+
+
+#[path = "claude_stream_startup_tests.rs"]
+mod startup_tests;
+#[path = "claude_stream_completion_tests.rs"]
+mod completion_tests;

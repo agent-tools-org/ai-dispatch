@@ -19,6 +19,7 @@ use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 mod command;
 use command::spawn_bridge;
 mod execution;
+pub(crate) mod completion;
 
 #[allow(clippy::too_many_arguments)]
 pub fn run_agent_process(
@@ -159,27 +160,7 @@ fn record_completion(
     // any given row used instead of having to assume.
     let costing_model = observed_model.as_deref().or(model);
     let cost_usd = cost::completion_cost(store, task_id, info, costing_model, agent.kind())?;
-    let event = crate::types::TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: if info.status == crate::types::TaskStatus::Done {
-            crate::types::EventKind::Completion
-        } else {
-            crate::types::EventKind::Error
-        },
-        detail: format!(
-            "{} ({}{}{})",
-            crate::routing::capacity::terminal_label(store, task_id, agent.kind(), info.status),
-            format_duration(duration_ms),
-            info.tokens
-                .map(|t| format!(", {} tokens", t))
-                .unwrap_or_default(),
-            cost_usd
-                .map(|c| format!(", {}", cost::format_cost(Some(c))))
-                .unwrap_or_default(),
-        ),
-        metadata: None,
-    };
+    let event = completion::event(agent, task_id, store, duration_ms, info, cost_usd);
     if !crate::task::lifecycle::complete_task_atomic(
         store.as_ref(),
         TaskCompletionUpdate {

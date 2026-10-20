@@ -20,13 +20,23 @@ def emit(row):
 def replay(row):
     emit(dict(row, isReplay=True))
 
+if mode == 'delayed':
+    select.select([], [], [], 5.5)
 initial = json.loads(sys.stdin.readline())
-assert initial['message']['content'] == 'initial prompt'
+expected = 'x' * (256 * 1024) if mode == 'delayed' else 'initial prompt'
+assert initial['message']['content'] == expected
+if mode == 'delayed':
+    output.write_text(json.dumps(initial))
 if mode == 'startup':
     select.select([], [], [], 5)
     sys.exit(0)
 replay(initial)
 emit({'type': 'system', 'subtype': 'init'})
+if mode in ('delayed', 'summary'):
+    emit({'type': 'result', 'subtype': 'success', 'total_cost_usd': 0.25,
+          'usage': {'input_tokens': 3, 'output_tokens': 4}, 'is_error': False})
+    assert sys.stdin.read() == ''
+    sys.exit(0)
 if mode in ('partial', 'idle', 'cost', 'stderr', 'descendant'):
     if mode == 'partial':
         sys.stdout.write('partial raw output')

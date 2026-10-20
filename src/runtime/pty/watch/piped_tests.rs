@@ -93,3 +93,46 @@ async fn partial_raw_reads_refresh_first_token_clock() {
     reader.read_exact(&mut bytes).await.unwrap();
     assert!(watchdog.raw.lock().unwrap().raw.is_some());
 }
+
+#[test]
+fn childless_activity_probe_is_throttled_across_output_lines() {
+    let mut watchdog = Watchdog::new(crate::config::timeout_policy::TimeoutPolicy::default());
+    watchdog.state.received_raw_bytes = true;
+    let task = TaskId("t-probe-cadence".into());
+    let start = Instant::now();
+    let mut calls = 0;
+    for millis in [0, 0, 100, 200, 499, 500, 500, 600, 999, 1000] {
+        watchdog.observe("another output line", 2);
+        watchdog.refresh_descendant_activity(
+            &task,
+            Some(123),
+            start + Duration::from_millis(millis),
+            |_, _, _| {
+                calls += 1;
+                None
+            },
+        );
+    }
+    assert_eq!(calls, 3);
+    watchdog.policy.idle = Duration::from_millis(400);
+    watchdog.refresh_descendant_activity(
+        &task,
+        Some(123),
+        start + Duration::from_millis(1099),
+        |_, _, _| {
+            calls += 1;
+            None
+        },
+    );
+    assert_eq!(calls, 3);
+    watchdog.refresh_descendant_activity(
+        &task,
+        Some(123),
+        start + Duration::from_millis(1100),
+        |_, _, _| {
+            calls += 1;
+            None
+        },
+    );
+    assert_eq!(calls, 4);
+}

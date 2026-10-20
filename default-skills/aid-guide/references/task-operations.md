@@ -89,7 +89,9 @@ aid unstick <task-id>
   `accepted by claude` requires a replayed user envelope with the matching UUID.
   Background and foreground Claude runs use piped streaming input even for interactive specs.
   A write alone is sent, unconfirmed; uncertain deliveries are never automatically resent.
-  Failed or timed-out input writes close stdin and leave acceptance unconfirmed without failing the task.
+  Failed or timed-out steer writes close stdin and leave acceptance unconfirmed without failing the task.
+  The initial prompt write has no separate transport timeout; the task deadline still applies.
+  Initial write errors fail the run, except broken pipe, which preserves child exit settlement.
   `steer` waits up to 30 seconds; `reply --async` confirms only queuing.
   Acceptance confirms receipt, not interruption of a tool or completion of the request.
   A replayed queued message requires a subsequent result before stdin closes; remaining
@@ -312,6 +314,9 @@ inflate success rates used by `aid advise`. `aid stats` and `aid cost` show
 from totals rather than recorded as `$0.00`.
 
 ## Machine-facing completion data
+
+PTY and piped runs record a completion summary with duration, tokens and cost when available,
+and refresh project state after recording completion.
 
 MCP task views, task hook payloads, and task webhooks add `outcome` and
 `verify_status` fields. Existing `status` fields retain their lifecycle meaning;

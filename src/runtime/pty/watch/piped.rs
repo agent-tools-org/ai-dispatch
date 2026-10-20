@@ -17,6 +17,7 @@ pub(crate) struct Watchdog {
     raw: Arc<Mutex<Activity>>,
     policy: crate::config::timeout_policy::TimeoutPolicy,
     first_token: bool,
+    last_activity_probe: Option<Instant>,
 }
 
 impl Watchdog {
@@ -26,6 +27,7 @@ impl Watchdog {
             raw: Arc::new(Mutex::new(Activity::default())),
             policy,
             first_token: false,
+            last_activity_probe: None,
         }
     }
 
@@ -80,18 +82,12 @@ impl Watchdog {
         if self.first_token {
             return Ok(true);
         }
-        if self.state.received_raw_bytes {
-            if let Some(activity) =
-                process::monitor::activity::latest(task.as_str(), pid, self.policy.idle)
-            {
-                let age = activity.elapsed().unwrap_or_default();
-                if age < self.state.last_progress_time.elapsed() {
-                    self.state.last_progress_time = Instant::now() - age;
-                    self.state.idle_warned = false;
-                    self.state.idle_nudged = false;
-                }
-            }
-        }
+        self.refresh_descendant_activity(
+            task,
+            pid,
+            Instant::now(),
+            process::monitor::activity::latest,
+        );
         if self
             .state
             .idle_hang_elapsed(true, self.policy.idle, task.as_str())
@@ -100,6 +96,32 @@ impl Watchdog {
         }
         self.state.maybe_handle_idle(store, task, false)?;
         Ok(false)
+    }
+
+    fn refresh_descendant_activity(
+        &mut self,
+        task: &TaskId,
+        pid: Option<u32>,
+        now: Instant,
+        probe: impl FnOnce(&str, Option<u32>, Duration) -> Option<std::time::SystemTime>,
+    ) {
+        let cadence = (self.policy.idle / 4).min(Duration::from_millis(500));
+        if !self.state.received_raw_bytes
+            || self
+                .last_activity_probe
+                .is_some_and(|last| now.saturating_duration_since(last) < cadence)
+        {
+            return;
+        }
+        self.last_activity_probe = Some(now);
+        if let Some(activity) = probe(task.as_str(), pid, self.policy.idle) {
+            let age = activity.elapsed().unwrap_or_default();
+            if age < self.state.last_progress_time.elapsed() {
+                self.state.last_progress_time = Instant::now() - age;
+                self.state.idle_warned = false;
+                self.state.idle_nudged = false;
+            }
+        }
     }
 }
 

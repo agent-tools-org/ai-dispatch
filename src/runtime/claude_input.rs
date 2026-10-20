@@ -1,7 +1,7 @@
 // Claude streaming stdin transport with durable, UUID-matched replay receipts.
 // Retains piped watcher billing checks; live markers exclude legacy workers.
 use crate::{store::Store, types::*};
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
@@ -198,7 +198,15 @@ impl Session {
             .stdin
             .as_mut()
             .ok_or_else(|| anyhow!("Claude stdin closed"))?;
-        if !write::send(stdin, envelope(&uuid, text).as_bytes(), Duration::from_secs(5)).await {
+        let bytes = envelope(&uuid, text);
+        let written = if id.is_none() {
+            write::initial(stdin, bytes.as_bytes())
+                .await
+                .context("Failed to write Claude initial prompt")?
+        } else {
+            write::send(stdin, bytes.as_bytes(), Duration::from_secs(5)).await
+        };
+        if !written {
             self.stdin.take();
             let _ = std::fs::remove_file(marker(&self.task));
             return Ok(());

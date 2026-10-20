@@ -1,6 +1,6 @@
 # aid Roadmap
 
-Updated 2026-10-14 after v11.0.0 (`9a84f8a2`).
+Updated 2026-10-20 after v11.3.0 (`ec25a4f5`).
 This document owns execution order and acceptance gates; [CHANGELOG](../CHANGELOG.md)
 owns release history. The [takeover inventory](project-status-2026-09-22.md) records
 source evidence and verification limits. Release validation is recorded separately from historical audit results.
@@ -11,7 +11,10 @@ does not assert board closure. New slices need board IDs before implementation.
 
 ## Current baseline
 
-- The current release is **v11.0.0** (2026-10-14): failure truthfulness; see
+- The current release is **v11.3.0** (2026-10-16): Claude API account routes. v11.2.0
+  (2026-10-16) moved Codex to `codex app-server` with mid-run steering; v11.1.0
+  (2026-10-14) made input commands report what aid actually did. See the CHANGELOG.
+- v11.0.0 (2026-10-14): failure truthfulness; see
   "Failure truthfulness" below. The release gate passed the full workspace suite on the
   build box (38 test binaries, 3,442 passed, 0 failed, 15 ignored). The native Codex
   permission test was not run: no build box had the Codex CLI installed.
@@ -31,6 +34,23 @@ does not assert board closure. New slices need board IDs before implementation.
   the CLI module reorganisation. Web-feature help and the live API/Swift gates were not
   re-run for this release.
 - Earlier baseline notes (v10.47.x custody and budget work) remain below for reconciliation.
+
+## Next release: truthful outcomes under concurrency and long runs (v11.4.0)
+
+Source: [failed-task review 2026-10-20](investigation-failed-tasks-20261020.md).
+
+| Slice | Acceptance contract |
+| --- | --- |
+| A. Read-only concurrent change | A launch whose recorded provenance proves aid's restrictive native profile reports post-run checkout differences as a concurrent-change warning (baseline/current HEAD, paths); unenforced or unproven launches still fail |
+| B. Claude mid-run input | Claude runs with streaming input; `aid steer`/`reply` record acceptance only when Claude replays the message; tasks without the transport still refuse |
+| W. Worker-owned wrap-up | The worker requests wrap-up at 90 % of the deadline it enforces (reaper as backup, one request); read-only tasks get a report-only request |
+| C. Usage survives a kill | Usage checkpoints persist at ingestion; worker timeout, reaper and stop settle from the latest checkpoint; Claude cumulative cost is never summed |
+| D. Infrastructure verify outcome | A remote verify that failed before the command ran records the infrastructure outcome, not a failed verify; an auto-picked box retries once on another box within the deadline |
+| E. Diagnostics kept | The reaper appends to agent stderr; worker stderr goes to a task log; preparation errors after the pending row settle with their own text |
+
+Follow-ups, not in v11.4.0: Claude read-only under Claude Code's own sandbox (would let
+slice A cover Claude); snapshotting ignored files written by advisory agents; rbox ensure-stamp
+mismatches seen on two boxes.
 
 ## Failure truthfulness (v11.0.0, from the 2026-10-13 failed-task review)
 

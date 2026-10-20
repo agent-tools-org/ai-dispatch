@@ -90,20 +90,14 @@ fn contains_status_code(s: &str, code: &str) -> bool {
 /// message, or a tool result. Those are not channels — see `quota_channel`.
 ///
 /// The evidence rule follows the split: CLI diagnostics may carry a bare status
-/// token; unsplit lines need an agent signature. Claude needs an envelope.
+/// token. Unsplit lines are handled separately as transient excerpts.
 pub(crate) fn refusal_on_channel(
     raw: &str,
     agent: AgentKind,
     channel: crate::routing::quota::channel::Channel,
 ) -> Option<String> {
     let kept = crate::routing::quota::channel::provider_attributable(raw, agent, channel);
-    // Claude's refusal counts only from a CLI envelope on the stream.
-    let signed = (agent != AgentKind::Claude
-        || channel == crate::routing::quota::channel::Channel::CliStream)
-        .then(|| kept.quota_text(agent));
-    if let Some(refusal) =
-        signed.and_then(|text| crate::agent::stream_completion::quota_line(&text, agent))
-    {
+    if let Some(refusal) = crate::agent::stream_completion::quota_line(&kept.cli_diagnostic, agent) {
         return Some(refusal);
     }
     let generic = kept
@@ -116,19 +110,13 @@ pub(crate) fn refusal_on_channel(
 }
 
 pub(super) fn parse_iso_recovery_time(message: &str) -> Option<String> {
-    for (index, _) in message.match_indices("20") {
-        let candidate: String = message[index..]
-            .chars()
-            .take_while(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | ':' | '.' | '+'))
-            .collect();
-        let candidate = candidate.trim_end_matches(['.', ',', ';', ')', ']', '}']);
-        let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(candidate) else {
-            continue;
-        };
-        let local = parsed.with_timezone(&Local).naive_local();
-        return Some(format_recovery(local));
-    }
-    None
+    let candidate: String = message.trim_start()
+        .chars()
+        .take_while(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | ':' | '.' | '+'))
+        .collect();
+    let candidate = candidate.trim_end_matches(['.', ',', ';', ')', ']', '}']);
+    let parsed = chrono::DateTime::parse_from_rfc3339(candidate).ok()?;
+    Some(format_recovery(parsed.with_timezone(&Local).naive_local()))
 }
 
 pub(crate) fn parse_recovery_datetime(s: &str) -> Option<NaiveDateTime> {

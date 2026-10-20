@@ -74,10 +74,11 @@ fn record_quota_exhaustion_detects_provider_refusal_templates() {
     crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
 
     crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
-    let codex_out = format!(
+    let codex_message = format!(
         "You have hit your usage limit. try again at {}.",
         crate::routing::rate_limit::test_future_recovery_time()
     );
+    let codex_out = test_codex_error_envelope(&codex_message);
     assert!(record_quota_exhaustion(&codex_out, crate::types::AgentKind::Codex, None, None,)
     .should_fail());
     assert!(crate::routing::rate_limit::is_rate_limited(&crate::types::AgentKind::Codex, None));
@@ -104,7 +105,8 @@ fn explicit_delivery_survives_a_later_quota_refusal() {
 
     let mut report = String::from("## Findings\n\n");
     report.push_str(&"The audit reviewed rate limits and 429 handling. ".repeat(20));
-    report.push_str("\nYou have hit your usage limit.");
+    report.push_str("\n");
+    report.push_str(&test_codex_error_envelope("You have hit your usage limit."));
     assert!(!record_quota_exhaustion_with_delivery(
         &report,
         crate::types::AgentKind::Codex,
@@ -122,7 +124,7 @@ fn markdown_shape_does_not_turn_a_refusal_into_delivery() {
     let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
 
-    let output = "# Error\nYou have hit your usage limit.";
+    let output = &test_codex_error_envelope("# Error\nYou have hit your usage limit.");
     assert!(record_quota_exhaustion(output, crate::types::AgentKind::Codex, None, None,)
     .should_fail());
     assert!(crate::routing::rate_limit::is_rate_limited(&crate::types::AgentKind::Codex, None));

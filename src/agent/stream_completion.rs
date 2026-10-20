@@ -96,17 +96,8 @@ pub(crate) fn merge_parsed_completion(info: &mut CompletionInfo, parsed: Complet
     }
 }
 
-/// Detect a provider's quota-exhaustion message anywhere in the captured output
-/// and record it, regardless of exit code or envelope shape.
-///
-/// This also runs on the success path: a provider refusal must retain its
-/// marker even when a run delivered output and exited successfully.
-///
-/// Detection and marker writes always run when a refusal is present; only the
-/// task verdict considers deliverables. Callers need both facts separately: a
-/// run that delivered *and* hit a refusal keeps its Done status, but its marker
-/// must survive — `watcher.rs` clears the marker on every Done, so collapsing
-/// the two into one bool wiped the outage we had just recorded.
+/// Record provider error envelopes independently from whether the run delivered.
+/// Unsplit output preserves only a transient excerpt and never fails the run.
 pub(crate) fn record_quota_exhaustion(
     output: &str,
     agent: crate::types::AgentKind,
@@ -123,32 +114,21 @@ pub(crate) fn record_quota_exhaustion_with_delivery(
     model: Option<&str>,
     delivered: bool,
 ) -> QuotaOutcome {
-    // Only what the CLI wrote. The model's own text is dropped before any
-    // needle is looked for, so a report quoting this repo's signature table —
-    // or a test fixture, or a commit message — cannot write a marker. See
-    // `quota_channel` for what that rests on and what it does not reach.
-    let tail = crate::routing::quota::channel::provider_attributable(
-        quota_scan_tail(output),
-        agent,
-        crate::routing::quota::channel::Channel::CliStream,
-    )
-    .quota_text(agent);
-    let tail = tail.as_str();
-    if !agent_prose_quota_match(tail, agent) {
+    use crate::routing::{quota::channel::{provider_attributable, Channel}, rate_limit};
+    let tail = quota_scan_tail(output);
+    let kept = provider_attributable(tail, agent, Channel::CliStream);
+    if let Some(detail) = rate_limit::refusal_on_channel(tail, agent, Channel::CliStream) {
+        rate_limit::mark_rate_limited_for_model(&agent, custom_name, model, &detail);
+        return if delivered { QuotaOutcome::RecordedDelivered } else { QuotaOutcome::RecordedFailed };
+    }
+    if agent == crate::types::AgentKind::Grok {
         return QuotaOutcome::None;
     }
-    let detail = quota_line(tail, agent).unwrap_or_else(|| tail.chars().take(200).collect());
-    crate::routing::rate_limit::mark_rate_limited_for_model(
-        &agent,
-        custom_name,
-        model,
-        &detail,
-    );
-    if delivered {
-        QuotaOutcome::RecordedDelivered
-    } else {
-        QuotaOutcome::RecordedFailed
-    }
+    let Some(detail) = quota_line(&kept.all(), agent) else {
+        return QuotaOutcome::None;
+    };
+    rate_limit::mark_untrusted_for_model(&agent, custom_name, model, &detail);
+    QuotaOutcome::RecordedDelivered
 }
 
 /// What a completed run's output said about its provider's quota.
@@ -172,10 +152,6 @@ impl QuotaOutcome {
     pub(crate) fn should_fail(self) -> bool {
         matches!(self, Self::RecordedFailed)
     }
-}
-
-fn agent_prose_quota_match(output: &str, agent: crate::types::AgentKind) -> bool {
-    output.lines().any(|line| prose_line_is_quota_refusal(line, agent))
 }
 
 /// A refusal is only recognised by its provider's own anchored template. A
@@ -284,3 +260,7 @@ fn quota_scan_tail(output: &str) -> &str {
 #[cfg(test)]
 #[path = "stream_completion_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "stream_completion_scope_tests.rs"]
+mod scope_tests;

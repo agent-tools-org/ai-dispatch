@@ -82,7 +82,9 @@ pub(crate) fn parse_json_event(
                 if let Some(message) = rate_limit::refusal_on_channel(
                     &v.to_string(), signature_kind, crate::routing::quota::channel::Channel::CliStream,
                 ) {
-                    rate_limit::mark_rate_limited_for_message(&marker_kind, custom_name, &message);
+                    rate_limit::mark_rate_limited_for_signature(
+                        &marker_kind, custom_name, signature_kind, &message,
+                    );
                 }
             }
             let auth = crate::routing::auth_marker::auth_failure_line(

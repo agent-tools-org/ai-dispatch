@@ -210,7 +210,7 @@ fn test_mark_and_check_rate_limited() {
     mark_rate_limited(
         &AgentKind::Codex,
         None,
-        &format!("try again at {}.", test_future_recovery_time()),
+        &format!("You have hit your usage limit. try again at {}.", test_future_recovery_time()),
     );
     assert!(is_rate_limited(&AgentKind::Codex, None));
 

@@ -32,16 +32,8 @@ pub(crate) enum Channel {
     CliStderr,
 }
 
-/// The subset of captured output that the CLI wrote, with everything the model
-/// wrote removed.
-///
-/// A quota refusal is testimony about the provider, and only the CLI can give
-/// it. On `CliStream` the model can only put bytes *inside* a field the CLI
-/// opened: whatever it emits arrives as an escaped string under
-/// `/message/content/0/text`, never as a sibling `{"type":"error"}` line. That
-/// containment is the thing this module rests on, and it is not a property of
-/// the bytes — no wording the model chooses can promote its own text out of the
-/// field it is written into.
+/// Provider diagnostics, separated from unsplit text that may be model output.
+/// Only the former can establish a long or permanent hold.
 ///
 /// What survives on `CliStream`, line by line:
 ///
@@ -52,18 +44,7 @@ pub(crate) enum Channel {
 /// | any other JSON object | nothing |
 /// | not JSON | the line, except Droid Core refusals |
 ///
-/// What this cannot catch, stated rather than papered over:
-///
-/// - The last row is the model's own words whenever the transport has no
-///   envelope to split on: a buffered plain-text CLI (`agy`), and every
-///   PTY-attached CLI, whose captured buffer is the *rendered* answer rather
-///   than the JSON behind it (`opencode` and its overlays). A report by one of
-///   those agents that quotes its own provider's refusal wording verbatim can
-///   still write a marker. The bound is that a non-JSON line is only ever
-///   matched against that agent's own anchored signature, never a generic token
-///   — see `stream_completion::prose_line_is_quota_refusal`.
-/// - A provider whose refusal wording nobody has captured stays undetectable.
-///   Unchanged, and still the honest answer.
+/// Unsplit lines remain separate: they cannot establish a long or permanent hold.
 pub(crate) fn provider_attributable(
     output: &str,
     agent: AgentKind,
@@ -131,10 +112,7 @@ impl Attributable {
         format!("{}{}", self.cli_diagnostic, self.unsplit)
     }
 
-    /// Quota evidence: Claude's plain lines can be model prose, so only envelopes.
-    pub(crate) fn quota_text(&self, agent: AgentKind) -> String {
-        if agent == AgentKind::Claude { self.cli_diagnostic.clone() } else { self.all() }
-    }
+
 }
 
 /// The only way an adapter may write a hold: the raw captured line, split here,
@@ -142,6 +120,11 @@ impl Attributable {
 pub(crate) fn mark_stream_refusal(agent: AgentKind, custom_name: Option<&str>, raw: &str) {
     let Some(message) = crate::routing::rate_limit::refusal_on_channel(raw, agent, Channel::CliStream)
     else {
+        if agent == AgentKind::Grok { return; }
+        let kept = provider_attributable(raw, agent, Channel::CliStream);
+        if let Some(message) = crate::agent::stream_completion::quota_line(&kept.all(), agent) {
+            crate::routing::rate_limit::mark_untrusted_for_model(&agent, custom_name, None, &message);
+        }
         return;
     };
     crate::routing::rate_limit::mark_rate_limited_for_message(&agent, custom_name, &message);
@@ -153,6 +136,25 @@ fn keep_envelope_strings(object: &Map<String, Value>, agent: AgentKind, kept: &m
         // parsed status of the subscription window can report a refusal.
         if let Some(limit) = crate::routing::rate_limit::claude_rejected_limit(object) {
             push_line(&mut kept.cli_diagnostic, &limit);
+        }
+        return;
+    }
+    if agent == AgentKind::Codex
+        && let Some(error) = object.get("error")
+        && !error["codexErrorInfo"].is_null()
+    {
+        if let Some(message) = crate::agent::codex::app_server::error_quota_message(
+            &Value::Object(object.clone()),
+        ) {
+            push_line(&mut kept.cli_diagnostic, &message);
+        }
+        return;
+    }
+    if agent == AgentKind::Grok {
+        if object.get("type").and_then(Value::as_str) == Some("error")
+            && let Some(message) = object.get("message").and_then(Value::as_str)
+        {
+            push_line(&mut kept.cli_diagnostic, message);
         }
         return;
     }
@@ -216,9 +218,6 @@ fn describes_a_tool(object: &Map<String, Value>) -> bool {
         || object.contains_key("tool_use_id")
         || object.contains_key("toolCallId")
 }
-
-/// Agents measured to report refusals in their model's terminal result slot.
-
 
 /// Every string inside a diagnostic envelope, each on its own line, so the
 /// signature match runs against the provider's sentence rather than the raw

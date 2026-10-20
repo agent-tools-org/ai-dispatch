@@ -191,11 +191,12 @@ fn custom_agent_quota_read_matches_write() {
     let mut config = sample_custom_config();
     config.id = "auditor".into();
     config.base_url = None; // no endpoint — triggers the old delegate_to path
-    let stated = crate::routing::rate_limit::test_future_recovery_time();
-    crate::routing::rate_limit::mark_rate_limited(
+    let reset = chrono::Local::now().naive_local() + chrono::Duration::days(1);
+    crate::routing::rate_limit::mark_rate_limited_until(
         &AgentKind::Custom,
         Some("auditor"),
-        &format!("try again at {stated}."),
+        reset,
+        "Insufficient balance",
     );
     let rlk = rate_limit_kind(AgentKind::Custom, Some(&config));
     let q = build_quota_json(&rlk, Some("auditor"));

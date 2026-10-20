@@ -256,7 +256,7 @@ async fn watch_buffered_records_quota_refusal_and_fails_task() {
 
         .current_dir(temp.path())
         .arg("-c")
-        .arg("printf 'Error: Individual quota reached.\\n'")
+        .arg(r#"printf '{"type":"error","message":"Individual quota reached."}\n'"#)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

@@ -74,12 +74,7 @@ pub(crate) async fn watch_buffered(
         delivered,
     );
     let diagnostic_quota = if diagnostic_failure {
-        crate::agent::stream_completion::record_quota_exhaustion(
-            &diagnostics,
-            agent.kind(),
-            agent.rate_limit_name(),
-            info.model.as_deref().or(dispatched_model),
-        )
+        record_diagnostic_quota(agent, &diagnostics, info.model.as_deref().or(dispatched_model))
     } else {
         crate::agent::stream_completion::QuotaOutcome::None
     };
@@ -170,4 +165,26 @@ async fn persist_outputs(
         }
     }
     Ok(())
+}
+
+fn record_diagnostic_quota(
+    agent: &dyn Agent,
+    diagnostics: &str,
+    model: Option<&str>,
+) -> crate::agent::stream_completion::QuotaOutcome {
+    use crate::agent::stream_completion::QuotaOutcome;
+    let Some(message) = rate_limit::refusal_on_channel(
+        diagnostics,
+        agent.kind(),
+        crate::routing::quota::channel::Channel::CliStderr,
+    ) else {
+        return QuotaOutcome::None;
+    };
+    rate_limit::mark_rate_limited_for_model(
+        &agent.kind(),
+        agent.rate_limit_name(),
+        model,
+        &message,
+    );
+    QuotaOutcome::RecordedFailed
 }

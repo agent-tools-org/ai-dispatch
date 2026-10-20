@@ -85,7 +85,8 @@ fn a_delivered_run_that_hit_a_refusal_keeps_its_marker() {
 
     let mut report = String::from("## Findings\n\n");
     report.push_str(&"Reviewed the adapter and its tests. ".repeat(20));
-    report.push_str("\nYou have hit your usage limit.");
+    report.push_str("\n");
+    report.push_str(&test_codex_error_envelope("You have hit your usage limit."));
 
     let outcome = record_quota_exhaustion_with_delivery(
         &report,
@@ -113,7 +114,7 @@ fn quota_scan_tail_captures_refusal_before_large_diagnostics() {
     let output = format!("{refusal}\n{diagnostics}");
     let tail = quota_scan_tail(&output);
     assert!(
-        agent_prose_quota_match(tail, crate::types::AgentKind::Codex),
+        quota_line(tail, crate::types::AgentKind::Codex).is_some(),
         "refusal must be preserved even when followed by >4 KB of diagnostics"
     );
 }
@@ -233,7 +234,8 @@ fn a_cursor_premium_refusal_with_no_recorded_model_marks_only_the_premium_pool()
     let refusal = "ActionRequiredError: Increase limits for faster responses You're out of \
                    usage. Switch to Auto, or ask your admin to increase your limit to continue.";
 
-    assert!(record_quota_exhaustion(refusal, cursor, None, None).should_fail());
+    let envelope = serde_json::json!({"type":"error", "message":refusal}).to_string();
+    assert!(record_quota_exhaustion(&envelope, cursor, None, None).should_fail());
     assert!(crate::routing::rate_limit::is_group_rate_limited(
         &cursor, None, "premium"
     ));

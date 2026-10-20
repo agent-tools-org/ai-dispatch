@@ -1,11 +1,12 @@
 // Per-CLI quota-exhaustion signatures and relative recovery-time parsing.
-// Exports: match_quota_signature, parse_relative_recovery.
+// Exports: agent-scoped quota signatures and provider-owned recovery clocks.
 // Deps: types::AgentKind, chrono.
 
 use crate::types::AgentKind;
-use chrono::{Duration, Local, NaiveDateTime};
 
 mod cursor;
+mod recovery;
+pub(crate) use recovery::recovery_for_agent;
 
 /// A provider's quota message, captured from a real run, plus how long that
 /// quota class actually lasts. Provider-specific wording is matched separately
@@ -170,94 +171,6 @@ pub(crate) fn match_quota_signature_with_agent(
         .iter()
         .find(|signature| cursor::matches(&lower, signature.needle))
         .map(|signature| (signature.agent, signature.recovery))
-}
-
-/// Parse relative reset phrasings that `parse_recovery_time`'s "try again at
-/// <date>" format cannot reach: "resets in 1 day", "resets in 3 hours",
-/// "5-hour quota". Returns an absolute local time.
-pub(crate) fn parse_relative_recovery(message: &str) -> Option<NaiveDateTime> {
-    let lower = message.to_lowercase();
-    let now = Local::now().naive_local();
-    if let Some(at) = crate::routing::rate_limit::parse_claude_reset_clock(&lower) { return Some(at); }
-    if let Some(at) = cursor::cycle_end(&lower) {
-        return Some(at);
-    }
-    if let Some(duration) = parse_compact_duration(&lower) {
-        return Some(now + duration);
-    }
-    if let Some(duration) = parse_resets_in(&lower) {
-        return Some(now + duration);
-    }
-    if let Some(hours) = parse_hyphenated_hours(&lower) {
-        return Some(now + Duration::hours(hours));
-    }
-    None
-}
-
-/// "resets in 59m21s" / "1h30m" — the compact form agy uses. The spaced parser
-/// cannot read it, and falling through to a default cooldown turned a 59-minute
-/// outage into a multi-hour one.
-fn parse_compact_duration(lower: &str) -> Option<Duration> {
-    let idx = lower.find("resets in ").or_else(|| lower.find("try again in "))?;
-    let rest = lower[idx..].split_once(" in ")?.1.trim();
-    let token: String = rest
-        .chars()
-        .take_while(|c| c.is_ascii_digit() || matches!(c, 'd' | 'h' | 'm' | 's'))
-        .collect();
-    if token.is_empty() || !token.chars().any(|c| c.is_ascii_alphabetic()) {
-        return None;
-    }
-    let mut total = Duration::zero();
-    let mut number = String::new();
-    for ch in token.chars() {
-        if ch.is_ascii_digit() {
-            number.push(ch);
-            continue;
-        }
-        let amount: i64 = number.parse().ok()?;
-        number.clear();
-        total += match ch {
-            'd' => Duration::days(amount),
-            'h' => Duration::hours(amount),
-            'm' => Duration::minutes(amount),
-            's' => Duration::seconds(amount),
-            _ => return None,
-        };
-    }
-    (total > Duration::zero()).then_some(total)
-}
-
-/// "resets in 1 day" / "resets in 45 minutes" / "try again in 2 hours"
-fn parse_resets_in(lower: &str) -> Option<Duration> {
-    let idx = lower.find("resets in ").or_else(|| lower.find("try again in "))?;
-    let rest = &lower[idx..];
-    let rest = rest.split_once(" in ")?.1;
-    let mut parts = rest.split_whitespace();
-    let amount: i64 = parts.next()?.parse().ok()?;
-    let unit = parts.next()?.trim_end_matches([',', '.', ')']);
-    unit_to_duration(unit, amount)
-}
-
-/// "5-hour quota" — the window length doubles as the wait when a provider does
-/// not say when it resets.
-fn parse_hyphenated_hours(lower: &str) -> Option<i64> {
-    let idx = lower.find("-hour")?;
-    let head = &lower[..idx];
-    let digits: String = head.chars().rev().take_while(char::is_ascii_digit).collect();
-    if digits.is_empty() {
-        return None;
-    }
-    digits.chars().rev().collect::<String>().parse().ok()
-}
-
-fn unit_to_duration(unit: &str, amount: i64) -> Option<Duration> {
-    match unit {
-        u if u.starts_with("minute") || u == "min" || u == "mins" => Some(Duration::minutes(amount)),
-        u if u.starts_with("hour") || u == "hr" || u == "hrs" => Some(Duration::hours(amount)),
-        u if u.starts_with("day") => Some(Duration::days(amount)),
-        u if u.starts_with("week") => Some(Duration::weeks(amount)),
-        _ => None,
-    }
 }
 
 #[cfg(test)]

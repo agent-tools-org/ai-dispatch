@@ -148,11 +148,13 @@ fn custom_agent_with_hold_shows_limited() {
     let _guard = AidHomeGuard::set(temp.path());
     std::fs::create_dir_all(paths::aid_dir()).ok();
 
-    let stated = crate::routing::rate_limit::test_future_recovery_time();
-    mark_rate_limited(
+    let reset = chrono::Local::now().naive_local() + chrono::Duration::days(1);
+    let stated = crate::routing::rate_limit::format_recovery(reset);
+    crate::routing::rate_limit::mark_rate_limited_until(
         &AgentKind::Custom,
         Some("auditor"),
-        &format!("try again at {stated}."),
+        reset,
+        "Insufficient balance",
     );
 
     match quota_row(AgentKind::Custom, Some("auditor")) {

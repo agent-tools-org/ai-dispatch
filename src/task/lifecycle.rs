@@ -2,6 +2,8 @@
 // Exports failure transition helpers that keep Store mutations pure.
 // Deps: Store, failure salvage, and task status/event payload types.
 
+mod failure;
+
 use anyhow::Result;
 
 use crate::store::{Store, TaskCompletionUpdate};
@@ -122,6 +124,7 @@ fn salvage_failed_transition(
 }
 
 pub(crate) fn salvage_failed_task(store: &Store, task_id: &TaskId) {
+    failure::record_unclassified(store, task_id);
     if let Ok(Some(task)) = store.get_task(task_id.as_str())
         && let Some(message) = crate::routing::capacity::read(store, task_id, task.agent)
     {

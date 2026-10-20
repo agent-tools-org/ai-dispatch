@@ -241,7 +241,7 @@ fn held_background_keeps_zero_penalty_and_note_says_wait() {
         0,
         None,
     );
-    let grok = report
+    let codex = report
         .candidates
         .iter()
         .find(|item| item.agent == "codex")

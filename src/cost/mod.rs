@@ -12,9 +12,9 @@ pub(crate) use components::{apply_completion_usage_cost, completion_cost, task_c
 use crate::routing::model_catalog;
 use crate::types::AgentKind;
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 #[cfg(not(test))]
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 /// Price per 1M tokens (input, output) in USD
 #[derive(Clone, Copy)]

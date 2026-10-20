@@ -35,7 +35,6 @@ fn candidate(
         None,
         model,
         (AgentKind::Custom, installed),
-        false,
     );
     apply_terms(&mut item.report, context, route, store);
     apply_gates(&mut item.report, context, route, store, declared);

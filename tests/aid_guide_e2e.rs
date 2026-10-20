@@ -78,7 +78,7 @@ const INVARIANTS: &[(&str /* reference file */, &str /* phrase */)] = &[
     ("task-operations.md", "Success is reported only after the `turn/steer` response"),
     ("task-operations.md", "written to PTY; consumption unconfirmed"),
     ("task-operations.md", "Output lines, including echoes, never acknowledge input"),
-    ("task-operations.md", "`respond` is refused for those same one-shot CLIs"),
+    ("task-operations.md", "`respond` is refused for Claude and those same one-shot CLIs"),
     ("task-operations.md", "no response signal was written"),
     ("task-operations.md", "`aid show --output` only renders content proven to belong to that task"),
     ("task-operations.md", "recorded directory stay empty and report absence"),

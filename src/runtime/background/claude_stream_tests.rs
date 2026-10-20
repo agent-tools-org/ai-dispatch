@@ -95,7 +95,7 @@ async fn interactive_background_spec_accepts_only_replay_and_settles() {
         assert_eq!(status(&store), TaskStatus::Running);
         std::fs::write(output.with_extension("replay"), "go").unwrap();
     };
-    let run = run_process(&store, &spec, &args, &ClaudeAgent, command("ack", &output));
+    let run = run_process(&store, &spec, &args, &ClaudeAgent, command("ack", &output), std::time::Instant::now());
     let (result, ()) = tokio::time::timeout(Duration::from_secs(8), async {
         tokio::join!(run, observer)
     })
@@ -151,7 +151,7 @@ async fn interactive_background_immediate_exit_preserves_status_and_output() {
             "-p",
             "initial prompt",
         ]);
-        run_process(&store, &spec, &args, &ClaudeAgent, command)
+        run_process(&store, &spec, &args, &ClaudeAgent, command, std::time::Instant::now())
             .await
             .unwrap();
         let task = store.get_task(&spec.task_id).unwrap().unwrap();
@@ -188,7 +188,7 @@ async fn interactive_background_api_refusal_still_fails_without_reading_stdin() 
         "-p",
         "initial prompt",
     ]);
-    run_process(&store, &spec, &args, &route, command)
+    run_process(&store, &spec, &args, &route, command, std::time::Instant::now())
         .await
         .unwrap();
     assert_eq!(status(&store), TaskStatus::Failed);
@@ -216,6 +216,7 @@ async fn timed_out_steer_write_closes_input_without_failing_background_task() {
             &args,
             &ClaudeAgent,
             command("blocked", &output),
+            std::time::Instant::now(),
         ),
     )
     .await

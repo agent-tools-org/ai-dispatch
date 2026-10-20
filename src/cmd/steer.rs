@@ -39,33 +39,41 @@ pub(crate) fn wrap_up_before_timeout(
     let Some(task) = store.get_task(task_id)? else {
         return Ok(false);
     };
-    if task.read_only || reply::ensure_interactive_input(&task, InputCommand::Steer).is_err()
+    if reply::ensure_interactive_input(&task, InputCommand::Steer).is_err()
         || crate::support::paths::steer_signal_path(task_id).exists()
     {
         return Ok(false);
     }
-    queue_wrap_up(store, task_id)
+    queue_wrap_up(store, task_id, task.read_only)
 }
 
-fn queue_wrap_up(store: &Store, task_id: &str) -> Result<bool> {
+fn queue_wrap_up(store: &Store, task_id: &str, read_only: bool) -> Result<bool> {
     let mut conn = store.db();
     let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
     if crate::support::paths::steer_signal_path(task_id).exists() {
         return Ok(false);
     }
-    let message = "Hard timeout is approaching: please commit work in progress if changes are permitted, \
-                   and write the report now.";
+    let (message, detail) = if read_only {
+        ("Hard timeout is approaching: stop investigating and write the report now with the evidence \
+          gathered so far and the open questions. Write only an already authorized result file; \
+          this request grants no new write permission.",
+         "Hard-cap wrap-up: queued request to stop investigating and write the report")
+    } else {
+        ("Hard timeout is approaching: please commit work in progress if changes are permitted, \
+                   and write the report now.",
+         "Hard-cap wrap-up: queued request to commit work in progress and write the report")
+    };
     let rows = tx.execute(
         "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
          SELECT id, ?2, 'milestone', ?3, ?4 FROM tasks WHERE id = ?1
-         AND status IN ('running', 'awaiting_input', 'stalled') AND read_only = 0
+         AND status IN ('running', 'awaiting_input', 'stalled')
          AND NOT EXISTS (SELECT 1 FROM events WHERE task_id = ?1 AND
              CASE WHEN json_valid(metadata)
              THEN json_extract(metadata, '$.hard_cap_wrap_up') END = 1)",
         rusqlite::params![
             task_id,
             chrono::Local::now().to_rfc3339(),
-            "Hard-cap wrap-up: queued request to commit work in progress and write the report",
+            detail,
             r#"{"input_delivery":"queued","hard_cap_wrap_up":true}"#
         ],
     )?;

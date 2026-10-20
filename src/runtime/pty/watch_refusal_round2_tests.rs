@@ -233,13 +233,23 @@ fn operator_steer_remains_allowed_for_read_only_round2_regression() {
         )
         .expect("read-only");
     assert!(
-        !crate::cmd::steer::wrap_up_before_timeout(&store, id.as_str(), 540, 600).expect("auto")
+        crate::cmd::steer::wrap_up_before_timeout(&store, id.as_str(), 540, 600).expect("auto")
     );
     crate::cmd::steer::run(&store, id.as_str(), "operator guidance").expect("operator steer");
     MonitorState::new(true, None)
         .maybe_forward_steer(&mut bridge, &store, &id)
         .expect("operator signal");
-    consume_twice(&store, &id, &mut bridge);
+    let mut state = MonitorState::new(true, None);
+    for _ in 0..2 {
+        state.maybe_consume_reply(&mut bridge, &store, &id).expect("pending delivery");
+    }
+    let messages = store.list_messages_for_task(id.as_str()).expect("messages");
+    assert_eq!(messages.len(), 2);
+    assert!(messages.iter().all(|message| message.delivered_at.is_some()));
+    assert!(messages.iter().any(|message| message.content == "operator guidance"));
+    assert_eq!(store.get_events(id.as_str()).expect("events").iter()
+        .filter(|event| event.event_kind == EventKind::Reasoning
+            && event.detail.contains("written to PTY; consumption unconfirmed")).count(), 2);
     bridge.kill().expect("kill");
     bridge.wait().expect("wait");
 }

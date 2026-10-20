@@ -98,7 +98,7 @@ fn wrap_up_skips_early_short_and_unsupported_runs_refusal_regression() {
 }
 
 #[test]
-fn read_only_reaper_never_queues_wrap_up_fix_regression() {
+fn read_only_reaper_queues_report_only_wrap_up() {
     let _home = setup_home();
     let store = Store::open_memory().expect("store");
     let mut task = task("t-read-only-wrap", TaskStatus::Running);
@@ -115,8 +115,15 @@ fn read_only_reaper_never_queues_wrap_up_fix_regression() {
     check_zombie_tasks_with(&store, |_| true).expect("reap");
     assert_eq!(store.get_task(task.id.as_str()).expect("task").expect("task").status,
         TaskStatus::Running);
-    assert!(store.get_events(task.id.as_str()).expect("events").is_empty());
-    assert!(store.list_messages_for_task(task.id.as_str()).expect("messages").is_empty());
+    let messages = store.list_messages_for_task(task.id.as_str()).expect("messages");
+    assert_eq!(messages.len(), 1);
+    assert!(messages[0].content.contains("stop investigating"));
+    assert!(messages[0].content.contains("open questions"));
+    assert!(!messages[0].content.contains("commit"));
+    let events = store.get_events(task.id.as_str()).expect("events");
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].detail,
+        "Hard-cap wrap-up: queued request to stop investigating and write the report");
     assert!(!crate::support::paths::steer_signal_path(task.id.as_str()).exists());
 }
 
@@ -163,4 +170,21 @@ fn legacy_wrap_up_record_prevents_duplicate_queueing() {
     assert!(store.list_messages_for_task(task.id.as_str()).unwrap().is_empty());
     let events = store.get_events(task.id.as_str()).unwrap();
     assert_eq!(events[0].metadata.as_ref().unwrap()["steered"], true);
+}
+
+#[test]
+fn worker_claim_then_reaper_keeps_one_wrap_up_request() {
+    let _home = setup_home();
+    let (store, task) = poll_at(0, 600, AgentKind::Gemini);
+    assert!(crate::cmd::steer::wrap_up_before_timeout(
+        &store, task.id.as_str(), 540, 600,
+    ).expect("worker claim"));
+    store.db().execute(
+        "UPDATE tasks SET created_at = ?1 WHERE id = ?2",
+        rusqlite::params![(Local::now() - Duration::seconds(541)).to_rfc3339(), task.id.as_str()],
+    ).expect("age task");
+    check_zombie_tasks_with(&store, |_| true).expect("backup reaper");
+    assert_eq!(store.list_messages_for_task(task.id.as_str()).expect("messages").len(), 1);
+    assert_eq!(store.get_events(task.id.as_str()).expect("events").iter()
+        .filter(|event| event.detail.contains("wrap-up")).count(), 1);
 }

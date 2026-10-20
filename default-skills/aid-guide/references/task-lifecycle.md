@@ -41,6 +41,13 @@ visible as Milestones and do not replace the terminal failure reason. Verificati
 status and delivery assessments remain observational metadata and may update after
 settlement.
 
+Usage-bearing completions checkpoint reported tokens and cost durably at ingestion.
+Normal completion, worker timeout, reaper failure, and stop recover the latest checkpoint
+when completion accounting is missing. Claude result cost and complete `modelUsage`
+counters are cumulative snapshots across models, not amounts to add between results.
+Without a usage event, accounting stays unknown (`NULL`); usage before the first result
+is not estimated from assistant messages.
+
 A stopped parent refuses automatic child tasks and automatic child worker launches
 (verification retries, judge retries, iterations, `--retry`, cascades, and batch fallbacks).
 Explicit `aid retry <task-id> -f "feedback"` and `aid batch retry` can create and launch

@@ -121,3 +121,7 @@ fn settle_execution_failure(args: &RunProcessArgs<'_>, duration_ms: i64, detail:
         &event,
     );
 }
+
+#[cfg(test)]
+#[path = "process_watch_usage_tests.rs"]
+mod usage_tests;

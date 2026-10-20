@@ -4,6 +4,9 @@
 #[path = "claude_model.rs"]
 mod model;
 use model::{extract_result_model, normalize_model};
+#[path = "claude_usage.rs"]
+mod usage;
+use usage::parse_result_event;
 use chrono::Local;
 use serde_json::{Value, json};
 use super::truncate::{capped_detail, capped_detail_with};
@@ -23,7 +26,7 @@ pub(crate) fn parse_event_line_for_route(
     }
     let v: Value = serde_json::from_str(trimmed).ok()?;
     let now = Local::now();
-    if trimmed.contains("NO_CHANGES_NEEDED") {
+    if trimmed.contains("NO_CHANGES_NEEDED") && v["type"] != "result" {
         return Some(TaskEvent {
             task_id: task_id.clone(),
             timestamp: now,
@@ -113,73 +116,6 @@ fn build_tool_event(
         detail,
         metadata,
     })
-}
-
-fn parse_result_event(
-    task_id: &TaskId,
-    v: &Value,
-    now: chrono::DateTime<Local>,
-) -> Option<TaskEvent> {
-    let payload = v.get("result").filter(|value| value.is_object()).unwrap_or(v);
-    let usage = payload.get("usage").unwrap_or(payload);
-    let input_tokens = usage_token_count(usage, "input_tokens", "tokens_in");
-    let output_tokens = usage_token_count(usage, "output_tokens", "tokens_out");
-    let cache_creation_tokens = usage_token_count(
-        usage, "cache_creation_input_tokens", "cache_creation_input_tokens",
-    );
-    let cache_read_tokens = usage_token_count(usage, "cache_read_input_tokens", "cache_read_input_tokens");
-    let total_tokens = input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens;
-    let detail = format!(
-        "tokens: {} in + {} out = {} ({} cache create, {} cache read)",
-        input_tokens,
-        output_tokens,
-        total_tokens,
-        cache_creation_tokens,
-        cache_read_tokens
-    );
-    let metadata = result_metadata(payload, v, json!({
-        "tokens": total_tokens,
-        "input_tokens": input_tokens,
-        "uncached_input_tokens": input_tokens,
-        "output_tokens": output_tokens,
-        "prompt_tokens": input_tokens,
-        "cache_creation_input_tokens": cache_creation_tokens,
-        "cache_read_input_tokens": cache_read_tokens,
-    }));
-    let (detail, metadata) = capped_detail_with(&detail, Some(metadata));
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Completion,
-        detail,
-        metadata,
-    })
-}
-
-fn usage_token_count(usage: &Value, key: &str, alias: &str) -> i64 {
-    usage.get(key).or_else(|| usage.get(alias)).and_then(Value::as_i64).unwrap_or(0)
-}
-
-fn result_metadata(payload: &Value, envelope: &Value, mut metadata: Value) -> Value {
-    let cost_usd = payload
-        .get("total_cost_usd")
-        .or_else(|| payload.get("cost_usd"))
-        .and_then(|value| value.as_f64());
-    let model = extract_result_model(payload);
-    let session_id = payload
-        .get("session_id")
-        .or_else(|| envelope.get("session_id"))
-        .and_then(|value| value.as_str());
-    if let Some(cost) = cost_usd {
-        metadata["cost_usd"] = json!(cost);
-    }
-    if let Some(model) = model {
-        metadata["model"] = json!(model);
-    }
-    if let Some(session_id) = session_id {
-        metadata["agent_session_id"] = json!(session_id);
-    }
-    metadata
 }
 
 fn parse_system_event(

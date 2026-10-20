@@ -141,7 +141,11 @@ pub(crate) fn handle_streaming_line_with_session(
         {
             mark_stream_rate_limit(store, task_id, agent, line, &message);
         }
-        store.insert_agent_event(&event)?;
+        if event.event_kind == EventKind::Completion {
+            store.insert_agent_event_with_usage(&event, info)?;
+        } else {
+            store.insert_agent_event(&event)?;
+        }
         *event_count += 1;
         if let Some(event) = synthetic_tracker.synthetic_event(task_id, &event) {
             store.insert_agent_event(&event)?;

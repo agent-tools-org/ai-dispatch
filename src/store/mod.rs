@@ -7,6 +7,7 @@ mod task_insert_mutations;
 mod status_mutations;
 mod task_metadata_mutations;
 mod completion_mutations;
+mod usage_checkpoint;
 mod memory_mutations;
 #[cfg(test)]
 mod mutation_tests;
@@ -96,6 +97,7 @@ impl Store {
     fn create_tables(&self) -> Result<()> {
         schema::create_tables(self)?;
         self.migrate()?;
+        usage_checkpoint::create_table(&self.db())?;
         migrations::migrate_billing_index(&self.db())?;
         Ok(())
     }

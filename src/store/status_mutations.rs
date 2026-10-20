@@ -46,6 +46,9 @@ impl Store {
         if rows == 0 {
             return Ok(false);
         }
+        if status.is_terminal() {
+            super::usage_checkpoint::reconcile_on(&tx, id, None, None)?;
+        }
         if let Some(event) = event {
             super::mutations::insert_event_on(&tx, event)?;
         }

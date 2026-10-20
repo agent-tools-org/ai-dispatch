@@ -38,7 +38,10 @@ fn selection_uses_explicit_name_or_one_pick_and_retains_stderr() {
 pub(super) fn stored_task() -> (Store, TaskId, RunArgs) {
     let store = Store::open_memory().expect("store");
     store.db().execute("INSERT INTO tasks (id, agent, prompt, status, created_at) VALUES ('t-remote', 'codex', 'task', 'pending', ?1)", [chrono::Local::now().to_rfc3339()]).expect("task");
-    let args = RunArgs { remote_build: Some("chosen-box".into()), ..Default::default() };
+    let args = RunArgs {
+        remote_build: Some("chosen-box".into()), remote_build_auto_picked: true,
+        ..Default::default()
+    };
     store.update_task_dispatch_args("t-remote", &args.dispatch_args_json().expect("serialize")).expect("persist");
     (store, TaskId("t-remote".into()), args)
 }
@@ -195,7 +198,8 @@ fn refused_verify_repicks_once_persists_box_and_reruns() {
     assert_eq!(saved_box(&store, id.as_str()).expect("saved").as_deref(), Some("second-box"));
     let events = store.get_events(id.as_str()).expect("events");
     assert_eq!(events.len(), 1);
-    assert_eq!(events[0].detail, "Remote build box: chosen-box refused admission (disk); re-picked second-box");
+    assert!(events[0].detail.contains("infrastructure failure"));
+    assert!(events[0].detail.contains("re-picked second-box"));
     assert_eq!(events[0].metadata.as_ref().expect("metadata")["remote_build"], "second-box");
 }
 
@@ -207,14 +211,19 @@ fn second_refusal_or_failed_repick_is_infrastructure_failure_naming_the_box() {
     refusing_verify(temp.path(), "chosen-box|second-box");
     let rbox = temp.path().join("rbox");
     write_executable(&rbox, "#!/bin/bash\necho second-box\n");
-    let error = verify_with(&store, id.as_str(), temp.path(), Some("./verify"), None, None, &mut Command::new(&rbox)).expect_err("both refused");
-    assert_eq!(error.to_string(), "Remote build box second-box refused admission after re-pick from chosen-box (rbox: second-box 9.9 GiB free; requires 10 GiB)");
+    let result = verify_with(&store, id.as_str(), temp.path(), Some("./verify"), None, None,
+        &mut Command::new(&rbox)).expect("both refused");
+    assert!(result.infrastructure_failure);
+    assert!(result.output.contains("rbox: second-box 9.9 GiB free; requires 10 GiB"));
     assert_eq!(saved_box(&store, id.as_str()).expect("saved").as_deref(), Some("second-box"));
     
     let (store2, id2, _) = stored_task();
     write_executable(&rbox, "#!/bin/bash\necho 'none free: all rust builders busy' >&2\nexit 1\n");
     let error = verify_with(&store2, id2.as_str(), temp.path(), Some("./verify"), None, None, &mut Command::new(&rbox)).expect_err("re-pick failed");
-    assert_eq!(error.to_string(), "Remote build box chosen-box refused admission (rbox: chosen-box 9.9 GiB free; requires 10 GiB); re-pick failed: Remote build box selection failed: none free: all rust builders busy");
+    assert_eq!(error.to_string(), concat!(
+        "Remote build box chosen-box: rbox: chosen-box 9.9 GiB free; requires 10 GiB; ",
+        "re-pick failed: Remote build box selection failed: none free: all rust builders busy"
+    ));
     
 }
 

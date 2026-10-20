@@ -109,6 +109,7 @@ fn every_field_set() -> RunArgs {
         origin: DispatchOrigin::ExplicitRetry,
         cascade: vec!["opencode".into()], read_only: true, audit_report_mode: true, sandbox: true,
         container: Some("ubuntu:latest".into()), remote_build: Some("chosen-box".into()),
+        remote_build_auto_picked: true,
         backup: Some("gdrive:x".into()), no_backup: true, budget: true, best_of: Some(2),
         metric: Some("wc -l".into()), session_id: Some("session-1".into()), team: Some("dev".into()),
         context_from: vec!["t-ctx".into()],

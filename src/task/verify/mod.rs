@@ -13,6 +13,7 @@ use crate::types::{TaskId, TaskStatus, VerifyStatus};
 
 mod budget;
 mod output;
+pub(crate) mod infrastructure;
 use output::spawn_output_reader;
 use crate::runtime::remote_build::LockQueue;
 pub(crate) use budget::VerifyBudget;
@@ -144,7 +145,9 @@ fn execute_verify(
 
 /// Format a concise pass/fail report from verification result.
 pub fn format_verify_report(result: &VerifyResult) -> String {
-    let status = if result.timed_out {
+    let status = if result.infrastructure_failure {
+        "INFRASTRUCTURE"
+    } else if result.timed_out {
         "TIMEOUT"
     } else if result.success {
         "PASS"
@@ -175,7 +178,9 @@ pub fn record_verify_status(store: &Store, task_id: &TaskId, result: &VerifyResu
         let _ = store.update_verify_status(task_id.as_str(), VerifyStatus::Skipped);
         return;
     }
-    let status = if result.timed_out {
+    let status = if result.infrastructure_failure {
+        VerifyStatus::InfrastructureFailure
+    } else if result.timed_out {
         VerifyStatus::TimedOut
     } else if result.success {
         VerifyStatus::Passed

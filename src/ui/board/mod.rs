@@ -102,7 +102,19 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
         &latest_milestones,
         &latest_errors,
     );
+    append_infrastructure_diagnostics(&mut out, tasks, store)?;
     Ok(out)
+}
+
+fn append_infrastructure_diagnostics(out: &mut String, tasks: &[Task], store: &Store) -> Result<()> {
+    for task in tasks.iter().filter(|task| task.verify_status == VerifyStatus::InfrastructureFailure) {
+        if let Some(event) = store.get_events(task.id.as_str())?.iter().rev().find(|event| {
+            event.metadata.as_ref().is_some_and(|meta| meta["verify_execution_error"] == true)
+        }) {
+            out.push_str(&format!("{} [VINFRA] {}\n", task.id, event.detail));
+        }
+    }
+    Ok(())
 }
 
 fn count_statuses(tasks: &[Task]) -> (usize, usize, usize) {

@@ -117,9 +117,11 @@ fn record_verify_infrastructure_detail(store: &Store, task_id: &TaskId, detail: 
 }
 
 fn verify_infrastructure_detail(result: &crate::task::verify::VerifyResult) -> String {
-    match verify_output_excerpt(&result.output) {
-        Some(output) => format!("{}\nOutput: {output}", result.command),
-        None => result.command.clone(),
+    let diagnostic = crate::task::verify::infrastructure::diagnostic(&result.output);
+    match (diagnostic, verify_output_excerpt(&result.output)) {
+        (Some(line), _) => format!("{}\nOutput: {line}", result.command),
+        (_, Some(output)) => format!("{}\nOutput: {output}", result.command),
+        _ => result.command.clone(),
     }
 }
 

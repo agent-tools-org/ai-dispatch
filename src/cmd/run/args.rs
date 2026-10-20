@@ -65,6 +65,7 @@ pub struct RunArgs {
     pub sandbox: bool,
     pub container: Option<String>,
     pub remote_build: Option<String>,
+    pub(crate) remote_build_auto_picked: bool,
     /// `--backup TARGET[:FOLDER]`; `aid retry` inherits it with the other args.
     pub backup: Option<String>,
     pub no_backup: bool,
@@ -194,6 +195,7 @@ impl Default for RunArgs {
             sandbox: false,
             container: None,
             remote_build: None,
+            remote_build_auto_picked: false,
             backup: None,
             no_backup: false,
             budget: false,

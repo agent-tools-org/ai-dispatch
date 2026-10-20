@@ -249,3 +249,48 @@ fn retry_target_application_errors_without_worktree_or_repo() {
 
     assert!(err.to_string().contains("no usable worktree path, retry dir, or repo path"));
 }
+
+#[test]
+fn infrastructure_diagnostic_survives_long_output_in_show_and_board() {
+    let temp = TempDir::new().expect("temp");
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().expect("store");
+    let dir = temp.path().to_string_lossy().to_string();
+    let task = make_task("t-infra-show", &dir);
+    store.insert_task(&task).expect("task");
+    let args = RunArgs { remote_build: Some("box".into()), ..Default::default() };
+    store.update_task_dispatch_args(task.id.as_str(), &args.dispatch_args_json().expect("json"))
+        .expect("save remote box");
+    let line = "rbox: Box lock not acquired within 60 s";
+    let bin = temp.path().join("long-remote-checkout-path-".repeat(8));
+    crate::support::test_env::write_executable(&bin.join("rbox"), &format!(
+        "#!/bin/sh\necho '{line}'\ni=0\n\
+         while [ $i -lt 20 ]; do echo trailing-noise; i=$((i+1)); done\nexit 75\n"
+    ));
+    let command = format!("PATH='{}:/usr/bin:/bin' rbox exec box", bin.display());
+    assert!(command.len() > 200);
+    maybe_verify_impl(&store, &task.id, Some(&command), Some(&dir), None);
+    let task = store.get_task(task.id.as_str()).expect("load").expect("task");
+    assert_eq!(task.status, TaskStatus::Done);
+    assert_eq!(task.verify_status, VerifyStatus::InfrastructureFailure);
+    let board = crate::ui::board::render_board(&[task.clone()], &store).expect("board");
+    assert!(board.contains("[VINFRA]") && board.contains(line), "{board}");
+    let show = crate::cmd::show::audit_text(&Arc::new(store), task.id.as_str()).expect("show");
+    assert!(show.contains(line), "{show}");
+}
+
+#[test]
+fn local_verify_with_anchored_rbox_output_stays_failed() {
+    let temp = TempDir::new().expect("temp");
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().expect("store");
+    let dir = temp.path().to_string_lossy().to_string();
+    let task = make_task("t-local-rbox-output", &dir);
+    store.insert_task(&task).expect("task");
+    assert!(RunArgs::saved_for_task(&store, task.id.as_str()).expect("args").is_none());
+    let command = "printf 'rbox: Box lock not acquired within 60 s\\n'; exit 1";
+    maybe_verify_impl(&store, &task.id, Some(command), Some(&dir), None);
+    let task = store.get_task(task.id.as_str()).expect("load").expect("task");
+    assert_eq!(task.verify_status, VerifyStatus::Failed);
+    assert_eq!(task.status, TaskStatus::Failed);
+}

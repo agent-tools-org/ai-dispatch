@@ -72,8 +72,16 @@ fn infrastructure_verification_renders_its_own_tag() {
     let store = Store::open_memory().unwrap();
     let mut task = timed_out_task();
     task.verify_status = VerifyStatus::InfrastructureFailure;
+    store.insert_task(&task).expect("task");
+    store.insert_event(&crate::types::TaskEvent {
+        task_id: task.id.clone(), timestamp: Local::now(),
+        event_kind: crate::types::EventKind::Milestone,
+        detail: "Verification could not run: rbox: Box lock not acquired within 60 s".into(),
+        metadata: Some(serde_json::json!({"verify_execution_error": true})),
+    }).expect("event");
 
     let output = render_board(&[task], &store).unwrap();
+    assert!(output.contains("rbox: Box lock not acquired within 60 s"), "{output}");
 
     assert!(output.contains("[VINFRA]"), "output: {output}");
     assert!(!output.contains("[VFAIL]"), "output: {output}");

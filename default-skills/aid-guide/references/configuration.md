@@ -299,6 +299,9 @@ and other isolation controls cannot be credential variable references.
 Malformed TOML refuses launch when a top-level provider selection is identified;
 otherwise aid warns with the config path and launches with the default provider.
 
+The global `[query]` table configures OpenRouter models and authentication for
+`aid query`; it is separate from Codex provider `query_params`.
+
 Register a local custom agent
 with `agent add`. Use `clear-limit` only after confirming a provider's
 rate-limit condition has cleared. Each custom agent has its own marker keyed on

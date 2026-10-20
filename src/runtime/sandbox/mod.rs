@@ -92,7 +92,11 @@ fn mount_workdir(wrapped: &mut Command, dir: &str) {
 }
 
 fn forward_command_envs(wrapped: &mut Command, cmd: &Command) {
+    let provider_env = crate::agent::codex::provider::forward_environment(cmd, wrapped);
     for (key, value) in cmd.get_envs() {
+        if provider_env.iter().any(|name| key == std::ffi::OsStr::new(name)) {
+            continue;
+        }
         if key == std::ffi::OsStr::new("HOME") {
             continue;
         }

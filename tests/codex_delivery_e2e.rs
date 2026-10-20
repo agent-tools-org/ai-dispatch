@@ -150,10 +150,9 @@ fn missing_final_delivery_fails_parent_and_resumes_once() {
 
     let home = home_with_seeded_rollout();
     let workspace = TempDir::new().unwrap();
-    let output = aid_cmd_in(aid_home.path())
+    let output = delivery_cmd(aid_home.path(), home.path())
         .current_dir(workspace.path())
         .env("PATH", path)
-        .env("HOME", home.path())
         .args([
             "run",
             "codex",
@@ -188,10 +187,9 @@ fn repeated_missing_delivery_does_not_start_third_attempt() {
 
     let home = home_with_seeded_rollout();
     let workspace = TempDir::new().unwrap();
-    let output = aid_cmd_in(aid_home.path())
+    let output = delivery_cmd(aid_home.path(), home.path())
         .current_dir(workspace.path())
         .env("PATH", test_path(bin_dir.path()))
-        .env("HOME", home.path())
         .env("FAKE_CODEX_HOLLOW_RESUME", "1")
         .args([
             "run",
@@ -220,10 +218,36 @@ fn repeated_missing_delivery_does_not_start_third_attempt() {
 }
 
 /// The resume preflight looks for the session's rollout under the operator's
-/// real `$HOME`, so a test that leaves HOME alone reads whatever that machine
-/// happens to have and falls back to a fresh run instead of resuming. Give the
-/// test its own HOME and seed the rollout the fake CLI's thread_id implies.
+/// `$CODEX_HOME` (or `$HOME/.codex` when unset). Override both homes so the
+/// shared command helper's empty Codex home cannot hide the seeded rollout.
 const FIXTURE_SESSION_ID: &str = "019e3e49-6b83-7563-a3d8-b51a3a716dd1";
+
+fn delivery_cmd(aid_home: &Path, home: &Path) -> std::process::Command {
+    let mut cmd = aid_cmd_in(aid_home);
+    cmd.env("HOME", home).env("CODEX_HOME", home.join(".codex"));
+    cmd
+}
+
+#[test]
+fn delivery_command_overrides_empty_codex_home_with_seeded_rollout() {
+    let aid_home = TempDir::new().unwrap();
+    let home = home_with_seeded_rollout();
+    let cmd = delivery_cmd(aid_home.path(), home.path());
+    let codex_home = cmd
+        .get_envs()
+        .find(|(key, _)| *key == "CODEX_HOME")
+        .and_then(|(_, value)| value)
+        .map(std::path::PathBuf::from)
+        .unwrap();
+    assert_eq!(codex_home, home.path().join(".codex"));
+    assert!(
+        codex_home
+            .join(format!(
+                "sessions/2026/08/09/rollout-2026-08-09T00-00-00-{FIXTURE_SESSION_ID}.jsonl"
+            ))
+            .is_file()
+    );
+}
 
 fn home_with_seeded_rollout() -> TempDir {
     let home = TempDir::new().unwrap();

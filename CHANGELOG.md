@@ -1,3 +1,12 @@
+## v11.4.0 (2026-10-20)
+- Read-only concurrent changes: a `--read-only` launch whose recorded provenance proves aid's restrictive native profile (Codex app-server or exec) reports checkout changes made during the run as an input-instability warning with baseline/current HEAD and the changed paths, instead of a read-only violation; unproven launches (Claude, custom agents, missing provenance) still fail
+- Claude mid-run input: Claude tasks run with streaming input, so `aid steer` and `aid reply` reach a running Claude task and record acceptance only when Claude replays the message; a steer write that fails is recorded unconfirmed without ending the run
+- Hard-cap wrap-up is requested by the worker itself at 90 % of the deadline it enforces (PTY, Codex app-server and piped runs), with the reaper as backup and one request per task; read-only tasks get a report-only request
+- Usage survives a killed task: usage-bearing completions are checkpointed as they arrive, and worker timeout, reaper and stop settle tokens and cost from the latest checkpoint; Claude's cumulative `total_cost_usd` is never summed and `modelUsage` is preferred for tokens
+- Remote verify infrastructure outcome: an rbox-routed verify that failed before its command ran (offline box, ensure-stamp refusal, sync, lock) records the infrastructure outcome instead of a failed verify; an auto-picked box is re-picked once within the deadline; `aid show` keeps the diagnostic line
+- Diagnostics are kept: the reaper appends to the agent's stderr instead of replacing it, worker stderr goes to a per-task worker log, and a preparation error after the pending row settles with its own text
+
+
 ## v11.3.0 (2026-10-16)
 - Claude API account routes: `[[api_route]]` entries run Claude Code against one Anthropic API account whose key stays in the macOS keychain (inline apiKeyHelper, provider env scrubbed, disk setting sources disabled, launch refused when Claude Code managed settings exist)
 - Route spend is the month-to-date cost of completed route tasks in the UTC month, checked at launch against `monthly_budget_usd` with `over_budget = "stop"` or `"bill"`; credit-balance refusals hold the route until the next UTC month

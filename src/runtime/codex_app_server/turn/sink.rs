@@ -100,7 +100,7 @@ impl<'a> Sink<'a> {
                 AgentKind::Codex,
             )?;
             event.event_kind = EventKind::Milestone;
-            self.run.store.insert_agent_event(&event)?;
+            self.run.store.insert_agent_event_with_usage(&event, &self.info)?;
         }
         Ok(())
     }

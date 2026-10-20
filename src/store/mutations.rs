@@ -74,7 +74,7 @@ impl Store {
 
     pub(crate) fn insert_agent_event(&self, event: &TaskEvent) -> Result<()> {
         let terminal = matches!(event.event_kind, EventKind::Completion | EventKind::Error);
-        insert_event_with_guard(&self.db(), event, terminal)
+        insert_event_with_guard(&self.db(), event, terminal).map(|_| ())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -112,14 +112,14 @@ impl Store {
 }
 
 pub(super) fn insert_event_on(conn: &rusqlite::Connection, event: &TaskEvent) -> Result<()> {
-    insert_event_with_guard(conn, event, false)
+    insert_event_with_guard(conn, event, false).map(|_| ())
 }
 
-fn insert_event_with_guard(
+pub(super) fn insert_event_with_guard(
     conn: &rusqlite::Connection, event: &TaskEvent, active_only: bool,
-) -> Result<()> {
+) -> Result<usize> {
     let metadata_str = event.metadata.as_ref().map(|m| m.to_string());
-    conn.execute(
+    let rows = conn.execute(
         "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
          SELECT ?1, ?2, ?3, ?4, ?5 WHERE ?6 = 0 OR EXISTS (
              SELECT 1 FROM tasks WHERE id = ?1
@@ -134,5 +134,5 @@ fn insert_event_with_guard(
             active_only,
         ],
     )?;
-    Ok(())
+    Ok(rows)
 }

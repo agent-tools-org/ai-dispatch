@@ -100,7 +100,7 @@ pub(crate) async fn watch_buffered(
             event.detail = "Agent diagnostic reported a terminal executor failure".to_string();
         }
     }
-    store.insert_agent_event(&event)?;
+    store.insert_agent_event_with_usage(&event, &info)?;
     Ok(info)
 }
 

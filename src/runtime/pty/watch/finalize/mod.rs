@@ -137,7 +137,7 @@ fn finalize_buffered(
     if state.info.status == TaskStatus::Failed {
         event.event_kind = EventKind::Error;
     }
-    store.insert_agent_event(&event)?;
+    store.insert_agent_event_with_usage(&event, &state.info)?;
     Ok(())
 }
 

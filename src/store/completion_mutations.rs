@@ -45,10 +45,11 @@ impl Store {
             // nothing must not erase a model the first one observed. The
             // requested model in `model` is never touched here — a completion
             // has no business rewriting what was asked for.
-            "UPDATE tasks SET status = ?1, tokens = ?2, duration_ms = ?3,
+            "UPDATE tasks SET status = ?1, tokens = COALESCE(?2, tokens), duration_ms = ?3,
              completed_at = CASE WHEN ?1 = 'done' AND ?10 = 0 THEN NULL ELSE ?4 END,
              observed_model = COALESCE(?5, observed_model),
-             attribution_source = COALESCE(?9, attribution_source), cost_usd = ?6, exit_code = ?7
+             attribution_source = COALESCE(?9, attribution_source),
+             cost_usd = COALESCE(?6, cost_usd), exit_code = ?7
              WHERE id = ?8
              AND (status NOT IN ('done', 'failed', 'stopped', 'skipped', 'merged')
                   OR (status = 'done' AND completed_at IS NULL))",
@@ -68,6 +69,7 @@ impl Store {
         if rows == 0 {
             return Ok(false);
         }
+        super::usage_checkpoint::reconcile_on(&tx, payload.id, payload.tokens, payload.cost_usd)?;
         if let Some(event) = event {
             super::mutations::insert_event_on(&tx, event)?;
         }

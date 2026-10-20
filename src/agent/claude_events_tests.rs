@@ -103,3 +103,9 @@ fn regression_picks_larger_claude_model_with_huge_token_counts() {
     });
     assert_eq!(extract_result_model(&result).as_deref(), Some("a-large"));
 }
+
+#[test]
+fn captured_result_counts_all_models_cumulatively() {
+    let event = parse_event_line(&TaskId("t-model-totals".into()), CAPTURED_RESULT).expect("result");
+    assert_eq!(event.metadata.expect("usage")["tokens"], 10_244_041);
+}

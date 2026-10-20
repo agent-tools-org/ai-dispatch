@@ -53,7 +53,7 @@ fn cumulative_usage(payload: &Value) -> Option<Value> {
 pub(super) fn parse_result_event(
     task_id: &TaskId,
     v: &Value,
-    now: chrono::DateTime<Local>,
+    now: chrono::DateTime<chrono::Local>,
 ) -> Option<TaskEvent> {
     let payload = v
         .get("result")

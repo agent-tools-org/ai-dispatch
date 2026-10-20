@@ -65,33 +65,10 @@ fn loads_and_merges_pricing_overrides() {
 }
 
 #[test]
-fn merged_agent_models_include_gemini_3_catalog() {
-    let merged = merged_agent_models().unwrap();
-    let gemini_models: Vec<_> = merged
-        .iter()
-        .filter(|model| model.agent == AgentKind::Gemini)
-        .map(|model| model.model.as_str())
-        .collect();
-    for expected in [
-        "gemini-3.1-pro-preview",
-        "gemini-3-flash-preview",
-        "gemini-3-flash-lite-preview",
-        "gemini-2.5-flash",
-        "gemini-2.5-pro",
-    ] {
-        assert!(
-            gemini_models.iter().any(|name| *name == expected),
-            "missing model {expected} in {:?}",
-            gemini_models
-        );
-    }
-}
-
-#[test]
 fn recent_observed_models_line_lists_top_three_unsorted_extras_only() {
     let mut mh = HashMap::new();
     mh.insert(
-        (AgentKind::Gemini, "gemini-3-flash-preview".into()),
+        (AgentKind::Grok, "grok-4.6".into()),
         ModelHistory {
             task_count: 1,
             success_rate: 50.0,
@@ -100,7 +77,7 @@ fn recent_observed_models_line_lists_top_three_unsorted_extras_only() {
     );
     mh.insert(
         (
-            AgentKind::Gemini,
+            AgentKind::Grok,
             "actually-observed-gemini-99".into(),
         ),
         ModelHistory {
@@ -111,7 +88,7 @@ fn recent_observed_models_line_lists_top_three_unsorted_extras_only() {
     );
     mh.insert(
         (
-            AgentKind::Gemini,
+            AgentKind::Grok,
             "actually-observed-gemini-98".into(),
         ),
         ModelHistory {
@@ -122,7 +99,7 @@ fn recent_observed_models_line_lists_top_three_unsorted_extras_only() {
     );
     mh.insert(
         (
-            AgentKind::Gemini,
+            AgentKind::Grok,
             "actually-observed-gemini-97".into(),
         ),
         ModelHistory {
@@ -133,7 +110,7 @@ fn recent_observed_models_line_lists_top_three_unsorted_extras_only() {
     );
     mh.insert(
         (
-            AgentKind::Gemini,
+            AgentKind::Grok,
             "actually-observed-fourth".into(),
         ),
         ModelHistory {
@@ -143,7 +120,7 @@ fn recent_observed_models_line_lists_top_three_unsorted_extras_only() {
         },
     );
 
-    let line = recent_observed_models_line(AgentKind::Gemini, &mh).expect("recent line present");
+    let line = recent_observed_models_line(AgentKind::Grok, &mh).expect("recent line present");
     assert!(line.starts_with("  Recent:    "));
     assert!(line.contains("actually-observed-gemini-99 (7)"));
     assert!(line.contains("actually-observed-gemini-97 (5)"));
@@ -156,14 +133,14 @@ fn recent_observed_models_line_lists_top_three_unsorted_extras_only() {
 fn disabled_agent_listing_hides_and_summarizes_agent() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = AidHomeGuard::set(temp.path());
-    agent_config::save_agent_disabled("gemini", true).unwrap();
+    agent_config::save_agent_disabled("grok", true).unwrap();
 
-    assert!(!builtin_agent_visible(AgentKind::Gemini));
+    assert!(!builtin_agent_visible(AgentKind::Grok));
     let names = disabled_agent_names();
-    assert_eq!(names, vec!["gemini".to_string()]);
+    assert_eq!(names, vec!["grok".to_string()]);
     assert_eq!(
         disabled_summary_line(&names).as_deref(),
-        Some("Disabled: gemini (enable with aid agent config gemini --enable)")
+        Some("Disabled: grok (enable with aid agent config grok --enable)")
     );
 }
 

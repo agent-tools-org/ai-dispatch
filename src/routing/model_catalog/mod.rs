@@ -9,9 +9,9 @@ use std::sync::OnceLock;
 use crate::types::{AgentKind, TaskBudget};
 
 mod data;
-pub(crate) mod resolved;
 #[cfg(test)]
 mod test_support;
+pub(crate) mod resolved;
 pub use data::{AGENT_MODELS, AGENT_PROFILES, AgentModel};
 pub(crate) use resolved::{
     load_pricing_overrides, merged_agent_models, models_for_agent, PricingResponse,

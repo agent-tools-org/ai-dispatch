@@ -39,9 +39,7 @@ impl Harness {
         };
         let mut config = String::new();
         for agent in [
-            "gemini",
             "agy",
-            "qwen",
             "copilot",
             "opencode",
             "commandcode",

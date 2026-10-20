@@ -175,10 +175,13 @@ fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
 }
 
+// Antigravity stores its authentication under this directory.
+const AGY_AUTH_DIR: &str = ".gemini";
+
 fn mount_home_dirs_from(home: Option<PathBuf>) -> Vec<String> {
     let mut args = Vec::new();
     let Some(home) = home else { return args };
-    for subdir in [".codex", ".copilot", ".gemini", ".qwen", ".kilo", ".mimocode", ".opencode"] {
+    for subdir in [".codex", ".copilot", AGY_AUTH_DIR, ".qwen", ".kilo", ".mimocode", ".opencode"] {
         let host_path = home.join(subdir);
         if host_path.exists() {
             let container_path = Path::new("/root").join(subdir);
@@ -216,6 +219,7 @@ mod tests {
     fn mount_home_dirs_returns_expected_args() {
         let home = TempDir::new().unwrap();
         fs::create_dir(home.path().join(".codex")).unwrap();
+        fs::create_dir(home.path().join(".copilot")).unwrap();
         fs::create_dir(home.path().join(".gemini")).unwrap();
         fs::create_dir(home.path().join(".qwen")).unwrap();
 
@@ -226,10 +230,11 @@ mod tests {
             .any(|pair| pair[0] == "-v" && pair[1].contains(".codex:/root/.codex")));
         assert!(args
             .windows(2)
-            .any(|pair| pair[0] == "-v" && pair[1].contains(".gemini:/root/.gemini")));
-        assert!(args
-            .windows(2)
-            .any(|pair| pair[0] == "-v" && pair[1].contains(".qwen:/root/.qwen")));
+            .any(|pair| pair[0] == "-v" && pair[1].contains(".copilot:/root/.copilot")));
+        assert!(args.windows(2).any(|pair|
+            pair[0] == "-v" && pair[1].contains(".gemini:/root/.gemini")));
+        assert!(args.windows(2).any(|pair|
+            pair[0] == "-v" && pair[1].contains(".qwen:/root/.qwen")));
     }
 
     #[test]
@@ -278,8 +283,14 @@ mod tests {
             .windows(2)
             .any(|pair| pair == ["-e", "CARGO_TARGET_DIR=/tmp/cache/_base"]));
     }
+
+
 }
 
 #[cfg(test)]
 #[path = "container_api_route_tests.rs"]
 mod api_route_tests;
+
+#[cfg(test)]
+#[path = "container_auth_tests.rs"]
+mod auth_tests;

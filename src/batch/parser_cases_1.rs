@@ -5,7 +5,7 @@ use super::*;
 #[test]
 fn parse_valid_batch() {
     let file = write_temp(concat!(
-            "[[tasks]]\nagent = \"gemini\"\nprompt = \"research X\"\nworktree = \"feat/x\"\n",
+            "[[tasks]]\nagent = \"grok\"\nprompt = \"research X\"\nworktree = \"feat/x\"\n",
             "[[tasks]]\nagent = \"codex\"\nprompt = \"implement Y\"\ndir = \"src\"\nmodel = \"gpt-4\"\ngroup = \"wg-demo\""
         ));
     std::fs::create_dir_all(file.path().parent().unwrap().join("src")).unwrap();
@@ -13,7 +13,7 @@ fn parse_valid_batch() {
     let expected_dir = file.path().parent().unwrap().join("src");
 
     assert_eq!(cfg.tasks.len(), 2);
-    assert_eq!(cfg.tasks[0].agent, "gemini");
+    assert_eq!(cfg.tasks[0].agent, "grok");
     assert_eq!(cfg.tasks[0].worktree, Some("feat/x".into()));
     assert_eq!(
         cfg.tasks[1].dir.as_deref(),
@@ -201,7 +201,7 @@ prompt = "test"
 #[test]
 fn applies_defaults_to_tasks() {
     let file = write_temp(concat!(
-            "[defaults]\nauto_fallback = true\nagent = \"gemini\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
+            "[defaults]\nauto_fallback = true\nagent = \"grok\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
             "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\nmax_wait_mins = 10\n",
             "retry = 2\npeer_review = \"cursor\"\nbest_of = 3\nmetric = \"cargo test\"\n",
             "context = [\"src/lib.rs\", \"src/main.rs:run\"]\n",
@@ -219,7 +219,7 @@ fn applies_defaults_to_tasks() {
 
     assert_eq!(cfg.defaults.auto_fallback, Some(true));
     let task = &cfg.tasks[0];
-    assert_eq!(task.agent, "gemini");
+    assert_eq!(task.agent, "grok");
     assert_eq!(
         task.dir.as_deref(),
         Some(batch_dir.join("src").to_string_lossy().as_ref())

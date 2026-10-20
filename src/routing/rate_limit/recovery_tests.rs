@@ -100,13 +100,13 @@ fn test_get_rate_limit_info() {
     );
 
     // Test without recovery time
-    mark_rate_limited(&AgentKind::Gemini, None, "rate limit exceeded");
-    let info = get_rate_limit_info(&AgentKind::Gemini, None).unwrap();
+    mark_rate_limited(&AgentKind::Grok, None, "rate limit exceeded");
+    let info = get_rate_limit_info(&AgentKind::Grok, None).unwrap();
     assert_eq!(info.recovery_at, None);
     assert_eq!(info.message, Some("rate limit exceeded".to_string()));
 
-    mark_rate_limited(&AgentKind::Qwen, None, "rate limit exceeded");
-    let info = get_rate_limit_info(&AgentKind::Qwen, None).unwrap();
+    mark_rate_limited(&AgentKind::Kilo, None, "rate limit exceeded");
+    let info = get_rate_limit_info(&AgentKind::Kilo, None).unwrap();
     assert_eq!(info.recovery_at, None);
     assert_eq!(info.message, Some("rate limit exceeded".to_string()));
 
@@ -114,6 +114,6 @@ fn test_get_rate_limit_info() {
     assert!(get_rate_limit_info(&AgentKind::Cursor, None).is_none());
 
     let _ = std::fs::remove_file(marker_path(&AgentKind::Codex, None));
-    let _ = std::fs::remove_file(marker_path(&AgentKind::Gemini, None));
-    let _ = std::fs::remove_file(marker_path(&AgentKind::Qwen, None));
+    let _ = std::fs::remove_file(marker_path(&AgentKind::Grok, None));
+    let _ = std::fs::remove_file(marker_path(&AgentKind::Kilo, None));
 }

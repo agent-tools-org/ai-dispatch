@@ -59,7 +59,7 @@ fn agent_level_hold_is_limited_not_partial() {
         }
         other => panic!("expected Limited, got {other:?}"),
     }
-    assert!(matches!(quota_row(AgentKind::Gemini, None), QuotaRow::Ok { .. }));
+    assert!(matches!(quota_row(AgentKind::Grok, None), QuotaRow::Ok { .. }));
 }
 
 #[test]

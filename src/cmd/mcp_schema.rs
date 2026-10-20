@@ -114,7 +114,7 @@ fn ask_schema() -> Value {
         "type": "object",
         "properties": {
             "question": { "type": "string" },
-            "agent": { "type": "string", "default": "gemini" }
+            "agent": { "type": "string", "default": "agy" }
         },
         "required": ["question"],
         "additionalProperties": false

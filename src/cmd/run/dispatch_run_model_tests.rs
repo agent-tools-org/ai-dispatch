@@ -16,7 +16,7 @@ fn run_and_advise_resolve_identical_models_for_the_same_profile() {
     crate::config::agent::save_agent_default_model("claude", Some("sonnet")).expect("sticky");
     let selection = SelectionConfig::default();
     let mut compared = 0;
-    for kind in [AgentKind::Codex, AgentKind::Gemini, AgentKind::Grok, AgentKind::Claude, AgentKind::Qwen] {
+    for kind in [AgentKind::Codex, AgentKind::Antigravity, AgentKind::Grok, AgentKind::Claude, AgentKind::Kilo] {
         for difficulty in [TaskDifficulty::Trivial, TaskDifficulty::Moderate, TaskDifficulty::Complex] {
             for budget in [TaskBudget::Free, TaskBudget::Cheap, TaskBudget::Standard, TaskBudget::Premium] {
                 let declared = DeclaredTaskProfile {

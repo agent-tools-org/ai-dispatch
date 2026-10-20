@@ -138,7 +138,7 @@ mod round2;
 fn provider_capacity_regression_never_selects_automatic_advice_fallback() {
     let home = tempfile::tempdir().expect("home");
     let _home = paths::AidHomeGuard::set(home.path());
-    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Gemini]);
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Grok]);
     let store = Store::open_memory().expect("store");
     let row = task("t-capacity-advice", home.path());
     store.insert_task(&row).expect("task");

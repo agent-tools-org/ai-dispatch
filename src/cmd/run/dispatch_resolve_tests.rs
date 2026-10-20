@@ -23,10 +23,10 @@ fn write_manual_hold(agent: AgentKind) {
 fn resolve_agent_setup_rejects_disabled_agent() {
     let dir = tempfile::tempdir().expect("tempdir");
     let _guard = AidHomeGuard::set(dir.path());
-    agent_config::save_agent_disabled("gemini", true).expect("disable agent");
+    agent_config::save_agent_disabled("grok", true).expect("disable agent");
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut args = RunArgs {
-        agent_name: "gemini".to_string(),
+        agent_name: "grok".to_string(),
         prompt: "Explain the current architecture".to_string(),
         ..Default::default()
     };
@@ -38,7 +38,7 @@ fn resolve_agent_setup_rejects_disabled_agent() {
 
     assert_eq!(
         err,
-        "Agent 'gemini' is disabled (enable with: aid agent config gemini --enable)"
+        "Agent 'grok' is disabled (enable with: aid agent config grok --enable)"
     );
 }
 
@@ -293,3 +293,6 @@ fn unknown_cascade_entry_is_an_error() {
         Ok(_) => panic!("unknown cascade agent must produce an error"),
     }
 }
+
+#[path = "dispatch_stale_config_tests.rs"]
+mod stale_config;

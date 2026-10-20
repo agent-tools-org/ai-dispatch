@@ -198,7 +198,6 @@ fn agent_env_keys(kind: AgentKind) -> &'static [&'static str] {
     match kind {
         AgentKind::Codex => &["OPENAI_API_KEY"],
         AgentKind::CommandCode => &[],
-        AgentKind::Gemini => &["GOOGLE_API_KEY", "GEMINI_API_KEY"],
         AgentKind::Qwen => &[],
         AgentKind::Copilot => &[],
         AgentKind::Kilo => &["KILO_API_KEY", "OPENAI_API_KEY"],
@@ -213,7 +212,6 @@ fn agent_config_dirs(kind: AgentKind) -> &'static [&'static str] {
     match kind {
         AgentKind::Codex => &[".codex"],
         AgentKind::CommandCode => &[".commandcode"],
-        AgentKind::Gemini => &[".gemini"],
         AgentKind::Qwen => &[".qwen"],
         AgentKind::Copilot => &[".copilot"],
         AgentKind::Kilo => &[".kilo"],

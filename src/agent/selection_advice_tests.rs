@@ -240,12 +240,12 @@ fn research_and_frontend_advice_recommend_the_expected_installed_agent() {
     let (_temp, _home, _cache) = isolated();
     crate::routing::scores::test_support::seed_live();
     for (prompt, fleet, expected) in [
-        ("Explain the authentication flow and compare the docs?", [AgentKind::Gemini, AgentKind::Qwen], "gemini"),
-        ("Explain the authentication flow and compare the docs?", [AgentKind::Antigravity, AgentKind::Qwen], "agy"),
+        ("Explain the authentication flow and compare the docs?", [AgentKind::Antigravity, AgentKind::Codex], "agy"),
+        ("Explain the authentication flow and compare the docs?", [AgentKind::Antigravity, AgentKind::Kilo], "agy"),
         ("Create a responsive React component layout for the settings UI", [AgentKind::Cursor, AgentKind::Codex], "cursor"),
     ] {
         let _fleet = crate::agent::DetectAgentsGuard::set(fleet.to_vec());
-        let model = match expected { "gemini" | "agy" => "gemini-3.7-flash-high", _ => "opus" };
+        let model = match expected { "agy" => "gemini-3.7-flash-high", _ => "opus" };
         crate::config::agent::save_agent_default_model(expected, Some(model)).expect("model");
         let report = advise(prompt, declared(TaskDifficulty::Moderate, TaskBudget::Standard), None, None, None, 0, None);
         assert_eq!(report.recommended.expect("recommendation").agent, expected);
@@ -275,24 +275,24 @@ fn budget_simple_edit_advice_launches_eligible_budget_model() {
 #[test]
 fn team_override_changes_the_advised_agent() {
     let (_temp, _home, _cache) = isolated();
-    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Gemini, AgentKind::OpenCode]);
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Kilo, AgentKind::OpenCode]);
     let profile = declared(TaskDifficulty::Simple, TaskBudget::Standard);
     let prompt = "rename src/types.rs field name to task_name";
     assert_eq!(advise(prompt, profile, None, None, None, 0, None).recommended.expect("baseline").agent, "opencode");
-    let team: TeamConfig = toml::from_str("id = 'override'\ndisplay_name = 'Override'\npreferred_agents = []\n[overrides.gemini]\nsimple_edit = 10\n").expect("team");
+    let team: TeamConfig = toml::from_str("id = 'override'\ndisplay_name = 'Override'\npreferred_agents = []\n[overrides.kilo]\nsimple_edit = 10\n").expect("team");
     let picked = advise(prompt, profile, None, Some(&team), None, 0, None).recommended.expect("override");
-    assert_eq!((picked.agent.as_str(), picked.model.as_deref()), ("gemini", None));
+    assert_eq!((picked.agent.as_str(), picked.model.as_deref()), ("kilo", None));
 }
 
 #[test]
 fn advice_skips_disabled_installed_agents() {
     let (_temp, _home, _cache) = isolated();
-    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Gemini, AgentKind::Qwen]);
-    crate::config::agent::save_agent_disabled("gemini", true).expect("disable");
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Grok, AgentKind::Kilo]);
+    crate::config::agent::save_agent_disabled("grok", true).expect("disable");
     let report = advise("Explain the authentication flow and compare the docs?",
         declared(TaskDifficulty::Moderate, TaskBudget::Standard), None, None, None, 0, None);
-    assert_eq!(report.recommended.expect("recommendation").agent, "qwen");
-    assert!(report.candidates.iter().all(|candidate| candidate.agent != "gemini"));
+    assert_eq!(report.recommended.expect("recommendation").agent, "kilo");
+    assert!(report.candidates.iter().all(|candidate| candidate.agent != "grok"));
 }
 
 #[path = "selection_evidence_tests.rs"]

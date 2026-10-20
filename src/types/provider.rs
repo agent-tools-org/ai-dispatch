@@ -143,7 +143,6 @@ pub fn provider_for_cli(cli: AgentKind) -> (ProviderId, MeteringShape) {
         // Rate-limited with a reset timestamp but no per-task metering.
         AgentKind::Cursor => ("cursor-subscription", MeteringShape::Subscription),
         AgentKind::Claude => ("anthropic", MeteringShape::Unknown),
-        AgentKind::Gemini => ("google-genai", MeteringShape::Unknown),
         AgentKind::Copilot => ("github-copilot", MeteringShape::Subscription),
         // Never observed refusing, so nothing is known about how they meter.
         // Naming a provider here would be invention.

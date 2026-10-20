@@ -136,7 +136,7 @@ fn saved_explicit_batch_list_keeps_order_custom_resolution_and_remaining_entries
     saved.cascade = vec![
         "oz".into(),
         "custom-peer".into(),
-        "gemini".into(),
+        "grok".into(),
         "claude".into(),
     ];
     store
@@ -149,7 +149,7 @@ fn saved_explicit_batch_list_keeps_order_custom_resolution_and_remaining_entries
         .expect("fallback")
         .expect("custom");
     assert_eq!(fallback.agent_name, "custom-peer");
-    assert_eq!(fallback.cascade, ["gemini", "claude"]);
+    assert_eq!(fallback.cascade, ["grok", "claude"]);
     assert_ne!(fallback.model_source, crate::agent::model_validation::ModelSource::Advised);
     saved.cascade.push("unknown-peer".into());
     store
@@ -221,10 +221,10 @@ fn saved_empty_cascade_preserves_explicit_exhaustion_even_with_conflicting_spec(
         assert!(auto_fallback_args(&store, task.id.as_str(), &[spec], 0).expect("exhausted").is_none());
     }
     // Remaining saved entries are authoritative over a conflicting current specification.
-    saved.cascade = vec!["gemini".into(), "claude".into()];
+    saved.cascade = vec!["grok".into(), "claude".into()];
     store.update_task_dispatch_args(task.id.as_str(), &saved.dispatch_args_json().expect("serialize")).expect("save");
     let spec = toml::from_str("agent = 'oz'\nprompt = 'different'\nfallback = 'unknown-peer'").expect("spec");
-    let (_, next) = auto_fallback_args(&store, task.id.as_str(), &[spec], 0).expect("saved list").expect("Gemini");
-    assert_eq!(next.agent_name, "gemini");
+    let (_, next) = auto_fallback_args(&store, task.id.as_str(), &[spec], 0).expect("saved list").expect("grok");
+    assert_eq!(next.agent_name, "grok");
     assert_eq!(next.cascade, ["claude"]);
 }

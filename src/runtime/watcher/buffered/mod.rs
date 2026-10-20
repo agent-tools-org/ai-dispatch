@@ -87,7 +87,7 @@ pub(crate) async fn watch_buffered(
     }
     let mut event = match agent.kind() {
         AgentKind::Grok => crate::agent::grok::make_completion_event(task_id, &info),
-        _ => crate::agent::gemini::make_completion_event(task_id, &info),
+        _ => crate::agent::completion_event::make_completion_event(task_id, &info),
     };
     if info.status == TaskStatus::Failed {
         event.event_kind = crate::types::EventKind::Error;

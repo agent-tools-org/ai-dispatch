@@ -55,7 +55,7 @@ fn finds_matching_tasks_with_keyword_scores() {
     insert_task(
         &store,
         "t-gemini",
-        AgentKind::Gemini,
+        AgentKind::Grok,
         TaskStatus::Done,
         "Document routing hints and selection strategy",
     );
@@ -72,7 +72,7 @@ fn finds_matching_tasks_with_keyword_scores() {
         .unwrap();
     assert_eq!(results.len(), 2);
     assert_eq!(results[0].0, "t-gemini");
-    assert_eq!(results[0].1, AgentKind::Gemini);
+    assert_eq!(results[0].1, AgentKind::Grok);
     assert_eq!(results[1].0, "t-routing");
     assert_eq!(results[1].1, AgentKind::Codex);
 }
@@ -113,7 +113,7 @@ fn limits_results_to_positive_scores() {
 fn latest_awaiting_reasons_batch_returns_latest_prompt_per_task() {
     let store = Store::open_memory().unwrap();
     insert_task(&store, "t-await-1", AgentKind::Codex, TaskStatus::AwaitingInput, "Prompt one");
-    insert_task(&store, "t-await-2", AgentKind::Gemini, TaskStatus::AwaitingInput, "Prompt two");
+    insert_task(&store, "t-await-2", AgentKind::Grok, TaskStatus::AwaitingInput, "Prompt two");
     insert_task(&store, "t-other", AgentKind::Cursor, TaskStatus::Running, "Prompt three");
     insert_event(
         &store,
@@ -219,92 +219,9 @@ fn active_worktree_siblings_counts_stalled_tasks() {
         .unwrap());
 }
 
-#[test]
-fn aggregates_budget_usage_by_agent_and_window() {
-    let store = Store::open_memory().unwrap();
-    let conn = store.db();
-    let now = Local::now();
-    let within_window = (now - Duration::hours(6)).to_rfc3339();
-    let outside_window = (now - Duration::days(2)).to_rfc3339();
 
-    conn.execute(
-        "INSERT INTO tasks (id, agent, prompt, status, repo_path, tokens, cost_usd, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-        params!["t-recent-1", "codex", "recent", "done", "/work/project-a", 120_i64, 1.25_f64, &within_window],
-    )
-    .unwrap();
-    conn.execute(
-        "INSERT INTO tasks (id, agent, prompt, status, repo_path, tokens, cost_usd, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-        params!["t-recent-2", "codex", "recent", "done", "/work/project-a", 80_i64, 0.75_f64, &within_window],
-    )
-    .unwrap();
-    conn.execute(
-        "INSERT INTO tasks (id, agent, prompt, status, repo_path, tokens, cost_usd, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-        params!["t-old", "codex", "old", "done", "/work/project-a", 500_i64, 4.0_f64, &outside_window],
-    )
-    .unwrap();
-    conn.execute(
-        "INSERT INTO tasks (id, agent, prompt, status, repo_path, tokens, cost_usd, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-        params!["t-other", "gemini", "other", "done", "/work/project-b", 999_i64, 9.0_f64, &within_window],
-    )
-    .unwrap();
-    conn.execute("UPDATE tasks SET project_id = 'project-a' WHERE repo_path = '/work/project-a'", []).unwrap();
-    conn.execute("UPDATE tasks SET project_id = 'project-b' WHERE repo_path = '/work/project-b'", []).unwrap();
-    drop(conn);
+#[path = "budget_usage_tests.rs"]
+mod budget_usage;
 
-    let all_time = store.budget_usage_summary("codex", None).unwrap();
-    assert_eq!(all_time, (3, 700, 6.0));
-
-    let since = parse_window("24h").map(|window| now - window).unwrap();
-    let recent = store.budget_usage_summary("codex", Some(since)).unwrap();
-    assert_eq!(recent, (2, 200, 2.0));
-
-    let all_agents_recent = store.budget_usage_summary_all(Some(since)).unwrap();
-    assert_eq!(all_agents_recent, (3, 1199, 11.0));
-
-    let project_recent = store
-        .budget_usage_summary_for_project("project-a", Some(since))
-        .unwrap();
-    assert_eq!(project_recent, (2, 200, 2.0));
-}
-
-#[test]
-fn search_memories_escapes_wildcards() {
-    let store = Store::open_memory().unwrap();
-    let conn = store.db();
-    conn.execute(
-        "INSERT INTO memories (id, memory_type, content, source_task_id, agent, project_path,
-         content_hash, created_at, expires_at, supersedes, version, inject_count, last_injected_at,
-         success_count)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
-        params![
-            "m-100-percent",
-            "task_output",
-            "100% success rate",
-            Option::<String>::None,
-            Option::<String>::None,
-            Option::<String>::None,
-            "hash-100-percent",
-            "2026-03-15T00:00:00Z",
-            Option::<String>::None,
-            Option::<String>::None,
-            1,
-            0,
-            Option::<String>::None,
-            0,
-        ],
-    )
-    .unwrap();
-    drop(conn);
-
-    let percent_results = store.search_memories("100%", None, 10, None).unwrap();
-    assert_eq!(percent_results.len(), 1);
-    assert_eq!(percent_results[0].content, "100% success rate");
-
-    let plain_results = store.search_memories("100", None, 10, None).unwrap();
-    assert_eq!(plain_results.len(), 1);
-    assert_eq!(plain_results[0].content, "100% success rate");
-}
+#[path = "memory_search_tests.rs"]
+mod memory_search;

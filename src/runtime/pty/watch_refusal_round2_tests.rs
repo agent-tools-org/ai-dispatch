@@ -106,7 +106,7 @@ fn wrap_fixture() -> (
     paths::ensure_dirs().expect("directories");
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut task = crate::runtime::pty::watch::tests::pty_task("t-pty-wrap", TaskStatus::Running);
-    task.agent = AgentKind::Gemini;
+    task.agent = AgentKind::Cursor;
     store.insert_task(&task).expect("task");
     let bridge = PtyBridge::spawn(&["/bin/cat".into()], None, vec![]).expect("PTY");
     (home, guard, store, task.id, bridge)

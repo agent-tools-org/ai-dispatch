@@ -19,7 +19,7 @@ fn manual_unstick_queue_status_audit_regression() {
     let db = Connection::open(home.path().join("aid.db")).unwrap();
     db.execute(
         "INSERT INTO tasks (id, agent, prompt, status, created_at)
-        VALUES ('t-queue', 'gemini', 'task', 'running', ?1)",
+        VALUES ('t-queue', 'cursor', 'task', 'running', ?1)",
         [chrono::Local::now().to_rfc3339()],
     )
     .unwrap();
@@ -27,7 +27,7 @@ fn manual_unstick_queue_status_audit_regression() {
     std::fs::write(
         home.path().join("jobs/t-queue.json"),
         serde_json::json!({
-            "task_id": "t-queue", "worker_pid": std::process::id(), "agent_name": "gemini",
+            "task_id": "t-queue", "worker_pid": std::process::id(), "agent_name": "cursor",
             "prompt": "task", "dir": null, "output": null, "model": null,
             "verify": null, "retry": 0, "group": null
         })
@@ -70,7 +70,7 @@ fn reply_timeout_is_unconfirmed_audit_regression() {
     let db = Connection::open(home.path().join("aid.db")).unwrap();
     db.execute(
         "INSERT INTO tasks (id, agent, prompt, status, created_at)
-        VALUES ('t-timeout', 'gemini', 'task', 'running', ?1)",
+        VALUES ('t-timeout', 'cursor', 'task', 'running', ?1)",
         [chrono::Local::now().to_rfc3339()],
     )
     .unwrap();

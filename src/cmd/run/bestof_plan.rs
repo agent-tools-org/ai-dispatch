@@ -13,6 +13,7 @@ use crate::types::DeclaredTaskProfile;
 pub(super) fn advised_plan(
     store: &Store, args: &RunArgs, n: usize,
 ) -> Result<(DeclaredTaskProfile, Vec<AdviceCandidate>)> {
+    crate::agent::removed::validate_run(args)?;
     let report = super::super::advice_route::report(Some(store), args);
     let declared = report.declared;
     let team = args.team.as_deref().and_then(crate::config::team::resolve_team);
@@ -87,19 +88,19 @@ mod tests {
     #[test]
     fn plan_filters_unavailable_disabled_auth_failed_and_below_floor() {
         let (_temp, _home, _cache) = isolated();
-        let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid, AgentKind::Qwen, AgentKind::Grok]);
+        let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid, AgentKind::Kilo, AgentKind::Grok]);
         crate::config::agent::save_agent_disabled("grok", true).expect("disable");
         crate::routing::auth_marker::record_failure_at(AgentKind::Droid, "Not signed in.", chrono::Local::now());
         crate::routing::scores::test_support::seed_live();
-        // Rated Qwen (0.0) is below the complex floor (8); an unrated route stays eligible.
-        crate::config::agent::save_agent_default_model("qwen", Some("openai/gpt-4o-mini")).expect("model");
+        // Rated Kilo (0.0) is below the complex floor (8); an unrated route stays eligible.
+        crate::config::agent::save_agent_default_model("kilo", Some("openai/gpt-4o-mini")).expect("model");
         let declared = DeclaredTaskProfile { difficulty: TaskDifficulty::Complex, ..profile() };
         let all = advise("refactor the scheduler", declared,
             Some(TaskCategory::Refactoring), None, None, 0, None).candidates;
         let item = |agent: &str| all.iter().find(|c| c.agent == agent).expect("candidate");
         assert!(item("agy").exclusion_codes.contains(&"not_installed".into()));
         assert!(item("droid").exclusion_codes.contains(&"auth_failed".into()));
-        assert!(item("qwen").exclusion_codes.contains(&"below_floor".into()));
+        assert!(item("kilo").exclusion_codes.contains(&"below_floor".into()));
         assert!(all.iter().all(|c| c.agent != "grok"));
         let plan = expand_best_of_plan(all, None, 5).expect("plan");
         assert!(plan.iter().all(|c| c.agent == "codex"));
@@ -122,18 +123,6 @@ mod tests {
         hold(temp.path(), "droid--core");
         let plan = expand_best_of_plan(candidates(), None, 5).expect("other group is allowed");
         assert!(plan.iter().any(|c| c.agent == "droid" && c.model.as_deref() == Some("gpt-5.3-codex")));
-    }
-
-    #[test]
-    fn plan_excludes_superseded_gemini_and_unpreferred_claude() {
-        let (_temp, _home, _cache) = isolated();
-        let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Gemini, AgentKind::Antigravity, AgentKind::Claude]);
-        let report = advise("compare docs", profile(), Some(TaskCategory::Research), None, None, 0, None);
-        assert!(report.candidates.iter().any(|c| c.agent == "gemini" && c.exclusion_codes.contains(&"superseded_by_agy".into())));
-        let plan = expand_best_of_plan(report.candidates.clone(), None, 3).expect("plan");
-        assert!(plan.iter().all(|c| c.agent == "agy"));
-        let team: TeamConfig = toml::from_str("id = 'test'\ndisplay_name = 'Test'\npreferred_agents = ['claude']\n").expect("team");
-        assert!(expand_best_of_plan(report.candidates, Some(&team), 3).expect("preferred").iter().any(|c| c.agent == "claude"));
     }
 
     #[test]

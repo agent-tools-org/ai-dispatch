@@ -78,7 +78,7 @@ mod tests {
     fn make_task(id: &str, status: TaskStatus) -> Task {
         Task {
             id: TaskId(id.to_string()),
-            agent: AgentKind::Gemini,
+            agent: AgentKind::Cursor,
             custom_agent_name: None,
             prompt: "test".to_string(),
             resolved_prompt: None,

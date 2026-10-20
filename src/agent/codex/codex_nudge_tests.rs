@@ -1,8 +1,8 @@
 // Tests Codex idle-nudge capability declarations.
-// Exports: none. Deps: CodexAgent, GeminiAgent, and the Agent trait.
+// Exports: none. Deps: CodexAgent, AntigravityAgent, and the Agent trait.
 
 use super::CodexAgent;
-use crate::agent::{antigravity::AntigravityAgent, claude::ClaudeAgent, gemini::GeminiAgent, grok::GrokAgent, Agent};
+use crate::agent::{antigravity::AntigravityAgent, claude::ClaudeAgent, grok::GrokAgent, Agent};
 use crate::types::AgentKind;
 
 #[test]
@@ -12,7 +12,7 @@ fn codex_rejects_idle_nudges() {
 
 #[test]
 fn default_agent_accepts_idle_nudges() {
-    assert!(GeminiAgent.accepts_idle_nudge());
+    assert!(crate::agent::cursor::CursorAgent.accepts_idle_nudge());
 }
 
 #[test]

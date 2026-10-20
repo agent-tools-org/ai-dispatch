@@ -34,7 +34,6 @@ pub(super) fn recommendation_hint(
     let detail = match AgentKind::parse_str(&recommended_agent) {
         Some(AgentKind::Codex) => return None,
         Some(AgentKind::OpenCode) => " (5-20x cheaper, good for simple edits)",
-        Some(AgentKind::Gemini) => " (subscription-based, good for research/docs/web queries)",
         Some(AgentKind::Cursor) => " (subscription-based, good for UI/frontend)",
         _ => "",
     };
@@ -102,7 +101,7 @@ mod tests {
     fn hint_recommends_the_advise_agent_for_the_same_profile() {
         let temp = TempDir::new().expect("home");
         let _home = AidHomeGuard::set(temp.path());
-        let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Gemini, AgentKind::Droid, AgentKind::OpenCode]);
+        let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Grok, AgentKind::Droid, AgentKind::OpenCode]);
         let store = Store::open_memory().expect("store");
         let prompt = "refactor the scheduler and rename the routing fields";
         for (declared, kind) in [
@@ -113,7 +112,7 @@ mod tests {
         ] {
             let report = crate::cmd::advise::build_report(Some(&store), prompt, declared, Some(kind), None, 0, None);
             let recommended = report.recommended.expect("recommendation");
-            let hint = recommendation_hint("qwen", prompt, false, declared, Some(kind), &store, None).expect("hint");
+            let hint = recommendation_hint("kilo", prompt, false, declared, Some(kind), &store, None).expect("hint");
             assert!(hint.contains(&format!("`{}`", recommended.agent)), "{hint}");
         }
     }

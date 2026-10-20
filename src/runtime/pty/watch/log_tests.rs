@@ -37,7 +37,7 @@ fn output_after_pty_write_never_acknowledges_input() {
     let _permit = crate::support::test_subprocess::acquire();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = pty_task("t-unconfirmed-input");
-    task.agent = AgentKind::Gemini;
+    task.agent = AgentKind::Cursor;
     store.insert_task(&task).unwrap();
     store.insert_message(task.id.as_str(), MessageDirection::In, "pivot",
         MessageSource::Reply).unwrap();
@@ -46,10 +46,10 @@ fn output_after_pty_write_never_acknowledges_input() {
     let mut state = MonitorState::new(false, None);
     state.maybe_consume_reply(&mut bridge, &store, &task.id).unwrap();
     let mut log = tempfile::NamedTempFile::new().unwrap();
-    state.handle_chunk(&crate::agent::gemini::GeminiAgent, &task.id, &store,
+    state.handle_chunk(&crate::agent::cursor::CursorAgent, &task.id, &store,
         log.as_file_mut(), "pivot\nunrelated output\n".to_string()).unwrap();
     state.line_buffer.push_str("trailing output");
-    state.flush_trailing_output(&crate::agent::gemini::GeminiAgent, &task.id, &store).unwrap();
+    state.flush_trailing_output(&crate::agent::cursor::CursorAgent, &task.id, &store).unwrap();
     assert!(bridge.wait().unwrap().success());
     let messages = store.list_messages_for_task(task.id.as_str()).unwrap();
     assert!(messages[0].delivered_at.is_some());

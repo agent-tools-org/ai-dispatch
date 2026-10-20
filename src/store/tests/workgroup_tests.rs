@@ -28,7 +28,7 @@ fn gets_workgroup_milestones() {
     first.workgroup_id = Some(workgroup.id.as_str().to_string());
     store.insert_task(&first).unwrap();
 
-    let mut second = make_task("t-0041", AgentKind::Gemini, TaskStatus::Running);
+    let mut second = make_task("t-0041", AgentKind::Grok, TaskStatus::Running);
     second.workgroup_id = Some(workgroup.id.as_str().to_string());
     store.insert_task(&second).unwrap();
 

@@ -15,11 +15,8 @@ const MAX_DEPTH: u8 = 6;
 ///
 /// **The rule is "these named channels, each with a reason" — not "only the
 /// CLI's own error channel".** The stricter rule was considered and rejected on
-/// evidence: it drops two refusals we have actually captured. `qwen` reports an
-/// exhausted token plan on its ordinary result slot with `is_error:false` and
-/// exit 0, and `cursor`'s spent premium pool arrives only as an
-/// `ActionRequiredError` line on stderr — neither is an error envelope. Both are
-/// outages this module exists to record.
+/// Cursor reports a spent premium pool as an `ActionRequiredError` line on
+/// stderr, outside an error envelope.
 ///
 /// What keeps an enumeration from decaying into the denylist it replaced: the
 /// list lives here, every path that can write a marker goes through it, and each
@@ -44,7 +41,6 @@ pub(crate) enum Channel {
 /// |---|---|
 /// | JSON error envelope (`type` naming an error, an `error`/`errorCode` key, `is_error:true`) | every string in it |
 /// | JSON tool envelope, even one reporting the tool failed | nothing |
-/// | JSON `result`/`turn_complete` envelope, for an agent whose refusal is known to land there | its top-level `result` |
 /// | any other JSON object | nothing |
 /// | not JSON | the line, except Droid Core refusals |
 ///
@@ -172,12 +168,12 @@ fn keep_envelope_strings(object: &Map<String, Value>, agent: AgentKind, kept: &m
             MAX_DEPTH,
             &mut kept.cli_diagnostic,
         );
-    } else if terminal_text_is_a_refusal_channel(agent) && is_terminal_result(object) {
-        // The slot qwen's model otherwise fills, so it is read under the narrow
-        // rule even though it arrived inside an envelope.
-        if let Some(text) = object.get("result").and_then(Value::as_str) {
-            push_line(&mut kept.unsplit, text);
-        }
+    } else if agent == AgentKind::Qwen
+        && matches!(object.get("type").and_then(Value::as_str), Some("result" | "turn_complete"))
+        && let Some(text) = object.get("result").and_then(Value::as_str)
+        && crate::routing::rate_limit::signatures::match_quota_signature_for_agent(text, agent).is_some()
+    {
+        push_line(&mut kept.unsplit, text);
     }
 }
 
@@ -229,18 +225,6 @@ fn describes_a_tool(object: &Map<String, Value>) -> bool {
         || object.contains_key("toolCallId")
 }
 
-fn is_terminal_result(object: &Map<String, Value>) -> bool {
-    matches!(
-        object.get("type").and_then(Value::as_str),
-        Some("result" | "turn_complete")
-    )
-}
-
-/// Agents measured to report refusals in their model's terminal result slot.
-fn terminal_text_is_a_refusal_channel(agent: AgentKind) -> bool {
-    matches!(agent, AgentKind::Qwen)
-}
-
 /// Every string inside a diagnostic envelope, each on its own line, so the
 /// signature match runs against the provider's sentence rather than the raw
 /// JSON around it. `serde_json` has already undone the escaping, so a marker
@@ -276,19 +260,6 @@ fn push_line(kept: &mut String, text: &str) {
     }
     kept.push_str(text);
     kept.push('\n');
-}
-
-#[cfg(test)]
-pub(crate) fn test_qwen_result_envelope(result: &str) -> String {
-    let mut envelope: Value = serde_json::from_str(
-        include_str!("../../../tests/fixtures/qwen-0.22.3-real-envelopes.jsonl")
-            .lines()
-            .nth(1)
-            .expect("qwen result fixture"),
-    )
-    .expect("valid qwen result fixture");
-    envelope["result"] = Value::String(result.to_owned());
-    envelope.to_string()
 }
 
 #[cfg(test)]

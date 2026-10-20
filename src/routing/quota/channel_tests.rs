@@ -127,36 +127,6 @@ fn grok_is_split_by_its_envelope_not_by_its_words() {
     );
 }
 
-/// qwen writes its refusal into the slot its model otherwise fills, so that slot
-/// stays readable for qwen alone — the one place a model's own words are still
-/// read as provider testimony.
-#[test]
-fn the_terminal_result_slot_is_open_for_qwen_and_shut_for_everyone_else() {
-    let envelope = crate::routing::quota::channel::test_qwen_result_envelope("Quota exhausted: Your token-plan 5-hour quota has been exhausted.");
-    assert!(
-        stream(&envelope, AgentKind::Qwen).contains("Quota exhausted:"),
-        "qwen's measured refusal channel must stay readable"
-    );
-    assert!(
-        stream(&envelope, AgentKind::Cursor).is_empty(),
-        "no other agent has been measured refusing here"
-    );
-}
-
-/// Admissible but not *strongly* attributed: it is the model's slot, so a bare
-/// status token in it proves nothing.
-#[test]
-fn qwens_result_slot_is_never_strong_enough_for_a_bare_status_token() {
-    let envelope = crate::routing::quota::channel::test_qwen_result_envelope("The upstream RPC returned 429 twice during the run.");
-    assert!(stream(&envelope, AgentKind::Qwen).contains("429"));
-    assert!(
-        stream_diagnostic(&envelope, AgentKind::Qwen).is_empty(),
-        "the model's own slot is never CLI-diagnostic evidence"
-    );
-}
-
-/// A buffered plain-text CLI has no envelope to split on, so its whole stdout
-/// stays admissible. Pinned so the limit is on the record.
 #[test]
 fn plain_text_lines_stay_admissible() {
     let refusal = "Individual quota reached. Please upgrade your subscription. Resets in 59m21s.";
@@ -297,3 +267,21 @@ fn stderr_is_the_cursor_premium_channel_and_is_kept_whole() {
         "stderr has no unsplit half — the whole channel is the CLI's"
     );
 }
+
+#[test]
+fn ordinary_terminal_results_cannot_forge_provider_diagnostics() {
+    for agent in adapters_under_test() {
+        for kind in ["result", "turn_complete"] {
+            for text in ["429", "You have exceeded your monthly quota"] {
+                let envelope = serde_json::json!({
+                    "type": kind, "is_error": false, "result": text,
+                }).to_string();
+                assert!(stream(&envelope, agent).is_empty(), "{agent:?}: {envelope}");
+                assert!(stream_diagnostic(&envelope, agent).is_empty());
+            }
+        }
+    }
+}
+
+#[path = "channel_qwen_tests.rs"]
+mod qwen;

@@ -65,12 +65,13 @@ fn prepare_request(
     let agent_name = match agent {
         Some(agent) => agent,
         None => {
-            if agent_config::is_agent_disabled("gemini") {
-                anyhow::bail!("Default agent 'gemini' is disabled (choose another with: aid ask --agent <name>)");
+            if agent_config::is_agent_disabled("agy") {
+                anyhow::bail!("Default agent 'agy' is disabled (choose another with: aid ask --agent <name>)");
             }
-            "gemini".to_string()
+            "agy".to_string()
         }
     };
+    crate::agent::removed::reject(&agent_name)?;
     Ok(AskRequest {
         agent_name,
         prompt,
@@ -137,10 +138,19 @@ mod tests {
     use crate::support::paths::AidHomeGuard;
 
     #[test]
+    fn prepare_request_defaults_to_agy() {
+        let dir = tempfile::tempdir().expect("home");
+        let _guard = AidHomeGuard::set(dir.path());
+        let request = prepare_request("Explain this".into(), None, None, vec![], None)
+            .expect("default request");
+        assert_eq!(request.agent_name, "agy");
+    }
+
+    #[test]
     fn prepare_request_rejects_disabled_default_agent() {
         let dir = tempfile::tempdir().expect("tempdir");
         let _guard = AidHomeGuard::set(dir.path());
-        agent_config::save_agent_disabled("gemini", true).expect("disable agent");
+        agent_config::save_agent_disabled("agy", true).expect("disable agent");
 
         let err = match prepare_request(
             "Explain this".to_string(),
@@ -155,7 +165,7 @@ mod tests {
 
         assert_eq!(
             err,
-            "Default agent 'gemini' is disabled (choose another with: aid ask --agent <name>)"
+            "Default agent 'agy' is disabled (choose another with: aid ask --agent <name>)"
         );
     }
 }

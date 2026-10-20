@@ -16,7 +16,7 @@ fn setup() -> (
     crate::support::paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let id = TaskId("t-terminal-events-deadline".into());
-    let task = crate::cost::test_support::task(AgentKind::Gemini, 0, None);
+    let task = crate::cost::test_support::task(AgentKind::Antigravity, 0, None);
     store
         .insert_task(&crate::types::Task {
             id: id.clone(),

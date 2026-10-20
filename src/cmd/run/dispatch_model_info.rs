@@ -154,6 +154,15 @@ mod tests {
     }
 
     #[test]
+    fn unpinned_cli_config_default_is_named_with_its_source() {
+        let args = RunArgs { agent_name: "codex".to_string(), ..Default::default() };
+        let run_model = RunModel {
+            model: Some("gpt-6-sol".to_string()), pinned: false, source: RunModelSource::CliConfig,
+        };
+        assert_eq!(model_selection_info(&args, &run_model, None, &crate::agent::codex::CodexAgent),
+            "[aid] codex model: gpt-6-sol; source: CLI config (no -m)");
+    }
+    #[test]
     fn qwen_default_follows_selected_settings_model() {
         let home = tempfile::tempdir().expect("temporary qwen home");
         std::fs::create_dir(home.path().join(".qwen")).expect("qwen directory");
@@ -167,13 +176,4 @@ mod tests {
             "[aid] qwen model: configured-qwen; source: adapter default (no caller -m)");
     }
 
-    #[test]
-    fn unpinned_cli_config_default_is_named_with_its_source() {
-        let args = RunArgs { agent_name: "codex".to_string(), ..Default::default() };
-        let run_model = RunModel {
-            model: Some("gpt-6-sol".to_string()), pinned: false, source: RunModelSource::CliConfig,
-        };
-        assert_eq!(model_selection_info(&args, &run_model, None, &crate::agent::codex::CodexAgent),
-            "[aid] codex model: gpt-6-sol; source: CLI config (no -m)");
-    }
 }

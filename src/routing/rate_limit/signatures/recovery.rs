@@ -3,7 +3,7 @@
 
 use super::cursor;
 use crate::types::AgentKind;
-use chrono::{Datelike, Duration, Local, NaiveDateTime};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDateTime, Utc};
 
 pub(crate) fn recovery_for_agent(message: &str, agent: AgentKind) -> Option<NaiveDateTime> {
     use crate::routing::rate_limit::{parse_recovery_datetime, parse_recovery_time};
@@ -54,9 +54,6 @@ pub(crate) fn parse_relative_recovery(message: &str) -> Option<NaiveDateTime> {
     if let Some(duration) = parse_resets_in(&lower) {
         return Some(now + duration);
     }
-    if let Some(at) = parse_reset_at_utc(&lower) {
-        return Some(at);
-    }
     None
 }
 
@@ -64,14 +61,22 @@ pub(crate) fn parse_relative_recovery(message: &str) -> Option<NaiveDateTime> {
 /// year, which is how qwen's token plan reports its window. Assumes the current
 /// year and rolls to next year if that would land in the past.
 fn parse_reset_at_utc(lower: &str) -> Option<NaiveDateTime> {
-    let idx = lower.find("reset at ")?;
-    let rest = lower[idx + "reset at ".len()..].trim();
-    let stamp: String = rest.chars().take(14).collect();
-    let year = Local::now().naive_local().year();
+    parse_reset_at_utc_from(lower, Utc::now())
+        .map(|reset| reset.with_timezone(&Local).naive_local())
+}
+
+fn parse_reset_at_utc_from(lower: &str, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    let rest = lower.split_once("reset at ")?.1.trim();
+    let stamp = rest.split_once(" utc")?.0;
     let candidate =
-        NaiveDateTime::parse_from_str(&format!("{year}-{stamp}"), "%Y-%m-%d %H:%M:%S").ok()?;
-    let utc_offset = Local::now().offset().local_minus_utc();
-    Some(candidate + Duration::seconds(i64::from(utc_offset)))
+        NaiveDateTime::parse_from_str(&format!("{}-{stamp}", now.year()), "%Y-%m-%d %H:%M:%S")
+            .ok()?
+            .and_utc();
+    if candidate < now {
+        candidate.with_year(now.year().checked_add(1)?)
+    } else {
+        Some(candidate)
+    }
 }
 
 /// "resets in 59m21s" / "1h30m" — the compact form agy uses. The spaced parser
@@ -133,3 +138,7 @@ fn unit_to_duration(unit: &str, amount: i64) -> Option<Duration> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+#[path = "recovery_tests.rs"]
+mod tests;

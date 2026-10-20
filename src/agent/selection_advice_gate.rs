@@ -37,12 +37,6 @@ impl Exclusions {
         (quota, billing)
     }
 
-    pub(super) fn superseded_by_agy(&mut self, kind: AgentKind, agy_installed: bool) {
-        if kind == AgentKind::Gemini && agy_installed {
-            self.push("superseded_by_agy", "gemini individual tier superseded by agy (installed)".to_string());
-        }
-    }
-
     pub(super) fn push(&mut self, code: &str, reason: String) {
         self.codes.push(code.to_string());
         self.reasons.push(reason);

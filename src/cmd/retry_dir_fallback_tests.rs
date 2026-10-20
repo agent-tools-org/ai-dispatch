@@ -13,7 +13,7 @@ use chrono::Local;
 fn task_with(id: &str, effective_dir: Option<String>, repo_path: Option<String>) -> Task {
     Task {
         id: TaskId(id.to_string()),
-        agent: AgentKind::Qwen,
+        agent: AgentKind::Kilo,
         custom_agent_name: None,
         prompt: "original prompt".to_string(),
         resolved_prompt: None,
@@ -83,7 +83,7 @@ fn retry_repo_without_dir_replays_repo_not_process_cwd() {
     let repo_path = repo.path().to_string_lossy().to_string();
     let task = task_with("t-repo-no-dir", Some(repo_path.clone()), Some(repo_path.clone()));
     let saved = RunArgs {
-        agent_name: "qwen".to_string(),
+        agent_name: "kilo".to_string(),
         prompt: task.prompt.clone(),
         repo: Some(repo_path.clone()),
         dir: None,
@@ -110,7 +110,7 @@ fn retry_missing_recorded_dir_falls_back_to_repo() {
     gone.close().unwrap();
     let task = task_with("t-gone-dir", Some(gone_path.clone()), Some(repo_path.clone()));
     let saved = RunArgs {
-        agent_name: "qwen".to_string(),
+        agent_name: "kilo".to_string(),
         prompt: task.prompt.clone(),
         dir: None,
         ..Default::default()
@@ -134,7 +134,7 @@ fn retry_without_dir_replays_absolute_effective_dir() {
     let original_path = original.path().to_string_lossy().to_string();
     let task = task_with("t-plain", Some(original_path.clone()), None);
     let saved = RunArgs {
-        agent_name: "qwen".to_string(),
+        agent_name: "kilo".to_string(),
         prompt: task.prompt.clone(),
         dir: None,
         ..Default::default()
@@ -158,7 +158,7 @@ fn retry_refuses_when_recorded_dir_and_repo_are_unusable() {
     gone.close().unwrap();
     let task = task_with("t-refuse", Some(gone_path), None);
     let saved = RunArgs {
-        agent_name: "qwen".to_string(),
+        agent_name: "kilo".to_string(),
         prompt: task.prompt.clone(),
         dir: None,
         ..Default::default()

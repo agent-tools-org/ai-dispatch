@@ -1,7 +1,8 @@
 // Tests for the Qwen CLI adapter covering command flags and stream-json parsing.
-// Validates the Gemini-compatible command shape and Qwen-specific result events.
+// Validates Qwen command flags and Qwen-specific result events.
 
 use super::*;
+use super::events::parse_stream_event;
 use crate::agent::{Agent, RunOpts};
 
 fn base_opts() -> RunOpts {
@@ -194,7 +195,7 @@ fn get_qwen_selected_model_reads_settings_json() {
     let qwen_dir = temp_dir.path().join(".qwen");
     std::fs::create_dir_all(&qwen_dir).unwrap();
     let settings_path = qwen_dir.join("settings.json");
-    
+
     let settings_json = serde_json::json!({
         "model": {
             "name": "my-selected-qwen-model"
@@ -250,6 +251,10 @@ fn parse_completion_detects_api_errors_and_returns_failed() {
     let info3 = QwenAgent.parse_completion(&output3);
     assert_eq!(info3.status, TaskStatus::Failed);
 
+}
+
+#[test]
+fn parse_completion_keeps_assistant_errors_as_data() {
     // Assistant content remains data, not an error envelope.
     let output4 = serde_json::json!({
         "type": "assistant",
@@ -271,6 +276,10 @@ fn parse_completion_detects_api_errors_and_returns_failed() {
         TaskStatus::Failed
     );
 
+}
+
+#[test]
+fn parse_completion_preserves_success_usage_and_model() {
     // Test case 5: Successful completion
     let output5 = serde_json::json!({
         "type": "result",

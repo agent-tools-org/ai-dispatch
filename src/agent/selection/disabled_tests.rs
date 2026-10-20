@@ -11,16 +11,17 @@ fn fallback_chain_skips_disabled_agent() {
     let dir = tempfile::tempdir().expect("tempdir");
     let _guard = AidHomeGuard::set(dir.path());
     let _agents = crate::agent::DetectAgentsGuard::set(vec![
-        AgentKind::Gemini,
+        AgentKind::Grok,
+        AgentKind::Kilo,
         AgentKind::Qwen,
         AgentKind::Codex,
     ]);
-    agent_config::save_agent_disabled("qwen", true).expect("disable agent");
+    agent_config::save_agent_disabled("kilo", true).expect("disable agent");
 
     let result = crate::cmd::run::advice_route::automatic_candidate(
         None,
         &crate::cmd::run::RunArgs {
-            agent_name: "gemini".into(),
+            agent_name: "grok".into(),
             prompt: "Implement a feature".into(),
             ..Default::default()
         },

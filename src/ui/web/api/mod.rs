@@ -84,8 +84,8 @@ pub async fn get_task_result(
 }
 
 pub async fn get_usage(State(store): State<Arc<Store>>) -> Result<Json<UsageResponse>, StatusCode> {
-    let success_rates = store.agent_success_rates().map_err(internal_error)?;
-    let avg_costs: HashMap<_, _> = store.agent_avg_costs().map_err(internal_error)?.into_iter().collect();
+    let success_rates = store.named_agent_success_rates().map_err(internal_error)?;
+    let avg_costs: HashMap<_, _> = store.named_agent_avg_costs().map_err(internal_error)?.into_iter().collect();
     let agents = success_rates
         .into_iter()
         .map(|(agent, success_rate, task_count)| AgentUsageResponse {
@@ -277,3 +277,7 @@ fn diff_unavailable(diff: &str) -> bool {
         || diff.contains("(no worktree diff or output file available)")
         || diff.contains("(in-place edit — no uncommitted changes detected, may already be committed)")
 }
+
+#[cfg(test)]
+#[path = "removed_history_tests.rs"]
+mod removed_history_tests;

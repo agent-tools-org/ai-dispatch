@@ -32,7 +32,7 @@ fn poll_at(age: i64, cap: u64, agent: AgentKind) -> (Store, Task) {
 #[test]
 fn ninety_percent_cap_steers_commit_and_report_once_refusal_regression() {
     let _home = setup_home();
-    let (store, task) = poll_at(540, 600, AgentKind::Gemini);
+    let (store, task) = poll_at(540, 600, AgentKind::Cursor);
     let messages = store.list_messages_for_task(task.id.as_str()).expect("messages");
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].source.as_str(), "steer");
@@ -75,8 +75,8 @@ fn ninety_percent_cap_steers_commit_and_report_once_refusal_regression() {
 #[test]
 fn wrap_up_skips_early_short_and_unsupported_runs_refusal_regression() {
     for (age, cap, agent) in [
-        (539, 600, AgentKind::Gemini),
-        (550, 599, AgentKind::Gemini),
+        (539, 600, AgentKind::Cursor),
+        (550, 599, AgentKind::Cursor),
         (540, 600, AgentKind::Codex),
         (540, 600, AgentKind::Claude),
         (540, 600, AgentKind::Grok),
@@ -102,7 +102,7 @@ fn read_only_reaper_queues_report_only_wrap_up() {
     let _home = setup_home();
     let store = Store::open_memory().expect("store");
     let mut task = task("t-read-only-wrap", TaskStatus::Running);
-    task.agent = AgentKind::Gemini;
+    task.agent = AgentKind::Cursor;
     task.read_only = true;
     task.created_at = Local::now() - Duration::seconds(540);
     store.insert_task(&task).expect("task");
@@ -132,7 +132,7 @@ fn wrap_up_delivery_failure_can_recover_once_fix_regression() {
     let _home = setup_home();
     let store = Store::open_memory().expect("store");
     let mut task = task("t-wrap-recovery", TaskStatus::Running);
-    task.agent = AgentKind::Gemini;
+    task.agent = AgentKind::Cursor;
     task.read_only = false;
     store.insert_task(&task).expect("task");
     let signal = crate::support::paths::steer_signal_path(task.id.as_str());
@@ -157,7 +157,7 @@ fn legacy_wrap_up_record_prevents_duplicate_queueing() {
     let _home = setup_home();
     let store = Store::open_memory().unwrap();
     let mut task = task("t-legacy-wrap", TaskStatus::Running);
-    task.agent = AgentKind::Gemini;
+    task.agent = AgentKind::Cursor;
     store.insert_task(&task).unwrap();
     store.insert_event(&crate::types::TaskEvent {
         task_id: task.id.clone(), timestamp: Local::now(), event_kind: EventKind::Milestone,
@@ -175,7 +175,7 @@ fn legacy_wrap_up_record_prevents_duplicate_queueing() {
 #[test]
 fn worker_claim_then_reaper_keeps_one_wrap_up_request() {
     let _home = setup_home();
-    let (store, task) = poll_at(0, 600, AgentKind::Gemini);
+    let (store, task) = poll_at(0, 600, AgentKind::Cursor);
     assert!(crate::cmd::steer::wrap_up_before_timeout(
         &store, task.id.as_str(), 540, 600,
     ).expect("worker claim"));

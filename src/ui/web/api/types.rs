@@ -83,7 +83,7 @@ impl TaskResponse {
         let outcome = task.outcome().as_str().to_string();
         let sector_id = task_sector_id(&task);
         Self {
-            id: task.id.to_string(), agent: task.agent.as_str().to_string(), custom_agent_name: task.custom_agent_name,
+            id: task.id.to_string(), agent: task.agent_display_name().to_string(), custom_agent_name: task.custom_agent_name,
             prompt_excerpt: task.prompt.chars().take(160).collect(), prompt: task.prompt, resolved_prompt: task.resolved_prompt,
             status: task.status.as_str().to_string(), outcome, parent_task_id: task.parent_task_id, workgroup_id: task.workgroup_id,
             caller_kind: task.caller_kind, caller_session_id: task.caller_session_id, agent_session_id: task.agent_session_id,

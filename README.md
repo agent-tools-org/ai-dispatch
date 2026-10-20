@@ -100,7 +100,7 @@ See the [lifecycle guide](default-skills/aid-guide/references/task-lifecycle.md)
 Research can return a saved answer without creating a writable code worktree:
 
 ```sh
-aid run gemini "Summarize the design in README.md and cite relevant sections" \
+aid run agy "Summarize the design in README.md and cite relevant sections" \
   --dir . --read-only -o /tmp/aid-summary.md \
   --difficulty simple --budget standard --urgency normal --rigor draft
 ```
@@ -164,11 +164,14 @@ aid advise "Add request validation and regression tests" \
   --difficulty moderate --budget standard --urgency normal --rigor standard
 ```
 
-Supported built-in agents: `gemini`, `agy`, `qwen`, `codex`, `copilot`, `opencode`,
+Supported built-in agents: `agy`, `qwen`, `codex`, `copilot`, `opencode`,
 `commandcode`, `cursor`, `kilo`, `mimocode`, `droid`, `oz`, `claude`, and `grok`.
 Availability depends on installed CLIs and their authentication. The
 [configuration guide](default-skills/aid-guide/references/configuration.md)
 also covers custom agents.
+
+The `gemini` agent was removed. Use `agy`, a Google provider through
+`opencode`/`kilo`, or a custom agent. Historical tasks keep their original names.
 
 ## Where to go next
 

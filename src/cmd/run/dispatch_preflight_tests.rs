@@ -11,11 +11,11 @@ fn isolated_home() -> crate::support::paths::AidHomeGuard {
 }
 
 #[test]
-fn prepare_dispatch_accepts_qwen_read_only() {
+fn prepare_dispatch_accepts_kilo_read_only() {
     let _guard = isolated_home();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut args = RunArgs {
-        agent_name: "qwen".to_string(),
+        agent_name: "kilo".to_string(),
         prompt: "Investigate a concrete task routing bug.".to_string(),
         read_only: true,
         existing_task_id: Some(TaskId("t-preflight-ro".to_string())),
@@ -23,7 +23,7 @@ fn prepare_dispatch_accepts_qwen_read_only() {
     };
 
     let prepared = super::prepare_dispatch_with(&store, &mut args, |_| true)
-        .expect("qwen --read-only should pass command preflight");
+        .expect("kilo --read-only should pass command preflight");
     assert_eq!(prepared.task.id.as_str(), "t-preflight-ro");
 }
 

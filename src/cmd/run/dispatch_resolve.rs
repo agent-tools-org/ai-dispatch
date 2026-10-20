@@ -97,6 +97,7 @@ pub(super) fn resolve_agent_setup(
     args: &mut RunArgs,
     project_id: Option<&str>,
 ) -> Result<AgentSetup> {
+    agent::removed::validate_run(args)?;
     let cfg = config::load_dispatch_config()?;
     let requested_api = config::api_route::find_for_dispatch(&args.agent_name)?;
     let (mut agent_kind, mut custom_agent_name) = if let Some(kind) = AgentKind::parse_str(&args.agent_name) {

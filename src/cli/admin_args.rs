@@ -15,7 +15,7 @@ pub enum ConfigAction {
     Agents,
     /// Clear rate-limit marker for an agent (or "all")
     ClearLimit {
-        /// Agent name (e.g. codex, gemini) or "all"
+        /// Agent name (e.g. codex, agy) or "all"
         agent: String,
     },
     /// Show pricing table

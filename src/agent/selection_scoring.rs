@@ -15,9 +15,8 @@ pub(super) const NEUTRAL_BASE: f64 = 6.0; // no evidence: neither penalise nor f
 
 pub(super) fn priority(kind: AgentKind) -> i32 {
     match kind {
-        AgentKind::Gemini
+        AgentKind::Qwen
         | AgentKind::Antigravity
-        | AgentKind::Qwen
         | AgentKind::Kilo
         | AgentKind::MiMoCode => 0,
         AgentKind::OpenCode => 1,

@@ -210,7 +210,7 @@ fn custom_agent_quota_read_matches_write() {
 #[test]
 fn quota_json_unknown_when_no_evidence() {
     let (_tmp, _guard, _cache) = isolated_home();
-    let q = build_quota_json(&AgentKind::Gemini, None);
+    let q = build_quota_json(&AgentKind::Grok, None);
     assert_eq!(q.source, "none");
     assert_eq!(q.state, "unknown");
     assert!(q.groups.is_empty());

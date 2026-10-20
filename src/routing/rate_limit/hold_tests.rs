@@ -6,6 +6,10 @@ use super::*;
 use chrono::{Datelike, Duration, Local, Timelike};
 use crate::types::AgentKind;
 
+#[path = "hold_test_support.rs"]
+mod helpers;
+use helpers::*;
+
 fn isolated() -> tempfile::TempDir {
     let temp = tempfile::tempdir().expect("temp dir");
     std::fs::create_dir_all(temp.path().join(".aid")).expect("aid dir");
@@ -110,11 +114,6 @@ fn every_human_ended_refusal_holds_without_an_invented_reset_time() {
         ),
         (AgentKind::Droid, "402 payment required: reload your tokens"),
         (
-            AgentKind::Gemini,
-            "IneligibleTierError: This client is no longer supported for Gemini Code \
-             Assist for individuals",
-        ),
-        (
             AgentKind::Oz,
             "Error: Your credentials are invalid. Please log in again with `oz login`.",
         ),
@@ -142,7 +141,7 @@ fn clock_ended_refusals_still_get_a_recovery_time() {
     let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
     for (agent, message) in [
-        (AgentKind::Qwen, "Quota exhausted: Your token-plan 5-hour quota has been exhausted."),
+        (AgentKind::Codex, "You have hit your usage limit."),
         (AgentKind::Oz, "Error: Quota limit reached."),
         (AgentKind::Cursor, "quota exceeded for this workspace"),
         (
@@ -188,17 +187,17 @@ fn an_unparseable_recovery_phrase_falls_back_to_the_cooldown() {
     let temp = isolated();
     let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
-    let path = marker_path(&AgentKind::Qwen, None);
+    let path = marker_path(&AgentKind::Codex, None);
     std::fs::write(&path, "recovery_at: tomorrow morning\nmessage: out of quota\n")
         .expect("write marker");
 
     assert!(
-        !is_rate_limited(&AgentKind::Qwen, None),
+        !is_rate_limited(&AgentKind::Codex, None),
         "unparseable recovery is Transient, and Transient is not Held"
     );
     age_marker(&path, RATE_LIMIT_WINDOW_SECS + 60);
     assert!(
-        !is_rate_limited(&AgentKind::Qwen, None),
+        !is_rate_limited(&AgentKind::Codex, None),
         "an unreadable time must expire, not become permanent"
     );
 }
@@ -223,8 +222,7 @@ fn live_markers_with_a_future_reset_time_still_read_as_out() {
 
     for (agent, fixture) in [
         (AgentKind::Codex, "rate-limit-codex"),
-        (AgentKind::Qwen, "rate-limit-qwen"),
-        (AgentKind::Droid, "rate-limit-droid"),
+                (AgentKind::Droid, "rate-limit-droid"),
         (AgentKind::OpenCode, "rate-limit-opencode"),
     ] {
         let content = with_relative_recovery_time(&read_fixture(fixture), Duration::days(1));
@@ -257,521 +255,9 @@ fn a_marker_whose_stated_time_has_passed_reads_as_recovered() {
 
 /// A marker written before the hold classes existed has no `hold:` line. It must
 /// not be read as permanent — that is the blackhole this fix removes.
-#[test]
-fn a_marker_without_a_hold_field_is_not_permanent() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
 
-    let path = marker_path(&AgentKind::Copilot, None);
-    std::fs::write(&path, "recovery_at: \nmessage: some old refusal\n").expect("write marker");
-    age_marker(&path, RATE_LIMIT_WINDOW_SECS + 60);
-    assert!(!is_rate_limited(&AgentKind::Copilot, None));
-}
+#[path = "hold_tier_tests.rs"]
+mod tiers;
 
-/// Group markers are held by the same three classes as agent markers, so a
-/// spent cursor premium pool survives while `auto` is untouched.
-#[test]
-fn a_group_marker_holds_for_a_person_too() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-    let _cache = isolate_cache(&temp);
-    write_probe_held(&temp.path().join("aidbar"), "cursor");
-
-    let cursor = AgentKind::Cursor;
-    mark_group_rate_limited(&cursor, None, "premium", "ActionRequiredError: Increase limits for faster responses You're out of usage. \
-         Switch to Auto, or ask your admin to increase your limit to continue.");
-
-    age_marker(&group_marker_path(&cursor, None, "premium"), RATE_LIMIT_WINDOW_SECS * 100);
-    assert!(is_group_rate_limited(&cursor, None, "premium"));
-    assert!(!is_group_rate_limited(&cursor, None, "auto"), "auto keeps serving");
-    assert!(!is_rate_limited(&cursor, None), "the agent itself is not written off");
-
-    let holds = active_group_holds(&cursor, None);
-    assert_eq!(holds.len(), 1);
-    assert_eq!(holds[0].0, "premium");
-    assert!(!holds[0].1.needs_human, "cursor premium is Windowed");
-    let end = format_hold_end(&cursor, None, &holds[0].1);
-    assert!(
-        end.contains("aid config clear-limit cursor"),
-        "Windowed group hold must still name the clear command, got {end:?}"
-    );
-    assert!(!end.contains("cooling down"), "got {end:?}");
-
-    assert!(clear_all_rate_limits_for_agent(&cursor, None));
-    assert!(!is_group_rate_limited(&cursor, None, "premium"));
-    assert!(active_group_holds(&cursor, None).is_empty());
-}
-
-/// The live call site, not just the grouping helper. `classify_line` in the
-/// cursor adapter has no model in hand, so it marked the agent — which made
-/// `is_rate_limited(Cursor, None)` true and took `auto` out with the pool that ran
-/// out. The message names the tier; the marking must follow it.
-#[test]
-fn a_cursor_premium_refusal_with_no_model_in_hand_holds_only_the_premium_pool() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-
-    let cursor = AgentKind::Cursor;
-    mark_rate_limited_for_message(&cursor, None, "ActionRequiredError: Increase limits for faster responses You're out of usage. \
-         Switch to Auto, or ask your admin to increase your limit to continue.");
-
-    assert!(is_group_rate_limited(&cursor, None, "premium"), "the spent pool is held");
-    assert!(!is_group_rate_limited(&cursor, None, "auto"), "auto keeps serving");
-    assert!(!is_rate_limited(&cursor, None), "the agent as a whole is not written off");
-    assert!(
-        dispatch_blocking_hold(&cursor, None).is_none(),
-        "aid run must still dispatch cursor — on auto"
-    );
-}
-
-/// End to end on the channel it actually arrives on. cursor's premium refusal is
-/// on stderr and nowhere else — no error envelope in the stream carries it — so
-/// this is the coverage that decides whether `Channel::CliStderr` earns its
-/// place in the enumeration. If it ever stops passing, the answer is not to
-/// widen the stream channel but to say so.
-#[test]
-fn cursors_premium_refusal_is_read_off_the_stderr_channel() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-
-    let stderr = "ActionRequiredError: Increase limits for faster responses You're out of usage. \
-                  Switch to Auto, or ask your admin to increase your limit to continue.";
-    let refusal = refusal_on_channel(
-        stderr,
-        AgentKind::Cursor,
-        crate::routing::quota::channel::Channel::CliStderr,
-    )
-    .expect("cursor's premium refusal must be readable on stderr");
-    mark_rate_limited_for_message(&AgentKind::Cursor, None, &refusal);
-
-    assert!(is_group_rate_limited(&AgentKind::Cursor, None, "premium"));
-    assert!(!is_group_rate_limited(&AgentKind::Cursor, None, "auto"));
-    assert!(!is_rate_limited(&AgentKind::Cursor, None));
-}
-
-/// oz's logged-out refusal is CLI stderr, not an assistant envelope. Matching
-/// it here is what holds the route; widening to model prose would not.
-#[test]
-fn oz_invalid_credentials_are_read_off_the_stderr_channel() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-
-    let stderr = "Error: Your credentials are invalid. Please log in again with `oz login`.";
-    let refusal = refusal_on_channel(
-        stderr,
-        AgentKind::Oz,
-        crate::routing::quota::channel::Channel::CliStderr,
-    )
-    .expect("oz credentials refusal must be readable on stderr");
-    mark_rate_limited_for_message(&AgentKind::Oz, None, &refusal);
-
-    let info = get_rate_limit_info(&AgentKind::Oz, None).expect("marker written");
-    assert!(info.needs_human, "logged-out oz must wait for a person");
-    assert!(is_rate_limited(&AgentKind::Oz, None));
-    let end = format_hold_end(&AgentKind::Oz, None, &info);
-    assert!(
-        end.starts_with("needs human: Error: Your credentials are invalid."),
-        "got {end:?}"
-    );
-    assert!(
-        end.contains("fix, then `aid config clear-limit oz`"),
-        "got {end:?}"
-    );
-}
-
-/// The complement: a cursor refusal that names no tier is still an agent-level
-/// fact and must not be quietly narrowed to one group.
-#[test]
-fn a_cursor_refusal_naming_no_tier_still_marks_the_agent() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-
-    let cursor = AgentKind::Cursor;
-    mark_rate_limited_for_message(&cursor, None, "Quota exceeded for this workspace");
-
-    assert!(is_rate_limited(&cursor, None));
-    assert!(!is_group_rate_limited(&cursor, None, "premium"));
-}
-
-/// The live call site with no model in hand. The 402 names the standard
-/// pool; Core must stay dispatchable.
-#[test]
-fn a_droid_standard_402_with_no_model_holds_only_the_standard_pool() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-
-    let body = r#"{"type":"error","source":"agent_loop","message":"402 {\"detail\":\"You've reached your weekly standard usage limit (resets in 2 days).\nSwitch to Droid Core or enable Extra Usage to continue.\",\"status\":402,\"title\":\"Payment Required\",\"displayToUser\":true}"}"#;
-    mark_rate_limited_for_message(&AgentKind::Droid, None, body);
-
-    assert!(is_group_rate_limited(&AgentKind::Droid, None, "standard"));
-    assert!(!is_group_rate_limited(&AgentKind::Droid, None, "core"));
-    assert!(!is_rate_limited(&AgentKind::Droid, None));
-    assert!(
-        dispatch_blocking_hold(&AgentKind::Droid, None).is_none(),
-        "aid run must still dispatch droid — on Core"
-    );
-}
-
-#[test]
-fn a_droid_core_402_with_no_model_holds_only_the_core_pool() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-
-    let body = r#"402 {"detail":"You've reached your weekly Droid Core usage limit (resets in 2 days).\nReload Extra Usage credits or wait for your limits to reset.","status":402,"title":"Payment Required","displayToUser":true}"#;
-    mark_rate_limited_for_message(&AgentKind::Droid, None, body);
-
-    assert!(is_group_rate_limited(&AgentKind::Droid, None, "core"));
-    assert!(!is_group_rate_limited(&AgentKind::Droid, None, "standard"));
-    assert!(!is_rate_limited(&AgentKind::Droid, None));
-    assert!(
-        dispatch_blocking_hold(&AgentKind::Droid, None).is_none(),
-        "aid run must still dispatch droid — on standard"
-    );
-}
-
-#[test]
-fn a_droid_refusal_naming_no_tier_still_marks_the_agent() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-
-    mark_rate_limited_for_message(
-        &AgentKind::Droid,
-        None,
-        "402 payment required: reload your tokens",
-    );
-
-    assert!(is_rate_limited(&AgentKind::Droid, None));
-    assert!(!is_group_rate_limited(&AgentKind::Droid, None, "standard"));
-    assert!(!is_group_rate_limited(&AgentKind::Droid, None, "core"));
-}
-
-/// Watcher, lifecycle, and stream-completion pass `requested_model`. The
-/// refusal names the spent tier; a dispatched opus must not change that.
-#[test]
-fn a_droid_standard_402_with_a_model_in_hand_holds_only_the_standard_pool() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-
-    let body = r#"{"type":"error","source":"agent_loop","message":"402 {\"detail\":\"You've reached your weekly standard usage limit (resets in 2 days).\nSwitch to Droid Core or enable Extra Usage to continue.\",\"status\":402,\"title\":\"Payment Required\",\"displayToUser\":true}"}"#;
-    mark_rate_limited_for_model(&AgentKind::Droid, None, Some("claude-opus-5"), body);
-
-    assert!(is_group_rate_limited(&AgentKind::Droid, None, "standard"));
-    assert!(!is_group_rate_limited(&AgentKind::Droid, None, "core"));
-    assert!(!is_rate_limited(&AgentKind::Droid, None));
-    assert!(
-        dispatch_blocking_hold(&AgentKind::Droid, None).is_none(),
-        "aid run must still dispatch droid — on Core"
-    );
-}
-
-/// Same write site, Core model in hand: the refusal still names standard.
-#[test]
-fn a_droid_standard_402_with_a_core_model_in_hand_still_holds_only_standard() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-
-    let body = r#"{"type":"error","source":"agent_loop","message":"402 {\"detail\":\"You've reached your weekly standard usage limit (resets in 2 days).\nSwitch to Droid Core or enable Extra Usage to continue.\",\"status\":402,\"title\":\"Payment Required\",\"displayToUser\":true}"}"#;
-    mark_rate_limited_for_model(&AgentKind::Droid, None, Some("glm-5.2"), body);
-
-    assert!(is_group_rate_limited(&AgentKind::Droid, None, "standard"));
-    assert!(!is_group_rate_limited(&AgentKind::Droid, None, "core"));
-    assert!(!is_rate_limited(&AgentKind::Droid, None));
-}
-
-/// The live with-model path. `reload your tokens` names no tier and is
-/// NeedsHuman — a purchase ends it. Marking only `standard` would keep
-/// dispatching Core against an account that cannot serve.
-#[test]
-fn a_droid_reload_tokens_402_with_a_model_in_hand_marks_the_agent() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-
-    mark_rate_limited_for_model(
-        &AgentKind::Droid,
-        None,
-        Some("claude-opus-5"),
-        "402 payment required: reload your tokens",
-    );
-
-    assert!(is_rate_limited(&AgentKind::Droid, None));
-    assert!(!is_group_rate_limited(&AgentKind::Droid, None, "standard"));
-    assert!(!is_group_rate_limited(&AgentKind::Droid, None, "core"));
-    assert!(dispatch_blocking_hold(&AgentKind::Droid, None).is_some());
-    assert!(
-        dispatch_blocking_hold_for_model(&AgentKind::Droid, None, Some("glm-5.2")).is_none(),
-        "Core group is not held; the agent-wide marker is what stops dispatch"
-    );
-}
-
-/// `aid run` used to divert only when a recovery time was present. A Windowed
-/// 402 states none, so dispatch must still stop and name the dated-snapshot way
-/// out rather than inventing a clock or saying "cooling down". A probe is
-/// written so the route keeps its Windowed class — see the probe-less case below.
-#[test]
-fn a_windowed_hold_blocks_dispatch_and_names_the_way_out() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-    let _cache = isolate_cache(&temp);
-    write_probe_held(&temp.path().join("aidbar"), "grok");
-
-    mark_rate_limited(&AgentKind::Grok, None, "API error (status 402 Payment Required): Grok Build usage balance exhausted");
-    let hold = dispatch_blocking_hold(&AgentKind::Grok, None).expect("a Windowed hold must block");
-    assert_eq!(
-        hold,
-        "until a dated grok snapshot with headroom (or `aid config clear-limit grok`)"
-    );
-    assert!(!hold.contains("cooling down"));
-
-    assert!(clear_rate_limit(&AgentKind::Grok, None));
-    assert!(dispatch_blocking_hold(&AgentKind::Grok, None).is_none());
-}
-
-/// A probe-less agent's Windowed refusal must state the human-cleared end, not
-/// promise a dated snapshot that can never arrive. grok's 402 is Windowed by
-/// signature (aidbar is assumed to map the billing period to a dated resets_at),
-/// but when no probe exists the recovery condition is unobservable, so the hold
-/// is human-cleared and `aid agent quota` / dispatch must say so plainly.
-#[test]
-fn a_probeless_windowed_refusal_states_a_human_clear_not_a_missing_snapshot() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-    let _cache = isolate_cache(&temp);
-
-    mark_rate_limited(&AgentKind::Grok, None, "API error (status 402 Payment Required): Grok Build usage balance exhausted");
-
-    let hold = dispatch_blocking_hold(&AgentKind::Grok, None)
-        .expect("the refusal must still block dispatch");
-    assert!(
-        !hold.contains("dated grok snapshot"),
-        "a probe-less route must not promise a snapshot; got {hold:?}"
-    );
-    assert!(
-        hold.contains("aid config clear-limit grok"),
-        "the stated end must name the human-clear command; got {hold:?}"
-    );
-
-    let info = get_rate_limit_info(&AgentKind::Grok, None).expect("marker written");
-    assert!(
-        info.needs_human,
-        "a probe-less Windowed refusal is human-cleared, not windowed: {info:?}"
-    );
-    let end = format_hold_end(&AgentKind::Grok, None, &info);
-    assert!(
-        !end.contains("dated grok snapshot"),
-        "quota display must not promise a snapshot for a probe-less route: {end:?}"
-    );
-    assert!(
-        end.contains("aid config clear-limit grok"),
-        "quota display must name the human-clear command: {end:?}"
-    );
-}
-
-/// The other direction of the same gate: a stated time still blocks while it is
-/// in the future, and stops blocking once it has passed. oz's live marker is
-/// fourteen hours stale and kept diverting runs off a route that was back.
-#[test]
-fn a_stated_time_blocks_dispatch_only_until_it_passes() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-
-    let content = with_relative_recovery_time(&read_fixture("rate-limit-codex"), Duration::days(1));
-    let stated = content
-        .lines()
-        .find_map(|line| line.strip_prefix("recovery_at: "))
-        .map(str::to_string)
-        .expect("fixture must state a recovery time");
-    std::fs::write(marker_path(&AgentKind::Codex, None), content)
-        .expect("write marker");
-    assert_eq!(
-        dispatch_blocking_hold(&AgentKind::Codex, None),
-        Some(format!("until {stated}")),
-        "the provider's own phrasing of the time is quoted back"
-    );
-
-    let content = with_relative_recovery_time(&read_fixture("rate-limit-oz"), Duration::minutes(-1));
-    std::fs::write(marker_path(&AgentKind::Oz, None), content).expect("write marker");
-    assert!(
-        dispatch_blocking_hold(&AgentKind::Oz, None).is_none(),
-        "a reset time in the past must not divert a run"
-    );
-}
-
-/// A bounded cooldown is not a dispatch gate. Moving the caller off the agent
-/// they asked for costs more than the few minutes left on a transient 429, and
-/// gating on it was never the previous behaviour either.
-#[test]
-fn a_transient_cooldown_does_not_divert_dispatch() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-
-    mark_rate_limited(&AgentKind::Claude, None, "HTTP 429 Too Many Requests");
-    assert!(
-        !is_rate_limited(&AgentKind::Claude, None),
-        "Transient is not Held, so scoring no longer applies -10"
-    );
-    assert!(dispatch_blocking_hold(&AgentKind::Claude, None).is_none());
-}
-
-/// Markers already on disk when this version lands carry no `hold:` line. The
-/// two human-ended ones state no reset time either, so the cooldown would
-/// release them within five minutes and hand work back to a spent allowance.
-/// Their stored refusal text is the same evidence write-time classification
-/// uses, so it is re-read rather than the file rewritten.
-#[test]
-fn a_legacy_marker_is_reclassified_from_the_refusal_it_stored() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-    let _cache = isolate_cache(&temp);
-    write_probe_held(&temp.path().join("aidbar"), "grok");
-
-    for (agent, fixture, human) in [
-        // "recovery_at: " empty, message a mid-token JSON fragment that still
-        // carries "You have exceeded your monthly quota".
-        (AgentKind::Copilot, "rate-limit-copilot", true),
-        // "recovery_at: " empty, refusal on a later line of a multi-line message.
-        (AgentKind::Grok, "rate-limit-grok", false),
-    ] {
-        let path = marker_path(&agent, None);
-        std::fs::write(&path, read_fixture(fixture)).expect("write marker");
-        age_marker(&path, RATE_LIMIT_WINDOW_SECS * 100);
-
-        assert!(
-            is_rate_limited(&agent, None),
-            "{fixture} must not expire on a timer"
-        );
-        let info = get_rate_limit_info(&agent, None).expect("marker present");
-        assert_eq!(
-            info.needs_human, human,
-            "{fixture} must report which kind of hold it is under"
-        );
-        assert!(dispatch_blocking_hold(&agent, None).is_some(), "{fixture} must divert dispatch");
-        if !human {
-            assert!(
-                !format_hold_end(&agent, None, &info).contains("cooling down"),
-                "{fixture} Windowed must not print cooling down"
-            );
-        }
-    }
-}
-
-/// The same rule must not turn every legacy marker permanent. A stored message
-/// matching no signature is still transient and still expires — that is the
-/// blackhole this whole change exists to avoid.
-#[test]
-fn a_legacy_marker_with_an_unrecognised_refusal_still_expires() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-
-    let path = marker_path(&AgentKind::Claude, None);
-    std::fs::write(&path, "recovery_at: \nmessage: 429 Too Many Requests\n")
-        .expect("write marker");
-    age_marker(&path, RATE_LIMIT_WINDOW_SECS + 60);
-
-    assert!(!is_rate_limited(&AgentKind::Claude, None));
-    assert!(!get_rate_limit_info(&AgentKind::Claude, None).expect("marker present").needs_human);
-}
-
-/// A marker records what *one* provider said, so a needle another provider owns
-/// is not evidence about this one. `~/.aid/rate-limit-claude` was written on
-/// 2026-08-07 from an agent's own message quoting this crate's signature table,
-/// and the stored text contained `"insufficient balance"` — opencode's refusal,
-/// which held claude open until someone cleared it.
-///
-/// The scoping is what does the work here, not the wording: the identical text
-/// in opencode's own marker is still a human-ended hold, as the second half
-/// asserts. The write side can no longer produce such a marker at all
-/// (`quota_channel`); this covers the ones already on disk.
-#[test]
-fn a_stored_refusal_only_speaks_for_the_agent_whose_marker_it_is() {
-    let temp = isolated();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-
-    let stored = "recovery_at: \nmessage: QuotaSignature { needle: \"insufficient balance\", \
-                  recovery: QuotaRecovery::NeedsHuman }\n";
-
-    let claude = marker_path(&AgentKind::Claude, None);
-    std::fs::write(&claude, stored).expect("write marker");
-    age_marker(&claude, RATE_LIMIT_WINDOW_SECS + 60);
-    assert!(
-        !is_rate_limited(&AgentKind::Claude, None),
-        "another provider's needle must not hold claude open until someone clears it"
-    );
-
-    let opencode = marker_path(&AgentKind::OpenCode, None);
-    std::fs::write(&opencode, stored).expect("write marker");
-    age_marker(&opencode, RATE_LIMIT_WINDOW_SECS + 60);
-    assert!(
-        is_rate_limited(&AgentKind::OpenCode, None),
-        "opencode's own refusal must still hold, or this became a denylist"
-    );
-}
-
-fn read_fixture(name: &str) -> String {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures")
-        .join(name);
-    std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("read {path:?}: {err}"))
-}
-
-/// Backdate a marker's mtime so the bounded cooldown can be exercised without
-/// sleeping. The transient class measures from the write time.
-fn age_marker(path: &std::path::Path, seconds: u64) {
-    let when = std::time::SystemTime::now() - std::time::Duration::from_secs(seconds);
-    let file = std::fs::File::options()
-        .write(true)
-        .open(path)
-        .unwrap_or_else(|err| panic!("open {path:?}: {err}"));
-    file.set_modified(when)
-        .unwrap_or_else(|err| panic!("set mtime on {path:?}: {err}"));
-}
-
-/// Shift a fixture's stated time relative to now while preserving its provider
-/// formatting. The message body remains the captured evidence under test.
-fn with_relative_recovery_time(content: &str, delta: Duration) -> String {
-    let stated = content
-        .lines()
-        .find_map(|line| line.strip_prefix("recovery_at: "))
-        .filter(|value| !value.is_empty())
-        .expect("fixture must state a recovery time");
-    let template_tokens: Vec<_> = stated.split_whitespace().collect();
-    let at = Local::now().naive_local() + delta;
-    let day_token = template_tokens[1];
-    let day = if day_token.starts_with('0') {
-        format!("{:02}", at.day())
-    } else {
-        at.day().to_string()
-    };
-    let suffix = if day_token.ends_with("st,") || day_token.ends_with("nd,")
-        || day_token.ends_with("rd,") || day_token.ends_with("th,")
-    {
-        ordinal_suffix(at.day()).to_string()
-    } else {
-        String::new()
-    };
-    let hour = if template_tokens[3].starts_with('0') {
-        format!("{:02}", at.hour12().1)
-    } else {
-        at.hour12().1.to_string()
-    };
-    let replacement = format!(
-        "{} {}{}, {} {}:{:02} {}",
-        at.format("%b"), day, suffix, at.year(), hour, at.minute(), at.format("%p")
-    );
-    content.replacen(
-        &format!("recovery_at: {stated}"),
-        &format!("recovery_at: {replacement}"),
-        1,
-    )
-}
-
-fn ordinal_suffix(day: u32) -> &'static str {
-    match day % 100 {
-        11..=13 => "th",
-        _ => match day % 10 {
-            1 => "st",
-            2 => "nd",
-            3 => "rd",
-            _ => "th",
-        },
-    }
-}
+#[path = "hold_window_tests.rs"]
+mod windows;

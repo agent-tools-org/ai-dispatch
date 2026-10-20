@@ -9,7 +9,7 @@ fn sub_300_second_timeout_warns_with_minutes_conversion_refusal_regression() {
         timeout: Some(90),
         ..Default::default()
     };
-    let warnings = validate_dispatch(&args, &AgentKind::Gemini);
+    let warnings = validate_dispatch(&args, &AgentKind::Grok);
     assert!(
         warnings.iter().any(|warning| warning.contains("90 s")
             && warning.contains("seconds")
@@ -23,7 +23,7 @@ fn sub_300_second_timeout_warns_with_minutes_conversion_refusal_regression() {
                     timeout,
                     ..args.clone()
                 },
-                &AgentKind::Gemini
+                &AgentKind::Grok
             )
             .is_empty()
         );

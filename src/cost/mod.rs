@@ -10,12 +10,11 @@ pub(crate) mod api_route;
 pub(crate) use components::{apply_completion_usage_cost, completion_cost, task_cost};
 
 use crate::routing::model_catalog;
-use crate::store::Store;
 use crate::types::AgentKind;
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 #[cfg(not(test))]
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 /// Price per 1M tokens (input, output) in USD
 #[derive(Clone, Copy)]
@@ -34,15 +33,6 @@ static PRICING_OVERRIDES: OnceLock<PricingOverrides> = OnceLock::new();
 #[cfg(test)]
 thread_local! {
     static TEST_PRICING_OVERRIDES: std::cell::RefCell<Option<PricingOverrides>> = const { std::cell::RefCell::new(None) };
-}
-
-/// Most recent observed Gemini model from the task DB; unset means unknown cost.
-static GEMINI_DEFAULT_MODEL_CACHE: OnceLock<Option<String>> = OnceLock::new();
-
-/// Populate [`GEMINI_DEFAULT_MODEL_CACHE`] once per process from [`Store::latest_default_model`].
-pub fn warm_gemini_default_from_store(store: &Store) {
-    let _ = GEMINI_DEFAULT_MODEL_CACHE
-        .get_or_init(|| store.latest_default_model(AgentKind::Gemini).unwrap_or_default());
 }
 
 /// Refresh the price-feed cache out of band. Never blocks or fails a run; a
@@ -190,15 +180,11 @@ pub(crate) fn clear_feed_for_tests() {
     });
 }
 
-/// Prices the reported model; with none reported, only a model aid observed
-/// run (Gemini's last recorded default, Qwen's selected model). Else unknown.
+/// Prices the reported model or Qwen's selected settings model.
+/// Otherwise the model price is unknown.
 pub(crate) fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing> {
     let known = match (model, agent) {
         (Some(model), _) => Some(model.to_string()),
-        (None, AgentKind::Gemini) => GEMINI_DEFAULT_MODEL_CACHE
-            .get()
-            .and_then(|stored| stored.clone())
-            .filter(|model| !model.is_empty()),
         (None, AgentKind::Qwen) => crate::routing::model_catalog::get_qwen_selected_model(),
         (None, _) => None,
     };

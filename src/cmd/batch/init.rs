@@ -82,7 +82,7 @@ fn render_template(dir: &str, team: &str, verify: &str, language: &str) -> Strin
     lines.push("# retry = 1                     # Retry failed runs N times".to_string());
     lines.push("# idle_timeout = 120            # Kill if idle for N seconds".to_string());
     lines.push("# judge = true                  # AI judge evaluates output quality".to_string());
-    lines.push("# peer_review = \"gemini\"       # Run a second-agent review".to_string());
+    lines.push("# peer_review = \"agy\"       # Run a second-agent review".to_string());
     lines.push("# best_of = 3                   # Run N copies, pick best".to_string());
     lines.push("# metric = \"cargo test\"        # Best-of scoring command".to_string());
     lines.push("# container = \"node:20\"         # Run agent inside container".to_string());
@@ -118,7 +118,7 @@ fn render_template(dir: &str, team: &str, verify: &str, language: &str) -> Strin
     lines.push("# max_wait_mins = 30            # Fail WAIT tasks after 30 minutes".to_string());
     lines.push("# idle_timeout = 120            # Kill if idle for N seconds".to_string());
     lines.push("# retry = 2                     # Retry the task on failure".to_string());
-    lines.push("# peer_review = \"gemini\"       # Run a second-agent review".to_string());
+    lines.push("# peer_review = \"agy\"       # Run a second-agent review".to_string());
     lines.push("# best_of = 3                   # Run N copies, pick best".to_string());
     lines.push("# metric = \"cargo test\"        # Best-of scoring command".to_string());
     lines.push("# scope = [\"src/parser/\"]       # Restrict file access".to_string());

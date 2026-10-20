@@ -48,7 +48,7 @@ fn compute_state_aggregates_project_metrics() {
         ),
         make_task(
             "t-2",
-            AgentKind::Gemini,
+            AgentKind::Grok,
             TaskStatus::Failed,
             dir.path(),
             15,
@@ -178,7 +178,7 @@ fn summary_formats_key_lines() {
     let summary = format_state_summary_in(&sample_state(), dir.path());
     assert!(summary.contains("[Project State: alpha]"));
     assert!(summary.contains("Health: 94% success (47/50 recent), verify: passed"));
-    assert!(summary.contains("Best agents: codex (92%), gemini (88%)"));
+    assert!(summary.contains("Best agents: codex (92%), grok (88%)"));
     assert!(summary.contains("Last task: t-abcd (codex)"));
 }
 
@@ -195,7 +195,7 @@ fn sample_state() -> ProjectState {
             best_agent: Some("codex".to_string()),
             agent_success_rates: [
                 ("codex".to_string(), 0.92),
-                ("gemini".to_string(), 0.88),
+                ("grok".to_string(), 0.88),
             ]
             .into_iter()
             .collect(),

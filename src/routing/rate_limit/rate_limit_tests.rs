@@ -45,7 +45,7 @@ fn test_is_rate_limit_error() {
         "You have hit your usage limit. try again at Mar 19th, 2026 2:27 PM."
     ));
     assert!(is_rate_limit_error(
-        "Quota exhausted: Your token-plan 5-hour quota has been exhausted."
+        "Error: Quota limit reached."
     ));
     assert!(is_rate_limit_error(
         "APIError: Insufficient balance. Manage your billing here"

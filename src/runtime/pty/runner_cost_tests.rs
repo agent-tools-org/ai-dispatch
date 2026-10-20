@@ -58,11 +58,11 @@ fn record(
 #[test]
 fn process_completion_stores_codex_components_and_preserves_legacy_blend() {
     let _guard = seed_prices(Some(0.125));
-    let legacy = crate::cost::test_support::task(AgentKind::Gemini, 2_020_000, None);
+    let legacy = crate::cost::test_support::task(AgentKind::Claude, 2_020_000, None);
     let (_, stored) = record(&legacy, None, None);
     assert_eq!(
         stored.cost_usd,
-        crate::cost::estimate_cost(2_020_000, legacy.costing_model(), AgentKind::Gemini)
+        crate::cost::estimate_cost(2_020_000, legacy.costing_model(), AgentKind::Claude)
     );
     assert_cost(stored.cost_usd, 7.8275);
     let task = task(AgentKind::Codex, 2_020_000, None);

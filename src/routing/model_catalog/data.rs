@@ -6,13 +6,6 @@ use crate::types::AgentKind;
 
 pub const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
     (
-        AgentKind::Gemini,
-        "Research, coding, web search, file editing",
-        "$0.10-$10/M blended",
-        "research, explain, implement, create, analyze, build",
-        true,
-    ),
-    (
         AgentKind::Antigravity,
         "Research, coding, web search, file editing with Antigravity CLI",
         "free (Google One / Gemini Code Assist) or BYOK",
@@ -122,14 +115,6 @@ pub const AGENT_MODELS: &[AgentModel] = &[
     AgentModel { agent: AgentKind::Codex, model: "gpt-5.5", input_per_m: 2.5, output_per_m: 15.0, tier: "premium", description: "Latest, best quality" },
     AgentModel { agent: AgentKind::Codex, model: "gpt-5.4", input_per_m: 2.5, output_per_m: 15.0, tier: "premium", description: "Reliable, good quality" },
     AgentModel { agent: AgentKind::Codex, model: "gpt-5.4-mini", input_per_m: 0.4, output_per_m: 1.6, tier: "cheap", description: "Balanced cost/quality" },
-    AgentModel { agent: AgentKind::Gemini, model: "flash", input_per_m: 0.30, output_per_m: 2.50, tier: "cheap", description: "(version selected by gemini CLI)" },
-    AgentModel { agent: AgentKind::Gemini, model: "pro", input_per_m: 1.25, output_per_m: 10.0, tier: "premium", description: "(version selected by gemini CLI)" },
-    AgentModel { agent: AgentKind::Gemini, model: "flash-lite", input_per_m: 0.10, output_per_m: 0.40, tier: "cheap", description: "(version selected by gemini CLI)" },
-    AgentModel { agent: AgentKind::Gemini, model: "gemini-3.1-pro-preview", input_per_m: 1.25, output_per_m: 10.0, tier: "premium", description: "Gemini 3.1 Pro (preview pricing)" },
-    AgentModel { agent: AgentKind::Gemini, model: "gemini-3-flash-preview", input_per_m: 0.30, output_per_m: 2.50, tier: "cheap", description: "Gemini 3 Flash (preview pricing)" },
-    AgentModel { agent: AgentKind::Gemini, model: "gemini-3-flash-lite-preview", input_per_m: 0.10, output_per_m: 0.40, tier: "cheap", description: "Gemini 3 Flash Lite (preview pricing)" },
-    AgentModel { agent: AgentKind::Gemini, model: "gemini-2.5-flash", input_per_m: 0.30, output_per_m: 2.50, tier: "cheap", description: "Legacy 2.5 Flash (historical tasks)" },
-    AgentModel { agent: AgentKind::Gemini, model: "gemini-2.5-pro", input_per_m: 1.25, output_per_m: 10.0, tier: "premium", description: "Legacy 2.5 Pro (historical tasks)" },
     AgentModel { agent: AgentKind::Antigravity, model: "gemini-3.6-flash-medium", input_per_m: 0.0, output_per_m: 0.0, tier: "free", description: "Flash medium (Google One / BYOK)" },
     AgentModel { agent: AgentKind::Antigravity, model: "gemini-3.1-pro-high", input_per_m: 0.0, output_per_m: 0.0, tier: "free", description: "Pro high (Google One / BYOK)" },
     AgentModel { agent: AgentKind::Antigravity, model: "claude-sonnet-4-6", input_per_m: 0.0, output_per_m: 0.0, tier: "free", description: "Claude Sonnet 4.6 via agy" },

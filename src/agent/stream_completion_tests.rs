@@ -4,6 +4,10 @@
 use super::*;
 use serde_json::Value;
 
+fn test_codex_error_envelope(message: &str) -> String {
+    serde_json::json!({"type": "error", "message": message}).to_string()
+}
+
 #[test]
 fn result_is_error_true_fails() {
     let v: Value = serde_json::from_str(
@@ -60,21 +64,21 @@ fn record_quota_exhaustion_detects_provider_refusal_templates() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
 
-    crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
-    let qwen_out = crate::routing::quota::channel::test_qwen_result_envelope(
-        "Quota exhausted: Your token-plan 5-hour quota has been exhausted.",
+    crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
+    let codex_out = test_codex_error_envelope(
+        "You have hit your usage limit.",
     );
-    assert!(!record_quota_exhaustion(&qwen_out, crate::types::AgentKind::Qwen, None, None,)
+    assert!(record_quota_exhaustion(&codex_out, crate::types::AgentKind::Codex, None, None,)
     .should_fail());
-    assert!(crate::routing::rate_limit::marker_path(&crate::types::AgentKind::Qwen, None).exists());
-    crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
+    assert!(crate::routing::rate_limit::is_rate_limited(&crate::types::AgentKind::Codex, None));
+    crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
 
     crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
     let codex_message = format!(
         "You have hit your usage limit. try again at {}.",
         crate::routing::rate_limit::test_future_recovery_time()
     );
-    let codex_out = serde_json::json!({"type":"error", "message":codex_message}).to_string();
+    let codex_out = test_codex_error_envelope(&codex_message);
     assert!(record_quota_exhaustion(&codex_out, crate::types::AgentKind::Codex, None, None,)
     .should_fail());
     assert!(crate::routing::rate_limit::is_rate_limited(&crate::types::AgentKind::Codex, None));
@@ -97,35 +101,33 @@ fn prose_rate_limit_tokens_are_not_quota_failures() {
 fn explicit_delivery_survives_a_later_quota_refusal() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
-    crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
+    crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
 
     let mut report = String::from("## Findings\n\n");
     report.push_str(&"The audit reviewed rate limits and 429 handling. ".repeat(20));
-    report.push_str("\nQuota exhausted: Your token-plan 5-hour quota has been exhausted.");
+    report.push_str("\n");
+    report.push_str(&test_codex_error_envelope("You have hit your usage limit."));
     assert!(!record_quota_exhaustion_with_delivery(
         &report,
-        crate::types::AgentKind::Qwen,
+        crate::types::AgentKind::Codex,
         None,
         None,
         true,
     )
     .should_fail());
-    assert!(crate::routing::rate_limit::marker_path(&crate::types::AgentKind::Qwen, None).exists());
+    assert!(crate::routing::rate_limit::is_rate_limited(&crate::types::AgentKind::Codex, None));
 }
 
 #[test]
 fn markdown_shape_does_not_turn_a_refusal_into_delivery() {
     let temp = tempfile::tempdir().unwrap();
     let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
-    crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Qwen, None);
+    crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
 
-    let output = concat!(
-        r##"{"type":"error","message":"# Error\n"##,
-        r#"Quota exhausted: Your token-plan 5-hour quota has been exhausted."}"#,
-    );
-    assert!(record_quota_exhaustion(output, crate::types::AgentKind::Qwen, None, None,)
+    let output = &test_codex_error_envelope("# Error\nYou have hit your usage limit.");
+    assert!(record_quota_exhaustion(output, crate::types::AgentKind::Codex, None, None,)
     .should_fail());
-    assert!(crate::routing::rate_limit::is_rate_limited(&crate::types::AgentKind::Qwen, None));
+    assert!(crate::routing::rate_limit::is_rate_limited(&crate::types::AgentKind::Codex, None));
 }
 
 /// A provider whose refusal wording nobody has captured is undetectable on the
@@ -195,18 +197,18 @@ fn quota_line_keeps_a_stated_reset_time_on_plain_text() {
 /// marker is held to the stated window rather than a class default.
 #[test]
 fn quota_line_keeps_a_reset_time_embedded_in_json() {
-    let event = crate::routing::quota::channel::test_qwen_result_envelope(
-        "Quota exhausted: Your token-plan 1-week quota has been exhausted. The quota will reset at 08-12 10:12:00 UTC.\n\nPlease retry",
+    let event = test_codex_error_envelope(
+        "You have hit your usage limit. Please try again at Aug 12th, 2099 10:12 AM.\n\nPlease retry",
     );
     let attributable = crate::routing::quota::channel::provider_attributable(
         &event,
-        crate::types::AgentKind::Qwen,
+        crate::types::AgentKind::Codex,
         crate::routing::quota::channel::Channel::CliStream,
     )
     .all();
-    let line = quota_line(&attributable, crate::types::AgentKind::Qwen).expect("qwen line");
-    assert!(line.starts_with("Quota exhausted:"), "got {line}");
-    assert!(line.contains("reset at 08-12 10:12:00 UTC"), "got {line}");
+    let line = quota_line(&attributable, crate::types::AgentKind::Codex).expect("codex line");
+    assert!(line.starts_with("You have hit your usage limit."), "got {line}");
+    assert!(line.contains("try again at Aug 12th, 2099 10:12 AM"), "got {line}");
     assert!(!line.contains('\\'), "JSON escapes must not survive: {line}");
 }
 
@@ -242,54 +244,6 @@ fn a_report_quoting_this_repos_own_fixture_never_marks_the_agent() {
 
 /// The same guarantee over every signature we ship, so a needle added later
 /// inherits it: nothing an agent can write into its own message becomes a hold.
-#[test]
-fn no_shipped_signature_can_be_quoted_into_a_marker() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
 
-    for signature in crate::routing::rate_limit::signatures::QUOTA_SIGNATURES {
-        crate::routing::rate_limit::clear_all_rate_limits_for_agent(&signature.agent, None);
-        let report = serde_json::json!({
-            "type": "assistant",
-            "message": {"content": [{
-                "type": "text",
-                "text": format!("The captured refusal reads \"{}\".", signature.needle),
-            }]}
-        })
-        .to_string();
-        assert!(
-            !record_quota_exhaustion(&report, signature.agent, None, None).recorded(),
-            "needle {:?} was quoted into a marker for {:?}",
-            signature.needle,
-            signature.agent
-        );
-        assert!(!crate::routing::rate_limit::is_rate_limited(&signature.agent, None));
-    }
-}
-
-/// copilot's monthly quota, in the envelope copilot actually emits.
-///
-/// The shape matters: the refusal is a `session.error`, and its body is the
-/// provider's HTTP error as a *string* nested inside the CLI's own field. An
-/// envelope test that only knew `{"type":"error"}` passed while this — the
-/// refusal captured on t-03a68876 and t-80cf4b62, and half the reason this
-/// branch exists — was being dropped whole.
-#[test]
-fn copilots_real_session_error_envelope_is_recorded() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
-    let copilot = crate::types::AgentKind::Copilot;
-    crate::routing::rate_limit::clear_all_rate_limits_for_agent(&copilot, None);
-
-    let output = r#"{"type":"session.error","data":{"message":"{\"error\":{\"message\":\"You have exceeded your monthly quota\",\"code\":\"quota_exceeded\"}}","requestFingerprint":{"messageCount":2}}}"#;
-    assert!(record_quota_exhaustion(output, copilot, None, None).recorded());
-    let info = crate::routing::rate_limit::get_rate_limit_info(&copilot, None).expect("marker");
-    assert!(info.needs_human, "a monthly quota with no stated reset waits for a person");
-    assert!(
-        info.message.is_some_and(|message| message.contains("exceeded your monthly quota")),
-        "the marker must hold copilot's own sentence"
-    );
-}
-
-#[path = "stream_completion_tail_tests.rs"]
-mod tail_tests;
+#[path = "stream_completion_quota_tests.rs"]
+mod quota;

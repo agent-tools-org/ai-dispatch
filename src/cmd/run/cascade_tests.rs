@@ -61,7 +61,7 @@ fn cascade_inherits_existing_worktree_dir() {
     git(repo.path(), &["worktree", "add", "-b", "feat/cascade", &linked.to_string_lossy()]);
     let task = failed_task_with_repo(&repo.path().display().to_string(), &linked.display().to_string());
     let mut args = RunArgs {
-        agent_name: "gemini".to_string(),
+        agent_name: "grok".to_string(),
         worktree: Some("feat/cascade".to_string()),
         ..Default::default()
     };
@@ -82,7 +82,7 @@ fn cascade_refuses_persisted_worktree_that_equals_repo_path() {
     let repo_path = temp.path().display().to_string();
     let task = failed_task_with_repo(&repo_path, &repo_path);
     let mut args = RunArgs {
-        agent_name: "gemini".to_string(),
+        agent_name: "grok".to_string(),
         worktree: Some("feat/cascade".to_string()),
         ..Default::default()
     };

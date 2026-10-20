@@ -163,7 +163,7 @@ mod tests {
     fn batch_env_forward_keeps_names_without_resolving_values() {
         let (_home, _guard, task) = batch_task(
             r#"
-            agent = "gemini"
+            agent = "grok"
             prompt = "say hi"
             env_forward = ["PATH"]
             "#,
@@ -178,12 +178,12 @@ mod tests {
     fn batch_leaves_model_resolution_to_dispatch() {
         let (_home, _guard, task) = batch_task(
             r#"
-            agent = "gemini"
+            agent = "grok"
             prompt = "say hi"
             budget = "cheap"
             "#,
         );
-        crate::config::agent::save_agent_default_model("gemini", Some("pro")).expect("save config");
+        crate::config::agent::save_agent_default_model("grok", Some("pro")).expect("save config");
         let store = Arc::new(Store::open_memory().expect("in-memory store"));
 
         let args = task_to_run_args(&task, &[], false, &store, None);
@@ -199,13 +199,13 @@ mod tests {
     fn batch_task_model_beats_configured_default() {
         let (_home, _guard, task) = batch_task(
             r#"
-            agent = "gemini"
+            agent = "grok"
             prompt = "say hi"
             budget = "cheap"
             model = "flash"
             "#,
         );
-        crate::config::agent::save_agent_default_model("gemini", Some("pro")).expect("save config");
+        crate::config::agent::save_agent_default_model("grok", Some("pro")).expect("save config");
         let store = Arc::new(Store::open_memory().expect("in-memory store"));
 
         let args = task_to_run_args(&task, &[], false, &store, None);

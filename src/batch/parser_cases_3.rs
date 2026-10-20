@@ -14,7 +14,7 @@ fn rejects_unknown_agent() {
 #[test]
 fn auto_sequences_shared_worktree_tasks() {
     let file = write_temp(concat!(
-        "[[tasks]]\nname = \"task-a\"\nagent = \"gemini\"\nprompt = \"a\"\nworktree = \"feat/x\"\n",
+        "[[tasks]]\nname = \"task-a\"\nagent = \"grok\"\nprompt = \"a\"\nworktree = \"feat/x\"\n",
         "[[tasks]]\nname = \"task-b\"\nagent = \"codex\"\nprompt = \"b\"\nworktree = \"feat/x\""
     ));
     let cfg = parse_batch_file(file.path()).unwrap();
@@ -133,7 +133,7 @@ fallback = "codex,opencode"
 #[test]
 fn accepts_tasks_plural_alias() {
     let file = write_temp(concat!(
-        "[[tasks]]\nagent = \"gemini\"\nprompt = \"research\"\n",
+        "[[tasks]]\nagent = \"grok\"\nprompt = \"research\"\n",
         "[[tasks]]\nagent = \"codex\"\nprompt = \"implement\""
     ));
     let cfg = parse_batch_file(file.path()).unwrap();

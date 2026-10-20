@@ -74,3 +74,21 @@ fn unwrapped_claude_reset_preserves_an_excerpt_without_a_long_hold() {
     assert!(info.recovery_at.is_none());
     assert!(!info.needs_human);
 }
+
+#[test]
+fn unsplit_codex_refusal_records_without_failing() {
+    let home = tempfile::tempdir().expect("home");
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let outcome = record_quota_exhaustion(
+        "You have hit your usage limit.", AgentKind::Codex, None, None,
+    );
+    assert!(outcome.recorded());
+    assert!(!outcome.should_fail());
+    let path = rate_limit::marker_path(&AgentKind::Codex, None);
+    assert!(path.exists());
+    let marker = std::fs::read_to_string(path).expect("excerpt marker");
+    assert_eq!(
+        crate::routing::availability::stored_hold(&marker, &AgentKind::Codex),
+        crate::routing::availability::StoredHold::Transient
+    );
+}

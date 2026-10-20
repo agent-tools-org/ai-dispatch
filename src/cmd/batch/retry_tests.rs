@@ -82,8 +82,8 @@ fn retry_uses_original_when_not_rate_limited() {
 fn retry_uses_fallback_when_rate_limited() {
     let _guard = aid_home_guard("aid-retry-fallback-test-limited");
     let _agents = crate::agent::DetectAgentsGuard::set(vec![
-        AgentKind::Gemini,
-        AgentKind::Qwen,
+        AgentKind::Grok,
+        AgentKind::Kilo,
         AgentKind::Codex,
         AgentKind::Copilot,
     ]);
@@ -119,9 +119,9 @@ fn retry_uses_override_regardless_of_rate_limit() {
     let mut task = make_task("t-003", AgentKind::Codex);
     set_repo(&mut task, &repo);
     let args =
-        retry_task_to_run_args(&Store::open_memory().unwrap(), &task, "wg-test", Some("gemini"))
+        retry_task_to_run_args(&Store::open_memory().unwrap(), &task, "wg-test", Some("grok"))
             .unwrap();
-    assert_eq!(args.agent_name, "gemini", "Override should bypass rate limit check");
+    assert_eq!(args.agent_name, "grok", "Override should bypass rate limit check");
     clear_rate_limit(&AgentKind::Codex, None);
 }
 
@@ -209,9 +209,9 @@ fn batch_retry_agent_override_clears_session_id() {
         .update_task_dispatch_args(task.id.as_str(), &saved.dispatch_args_json().unwrap())
         .unwrap();
 
-    let args = retry_task_to_run_args(&store, &task, "wg-test", Some("gemini")).unwrap();
+    let args = retry_task_to_run_args(&store, &task, "wg-test", Some("grok")).unwrap();
 
-    assert_eq!(args.agent_name, "gemini");
+    assert_eq!(args.agent_name, "grok");
     assert!(
         args.session_id.is_none(),
         "session_id from saved dispatch must be cleared on agent change, got {:?}",

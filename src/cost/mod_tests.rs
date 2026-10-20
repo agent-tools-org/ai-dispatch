@@ -158,8 +158,8 @@ fn free_named_models_price_only_from_their_catalog_row() {
 #[test]
 fn unpinned_agents_without_an_observed_model_are_unknown() {
     let _guard = isolated();
-    // No fixed fallback model: Gemini, Kilo and MiMoCode stay unknown.
-    for agent in [AgentKind::Gemini, AgentKind::Kilo, AgentKind::MiMoCode, AgentKind::Claude] {
+    // No fixed fallback model: Kilo and MiMoCode stay unknown.
+    for agent in [AgentKind::Kilo, AgentKind::MiMoCode, AgentKind::Claude] {
         assert_eq!(estimate_cost(1_000_000, None, agent), None, "{agent:?}");
     }
     assert_eq!(estimate_cost(1_000_000, None, AgentKind::Cursor), Some(0.0), "subscription");
@@ -180,8 +180,8 @@ fn catalog_rows_price_exactly() {
     let _guard = isolated();
     let sol = pricing_resolution::resolve_model_pricing("gpt-5.6-sol", AgentKind::Codex).expect("row");
     assert_eq!((sol.input_per_m, sol.output_per_m), (2.5, 15.0));
-    let cost = estimate_cost(1_000_000, Some("gemini-3-flash-preview"), AgentKind::Gemini).expect("row");
-    assert!((cost - (0.30 * 0.7 + 2.50 * 0.3)).abs() < 1e-9);
+    let cost = estimate_cost(1_000_000, Some("gpt-5.6-sol"), AgentKind::Codex).expect("row");
+    assert!((cost - (2.5 * 0.7 + 15.0 * 0.3)).abs() < 1e-9);
 }
 
 #[test]

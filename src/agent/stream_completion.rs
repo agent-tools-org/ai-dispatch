@@ -21,7 +21,7 @@ pub(crate) fn result_envelope_failed(v: &Value) -> bool {
     )
 }
 
-/// Any JSONL line with top-level `type == "error"` (OpenCode / Gemini / etc.).
+/// Any JSONL line with top-level `type == "error"` (OpenCode / etc.).
 pub(crate) fn jsonl_has_error_type(output: &str) -> bool {
     for line in output.lines() {
         let trimmed = line.trim();

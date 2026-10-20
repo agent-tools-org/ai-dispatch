@@ -11,21 +11,21 @@ use crate::types::AgentKind;
 fn a_marker_written_during_the_run_is_not_cleared_by_success() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-    clear_rate_limit(&AgentKind::Qwen, None);
+    clear_rate_limit(&AgentKind::Codex, None);
 
     let task_start = Local::now() - chrono::Duration::minutes(5);
     mark_rate_limited(
-        &AgentKind::Qwen,
+        &AgentKind::Codex,
         None,
-        "Your token-plan 5-hour quota has been exhausted.",
+        "You have hit your usage limit.",
     );
 
     assert!(!clear_rate_limit_if_stale(
-        &AgentKind::Qwen,
+        &AgentKind::Codex,
         None,
         task_start
     ));
-    assert!(is_rate_limited(&AgentKind::Qwen, None));
+    assert!(is_rate_limited(&AgentKind::Codex, None));
 }
 
 /// A marker left by an earlier run is stale and a fresh success clears it,
@@ -34,21 +34,21 @@ fn a_marker_written_during_the_run_is_not_cleared_by_success() {
 fn a_marker_from_an_earlier_run_is_still_cleared() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-    clear_rate_limit(&AgentKind::Qwen, None);
+    clear_rate_limit(&AgentKind::Codex, None);
 
     mark_rate_limited(
-        &AgentKind::Qwen,
+        &AgentKind::Codex,
         None,
-        "Your token-plan 5-hour quota has been exhausted.",
+        "You have hit your usage limit.",
     );
     let task_start = Local::now() + chrono::Duration::minutes(5);
 
     assert!(clear_rate_limit_if_stale(
-        &AgentKind::Qwen,
+        &AgentKind::Codex,
         None,
         task_start
     ));
-    assert!(!is_rate_limited(&AgentKind::Qwen, None));
+    assert!(!is_rate_limited(&AgentKind::Codex, None));
 }
 
 #[test]
@@ -60,8 +60,11 @@ fn clear_group_rate_limit_if_stale_clears_only_matching_group() {
     clear_all_rate_limits_for_agent(&agent, None);
 
     mark_rate_limited(&agent, None, "Agent rate limit");
-    mark_group_rate_limited(&agent, None, "gemini", "Individual quota reached");
-    mark_group_rate_limited(&agent, None, "claude", "Individual quota reached");
+    mark_group_rate_limited(&agent, None, "gemini", "Individual quota reached. Resets in 59m21s.");
+    mark_group_rate_limited(&agent, None, "claude", "Individual quota reached. Resets in 59m21s.");
+
+    assert!(is_group_rate_limited(&agent, None, "gemini"));
+    assert!(is_group_rate_limited(&agent, None, "claude"));
 
     let task_start = Local::now() + chrono::Duration::minutes(5);
 
@@ -96,8 +99,9 @@ fn clear_rate_limit_does_not_clear_group_markers() {
     clear_all_rate_limits_for_agent(&agent, None);
 
     mark_rate_limited(&agent, None, "Agent level limit");
-    mark_group_rate_limited(&agent, None, "gemini", "Individual quota reached");
+    mark_group_rate_limited(&agent, None, "gemini", "Individual quota reached. Resets in 59m21s.");
 
+    assert!(is_group_rate_limited(&agent, None, "gemini"));
     assert!(clear_rate_limit(&agent, None));
     assert!(
         !is_rate_limited(&agent, None),

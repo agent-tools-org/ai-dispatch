@@ -12,7 +12,7 @@ const AGENT_TEMPLATE: &str = r#"# Custom agent definition for aid.
 #   2. Performs the task autonomously
 #   3. Exits when done
 #
-# Compatible CLIs: gemini, codex, opencode, cursor, claude, kilo, aider, etc.
+# Compatible CLIs: agy, codex, opencode, cursor, claude, kilo, aider, etc.
 # NOT compatible: interactive/session-based tools without a stable non-interactive mode.
 
 [agent]
@@ -147,7 +147,7 @@ mod tests {
             testing = 0\n\
             refactoring = 0\n\
             documentation = 0\n\n";
-        for kind in [AgentKind::Gemini, AgentKind::Antigravity, AgentKind::Codex] {
+        for kind in [AgentKind::Grok, AgentKind::Antigravity, AgentKind::Codex] {
             let template = build_builtin_agent_toml("custom", kind);
             let _: toml::Value = template.parse().expect("template");
             assert!(template.ends_with(capabilities), "{kind:?}: {template}");

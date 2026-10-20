@@ -187,10 +187,10 @@ fn read_only_result_symlink_does_not_exempt_its_destination() {
 }
 
 #[test]
-fn read_only_without_dir_guards_gemini_cwd() {
+fn read_only_without_dir_guards_grok_cwd() {
     let f = Fixture::new("echo stray > probe.txt");
-    std::os::unix::fs::symlink(f.bin.path().join("claude"), f.bin.path().join("gemini")).unwrap();
-    let db = f.foreground(f.repo.path(), "gemini", &["-o", "output.md"], "failed");
+    std::os::unix::fs::symlink(f.bin.path().join("claude"), f.bin.path().join("grok")).unwrap();
+    let db = f.foreground(f.repo.path(), "grok", &["-o", "output.md"], "failed");
     f.assert_error_paths(&db, &["probe.txt"]);
 }
 

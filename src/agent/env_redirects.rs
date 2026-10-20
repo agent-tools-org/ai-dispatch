@@ -13,7 +13,6 @@ pub const CONFIG_REDIRECT_VARS: &[&str] = &[
     "CLAUDE_SECURESTORAGE_CONFIG_DIR",
     "CODEX_HOME",
     "CODEX_SQLITE_HOME",
-    "GEMINI_CLI_HOME",
     "OPENCODE_CONFIG_DIR",
     "OPENCODE_CONFIG",
     "OPENCODE_DB",
@@ -40,6 +39,11 @@ pub fn strip_inherited_config_redirects(cmd: &mut Command) {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn removed_agent_redirects_are_not_managed() {
+        assert!(!CONFIG_REDIRECT_VARS.contains(&"GEMINI_CLI_HOME"));
+    }
 
     #[test]
     fn redirect_vars_are_unique() {
@@ -98,7 +102,7 @@ mod tests {
     fn run_env_drops_inherited_claude_config_dir() {
         let cmd = launch_env(None);
         assert_eq!(launched(&cmd, "CLAUDE_CONFIG_DIR"), Some(None));
-        assert_eq!(launched(&cmd, "GEMINI_CLI_HOME"), Some(None));
+        assert_eq!(launched(&cmd, "OPENCODE_CONFIG_DIR"), Some(None));
     }
 
     #[test]

@@ -75,7 +75,7 @@ fn advise_succeeds_when_every_builtin_is_rate_limited() {
         .format("%b %d, %Y %I:%M %p")
         .to_string();
     for agent in [
-        "gemini", "qwen", "codex", "copilot", "opencode", "commandcode",
+        "qwen", "codex", "copilot", "opencode", "commandcode",
         "cursor", "kilo", "mimocode", "droid", "oz", "claude",
         "agy", "grok", "droid--standard", "droid--core",
     ] {

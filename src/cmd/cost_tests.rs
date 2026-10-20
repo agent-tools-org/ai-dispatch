@@ -62,7 +62,7 @@ fn aggregates_group_costs() {
     let now = Local::now();
     let tasks = vec![
         make_task("t-1", AgentKind::Codex, Some("wg-1"), now, 100, 1.25),
-        make_task("t-2", AgentKind::Gemini, Some("wg-1"), now, 200, 0.75),
+        make_task("t-2", AgentKind::Grok, Some("wg-1"), now, 200, 0.75),
         make_task("t-3", AgentKind::Cursor, Some("wg-2"), now, 999, 9.99),
     ];
 
@@ -77,7 +77,7 @@ fn aggregates_daily_summary_rows() {
     let now = Local::now();
     let tasks = vec![
         make_task("t-1", AgentKind::Codex, None, now, 100, 1.25),
-        make_task("t-2", AgentKind::Gemini, None, now, 200, 0.75),
+        make_task("t-2", AgentKind::Grok, None, now, 200, 0.75),
         make_task("t-3", AgentKind::Cursor, None, now - Duration::days(2), 300, 2.50),
         make_task("t-4", AgentKind::Cursor, None, now - Duration::days(10), 400, 4.50),
     ];

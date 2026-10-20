@@ -92,6 +92,10 @@ pub(crate) fn parse_batch_file_with_vars_and_source(
     let batch_dir = batch_source_dir(source_path, pwd);
     resolve_batch_paths(&mut config.tasks, batch_dir.as_deref(), pwd)?;
     resolve_task_prompts(&mut config.tasks, batch_dir.as_deref(), pwd)?;
+    for names in [&config.defaults.agent, &config.defaults.judge,
+        &config.defaults.peer_review, &config.defaults.fallback].into_iter().flatten() {
+        for name in names.split(',') { crate::agent::removed::reject(name)?; }
+    }
     validate_agents(&config.tasks)?;
     validate_fallback_agents(&config.tasks)?;
     auto_sequence_shared_worktrees(&mut config.tasks, &mut stderr)?;

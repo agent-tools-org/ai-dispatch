@@ -20,7 +20,7 @@ fn parses_usage_budgets() {
 
         [[usage.budget]]
         name = "gemini-daily"
-        agent = "gemini"
+        agent = "grok"
         window = "24h"
         task_limit = 50
         cost_limit_usd = 5.0
@@ -30,7 +30,7 @@ fn parses_usage_budgets() {
 
     assert_eq!(config.usage.budgets.len(), 2);
     assert_eq!(config.usage.budgets[0].agent.as_deref(), Some("codex"));
-    assert_eq!(config.usage.budgets[1].agent.as_deref(), Some("gemini"));
+    assert_eq!(config.usage.budgets[1].agent.as_deref(), Some("grok"));
 }
 
 #[test]

@@ -94,7 +94,7 @@ fn task_to_run_args_copies_existing_task_id_and_run_flags() {
             verify: None,
             setup: None,
             judge: None,
-            peer_review: Some("gemini".to_string()),
+            peer_review: Some("grok".to_string()),
             max_duration_mins: None,
             max_wait_mins: None,
             retry: Some(2),
@@ -136,7 +136,7 @@ fn task_to_run_args_copies_existing_task_id_and_run_flags() {
         run_args.existing_task_id.as_ref().map(|id| id.as_str()),
         Some("audit-utilcap")
     );
-    assert_eq!(run_args.peer_review.as_deref(), Some("gemini"));
+    assert_eq!(run_args.peer_review.as_deref(), Some("grok"));
     assert_eq!(run_args.retry, 2);
     assert_eq!(run_args.best_of, Some(3));
     assert_eq!(run_args.metric.as_deref(), Some("cargo test"));

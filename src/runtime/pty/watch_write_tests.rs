@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use super::{MonitorState, monitor_bridge, write_output_file};
 use crate::agent::antigravity::AntigravityAgent;
-use crate::agent::gemini::GeminiAgent;
+use crate::agent::cursor::CursorAgent;
 use crate::runtime::input_signal;
 use crate::runtime::pty::bridge::PtyBridge;
 use crate::store::Store;
@@ -68,7 +68,7 @@ fn queued_message_after_child_exit_does_not_fail_monitor() {
     let mut state = MonitorState::new(true, None);
 
     let result = monitor_bridge(
-        &GeminiAgent,
+        &CursorAgent,
         &task.id,
         &store,
         &mut bridge,
@@ -153,7 +153,7 @@ fn failed_pending_reply_is_reported_once_after_successful_steer() {
     let mut state = MonitorState::new(true, None);
 
     let result = monitor_bridge(
-        &GeminiAgent,
+        &CursorAgent,
         &task.id,
         &store,
         &mut bridge,
@@ -258,7 +258,7 @@ fn input_to_child_that_never_reads_does_not_wedge_monitor() {
     let (done_tx, done_rx) = mpsc::channel();
     std::thread::spawn(move || {
         let mut state = MonitorState::new(true, None);
-        let result = monitor_bridge(&GeminiAgent, &task_id, &monitor_store, &mut bridge,
+        let result = monitor_bridge(&CursorAgent, &task_id, &monitor_store, &mut bridge,
             &receiver, &mut log_file, &mut state, None, None, None);
         let _ = bridge.wait();
         let _ = done_tx.send(result.is_ok());

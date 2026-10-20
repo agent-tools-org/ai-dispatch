@@ -15,9 +15,7 @@ pub(super) const NEUTRAL_BASE: f64 = 6.0; // no evidence: neither penalise nor f
 
 pub(super) fn priority(kind: AgentKind) -> i32 {
     match kind {
-        AgentKind::Gemini
-        | AgentKind::Antigravity
-        | AgentKind::Qwen
+        AgentKind::Antigravity
         | AgentKind::Kilo
         | AgentKind::MiMoCode => 0,
         AgentKind::OpenCode => 1,
@@ -91,7 +89,7 @@ pub(super) fn score_breakdown(
     let mut s = base;
     let mut budget_penalty = 0.0;
     // Budget mode favors free models: a paid agent must be clearly stronger to
-    // win, so trivial tasks route to free agents (kilo/qwen/free opencode).
+    // win, so trivial tasks route to free agents (kilo/free opencode).
     if ctx.budget && model.is_some_and(|m| model_is_paid(kind, m)) {
         s -= 3.0;
         budget_penalty = -3.0;

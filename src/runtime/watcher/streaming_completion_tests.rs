@@ -9,7 +9,6 @@ use crate::agent::claude::ClaudeAgent;
 use crate::agent::commandcode::CommandCodeAgent;
 use crate::agent::cursor::CursorAgent;
 use crate::types::AgentKind;
-use crate::agent::qwen::QwenAgent;
 use crate::agent::Agent;
 use crate::support::paths;
 use crate::store::Store;
@@ -62,17 +61,6 @@ async fn watch_exit0(agent: &dyn Agent, output: &str, task_id: &str) -> TaskStat
     .unwrap();
     assert_eq!(info.exit_code, Some(0));
     info.status
-}
-
-#[tokio::test]
-async fn exit0_qwen_api_error_fixture_records_failed() {
-    let output = fixture("qwen-exit0-api-error.jsonl");
-    assert!(
-        output.contains("[API Error:"),
-        "fixture must be real qwen API error log"
-    );
-    let status = watch_exit0(&QwenAgent, &output, "t-stream-qwen-err").await;
-    assert_eq!(status, TaskStatus::Failed);
 }
 
 #[tokio::test]

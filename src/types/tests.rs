@@ -225,11 +225,10 @@ fn resumable_agents_report_session_support() {
         AgentKind::MiMoCode,
         AgentKind::Droid,
         AgentKind::Codex,
-        AgentKind::Qwen,
     ] {
         assert!(kind.supports_session_resume(), "{kind} should resume sessions");
     }
-    for kind in [AgentKind::Gemini, AgentKind::Cursor, AgentKind::Claude, AgentKind::Custom] {
+    for kind in [AgentKind::Antigravity, AgentKind::Cursor, AgentKind::Claude, AgentKind::Custom] {
         assert!(!kind.supports_session_resume(), "{kind} should not resume sessions");
     }
 }

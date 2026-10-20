@@ -12,9 +12,9 @@ fn a_bare_agent_name_resolves_to_a_triple() {
 
 #[test]
 fn an_unpinned_model_reads_as_unpinned_not_as_a_default() {
-    assert!(Route::for_cli(AgentKind::Qwen).model.is_none());
-    let pinned = Route::for_cli(AgentKind::Qwen).with_model(Some("qwen3.8-max"));
-    assert_eq!(pinned.id(), "qwen/alibaba-modelstudio-token-plan/qwen3.8-max");
+    assert!(Route::for_cli(AgentKind::Codex).model.is_none());
+    let pinned = Route::for_cli(AgentKind::Codex).with_model(Some("gpt-6-sol"));
+    assert_eq!(pinned.id(), "codex/openai-chatgpt-plan/gpt-6-sol");
 }
 
 /// The concrete loss this refactor was started for: agy's gemini allowance was
@@ -30,12 +30,12 @@ fn agy_families_do_not_share_a_pool() {
     assert!(gemini.shares_pool_with(&other_gemini));
 }
 
-/// qwen is the mirror case: one 5-hour pool shared by all 17 served models, so
+/// Codex meters an account pool, so
 /// two different models there do share, and marking one must mark both.
 #[test]
-fn qwen_models_share_one_account_pool() {
-    let a = Route::for_cli(AgentKind::Qwen).with_model(Some("qwen3.8-max"));
-    let b = Route::for_cli(AgentKind::Qwen).with_model(Some("MiniMax-M2.5"));
+fn codex_models_share_one_account_pool() {
+    let a = Route::for_cli(AgentKind::Codex).with_model(Some("gpt-6-sol"));
+    let b = Route::for_cli(AgentKind::Codex).with_model(Some("gpt-6-luna"));
     assert!(a.shares_pool_with(&b));
 }
 
@@ -54,7 +54,7 @@ fn different_clis_do_not_share_a_pool() {
 /// take out every unmapped CLI at once.
 #[test]
 fn unknown_providers_never_share() {
-    let a = Route::for_cli(AgentKind::Kilo);
+    let a = Route::for_cli(AgentKind::Codex);
     let b = Route::for_cli(AgentKind::Custom);
     assert!(a.provider.is_unknown() && b.provider.is_unknown());
     assert!(!a.shares_pool_with(&b));

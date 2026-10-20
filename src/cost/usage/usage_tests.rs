@@ -104,7 +104,7 @@ fn project_budget_cost_cap_counts_matching_project() {
     store
         .insert_task(&make_project_task(
             "t-b",
-            AgentKind::Gemini,
+            AgentKind::Grok,
             1_000,
             0.75,
             "/work/project-b",
@@ -144,7 +144,7 @@ fn other_project_budget_does_not_block_dispatch() {
     store
         .insert_task(&make_project_task(
             "t-b",
-            AgentKind::Gemini,
+            AgentKind::Grok,
             1_000,
             1.00,
             "/work/project-b",
@@ -183,7 +183,7 @@ fn unrelated_large_usage_does_not_trip_small_project_budget() {
     store
         .insert_task(&make_project_task(
             "t-global",
-            AgentKind::Gemini,
+            AgentKind::Grok,
             1_000,
             30_000.00,
             "/work/unrelated",
@@ -210,7 +210,7 @@ fn per_agent_budget_ignores_other_agents() {
         .insert_task(&make_task("t-codex", AgentKind::Codex, 500, 0.25))
         .unwrap();
     store
-        .insert_task(&make_task("t-gemini", AgentKind::Gemini, 5_000, 5.00))
+        .insert_task(&make_task("t-gemini", AgentKind::Grok, 5_000, 5.00))
         .unwrap();
     let config: AidConfig = toml::from_str(
         r#"

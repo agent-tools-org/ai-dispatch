@@ -72,6 +72,7 @@ pub fn is_agent_disabled(agent_name: &str) -> bool {
 }
 
 pub fn save_agent_default_model(agent_name: &str, model: Option<&str>) -> Result<()> {
+    crate::agent::removed::reject(agent_name)?;
     let path = config_path();
     let mut config = load_from(&path);
     let key = config_key(agent_name);
@@ -90,6 +91,7 @@ pub fn save_agent_default_model(agent_name: &str, model: Option<&str>) -> Result
 }
 
 pub fn save_agent_idle_timeout(agent_name: &str, idle_timeout: Option<u64>) -> Result<()> {
+    crate::agent::removed::reject(agent_name)?;
     let path = config_path();
     let mut config = load_from(&path);
     config.entry(config_key(agent_name)).or_default().idle_timeout = idle_timeout;
@@ -98,6 +100,7 @@ pub fn save_agent_idle_timeout(agent_name: &str, idle_timeout: Option<u64>) -> R
 }
 
 pub fn save_agent_disabled(agent_name: &str, disabled: bool) -> Result<()> {
+    crate::agent::removed::reject(agent_name)?;
     let path = config_path();
     let mut config = load_from(&path);
     config.entry(config_key(agent_name)).or_default().disabled = disabled;
@@ -175,12 +178,12 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let _guard = AidHomeGuard::set(dir.path());
 
-        save_agent_disabled("gemini", true).expect("disable agent");
-        assert!(is_agent_disabled("gemini"));
-        assert!(load_agent_config()["gemini"].disabled);
+        save_agent_disabled("grok", true).expect("disable agent");
+        assert!(is_agent_disabled("grok"));
+        assert!(load_agent_config()["grok"].disabled);
 
-        save_agent_disabled("gemini", false).expect("enable agent");
-        assert!(!is_agent_disabled("gemini"));
+        save_agent_disabled("grok", false).expect("enable agent");
+        assert!(!is_agent_disabled("grok"));
         assert!(load_agent_config().is_empty());
     }
 
@@ -189,13 +192,13 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let _guard = AidHomeGuard::set(dir.path());
 
-        save_agent_default_model("gemini", Some("gemini-3-flash")).expect("save model");
-        save_agent_disabled("Gemini", true).expect("disable agent");
-        save_agent_default_model("gemini", None).expect("clear model");
+        save_agent_default_model("grok", Some("gemini-3-flash")).expect("save model");
+        save_agent_disabled("grok", true).expect("disable agent");
+        save_agent_default_model("grok", None).expect("clear model");
 
         let config = load_agent_config();
-        assert_eq!(config["gemini"].model, None);
-        assert!(config["gemini"].disabled);
+        assert_eq!(config["grok"].model, None);
+        assert!(config["grok"].disabled);
     }
 
     #[test]

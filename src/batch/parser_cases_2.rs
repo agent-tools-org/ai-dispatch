@@ -5,9 +5,9 @@ use super::*;
 #[test]
 fn task_values_override_defaults() {
     let file = write_temp(concat!(
-            "[defaults]\nagent = \"gemini\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
+            "[defaults]\nagent = \"grok\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
             "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\nmax_wait_mins = 10\n",
-            "retry = 2\npeer_review = \"gemini\"\nbest_of = 3\nmetric = \"cargo test\"\n",
+            "retry = 2\npeer_review = \"grok\"\nbest_of = 3\nmetric = \"cargo test\"\n",
             "context = [\"src/default.rs\"]\nskills = [\"rust\"]\non_done = \"notify done\"\n",
             "fallback = \"cursor\"\n",
             "env = { DEFAULT_ONLY = \"yes\", SHARED = \"default\" }\n",

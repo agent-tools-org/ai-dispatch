@@ -9,7 +9,7 @@ fn provider_mapping_matches_aidbar_probe_ids() {
     assert_eq!(provider_name(&AgentKind::Antigravity), Some("agy"));
     assert_eq!(provider_name(&AgentKind::Copilot), None);
     assert_eq!(provider_name(&AgentKind::Grok), Some("grok"));
-    assert_eq!(provider_name(&AgentKind::Qwen), Some("qwen"));
+    assert_eq!(provider_name(&AgentKind::Codex), Some("codex"));
     assert_eq!(provider_name(&AgentKind::Droid), Some("droid"));
 }
 

@@ -27,7 +27,6 @@ const MAPPED: &[AgentKind] = &[
     AgentKind::Cursor,
     AgentKind::Antigravity,
     AgentKind::Grok,
-    AgentKind::Qwen,
     AgentKind::Droid,
 ];
 

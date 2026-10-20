@@ -44,6 +44,8 @@ pub(super) fn resolve_run_agent(
     urgency: Option<TaskUrgency>, rigor: Option<TaskRigor>, egress: TaskEgress,
     kind: Option<TaskCategory>, no_hint: bool, team_flag: &Option<String>, agent_name: String,
 ) -> Result<String> {
+    agent::removed::reject(&agent_name)?;
+    agent::removed::validate_team(team_flag.as_deref())?;
     if agent::selection::is_removed_auto_agent(&agent_name) {
         anyhow::bail!("{}", agent::selection::AUTO_AGENT_REMOVED_MSG);
     }

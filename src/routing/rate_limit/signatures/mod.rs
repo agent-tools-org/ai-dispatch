@@ -3,15 +3,13 @@
 // Deps: types::AgentKind, chrono.
 
 use crate::types::AgentKind;
-use chrono::{Datelike, Duration, Local, NaiveDateTime};
+use chrono::{Duration, Local, NaiveDateTime};
 
 mod cursor;
 
 /// A provider's quota message, captured from a real run, plus how long that
-/// quota class actually lasts. The generic phrase list in `rate_limit.rs` misses
-/// these: qwen says "quota has been exhausted" where the generic matcher only
-/// knows "quota exceeded", so an exhausted qwen kept looking healthy and every
-/// run it refused was recorded as a success.
+/// quota class actually lasts. Provider-specific wording is matched separately
+/// from generic transport errors.
 pub(crate) struct QuotaSignature {
     pub(crate) agent: AgentKind,
     /// Lowercase CLI wording; Cursor's monthly error is anchored to a line start.
@@ -51,10 +49,6 @@ pub(crate) enum QuotaRecovery {
 pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
     QuotaSignature { agent: AgentKind::Claude, needle: "you've hit your limit", recovery: QuotaRecovery::After(300) },
     QuotaSignature { agent: AgentKind::Claude, needle: "claude ai usage limit reached", recovery: QuotaRecovery::After(300) },
-    // qwen 0.21.5, ModelStudio token plan, captured 2026-08-05:
-    // "Quota exhausted: Your token-plan 5-hour quota has been exhausted."
-    QuotaSignature { agent: AgentKind::Qwen, needle: "quota has been exhausted", recovery: QuotaRecovery::After(300) },
-    QuotaSignature { agent: AgentKind::Qwen, needle: "quota exhausted", recovery: QuotaRecovery::After(300) },
     // droid 0.183.0, captured 2026-08-05 as an HTTP 402 body:
     // "You've reached your weekly standard usage limit (resets in 1 day)."
     // A rolling window on a clock, and the message states the remainder.
@@ -111,14 +105,6 @@ pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
     // Reloading tokens is a purchase, not a window elapsing — distinct from
     // droid's weekly usage limit above, which does run on a clock.
     QuotaSignature { agent: AgentKind::Droid, needle: "reload your tokens", recovery: QuotaRecovery::NeedsHuman },
-    // gemini Code Assist, captured 2026-08-05:
-    // "IneligibleTierError: ... migrate to Antigravity"
-    // Not a quota at all: this tier is no longer served by this CLI and no
-    // amount of waiting restores it. A person migrates to agy.
-    QuotaSignature { agent: AgentKind::Gemini, needle: "ineligibletier", recovery: QuotaRecovery::NeedsHuman },
-    // Per-window API quota on the paid endpoint; this one does refill on a clock.
-    QuotaSignature { agent: AgentKind::Gemini, needle: "resource exhausted", recovery: QuotaRecovery::After(60) },
-    QuotaSignature { agent: AgentKind::Gemini, needle: "resourceexhausted", recovery: QuotaRecovery::After(60) },
     // The same tier retirement, worded from the other side.
     QuotaSignature { agent: AgentKind::Antigravity, needle: "migrate to antigravity", recovery: QuotaRecovery::NeedsHuman },
     // cursor workspace quota (structured error event) — a window on a clock.
@@ -202,27 +188,10 @@ pub(crate) fn parse_relative_recovery(message: &str) -> Option<NaiveDateTime> {
     if let Some(duration) = parse_resets_in(&lower) {
         return Some(now + duration);
     }
-    if let Some(at) = parse_reset_at_utc(&lower) {
-        return Some(at);
-    }
     if let Some(hours) = parse_hyphenated_hours(&lower) {
         return Some(now + Duration::hours(hours));
     }
     None
-}
-
-/// "the quota will reset at 08-05 15:12:00 utc" — an absolute instant with no
-/// year, which is how qwen's token plan reports its window. Assumes the current
-/// year and rolls to next year if that would land in the past.
-fn parse_reset_at_utc(lower: &str) -> Option<NaiveDateTime> {
-    let idx = lower.find("reset at ")?;
-    let rest = lower[idx + "reset at ".len()..].trim();
-    let stamp: String = rest.chars().take(14).collect();
-    let year = Local::now().naive_local().year();
-    let candidate =
-        NaiveDateTime::parse_from_str(&format!("{year}-{stamp}"), "%Y-%m-%d %H:%M:%S").ok()?;
-    let utc_offset = Local::now().offset().local_minus_utc();
-    Some(candidate + Duration::seconds(i64::from(utc_offset)))
 }
 
 /// "resets in 59m21s" / "1h30m" — the compact form agy uses. The spaced parser

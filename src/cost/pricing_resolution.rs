@@ -40,7 +40,7 @@ pub(super) fn subscription_pricing(agent: AgentKind) -> Option<ModelPricing> {
 fn exact_feed_pricing(model: &str, agent: AgentKind) -> Option<ModelPricing> {
     let vendor_cli = matches!(
         agent,
-        AgentKind::Codex | AgentKind::Claude | AgentKind::Gemini | AgentKind::Grok
+        AgentKind::Codex | AgentKind::Claude | AgentKind::Grok
     );
     if !vendor_cli {
         return None;

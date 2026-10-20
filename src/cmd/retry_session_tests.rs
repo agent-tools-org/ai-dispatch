@@ -144,7 +144,7 @@ fn retry_agent_switch_clears_session_id() {
             task_id: task.id.to_string(),
             feedback: Some("fix the bug".to_string()),
             feedback_file: None,
-            agent: Some("gemini".to_string()), // switching to a different CLI
+            agent: Some("grok".to_string()), // switching to a different CLI
             model: None,
             idle_timeout_secs: None,
             dir: None,
@@ -155,7 +155,7 @@ fn retry_agent_switch_clears_session_id() {
     )
     .unwrap();
 
-    assert_eq!(args.agent_name, "gemini");
+    assert_eq!(args.agent_name, "grok");
     assert!(
         args.session_id.is_none(),
         "session_id must be cleared when agent changes, got {:?}",

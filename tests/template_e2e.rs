@@ -27,9 +27,9 @@ fn run_wraps_prompt_with_template() {
     let bin_dir = TempDir::new().unwrap();
     std::fs::create_dir_all(aid_home.path().join("templates")).unwrap();
     std::fs::write(aid_home.path().join("templates/bug-fix.md"), "Plan:\n{{prompt}}\nDone.").unwrap();
-    write_script(bin_dir.path(), "gemini", "#!/bin/sh\nwhile [ $# -gt 0 ]; do\n  if [ \"$1\" = \"-p\" ]; then\n    shift\n    printf '%s' \"$1\" > \"$AID_HOME/captured-prompt.txt\"\n    break\n  fi\n  shift\ndone\nprintf '%s' '{\"response\":\"ok\",\"usageMetadata\":{\"totalTokenCount\":7}}'\n");
+    write_script(bin_dir.path(), "grok", "#!/bin/sh\nwhile [ $# -gt 0 ]; do\n  if [ \"$1\" = \"-p\" ]; then\n    shift\n    printf '%s' \"$1\" > \"$AID_HOME/captured-prompt.txt\"\n    break\n  fi\n  shift\ndone\nprintf '%s' '{\"response\":\"ok\",\"usage\":{\"total_tokens\":7}}'\n");
     let path = format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
-    let output = aid_cmd_in(aid_home.path()).env("PATH", path).args(["run", "gemini", "--template", "bug-fix", "Fix login crash"]).output().unwrap();
+    let output = aid_cmd_in(aid_home.path()).env("PATH", path).args(["run", "grok", "--template", "bug-fix", "Fix login crash"]).output().unwrap();
     assert!(output.status.success(), "run failed: {}", String::from_utf8_lossy(&output.stderr));
     let captured = std::fs::read_to_string(aid_home.path().join("captured-prompt.txt")).unwrap();
     assert!(captured.contains("Plan:\nFix login crash\nDone."));

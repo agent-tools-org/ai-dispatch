@@ -82,7 +82,7 @@ fn agent_uses_claude_hooks_matches_known_agents() {
     assert!(!agent_uses_claude_hooks("codex"));
     assert!(!agent_uses_claude_hooks("cursor"));
     assert!(!agent_uses_claude_hooks("opencode"));
-    assert!(!agent_uses_claude_hooks("gemini"));
+    assert!(!agent_uses_claude_hooks("grok"));
 }
 
 #[test]

@@ -19,34 +19,34 @@ fn cost_efficiency_calculates_ratio() {
 }
 
 #[test]
-fn gemini_in_fallback_chain() {
+fn grok_in_fallback_chain() {
     let (_temp, _guard) = isolated();
     // Pin the detected agent set so the test is deterministic on CI hosts
     // where no agent binaries are installed on PATH.
     let _agents = crate::agent::DetectAgentsGuard::set(vec![
-        AgentKind::Gemini,
-        AgentKind::Qwen,
+        AgentKind::Grok,
+        AgentKind::Kilo,
         AgentKind::Codex,
     ]);
     let result = crate::cmd::run::advice_route::automatic_candidate(
         None,
         &crate::cmd::run::RunArgs {
-            agent_name: "gemini".into(),
+            agent_name: "grok".into(),
             prompt: "Implement a feature".into(),
             ..Default::default()
         },
     )
     .and_then(|candidate| candidate.kind());
-    assert!(result.is_some(), "Gemini should have a fallback agent");
-    assert_ne!(result, Some(AgentKind::Gemini));
+    assert!(result.is_some(), "Grok should have a fallback agent");
+    assert_ne!(result, Some(AgentKind::Grok));
 }
 
 #[test]
 fn fallback_chain_skips_rate_limited() {
     let (_temp, _guard) = isolated();
     let _agents = crate::agent::DetectAgentsGuard::set(vec![
-        AgentKind::Gemini,
-        AgentKind::Qwen,
+        AgentKind::Grok,
+        AgentKind::Kilo,
         AgentKind::Codex,
         AgentKind::Cursor,
     ]);
@@ -54,7 +54,7 @@ fn fallback_chain_skips_rate_limited() {
     let result = crate::cmd::run::advice_route::automatic_candidate(
         None,
         &crate::cmd::run::RunArgs {
-            agent_name: "gemini".into(),
+            agent_name: "grok".into(),
             prompt: "Implement a feature".into(),
             ..Default::default()
         },

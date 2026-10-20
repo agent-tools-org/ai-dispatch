@@ -96,7 +96,7 @@ fn cursor_stays_a_subscription_while_still_being_grouped() {
 
 #[test]
 fn agents_metered_per_account_have_no_groups() {
-    assert_eq!(model_group(AgentKind::Qwen, Some("qwen3.8-max")), None);
+    assert_eq!(model_group(AgentKind::Kilo, Some("qwen3.8-max")), None);
     assert_eq!(model_group(AgentKind::Codex, Some("gpt-5.5")), None);
     assert!(groups_for_agent(AgentKind::Codex).is_empty());
 }

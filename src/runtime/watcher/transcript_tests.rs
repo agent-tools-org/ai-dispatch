@@ -16,7 +16,7 @@ use std::sync::Arc;
 struct BufferedTestAgent;
 
 impl Agent for BufferedTestAgent {
-    fn kind(&self) -> AgentKind { AgentKind::Gemini }
+    fn kind(&self) -> AgentKind { AgentKind::Antigravity }
     fn streaming(&self) -> bool { false }
     fn accepts_interactive_input(&self) -> bool { false }
     fn build_command(&self, _: &str, _: &RunOpts) -> anyhow::Result<Command> { unreachable!() }
@@ -34,7 +34,7 @@ async fn watch_buffered_persists_transcript() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = Task {
         id: TaskId("t-watch-buffered".to_string()),
-        agent: AgentKind::Gemini,
+        agent: AgentKind::Antigravity,
         custom_agent_name: None,
         prompt: "prompt".to_string(),
         resolved_prompt: None,
@@ -106,7 +106,7 @@ async fn watch_buffered_clears_rate_limit_on_success() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = Task {
         id: TaskId("t-watch-clear-rate-limit".to_string()),
-        agent: AgentKind::Gemini,
+        agent: AgentKind::Antigravity,
         custom_agent_name: None,
         prompt: "prompt".to_string(),
         resolved_prompt: None,
@@ -144,11 +144,11 @@ async fn watch_buffered_clears_rate_limit_on_success() {
     };
     store.insert_task(&task).unwrap();
     rate_limit::mark_rate_limited(
-        &AgentKind::Gemini,
+        &AgentKind::Antigravity,
         None,
-        "IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals",
+        "Individual quota reached. Resets in 59m21s.",
     );
-    assert!(rate_limit::is_rate_limited(&AgentKind::Gemini, None));
+    assert!(rate_limit::is_rate_limited(&AgentKind::Antigravity, None));
 
     let mut child = tokio::process::Command::new("sh")
 
@@ -172,7 +172,7 @@ async fn watch_buffered_clears_rate_limit_on_success() {
     .await
     .unwrap();
 
-    assert!(!rate_limit::is_rate_limited(&AgentKind::Gemini, None));
+    assert!(!rate_limit::is_rate_limited(&AgentKind::Antigravity, None));
 }
 
 struct BufferedAgyTestAgent;

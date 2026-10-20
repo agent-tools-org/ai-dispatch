@@ -21,7 +21,7 @@ impl Harness {
             bin: TempDir::new().expect("fake binaries"),
         };
         let mut config = String::new();
-        for agent in ["gemini", "agy", "qwen", "copilot", "opencode", "commandcode", "cursor", "kilo", "mimocode", "droid", "oz", "claude", "grok"] {
+        for agent in ["agy", "copilot", "opencode", "commandcode", "cursor", "kilo", "mimocode", "droid", "oz", "claude", "grok"] {
             config.push_str(&format!("[{agent}]\ndisabled = true\n"));
         }
         if let Some(model) = model {

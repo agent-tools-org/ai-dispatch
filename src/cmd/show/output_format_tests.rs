@@ -139,7 +139,7 @@ fn claude_result_event_does_not_duplicate_assistant_text() {
 fn qwen_stream_json_result_event_renders_final_text() {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/qwen-0.22.3-real-envelopes.jsonl");
-    let output = extract_messages_from_log(&fixture, true, Some("qwen")).unwrap();
+    let output = extract_messages_from_log(&fixture, true, Some("kilo")).unwrap();
     assert!(
         output.starts_with("Unable to complete:"),
         "expected qwen result text, got: {output}"

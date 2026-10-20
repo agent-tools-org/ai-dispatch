@@ -104,12 +104,12 @@ fn automatic_excludes_missing_disabled_auth_failed_below_floor_and_exhausted() {
     let _fleet = DetectAgentsGuard::set(vec![
         AgentKind::Codex,
         AgentKind::Droid,
-        AgentKind::Qwen,
+        AgentKind::Kilo,
         AgentKind::Grok,
     ]);
     crate::routing::scores::test_support::seed_live();
     // Keep a below-floor route with model evidence instead of the removed CLI score.
-    crate::config::agent::save_agent_default_model("qwen", Some("openai/gpt-4o-mini")).expect("model");
+    crate::config::agent::save_agent_default_model("kilo", Some("openai/gpt-4o-mini")).expect("model");
     crate::config::agent::save_agent_disabled("grok", true).expect("disable");
     crate::routing::auth_marker::record_failure_at(AgentKind::Droid, "Not signed in.", chrono::Local::now());
     let args = RunArgs {
@@ -129,7 +129,7 @@ fn automatic_excludes_missing_disabled_auth_failed_below_floor_and_exhausted() {
             .contains(&"auth_failed".into())
     );
     assert!(
-        candidate("qwen")
+        candidate("kilo")
             .exclusion_codes
             .contains(&"below_floor".into())
     );
@@ -164,40 +164,6 @@ fn automatic_excludes_selected_model_group_holds_even_background_and_advisory_re
         "held routes can remain advisory"
     );
     assert!(automatic_candidate(None, &args).is_none());
-}
-
-#[test]
-fn automatic_excludes_superseded_gemini_and_claude_but_explicit_gemini_still_runs() {
-    let (dir, _home, _cache) = isolated();
-    let _fleet = DetectAgentsGuard::set(vec![
-        AgentKind::Gemini,
-        AgentKind::Antigravity,
-        AgentKind::Claude,
-    ]);
-    let store = Arc::new(Store::open_memory().expect("store"));
-    let args = RunArgs {
-        kind: Some(TaskCategory::Research),
-        ..args()
-    };
-    assert!(report(Some(&store), &args).candidates.iter().any(|c|
-        c.agent == "gemini" && c.exclusion_codes.contains(&"superseded_by_agy".into())));
-    assert_eq!(
-        automatic_candidate(Some(&store), &args)
-            .expect("peer")
-            .agent,
-        "agy"
-    );
-    hold(dir.path(), "oz");
-    let mut explicit = RunArgs {
-        cascade: vec!["gemini".into(), "claude".into()],
-        ..args
-    };
-    let setup =
-        super::super::run_dispatch_resolve::resolve_agent_setup(&store, &mut explicit, None)
-            .expect("explicit Gemini");
-    assert_eq!(setup.agent_kind, AgentKind::Gemini);
-    assert_eq!(explicit.cascade, ["claude"]);
-    assert_ne!(explicit.model_source, ModelSource::Advised);
 }
 
 #[test]

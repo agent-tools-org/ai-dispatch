@@ -50,6 +50,17 @@ pub enum AgentAction {
 }
 
 pub fn run_agent_command(store: &Store, action: AgentAction) -> Result<()> {
+    match &action {
+        AgentAction::Show { name, .. } | AgentAction::Config { name, .. }
+        | AgentAction::Add { name } | AgentAction::Remove { name } => {
+            crate::agent::removed::reject(name)?;
+        }
+        AgentAction::Fork { name, new_name } => {
+            crate::agent::removed::reject(name)?;
+            if let Some(name) = new_name { crate::agent::removed::reject(name)?; }
+        }
+        _ => {}
+    }
     match action {
         AgentAction::List { json } => {
             if json {
@@ -88,6 +99,7 @@ fn config_agent(
     disable: bool,
     enable: bool,
 ) -> Result<()> {
+    crate::agent::removed::reject(name)?;
     if !is_builtin(name) && !registry::custom_agent_exists(name) {
         bail!("Unknown agent '{name}'");
     }
@@ -130,8 +142,6 @@ fn config_agent(
     }
     Ok(())
 }
-
-
 
 fn show_agent(name: &str) -> Result<()> {
     if let Some(kind) = builtin_profile(name) {

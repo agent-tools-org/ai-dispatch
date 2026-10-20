@@ -1,6 +1,6 @@
 // The one model-resolution function shared by `aid run` and `aid advise`.
 // Exports: RunModel, RunModelSource, RunModelInput, resolve_run_model, model_label.
-// Deps: agent_config (sticky), custom agent config, model_catalog, codex/qwen CLI config, rate_limit.
+// Deps: agent_config (sticky), custom agent config, model_catalog, codex CLI config, rate_limit.
 
 use serde::{Deserialize, Serialize};
 
@@ -161,7 +161,6 @@ fn smart_route_applies(input: &RunModelInput) -> bool {
 fn cli_configured_default(kind: AgentKind) -> Option<String> {
     match kind {
         AgentKind::Codex => crate::agent::codex::cli_config::configured_model(),
-        AgentKind::Qwen => crate::routing::model_catalog::get_qwen_selected_model(),
         _ => None,
     }
 }

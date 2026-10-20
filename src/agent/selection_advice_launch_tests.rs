@@ -1,55 +1,8 @@
 // Launch policy tests through real advice, inventory, and quota evidence.
-// Covers: Gemini supersession, recommendation fallback, Claude preference, and eligibility.
+// Covers: Claude preference and eligibility.
 // Deps: advise test isolation helpers, DetectAgentsGuard, auth markers.
 
 use super::*;
-
-#[test]
-fn installed_agy_supersedes_gemini_research_advice() {
-    let (_temp, _home, _cache) = isolated();
-    for agy_installed in [true, false] {
-        let mut fleet = vec![AgentKind::Gemini, AgentKind::Codex];
-        if agy_installed { fleet.push(AgentKind::Antigravity); }
-        let _fleet = crate::agent::DetectAgentsGuard::set(fleet);
-        let report = advise("compare the docs", declared(TaskDifficulty::Moderate, TaskBudget::Standard),
-            Some(TaskCategory::Research), None, None, 0, None);
-        let gemini = find(&report, "gemini");
-        assert_eq!(gemini.eligible, !agy_installed);
-        assert_eq!(gemini.exclusion_codes.iter().any(|code| code == "superseded_by_agy"), agy_installed);
-        if agy_installed {
-            assert_eq!(gemini.exclusion_reason.as_deref(), Some("gemini individual tier superseded by agy (installed)"));
-            assert!(!gemini.launchable(None));
-            assert_ne!(report.recommended.expect("recommendation").agent, "gemini");
-        }
-    }
-}
-
-#[test]
-fn disabled_installed_agy_does_not_supersede_gemini() {
-    let (_temp, _home, _cache) = isolated();
-    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Gemini, AgentKind::Antigravity]);
-    crate::config::agent::save_agent_disabled("agy", true).expect("disable");
-    let report = advise("compare the docs", declared(TaskDifficulty::Moderate, TaskBudget::Standard),
-        Some(TaskCategory::Research), None, None, 0, None);
-    let gemini = find(&report, "gemini");
-    assert!(gemini.eligible);
-    assert!(!gemini.exclusion_codes.iter().any(|code| code == "superseded_by_agy"));
-    assert!(report.candidates.iter().all(|candidate| candidate.agent != "agy"));
-    assert_eq!(report.recommended.expect("recommendation").agent, "gemini");
-}
-
-#[test]
-fn superseded_gemini_is_never_a_recommendation_fallback() {
-    let (_temp, _home, _cache) = isolated();
-    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Gemini, AgentKind::Antigravity, AgentKind::Codex]);
-    for kind in [AgentKind::Antigravity, AgentKind::Codex] {
-        crate::routing::auth_marker::record_failure_at(kind, "Not signed in.", chrono::Local::now());
-    }
-    let report = advise("compare the docs", declared(TaskDifficulty::Moderate, TaskBudget::Standard),
-        Some(TaskCategory::Research), None, None, 0, None);
-    assert!(report.candidates.iter().all(|candidate| !candidate.eligible));
-    assert_ne!(report.recommended.as_ref().map(|candidate| candidate.agent.as_str()), Some("gemini"));
-}
 
 #[test]
 fn launchable_requires_eligibility_and_claude_team_preference() {

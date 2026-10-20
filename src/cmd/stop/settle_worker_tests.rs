@@ -19,7 +19,7 @@ struct StopAtFailure {
 
 impl Agent for StopAtFailure {
     fn kind(&self) -> AgentKind {
-        AgentKind::Gemini
+        AgentKind::Grok
     }
     fn streaming(&self) -> bool {
         false

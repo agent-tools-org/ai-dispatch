@@ -121,7 +121,7 @@ fn task_to_run_args_includes_sibling_metadata() {
     let sibling = batch::BatchTask {
         id: Some("task-sibling".to_string()),
         name: Some("sibling".to_string()),
-        agent: "gemini".to_string(),
+        agent: "grok".to_string(),
         team: None,
         prompt: "review the implementation".to_string(),
         prompt_file: None,
@@ -174,7 +174,7 @@ fn task_to_run_args_includes_sibling_metadata() {
         run_args.batch_siblings,
         vec![(
             "sibling".to_string(),
-            "gemini".to_string(),
+            "grok".to_string(),
             "review the implementation".to_string(),
         )]
     );

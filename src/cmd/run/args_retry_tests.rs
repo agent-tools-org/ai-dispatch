@@ -100,7 +100,7 @@ fn every_field_set() -> RunArgs {
         worktree: Some("feat/x".into()), base_branch: Some("develop".into()), group: Some("wg-1".into()),
         verify: Some("true".into()), setup: Some("make setup".into()), iterate: Some(3),
         eval: Some("make eval".into()), eval_feedback_template: Some("fix {output}".into()),
-        judge: Some("gemini".into()), peer_review: Some("claude".into()),
+        judge: Some("grok".into()), peer_review: Some("claude".into()),
         max_duration_mins: Some(42), max_task_cost: Some(1.5), retry: 2,
         context: vec!["ctx.md".into()], checklist: vec!["check".into()], skills: vec!["implementer".into()],
         hooks: vec!["on_fail:true".into()], template: Some("bug-fix".into()),

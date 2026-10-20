@@ -7,8 +7,6 @@ use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub enum AgentKind {
-    Gemini,
-    Qwen,
     Codex,
     Copilot,
     OpenCode,
@@ -26,8 +24,6 @@ pub enum AgentKind {
 
 impl AgentKind {
     pub const ALL_BUILTIN: &'static [Self] = &[
-        Self::Gemini,
-        Self::Qwen,
         Self::Codex,
         Self::Copilot,
         Self::OpenCode,
@@ -42,8 +38,6 @@ impl AgentKind {
     ];
 
     pub const ALL: &'static [Self] = &[
-        Self::Gemini,
-        Self::Qwen,
         Self::Codex,
         Self::Copilot,
         Self::OpenCode,
@@ -60,8 +54,6 @@ impl AgentKind {
 
     pub fn parse_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
-            "gemini" => Some(Self::Gemini),
-            "qwen" => Some(Self::Qwen),
             "codex" => Some(Self::Codex),
             "copilot" => Some(Self::Copilot),
             "opencode" => Some(Self::OpenCode),
@@ -81,8 +73,6 @@ impl AgentKind {
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Gemini => "gemini",
-            Self::Qwen => "qwen",
             Self::Codex => "codex",
             Self::Copilot => "copilot",
             Self::OpenCode => "opencode",
@@ -117,7 +107,6 @@ impl AgentKind {
                 | Self::MiMoCode
                 | Self::Droid
                 | Self::Codex
-                | Self::Qwen
                 | Self::Grok
         )
     }
@@ -130,20 +119,6 @@ impl AgentKind {
         &self,
     ) -> Option<(&'static str, &'static str, &'static str, &'static str, bool)> {
         match self {
-            Self::Gemini => Some((
-                "gemini",
-                "Research, coding, web search, file editing",
-                "$0.10-$10/M blended",
-                "research, explain, implement, create, analyze, build",
-                true,
-            )),
-            Self::Qwen => Some((
-                "qwen",
-                "Research, coding with Qwen3-Coder models",
-                "free (OAuth) or Alibaba Cloud subscription",
-                "implement, refactor, research, explain",
-                true,
-            )),
             Self::Codex => Some((
                 "codex",
                 "Complex implementation, multi-file refactors",

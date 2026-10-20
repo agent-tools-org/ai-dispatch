@@ -170,19 +170,19 @@ fn two_free_agents_ten_percent_ranks_three_above_ninety() {
     let history = HashMap::new();
     let costs = HashMap::new();
     let ctx = score_ctx(&profile, &history, &costs, None, true);
-    let qwen_base = hint_breakdown(&ctx, AgentKind::Qwen).total;
+    let codex_base = hint_breakdown(&ctx, AgentKind::Codex).total;
     let agy_base = hint_breakdown(&ctx, AgentKind::Antigravity).total;
 
-    write_snapshot(&cache, "qwen", 90.0, 60);
+    write_snapshot(&cache, "codex", 90.0, 60);
     write_snapshot(&cache, "agy", 10.0, 60);
 
-    let qwen = hint_breakdown(&ctx, AgentKind::Qwen);
+    let codex = hint_breakdown(&ctx, AgentKind::Codex);
     let agy = hint_breakdown(&ctx, AgentKind::Antigravity);
-    assert_eq!(qwen.headroom_penalty, -3.0);
+    assert_eq!(codex.headroom_penalty, -3.0);
     assert_eq!(agy.headroom_penalty, 0.0);
-    assert_eq!(qwen.total, qwen_base - 3.0);
+    assert_eq!(codex.total, codex_base - 3.0);
     assert_eq!(agy.total, agy_base);
-    assert_eq!(agy.total - qwen.total, (agy_base - qwen_base) + 3.0);
+    assert_eq!(agy.total - codex.total, (agy_base - codex_base) + 3.0);
 }
 
 #[test]
@@ -192,10 +192,10 @@ fn stale_snapshot_does_not_retune_score() {
     let history = HashMap::new();
     let costs = HashMap::new();
     let ctx = score_ctx(&profile, &history, &costs, None, true);
-    let baseline = hint_breakdown(&ctx, AgentKind::Qwen).total;
-    write_snapshot(&cache, "qwen", 90.0, 20 * 60);
-    let breakdown = hint_breakdown(&ctx, AgentKind::Qwen);
-    assert_eq!(headroom_penalty(AgentKind::Qwen, None), 0.0);
+    let baseline = hint_breakdown(&ctx, AgentKind::Codex).total;
+    write_snapshot(&cache, "codex", 90.0, 20 * 60);
+    let breakdown = hint_breakdown(&ctx, AgentKind::Codex);
+    assert_eq!(headroom_penalty(AgentKind::Codex, None), 0.0);
     assert_eq!(breakdown.headroom_penalty, 0.0);
     assert_eq!(breakdown.total.to_bits(), baseline.to_bits());
 }
@@ -207,9 +207,9 @@ fn unused_quota_does_not_boost() {
     let history = HashMap::new();
     let costs = HashMap::new();
     let ctx = score_ctx(&profile, &history, &costs, None, true);
-    let baseline = hint_breakdown(&ctx, AgentKind::Qwen).total;
-    write_snapshot(&cache, "qwen", 10.0, 60);
-    let breakdown = hint_breakdown(&ctx, AgentKind::Qwen);
+    let baseline = hint_breakdown(&ctx, AgentKind::Codex).total;
+    write_snapshot(&cache, "codex", 10.0, 60);
+    let breakdown = hint_breakdown(&ctx, AgentKind::Codex);
     assert_eq!(breakdown.headroom_penalty, 0.0);
     assert_eq!(breakdown.total.to_bits(), baseline.to_bits());
 }
@@ -217,13 +217,13 @@ fn unused_quota_does_not_boost() {
 #[test]
 fn held_uses_rate_limit_penalty_not_headroom() {
     let (temp, cache, _home, _guard) = isolated();
-    write_clock_hold(temp.path(), "qwen");
-    write_snapshot(&cache, "qwen", 90.0, 60);
+    write_clock_hold(temp.path(), "codex");
+    write_snapshot(&cache, "codex", 90.0, 60);
     let profile = free_profile();
     let history = HashMap::new();
     let costs = HashMap::new();
     let ctx = score_ctx(&profile, &history, &costs, None, true);
-    let breakdown = hint_breakdown(&ctx, AgentKind::Qwen);
+    let breakdown = hint_breakdown(&ctx, AgentKind::Codex);
     assert_eq!(breakdown.rate_limit_penalty, -10.0);
     assert_eq!(breakdown.headroom_penalty, 0.0);
 }
@@ -241,7 +241,7 @@ fn held_background_keeps_zero_penalty_and_note_says_wait() {
         0,
         None,
     );
-    let codex = report
+    let grok = report
         .candidates
         .iter()
         .find(|item| item.agent == "codex")
@@ -260,7 +260,7 @@ fn advise_notes_distinguish_held_degraded_and_skipped() {
     let (temp, cache, _home, _guard) = isolated();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::OpenCode]);
     write_clock_hold(temp.path(), "codex");
-    write_snapshot(&cache, "qwen", 90.0, 60);
+    write_snapshot(&cache, "grok", 90.0, 60);
     let report = advise(
         "add a null check",
         declared(TaskUrgency::Normal),
@@ -270,20 +270,20 @@ fn advise_notes_distinguish_held_degraded_and_skipped() {
         0,
         None,
     );
-    let qwen = report
+    let grok = report
         .candidates
         .iter()
-        .find(|item| item.agent == "qwen")
-        .expect("qwen");
-    assert_eq!(qwen.quota.status, "degraded");
-    assert_eq!(qwen.quota.used_percent, Some(90.0));
-    assert_eq!(qwen.quota.source, "probe");
-    assert_eq!(qwen.quota.wall, "none");
-    assert!(!qwen.quota.stale);
-    assert!(qwen.quota.freshness_secs.is_some());
-    assert!(qwen.quota.resets_at.is_some());
+        .find(|item| item.agent == "grok")
+        .expect("grok");
+    assert_eq!(grok.quota.status, "degraded");
+    assert_eq!(grok.quota.used_percent, Some(90.0));
+    assert_eq!(grok.quota.source, "probe");
+    assert_eq!(grok.quota.wall, "none");
+    assert!(!grok.quota.stale);
+    assert!(grok.quota.freshness_secs.is_some());
+    assert!(grok.quota.resets_at.is_some());
     assert!(
-        report.notes.iter().any(|note| note.contains("qwen") && note.contains("degraded")),
+        report.notes.iter().any(|note| note.contains("grok") && note.contains("degraded")),
         "notes: {:?}",
         report.notes
     );

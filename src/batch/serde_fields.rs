@@ -18,7 +18,7 @@ pub(super) fn deserialize_judge<'de, D: Deserializer<'de>>(
         }
 
         fn visit_bool<E: de::Error>(self, v: bool) -> Result<Self::Value, E> {
-            Ok(if v { Some("gemini".to_string()) } else { None })
+            Ok(if v { Some("agy".to_string()) } else { None })
         }
 
         fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {

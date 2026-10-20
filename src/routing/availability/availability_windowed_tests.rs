@@ -15,8 +15,6 @@ const GROK_402: &str =
 const CURSOR_PREMIUM: &str = "ActionRequiredError: Increase limits for faster responses You're out of usage. \
      Switch to Auto, or ask your admin to increase your limit to continue.";
 const OPENCODE_PREPAID: &str = "Insufficient balance. Manage your billing here: https://opencode.ai/";
-const GEMINI_TIER: &str = "IneligibleTierError: This client is no longer supported for Gemini Code \
-     Assist for individuals";
 const DATED: &str = "2026-08-18T00:55:28Z";
 
 struct Isolated {
@@ -224,14 +222,6 @@ fn opencode_prepaid_stays_held_dated_or_undated() {
             "prepaid must stay held with resets_at={resets:?}"
         );
     }
-}
-
-#[test]
-fn gemini_ineligible_tier_stays_held_with_any_snapshot() {
-    let iso = isolated();
-    mark_rate_limited(&AgentKind::Gemini, None, GEMINI_TIER);
-    write_cache(&iso.cache_dir, "grok", &window("pool", 0.0, Some(DATED), None));
-    assert!(dispatch_blocking_hold(&AgentKind::Gemini, None).is_some());
 }
 
 #[test]

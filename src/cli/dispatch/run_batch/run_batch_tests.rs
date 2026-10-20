@@ -8,7 +8,7 @@ use crate::types::{TaskBudget, TaskDifficulty, TaskEgress, TaskRigor, TaskUrgenc
 use clap::Parser;
 
 fn cli_args(flags: &[&str]) -> run_args::RunArgs {
-    let cli = Cli::try_parse_from(["aid", "run", "qwen", "say hi"].into_iter()
+    let cli = Cli::try_parse_from(["aid", "run", "kilo", "say hi"].into_iter()
         .chain(flags.iter().copied())).expect("parse run flags");
     let Some(Commands::Run(args)) = cli.command else { panic!("run command") };
     args
@@ -40,7 +40,7 @@ fn configured_args() -> cmd::run::RunArgs {
 #[test]
 fn cli_run_conversion_preserves_requested_profile_and_paths() {
     let args = configured_args();
-    assert_eq!(args.agent_name, "qwen");
+    assert_eq!(args.agent_name, "kilo");
     assert_eq!(args.prompt, "say hi");
     assert_eq!(args.repo.as_deref(), Some("repo"));
     assert_eq!(args.repo_root.as_deref(), Some("root"));
@@ -67,7 +67,7 @@ fn cli_run_conversion_preserves_lifecycle_flags() {
     assert_eq!(args.iterate, Some(2));
     assert_eq!(args.eval.as_deref(), Some("evaluate"));
     assert_eq!(args.eval_feedback_template.as_deref(), Some("feedback {output}"));
-    assert_eq!(args.judge.as_deref(), Some("gemini"));
+    assert_eq!(args.judge.as_deref(), Some("grok"));
     assert_eq!(args.peer_review.as_deref(), Some("claude"));
     assert_eq!(args.retry, 3);
     assert!(args.background && args.dry_run && args.announce && args.read_only);
@@ -124,7 +124,7 @@ fn cli_run_conversion_keeps_default_model_resolution_and_optional_flags() {
 #[test]
 fn cli_run_conversion_preserves_prompt_file_without_reading_files() {
     let cli = Cli::try_parse_from([
-        "aid", "run", "qwen", "--prompt-file", "prompt.md", "--no-hint",
+        "aid", "run", "kilo", "--prompt-file", "prompt.md", "--no-hint",
         "--checklist", " inline item ", "--checklist-file", "missing-checklist.txt",
     ]).expect("parse run");
     let Some(Commands::Run(args)) = cli.command else { panic!("run command") };
@@ -142,7 +142,7 @@ fn cli_run_conversion_does_not_drop_any_configurable_field() {
         configured_args(),
         parsed_args(&["--no-skill", "--no-audit", "--backup", "gdrive:x", "--sandbox"]),
         parsed_args(&["--container", "dev:latest"]),
-        run_args(Cli::try_parse_from(["aid", "run", "qwen", "--prompt-file", "prompt.md"])
+        run_args(Cli::try_parse_from(["aid", "run", "kilo", "--prompt-file", "prompt.md"])
             .expect("parse prompt file").command.and_then(|command| match command {
                 Commands::Run(args) => Some(args), _ => None,
             }).expect("run command")),

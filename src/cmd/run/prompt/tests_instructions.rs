@@ -104,7 +104,7 @@ fn build_prompt_bundle_appends_batch_siblings_after_system_context() {
             group: Some(group.id.to_string()),
             batch_siblings: vec![(
                 "task-2".to_string(),
-                "gemini".to_string(),
+                "grok".to_string(),
                 "Summarize the dependency graph".to_string(),
             )],
             ..Default::default()
@@ -122,7 +122,7 @@ fn build_prompt_bundle_appends_batch_siblings_after_system_context() {
     let siblings_idx = bundle.effective_prompt.find("<aid-batch-siblings>").unwrap();
 
     assert!(siblings_idx > system_idx);
-    assert!(bundle.effective_prompt.contains("- \"task-2\" (gemini): Summarize the dependency graph"));
+    assert!(bundle.effective_prompt.contains("- \"task-2\" (grok): Summarize the dependency graph"));
 }
 
 #[tokio::test]

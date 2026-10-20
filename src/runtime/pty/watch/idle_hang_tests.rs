@@ -196,7 +196,7 @@ fn maybe_handle_idle_skips_ladder_when_buffered_log_grows() {
     let (_temp, _home) = aid_home();
     write_agent_log("t-buf-ladder-live", "streamGenerateContent in flight\n");
     let store = Arc::new(Store::open_memory().expect("store"));
-    let task_id = running_task(&store, "t-buf-ladder-live", AgentKind::Gemini);
+    let task_id = running_task(&store, "t-buf-ladder-live", AgentKind::Antigravity);
     let mut state = MonitorState::with_policy(false, None, short_ladder_policy());
     let stale = Instant::now() - Duration::from_secs(25);
     state.last_progress_time = stale;
@@ -218,7 +218,7 @@ fn repeated_ladder_ticks_with_log_growth_still_reap_after_idle() {
     write_agent_log("t-buf-multi-tick", "start\n");
     let agent_log = paths::agent_log_path("t-buf-multi-tick");
     let store = Arc::new(Store::open_memory().expect("store"));
-    let task_id = running_task(&store, "t-buf-multi-tick", AgentKind::Gemini);
+    let task_id = running_task(&store, "t-buf-multi-tick", AgentKind::Antigravity);
     let mut state = MonitorState::with_policy(false, None, short_ladder_policy());
     let stale_progress = Instant::now() - Duration::from_secs(601);
     state.last_progress_time = stale_progress;
@@ -247,7 +247,7 @@ fn maybe_handle_idle_warns_when_buffered_log_is_stale() {
     write_agent_log("t-buf-ladder-stale", "wrote once then hung\n");
     age_log("t-buf-ladder-stale", Duration::from_secs(60));
     let store = Arc::new(Store::open_memory().expect("store"));
-    let task_id = running_task(&store, "t-buf-ladder-stale", AgentKind::Gemini);
+    let task_id = running_task(&store, "t-buf-ladder-stale", AgentKind::Antigravity);
     let mut state = MonitorState::with_policy(false, None, short_ladder_policy());
     state.last_progress_time = Instant::now() - Duration::from_secs(15);
     state.maybe_handle_idle(&store, &task_id, true).expect("idle ladder");
@@ -264,7 +264,7 @@ fn maybe_handle_idle_streaming_ignores_agent_log() {
     let (_temp, _home) = aid_home();
     write_agent_log("t-stream-ladder", "unrelated log growth\n");
     let store = Arc::new(Store::open_memory().expect("store"));
-    let task_id = running_task(&store, "t-stream-ladder", AgentKind::Gemini);
+    let task_id = running_task(&store, "t-stream-ladder", AgentKind::Antigravity);
     let mut state = MonitorState::with_policy(true, None, short_ladder_policy());
     state.last_progress_time = Instant::now() - Duration::from_secs(15);
     state.maybe_handle_idle(&store, &task_id, true).expect("idle ladder");

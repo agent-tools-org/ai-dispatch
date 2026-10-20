@@ -114,7 +114,7 @@ fn background_urgency_keeps_held_droid_agent() {
         agent_name: "droid".to_string(),
         prompt: "Add unit tests".to_string(),
         declared_urgency: Some(crate::types::TaskUrgency::Background),
-        cascade: vec!["gemini".to_string()],
+        cascade: vec!["grok".to_string()],
         ..Default::default()
     };
 
@@ -141,13 +141,13 @@ fn agent_wide_droid_hold_cascades_away_even_with_a_core_model() {
         agent_name: "droid".to_string(),
         prompt: "Add unit tests".to_string(),
         model: Some("glm-5.2".to_string()),
-        cascade: vec!["gemini".to_string()],
+        cascade: vec!["grok".to_string()],
         ..Default::default()
     };
 
     let setup = resolve_agent_setup(&store, &mut args, None).expect("should leave held droid");
-    assert_eq!(setup.agent_kind, AgentKind::Gemini);
-    assert_eq!(args.agent_name, "gemini");
+    assert_eq!(setup.agent_kind, AgentKind::Grok);
+    assert_eq!(args.agent_name, "grok");
     assert!(setup.substituted_from.is_some());
 }
 

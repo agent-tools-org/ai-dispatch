@@ -112,7 +112,7 @@ fn config_agents_detects_installed_clis() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     // At least one of these should be detected in the dev environment
     assert!(
-        stdout.contains("gemini")
+        stdout.contains("agy")
             || stdout.contains("codex")
             || stdout.contains("opencode")
             || stdout.contains("No AI CLI agents"),

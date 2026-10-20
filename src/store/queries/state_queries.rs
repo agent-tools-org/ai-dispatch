@@ -167,7 +167,7 @@ mod tests {
         let newer = "2026-03-19T10:00:00Z";
 
         insert_task(&store, "t-older", "/repo/a", AgentKind::Codex.as_str(), TaskStatus::Done, older, None);
-        insert_task(&store, "t-newer", "/repo/a", AgentKind::Gemini.as_str(), TaskStatus::Failed, newer, None);
+        insert_task(&store, "t-newer", "/repo/a", AgentKind::Grok.as_str(), TaskStatus::Failed, newer, None);
         insert_task(&store, "t-other", "/repo/b", AgentKind::Cursor.as_str(), TaskStatus::Done, newer, None);
         insert_verify_event(&store, "t-older", "2026-03-18T11:00:00Z", "older verify");
         insert_verify_event(&store, "t-newer", "2026-03-19T11:00:00Z", "latest verify");
@@ -197,8 +197,8 @@ mod tests {
         insert_task(&store, "t-failed", "/repo/a", "codex", TaskStatus::Failed, &recent_c, Some(4.0));
         insert_task(&store, "t-old", "/repo/a", "codex", TaskStatus::Done, &old_done, Some(100.0));
         insert_task(&store, "t-other-1", "/repo/b", "codex", TaskStatus::Done, &recent_a, Some(50.0));
-        insert_task(&store, "t-other-2", "/repo/a", "gemini", TaskStatus::Done, &recent_a, Some(7.0));
-        insert_task(&store, "t-other-3", "/repo/a", "gemini", TaskStatus::Failed, &recent_b, Some(8.0));
+        insert_task(&store, "t-other-2", "/repo/a", "grok", TaskStatus::Done, &recent_a, Some(7.0));
+        insert_task(&store, "t-other-3", "/repo/a", "grok", TaskStatus::Failed, &recent_b, Some(8.0));
 
         let rates = store.project_agent_success_rates("/repo/a").unwrap();
         assert_eq!(rates.len(), 1);

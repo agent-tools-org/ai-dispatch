@@ -11,7 +11,7 @@ pub(crate) const NO_HINT_FLAG: &str = "no-hint";
 #[derive(Args)]
 #[command(after_help = r#"Examples:
   aid run codex "Add unit tests" --verify
-  aid run gemini "Research topic" -o notes.md
+  aid run agy "Research topic" -o notes.md
   aid run codex "Refactor" -w feat/refactor --verify --retry 1 --bg
 
 Hint: If passing file paths, use --context <path> not positional args"#)]
@@ -64,7 +64,7 @@ pub struct RunArgs {
     pub eval: Option<String>,
     #[arg(long, value_name = "TEMPLATE", requires = "iterate")]
     pub eval_feedback_template: Option<String>,
-    #[arg(long, value_name = "AGENT", num_args = 0..=1, default_missing_value = "gemini")]
+    #[arg(long, value_name = "AGENT", num_args = 0..=1, default_missing_value = "agy")]
     pub judge: Option<String>,
     #[arg(long, value_name = "AGENT")]
     pub peer_review: Option<String>,
@@ -206,4 +206,18 @@ pub struct BenchmarkArgs {
     pub dir: Option<String>,
     #[arg(long, num_args = 0..=1, default_missing_value = "auto")]
     pub verify: Option<String>,
+}
+
+#[cfg(test)]
+mod removed_defaults_tests {
+    use clap::Parser;
+    use crate::cli::{Cli, Commands};
+
+    #[test]
+    fn bare_judge_defaults_to_agy() {
+        let cli = Cli::try_parse_from(["aid", "run", "codex", "Review code", "--judge"])
+            .expect("run args");
+        let Some(Commands::Run(args)) = cli.command else { panic!("run command") };
+        assert_eq!(args.judge.as_deref(), Some("agy"));
+    }
 }

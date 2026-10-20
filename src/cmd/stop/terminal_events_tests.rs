@@ -19,7 +19,7 @@ struct FinalizingAgent {
 
 impl Agent for FinalizingAgent {
     fn kind(&self) -> AgentKind {
-        AgentKind::Gemini
+        AgentKind::Grok
     }
     fn streaming(&self) -> bool {
         true
@@ -50,7 +50,7 @@ impl Agent for FinalizingAgent {
 }
 
 fn agent(store: &Arc<Store>, stop_at_completion: bool, status: TaskStatus) -> FinalizingAgent {
-    let mut task = crate::cost::test_support::task(AgentKind::Gemini, 0, None);
+    let mut task = crate::cost::test_support::task(AgentKind::Grok, 0, None);
     task.status = TaskStatus::Running;
     store.insert_task(&task).expect("running task");
     FinalizingAgent {

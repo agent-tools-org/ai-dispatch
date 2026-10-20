@@ -161,6 +161,7 @@ fn batch_outcome(outcome: TaskOutcome) -> BatchTaskOutcome {
 }
 fn validate_task_agents(tasks: &[batch::BatchTask]) -> Result<()> {
     for (task_idx, task) in tasks.iter().enumerate() {
+        crate::agent::removed::reject(&task.agent)?;
         anyhow::ensure!(
             batch::is_valid_agent(&task.agent),
             "Unknown agent '{}' for task {}",
@@ -169,6 +170,7 @@ fn validate_task_agents(tasks: &[batch::BatchTask]) -> Result<()> {
         );
         if let Some(ref fallback) = task.fallback {
             for agent in fallback.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                crate::agent::removed::reject(agent)?;
                 anyhow::ensure!(
                     batch::is_valid_agent(agent),
                     "Unknown fallback agent '{}' for task {}",

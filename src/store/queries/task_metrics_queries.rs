@@ -98,19 +98,30 @@ impl Store {
     }
 
     pub fn agent_success_rates(&self) -> Result<Vec<(AgentKind, f64, usize)>> {
-        self.success_rates(None, 5)
+        self.typed_success_rates(None)
     }
 
     pub fn agent_success_rates_by_category(&self, category: &str) -> Result<Vec<(AgentKind, f64, usize)>> {
-        self.success_rates(Some(category), 5)
+        self.typed_success_rates(Some(category))
+    }
+
+    fn typed_success_rates(&self, category: Option<&str>) -> Result<Vec<(AgentKind, f64, usize)>> {
+        Ok(self.success_rates(category, 5)?.into_iter().filter_map(|(name, rate, count)| {
+            (!matches!(name.as_str(), "gemini" | "qwen")).then(||
+                (AgentKind::parse_str(&name).unwrap_or(AgentKind::Custom), rate, count))
+        }).collect())
+    }
+
+    pub fn named_agent_success_rates(&self) -> Result<Vec<(String, f64, usize)>> {
+        self.success_rates(None, 5)
     }
 
     fn success_rates(
         &self,
         category: Option<&str>,
         minimum_tasks: usize,
-    ) -> Result<Vec<(AgentKind, f64, usize)>> {
-        let mut totals = std::collections::HashMap::<AgentKind, (usize, usize)>::new();
+    ) -> Result<Vec<(String, f64, usize)>> {
+        let mut totals = std::collections::HashMap::<String, (usize, usize)>::new();
         for (agent, outcome) in self.agent_metric_outcomes(category)? {
             if outcome.is_unverified() {
                 continue;
@@ -131,7 +142,7 @@ impl Store {
     fn agent_metric_outcomes(
         &self,
         category: Option<&str>,
-    ) -> Result<Vec<(AgentKind, TaskOutcome)>> {
+    ) -> Result<Vec<(String, TaskOutcome)>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
             "SELECT agent, status, verify_status, verify, delivery_assessment
@@ -153,7 +164,6 @@ impl Store {
                 .ok_or_else(|| anyhow!("unknown task status in metrics: {status}"))?;
             let verify_status = VerifyStatus::parse_str(&verify_status)
                 .ok_or_else(|| anyhow!("unknown verify status in metrics: {verify_status}"))?;
-            let agent = AgentKind::parse_str(&agent).unwrap_or(AgentKind::Custom);
             let delivery = delivery
                 .as_deref()
                 .and_then(DeliveryAssessment::parse_str);
@@ -169,19 +179,25 @@ impl Store {
     }
 
     pub fn agent_avg_costs(&self) -> Result<Vec<(AgentKind, f64)>> {
+        Ok(self.named_agent_avg_costs()?.into_iter().filter_map(|(name, cost)| {
+            (!matches!(name.as_str(), "gemini" | "qwen")).then(||
+                (AgentKind::parse_str(&name).unwrap_or(AgentKind::Custom), cost))
+        }).collect())
+    }
+
+    pub fn named_agent_avg_costs(&self) -> Result<Vec<(String, f64)>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
-            "SELECT agent, AVG(cost_usd) as avg_cost
+            "SELECT agent AS agent_name, AVG(cost_usd) as avg_cost
              FROM tasks
              WHERE cost_usd IS NOT NULL AND cost_usd > 0
-             GROUP BY agent
+             GROUP BY agent_name
              HAVING COUNT(*) >= 3",
         )?;
         let rows = stmt.query_map([], |row| {
             let agent_str: String = row.get(0)?;
             let avg_cost: f64 = row.get(1)?;
-            let agent = AgentKind::parse_str(&agent_str).unwrap_or(AgentKind::Custom);
-            Ok((agent, avg_cost))
+            Ok((agent_str, avg_cost))
         })?;
         rows.map(|row| Ok(row?)).collect()
     }

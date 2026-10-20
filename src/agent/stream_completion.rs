@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::types::{CompletionInfo, TaskStatus};
 
-/// Claude / Cursor / Qwen stream-json terminal `result` is a failure only when
+/// Claude / Cursor stream-json terminal `result` is a failure only when
 /// its protocol exposes an explicit error flag or a known non-delivery subtype.
 pub(crate) fn result_envelope_failed(v: &Value) -> bool {
     if v.get("type").and_then(|t| t.as_str()) != Some("result") {
@@ -21,7 +21,7 @@ pub(crate) fn result_envelope_failed(v: &Value) -> bool {
     )
 }
 
-/// Any JSONL line with top-level `type == "error"` (OpenCode / Gemini / etc.).
+/// Any JSONL line with top-level `type == "error"` (OpenCode / etc.).
 pub(crate) fn jsonl_has_error_type(output: &str) -> bool {
     for line in output.lines() {
         let trimmed = line.trim();
@@ -99,12 +99,8 @@ pub(crate) fn merge_parsed_completion(info: &mut CompletionInfo, parsed: Complet
 /// Detect a provider's quota-exhaustion message anywhere in the captured output
 /// and record it, regardless of exit code or envelope shape.
 ///
-/// This runs on the SUCCESS path on purpose. qwen reports an exhausted plan as
-/// ordinary result text with `is_error:false` and exit 0, so every check that
-/// hangs off the failure path — including `mark_rate_limited`'s existing call
-/// sites — never sees it. The observed result was an exhausted provider still
-/// reported as healthy by `aid agent quota`, its refusal recorded as a success,
-/// and the previous rate-limit marker cleared by that same "success".
+/// This also runs on the success path: a provider refusal must retain its
+/// marker even when a run delivered output and exited successfully.
 ///
 /// Detection and marker writes always run when a refusal is present; only the
 /// task verdict considers deliverables. Callers need both facts separately: a

@@ -7,7 +7,7 @@ aid does not choose either on the caller's behalf.
 - **Skills**: `--skill <name>` declares them, `--no-skill` declares none, and a project sets a
   default once with `skills = ["implementer"]` in `.aid/project.toml`. Omitting all three means no
   skill. A `--read-only` run skips the project default; an explicit `--skill` still applies. aid previously picked one from the **agent kind alone**, never looking at the task, so
-  every implementation CLI was handed `implementer` and gemini and agy were handed `researcher`
+  every implementation CLI was handed `implementer` and agy was handed `researcher`
   whatever the work was — a large block of methodology text and a persona nobody had asked for.
 - **Tools**: omitting `--kind` describes every resolved toolbox tool. Narrowing is opt-in because
   omission is not a decision: a guessed category once cut a multi-file refactor down to 2 of 24
@@ -110,13 +110,13 @@ Important controls:
   agent's `forced_model` (`custom_forced`), simple-task smart routing
   (`smart_route`), the budget route (`budget_route`: a declared `free`/`cheap`
   budget, `--budget`, or `selection.budget_mode`), the CLI's own readable default
-  (`cli_config`: codex `config.toml`, qwen settings), else `agent_default` with
+  (`cli_config`: codex `config.toml`), else `agent_default` with
   no model. Only `explicit`, `sticky`, `smart_route`, and `budget_route` are
   pinned: aid passes the model to the CLI. `cli_config` and `custom_forced` are
   reported but not passed by aid.
   Every dispatch reports its effective model and source (`--model`, agent config,
   budget route, `CLI config (no -m)`, or `CLI default (no -m)`). Quota/budget
-  routing overrides and existing adapter defaults (Cursor, Qwen, MiMoCode) are
+  routing overrides and existing adapter defaults (Cursor, MiMoCode) are
   labeled separately. A healthy default quota group keeps the model
   unset; a held default group pins the first healthy alternative family.
 - `--urgency` declares `background`, `normal`, or `urgent` rate-limit handling. `background` may wait out a clock or Windowed hold; a NeedsHuman hold still blocks.
@@ -287,7 +287,7 @@ success outcome.
 When dispatches are executed, `aid` isolates the agent process's `HOME` directory to prevent identity and instruction leaks from the orchestrator (e.g. `~/.claude/CLAUDE.md`, `~/.claude/settings.json`):
 
 - **Isolated Per-Task HOME**: At dispatch time, `HOME` is set to an isolated directory created under the task directory (`<task_dir>/home`).
-- **Default-Allow Symlink Policy**: Every top-level entry in the host `$HOME` (e.g. `.cargo`, `.rustup`, `.gitconfig`, `.ssh`, `.gemini`, `.grok`, `.cursor`, `.codex`, etc.) is symlinked into the isolated `HOME` so development toolchains and CLI auth directories function without interruption.
+- **Default-Allow Symlink Policy**: Every top-level entry in the host `$HOME` (e.g. `.cargo`, `.rustup`, `.gitconfig`, `.ssh`, `.grok`, `.cursor`, `.codex`, etc.) is symlinked into the isolated `HOME` so development toolchains and CLI auth directories function without interruption.
 - **Orchestrator Surface Masking**: `.claude` is rebuilt without its instruction and permission entries (`CLAUDE.md`, `settings.json`, `settings.local.json`, `skills`, `agents`, `commands`, `plugins`, `hooks`, `memory`, `agent-memory` and the rest of that list in `src/agent/home_isolation.rs`); the names in `DEFAULT_DENYLIST` (`src/agent/home_isolation.rs`) are not linked. Other entries, including `.claude.json`, are linked.
 - **Config Redirect Variables Removed**: Inherited per-CLI variables that move an agent's config or state away from `$HOME` (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GEMINI_CLI_HOME`, `OPENCODE_CONFIG_DIR`, `GROK_HOME`, `FACTORY_HOME_OVERRIDE` and the rest of `CONFIG_REDIRECT_VARS` in `src/agent/env_redirects.rs`) are removed from the host agent environment, including PTY launches. A value set by batch `env` or `env_forward` is kept. Exception: a non-sandbox, non-container Codex launch uses the durable Codex home, which is the operator's `CODEX_HOME` when set, else `~/.codex`. Sandbox and container wrappers do not unset variables inside the container, and container agents run with `HOME=/root`. CLI probes such as `--help` and `models` are not task launches and keep the caller's environment.
 - **Forwarded Values Resolved at Launch**: batch `env_forward` names are resolved when the agent launches, so aid saves only the names. Background job specs, which hold inline batch `env` values, are written owner-only (`0600`). Anything the agent itself prints, including an environment value, still reaches its task log.
@@ -298,3 +298,13 @@ When dispatches are executed, `aid` isolates the agent process's `HOME` director
 - [Routing previews and context](dispatch-routing.md)
 - [Result delivery, worktree safety, delegation, and builds](dispatch-delivery.md)
 - [Retries, fallback, and verification](dispatch-retry.md)
+
+### Removed agent names
+
+`gemini` and `qwen` were removed in this release. Naming either as an agent in
+CLI dispatch, batch TOML, team preferences/defaults/overrides, agent configuration,
+or cascade/fallback lists fails with migration guidance: use `agy`, a Google
+provider through `opencode`/`kilo`, or a custom agent with a different name.
+Google and Qwen model IDs served by supported agents remain available.
+Stored tasks, events, quota markers, and statistics keep their original agent names.
+`aid ask`, `aid show --explain`, and bare `--judge` default to `agy`.

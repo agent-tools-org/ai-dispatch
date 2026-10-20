@@ -37,14 +37,17 @@ pub(crate) async fn run_explain(store: Arc<Store>, task_id: &str, agent: Option<
 
 fn resolve_explain_agent(agent: Option<String>) -> Result<String> {
     match agent {
-        Some(agent) => Ok(agent),
+        Some(agent) => {
+            crate::agent::removed::reject(&agent)?;
+            Ok(agent)
+        },
         None => {
-            if agent_config::is_agent_disabled("gemini") {
+            if agent_config::is_agent_disabled("agy") {
                 anyhow::bail!(
-                    "Default agent 'gemini' is disabled (choose another with: aid show --explain --agent <name>)"
+                    "Default agent 'agy' is disabled (choose another with: aid show --explain --agent <name>)"
                 );
             }
-            Ok("gemini".to_string())
+            Ok("agy".to_string())
         }
     }
 }
@@ -146,10 +149,17 @@ mod tests {
     }
 
     #[test]
+    fn resolve_explain_agent_defaults_to_agy() {
+        let dir = tempfile::tempdir().expect("home");
+        let _guard = paths::AidHomeGuard::set(dir.path());
+        assert_eq!(resolve_explain_agent(None).expect("default"), "agy");
+    }
+
+    #[test]
     fn resolve_explain_agent_rejects_disabled_default_agent() {
         let dir = tempfile::tempdir().expect("tempdir");
         let _guard = paths::AidHomeGuard::set(dir.path());
-        agent_config::save_agent_disabled("gemini", true).expect("disable agent");
+        agent_config::save_agent_disabled("agy", true).expect("disable agent");
 
         let err = resolve_explain_agent(None)
             .expect_err("disabled default should fail")
@@ -157,7 +167,7 @@ mod tests {
 
         assert_eq!(
             err,
-            "Default agent 'gemini' is disabled (choose another with: aid show --explain --agent <name>)"
+            "Default agent 'agy' is disabled (choose another with: aid show --explain --agent <name>)"
         );
     }
 }

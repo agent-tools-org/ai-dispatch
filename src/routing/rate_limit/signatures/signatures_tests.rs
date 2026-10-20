@@ -4,14 +4,6 @@
 use super::*;
 
 #[test]
-fn qwen_token_plan_exhaustion_is_recognized() {
-    let msg = "Quota exhausted: Your token-plan 5-hour quota has been exhausted. The quota will reset later.";
-    let (agent, recovery) = match_quota_signature(msg).expect("qwen quota message must match");
-    assert_eq!(agent, AgentKind::Qwen);
-    assert_eq!(recovery, QuotaRecovery::After(300));
-}
-
-#[test]
 fn droid_weekly_limit_is_recognized_with_a_day_long_cooldown() {
     let msg = "402 You've reached your weekly standard usage limit (resets in 1 day).\nSwitch to Droid Core or enable Extra Usage to continue.";
     let (agent, recovery) = match_quota_signature(msg).expect("droid quota message must match");
@@ -125,15 +117,6 @@ fn droid_reload_tokens_is_recognized() {
         .expect("droid reload-tokens message must match");
     assert_eq!(agent, AgentKind::Droid);
     // Reloading tokens is a purchase, not a window elapsing.
-    assert_eq!(recovery, QuotaRecovery::NeedsHuman);
-}
-
-#[test]
-fn gemini_ineligible_tier_is_recognized() {
-    let msg = "IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals; migrate to Antigravity";
-    let (agent, recovery) = match_quota_signature(msg).expect("gemini tier message must match");
-    assert_eq!(agent, AgentKind::Gemini);
-    // The tier is retired, not throttled: no wait restores it.
     assert_eq!(recovery, QuotaRecovery::NeedsHuman);
 }
 

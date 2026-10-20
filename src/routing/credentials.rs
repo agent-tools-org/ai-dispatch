@@ -170,10 +170,10 @@ keys = [
   { name = "team", env = "OPENAI_API_KEY_2" },
 ]
 
-[gemini]
+[grok]
 strategy = "fill_first"
 keys = [
-  { name = "default", env = "GEMINI_API_KEY" },
+  { name = "default", env = "XAI_API_KEY" },
 ]
 "#;
 
@@ -218,23 +218,23 @@ keys = [
         let dir = TempDir::new().unwrap();
         write_pool(&dir);
         let mut pool = load_pool_from_path(&dir.path().join("credentials.toml")).unwrap();
-        pool.providers.get_mut("gemini").unwrap().keys.push(super::KeyEntry {
+        pool.providers.get_mut("grok").unwrap().keys.push(super::KeyEntry {
             name: "backup".to_string(),
-            env: "GEMINI_API_KEY_BACKUP".to_string(),
+            env: "XAI_API_KEY_BACKUP".to_string(),
             exhausted_until: None,
         });
         super::set_test_env(Some(HashMap::from([
-            ("GEMINI_API_KEY".to_string(), "primary".to_string()),
-            ("GEMINI_API_KEY_BACKUP".to_string(), "backup".to_string()),
+            ("XAI_API_KEY".to_string(), "primary".to_string()),
+            ("XAI_API_KEY_BACKUP".to_string(), "backup".to_string()),
         ])));
 
-        mark_exhausted(&mut pool, "gemini", "default", 5);
+        mark_exhausted(&mut pool, "grok", "default", 5);
 
-        let selected = get_credential(&pool, "gemini");
+        let selected = get_credential(&pool, "grok");
 
         assert_eq!(
             selected,
-            Some(("GEMINI_API_KEY_BACKUP".to_string(), "backup".to_string()))
+            Some(("XAI_API_KEY_BACKUP".to_string(), "backup".to_string()))
         );
         super::set_test_env(None);
     }

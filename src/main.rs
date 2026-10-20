@@ -93,7 +93,6 @@ async fn async_main(cli: Cli) -> Result<()> {
     // a cold or stale cache cannot delay or fail a run.
     cost::maybe_refresh_prices();
     let store = Arc::new(store::Store::open(&support::paths::db_path())?);
-    cost::warm_gemini_default_from_store(store.as_ref());
     let _ = runtime::background::check_zombie_tasks(&store);
 
     let outcome = match command {

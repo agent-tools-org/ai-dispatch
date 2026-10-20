@@ -69,7 +69,7 @@ fn board_with_tasks() {
     let (_temp, _guard, store) = isolated_store();
     let tasks = vec![
         make_task("t-0001", AgentKind::Codex, TaskStatus::Done),
-        make_task("t-0002", AgentKind::Gemini, TaskStatus::Running),
+        make_task("t-0002", AgentKind::Grok, TaskStatus::Running),
     ];
     let output = render_board(&tasks, &store).unwrap();
     assert!(output.contains("t-0001"));

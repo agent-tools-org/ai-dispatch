@@ -85,7 +85,6 @@ impl EgressTier {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum MeteringShape {
     /// One pool for the whole account, shared by every model it serves.
-    /// qwen's ModelStudio token plan is one 5-hour pool across all 17 models.
     AccountPool,
     /// Separate pools per model family. Observed twice in one day on agy, in
     /// both directions: gemini exhausted while claude served, then claude
@@ -118,9 +117,6 @@ pub fn provider_for_cli(cli: AgentKind) -> (ProviderId, MeteringShape) {
         // "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage
         //  ... try again at Aug 11th, 2026 2:23 PM." — run directly, 2026-08-05.
         AgentKind::Codex => ("openai-chatgpt-plan", MeteringShape::AccountPool),
-        // settings.json baseUrl token-plan.ap-southeast-1.maas.aliyuncs.com, and
-        // "Your token-plan 5-hour quota has been exhausted."
-        AgentKind::Qwen => ("alibaba-modelstudio-token-plan", MeteringShape::AccountPool),
         // "Individual quota reached ... Resets in 59m21s." on one family while
         // another kept serving — captured in both directions on 2026-08-05/06.
         AgentKind::Antigravity => ("google-antigravity-individual", MeteringShape::PerModelFamily),
@@ -143,7 +139,6 @@ pub fn provider_for_cli(cli: AgentKind) -> (ProviderId, MeteringShape) {
         // Rate-limited with a reset timestamp but no per-task metering.
         AgentKind::Cursor => ("cursor-subscription", MeteringShape::Subscription),
         AgentKind::Claude => ("anthropic", MeteringShape::Unknown),
-        AgentKind::Gemini => ("google-genai", MeteringShape::Unknown),
         AgentKind::Copilot => ("github-copilot", MeteringShape::Subscription),
         // Never observed refusing, so nothing is known about how they meter.
         // Naming a provider here would be invention.

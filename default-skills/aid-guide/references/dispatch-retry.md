@@ -17,7 +17,7 @@ Automatic cascade takes the first launchable builtin candidate in `aid advise`'s
 ranked list, using the task's difficulty, budget, urgency, rigor, kind, team,
 history and detected caller. It excludes the exhausted agent and always excludes
 Claude, even when team-preferred. Advice gates exclude disabled, missing,
-auth-failed, below-floor, weaker same-pool and superseded Gemini routes, plus
+auth-failed, below-floor and weaker same-pool routes, plus
 holds on the candidate's selected model group even under background urgency.
 An advisory `recommended` route never rescues an empty launchable set.
 
@@ -29,9 +29,8 @@ Advice provenance is persisted for both model pins and unknown defaults.
 Explicit cascade/fallback lists keep their order, custom-name resolution,
 remaining entries and unknown-name errors. Failed-task batch `auto_fallback`
 never replaces an exhausted explicit list with advice. Explicit `aid batch retry`
-can use advice when the saved list is empty and the agent is held. Explicit Gemini
-and Claude remain allowed when
-agy is installed. Cross-agent switches clear the source model and session before
+can use advice when the saved list is empty and the agent is held. Explicit Claude
+remains allowed. Cross-agent switches clear the source model and session before
 applying the selected route.
 
 A live hold blocks the requested route; an explicit `--cascade` can divert dispatch.
@@ -91,7 +90,7 @@ lists on the next lookup, including in a long-running `aid mcp` process.
 `aid agent list --json`, `aid config pricing`, and `aid advise` merge every
 model in the 24-hour served-model cache that has no catalog row into the
 catalog views, for each agent with a served-model probe: codex, grok, cursor,
-qwen, agy, and opencode (so providers such as `opencode-go` appear beside the
+agy and opencode (so providers such as `opencode-go` appear beside the
 built-in `opencode/*` rows). For Codex, a changed source-file stamp refreshes
 the cache from its local model list. Other agents read the cache only and never probe;
 an absent or expired cache adds nothing. Each `models.available` row carries
@@ -111,13 +110,13 @@ inclusion, its static catalog row, or an exact price-feed id or alias.
 An explicit override also replaces a listed row's tier and description while
 preserving its origin; ratings resolve independently from the leaderboard feed.
 The price feed carries each vendor's own per-token API rate, so it prices only
-the vendor's own CLI (codex, claude, gemini, grok); on a reseller route (droid,
+the vendor's own CLI (codex, claude, grok); on a reseller route (droid,
 oz, opencode, and the others) a model without a catalog figure or override
 costs `unknown`. It never uses a substring, vendor-prefix, family, or
 `-free`-suffix match, and never a fixed fallback model: a served-only model
 gets its price from an exact price-feed entry on its vendor's CLI, never from a
 similar-name rate. A task with neither a pinned nor an observed model (for
-example unpinned gemini or codex) costs `unknown`, stored as NULL. Subscription
+example unpinned codex) costs `unknown`, stored as NULL. Subscription
 agents (Cursor, Copilot) cost 0.0 as included.
 
 A catalog row storing 0.0/0.0 is a price only when its tier is `free`; on any

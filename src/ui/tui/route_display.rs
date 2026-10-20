@@ -187,7 +187,7 @@ mod tests {
     #[test]
     fn narrow_width_keeps_cli_and_does_not_wrap() {
         let t = task_with(
-            AgentKind::Qwen,
+            AgentKind::Kilo,
             None,
             Some("qwen3.8-max"),
             Some("qwen3.8-max"),
@@ -195,7 +195,7 @@ mod tests {
         );
         let shown = format_route_fit(&t, 24);
         assert!(char_len(&shown) <= 24, "{shown}");
-        assert!(shown.starts_with("qwen/"), "{shown}");
+        assert!(shown.starts_with("kilo/"), "{shown}");
         assert!(!shown.contains('\n'));
     }
 

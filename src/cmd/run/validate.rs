@@ -103,7 +103,6 @@ pub(super) fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<S
             | AgentKind::OpenCode
             | AgentKind::CommandCode
             | AgentKind::Cursor
-            | AgentKind::Qwen
             | AgentKind::Kilo
             | AgentKind::MiMoCode
             | AgentKind::Grok
@@ -125,9 +124,6 @@ pub(super) fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<S
         warnings.push(format!(
             "Very long prompt ({prompt_len} chars), consider using --context files instead"
         ));
-    }
-    if matches!(agent_kind, AgentKind::Gemini) && args.worktree.is_some() {
-        warnings.push("Research agent with --worktree is unusual, did you mean a code agent?".to_string());
     }
     warnings
 }

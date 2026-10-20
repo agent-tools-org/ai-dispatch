@@ -161,7 +161,7 @@ fn model_info_names_final_model_and_precedence_source() {
     let home = tempfile::tempdir().expect("temporary aid home");
     let _guard = AidHomeGuard::set(home.path());
     let mut args = RunArgs {
-        agent_name: "gemini".to_string(),
+        agent_name: "grok".to_string(),
         model: Some("flash".to_string()),
         declared_budget: Some(crate::types::TaskBudget::Cheap),
         ..Default::default()
@@ -169,17 +169,17 @@ fn model_info_names_final_model_and_precedence_source() {
     use crate::agent::run_model::{RunModel, RunModelSource};
     let resolved = |model: &str, source| RunModel { model: Some(model.to_string()), pinned: true, source };
     let info = |args: &RunArgs, run_model: &RunModel, model: Option<&str>|
-        super::super::model_info::model_selection_info(args, run_model, model, &crate::agent::gemini::GeminiAgent);
+        super::super::model_info::model_selection_info(args, run_model, model, &crate::agent::grok::GrokAgent);
     let explicit = resolved("flash", RunModelSource::Explicit);
-    assert_eq!(info(&args, &explicit, Some("flash")), "[aid] gemini model: flash; source: --model");
+    assert_eq!(info(&args, &explicit, Some("flash")), "[aid] grok model: flash; source: --model");
     args.model_source = ModelSource::AidResolved;
     let sticky = resolved("pro", RunModelSource::Sticky);
-    assert_eq!(info(&args, &sticky, Some("pro")), "[aid] gemini model: pro; source: agent config");
+    assert_eq!(info(&args, &sticky, Some("pro")), "[aid] grok model: pro; source: agent config");
     let budget = resolved("flash-lite", RunModelSource::BudgetRoute);
     assert_eq!(info(&args, &budget, Some("flash-lite")),
-        "[aid] gemini model: flash-lite; source: budget route");
+        "[aid] grok model: flash-lite; source: budget route");
     assert_eq!(info(&args, &budget, Some("other-family")),
-        "[aid] gemini model: other-family; source: quota/budget routing");
+        "[aid] grok model: other-family; source: quota/budget routing");
     let unpinned = RunModel { model: None, pinned: false, source: RunModelSource::AgentDefault };
     assert!(info(&args, &unpinned, None).ends_with("source: CLI default (no -m)"));
 }
@@ -188,7 +188,7 @@ fn model_info_names_final_model_and_precedence_source() {
 fn model_info_reports_existing_adapter_defaults_accurately() {
     let home = tempfile::tempdir().expect("temporary aid home");
     let _guard = AidHomeGuard::set(home.path());
-    for kind in [AgentKind::Cursor, AgentKind::Qwen, AgentKind::MiMoCode] {
+    for kind in [AgentKind::Cursor, AgentKind::MiMoCode] {
         let args = RunArgs { agent_name: kind.as_str().to_string(), ..Default::default() };
         let agent = crate::agent::get_agent(kind);
         let opts = crate::agent::RunOpts {

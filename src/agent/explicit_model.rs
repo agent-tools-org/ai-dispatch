@@ -65,7 +65,7 @@ mod tests {
     #[test]
     fn config_override_warning_does_not_claim_no_eligible_model() {
         let msg = declared_budget_model_warning(
-            "gemini",
+            "grok",
             Some(TaskBudget::Cheap),
             Some("pro"),
             true,
@@ -98,7 +98,7 @@ mod tests {
     fn on_preference_model_does_not_warn() {
         assert_eq!(
             declared_budget_model_warning(
-                "gemini",
+                "grok",
                 Some(TaskBudget::Cheap),
                 Some("flash-lite"),
                 false,

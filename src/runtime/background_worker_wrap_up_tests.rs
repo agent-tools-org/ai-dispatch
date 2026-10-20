@@ -29,18 +29,18 @@ impl Fixture {
             .db()
             .execute(
                 "INSERT INTO tasks (id, agent, prompt, status, created_at, read_only)
-             VALUES ('t-worker-wrap', 'gemini', '', 'running', ?1, 1)",
+             VALUES ('t-worker-wrap', 'cursor', '', 'running', ?1, 1)",
                 [chrono::Local::now().to_rfc3339()],
             )
             .expect("task");
         let spec: BackgroundRunSpec = serde_json::from_value(serde_json::json!({
-            "task_id": "t-worker-wrap", "agent_name": "gemini", "prompt": "report",
+            "task_id": "t-worker-wrap", "agent_name": "cursor", "prompt": "report",
             "retry": 0, "interactive": true, "read_only": true,
             "max_duration_secs": policy.max_duration.as_secs(),
         }))
         .expect("spec");
         let args = RunArgs {
-            agent_name: "gemini".into(),
+            agent_name: "cursor".into(),
             env: env_with_policy(None, policy),
             read_only: true,
             ..Default::default()
@@ -62,7 +62,7 @@ impl Fixture {
             &self.store,
             &self.spec,
             &self.args,
-            agent::get_agent(AgentKind::Gemini).as_ref(),
+            agent::get_agent(AgentKind::Cursor).as_ref(),
             command,
             start,
         )

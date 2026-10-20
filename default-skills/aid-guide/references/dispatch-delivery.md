@@ -42,8 +42,7 @@ report, declare `--kind research|debugging|documentation` or pass `--read-only`.
 Unsupported agent and flag combinations are refused before a task row is created,
 with an error that names what to do instead. The same preflight resolves the agent
 command (built-in or custom) and refuses when the binary is missing from `PATH`,
-naming the missing binary. Qwen supports `--read-only` through its native plan
-approval mode.
+naming the missing binary.
 Unknown models that the agent CLI does not report as invalid are passed
 through.
 

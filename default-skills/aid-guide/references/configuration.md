@@ -267,13 +267,12 @@ A healthy default quota group preserves that unset model; a held default group
 pins a model from the first healthy alternative group. Every dispatch reports
 the effective model and source: `--model`, agent config, budget route,
 `CLI config (no -m)`, or `CLI default (no -m)`; quota/budget routing overrides and
-existing adapter defaults (Cursor, Qwen, MiMoCode) are labeled separately.
+existing adapter defaults (Cursor, MiMoCode) are labeled separately.
 `aid agent list --json` reports the default as `models.default` with
 `models.default_source`, resolved exactly as `aid run <agent>` with no flags:
 `sticky` (`aid agent config --model`), `custom_forced` (a custom agent's forced
 model), `budget_route` (`selection.budget_mode`), or `cli_config` (the CLI's own
-configured default: codex `model` in `config.toml` under the codex home, qwen
-`model.name` in `~/.qwen/settings.json`). Both are `null` when aid cannot know
+configured default: codex `model` in `config.toml` under the codex home). Both are `null` when aid cannot know
 the default; it never names a catalog row instead. That order is the
 precedence. A `cli_config` default is what the CLI runs when aid passes no
 `-m`, so aid reports it and never replaces it with an older catalog row.
@@ -329,9 +328,9 @@ A hold ends in one of three ways, and `aid config agents` names which:
 
 | Status | Ends when | Example |
 |---|---|---|
-| `rate-limited (try again at <time>)` | that time passes | codex usage limit, qwen token-plan window |
+| `rate-limited (try again at <time>)` | that time passes | codex usage limit |
 | `rate-limited (until a dated <provider> snapshot with headroom …)` | a newer dated aidbar window shows headroom, or `clear-limit` | cursor premium `you're out of usage`; grok 402 `usage balance exhausted` (when aidbar probes grok) |
-| `rate-limited (needs manual clear: aid config clear-limit <agent>)` | a person acts | spent opencode balance, copilot monthly/premium, gemini `IneligibleTier`, oz `credentials are invalid`; grok 402 with no aidbar probe |
+| `rate-limited (needs manual clear: aid config clear-limit <agent>)` | a person acts | spent opencode balance, copilot monthly/premium, oz `credentials are invalid`; grok 402 with no aidbar probe |
 
 The Windowed class covers refusals that never state a reset time, but whose
 wall is a dated billing window aidbar already probes. A percentage alone

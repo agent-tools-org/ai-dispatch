@@ -3,13 +3,13 @@
 use super::*;
 
 #[test]
-fn judge_true_defaults_to_gemini() {
+fn judge_true_defaults_to_agy() {
     let cfg = parse_batch_file(
         write_temp("[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\njudge = true\n").path(),
     )
     .unwrap();
 
-    assert_eq!(cfg.tasks[0].judge.as_deref(), Some("gemini"));
+    assert_eq!(cfg.tasks[0].judge.as_deref(), Some("agy"));
 }
 
 #[test]
@@ -52,8 +52,8 @@ fn judge_defaults_propagate_to_tasks() {
     )
     .unwrap();
 
-    assert_eq!(cfg.defaults.judge.as_deref(), Some("gemini"));
-    assert_eq!(cfg.tasks[0].judge.as_deref(), Some("gemini"));
+    assert_eq!(cfg.defaults.judge.as_deref(), Some("agy"));
+    assert_eq!(cfg.tasks[0].judge.as_deref(), Some("agy"));
 }
 
 #[test]

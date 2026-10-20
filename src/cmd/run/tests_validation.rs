@@ -97,7 +97,7 @@ fn terminal_failure_keeps_failed_verify_failed() {
 
 #[test]
 fn validate_dispatch_warns_short_prompt() {
-    assert_eq!(validate_dispatch(&RunArgs { prompt: "tiny".to_string(), ..Default::default() }, &AgentKind::Gemini), vec!["Prompt is very short, agent may not have enough context".to_string()]);
+    assert_eq!(validate_dispatch(&RunArgs { prompt: "tiny".to_string(), ..Default::default() }, &AgentKind::Antigravity), vec!["Prompt is very short, agent may not have enough context".to_string()]);
 }
 
 #[test]
@@ -152,7 +152,7 @@ fn resolve_prompt_input_requires_prompt_source() {
 fn sandboxed_agents_identified() {
     assert!(AgentKind::OpenCode.sandboxed_fs());
     assert!(!AgentKind::Codex.sandboxed_fs());
-    assert!(!AgentKind::Gemini.sandboxed_fs());
+    assert!(!AgentKind::Grok.sandboxed_fs());
 }
 
 #[test]
@@ -241,12 +241,7 @@ fn workspace_symlink_guard_creates_and_cleans_up_link() {
 #[test]
 fn validate_dispatch_warns_long_prompt() {
     let prompt = "a".repeat(5001);
-    assert_eq!(validate_dispatch(&RunArgs { prompt, ..Default::default() }, &AgentKind::Gemini), vec!["Very long prompt (5001 chars), consider using --context files instead".to_string()]);
-}
-
-#[test]
-fn validate_dispatch_warns_research_worktree() {
-    assert_eq!(validate_dispatch(&RunArgs { prompt: "valid prompt text".to_string(), worktree: Some("wt".to_string()), ..Default::default() }, &AgentKind::Gemini), vec!["Research agent with --worktree is unusual, did you mean a code agent?".to_string()]);
+    assert_eq!(validate_dispatch(&RunArgs { prompt, ..Default::default() }, &AgentKind::Antigravity), vec!["Very long prompt (5001 chars), consider using --context files instead".to_string()]);
 }
 
 #[test]

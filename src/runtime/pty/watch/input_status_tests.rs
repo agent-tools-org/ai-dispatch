@@ -7,7 +7,7 @@ use super::*;
 fn auto_unstick_queue_status_audit_regression() {
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = super::tests::pty_task("t-auto-queue", TaskStatus::Running);
-    task.agent = AgentKind::Gemini;
+    task.agent = AgentKind::Cursor;
     store.insert_task(&task).unwrap();
     let mut state = MonitorState::new(true, None);
     state.last_progress_time = Instant::now() - state.idle_detector.nudge_after;
@@ -31,7 +31,7 @@ fn steer_pty_write_status_audit_regression() {
     let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = super::tests::pty_task("t-steer-stage", TaskStatus::Running);
-    task.agent = AgentKind::Gemini;
+    task.agent = AgentKind::Cursor;
     store.insert_task(&task).unwrap();
     store
         .insert_message(

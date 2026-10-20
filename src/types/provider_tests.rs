@@ -2,15 +2,14 @@ use super::*;
 
 /// The two shapes that broke routing on 2026-08-05 must stay distinguishable.
 /// agy metering per family is why marking the whole CLI stranded a working
-/// claude allowance; qwen's single pool is why marking one of its 17 models
-/// would have been wrong in the opposite direction.
+/// claude allowance; Codex meters its models against one account pool.
 #[test]
 fn the_shapes_that_broke_routing_are_distinct() {
     let (agy, agy_shape) = provider_for_cli(AgentKind::Antigravity);
-    let (qwen, qwen_shape) = provider_for_cli(AgentKind::Qwen);
+    let (codex, codex_shape) = provider_for_cli(AgentKind::Codex);
     assert_eq!(agy_shape, MeteringShape::PerModelFamily);
-    assert_eq!(qwen_shape, MeteringShape::AccountPool);
-    assert_ne!(agy, qwen);
+    assert_eq!(codex_shape, MeteringShape::AccountPool);
+    assert_ne!(agy, codex);
 }
 
 /// A spend budget is not a time window. opencode Zen refuses with
@@ -51,14 +50,14 @@ fn commandcode_is_its_own_provider() {
     assert_eq!(shape, MeteringShape::Unknown);
 }
 
-/// Two CLIs from the same vendor must not collapse into one provider: agy and
-/// gemini both reach Google models, but an exhausted Antigravity tier says
-/// nothing about a Gemini API key.
+/// Different CLIs must not collapse into one provider: agy and
+/// grok reach different providers, so an exhausted Antigravity tier says
+/// nothing about a Grok allowance.
 #[test]
-fn one_vendor_two_cli_routes_are_two_providers() {
+fn different_cli_routes_are_distinct_providers() {
     let (agy, _) = provider_for_cli(AgentKind::Antigravity);
-    let (gemini, _) = provider_for_cli(AgentKind::Gemini);
-    assert_ne!(agy, gemini);
+    let (grok, _) = provider_for_cli(AgentKind::Grok);
+    assert_ne!(agy, grok);
 }
 
 /// Every built-in CLI is third-party or unknown. None of them are local: the

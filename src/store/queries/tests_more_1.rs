@@ -1,0 +1,123 @@
+// Additional regression coverage for tests.rs.
+// Deps: parent test module fixtures.
+
+use super::*;
+
+#[test]
+fn aggregates_budget_usage_by_agent_and_window() {
+    let store = Store::open_memory().unwrap();
+    let conn = store.db();
+    let now = Local::now();
+    let within_window = (now - Duration::hours(6)).to_rfc3339();
+    let outside_window = (now - Duration::days(2)).to_rfc3339();
+
+    for (id, agent, prompt, repo, tokens, cost, created) in [
+        (
+            "t-recent-1",
+            "codex",
+            "recent",
+            "/work/project-a",
+            120_i64,
+            1.25_f64,
+            &within_window,
+        ),
+        (
+            "t-recent-2",
+            "codex",
+            "recent",
+            "/work/project-a",
+            80,
+            0.75,
+            &within_window,
+        ),
+        (
+            "t-old",
+            "codex",
+            "old",
+            "/work/project-a",
+            500,
+            4.0,
+            &outside_window,
+        ),
+        (
+            "t-other",
+            "grok",
+            "other",
+            "/work/project-b",
+            999,
+            9.0,
+            &within_window,
+        ),
+    ] {
+        conn.execute(
+            "INSERT INTO tasks (id, agent, prompt, status, repo_path, tokens, cost_usd, created_at)
+             VALUES (?1, ?2, ?3, 'done', ?4, ?5, ?6, ?7)",
+            params![id, agent, prompt, repo, tokens, cost, created],
+        )
+        .unwrap();
+    }
+    conn.execute(
+        "UPDATE tasks SET project_id = 'project-a' WHERE repo_path = '/work/project-a'",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "UPDATE tasks SET project_id = 'project-b' WHERE repo_path = '/work/project-b'",
+        [],
+    )
+    .unwrap();
+    drop(conn);
+
+    let all_time = store.budget_usage_summary("codex", None).unwrap();
+    assert_eq!(all_time, (3, 700, 6.0));
+
+    let since = parse_window("24h").map(|window| now - window).unwrap();
+    let recent = store.budget_usage_summary("codex", Some(since)).unwrap();
+    assert_eq!(recent, (2, 200, 2.0));
+
+    let all_agents_recent = store.budget_usage_summary_all(Some(since)).unwrap();
+    assert_eq!(all_agents_recent, (3, 1199, 11.0));
+
+    let project_recent = store
+        .budget_usage_summary_for_project("project-a", Some(since))
+        .unwrap();
+    assert_eq!(project_recent, (2, 200, 2.0));
+}
+
+#[test]
+fn search_memories_escapes_wildcards() {
+    let store = Store::open_memory().unwrap();
+    let conn = store.db();
+    conn.execute(
+        "INSERT INTO memories (id, memory_type, content, source_task_id, agent, project_path,
+         content_hash, created_at, expires_at, supersedes, version, inject_count, last_injected_at,
+         success_count)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        params![
+            "m-100-percent",
+            "task_output",
+            "100% success rate",
+            Option::<String>::None,
+            Option::<String>::None,
+            Option::<String>::None,
+            "hash-100-percent",
+            "2026-03-15T00:00:00Z",
+            Option::<String>::None,
+            Option::<String>::None,
+            1,
+            0,
+            Option::<String>::None,
+            0,
+        ],
+    )
+    .unwrap();
+    drop(conn);
+
+    let percent_results = store.search_memories("100%", None, 10, None).unwrap();
+    assert_eq!(percent_results.len(), 1);
+    assert_eq!(percent_results[0].content, "100% success rate");
+
+    let plain_results = store.search_memories("100", None, 10, None).unwrap();
+    assert_eq!(plain_results.len(), 1);
+    assert_eq!(plain_results[0].content, "100% success rate");
+}

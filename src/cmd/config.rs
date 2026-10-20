@@ -224,6 +224,7 @@ fn pricing_table() -> Result<String> {
 }
 
 fn clear_limit(agent: &str) -> Result<()> {
+    crate::agent::removed::reject(agent)?;
     if agent == "all" {
         for (kind, _, _, _, _) in AGENT_PROFILES {
             if rate_limit::clear_all_rate_limits_for_agent(kind, None) {

@@ -24,7 +24,7 @@ fn substituted_fallback_is_pinned_to_a_group_that_can_serve() {
     crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::Antigravity,
         None,
-        "gemini",
+        "grok",
         "Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 59m21s.",
     );
     let store = Arc::new(Store::open_memory().expect("store"));
@@ -42,7 +42,7 @@ fn substituted_fallback_is_pinned_to_a_group_that_can_serve() {
     let model = setup.effective_model.expect("substitution must pin a healthy model");
     assert_ne!(
         crate::agent::model_group::model_group(AgentKind::Antigravity, Some(&model)),
-        Some("gemini"),
+        Some("grok"),
         "the exhausted gemini family must not be dispatched"
     );
     assert!(setup.substituted_from.is_some());
@@ -69,7 +69,7 @@ fn substituted_aid_resolved_pin_survives_served_list_miss() {
     crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::Antigravity,
         None,
-        "gemini",
+        "grok",
         "Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 59m21s.",
     );
     // agy's served-list snapshot predates the claude family — the pinned
@@ -99,7 +99,7 @@ fn substituted_aid_resolved_pin_survives_served_list_miss() {
         .expect("aid-resolved pin must survive a served-list miss on a substituted route");
     assert_ne!(
         crate::agent::model_group::model_group(AgentKind::Antigravity, Some(&model)),
-        Some("gemini"),
+        Some("grok"),
         "the exhausted gemini family must not be dispatched"
     );
     assert!(setup.substituted_from.is_some());

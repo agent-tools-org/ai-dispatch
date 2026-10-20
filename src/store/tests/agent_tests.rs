@@ -51,12 +51,12 @@ fn agent_success_rates_includes_merged_as_success() {
         } else {
             TaskStatus::Failed
         };
-        let task = make_task(&format!("t-{:04}", i), AgentKind::Gemini, status);
+        let task = make_task(&format!("t-{:04}", i), AgentKind::Grok, status);
         store.insert_task(&task).unwrap();
     }
     let rates = store.agent_success_rates().unwrap();
     let (agent, rate, count) = &rates[0];
-    assert_eq!(*agent, AgentKind::Gemini);
+    assert_eq!(*agent, AgentKind::Grok);
     assert_eq!(*count, 5);
     assert!((rate - 0.8).abs() < 0.01);
 }
@@ -110,7 +110,7 @@ fn agent_success_rates_groups_by_agent() {
         } else {
             TaskStatus::Failed
         };
-        let task = make_task(&format!("t-g{:04}", i), AgentKind::Gemini, status);
+        let task = make_task(&format!("t-g{:04}", i), AgentKind::Grok, status);
         store.insert_task(&task).unwrap();
     }
     let rates = store.agent_success_rates().unwrap();
@@ -121,7 +121,7 @@ fn agent_success_rates_groups_by_agent() {
         .unwrap();
     let gemini_rate = rates
         .iter()
-        .find(|(a, _, _)| *a == AgentKind::Gemini)
+        .find(|(a, _, _)| *a == AgentKind::Grok)
         .unwrap();
     assert_eq!(codex_rate.2, 5);
     assert_eq!(gemini_rate.2, 5);
@@ -138,7 +138,7 @@ fn agent_success_rates_by_category_filters_correctly() {
         store.insert_task(&task).unwrap();
     }
     for i in 0..5 {
-        let mut task = make_task(&format!("t-g{:04}", i), AgentKind::Gemini, TaskStatus::Failed);
+        let mut task = make_task(&format!("t-g{:04}", i), AgentKind::Grok, TaskStatus::Failed);
         task.category = Some("testing".to_string());
         store.insert_task(&task).unwrap();
     }

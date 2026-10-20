@@ -97,9 +97,7 @@ pub fn run() -> Result<()> {
     // 2. Detect installed agents
     section("Agents");
     let builtin = [
-        ("gemini", crate::types::AgentKind::Gemini),
         ("agy", crate::types::AgentKind::Antigravity),
-        ("qwen", crate::types::AgentKind::Qwen),
         ("codex", crate::types::AgentKind::Codex),
         ("copilot", crate::types::AgentKind::Copilot),
         ("opencode", crate::types::AgentKind::OpenCode),

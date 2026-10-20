@@ -9,8 +9,9 @@ pub mod codex;
 pub mod copilot;
 pub mod cursor;
 pub mod droid;
-pub mod gemini;
-pub(crate) mod gemini_support;
+pub(crate) mod antigravity_response;
+pub(crate) mod completion_event;
+pub(crate) mod removed;
 pub mod grok;
 pub mod kilo;
 pub(crate) mod model_group;
@@ -20,7 +21,6 @@ pub mod opencode;
 pub(crate) mod opencode_models;
 pub(crate) mod opencode_overlay;
 pub mod oz;
-pub mod qwen;
 pub(crate) mod read_only;
 pub(crate) mod custom;
 pub(crate) mod cargo_target;
@@ -193,8 +193,6 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
         AgentKind::CommandCode => Box::new(commandcode::CommandCodeAgent),
         AgentKind::Copilot => Box::new(copilot::CopilotAgent),
         AgentKind::Cursor => Box::new(cursor::CursorAgent),
-        AgentKind::Gemini => Box::new(gemini::GeminiAgent),
-        AgentKind::Qwen => Box::new(qwen::QwenAgent),
         AgentKind::OpenCode => Box::new(opencode_overlay::OpenCodeOverlayAgent::from_spec(opencode::spec())),
         AgentKind::Kilo => Box::new(kilo::agent()),
         AgentKind::MiMoCode => Box::new(mimocode::agent()),

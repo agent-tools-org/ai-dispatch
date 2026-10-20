@@ -133,7 +133,7 @@ fn finalize_buffered(
         }
     };
     state.info.exit_code = i32::try_from(exit_status.exit_code()).ok();
-    let mut event = crate::agent::gemini::make_completion_event(task_id, &state.info);
+    let mut event = crate::agent::completion_event::make_completion_event(task_id, &state.info);
     if state.info.status == TaskStatus::Failed {
         event.event_kind = EventKind::Error;
     }

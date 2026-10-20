@@ -74,7 +74,7 @@ fn retry_rehydrates_saved_context_scope_team_and_agent_override_wins() {
             task_id: task.id.to_string(),
             feedback: Some("fix it".to_string()),
             feedback_file: None,
-            agent: Some("gemini".to_string()),
+            agent: Some("grok".to_string()),
             model: None,
             idle_timeout_secs: None,
             dir: None,
@@ -84,7 +84,7 @@ fn retry_rehydrates_saved_context_scope_team_and_agent_override_wins() {
         false,
     ).unwrap();
 
-    assert_eq!(args.agent_name, "gemini");
+    assert_eq!(args.agent_name, "grok");
     assert_eq!(args.context, vec!["src/lib.rs".to_string()]);
     assert_eq!(args.scope, vec!["src/**".to_string()]);
     assert_eq!(args.team, Some("dev".to_string()));

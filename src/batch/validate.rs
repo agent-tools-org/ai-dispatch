@@ -10,6 +10,10 @@ use super::BatchTask;
 
 pub(super) fn validate_agents(tasks: &[BatchTask]) -> Result<()> {
     for (task_idx, task) in tasks.iter().enumerate() {
+        for name in std::iter::once(task.agent.as_str())
+            .chain(task.judge.as_deref()).chain(task.peer_review.as_deref()) {
+            crate::agent::removed::reject(name)?;
+        }
         if crate::agent::selection::is_removed_auto_agent(&task.agent) {
             anyhow::bail!(
                 "task {}: {}",
@@ -34,6 +38,7 @@ pub(super) fn validate_fallback_agents(tasks: &[BatchTask]) -> Result<()> {
     for task in tasks {
         if let Some(fallback) = task.fallback.as_deref() {
             for agent in fallback.split(',').map(str::trim) {
+                crate::agent::removed::reject(agent)?;
                 if !agent.is_empty() && !is_valid_agent(agent) {
                     anyhow::bail!("unknown fallback agent: {}", agent);
                 }

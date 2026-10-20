@@ -21,10 +21,9 @@ RUN npm install -g --no-fund --no-audit \
     @kilocode/cli
 
 # Gemini CLI
-RUN npm install -g --no-fund --no-audit @google/gemini-cli
 
 # Verify installations
 RUN node --version && npm --version && \
-    which codex && which kilo && which gemini
+    which codex && which kilo
 
 WORKDIR /work

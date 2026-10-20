@@ -6,6 +6,11 @@ use crate::config::timeout_policy::{TimeoutPolicy, env_with_policy};
 use crate::support::paths::AidHomeGuard;
 use std::time::{Duration, Instant};
 
+const READ_TERMINAL: &str = concat!(
+    "stty -echo; IFS= read -r -t 4 guidance || exit 1; ",
+    r#"printf '%s\n' "$guidance" > "$1""#,
+);
+
 struct Fixture {
     home: tempfile::TempDir,
     _guard: AidHomeGuard,
@@ -50,7 +55,7 @@ impl Fixture {
     }
 
     async fn run(&self, script: &str, start: Instant) {
-        let mut command = std::process::Command::new("sh");
+        let mut command = std::process::Command::new("bash");
         command.args(["-c", script, "fake-agent"]);
         command.arg(self.home.path().join("received.txt"));
         super::run_process(
@@ -71,16 +76,14 @@ async fn assert_pty_wrap_up(policy: TimeoutPolicy) {
     let fixture = Fixture::new(policy);
     let limit = policy.max_duration.min(policy.hard_cap);
     let start = Instant::now() - (limit - Duration::from_secs(3));
-    fixture
-        .run(
-            "stty -echo; IFS= read -r guidance; printf '%s\\n' \"$guidance\" > \"$1\"",
-            start,
-        )
-        .await;
-    let messages = fixture
-        .store
-        .list_messages_for_task(&fixture.spec.task_id)
-        .expect("messages");
+    fixture.run(READ_TERMINAL, start).await;
+    assert_received_wrap_up(&fixture);
+}
+
+fn assert_received_wrap_up(fixture: &Fixture) {
+    let store = &fixture.store;
+    let id = &fixture.spec.task_id;
+    let messages = store.list_messages_for_task(id).expect("messages");
     assert_eq!(messages.len(), 1);
     assert!(messages[0].delivered_at.is_some());
     let received = std::fs::read_to_string(fixture.home.path().join("received.txt"))
@@ -91,10 +94,7 @@ async fn assert_pty_wrap_up(policy: TimeoutPolicy) {
     assert!(received.contains("open questions"));
     assert!(!received.contains("commit"));
     assert!(received.contains("no new write permission"));
-    let events = fixture
-        .store
-        .get_events(&fixture.spec.task_id)
-        .expect("events");
+    let events = store.get_events(id).expect("events");
     assert!(events.iter().any(|event| {
         event
             .detail
@@ -112,14 +112,7 @@ async fn assert_pty_wrap_up(policy: TimeoutPolicy) {
             .count(),
         1
     );
-    assert!(
-        fixture
-            .store
-            .get_task(&fixture.spec.task_id)
-            .expect("query")
-            .expect("task")
-            .read_only
-    );
+    assert!(store.get_task(id).expect("query").expect("task").read_only);
 }
 
 #[tokio::test]
@@ -155,4 +148,52 @@ async fn worker_settlement_cancels_wrap_up_timer() {
             .expect("messages")
             .is_empty()
     );
+}
+
+#[tokio::test]
+async fn interactive_worker_enforces_the_shared_execution_start() {
+    let _permit = crate::support::test_subprocess::acquire();
+    let fixture = Fixture::new(TimeoutPolicy {
+        max_duration: Duration::from_secs(600),
+        ..Default::default()
+    });
+    let start = Instant::now() - Duration::from_millis(599_600);
+    fixture.run("sleep 3", start).await;
+    let task = fixture
+        .store
+        .get_task(&fixture.spec.task_id)
+        .expect("query")
+        .expect("task");
+    assert_eq!(task.status, crate::types::TaskStatus::Failed);
+    assert!(task.duration_ms.expect("duration") >= 599_600);
+    assert!(
+        fixture
+            .store
+            .get_events(&fixture.spec.task_id)
+            .expect("events")
+            .iter()
+            .any(|event| event.detail.contains("hard timeout"))
+    );
+}
+
+#[tokio::test]
+async fn worker_timer_waits_until_ninety_percent() {
+    let _permit = crate::support::test_subprocess::acquire();
+    let fixture = Fixture::new(TimeoutPolicy {
+        max_duration: Duration::from_secs(600),
+        ..Default::default()
+    });
+    let earliest = chrono::Local::now() + chrono::Duration::milliseconds(190);
+    let start = Instant::now() - Duration::from_millis(539_800);
+    fixture.run(READ_TERMINAL, start).await;
+    assert_received_wrap_up(&fixture);
+    let events = fixture
+        .store
+        .get_events(&fixture.spec.task_id)
+        .expect("events");
+    let queued = events
+        .iter()
+        .find(|event| event.detail.contains("Hard-cap wrap-up"))
+        .expect("claim");
+    assert!(queued.timestamp >= earliest);
 }

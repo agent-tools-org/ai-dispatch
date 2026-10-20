@@ -117,7 +117,7 @@ async fn piped_worker_launch_uses_route_helper_and_no_env_key() {
     let (home, _guard, store) = fixture();
     let spec = spec(false);
     let (args, agent, command, _isolated) = prepared(home.path(), &store, &spec);
-    super::super::run_process(&store, &spec, &args, agent.as_ref(), command)
+    super::super::run_process(&store, &spec, &args, agent.as_ref(), command, std::time::Instant::now())
         .await
         .unwrap();
     assert_eq!(
@@ -132,7 +132,7 @@ async fn foreground_pty_launch_uses_route_helper_and_no_env_key() {
     let (home, _guard, store) = fixture();
     let spec = spec(true);
     let (args, agent, command, _isolated) = prepared(home.path(), &store, &spec);
-    super::super::run_process(&store, &spec, &args, agent.as_ref(), command)
+    super::super::run_process(&store, &spec, &args, agent.as_ref(), command, std::time::Instant::now())
         .await
         .unwrap();
     assert_eq!(
@@ -174,7 +174,7 @@ async fn route_without_init_holds_next_launch(interactive: bool) {
     );
     let spec = spec(interactive);
     let (args, agent, command, _isolated) = prepared(home.path(), &store, &spec);
-    super::super::run_process(&store, &spec, &args, agent.as_ref(), command)
+    super::super::run_process(&store, &spec, &args, agent.as_ref(), command, std::time::Instant::now())
         .await
         .unwrap();
     let task = store.get_task("t-api-launch").unwrap().unwrap();

@@ -108,8 +108,7 @@ pub(crate) async fn watch_streaming_with_input(
             Some(Ok(None)) => break,
             Some(Err(e)) => return Err(e.into()),
             None => {
-                force_kill_process_group(child);
-                let _ = child.kill().await;
+                let _ = crate::runtime::process::group::terminate_child_group(child).await;
                 let _ = monitor::insert_hung_detected_events(
                     store.as_ref(),
                     task_id,

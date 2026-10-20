@@ -26,6 +26,10 @@ pub(super) fn spawn_for_task(
             return Err(err);
         }
     };
+    if let Err(error) = crate::runtime::read_only_launch::record(store, task_id, cmd, "exec") {
+        let _ = bridge.kill_group();
+        return Err(error);
+    }
     if let Some(pid) = bridge.child_pid() {
         if let Some(control) = control {
             control.set_agent_pid(pid);

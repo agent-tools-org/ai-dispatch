@@ -123,6 +123,7 @@ fn agent_log_label(agent: &dyn crate::agent::Agent) -> &str {
 }
 
 pub(crate) async fn run_agent_process_impl(mut args: RunProcessArgs<'_>) -> Result<()> {
+    crate::runtime::read_only_launch::reset(args.store, args.task_id)?;
     let start = std::time::Instant::now();
     let failure_context = capture_failure_context(args.store.as_ref(), args.task_id, &args.cmd);
     if args.agent.kind() == AgentKind::Codex

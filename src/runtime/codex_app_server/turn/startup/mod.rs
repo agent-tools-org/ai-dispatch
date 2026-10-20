@@ -25,6 +25,9 @@ impl Turn<'_> {
             .as_str()
             .context("Missing Codex thread id")?
             .to_string();
+        crate::runtime::read_only_launch::record(
+            self.sink.run.store, self.sink.run.task, self.sink.run.command, "app-server",
+        )?;
         self.events.model = response["model"].as_str().map(str::to_string);
         self.sink.event(
             json!({"type":"thread.started","thread_id":self.thread,"model":self.events.model}),

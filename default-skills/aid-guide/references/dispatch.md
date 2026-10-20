@@ -166,8 +166,8 @@ Important controls:
   files, deletions, repository HEAD and its current branch, and nested repository HEAD changes.
   Unrelated ref updates are recorded as diagnostics. Gitlinks compare their
   recorded index commit. Without `--dir`, aid captures and uses its current working
-  directory. Any change outside the designated result file, `-o/--output` file,
-  and aid-owned paths makes the task Failed with an error listing paths. Files
+  directory. Changes outside artifact and aid-owned paths follow the
+  [read-only settlement rule](dispatch-delivery.md#native-codex-permissions). Files
   stay in place; aid does not commit, stash, revert, or automatically retry the
   violation. Absolute artifact paths work with relative run directories; a
   symlink artifact does not exempt its destination. Enforcement covers Git run

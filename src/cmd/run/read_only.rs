@@ -8,6 +8,7 @@ use crate::{store::Store, types::{EventKind, TaskEvent, TaskId}};
 use super::{DirtyWorktreeAction, RunArgs};
 
 pub(in crate::cmd::run) fn capture_baseline(store: &Store, task_id: &TaskId, dir: Option<&str>) -> Result<Option<Vec<String>>> {
+    crate::runtime::read_only_launch::reset(store, task_id)?;
     let dir = dir.context("Read-only run directory is unavailable")?;
     if !is_git_directory(dir)? {
         let detail = format!("Warning: read-only enforcement unavailable in {dir}: not a git repository. Enforcement covers Git run directories only.");
@@ -37,14 +38,21 @@ pub(super) fn settle(
     dir: &str,
     baseline: Option<&[String]>,
 ) -> Result<DirtyWorktreeAction> {
-    let comparison = (|| {
+    let comparison = (|| -> Result<(Vec<String>, Vec<String>)> {
         if baseline.is_none() && !is_git_directory(dir)? {
             return Ok((Vec::new(), Vec::new()));
         }
         let baseline = baseline.context("Dispatch snapshot is unavailable")?;
         let snapshot = crate::workspace::worktree::capture_worktree_snapshot(Path::new(dir))?;
         let current = snapshot.read_only_state(Path::new(dir))?;
-        changed_paths(dir, [args.result_file.as_deref(), args.output.as_deref()], baseline, &current)
+        let (paths, refs) = changed_paths(
+            dir, [args.result_file.as_deref(), args.output.as_deref()], baseline, &current,
+        )?;
+        if !paths.is_empty() && crate::runtime::read_only_launch::enforced(store, task_id, dir)? {
+            record_concurrent_change(store, task_id, baseline, &current, &paths)?;
+            return Ok((Vec::new(), refs));
+        }
+        Ok((paths, refs))
     })();
     let detail = match comparison {
         Ok((paths, refs)) => {
@@ -61,6 +69,36 @@ pub(super) fn settle(
     })?;
     crate::task::lifecycle::mark_failed(store, task_id)?;
     Ok(DirtyWorktreeAction::Failed)
+}
+
+fn record_concurrent_change(
+    store: &Store, task: &TaskId, baseline: &[String], current: &[String], paths: &[String],
+) -> Result<()> {
+    let baseline_head = snapshot_head(baseline)?;
+    let current_head = snapshot_head(current)?;
+    let detail = format!(
+        "Warning: audited inputs changed during the run (concurrent checkout change); \
+         input stability is unknown. Baseline HEAD: {baseline_head}; current HEAD: {current_head}; \
+         changed paths: {}.", paths.join(", "),
+    );
+    aid_warn!("[aid] {detail}");
+    store.insert_event(&TaskEvent {
+        task_id: task.clone(), timestamp: chrono::Local::now(), event_kind: EventKind::Setup,
+        detail, metadata: Some(serde_json::json!({
+            "warning": "read_only_concurrent_change", "input_stability": "unknown",
+            "baseline_head": baseline_head, "current_head": current_head, "changed_paths": paths,
+        })),
+    })
+}
+
+fn snapshot_head(snapshot: &[String]) -> Result<String> {
+    for entry in snapshot {
+        let (path, _, content, _): (String, String, String, u32) = serde_json::from_str(entry)?;
+        if path == ".git/HEAD" {
+            return Ok(content.rsplit_once(':').context("Malformed snapshot HEAD")?.1.to_string());
+        }
+    }
+    anyhow::bail!("Snapshot HEAD is unavailable")
 }
 
 fn record_ref_diagnostic(store: &Store, task_id: &TaskId, refs: &[String]) -> Result<()> {

@@ -63,7 +63,9 @@ pub(super) fn configure_options(
     }
     if opts.read_only {
         let roots = crate::agent::scratch::validate_read_only_roots(opts.dir.as_deref(), roots)?;
-        configure_permissions(cmd, true, &roots)
+        configure_permissions(cmd, true, &roots)?;
+        cmd.env("AID_NATIVE_READ_ONLY_PROFILE", "aid-read-only");
+        Ok(())
     } else {
         configure_permissions(cmd, false, roots)
     }

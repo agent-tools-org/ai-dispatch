@@ -1,7 +1,7 @@
 // Codex app-server execution selected once per dispatch, retaining exec as capability fallback.
 // Shares normalized task events, completion accounting, and persisted steering requests.
 
-mod command;
+pub(crate) mod command;
 mod control;
 mod home;
 mod io;
@@ -193,3 +193,7 @@ fn write_output(args: &Run<'_>) -> Result<()> {
 #[cfg(test)]
 #[path = "control_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "read_only_transport_tests.rs"]
+mod read_only_transport_tests;

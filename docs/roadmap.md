@@ -11,8 +11,9 @@ does not assert board closure. New slices need board IDs before implementation.
 
 ## Current baseline
 
-- The current release is **v11.4.0** (2026-10-20): truthful outcomes under concurrency and
-  long runs; see that section below. v11.3.0 (2026-10-16): Claude API account routes. v11.2.0
+- The current release is **v11.5.0** (2026-10-20): Codex keeps the user's provider,
+  agent-scoped failure classification, and removal of the Gemini CLI agent; see that section
+  below. v11.4.0 (2026-10-20): truthful outcomes under concurrency and long runs. v11.3.0 (2026-10-16): Claude API account routes. v11.2.0
   (2026-10-16) moved Codex to `codex app-server` with mid-run steering; v11.1.0
   (2026-10-14) made input commands report what aid actually did. See the CHANGELOG.
 - v11.0.0 (2026-10-14): failure truthfulness; see
@@ -36,16 +37,24 @@ does not assert board closure. New slices need board IDs before implementation.
   re-run for this release.
 - Earlier baseline notes (v10.47.x custody and budget work) remain below for reconciliation.
 
-## Next release (in progress)
+## Provider carry-over, scoped classification, Gemini removal (v11.5.0)
 
 | Slice | Board | Acceptance contract |
 | --- | --- | --- |
-| Codex keeps the user's provider | wi-3856 | `model_provider` and the selected `[model_providers.<id>]` table reach exec, app-server and exec fallback identically as overrides; inline secrets refuse the launch; a custom provider is its own route; read-only provenance stays proven |
-| Remove Gemini CLI and Qwen Code | wi-08c8 | Both built-in agents and their signatures are deleted; naming them fails with a migration hint; stored history with those agent names still loads and displays |
-| Error classification, slice 1 | wi-1ad2 | Hold classification uses only the marker's own agent; recovery times come only from reset phrases or typed fields; holds over 24 h or needing a human require a provider-attributed source; unrecognised failures are recorded for review |
+| Codex keeps the user's provider (P1) | wi-3856 | `model_provider` and the selected `[model_providers.<id>]` table reach exec, app-server and exec fallback identically as overrides; inline credentials refuse the launch; route identity is unchanged |
+| Remove Gemini CLI | wi-08c8 | The built-in agent and its signatures are deleted; naming it fails with a migration hint; stale settings are ignored; stored history with that agent name still loads and displays. Qwen Code stays, with its own quota signatures and reset parsing |
+| Error classification, slice 1 | wi-1ad2 | Hold classification uses only the marker's own agent; recovery times come only from reset phrases or typed fields; holds over 24 h or needing a human require a provider-attributed source; Codex app-server typed errors classify directly; unrecognised failures are recorded for review |
 
-Later in wi-1ad2: typed pre-command results from rbox, and model-assisted review of recorded
-unrecognised failures as advice only (never on agent output, never setting a hold).
+Integration found two cross-slice regressions that per-slice `--bin aid` verifies missed, both
+fixed before release: a failed PTY run's quota refusal no longer continued to the next route
+(now it continues with a transient model hold), and the Codex resume end-to-end fixtures read
+an empty Codex home after the provider carry-over. The release candidate passed the full
+workspace suite on the build box with default features (44 test binaries, 3,750 passed,
+0 failed, 16 ignored) and with `--features web` (3,783 passed, 0 failed, 16 ignored).
+
+Next: wi-3856 P2 (a custom provider as its own route identity per task); in wi-1ad2, typed
+pre-command results from rbox, and model-assisted review of recorded unrecognised failures as
+advice only (never on agent output, never setting a hold).
 
 ## Truthful outcomes under concurrency and long runs (v11.4.0)
 

@@ -11,11 +11,12 @@ fn two_custom_agents_do_not_share_a_hold() {
     let _guard = AidHomeGuard::set(temp.path());
     std::fs::create_dir_all(paths::aid_dir()).unwrap();
 
-    let stated = crate::routing::rate_limit::test_future_recovery_time();
-    mark_rate_limited(
+    let reset = chrono::Local::now().naive_local() + chrono::Duration::days(1);
+    crate::routing::rate_limit::mark_rate_limited_until(
         &AgentKind::Custom,
         Some("auditor"),
-        &format!("try again at {stated}."),
+        reset,
+        "Insufficient balance",
     );
 
     assert!(is_rate_limited(&AgentKind::Custom, Some("auditor")));

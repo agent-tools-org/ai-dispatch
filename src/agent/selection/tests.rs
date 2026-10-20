@@ -50,7 +50,7 @@ fn fallback_chain_skips_rate_limited() {
         AgentKind::Codex,
         AgentKind::Cursor,
     ]);
-    crate::routing::rate_limit::mark_rate_limited(&AgentKind::Codex, None, "quota exhausted");
+    crate::routing::rate_limit::mark_rate_limited(&AgentKind::Codex, None, "You have hit your usage limit");
     let result = crate::cmd::run::advice_route::automatic_candidate(
         None,
         &crate::cmd::run::RunArgs {

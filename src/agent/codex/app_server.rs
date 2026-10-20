@@ -31,7 +31,8 @@ impl Events {
                 event.into_iter().collect()
             }
             "turn/completed" => self.completed(params),
-            "error" => vec![json!({"type":"error", "message":params["error"]["message"]})],
+            "error" => vec![json!({"type":"error", "message":params["error"]["message"],
+                "error":params["error"]})],
             "account/rateLimits/updated" => vec![json!({"type":"codex.rate_limits",
                 "rate_limits":params["rateLimits"]})],
             _ => Vec::new(),
@@ -204,3 +205,29 @@ pub(crate) fn quota_message(snapshot: &Value) -> Option<String> {
 #[cfg(test)]
 #[path = "app_server_tests.rs"]
 mod tests;
+
+/// Typed app-server errors own their code; unrelated text fields cannot supply one.
+pub(crate) fn error_quota_message(event: &Value) -> Option<String> {
+    if !matches!(event["type"].as_str(), Some("error" | "turn.failed")) {
+        return None;
+    }
+    let error = &event["error"];
+    let code = &error["codexErrorInfo"];
+    if code == "usageLimitExceeded" {
+        return Some(
+            error["message"].as_str().unwrap_or("You have hit your usage limit").to_string(),
+        );
+    }
+    if code == "httpConnectionFailed"
+        || code.get("httpConnectionFailed").is_some()
+    {
+        let status = code["httpConnectionFailed"]["httpStatusCode"].as_i64();
+        return matches!(status, Some(429 | 402)).then(|| "Codex rate limit exceeded".to_string());
+    }
+    if !code.is_null() {
+        return None;
+    }
+    let message = error["message"].as_str().or_else(|| event["message"].as_str())?;
+    crate::routing::rate_limit::is_rate_limit_error_for_agent(message, &crate::types::AgentKind::Codex)
+        .then(|| message.to_string())
+}

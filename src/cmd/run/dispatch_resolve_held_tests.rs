@@ -101,9 +101,10 @@ fn background_urgency_keeps_held_ungrouped_agent() {
 fn background_urgency_keeps_held_droid_agent() {
     let dir = tempfile::tempdir().expect("tempdir");
     let _guard = AidHomeGuard::set(dir.path());
-    crate::routing::rate_limit::mark_rate_limited(
+    crate::routing::rate_limit::mark_rate_limited_until(
         &AgentKind::Droid,
         None,
+        chrono::Local::now().naive_local() + chrono::Duration::days(1),
         &format!(
             "try again at {}.",
             crate::routing::rate_limit::test_future_recovery_time()

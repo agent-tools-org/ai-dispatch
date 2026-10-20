@@ -38,7 +38,7 @@ pub(super) fn settle(
     dir: &str,
     baseline: Option<&[String]>,
 ) -> Result<DirtyWorktreeAction> {
-    let comparison = (|| {
+    let comparison = (|| -> Result<(Vec<String>, Vec<String>)> {
         if baseline.is_none() && !is_git_directory(dir)? {
             return Ok((Vec::new(), Vec::new()));
         }

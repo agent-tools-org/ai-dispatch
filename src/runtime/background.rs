@@ -168,7 +168,7 @@ async fn run_process(
     let task_id = TaskId(spec.task_id.clone());
     let log_path = paths::log_path(&spec.task_id);
     let timeout_policy = crate::config::timeout_policy::TimeoutPolicy::from_env(args.env.as_ref());
-    if spec.interactive {
+    if spec.interactive && !crate::runtime::claude_input::supports(agent) {
         crate::runtime::pty::runner::run_agent_process_with_control(
             agent, &std_cmd, &task_id, store, &log_path,
             args.output.as_deref(), args.model.as_deref(), agent.streaming(),
@@ -216,3 +216,7 @@ mod background_reaper_tests;
 mod lifecycle_bypass_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+#[path = "background/claude_stream_tests.rs"]
+mod claude_stream_tests;

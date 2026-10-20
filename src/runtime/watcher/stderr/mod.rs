@@ -19,8 +19,14 @@ pub(super) struct StderrCapture {
     child_exited: oneshot::Sender<Instant>,
 }
 
-pub(super) fn spawn_stderr_capture(child: &mut Child, task_id: &TaskId) -> Option<StderrCapture> {
-    let stderr = child.stderr.take()?;
+pub(super) fn spawn_stderr_capture(
+    child: &mut Child, task_id: &TaskId,
+    watchdog: Option<&crate::runtime::pty::watch::piped::Watchdog>,
+    transcript: Option<std::sync::Arc<std::sync::Mutex<std::fs::File>>>,
+) -> Option<StderrCapture> {
+    let stderr = crate::runtime::pty::watch::piped::Reader::new(
+        child.stderr.take()?, watchdog, transcript, true,
+    );
     let stderr_path = paths::stderr_path(task_id.as_str());
     let (child_exited, exited) = oneshot::channel();
     let handle = tokio::spawn(capture_stderr(stderr, stderr_path, exited));

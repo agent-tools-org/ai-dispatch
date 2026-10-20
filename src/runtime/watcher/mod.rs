@@ -62,12 +62,24 @@ pub(crate) async fn watch_streaming_with_input(
     idle_timeout: Duration,
     max_task_cost: Option<f64>,
     prompt: Option<&str>,
+    policy: Option<crate::config::timeout_policy::TimeoutPolicy>,
 ) -> Result<CompletionInfo> {
     let stdout = child
         .stdout
         .take()
         .ok_or_else(|| anyhow::anyhow!("No stdout on child process"))?;
-    let reader = BufReader::new(stdout);
+    let mut watchdog = policy.filter(|_| prompt.is_some()).map(
+        crate::runtime::pty::watch::piped::Watchdog::new,
+    );
+    let transcript = if watchdog.is_some() {
+        std::fs::create_dir_all(crate::support::paths::task_dir(task_id.as_str()))?;
+        Some(Arc::new(std::sync::Mutex::new(std::fs::File::create(
+            crate::support::paths::transcript_path(task_id.as_str()),
+        )?)))
+    } else { None };
+    let reader = BufReader::new(crate::runtime::pty::watch::piped::Reader::new(
+        stdout, watchdog.as_ref(), transcript.clone(), false,
+    ));
     let mut lines = reader.lines();
     let mut log_file = tokio::fs::File::create(log_path).await?;
     let mut info = CompletionInfo {
@@ -85,11 +97,11 @@ pub(crate) async fn watch_streaming_with_input(
     let mut delivery_evidence = DeliveryEvidence::default();
     let mut last_event_detail: Option<String> = None;
     let mut full_output = String::new();
-    let stderr_handle = spawn_stderr_capture(child, task_id);
+    let stderr_handle = spawn_stderr_capture(child, task_id, watchdog.as_ref(), transcript);
     let mut input = crate::runtime::claude_input::Session::start(child, task_id, store, prompt).await?;
     loop {
         let line = match input::next_line(
-            &mut input, store, task_id,
+            &mut input, store, task_id, watchdog.as_mut(),
             &mut lines, task_id.as_str(), child.id(), idle_timeout, last_event_detail.is_some(),
         ).await {
             Some(Ok(Some(line))) => line,
@@ -101,10 +113,10 @@ pub(crate) async fn watch_streaming_with_input(
                 let _ = monitor::insert_hung_detected_events(
                     store.as_ref(),
                     task_id,
-                    idle_timeout.as_secs(),
+                    watchdog.as_ref().map_or(idle_timeout, |watchdog| watchdog.timeout()).as_secs(),
                     event_count,
                     last_event_detail.as_deref(),
-                    false,
+                    watchdog.as_ref().is_some_and(|watchdog| watchdog.first_token()),
                 );
                 info.status = TaskStatus::Failed;
                 break;
@@ -166,13 +178,16 @@ pub(crate) async fn watch_streaming_with_input(
                 break;
             }
         }
+        if let Some(watchdog) = &mut watchdog {
+            watchdog.observe(&line, event_count);
+        }
     }
     log_file.flush().await?;
     let exit_status = child.wait().await?;
     if let Some(handle) = stderr_handle {
         drain_stderr_capture(handle).await;
     }
-    let mut status = if exit_status.success() && !api_route_failed {
+    let mut status = if exit_status.success() && !api_route_failed && info.status != TaskStatus::Failed {
         TaskStatus::Done
     } else {
         TaskStatus::Failed

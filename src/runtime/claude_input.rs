@@ -5,7 +5,8 @@ use anyhow::{Result, anyhow};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
-use tokio::io::AsyncWriteExt;
+#[path = "claude_input_write.rs"]
+mod write;
 
 fn marker(task: &str) -> std::path::PathBuf {
     crate::support::paths::task_dir(task).join("claude-input.json")
@@ -28,11 +29,15 @@ pub(crate) fn active(task: &str) -> bool {
     })
 }
 
+pub(crate) fn supports(agent: &dyn crate::agent::Agent) -> bool {
+    agent.kind() == AgentKind::Claude || agent.api_route().is_some()
+}
+
 pub(crate) fn prepare(
     agent: &dyn crate::agent::Agent,
     command: &mut tokio::process::Command,
 ) -> Result<Option<String>> {
-    if agent.kind() != AgentKind::Claude && agent.api_route().is_none() {
+    if !supports(agent) {
         return Ok(None);
     }
     let original = command.as_std();
@@ -193,15 +198,7 @@ impl Session {
             .stdin
             .as_mut()
             .ok_or_else(|| anyhow!("Claude stdin closed"))?;
-        let written = tokio::time::timeout(Duration::from_secs(5), async {
-            stdin.write_all(envelope(&uuid, text).as_bytes()).await?;
-            stdin.flush().await
-        })
-        .await?;
-        if let Err(error) = written {
-            if error.kind() != std::io::ErrorKind::BrokenPipe {
-                return Err(error.into());
-            }
+        if !write::send(stdin, envelope(&uuid, text).as_bytes(), Duration::from_secs(5)).await {
             self.stdin.take();
             let _ = std::fs::remove_file(marker(&self.task));
             return Ok(());
@@ -287,3 +284,7 @@ mod tests;
 #[cfg(test)]
 #[path = "claude_input_exit_tests.rs"]
 mod exit_tests;
+
+#[cfg(test)]
+#[path = "claude_input_route_tests.rs"]
+mod route_tests;

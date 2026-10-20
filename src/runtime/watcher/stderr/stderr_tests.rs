@@ -56,7 +56,7 @@ async fn stderr_drain_timeout_preserves_output_before_eof() {
         .kill_on_drop(true)
         .spawn()
         .unwrap();
-    let capture = spawn_stderr_capture(&mut child, &task_id).unwrap();
+    let capture = spawn_stderr_capture(&mut child, &task_id, None, None).unwrap();
     let drained = tokio::time::timeout(
         std::time::Duration::from_secs(5), drain_stderr_capture(capture),
     ).await;
@@ -92,7 +92,7 @@ fn stderr_drain_waits_for_file_io_after_child_exit() {
             let _ = release_rx.recv();
         });
         started_rx.await.unwrap();
-        let capture = spawn_stderr_capture(&mut child, &task_id).unwrap();
+        let capture = spawn_stderr_capture(&mut child, &task_id, None, None).unwrap();
         let mut drain = std::pin::pin!(drain_stderr_capture(capture));
         let returned_before_write = tokio::time::timeout(
             super::STDERR_DRAIN_TIMEOUT + std::time::Duration::from_millis(100),

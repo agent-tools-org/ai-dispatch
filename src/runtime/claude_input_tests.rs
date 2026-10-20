@@ -135,6 +135,7 @@ async fn multiple_results_drain_and_stdin_closes_after_queued_steer_replay() {
             Duration::from_secs(60),
             None,
             prompt.as_deref(),
+            None,
         ),
     )
     .await

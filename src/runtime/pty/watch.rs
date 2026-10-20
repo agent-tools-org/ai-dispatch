@@ -23,6 +23,7 @@ use crate::store::Store;
 use crate::types::{AgentKind, CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 use crate::runtime::watcher::{self, SyntheticMilestoneTracker};
 
+pub(crate) mod piped;
 mod prompt_liveness;
 mod utf8;
 

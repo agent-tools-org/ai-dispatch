@@ -58,6 +58,7 @@ async fn immediate_exit_without_reading_stdin_preserves_output_and_exit_status()
             Duration::from_secs(60),
             None,
             Some("initial prompt"),
+            None,
         )
         .await
         .unwrap();

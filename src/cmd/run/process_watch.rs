@@ -50,6 +50,7 @@ pub(super) async fn watch_agent(
                 args.timeout_policy.idle,
                 args.max_task_cost,
                 prompt,
+                Some(args.timeout_policy),
             )
             .await
         } else {

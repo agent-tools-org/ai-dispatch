@@ -87,7 +87,9 @@ aid unstick <task-id>
   a timeout is not a refusal and never marks delivery. `reply --async` only confirms queuing.
 - Claude streaming-input workers accept `steer` and `reply` (including API routes).
   `accepted by claude` requires a replayed user envelope with the matching UUID.
+  Background and foreground Claude runs use piped streaming input even for interactive specs.
   A write alone is sent, unconfirmed; uncertain deliveries are never automatically resent.
+  Failed or timed-out input writes close stdin and leave acceptance unconfirmed without failing the task.
   `steer` waits up to 30 seconds; `reply --async` confirms only queuing.
   Acceptance confirms receipt, not interruption of a tool or completion of the request.
   A replayed queued message requires a subsequent result before stdin closes; remaining

@@ -68,7 +68,7 @@ current arguments.
 | `aid tool` | Manage reusable tool definitions. |
 | `aid credential` | Manage credential-pool entries. |
 | `aid byok` | Manage custom OpenAI-compatible providers through opencode. |
-| `aid container` | Build, list, or stop development containers. |
+| `aid container` | Container home mounts exclude the removed `.gemini` and `.qwen` config directories. Build, list, or stop development containers. |
 | `aid hook` | Install or invoke supported AID hooks; task hook payloads expose additive `outcome` and `verify_status` fields. |
 | `aid mcp` | Start AID's stdio MCP server; task payloads expose additive `outcome` and `verify_status` fields. The `classify` tool takes `state`, `state_json`, `questions`, and `model` and returns the same JSON as `aid classify`. |
 | `aid doctor` | Report repository/worktree hygiene, leaked operator symlinks, and NeedsHuman agent holds; `--apply` repairs only those symlinks without bypassing custody. |

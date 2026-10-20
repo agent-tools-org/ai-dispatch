@@ -174,7 +174,7 @@ fn home_dir() -> Option<PathBuf> {
 fn mount_home_dirs_from(home: Option<PathBuf>) -> Vec<String> {
     let mut args = Vec::new();
     let Some(home) = home else { return args };
-    for subdir in [".codex", ".copilot", ".gemini", ".qwen", ".kilo", ".mimocode", ".opencode"] {
+    for subdir in [".codex", ".copilot", ".kilo", ".mimocode", ".opencode"] {
         let host_path = home.join(subdir);
         if host_path.exists() {
             let container_path = Path::new("/root").join(subdir);
@@ -212,6 +212,7 @@ mod tests {
     fn mount_home_dirs_returns_expected_args() {
         let home = TempDir::new().unwrap();
         fs::create_dir(home.path().join(".codex")).unwrap();
+        fs::create_dir(home.path().join(".copilot")).unwrap();
         fs::create_dir(home.path().join(".gemini")).unwrap();
         fs::create_dir(home.path().join(".qwen")).unwrap();
 
@@ -222,10 +223,9 @@ mod tests {
             .any(|pair| pair[0] == "-v" && pair[1].contains(".codex:/root/.codex")));
         assert!(args
             .windows(2)
-            .any(|pair| pair[0] == "-v" && pair[1].contains(".gemini:/root/.gemini")));
-        assert!(args
-            .windows(2)
-            .any(|pair| pair[0] == "-v" && pair[1].contains(".qwen:/root/.qwen")));
+            .any(|pair| pair[0] == "-v" && pair[1].contains(".copilot:/root/.copilot")));
+        assert!(!args.iter().any(|arg| arg.contains(".gemini")));
+        assert!(!args.iter().any(|arg| arg.contains(".qwen")));
     }
 
     #[test]

@@ -6,6 +6,9 @@ use super::*;
 use crate::types::TaskStatus;
 use std::{fs, process::Command};
 
+#[path = "read_only_concurrent_tests.rs"]
+mod concurrent_tests;
+
 fn git(dir: &Path, args: &[&str]) {
     let output = Command::new("git").current_dir(dir).args(args).output().unwrap();
     assert!(

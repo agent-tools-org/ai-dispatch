@@ -7,6 +7,9 @@ use super::*;
 #[path = "lifecycle_scope_cut_fix_tests.rs"]
 mod scope_cut_fix_tests;
 
+#[path = "lifecycle_read_only_concurrent_tests.rs"]
+mod concurrent_tests;
+
 #[tokio::test]
 async fn scope_cut_symlink_report_is_not_copied_by_official_persistence() {
     let _permit = test_subprocess::acquire();

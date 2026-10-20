@@ -32,6 +32,28 @@ pub(crate) fn available(cmd: &Command) -> bool {
     .is_ok_and(|output| output.success && output.stdout.contains("stdio"))
 }
 
+pub(crate) fn read_only_config(cmd: &Command) -> Option<(Value, std::path::PathBuf)> {
+    if std::path::Path::new(cmd.get_program())
+        .file_name().is_none_or(|name| name != "codex")
+        || !cmd.get_envs().any(|(key, value)| {
+            key == "AID_NATIVE_READ_ONLY_PROFILE"
+                && value.is_some_and(|value| value == "aid-read-only")
+        })
+    {
+        return None;
+    }
+    let launch = translate(cmd).ok()?;
+    if !launch.isolated { return None; }
+    let config = launch.thread.get("config")?.as_object()?;
+    if config.keys().any(|key| !matches!(key.as_str(),
+        "permissions" | "default_permissions" | "approval_policy" | "model" | "model_reasoning_effort"
+    )) {
+        return None;
+    }
+    let cwd = std::path::Path::new(launch.thread["cwd"].as_str()?).canonicalize().ok()?;
+    Some((Value::Object(config.clone()), cwd))
+}
+
 pub(super) fn translate(cmd: &Command) -> Result<Launch> {
     let args: Vec<_> = cmd
         .get_args()

@@ -166,8 +166,13 @@ Important controls:
   files, deletions, repository HEAD and its current branch, and nested repository HEAD changes.
   Unrelated ref updates are recorded as diagnostics. Gitlinks compare their
   recorded index commit. Without `--dir`, aid captures and uses its current working
-  directory. Any change outside the designated result file, `-o/--output` file,
-  and aid-owned paths makes the task Failed with an error listing paths. Files
+  directory. Changes outside the designated result file, `-o/--output` file,
+  and aid-owned paths fail with `Read-only violation` unless the executed attempt
+  has recorded restrictive native launch provenance. With that proof, aid preserves
+  the agent's result and warns that audited inputs changed during the run, listing
+  baseline/current HEAD and changed paths; input stability is unknown. Missing or
+  unknown provenance still fails closed, including older task rows and Claude or
+  custom launches. Snapshot/configuration failures still fail. Files
   stay in place; aid does not commit, stash, revert, or automatically retry the
   violation. Absolute artifact paths work with relative run directories; a
   symlink artifact does not exempt its destination. Enforcement covers Git run

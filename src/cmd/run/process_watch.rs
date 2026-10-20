@@ -10,7 +10,7 @@ pub(super) fn spawn_agent(args: &mut RunProcessArgs<'_>) -> Result<Child> {
     #[cfg(unix)]
     args.cmd.process_group(0);
     crate::cmd::noninteractive_stdio::configure(&mut args.cmd);
-    let child = match args.store.with_running_task(args.task_id.as_str(), || {
+    let mut child = match args.store.with_running_task(args.task_id.as_str(), || {
         let child = args.cmd.spawn()?;
         if let Some(pid) = child.id() {
             let _ = crate::runtime::background::update_agent_pid(args.task_id.as_str(), pid);
@@ -26,6 +26,13 @@ pub(super) fn spawn_agent(args: &mut RunProcessArgs<'_>) -> Result<Child> {
             return Err(err);
         }
     };
+    if let Err(error) = crate::runtime::read_only_launch::record(
+        args.store, args.task_id, args.cmd.as_std(), "exec",
+    ) {
+        cleanup_process_group(&child);
+        let _ = child.start_kill();
+        return Err(error);
+    }
     Ok(child)
 }
 

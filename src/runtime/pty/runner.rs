@@ -61,6 +61,7 @@ pub(crate) fn run_agent_process_with_control(
     control: Option<PtyRunControl>,
 ) -> Result<()> {
     let start = std::time::Instant::now();
+    crate::runtime::read_only_launch::reset(store, task_id)?;
     let fallback;
     let mut exec_cmd = cmd;
     if agent.kind() == crate::types::AgentKind::Codex

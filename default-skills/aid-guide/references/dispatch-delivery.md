@@ -65,6 +65,16 @@ Fresh and resumed Codex sessions explicitly select a permissions profile. Read-o
 approval review. The adapter uses `permissions` and `default_permissions`, without legacy
 `sandbox_mode`, `sandbox_workspace_write`, `--sandbox`, or write approval shortcut flags.
 
+Aid records the executed attempt's native profile identity, canonical writable roots, approval
+policy and transport after app-server thread configuration succeeds or exec is spawned.
+Exec fallback and resume retain that configuration; each new attempt clears older proof.
+For a proven restrictive native launch, checkout differences produce a warning with the
+baseline/current HEAD and changed paths, preserving the agent's result. The audited inputs
+changed during the run, so input stability is unknown; the warning does not verify conclusions
+against one immutable revision. Unverified launches still fail with `Read-only violation`, and
+snapshot/configuration failures still fail. The native boundary covers local filesystem writes,
+not effects through external services or privileged brokers.
+
 The exec fallback uses `--ignore-user-config` to exclude user sandbox defaults. App-server
 instead uses a task-scoped `CODEX_HOME` with symlinks to every real-home top-level entry except
 `config.toml` and `config.toml.*`. Authentication, session storage, instructions, hooks, rules,

@@ -64,6 +64,9 @@ fn command_paths(home: &std::path::Path, path: &[String]) -> Vec<String> {
 const INVARIANTS: &[(&str /* reference file */, &str /* phrase */)] = &[
     ("dispatch.md", "failure aborts with an error naming the directory"),
     ("dispatch.md", "`--dry-run` do not create or probe these directories"),
+    ("dispatch.md", "unknown provenance still fails closed"),
+    ("dispatch.md", "baseline/current HEAD and changed paths; input stability is unknown"),
+    ("dispatch.md", "Snapshot/configuration failures still fail"),
     ("dispatch.md", "a NeedsHuman hold still blocks"),
     ("dispatch-delivery.md", "refused before a task row is created"),
     ("dispatch-delivery.md", "is never turned into a report task by prompt wording"),

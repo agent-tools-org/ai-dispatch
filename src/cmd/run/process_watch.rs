@@ -31,8 +31,8 @@ pub(super) fn spawn_agent(args: &mut RunProcessArgs<'_>) -> Result<(Child, Optio
     if let Err(error) = crate::runtime::read_only_launch::record(
         args.store, args.task_id, args.cmd.as_std(), "exec",
     ) {
-        cleanup_process_group(&child);
-        let _ = child.start_kill();
+        cleanup_process_group(&child.0);
+        let _ = child.0.start_kill();
         return Err(error);
     }
     Ok(child)

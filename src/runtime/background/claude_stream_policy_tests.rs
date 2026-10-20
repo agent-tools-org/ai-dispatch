@@ -24,6 +24,7 @@ async fn deadline_preserves_partial_transcript_and_pid_for_stop() {
             &args,
             &ClaudeAgent,
             command("partial", &home.path().join("input")),
+            std::time::Instant::now(),
         ),
     )
     .await
@@ -76,6 +77,7 @@ async fn first_token_and_idle_timeouts_remain_distinct_on_interactive_specs() {
                 &args,
                 &ClaudeAgent,
                 command(mode, &home.path().join("input")),
+                std::time::Instant::now(),
             ),
         )
         .await
@@ -110,6 +112,7 @@ async fn stderr_activity_counts_as_progress_and_is_preserved() {
             &args,
             &ClaudeAgent,
             command("stderr", &home.path().join("input")),
+            std::time::Instant::now(),
         ),
     )
     .await
@@ -133,6 +136,7 @@ async fn cost_ceiling_and_usage_checkpoints_survive_piped_routing() {
             &args,
             &ClaudeAgent,
             command("cost", &home.path().join("input")),
+            std::time::Instant::now(),
         ),
     )
     .await
@@ -164,6 +168,7 @@ async fn remote_wait_descendant_counts_as_activity_on_production_stream() {
             &args,
             &ClaudeAgent,
             command("descendant", &home.path().join("input")),
+            std::time::Instant::now(),
         ),
     )
     .await

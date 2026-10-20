@@ -24,6 +24,7 @@ async fn piped_completion_refreshes_project_state_and_records_summary() {
             &args,
             &ClaudeAgent,
             command("summary", &cwd.join("input")),
+            std::time::Instant::now(),
         ),
     )
     .await

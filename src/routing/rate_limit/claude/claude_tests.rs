@@ -124,7 +124,7 @@ fn unrelated_429_with_unix_trace_does_not_create_a_dated_hold() {
 }
 
 #[test]
-fn unwrapped_claude_prose_cannot_create_a_hold() {
+fn unwrapped_claude_prose_can_only_preserve_a_transient_excerpt() {
     let temp = tempfile::tempdir().expect("temp dir");
     let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     for line in [
@@ -138,13 +138,17 @@ fn unwrapped_claude_prose_cannot_create_a_hold() {
             None,
             "{line}"
         );
-        assert!(!record_quota_exhaustion(line, AgentKind::Claude, None, None).recorded());
+        let outcome = record_quota_exhaustion(line, AgentKind::Claude, None, None);
+        assert!(!outcome.should_fail());
+        assert_eq!(outcome.recorded(), line.contains("You've hit your limit"));
     }
     assert_eq!(
         refusal_on_channel("You've hit your limit", AgentKind::Claude, Channel::CliStderr),
-        None
+        Some("You've hit your limit".to_string())
     );
-    assert!(get_rate_limit_info(&AgentKind::Claude, None).is_none());
+    let info = get_rate_limit_info(&AgentKind::Claude, None).expect("transient excerpt");
+    assert!(info.recovery_at.is_none());
+    assert!(!info.needs_human);
 }
 
 #[test]

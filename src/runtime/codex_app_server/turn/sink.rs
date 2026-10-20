@@ -69,12 +69,12 @@ impl<'a> Sink<'a> {
         if let Some(detail) = detail {
             self.last_detail = Some(detail.detail);
         }
-        self.quota |= crate::routing::rate_limit::refusal_on_channel(
-            &line,
-            AgentKind::Codex,
-            crate::routing::quota::channel::Channel::CliStream,
-        )
-        .is_some();
+        if let Some(message) = crate::agent::codex::app_server::error_quota_message(&event) {
+            crate::routing::rate_limit::mark_rate_limited_for_model_value(
+                &AgentKind::Codex, None, self.info.model.as_deref(), &event, &message,
+            );
+            self.quota = true;
+        }
         if event["type"] == "turn.failed" && self.info.status != TaskStatus::Stopped {
             self.info.status = TaskStatus::Failed;
         }
@@ -196,3 +196,7 @@ impl<'a> Sink<'a> {
         Ok(self.info)
     }
 }
+
+#[cfg(test)]
+#[path = "sink_scope_tests.rs"]
+mod scope_tests;

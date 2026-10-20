@@ -26,7 +26,7 @@ mod state;
 use state::discovered_group_markers;
 pub use state::*;
 mod detection;
-use detection::parse_iso_recovery_time;
+
 #[cfg(test)]
 pub(crate) use detection::test_future_recovery_time;
 pub use detection::*;

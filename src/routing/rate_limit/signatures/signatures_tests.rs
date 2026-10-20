@@ -2,6 +2,8 @@
 // not invented envelopes that let an adapter fix miss production.
 
 use super::*;
+use super::recovery::parse_relative_recovery;
+use chrono::Local;
 
 #[test]
 fn qwen_token_plan_exhaustion_is_recognized() {
@@ -49,10 +51,8 @@ fn resets_in_minutes_and_hours_parse() {
 }
 
 #[test]
-fn hyphenated_window_is_used_when_no_reset_time_is_given() {
-    let parsed = parse_relative_recovery("your token-plan 5-hour quota has been exhausted").expect("must parse");
-    let delta = parsed - Local::now().naive_local();
-    assert!(delta.num_hours() >= 4 && delta.num_hours() <= 5, "got {delta:?}");
+fn hyphenated_window_is_ignored_without_a_reset_phrase() {
+    assert!(parse_relative_recovery("your token-plan 5-hour quota has been exhausted").is_none());
 }
 
 #[test]

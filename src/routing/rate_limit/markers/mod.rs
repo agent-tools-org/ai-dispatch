@@ -50,6 +50,7 @@ pub fn mark_group_rate_limited(
         &group_marker_path(agent, custom_name, group),
         message,
         provider,
+        *agent,
     );
 }
 
@@ -65,7 +66,7 @@ pub fn clear_group_rate_limit(agent: &AgentKind, custom_name: Option<&str>, grou
 }
 
 pub fn mark_rate_limited(agent: &AgentKind, custom_name: Option<&str>, message: &str) {
-    write_marker(&marker_path(agent, custom_name), message, None);
+    write_marker(&marker_path(agent, custom_name), message, None, *agent);
 }
 
 /// Record a refusal when the caller has no model in hand — a stderr line, a
@@ -157,11 +158,11 @@ pub(crate) fn format_recovery(at: NaiveDateTime) -> String {
     at.format("%b %d, %Y %I:%M %p").to_string()
 }
 
-fn write_marker(path: &std::path::Path, message: &str, provider: Option<&str>) {
+fn write_marker(path: &std::path::Path, message: &str, provider: Option<&str>, agent: AgentKind) {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    let (recovery_at, hold_line) = match classify_hold(message) {
+    let (recovery_at, hold_line) = match classify_hold(message, agent) {
         Hold::Until(at) => (at, String::new()),
         Hold::NeedsHuman | Hold::Windowed => (String::new(), format!("hold: {MANUAL_HOLD}\n")),
         Hold::Transient => (String::new(), String::new()),
@@ -180,4 +181,27 @@ pub(crate) fn marker_field(content: &str, key: &str) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string)
+}
+
+/// Unsplit output can preserve a refusal excerpt, but cannot establish a long hold.
+pub(crate) fn mark_untrusted_for_model(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    model: Option<&str>,
+    message: &str,
+) {
+    let path = match quota_group_for_mark(*agent, model, message, None) {
+        Some(group) => group_marker_path(agent, custom_name, group),
+        None => marker_path(agent, custom_name),
+    };
+    if let Ok(content) = fs::read_to_string(&path)
+        && !matches!(stored_hold(&content, agent), StoredHold::Transient)
+    {
+        return;
+    }
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let excerpt = message.lines().take(1).collect::<String>();
+    let _ = fs::write(path, format!("source: untrusted\nmessage: {excerpt}\n"));
 }

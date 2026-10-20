@@ -8,10 +8,10 @@ use std::time::SystemTime;
 
 use crate::routing::quota::live as live_quota;
 use crate::routing::rate_limit::{
-    format_recovery, marker_field, marker_slug, parse_recovery_datetime, parse_recovery_time,
+    format_recovery, marker_field, marker_slug, parse_recovery_datetime,
 };
 use crate::routing::rate_limit::signatures::{
-    match_quota_signature, match_quota_signature_for_agent, parse_relative_recovery, QuotaRecovery,
+    match_quota_signature_for_agent, recovery_for_agent, QuotaRecovery,
     QUOTA_SIGNATURES,
 };
 use crate::types::AgentKind;
@@ -57,21 +57,18 @@ pub(crate) enum StoredHold {
 }
 
 /// A stated time always wins over the signature's class default.
-pub(crate) fn classify_hold(message: &str) -> Hold {
+pub(crate) fn classify_hold(message: &str, agent: AgentKind) -> Hold {
     if crate::routing::capacity::is_capacity(message) {
         return Hold::Until(format_recovery(chrono::Local::now().naive_local()
             + chrono::Duration::minutes(crate::routing::capacity::HOLD_MINUTES)));
     }
-    if let Some(stated) = parse_recovery_time(message) {
-        return Hold::Until(stated);
-    }
-    if let Some(at) = parse_relative_recovery(message) {
+    if let Some(at) = recovery_for_agent(message, agent) {
         return Hold::Until(format_recovery(at));
     }
-    match match_quota_signature(message) {
-        Some((_, QuotaRecovery::NeedsHuman)) => Hold::NeedsHuman,
-        Some((_, QuotaRecovery::Windowed)) => Hold::Windowed,
-        Some((_, QuotaRecovery::After(minutes))) => Hold::Until(format_recovery(
+    match match_quota_signature_for_agent(message, agent) {
+        Some(QuotaRecovery::NeedsHuman) => Hold::NeedsHuman,
+        Some(QuotaRecovery::Windowed) => Hold::Windowed,
+        Some(QuotaRecovery::After(minutes)) => Hold::Until(format_recovery(
             chrono::Local::now().naive_local() + chrono::Duration::minutes(minutes),
         )),
         None => Hold::Transient,
@@ -83,6 +80,9 @@ pub(crate) fn classify_hold(message: &str) -> Hold {
 /// has no probe, that condition is unobservable, so the hold is human-cleared
 /// rather than promising a snapshot that will never come.
 pub(crate) fn stored_hold(content: &str, agent: &AgentKind) -> StoredHold {
+    if marker_field(content, "source: ").as_deref() == Some("untrusted") {
+        return StoredHold::Transient;
+    }
     if let Some(recovery_at) = marker_field(content, "recovery_at: ")
         .as_deref()
         .and_then(parse_recovery_datetime)
@@ -105,8 +105,7 @@ pub(crate) fn stored_hold(content: &str, agent: &AgentKind) -> StoredHold {
 
 fn stored_refusal_matches(content: &str, agent: &AgentKind, want: QuotaRecovery) -> bool {
     content.lines().any(|line| {
-        parse_recovery_time(line).is_none()
-            && parse_relative_recovery(line).is_none()
+        recovery_for_agent(line, *agent).is_none()
             && match_quota_signature_for_agent(line, *agent) == Some(want)
     })
 }
@@ -261,3 +260,7 @@ pub(crate) fn format_hold_end_for(
         StoredHold::Transient => "cooling down".to_string(),
     }
 }
+
+#[cfg(test)]
+#[path = "policy_scope_tests.rs"]
+mod scope_tests;

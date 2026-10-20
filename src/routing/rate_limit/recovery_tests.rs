@@ -92,7 +92,7 @@ fn test_get_rate_limit_info() {
         "You have hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Mar 19th, 2026 2:27 PM.",
     );
     let info = get_rate_limit_info(&AgentKind::Codex, None).unwrap();
-    assert_eq!(info.recovery_at, Some("Mar 19th, 2026 2:27 PM".to_string()));
+    assert_eq!(info.recovery_at, Some("Mar 19, 2026 02:27 PM".to_string()));
     assert!(
         info.message
             .unwrap()

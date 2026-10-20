@@ -35,6 +35,7 @@ async fn settle_first_stopped_task_never_spawns_timeout_agent() {
         None,
         crate::config::timeout_policy::TimeoutPolicy::default(),
         None,
+        std::time::Instant::now(),
     )
     .await;
     assert!(result.is_err(), "stopped task must refuse agent launch");

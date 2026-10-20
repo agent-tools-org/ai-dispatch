@@ -4,6 +4,7 @@ mod buffered;
 mod completion;
 use completion::{apply_completion_event, exceeds_cost_ceiling};
 mod input;
+#[cfg(test)]
 pub use input::watch_streaming;
 mod api_route;
 mod esc;

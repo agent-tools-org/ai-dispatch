@@ -1,5 +1,5 @@
-// Additional regression coverage for stream_completion_tests.rs.
-// Deps: parent test module fixtures.
+// Quota refusal recording and bounded stream scanning regressions.
+// Deps: parent streaming completion fixtures.
 
 use super::*;
 

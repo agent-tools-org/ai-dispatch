@@ -222,5 +222,5 @@ fn best_of_task_ids_ignore_running_base_for_siblings() {
 }
 
 
-#[path = "tests_more_1.rs"]
-mod more;
+#[path = "task_id_tests.rs"]
+mod task_ids;

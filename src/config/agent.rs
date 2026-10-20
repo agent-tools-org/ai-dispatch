@@ -4,7 +4,8 @@
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Mutex, OnceLock};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -49,7 +50,25 @@ fn config_key(agent_name: &str) -> String {
 }
 
 pub fn load_agent_config() -> HashMap<String, AgentDefaults> {
-    load_from(&config_path())
+    let path = config_path();
+    let mut config: toml::Table = std::fs::read_to_string(&path).ok()
+        .and_then(|content| toml::from_str(&content).ok()).unwrap_or_default();
+    config.retain(|key, _| {
+        if !crate::agent::removed::is_removed(key) { return true; }
+        warn_stale_entry_once(&path, key);
+        false
+    });
+    config.try_into().unwrap_or_default()
+}
+
+fn warn_stale_entry_once(path: &Path, key: &str) {
+    static WARNED: OnceLock<Mutex<HashSet<(PathBuf, String)>>> = OnceLock::new();
+    let Ok(mut warned) = WARNED.get_or_init(|| Mutex::new(HashSet::new())).lock() else {
+        return;
+    };
+    if warned.insert((path.to_path_buf(), key.to_string())) {
+        aid_warn!("Ignoring stale removed-agent config key [{key}] in {}", path.display());
+    }
 }
 
 pub fn get_default_model(agent_name: &str) -> Option<String> {
@@ -220,5 +239,31 @@ mod tests {
         assert_eq!(config["agy"].model.as_deref(), Some("gemini-3"));
         assert_eq!(config["agy"].idle_timeout, Some(300));
         assert!(!config.contains_key("antigravity"));
+    }
+
+    #[test]
+    fn stale_removed_entries_do_not_hide_supported_agent_defaults() {
+        let dir = tempfile::tempdir().expect("home");
+        let _guard = AidHomeGuard::set(dir.path());
+        let path = dir.path().join("agent_config.toml");
+        let content = "[gemini]\nmodel = 42\n[qwen]\ndisabled = 'retired'\n\
+            [codex]\nmodel = 'gpt-6-sol'\nidle_timeout = 321\n\
+            [agy]\nmodel = 'gemini-3.7-flash-high'\n";
+        std::fs::write(&path, content).expect("config");
+        let config = load_agent_config();
+        assert_eq!(config.len(), 2);
+        assert_eq!(get_default_model("gemini"), None);
+        assert_eq!(get_default_idle_timeout("qwen"), None);
+        assert!(!is_agent_disabled("qwen"));
+        assert_eq!(get_default_model("codex").as_deref(), Some("gpt-6-sol"));
+        assert_eq!(get_default_idle_timeout("codex"), Some(321));
+        assert_eq!(
+            get_default_model("agy").as_deref(),
+            Some("gemini-3.7-flash-high")
+        );
+        assert_eq!(
+            std::fs::read_to_string(path).expect("unchanged config"),
+            content
+        );
     }
 }

@@ -1,5 +1,5 @@
-// Additional regression coverage for output_tests.rs.
-// Deps: parent test module fixtures.
+// Saved task output selection, extraction, and rendering regressions.
+// Deps: parent show test fixtures.
 
 use super::*;
 

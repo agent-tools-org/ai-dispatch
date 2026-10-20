@@ -107,7 +107,7 @@ impl Store {
 
     fn typed_success_rates(&self, category: Option<&str>) -> Result<Vec<(AgentKind, f64, usize)>> {
         Ok(self.success_rates(category, 5)?.into_iter().filter_map(|(name, rate, count)| {
-            (!matches!(name.as_str(), "gemini" | "qwen")).then(||
+            (!crate::agent::removed::is_removed(&name)).then(||
                 (AgentKind::parse_str(&name).unwrap_or(AgentKind::Custom), rate, count))
         }).collect())
     }
@@ -180,7 +180,7 @@ impl Store {
 
     pub fn agent_avg_costs(&self) -> Result<Vec<(AgentKind, f64)>> {
         Ok(self.named_agent_avg_costs()?.into_iter().filter_map(|(name, cost)| {
-            (!matches!(name.as_str(), "gemini" | "qwen")).then(||
+            (!crate::agent::removed::is_removed(&name)).then(||
                 (AgentKind::parse_str(&name).unwrap_or(AgentKind::Custom), cost))
         }).collect())
     }

@@ -171,10 +171,13 @@ fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
 }
 
+// Antigravity stores its authentication under this directory.
+const AGY_AUTH_DIR: &str = ".gemini";
+
 fn mount_home_dirs_from(home: Option<PathBuf>) -> Vec<String> {
     let mut args = Vec::new();
     let Some(home) = home else { return args };
-    for subdir in [".codex", ".copilot", ".kilo", ".mimocode", ".opencode"] {
+    for subdir in [".codex", ".copilot", AGY_AUTH_DIR, ".kilo", ".mimocode", ".opencode"] {
         let host_path = home.join(subdir);
         if host_path.exists() {
             let container_path = Path::new("/root").join(subdir);
@@ -224,7 +227,8 @@ mod tests {
         assert!(args
             .windows(2)
             .any(|pair| pair[0] == "-v" && pair[1].contains(".copilot:/root/.copilot")));
-        assert!(!args.iter().any(|arg| arg.contains(".gemini")));
+        assert!(args.windows(2).any(|pair|
+            pair[0] == "-v" && pair[1].contains(".gemini:/root/.gemini")));
         assert!(!args.iter().any(|arg| arg.contains(".qwen")));
     }
 
@@ -273,6 +277,17 @@ mod tests {
         assert!(wrapped_args
             .windows(2)
             .any(|pair| pair == ["-e", "CARGO_TARGET_DIR=/tmp/cache/_base"]));
+    }
+
+    #[test]
+    fn agy_mounts_its_auth_directory_without_a_gemini_agent() {
+        let home = TempDir::new().expect("home");
+        fs::create_dir(home.path().join(".gemini")).expect("agy auth directory");
+        let mounts = mount_home_dirs_from(Some(home.path().to_path_buf()));
+        let expected = format!("{}:/root/.gemini", home.path().join(".gemini").display());
+        assert!(mounts.windows(2).any(|pair| pair == ["-v", expected.as_str()]));
+        assert_eq!(crate::types::AgentKind::parse_str("gemini"), None);
+        assert!(mount_home_dirs_from(None).is_empty());
     }
 }
 

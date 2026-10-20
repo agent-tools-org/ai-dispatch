@@ -293,3 +293,6 @@ fn unknown_cascade_entry_is_an_error() {
         Ok(_) => panic!("unknown cascade agent must produce an error"),
     }
 }
+
+#[path = "dispatch_stale_config_tests.rs"]
+mod stale_config;

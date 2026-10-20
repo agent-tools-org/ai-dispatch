@@ -260,5 +260,5 @@ fn completion_without_a_reported_model_leaves_the_request_alone() {
 /// A later completion write that learned nothing must not erase an observation
 /// an earlier one made — hence COALESCE rather than plain assignment.
 
-#[path = "task_tests_more_1.rs"]
-mod more;
+#[path = "task_lifecycle_tests.rs"]
+mod lifecycle;

@@ -60,7 +60,7 @@ fn run_rejects_removed_primary_review_and_cascade_routes() {
 }
 
 #[test]
-fn removed_agent_config_is_rejected_on_write_and_dispatch() {
+fn removed_agent_config_is_rejected_on_write_but_ignored_on_dispatch() {
     let home = tempfile::tempdir().expect("home");
     let _home = crate::support::paths::AidHomeGuard::set(home.path());
     for name in ["gemini", "qwen"] {
@@ -72,12 +72,10 @@ fn removed_agent_config_is_rejected_on_write_and_dispatch() {
             format!("[{name}]\nmodel = 'model'\n"),
         )
         .expect("config");
-        assert!(
-            validate_agent_config()
-                .expect_err("removed config")
-                .to_string()
-                .contains("removed in this release")
-        );
+        assert!(!crate::config::agent::load_agent_config().contains_key(name));
+        validate_run(&RunArgs { agent_name: "codex".into(), ..Default::default() })
+            .expect("stale config must not block a supported dispatch");
+        assert!(reject(name).is_err(), "explicit removed requests still fail");
     }
 }
 

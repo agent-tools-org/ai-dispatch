@@ -256,3 +256,7 @@ fn push_line(kept: &mut String, text: &str) {
     kept.push_str(text);
     kept.push('\n');
 }
+
+#[cfg(test)]
+#[path = "channel_tests.rs"]
+mod tests;

@@ -302,11 +302,14 @@ When dispatches are executed, `aid` isolates the agent process's `HOME` director
 ### Removed agent names
 
 `gemini` and `qwen` were removed in this release. Naming either as an agent in
-CLI dispatch, batch TOML, team preferences/defaults/overrides, agent configuration,
-or cascade/fallback lists fails with migration guidance: use `agy`, a Google
+CLI dispatch, batch TOML, team preferences/defaults/overrides, explicit agent
+configuration commands, or cascade/fallback lists fails with migration guidance: use `agy`, a Google
 provider through `opencode`/`kilo`, or a custom agent with a different name.
 Google and Qwen model IDs served by supported agents remain available.
 Stored tasks, events, quota markers, and statistics keep their original agent names.
 `aid ask`, `aid show --explain`, and bare `--judge` default to `agy`.
-Container launches do not mount `.gemini` or `.qwen`, and `GEMINI_CLI_HOME` is
-no longer managed as a built-in CLI config redirect.
+Container launches retain `.gemini` for agy authentication and do not mount `.qwen`.
+`GEMINI_CLI_HOME` is no longer managed as a built-in CLI config redirect.
+Stale `[gemini]` and `[qwen]` tables in `~/.aid/agent_config.toml` are ignored
+without modifying the file. A warning names the file and key once per key per
+process; supported agents keep their configured defaults.

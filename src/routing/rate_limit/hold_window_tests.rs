@@ -1,8 +1,12 @@
-// Additional regression coverage for hold_tests.rs.
-// Deps: parent test module fixtures.
+// Dated, transient, and legacy marker hold regressions.
+// Deps: parent hold test fixtures.
 
 use super::*;
 
+/// `aid run` used to divert only when a recovery time was present. A Windowed
+/// 402 states none, so dispatch must still stop and name the dated-snapshot way
+/// out rather than inventing a clock or saying "cooling down". A probe is
+/// written so the route keeps its Windowed class — see the probe-less case below.
 #[test]
 fn a_windowed_hold_blocks_dispatch_and_names_the_way_out() {
     let temp = isolated();

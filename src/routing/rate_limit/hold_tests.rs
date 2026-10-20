@@ -256,5 +256,8 @@ fn a_marker_whose_stated_time_has_passed_reads_as_recovered() {
 /// A marker written before the hold classes existed has no `hold:` line. It must
 /// not be read as permanent — that is the blackhole this fix removes.
 
-#[path = "hold_tests_more_1.rs"]
-mod more;
+#[path = "hold_tier_tests.rs"]
+mod tiers;
+
+#[path = "hold_window_tests.rs"]
+mod windows;

@@ -1,5 +1,5 @@
-// Additional regression coverage for task_tests.rs.
-// Deps: parent test module fixtures.
+// Task completion updates, retry chains, and model history regressions.
+// Deps: parent store test fixtures.
 
 use super::*;
 

@@ -220,5 +220,8 @@ fn active_worktree_siblings_counts_stalled_tasks() {
 }
 
 
-#[path = "tests_more_1.rs"]
-mod more;
+#[path = "budget_usage_tests.rs"]
+mod budget_usage;
+
+#[path = "memory_search_tests.rs"]
+mod memory_search;

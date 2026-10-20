@@ -1,5 +1,5 @@
-// Additional regression coverage for tests.rs.
-// Deps: parent test module fixtures.
+// Best-of task ID reuse, collision, and validation regressions.
+// Deps: parent best-of test fixtures.
 
 use super::*;
 

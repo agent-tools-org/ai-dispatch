@@ -267,3 +267,18 @@ fn stderr_is_the_cursor_premium_channel_and_is_kept_whole() {
         "stderr has no unsplit half — the whole channel is the CLI's"
     );
 }
+
+#[test]
+fn ordinary_terminal_results_cannot_forge_provider_diagnostics() {
+    for agent in adapters_under_test() {
+        for kind in ["result", "turn_complete"] {
+            for text in ["429", "You have exceeded your monthly quota"] {
+                let envelope = serde_json::json!({
+                    "type": kind, "is_error": false, "result": text,
+                }).to_string();
+                assert!(stream(&envelope, agent).is_empty(), "{agent:?}: {envelope}");
+                assert!(stream_diagnostic(&envelope, agent).is_empty());
+            }
+        }
+    }
+}

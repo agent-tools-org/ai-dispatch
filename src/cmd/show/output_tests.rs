@@ -258,5 +258,5 @@ fn extract_messages_full_skips_truncation() {
 }
 
 
-#[path = "output_tests_more_1.rs"]
-mod more;
+#[path = "output_render_tests.rs"]
+mod render;

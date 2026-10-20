@@ -243,5 +243,5 @@ fn a_report_quoting_this_repos_own_fixture_never_marks_the_agent() {
 /// The same guarantee over every signature we ship, so a needle added later
 /// inherits it: nothing an agent can write into its own message becomes a hold.
 
-#[path = "stream_completion_tests_more_1.rs"]
-mod more;
+#[path = "stream_completion_quota_tests.rs"]
+mod quota;

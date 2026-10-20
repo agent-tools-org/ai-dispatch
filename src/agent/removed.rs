@@ -1,8 +1,14 @@
 // Reject removed execution routes while keeping stored agent names readable.
-// Exports: reject, validate_run, validate_agent_config. Deps: anyhow, RunArgs, agent config.
+// Exports: is_removed, reject, validate_run, validate_team. Deps: anyhow, RunArgs, team config.
+
+const REMOVED_AGENTS: &[&str] = &["gemini", "qwen"];
+
+pub(crate) fn is_removed(name: &str) -> bool {
+    REMOVED_AGENTS.iter().any(|removed| name.trim().eq_ignore_ascii_case(removed))
+}
 
 pub(crate) fn reject(name: &str) -> anyhow::Result<()> {
-    if matches!(name.trim().to_ascii_lowercase().as_str(), "gemini" | "qwen") {
+    if is_removed(name) {
         anyhow::bail!(
             "Agent '{}' was removed in this release; use `agy`, or a Google provider through \
              `opencode`/`kilo` or a custom agent.",
@@ -22,15 +28,7 @@ pub(crate) fn validate_run(args: &crate::cmd::run::RunArgs) -> anyhow::Result<()
             reject(name)?;
         }
     }
-    validate_team(args.team.as_deref())?;
-    validate_agent_config()
-}
-
-pub(crate) fn validate_agent_config() -> anyhow::Result<()> {
-    for name in crate::config::agent::load_agent_config().keys() {
-        reject(name)?;
-    }
-    Ok(())
+    validate_team(args.team.as_deref())
 }
 
 pub(crate) fn validate_team(name: Option<&str>) -> anyhow::Result<()> {

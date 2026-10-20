@@ -18,6 +18,7 @@ const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 pub enum ReplyOutcome {
     Queued { id: i64 },
     Written,
+    ClaudeAccepted,
     Accepted { turn_id: String },
     TimedOut,
 }
@@ -157,7 +158,8 @@ where
 
     let text = read_message(message, file)?;
     let queued = store.insert_message(task_id, MessageDirection::In, &text, source)?;
-    if !crate::runtime::codex_app_server::active(task_id) {
+    if !crate::runtime::codex_app_server::active(task_id)
+        && !crate::runtime::claude_input::active(task_id) {
         input_signal::write_steer(task_id, &text)?;
     }
     if async_mode {
@@ -176,6 +178,10 @@ where
 }
 
 pub(crate) fn ensure_interactive_input(task: &Task, command: InputCommand) -> Result<()> {
+    if matches!(command, InputCommand::Reply | InputCommand::Steer)
+        && crate::runtime::claude_input::active(task.id.as_str()) {
+        return Ok(());
+    }
     if task.agent == crate::types::AgentKind::Codex
         && matches!(command,InputCommand::Reply | InputCommand::Steer)
         && crate::runtime::codex_app_server::active(task.id.as_str())
@@ -252,6 +258,9 @@ where
             .ok_or_else(|| anyhow!("Reply message {message_id} disappeared for task {task_id}"))?;
         if let Some(turn_id) = crate::runtime::codex_app_server::receipt(store,task_id,message_id)? {
             return Ok(ReplyOutcome::Accepted { turn_id });
+        }
+        if crate::runtime::claude_input::receipt(store, task_id, message_id)? {
+            return Ok(ReplyOutcome::ClaudeAccepted);
         }
         if message.delivered_at.is_some() {
             return Ok(ReplyOutcome::Written);

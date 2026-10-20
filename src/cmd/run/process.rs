@@ -139,8 +139,8 @@ pub(crate) async fn run_agent_process_impl(mut args: RunProcessArgs<'_>) -> Resu
             args.cmd.as_std(), args.store, args.task_id,
         )?);
     }
-    let mut child = execution::spawn_agent(&mut args)?;
-    let mut info = execution::watch_agent(&args, &mut child, start).await?;
+    let (mut child, prompt) = execution::spawn_agent(&mut args)?;
+    let mut info = execution::watch_agent(&args, &mut child, start, prompt.as_deref()).await?;
     cleanup_process_group(&child);
     let _ = child.kill().await;
     let _ = child.wait().await;

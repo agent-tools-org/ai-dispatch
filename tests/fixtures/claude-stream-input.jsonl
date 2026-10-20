@@ -1,0 +1,4 @@
+{"type":"user","uuid":"00000000-0000-4000-8000-000000000000","session_id":"fixture-session","parent_tool_use_id":null,"message":{"role":"user","content":[{"type":"text","text":"initial prompt"}]},"isReplay":true}
+{"type":"result","subtype":"success","result":"first result","session_id":"fixture-session","usage":{"input_tokens":1,"output_tokens":1}}
+{"type":"user","uuid":"STEER_UUID","session_id":"fixture-session","parent_tool_use_id":null,"message":{"role":"user","content":[{"type":"text","text":"guidance"}]},"isReplay":true}
+{"type":"result","subtype":"success","result":"final result","session_id":"fixture-session","usage":{"input_tokens":2,"output_tokens":2}}

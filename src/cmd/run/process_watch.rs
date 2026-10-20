@@ -6,16 +6,18 @@ use super::*;
 use std::time::Instant;
 use tokio::process::Child;
 
-pub(super) fn spawn_agent(args: &mut RunProcessArgs<'_>) -> Result<Child> {
+pub(super) fn spawn_agent(args: &mut RunProcessArgs<'_>) -> Result<(Child, Option<String>)> {
+    let prompt = crate::runtime::claude_input::prepare(args.agent, &mut args.cmd)?;
     #[cfg(unix)]
     args.cmd.process_group(0);
     crate::cmd::noninteractive_stdio::configure(&mut args.cmd);
+    if prompt.is_some() { args.cmd.stdin(std::process::Stdio::piped()); }
     let child = match args.store.with_running_task(args.task_id.as_str(), || {
         let child = args.cmd.spawn()?;
         if let Some(pid) = child.id() {
             let _ = crate::runtime::background::update_agent_pid(args.task_id.as_str(), pid);
         }
-        Ok(child)
+        Ok((child, prompt))
     }) {
         Ok(child) => child,
         Err(err) => {
@@ -33,11 +35,12 @@ pub(super) async fn watch_agent(
     args: &RunProcessArgs<'_>,
     child: &mut Child,
     start: Instant,
+    prompt: Option<&str>,
 ) -> Result<CompletionInfo> {
     let limit = args.timeout_policy.max_duration.min(args.timeout_policy.hard_cap);
     let watch = async {
         if args.streaming {
-            crate::runtime::watcher::watch_streaming(
+            crate::runtime::watcher::watch_streaming_with_input(
                 args.agent,
                 child,
                 args.task_id,
@@ -46,6 +49,7 @@ pub(super) async fn watch_agent(
                 args.workgroup_id,
                 args.timeout_policy.idle,
                 args.max_task_cost,
+                prompt,
             )
             .await
         } else {

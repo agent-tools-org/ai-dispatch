@@ -85,15 +85,21 @@ aid unstick <task-id>
   `accepted by codex (turn <id>)`. A rejection records Codex's error; a timeout
   leaves acceptance unconfirmed. The steer response window is 30 seconds;
   a timeout is not a refusal and never marks delivery. `reply --async` only confirms queuing.
+- Claude streaming-input workers accept `steer` and `reply` (including API routes).
+  `accepted by claude` requires a replayed user envelope with the matching UUID.
+  A write alone is sent, unconfirmed; uncertain deliveries are never automatically resent.
+  `steer` waits up to 30 seconds; `reply --async` confirms only queuing.
+  Acceptance confirms receipt, not interruption of a tool or completion of the request.
+  stdin closes after submitted work settles; remaining stdout results are still drained.
+  Older Claude workers without the input transport refuse input before queuing.
 - Codex `respond` is refused; app-server does not expose approval input through
   that command. Exec fallback tasks refuse `steer`, `reply`, and `respond`
   before queuing input. Use `aid retry <id> -f "<feedback>"`, or stop then retry,
   to change direction on an exec fallback task.
 - `aid stop` asks an active Codex app-server turn to interrupt before the existing
   process termination path runs if it does not end promptly.
-- `steer` and `reply` are also refused for the one-shot print-mode `agy`, `grok`
-  and `claude` CLIs; they receive no idle nudges.
-- `respond` is refused for those same one-shot CLIs before aid writes a
+- `steer` and `reply` are also refused for the one-shot print-mode `agy` and `grok` CLIs; they receive no idle nudges.
+- `respond` is refused for Claude and those same one-shot CLIs before aid writes a
   response signal; aid says that no response signal was written.
 - For other PTY-capable adapters, `respond` writes input when the task awaits it;
   the result is written to PTY; consumption unconfirmed, just as for `reply`

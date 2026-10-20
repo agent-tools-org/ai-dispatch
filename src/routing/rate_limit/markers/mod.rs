@@ -162,7 +162,11 @@ fn write_marker(path: &std::path::Path, message: &str, provider: Option<&str>, a
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    let (recovery_at, hold_line) = match classify_hold(message, agent) {
+    let hold = classify_hold(message, agent);
+    if preserves_dated_hold(path, provider, agent, &hold) {
+        return;
+    }
+    let (recovery_at, hold_line) = match hold {
         Hold::Until(at) => (at, String::new()),
         Hold::NeedsHuman | Hold::Windowed => (String::new(), format!("hold: {MANUAL_HOLD}\n")),
         Hold::Transient => (String::new(), String::new()),
@@ -204,4 +208,29 @@ pub(crate) fn mark_untrusted_for_model(
     }
     let excerpt = message.lines().take(1).collect::<String>();
     let _ = fs::write(path, format!("source: untrusted\nmessage: {excerpt}\n"));
+}
+
+fn preserves_dated_hold(
+    path: &std::path::Path,
+    provider: Option<&str>,
+    agent: AgentKind,
+    incoming: &Hold,
+) -> bool {
+    let Ok(content) = fs::read_to_string(path) else {
+        return false;
+    };
+    if marker_field(&content, "provider: ").as_deref() != Some(provider.unwrap_or("unknown")) {
+        return false;
+    }
+    let StoredHold::Until(existing) = stored_hold(&content, &agent) else {
+        return false;
+    };
+    if existing <= Local::now().naive_local() {
+        return false;
+    }
+    match incoming {
+        Hold::Until(at) => parse_recovery_datetime(at).is_some_and(|at| existing > at),
+        Hold::Transient => true,
+        Hold::NeedsHuman | Hold::Windowed => false,
+    }
 }

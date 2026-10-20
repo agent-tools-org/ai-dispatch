@@ -42,13 +42,17 @@ four hold classes). Signatures match only the refusing agent. Reset times must
 follow that agent's known reset phrase directly or come from a typed provider
 field; unrelated timestamps and window lengths are ignored. Holds longer than
 24 hours and holds requiring a person require stderr, a typed error envelope,
-or a provider JSON field. Unsplit PTY/output text records at most a transient
+or a provider JSON field. CLI-written diagnostic logs use the stderr evidence
+class. Unsplit PTY/output text records at most a transient
 excerpt and cannot turn an exit-zero run into a failure. Grok reads only its
 `type:error` message; generic status tokens give a transient hold. Codex
 app-server uses typed error notifications and rate-limit snapshots instead of
-matching raw lines when typed evidence is available. Unrecognised failures
-record one event with `unclassified_failure: true`, the agent, and a capped
-`provider_excerpt`; this metadata does not change routing or task status.
+matching raw lines when typed evidence is available. Typed refusal messages
+retain their reset dates; a later shorter hold cannot replace a longer active
+dated hold for the same provider marker. Unrecognised failures
+record one milestone event with `unclassified_failure: true`, the agent, and a capped
+`provider_excerpt`; this metadata does not change routing or task status and
+does not replace the original error reason.
 A marker whose stated
 time has already passed does not block anything, and neither does the short
 cooldown left by an unrecognised refusal — that window is shorter than the cost

@@ -20,19 +20,18 @@ fn unknown_failures_record_one_provider_excerpt_without_changing_status() {
     std::fs::write(paths::log_path(id.as_str()),
         r#"{"type":"item.completed","item":{"type":"agent_message","text":"private assistant prose"}}"#)
         .expect("stdout");
+    store
+        .insert_agent_event(&TaskEvent {
+            task_id: id.clone(),
+            timestamp: chrono::Local::now(),
+            event_kind: EventKind::Error,
+            detail: "Original connection failure".into(),
+            metadata: None,
+        })
+        .expect("original error");
     super::super::mark_failed(&store, &id).expect("failure");
     super::super::salvage_failed_task(&store, &id);
-    let events = store.get_events(id.as_str()).expect("events");
-    let markers: Vec<_> = events
-        .iter()
-        .filter_map(|event| event.metadata.as_ref())
-        .filter(|data| data["unclassified_failure"] == true)
-        .collect();
-    assert_eq!(markers.len(), 1);
-    assert_eq!(
-        markers[0]["provider_excerpt"],
-        "Provider connection closed unexpectedly"
-    );
+    assert_unknown_marker(&store, &id);
     assert_eq!(
         store
             .get_task(id.as_str())
@@ -116,4 +115,29 @@ fn insert_task(store: &Store, id: &TaskId) {
             delivery_assessment: None,
         })
         .expect("insert task");
+}
+
+fn assert_unknown_marker(store: &Store, id: &TaskId) {
+    let events = store.get_events(id.as_str()).expect("persisted events");
+    let markers: Vec<_> = events
+        .iter()
+        .filter(|event| {
+            event
+                .metadata
+                .as_ref()
+                .is_some_and(|data| data["unclassified_failure"] == true)
+        })
+        .collect();
+    assert_eq!(markers.len(), 1);
+    assert_eq!(markers[0].event_kind, EventKind::Milestone);
+    assert_eq!(
+        markers[0].metadata.as_ref().expect("metadata")["provider_excerpt"],
+        "Provider connection closed unexpectedly"
+    );
+    let errors: Vec<_> = events
+        .iter()
+        .filter(|event| event.event_kind == EventKind::Error)
+        .collect();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].detail, "Original connection failure");
 }

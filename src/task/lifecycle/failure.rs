@@ -35,10 +35,10 @@ pub(super) fn record_unclassified(store: &Store, task_id: &TaskId) {
         return;
     }
     let excerpt = diagnostic_excerpt(&stderr, &stdout, task.agent);
-    let _ = store.insert_agent_event(&TaskEvent {
+    let _ = store.insert_event(&TaskEvent {
         task_id: task_id.clone(),
         timestamp: chrono::Local::now(),
-        event_kind: EventKind::Error,
+        event_kind: EventKind::Milestone,
         detail: "Unclassified provider failure".to_string(),
         metadata: Some(serde_json::json!({
             "unclassified_failure": true,

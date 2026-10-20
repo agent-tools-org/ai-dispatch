@@ -214,7 +214,9 @@ pub(crate) fn error_quota_message(event: &Value) -> Option<String> {
     let error = &event["error"];
     let code = &error["codexErrorInfo"];
     if code == "usageLimitExceeded" {
-        return Some("You have hit your usage limit".to_string());
+        return Some(
+            error["message"].as_str().unwrap_or("You have hit your usage limit").to_string(),
+        );
     }
     if code == "httpConnectionFailed"
         || code.get("httpConnectionFailed").is_some()

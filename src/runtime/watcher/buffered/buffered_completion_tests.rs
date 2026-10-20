@@ -98,12 +98,11 @@ async fn agy_exit_zero_with_terminal_agent_error_fails_completion() {
         event.event_kind == EventKind::Error
             && event.detail.contains("terminal executor failure")
     }));
-    let marker = std::fs::read_to_string(rate_limit::group_marker_path(
-        &AgentKind::Antigravity, None, "claude",
-    )).expect("diagnostic excerpt marker");
-    assert!(marker.contains("Individual quota reached"));
-    assert_eq!(crate::routing::availability::stored_hold(&marker, &AgentKind::Antigravity),
-        crate::routing::availability::StoredHold::Transient);
+    assert!(rate_limit::is_group_rate_limited(
+        &AgentKind::Antigravity,
+        None,
+        "claude"
+    ));
 }
 
 #[tokio::test]

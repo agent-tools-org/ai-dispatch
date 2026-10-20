@@ -67,7 +67,7 @@ fn cli_run_conversion_preserves_lifecycle_flags() {
     assert_eq!(args.iterate, Some(2));
     assert_eq!(args.eval.as_deref(), Some("evaluate"));
     assert_eq!(args.eval_feedback_template.as_deref(), Some("feedback {output}"));
-    assert_eq!(args.judge.as_deref(), Some("grok"));
+    assert_eq!(args.judge.as_deref(), Some("agy"));
     assert_eq!(args.peer_review.as_deref(), Some("claude"));
     assert_eq!(args.retry, 3);
     assert!(args.background && args.dry_run && args.announce && args.read_only);

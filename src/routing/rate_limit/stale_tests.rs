@@ -60,8 +60,11 @@ fn clear_group_rate_limit_if_stale_clears_only_matching_group() {
     clear_all_rate_limits_for_agent(&agent, None);
 
     mark_rate_limited(&agent, None, "Agent rate limit");
-    mark_group_rate_limited(&agent, None, "gemini", "Gemini quota exhausted");
-    mark_group_rate_limited(&agent, None, "claude", "Claude quota exhausted");
+    mark_group_rate_limited(&agent, None, "gemini", "Individual quota reached. Resets in 59m21s.");
+    mark_group_rate_limited(&agent, None, "claude", "Individual quota reached. Resets in 59m21s.");
+
+    assert!(is_group_rate_limited(&agent, None, "gemini"));
+    assert!(is_group_rate_limited(&agent, None, "claude"));
 
     let task_start = Local::now() + chrono::Duration::minutes(5);
 
@@ -96,8 +99,9 @@ fn clear_rate_limit_does_not_clear_group_markers() {
     clear_all_rate_limits_for_agent(&agent, None);
 
     mark_rate_limited(&agent, None, "Agent level limit");
-    mark_group_rate_limited(&agent, None, "gemini", "Gemini quota exhausted");
+    mark_group_rate_limited(&agent, None, "gemini", "Individual quota reached. Resets in 59m21s.");
 
+    assert!(is_group_rate_limited(&agent, None, "gemini"));
     assert!(clear_rate_limit(&agent, None));
     assert!(
         !is_rate_limited(&agent, None),

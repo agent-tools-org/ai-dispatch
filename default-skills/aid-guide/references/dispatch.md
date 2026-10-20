@@ -232,7 +232,7 @@ model, budget, context, scope, checklist, skill, template, hook, container, and 
 
 `--best-of N` races the top N launchable builtin `aid advise` candidates for the
 declared profile, kind, team and caller pool. Unavailable, disabled, held (including
-the selected model's group), auth-failed, superseded, weaker-caller-pool and
+the selected model's group), auth-failed, weaker-caller-pool and
 below-floor routes do not race; Claude requires team preference. Custom advice
 uses a separate scale and is excluded. Fewer launchable candidates cycle to N;
 none produces an error before creating racer tasks.
@@ -249,38 +249,6 @@ their usual best-of behavior. Missing profile dimensions use the advice defaults
 Outside best-of, missing task-profile dimensions produce one warning and persist as null. Projects
 with `require_task_profile = true` reject incomplete runs; the production profile
 enables this requirement.
-
-## Completion judgment and exit status
-
-`TaskStatus` answers lifecycle and integration: whether a task is running, has
-delivered artifacts, or has been merged. `VerifyStatus` answers what happened
-to verification. Delivery assessment records empty-diff / hollow / missing-final
-observations. `TaskOutcome` is derived from those facts and is the only axis
-that answers whether the task succeeded.
-
-The terminal outcomes are:
-
-- `Verified`: delivered and verification passed.
-- `Delivered`: delivered without required verification.
-- `Broken`: delivered but verification failed.
-- `Unverified`: delivered, but verification was inconclusive because it timed
-  out, failed as infrastructure, produced no result, or the agent exited
-  unobserved because no completion event survived the agent exit (kill and
-  success cannot be told apart).
-- `Failed`, `Stopped`, and `Skipped`: the task did not produce a successful
-  delivery; `InProgress` is non-terminal.
-
-Only `Verified` and `Delivered` are success outcomes. Hollow or missing-final
-delivery assessments demote an otherwise successful outcome to `Failed` so
-empty runs do not inflate `aid stats` / `aid advise`. `empty_diff` alone does
-not demote. A foreground `aid run` exits 0 only for success outcomes; all other
-outcomes use a non-zero exit. Do not read `Done` or `Merged` as success without
-checking the outcome.
-
-When `aid wait` observes `verify_status = pending`, it
-continues waiting for verification, bounded by the verification timeout. Once
-the task settles, either command returns non-zero if the outcome is not a
-success outcome.
 
 ## Task Execution Isolation
 

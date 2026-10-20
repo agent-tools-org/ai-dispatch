@@ -66,9 +66,12 @@ fn substituted_model_is_persisted_as_aid_resolved() {
         &AgentKind::Cursor,
         None,
         "premium",
-        "premium quota exhausted",
+        "You're out of usage. Switch to Auto.",
     );
-    let _served = MockServedModelsGuard::set(AgentKind::Cursor, Some(vec!["auto".to_string()]));
+    let _served = MockServedModelsGuard::set(
+        AgentKind::Cursor,
+        Some(vec!["composer-2.5".to_string(), "auto".to_string()]),
+    );
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut args = RunArgs {
         agent_name: "cursor".to_string(),

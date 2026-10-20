@@ -125,11 +125,13 @@ fn quota_scan_tail_aligns_start_to_line_boundary() {
     let split_line_header = "split line start ";
     let split_line_y = "y".repeat(100);
 
-    let mut suffix = String::with_capacity(65_440);
-    while suffix.len() < 65_440 {
+    let suffix_len = 65_636
+        - prefix.len() - split_line_header.len() - split_line_y.len() - refusal.len() - 2;
+    let mut suffix = String::with_capacity(suffix_len);
+    while suffix.len() < suffix_len {
         suffix.push_str("trailing diagnostic line...\n");
     }
-    suffix.truncate(65_440);
+    suffix.truncate(suffix_len);
 
     let output = format!("{prefix}{split_line_header}{split_line_y}\n{refusal}\n{suffix}");
     assert_eq!(output.len(), 65_636);

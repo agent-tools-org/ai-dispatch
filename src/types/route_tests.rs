@@ -54,7 +54,7 @@ fn different_clis_do_not_share_a_pool() {
 /// take out every unmapped CLI at once.
 #[test]
 fn unknown_providers_never_share() {
-    let a = Route::for_cli(AgentKind::Codex);
+    let a = Route::for_cli(AgentKind::Kilo);
     let b = Route::for_cli(AgentKind::Custom);
     assert!(a.provider.is_unknown() && b.provider.is_unknown());
     assert!(!a.shares_pool_with(&b));

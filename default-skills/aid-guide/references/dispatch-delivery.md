@@ -237,3 +237,35 @@ MCP elicitation is canceled. Requests that require unavailable client capabiliti
 After completion, aid closes input and drains final notifications and session writes within a
 bounded shutdown window. Rate-limit windows at 100% do not create a hold when paid or unlimited
 credits remain available; explicit credit/spend-control refusals remain evidence of a hold.
+
+## Completion judgment and exit status
+
+`TaskStatus` answers lifecycle and integration: whether a task is running, has
+delivered artifacts, or has been merged. `VerifyStatus` answers what happened
+to verification. Delivery assessment records empty-diff / hollow / missing-final
+observations. `TaskOutcome` is derived from those facts and is the only axis
+that answers whether the task succeeded.
+
+The terminal outcomes are:
+
+- `Verified`: delivered and verification passed.
+- `Delivered`: delivered without required verification.
+- `Broken`: delivered but verification failed.
+- `Unverified`: delivered, but verification was inconclusive because it timed
+  out, failed as infrastructure, produced no result, or the agent exited
+  unobserved because no completion event survived the agent exit (kill and
+  success cannot be told apart).
+- `Failed`, `Stopped`, and `Skipped`: the task did not produce a successful
+  delivery; `InProgress` is non-terminal.
+
+Only `Verified` and `Delivered` are success outcomes. Hollow or missing-final
+delivery assessments demote an otherwise successful outcome to `Failed` so
+empty runs do not inflate `aid stats` / `aid advise`. `empty_diff` alone does
+not demote. A foreground `aid run` exits 0 only for success outcomes; all other
+outcomes use a non-zero exit. Do not read `Done` or `Merged` as success without
+checking the outcome.
+
+When `aid wait` observes `verify_status = pending`, it
+continues waiting for verification, bounded by the verification timeout. Once
+the task settles, either command returns non-zero if the outcome is not a
+success outcome.

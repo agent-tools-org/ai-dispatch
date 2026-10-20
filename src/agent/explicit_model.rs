@@ -65,9 +65,9 @@ mod tests {
     #[test]
     fn config_override_warning_does_not_claim_no_eligible_model() {
         let msg = declared_budget_model_warning(
-            "grok",
+            "claude",
             Some(TaskBudget::Cheap),
-            Some("pro"),
+            Some("claude-opus-5"),
             true,
         )
         .expect("configured default that outranks cheap catalog rows must warn");
@@ -76,7 +76,7 @@ mod tests {
             "catalog still has cheap rows; they were outranked: {msg}"
         );
         assert!(
-            msg.contains("configured default") && msg.contains("pro") && msg.contains("cheap"),
+            msg.contains("configured default") && msg.contains("claude-opus-5") && msg.contains("cheap"),
             "{msg}"
         );
     }
@@ -98,9 +98,9 @@ mod tests {
     fn on_preference_model_does_not_warn() {
         assert_eq!(
             declared_budget_model_warning(
-                "grok",
+                "claude",
                 Some(TaskBudget::Cheap),
-                Some("flash-lite"),
+                Some("haiku"),
                 false,
             ),
             None

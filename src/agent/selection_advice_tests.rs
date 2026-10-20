@@ -275,13 +275,13 @@ fn budget_simple_edit_advice_launches_eligible_budget_model() {
 #[test]
 fn team_override_changes_the_advised_agent() {
     let (_temp, _home, _cache) = isolated();
-    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Grok, AgentKind::OpenCode]);
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Kilo, AgentKind::OpenCode]);
     let profile = declared(TaskDifficulty::Simple, TaskBudget::Standard);
     let prompt = "rename src/types.rs field name to task_name";
     assert_eq!(advise(prompt, profile, None, None, None, 0, None).recommended.expect("baseline").agent, "opencode");
-    let team: TeamConfig = toml::from_str("id = 'override'\ndisplay_name = 'Override'\npreferred_agents = []\n[overrides.grok]\nsimple_edit = 10\n").expect("team");
+    let team: TeamConfig = toml::from_str("id = 'override'\ndisplay_name = 'Override'\npreferred_agents = []\n[overrides.kilo]\nsimple_edit = 10\n").expect("team");
     let picked = advise(prompt, profile, None, Some(&team), None, 0, None).recommended.expect("override");
-    assert_eq!((picked.agent.as_str(), picked.model.as_deref()), ("grok", None));
+    assert_eq!((picked.agent.as_str(), picked.model.as_deref()), ("kilo", None));
 }
 
 #[test]

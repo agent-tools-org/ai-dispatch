@@ -2,7 +2,7 @@
 // Exports: parse_claude_reset_clock, claude_rejected_limit, parse_recovery_time.
 // Deps: chrono, serde_json, rate_limit recovery formatting.
 
-use super::{format_recovery, parse_iso_recovery_time};
+use super::format_recovery;
 use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, TimeZone, Utc};
 
 pub(crate) fn parse_recovery_time(message: &str) -> Option<String> {
@@ -26,7 +26,7 @@ pub(crate) fn parse_recovery_time(message: &str) -> Option<String> {
         let end = remainder.find('.').unwrap_or(remainder.len());
         Some(remainder[..end].trim().to_string())
     } else {
-        parse_iso_recovery_time(message)
+        None
     }
 }
 

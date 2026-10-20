@@ -124,23 +124,8 @@ pub(crate) fn parse_grok_models_output(output: &str) -> Vec<String> {
 }
 
 #[cfg(test)]
-mod parser_tests {
-    use super::parse_grok_models_output;
-
-    #[test]
-    fn parses_current_grok_models_output_and_ignores_footer_text() {
-        let output = r#"You are logged in with grok.com.
-
-Default model: grok-4.6
-
-Available models:
-  * grok-4.6 (default)
-  - grok-4.5
-"#;
-        assert_eq!(parse_grok_models_output(output), ["grok-4.6", "grok-4.5"]);
-        assert_eq!(parse_grok_models_output(&format!("{output}Footer text")), ["grok-4.6", "grok-4.5"]);
-    }
-}
+#[path = "grok_models_tests.rs"]
+mod parser_tests;
 
 /// Find grok's JSON envelope inside a buffer that also carries aid's own writes.
 ///
@@ -261,7 +246,11 @@ fn model_usage_cost(value: &Value) -> Option<f64> {
 
 fn maybe_mark_rate_limit(detail: &str) {
     if rate_limit::is_rate_limit_error_for_agent(detail, &AgentKind::Grok) {
-        rate_limit::mark_rate_limited(&AgentKind::Grok, None, detail);
+        if rate_limit::signatures::match_quota_signature_for_agent(detail, AgentKind::Grok).is_some() {
+            rate_limit::mark_rate_limited(&AgentKind::Grok, None, detail);
+        } else {
+            rate_limit::mark_untrusted_for_model(&AgentKind::Grok, None, None, detail);
+        }
     }
 }
 
@@ -296,3 +285,7 @@ pub fn make_completion_event(task_id: &TaskId, info: &CompletionInfo) -> TaskEve
 #[cfg(test)]
 #[path = "grok_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "grok_scope_tests.rs"]
+mod scope_tests;

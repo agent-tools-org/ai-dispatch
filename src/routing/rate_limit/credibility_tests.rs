@@ -18,7 +18,7 @@ fn opencode_model_refusal_holds_only_the_nvidia_provider() {
     let agent = AgentKind::OpenCode;
 
     crate::agent::stream_completion::record_quota_exhaustion(
-        "Insufficient balance. Manage your billing here.",
+        r#"{"type":"error","message":"Insufficient balance. Manage your billing here."}"#,
         agent,
         None,
         Some("nvidia/llama-4-maverick"),
@@ -185,7 +185,7 @@ fn opencode_missing_provider_key_stays_agent_wide() {
 }
 
 #[test]
-fn long_refusal_keeps_an_iso_reset_timestamp_after_the_old_cutoff() {
+fn long_refusal_keeps_excerpt_but_ignores_unscoped_iso_timestamp() {
     let temp = isolated();
     let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let prefix = "diagnostic detail ".repeat(20);
@@ -194,7 +194,8 @@ fn long_refusal_keeps_an_iso_reset_timestamp_after_the_old_cutoff() {
     mark_rate_limited(&AgentKind::OpenCode, None, &message);
 
     let info = get_rate_limit_info(&AgentKind::OpenCode, None).expect("marker");
-    assert!(info.recovery_at.is_some(), "{info:?}");
+    assert!(info.recovery_at.is_none(), "{info:?}");
+    assert!(info.needs_human);
     assert!(info.message.is_some_and(|stored| stored.len() > 200));
 }
 

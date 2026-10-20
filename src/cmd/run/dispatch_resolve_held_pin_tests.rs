@@ -122,9 +122,10 @@ fn substituted_route_keeps_agent_config_model_despite_served_list_miss() {
     let dir = tempfile::tempdir().expect("tempdir");
     let _guard = AidHomeGuard::set(dir.path());
     // grok is agent-level held — the agent-level substitution trigger.
-    crate::routing::rate_limit::mark_rate_limited(
+    crate::routing::rate_limit::mark_rate_limited_until(
         &AgentKind::Grok,
         None,
+        chrono::Local::now().naive_local() + chrono::Duration::days(1),
         &format!(
             "Individual quota reached. Please upgrade your subscription. try again at {}.",
             crate::routing::rate_limit::test_future_recovery_time()

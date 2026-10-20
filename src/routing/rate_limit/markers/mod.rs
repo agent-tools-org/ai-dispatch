@@ -50,6 +50,8 @@ pub fn mark_group_rate_limited(
         &group_marker_path(agent, custom_name, group),
         message,
         provider,
+        *agent,
+        super::identity::signature_agent(*agent, custom_name),
     );
 }
 
@@ -65,7 +67,9 @@ pub fn clear_group_rate_limit(agent: &AgentKind, custom_name: Option<&str>, grou
 }
 
 pub fn mark_rate_limited(agent: &AgentKind, custom_name: Option<&str>, message: &str) {
-    write_marker(&marker_path(agent, custom_name), message, None);
+    mark_rate_limited_for_signature(
+        agent, custom_name, super::identity::signature_agent(*agent, custom_name), message,
+    );
 }
 
 /// Record a refusal when the caller has no model in hand — a stderr line, a
@@ -157,18 +161,47 @@ pub(crate) fn format_recovery(at: NaiveDateTime) -> String {
     at.format("%b %d, %Y %I:%M %p").to_string()
 }
 
-fn write_marker(path: &std::path::Path, message: &str, provider: Option<&str>) {
+fn write_marker(
+    path: &std::path::Path,
+    message: &str,
+    provider: Option<&str>,
+    agent: AgentKind,
+    signature_agent: AgentKind,
+) {
+    write_marker_with_hold(
+        path,
+        message,
+        provider,
+        agent,
+        signature_agent,
+        classify_hold(message, signature_agent),
+    );
+}
+
+fn write_marker_with_hold(
+    path: &std::path::Path,
+    message: &str,
+    provider: Option<&str>,
+    agent: AgentKind,
+    signature_agent: AgentKind,
+    hold: Hold,
+) {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    let (recovery_at, hold_line) = match classify_hold(message) {
+    if preserves_dated_hold(path, provider, agent, &hold) {
+        return;
+    }
+    let (recovery_at, hold_line) = match hold {
         Hold::Until(at) => (at, String::new()),
         Hold::NeedsHuman | Hold::Windowed => (String::new(), format!("hold: {MANUAL_HOLD}\n")),
         Hold::Transient => (String::new(), String::new()),
     };
     let provider_line = format!("provider: {}\n", provider.unwrap_or("unknown"));
-    let content =
-        format!("recovery_at: {recovery_at}\n{hold_line}{provider_line}message: {message}\n");
+    let signature_line = format!("signature_agent: {}\n", signature_agent.as_str());
+    let content = format!(
+        "recovery_at: {recovery_at}\n{hold_line}{provider_line}{signature_line}message: {message}\n",
+    );
     let _ = fs::write(path, content);
 }
 
@@ -180,4 +213,79 @@ pub(crate) fn marker_field(content: &str, key: &str) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string)
+}
+
+/// Unsplit output can preserve a refusal excerpt, but cannot establish a long hold.
+pub(crate) fn mark_untrusted_for_model(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    model: Option<&str>,
+    message: &str,
+) {
+    let path = match quota_group_for_mark(*agent, model, message, None) {
+        Some(group) => group_marker_path(agent, custom_name, group),
+        None => marker_path(agent, custom_name),
+    };
+    if let Ok(content) = fs::read_to_string(&path)
+        && !matches!(stored_hold(&content, agent), StoredHold::Transient)
+    {
+        return;
+    }
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let excerpt = message.lines().take(1).collect::<String>();
+    let _ = fs::write(path, format!("source: untrusted\nmessage: {excerpt}\n"));
+}
+
+fn preserves_dated_hold(
+    path: &std::path::Path,
+    provider: Option<&str>,
+    agent: AgentKind,
+    incoming: &Hold,
+) -> bool {
+    let Ok(content) = fs::read_to_string(path) else {
+        return false;
+    };
+    if marker_field(&content, "provider: ").as_deref() != Some(provider.unwrap_or("unknown")) {
+        return false;
+    }
+    let StoredHold::Until(existing) = stored_hold(&content, &agent) else {
+        return false;
+    };
+    if existing <= Local::now().naive_local() {
+        return false;
+    }
+    match incoming {
+        Hold::Until(at) => parse_recovery_datetime(at).is_some_and(|at| existing > at),
+        Hold::Transient => true,
+        Hold::NeedsHuman | Hold::Windowed => false,
+    }
+}
+
+pub(crate) fn mark_rate_limited_for_signature(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    signature_agent: AgentKind,
+    message: &str,
+) {
+    let signature_agent = if *agent == AgentKind::Custom { signature_agent } else { *agent };
+    write_marker(&marker_path(agent, custom_name), message, None, *agent, signature_agent);
+}
+
+#[cfg(test)]
+pub(crate) fn mark_rate_limited_until(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    reset: NaiveDateTime,
+    message: &str,
+) {
+    write_marker_with_hold(
+        &marker_path(agent, custom_name),
+        message,
+        None,
+        *agent,
+        super::identity::signature_agent(*agent, custom_name),
+        Hold::Until(format_recovery(reset)),
+    );
 }

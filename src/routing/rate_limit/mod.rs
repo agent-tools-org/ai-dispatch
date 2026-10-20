@@ -20,13 +20,16 @@ use std::path::PathBuf;
 mod claude;
 pub(crate) use claude::{claude_rejected_limit, parse_claude_reset_clock, parse_recovery_time};
 
+mod identity;
+pub(crate) use identity::stored_signature_agent;
+
 mod markers;
 pub use markers::*;
 mod state;
 use state::discovered_group_markers;
 pub use state::*;
 mod detection;
-use detection::parse_iso_recovery_time;
+
 #[cfg(test)]
 pub(crate) use detection::test_future_recovery_time;
 pub use detection::*;

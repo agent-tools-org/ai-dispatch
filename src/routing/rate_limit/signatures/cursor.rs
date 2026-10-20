@@ -35,6 +35,10 @@ mod tests {
 
     const CAPTURE: &str = include_str!("../../../../tests/fixtures/cursor-usage-limit-refusal.txt");
 
+    fn provider_error(message: &str) -> String {
+        serde_json::json!({"type":"error", "message":message}).to_string()
+    }
+
     fn running_cursor_task() -> crate::types::Task {
         crate::types::Task {
             id: TaskId("t-cursor-monthly-replay".to_string()), agent: AgentKind::Cursor,
@@ -97,7 +101,7 @@ mod tests {
             .expect("finished task must classify as a quota failure");
         assert_eq!(refusal, CAPTURE.trim());
         assert_eq!(
-            record_quota_exhaustion(&refusal, AgentKind::Cursor, None, Some("Auto")),
+            record_quota_exhaustion(&provider_error(&refusal), AgentKind::Cursor, None, Some("Auto")),
             QuotaOutcome::RecordedFailed,
         );
         let marker = rate_limit::group_marker_path(&AgentKind::Cursor, None, "auto");
@@ -120,7 +124,10 @@ mod tests {
         let _cache = crate::routing::quota::live::CacheDirGuard::set(temp.path());
         let refusal = CAPTURE.replace("9/23/2026", "9/23/2099");
         for (model, group, other) in [("Auto", "auto", "composer-2.5"), ("composer-2.5", "premium", "auto")] {
-            assert_eq!(record_quota_exhaustion(&refusal, AgentKind::Cursor, None, Some(model)), QuotaOutcome::RecordedFailed);
+            assert_eq!(
+                record_quota_exhaustion(&provider_error(&refusal), AgentKind::Cursor, None, Some(model)),
+                QuotaOutcome::RecordedFailed,
+            );
             assert!(rate_limit::is_group_rate_limited(&AgentKind::Cursor, None, group));
             assert!(rate_limit::dispatch_blocking_hold_for_model(&AgentKind::Cursor, None, Some(model)).is_some());
             assert!(rate_limit::dispatch_blocking_hold_for_model(&AgentKind::Cursor, None, Some(other)).is_none());
@@ -136,7 +143,10 @@ mod tests {
         let _cache = crate::routing::quota::live::CacheDirGuard::set(temp.path());
         for date in ["", "not-a-date", "2/30/2099", "13/1/2099", "9/23/26"] {
             let refusal = CAPTURE.replace("9/23/2026", date);
-            assert_eq!(record_quota_exhaustion(&refusal, AgentKind::Cursor, None, Some("auto")), QuotaOutcome::RecordedFailed);
+            assert_eq!(
+                record_quota_exhaustion(&provider_error(&refusal), AgentKind::Cursor, None, Some("auto")),
+                QuotaOutcome::RecordedFailed,
+            );
             let content = std::fs::read_to_string(rate_limit::group_marker_path(&AgentKind::Cursor, None, "auto")).expect("marker");
             let recovery = rate_limit::marker_field(&content, "recovery_at: ").expect("long hold");
             let at = rate_limit::parse_recovery_datetime(&recovery).expect("valid recovery");

@@ -170,9 +170,12 @@ fn verify_on(
     let env = environment.get_envs().filter_map(|(key, value)| {
         value.map(|value| (key.to_string_lossy().into_owned(), value.to_string_lossy().into_owned()))
     }).collect::<Vec<_>>();
-    crate::task::verify::run_verify_with_env(
+    let mut result = crate::task::verify::run_verify_with_env(
         path, command, target, container, crate::task::verify::VerifyBudget::Deadline(deadline), &env,
-    )
+    )?;
+    result.infrastructure_failure = !result.success && !result.timed_out
+        && crate::task::verify::infrastructure::diagnostic(&result.output).is_some();
+    Ok(result)
 }
 
 fn verify_deadline(

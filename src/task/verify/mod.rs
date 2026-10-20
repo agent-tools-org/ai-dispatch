@@ -133,14 +133,12 @@ fn execute_verify(
         combined
     };
     let success = status.as_ref().is_some_and(|status| status.success());
-    let infrastructure_failure = !success && !timed_out
-        && infrastructure::diagnostic(&combined).is_some();
     Ok(VerifyResult {
         success,
         timed_out,
         output: combined,
         command: cmd_str,
-        infrastructure_failure,
+        infrastructure_failure: false,
         exit_code,
     })
 }

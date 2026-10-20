@@ -2,7 +2,7 @@
 // Covers infrastructure status enforcement and conservative no-replay classification.
 use super::*;
 use crate::support::test_env::write_executable;
-use crate::task::verify::{self, VerifyBudget};
+use crate::task::verify;
 
 fn fake_verify(diagnostic: &str, exit: i32) -> verify::VerifyResult {
     let temp = tempfile::tempdir().expect("temp");
@@ -10,15 +10,22 @@ fn fake_verify(diagnostic: &str, exit: i32) -> verify::VerifyResult {
         &temp.path().join("rbox"),
         &format!("#!/bin/sh\ncat <<'DIAGNOSTIC'\n{diagnostic}\nDIAGNOSTIC\nexit {exit}\n"),
     );
-    verify::run_verify_with_env(
-        temp.path(),
-        Some("rbox exec fake-box"),
-        None,
-        None,
-        VerifyBudget::Duration(std::time::Duration::from_secs(5)),
-        &[("PATH".into(), format!("{}:/usr/bin:/bin", temp.path().display()))],
-    )
-    .expect("fake verify")
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let store = crate::store::Store::open_memory().expect("store");
+    store.db().execute(
+        "INSERT INTO tasks (id, agent, prompt, status, created_at) VALUES
+         ('t-infra-fake', 'codex', 'task', 'done', ?1)",
+        [chrono::Local::now().to_rfc3339()],
+    ).expect("task");
+    let args = crate::cmd::run::RunArgs {
+        remote_build: Some("fake-box".into()), ..Default::default()
+    };
+    store.update_task_dispatch_args("t-infra-fake", &args.dispatch_args_json().expect("json"))
+        .expect("save");
+    let command = format!("PATH='{}:/usr/bin:/bin' rbox exec fake-box", temp.path().display());
+    crate::runtime::remote_build::verify(
+        &store, "t-infra-fake", temp.path(), Some(&command), None, None,
+    ).expect("fake verify")
 }
 
 #[test]

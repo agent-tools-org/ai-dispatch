@@ -258,6 +258,9 @@ fn infrastructure_diagnostic_survives_long_output_in_show_and_board() {
     let dir = temp.path().to_string_lossy().to_string();
     let task = make_task("t-infra-show", &dir);
     store.insert_task(&task).expect("task");
+    let args = RunArgs { remote_build: Some("box".into()), ..Default::default() };
+    store.update_task_dispatch_args(task.id.as_str(), &args.dispatch_args_json().expect("json"))
+        .expect("save remote box");
     let line = "rbox: Box lock not acquired within 60 s";
     crate::support::test_env::write_executable(&temp.path().join("rbox"), &format!(
         "#!/bin/sh\necho '{line}'\ni=0\n\
@@ -272,4 +275,20 @@ fn infrastructure_diagnostic_survives_long_output_in_show_and_board() {
     assert!(board.contains("[VINFRA]") && board.contains(line), "{board}");
     let show = crate::cmd::show::audit_text(&Arc::new(store), task.id.as_str()).expect("show");
     assert!(show.contains(line), "{show}");
+}
+
+#[test]
+fn local_verify_with_anchored_rbox_output_stays_failed() {
+    let temp = TempDir::new().expect("temp");
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let store = Store::open_memory().expect("store");
+    let dir = temp.path().to_string_lossy().to_string();
+    let task = make_task("t-local-rbox-output", &dir);
+    store.insert_task(&task).expect("task");
+    assert!(RunArgs::saved_for_task(&store, task.id.as_str()).expect("args").is_none());
+    let command = "printf 'rbox: Box lock not acquired within 60 s\\n'; exit 1";
+    maybe_verify_impl(&store, &task.id, Some(command), Some(&dir), None);
+    let task = store.get_task(task.id.as_str()).expect("load").expect("task");
+    assert_eq!(task.verify_status, VerifyStatus::Failed);
+    assert_eq!(task.status, TaskStatus::Failed);
 }

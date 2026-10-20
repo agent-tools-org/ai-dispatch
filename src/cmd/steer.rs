@@ -9,17 +9,20 @@ use crate::types::MessageSource;
 
 pub fn run(store: &Store, task_id: &str, message: &str) -> Result<()> {
     let app_server = crate::runtime::codex_app_server::active(task_id);
+    let claude = crate::runtime::claude_input::active(task_id);
     let outcome = reply::run_with_source(
         store,
         task_id,
         Some(message),
         None,
-        !app_server,
+        !(app_server || claude),
         30,
         MessageSource::Steer,
         InputCommand::Steer,
     )?;
     match outcome {
+        reply::ReplyOutcome::ClaudeAccepted => println!("accepted by claude"),
+        reply::ReplyOutcome::TimedOut if claude => anyhow::bail!("Claude input sent or queued, acceptance unconfirmed after timeout"),
         reply::ReplyOutcome::Accepted { turn_id } => println!("accepted by codex (turn {turn_id})"),
         reply::ReplyOutcome::TimedOut if app_server => anyhow::bail!("Codex steer response unconfirmed after timeout"),
         _ => println!("Queued steer for {task_id}: {}", message.chars().take(80).collect::<String>()),

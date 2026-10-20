@@ -33,6 +33,45 @@ pub fn force_kill_process_group(child: &tokio::process::Child) {
 #[cfg(not(unix))]
 pub fn force_kill_process_group(_child: &tokio::process::Child) {}
 
+pub(crate) async fn terminate_child_group(child: &mut tokio::process::Child) -> std::io::Result<()> {
+    #[cfg(unix)]
+    if let Some(pid) = child.id() {
+        let pgid = pid as i32;
+        let snapshot = DescendantCleanup { pgid, entries: descendants(pid) };
+        let pids = snapshot.entries.iter().map(|entry| entry.pid).collect::<Vec<_>>();
+        signal_process_group(pgid, libc::SIGTERM);
+        signal_processes(&pids, libc::SIGTERM);
+        let deadline = tokio::time::Instant::now() + DEFAULT_KILL_GRACE;
+        while tokio::time::Instant::now() < deadline {
+            child.try_wait()?;
+            if !process_group_exists(pgid) {
+                break;
+            }
+            tokio::time::sleep(KILL_POLL_INTERVAL).await;
+        }
+        drop(snapshot);
+    }
+    let _ = child.kill().await;
+    child.wait().await?;
+    Ok(())
+}
+
+#[cfg(unix)]
+struct DescendantCleanup {
+    pgid: i32,
+    entries: Vec<ProcessEntry>,
+}
+
+#[cfg(unix)]
+impl Drop for DescendantCleanup {
+    fn drop(&mut self) {
+        if process_group_exists(self.pgid) {
+            signal_process_group(self.pgid, libc::SIGKILL);
+        }
+        signal_processes(&unchanged_pids(&self.entries, &process_table()), libc::SIGKILL);
+    }
+}
+
 /// Signals the group led by `pgid` and every descendant of its leader, captured
 /// before the first signal: an agent's tool commands (Claude Code's Bash) run in
 /// their own session, so the group alone misses them, and once the leader dies
@@ -190,3 +229,7 @@ fn signal_process_group(pgid: i32, signal: i32) {
 #[cfg(unix)]
 #[path = "group_tests.rs"]
 mod tests;
+
+#[cfg(all(test, unix))]
+#[path = "group_async_tests.rs"]
+mod async_tests;

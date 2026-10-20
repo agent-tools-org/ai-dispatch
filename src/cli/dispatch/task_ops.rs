@@ -105,11 +105,14 @@ pub(super) fn reply(
         cmd::reply::ReplyOutcome::Accepted { turn_id } => {
             println!("accepted by codex (turn {turn_id})");
         }
+        cmd::reply::ReplyOutcome::ClaudeAccepted => println!("accepted by claude"),
         cmd::reply::ReplyOutcome::Written => {
             println!("Reply for {task_id} written to PTY; consumption unconfirmed");
         }
         cmd::reply::ReplyOutcome::TimedOut => {
-            if crate::runtime::codex_app_server::active(&task_id) {
+            if crate::runtime::claude_input::active(&task_id) {
+                println!("Reply for {task_id}: Claude acceptance unconfirmed after timeout");
+            } else if crate::runtime::codex_app_server::active(&task_id) {
                 println!("Reply for {task_id}: Codex response unconfirmed after timeout");
             } else {
                 println!("Reply for {task_id}: PTY write unconfirmed after timeout; consumption unconfirmed");

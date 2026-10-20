@@ -85,15 +85,27 @@ aid unstick <task-id>
   `accepted by codex (turn <id>)`. A rejection records Codex's error; a timeout
   leaves acceptance unconfirmed. The steer response window is 30 seconds;
   a timeout is not a refusal and never marks delivery. `reply --async` only confirms queuing.
+- Claude streaming-input workers accept `steer` and `reply` (including API routes).
+  `accepted by claude` requires a replayed user envelope with the matching UUID.
+  Background and foreground Claude runs use piped streaming input even for interactive specs.
+  A write alone is sent, unconfirmed; uncertain deliveries are never automatically resent.
+  Failed or timed-out steer writes close stdin and leave acceptance unconfirmed without failing the task.
+  The initial prompt write has no separate transport timeout; the task deadline still applies.
+  Initial write errors fail the run, except broken pipe, which preserves child exit settlement.
+  `steer` waits up to 30 seconds; `reply --async` confirms only queuing.
+  Acceptance confirms receipt, not interruption of a tool or completion of the request.
+  A replayed queued message requires a subsequent result before stdin closes; remaining
+  stdout results are still drained. A closed input pipe leaves delivery unconfirmed;
+  startup refusals still settle from the child exit and output.
+  Older Claude workers without the input transport refuse input before queuing.
 - Codex `respond` is refused; app-server does not expose approval input through
   that command. Exec fallback tasks refuse `steer`, `reply`, and `respond`
   before queuing input. Use `aid retry <id> -f "<feedback>"`, or stop then retry,
   to change direction on an exec fallback task.
 - `aid stop` asks an active Codex app-server turn to interrupt before the existing
   process termination path runs if it does not end promptly.
-- `steer` and `reply` are also refused for the one-shot print-mode `agy`, `grok`
-  and `claude` CLIs; they receive no idle nudges.
-- `respond` is refused for those same one-shot CLIs before aid writes a
+- `steer` and `reply` are also refused for the one-shot print-mode `agy` and `grok` CLIs; they receive no idle nudges.
+- `respond` is refused for Claude and those same one-shot CLIs before aid writes a
   response signal; aid says that no response signal was written.
 - For other PTY-capable adapters, `respond` writes input when the task awaits it;
   the result is written to PTY; consumption unconfirmed, just as for `reply`
@@ -308,6 +320,9 @@ inflate success rates used by `aid advise`. `aid stats` and `aid cost` show
 from totals rather than recorded as `$0.00`.
 
 ## Machine-facing completion data
+
+PTY and piped runs record a completion summary with duration, tokens and cost when available,
+and refresh project state after recording completion.
 
 MCP task views, task hook payloads, and task webhooks add `outcome` and
 `verify_status` fields. Existing `status` fields retain their lifecycle meaning;

@@ -1,6 +1,10 @@
 // Watcher engine: reads agent stdout/stderr and records events to store.
 // Exports streaming and buffered watchers plus shared watcher state.
 mod buffered;
+mod completion;
+use completion::{apply_completion_event, exceeds_cost_ceiling};
+mod input;
+pub use input::watch_streaming;
 mod api_route;
 mod esc;
 mod extract;
@@ -48,7 +52,7 @@ pub(crate) use stream::{
     StreamLineContext, apply_codex_delivery_guard, handle_streaming_line_with_session,
 };
 /// Watch a child process, parse output, store events, return completion info
-pub async fn watch_streaming(
+pub(crate) async fn watch_streaming_with_input(
     agent: &dyn Agent,
     child: &mut Child,
     task_id: &TaskId,
@@ -57,12 +61,25 @@ pub async fn watch_streaming(
     workgroup_id: Option<&str>,
     idle_timeout: Duration,
     max_task_cost: Option<f64>,
+    prompt: Option<&str>,
+    policy: Option<crate::config::timeout_policy::TimeoutPolicy>,
 ) -> Result<CompletionInfo> {
     let stdout = child
         .stdout
         .take()
         .ok_or_else(|| anyhow::anyhow!("No stdout on child process"))?;
-    let reader = BufReader::new(stdout);
+    let mut watchdog = policy.filter(|_| prompt.is_some()).map(
+        crate::runtime::pty::watch::piped::Watchdog::new,
+    );
+    let transcript = if watchdog.is_some() {
+        std::fs::create_dir_all(crate::support::paths::task_dir(task_id.as_str()))?;
+        Some(Arc::new(std::sync::Mutex::new(std::fs::File::create(
+            crate::support::paths::transcript_path(task_id.as_str()),
+        )?)))
+    } else { None };
+    let reader = BufReader::new(crate::runtime::pty::watch::piped::Reader::new(
+        stdout, watchdog.as_ref(), transcript.clone(), false,
+    ));
     let mut lines = reader.lines();
     let mut log_file = tokio::fs::File::create(log_path).await?;
     let mut info = CompletionInfo {
@@ -80,24 +97,25 @@ pub async fn watch_streaming(
     let mut delivery_evidence = DeliveryEvidence::default();
     let mut last_event_detail: Option<String> = None;
     let mut full_output = String::new();
-    let stderr_handle = spawn_stderr_capture(child, task_id);
+    let stderr_handle = spawn_stderr_capture(child, task_id, watchdog.as_ref(), transcript);
+    let mut input = crate::runtime::claude_input::Session::start(child, task_id, store, prompt).await?;
     loop {
-        let line = match idle::next_line(
+        let line = match input::next_line(
+            &mut input, store, task_id, watchdog.as_mut(),
             &mut lines, task_id.as_str(), child.id(), idle_timeout, last_event_detail.is_some(),
         ).await {
             Some(Ok(Some(line))) => line,
             Some(Ok(None)) => break,
             Some(Err(e)) => return Err(e.into()),
             None => {
-                force_kill_process_group(child);
-                let _ = child.kill().await;
+                let _ = crate::runtime::process::group::terminate_child_group(child).await;
                 let _ = monitor::insert_hung_detected_events(
                     store.as_ref(),
                     task_id,
-                    idle_timeout.as_secs(),
+                    watchdog.as_ref().map_or(idle_timeout, |watchdog| watchdog.timeout()).as_secs(),
                     event_count,
                     last_event_detail.as_deref(),
-                    false,
+                    watchdog.as_ref().is_some_and(|watchdog| watchdog.first_token()),
                 );
                 info.status = TaskStatus::Failed;
                 break;
@@ -109,6 +127,7 @@ pub async fn watch_streaming(
             api_route_failed = true;
             break;
         }
+        if let Some(input) = &mut input { input.observe(store, task_id, &line)?; }
         if !line.trim().is_empty() { last_event_detail = Some(line.trim().to_string()); }
         if agent.kind() == AgentKind::Codex {
             delivery_evidence.observe_codex_jsonl(&line);
@@ -158,13 +177,16 @@ pub async fn watch_streaming(
                 break;
             }
         }
+        if let Some(watchdog) = &mut watchdog {
+            watchdog.observe(&line, event_count);
+        }
     }
     log_file.flush().await?;
     let exit_status = child.wait().await?;
     if let Some(handle) = stderr_handle {
         drain_stderr_capture(handle).await;
     }
-    let mut status = if exit_status.success() && !api_route_failed {
+    let mut status = if exit_status.success() && !api_route_failed && info.status != TaskStatus::Failed {
         TaskStatus::Done
     } else {
         TaskStatus::Failed
@@ -257,44 +279,4 @@ pub async fn watch_streaming(
     })?;
     info.status = status;
     Ok(info)
-}
-
-fn apply_completion_event(info: &mut CompletionInfo, event: &TaskEvent) {
-    let Some(metadata) = event.metadata.as_ref() else {
-        return;
-    };
-    // A model announcement is evidence wherever it appears in the stream, not
-    // only on a completion event. copilot names its model on a Milestone
-    // (`session.tools_updated` -> `parse_model_update`) and droid names it on
-    // its very first `system/init` line; neither repeats it at completion.
-    // Gating the whole function on `EventKind::Completion` dropped both, which
-    // is why copilot recorded 19 of 20 tasks with no model and droid 14 of 15,
-    // while `"model":"gpt-5-mini"` sat in copilot's log three times over and
-    // `"model":"claude-opus-5"` on line 0 of droid's.
-    if let Some(model) = metadata.get("model").and_then(|value| value.as_str()) {
-        info.model = Some(model.to_string());
-    }
-    // Tokens and cost stay completion-only: a mid-run value is partial, and
-    // letting an interim total overwrite the final one would understate both.
-    if event.event_kind != EventKind::Completion {
-        return;
-    }
-    let incremental = metadata.get("usage_is_delta").and_then(|value| value.as_bool()) == Some(true);
-    if let Some(tokens) = metadata.get("tokens").and_then(|value| value.as_i64()) {
-        info.tokens = Some(if incremental { info.tokens.unwrap_or_default() + tokens } else { tokens });
-    }
-    if let Some(cost_usd) = metadata.get("cost_usd").and_then(|value| value.as_f64()) {
-        info.cost_usd = Some(if incremental {
-            info.cost_usd.unwrap_or_default() + cost_usd
-        } else {
-            cost_usd
-        });
-    }
-}
-
-fn exceeds_cost_ceiling(current_cost: Option<f64>, max_task_cost: Option<f64>) -> bool {
-    matches!(
-        (current_cost, max_task_cost),
-        (Some(current_cost), Some(max_task_cost)) if current_cost > max_task_cost
-    )
 }

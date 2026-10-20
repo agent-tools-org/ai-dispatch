@@ -1,0 +1,13 @@
+  --input-format <format>               Input format (only works with --print):
+                                        "text" (default), or "stream-json"
+                                        (realtime streaming input) (choices:
+                                        "text", "stream-json")
+  --json-schema <schema>                JSON Schema for structured output
+                                        validation (only works with --print).
+--
+  --replay-user-messages                Re-emit user messages from stdin back on
+                                        stdout for acknowledgment (only works
+                                        with --input-format=stream-json and
+                                        --output-format=stream-json)
+  --restricted                          Restricted mode: removes the built-in
+                                        tools that run commands or code (Bash,

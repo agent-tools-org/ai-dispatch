@@ -35,7 +35,7 @@ pub(crate) async fn watch_buffered(
         .ok_or_else(|| anyhow::anyhow!("No stdout on child process"))?;
     let mut reader = BufReader::new(stdout);
     let mut raw = Vec::new();
-    let stderr_handle = spawn_stderr_capture(child, task_id);
+    let stderr_handle = spawn_stderr_capture(child, task_id, None, None);
     // Read incrementally so the background reaper can see first-token bytes
     // while the child is still alive (buffered agents emit no progress events).
     read_stdout_signaling_bytes(&mut reader, &mut raw, task_id).await?;

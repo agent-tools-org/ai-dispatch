@@ -3,6 +3,7 @@
 
 pub(crate) mod background;
 pub(crate) mod codex_app_server;
+pub(crate) mod claude_input;
 pub(crate) mod read_only_launch;
 pub(crate) mod pty;
 pub(crate) mod process;

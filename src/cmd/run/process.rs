@@ -141,8 +141,8 @@ pub(crate) async fn run_agent_process_impl(mut args: RunProcessArgs<'_>) -> Resu
             args.cmd.as_std(), args.store, args.task_id,
         )?);
     }
-    let mut child = execution::spawn_agent(&mut args)?;
-    let mut info = execution::watch_agent(&args, &mut child, start).await?;
+    let (mut child, prompt) = execution::spawn_agent(&mut args)?;
+    let mut info = execution::watch_agent(&args, &mut child, start, prompt.as_deref()).await?;
     cleanup_process_group(&child);
     let _ = child.kill().await;
     let _ = child.wait().await;
@@ -168,7 +168,10 @@ fn complete_agent(
     );
     let costing_model = observed_model.as_deref().or(model);
     let cost_usd = crate::cost::completion_cost(store, task_id, info, costing_model, agent.kind())?;
-    if !crate::task::lifecycle::update_task_completion(store.as_ref(), TaskCompletionUpdate {
+    let event = crate::runtime::pty::runner::completion::event(
+        agent, task_id, store, duration_ms, info, cost_usd,
+    );
+    if !crate::task::lifecycle::complete_task_atomic(store.as_ref(), TaskCompletionUpdate {
         id: task_id.as_str(),
         status: info.status,
         tokens: info.tokens,
@@ -177,9 +180,10 @@ fn complete_agent(
         attribution_source,
         cost_usd,
         exit_code,
-    })? {
+    }, &event)? {
         return Ok(());
     }
+    crate::store::state::refresh_project_state(store.as_ref(), task_id);
     if let Some(event) = cost_event {
         let _ = store.insert_event(&event);
     }

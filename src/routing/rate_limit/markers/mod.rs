@@ -162,13 +162,33 @@ pub(crate) fn format_recovery(at: NaiveDateTime) -> String {
 }
 
 fn write_marker(
-    path: &std::path::Path, message: &str, provider: Option<&str>,
-    agent: AgentKind, signature_agent: AgentKind,
+    path: &std::path::Path,
+    message: &str,
+    provider: Option<&str>,
+    agent: AgentKind,
+    signature_agent: AgentKind,
+) {
+    write_marker_with_hold(
+        path,
+        message,
+        provider,
+        agent,
+        signature_agent,
+        classify_hold(message, signature_agent),
+    );
+}
+
+fn write_marker_with_hold(
+    path: &std::path::Path,
+    message: &str,
+    provider: Option<&str>,
+    agent: AgentKind,
+    signature_agent: AgentKind,
+    hold: Hold,
 ) {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    let hold = classify_hold(message, signature_agent);
     if preserves_dated_hold(path, provider, agent, &hold) {
         return;
     }
@@ -251,4 +271,21 @@ pub(crate) fn mark_rate_limited_for_signature(
 ) {
     let signature_agent = if *agent == AgentKind::Custom { signature_agent } else { *agent };
     write_marker(&marker_path(agent, custom_name), message, None, *agent, signature_agent);
+}
+
+#[cfg(test)]
+pub(crate) fn mark_rate_limited_until(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    reset: NaiveDateTime,
+    message: &str,
+) {
+    write_marker_with_hold(
+        &marker_path(agent, custom_name),
+        message,
+        None,
+        *agent,
+        super::identity::signature_agent(*agent, custom_name),
+        Hold::Until(format_recovery(reset)),
+    );
 }

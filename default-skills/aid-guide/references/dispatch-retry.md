@@ -42,8 +42,7 @@ four hold classes). Signatures match only the refusing agent. A custom id keeps
 its own marker path while classification uses its configured `rate_limit_kind`
 (OpenCode by default); overlay error parsing supplies its declared signature kind.
 Markers retain that identity for readback without borrowing another built-in's
-signatures. An explicit `try again at <date>` marker retains its stated date
-and display spelling, including for custom ids. Reset times must
+signatures. Reset times must
 follow that agent's known reset phrase directly or come from a typed provider
 field; unrelated timestamps and window lengths are ignored. Holds longer than
 24 hours and holds requiring a person require stderr, a typed error envelope,

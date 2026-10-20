@@ -26,16 +26,17 @@ fn custom_balance_hold_is_read_under_its_own_id() {
 }
 
 #[test]
-fn explicit_reset_markers_round_trip_without_changing_the_stated_date() {
+fn typed_reset_markers_round_trip_without_changing_the_stated_date() {
     let home = tempfile::tempdir().expect("home");
     let _guard = AidHomeGuard::set(home.path());
-    let stated = rate_limit::test_future_recovery_time();
+    let reset = chrono::Local::now().naive_local() + chrono::Duration::days(1);
+    let stated = rate_limit::format_recovery(reset);
     for (kind, name) in [
         (AgentKind::Custom, Some("auditor")),
         (AgentKind::MiMoCode, None),
         (AgentKind::Codex, None),
     ] {
-        rate_limit::mark_rate_limited(&kind, name, &format!("try again at {stated}."));
+        rate_limit::mark_rate_limited_until(&kind, name, reset, "typed provider reset");
         assert!(rate_limit::is_rate_limited(&kind, name));
         let info = rate_limit::get_rate_limit_info(&kind, name).expect("marker");
         assert_eq!(info.recovery_at.as_deref(), Some(stated.as_str()));

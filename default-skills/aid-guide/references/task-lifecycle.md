@@ -7,8 +7,8 @@ The lifecycle strings are `waiting`, `pending`, `running`, `awaiting_input`,
 strings are `pending`, `passed`, `failed`, `skipped`, `timed_out`,
 `infrastructure_failure`, and `unobserved`.
 
-Dispatch records `preparation` as the pending reason when the task row is claimed.
-An error before launch fails the task with the original error text. Pending cleanup
+New Pending rows have no recorded pending reason. An error before launch fails
+the task with the original error text and records `preparation`. Pending cleanup
 preserves a recorded reason and infers one only for rows without one.
 The reaper appends diagnostics to agent stderr. An absent worker is reported as
 `worker disappeared; cause unknown`, with a pointer to the task's `worker.log`;

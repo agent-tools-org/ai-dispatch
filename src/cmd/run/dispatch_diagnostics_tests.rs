@@ -121,3 +121,105 @@ fn error_immediately_after_insertion_is_settled_and_preserved() {
         events.len()
     );
 }
+
+fn prepare_pending_dispatch(
+    store: &Arc<Store>,
+    dir: &std::path::Path,
+    id: &TaskId,
+) -> crate::types::Task {
+    let mut args = RunArgs {
+        agent_name: "codex".into(),
+        prompt: "Implement a concrete focused change".into(),
+        existing_task_id: Some(id.clone()),
+        dry_run: true,
+        dir: Some(dir.to_string_lossy().into_owned()),
+        ..Default::default()
+    };
+    super::super::run_dispatch_prepare::prepare_dispatch_with(store, &mut args, |_| true)
+        .expect("prepare pending dispatch");
+    store.get_task(id.as_str()).expect("get").expect("row")
+}
+
+fn record_agent_exit(store: &Store, id: &TaskId) {
+    assert!(crate::task::lifecycle::mark_running(store, id).expect("start"));
+    let event = crate::types::TaskEvent {
+        task_id: id.clone(),
+        timestamp: chrono::Local::now(),
+        event_kind: crate::types::EventKind::Error,
+        detail: "agent exited 17".into(),
+        metadata: None,
+    };
+    let completion = crate::store::TaskCompletionUpdate {
+        id: id.as_str(),
+        status: TaskStatus::Failed,
+        tokens: None,
+        duration_ms: 10,
+        observed_model: None,
+        attribution_source: None,
+        cost_usd: None,
+        exit_code: Some(17),
+    };
+    assert!(
+        crate::task::lifecycle::complete_task_atomic(store, completion, &event)
+            .expect("fail agent")
+    );
+}
+
+#[test]
+fn launched_failure_preserves_exit_error_in_board_and_batch_summary() {
+    let temp = tempfile::tempdir().expect("home");
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let id = TaskId("t-launched-failure".into());
+    let pending = prepare_pending_dispatch(&store, temp.path(), &id);
+    assert_eq!(pending.status, TaskStatus::Pending);
+    record_agent_exit(&store, &id);
+    let row = store.get_task(id.as_str()).expect("get").expect("row");
+    let board = crate::ui::board::render_board(&[row.clone()], &store).expect("board");
+    let summary = crate::cmd::batch::completion_progress_label(
+        &store,
+        id.as_str(),
+        crate::cmd::batch::BatchTaskOutcome::Failed,
+    )
+    .expect("batch summary");
+    assert!(board.contains("agent exited 17"), "{board}");
+    assert_eq!(summary, "FAIL (exit 17)");
+    assert!(!board.contains("preparation"));
+    assert!(row.pending_reason.is_none());
+}
+
+#[test]
+fn pending_dispatch_without_recorded_reason_uses_reaper_inference() {
+    let temp = tempfile::tempdir().expect("home");
+    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let id = TaskId("t-pending-inference".into());
+    let row = prepare_pending_dispatch(&store, temp.path(), &id);
+    assert_eq!(row.status, TaskStatus::Pending);
+    assert!(row.pending_reason.is_none());
+    crate::routing::rate_limit::mark_rate_limited(
+        &crate::types::AgentKind::Codex,
+        None,
+        &format!(
+            "You've hit your usage limit. try again at {}.",
+            crate::routing::rate_limit::test_future_recovery_time()
+        ),
+    );
+    assert!(
+        crate::runtime::background::fail_stale_pending_task(
+            &store,
+            &row,
+            chrono::Local::now(),
+            601,
+        )
+        .expect("reap pending")
+    );
+    let failed = store.get_task(id.as_str()).expect("get").expect("row");
+    assert_eq!(failed.pending_reason.as_deref(), Some("rate_limited"));
+    assert!(
+        store
+            .latest_error(id.as_str())
+            .expect("error")
+            .contains("reason: rate_limited")
+    );
+}

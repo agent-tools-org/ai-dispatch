@@ -108,15 +108,6 @@ impl Store {
             Some(&[TaskStatus::Running, TaskStatus::Waiting]), None, None)
     }
 
-    pub fn fail_pending_with_reason(
-        &self,
-        id: &str,
-        pending_reason: PendingReason,
-    ) -> Result<bool> {
-        self.settle_task_status(id, TaskStatus::Failed, Some(&[TaskStatus::Pending]),
-            Some(pending_reason), None)
-    }
-
     pub fn fail_waiting_with_reason(&self, id: &str, detail: &str) -> Result<bool> {
         let event = TaskEvent {
             task_id: TaskId(id.to_string()),

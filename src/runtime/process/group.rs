@@ -37,24 +37,17 @@ pub(crate) async fn terminate_child_group(child: &mut tokio::process::Child) -> 
     #[cfg(unix)]
     if let Some(pid) = child.id() {
         let pgid = pid as i32;
-        let snapshot = DescendantCleanup { entries: descendants(pid) };
+        let snapshot = DescendantCleanup { pgid, entries: descendants(pid) };
         let pids = snapshot.entries.iter().map(|entry| entry.pid).collect::<Vec<_>>();
         signal_process_group(pgid, libc::SIGTERM);
         signal_processes(&pids, libc::SIGTERM);
         let deadline = tokio::time::Instant::now() + DEFAULT_KILL_GRACE;
-        let mut reaped = false;
         while tokio::time::Instant::now() < deadline {
-            if child.try_wait()?.is_some() {
-                reaped = true;
-                break;
-            }
+            child.try_wait()?;
             if !process_group_exists(pgid) {
                 break;
             }
             tokio::time::sleep(KILL_POLL_INTERVAL).await;
-        }
-        if !reaped && process_group_exists(pgid) {
-            signal_process_group(pgid, libc::SIGKILL);
         }
         drop(snapshot);
     }
@@ -65,12 +58,16 @@ pub(crate) async fn terminate_child_group(child: &mut tokio::process::Child) -> 
 
 #[cfg(unix)]
 struct DescendantCleanup {
+    pgid: i32,
     entries: Vec<ProcessEntry>,
 }
 
 #[cfg(unix)]
 impl Drop for DescendantCleanup {
     fn drop(&mut self) {
+        if process_group_exists(self.pgid) {
+            signal_process_group(self.pgid, libc::SIGKILL);
+        }
         signal_processes(&unchanged_pids(&self.entries, &process_table()), libc::SIGKILL);
     }
 }

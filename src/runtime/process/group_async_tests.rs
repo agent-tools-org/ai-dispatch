@@ -86,8 +86,59 @@ async fn cancelled_grace_period_still_kills_verified_escaped_descendants() {
         terminate_child_group(&mut child),
     )
     .await;
-    child.kill().await.unwrap();
-    child.wait().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(1), child.wait())
+        .await
+        .unwrap()
+        .unwrap();
     assert!(result.is_err());
     assert_descendant_stopped(descendant).await;
+}
+
+const ORPHAN_GROUP_TOOL: &str = concat!(
+    "import subprocess, sys, time\n",
+    "middle = subprocess.Popen([sys.executable, '-c', ",
+    "'import subprocess, sys; subprocess.Popen([sys.executable, ",
+    "\"-c\", \"import os, signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); ",
+    "print(os.getpid(), flush=True); time.sleep(60)\"])'], stdout=subprocess.PIPE)\n",
+    "orphan = middle.stdout.readline().decode().strip()\n",
+    "middle.wait()\n",
+    "print(orphan, flush=True)\n",
+    "time.sleep(60)\n",
+);
+
+#[tokio::test]
+async fn same_group_orphan_missing_from_snapshot_is_killed_after_grace() {
+    let _permit = test_subprocess::acquire();
+    let (mut child, ready) = ready_child(ORPHAN_GROUP_TOOL).await;
+    let straggler: i32 = ready.trim().parse().unwrap();
+    let pgid = child.id().unwrap();
+    let missing = !super::descendants(pgid)
+        .iter()
+        .any(|entry| entry.pid == straggler as u32);
+    let same_group = unsafe { libc::getpgid(straggler) } == pgid as i32;
+    let start = std::time::Instant::now();
+    let result =
+        tokio::time::timeout(Duration::from_secs(4), terminate_child_group(&mut child)).await;
+    let elapsed = start.elapsed();
+    let stopped = tokio::time::timeout(Duration::from_secs(1), async {
+        let mut tick = tokio::time::interval(Duration::from_millis(10));
+        while test_subprocess::is_live(straggler) {
+            tick.tick().await;
+        }
+    })
+    .await;
+    if test_subprocess::is_live(straggler) {
+        unsafe {
+            libc::kill(straggler, libc::SIGKILL);
+        }
+    }
+    result.unwrap().unwrap();
+    assert!(
+        missing,
+        "straggler must be absent from the descendant snapshot"
+    );
+    assert!(same_group);
+    assert!(stopped.is_ok(), "same-group orphan survived termination");
+    assert!(elapsed >= super::DEFAULT_KILL_GRACE);
+    assert!(child.id().is_none());
 }

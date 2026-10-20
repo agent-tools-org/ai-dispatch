@@ -18,7 +18,7 @@ mod show_worktree_state;
 
 pub use show_output_diff::{diff_text, diff_text_branch, diff_text_file};
 pub use show_output_messages::{
-    log_text, log_text_brief, output_text, output_text_brief, output_text_for_task,
+    output_text, output_text_brief, output_text_for_task,
     read_task_output,
 };
 pub(crate) use show_output_owned::{missing_owned_output_absence, owned_output_path};
@@ -47,3 +47,7 @@ mod diff_tests;
 #[cfg(test)]
 #[path = "output_format_tests.rs"]
 mod format_tests;
+
+#[path = "output_logs.rs"]
+mod show_output_logs;
+pub use show_output_logs::{log_text, log_text_brief};

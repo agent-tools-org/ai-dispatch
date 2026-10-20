@@ -146,6 +146,7 @@ fn antigravity_alias_parses_to_agy_agent() {
 #[test]
 fn pending_reason_parse_str_roundtrip() {
     for reason in [
+        PendingReason::Preparation,
         PendingReason::AgentStarting,
         PendingReason::RateLimited,
         PendingReason::WorkerCapacity,

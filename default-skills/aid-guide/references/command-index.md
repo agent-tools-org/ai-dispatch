@@ -26,7 +26,7 @@ current arguments.
 | `aid board` | Show the current task board (default: current project only; `--all` shows every project). Includes verification tags when verification has something to report. |
 | `aid watch` | Follow live task or group progress in text mode, the TUI, or a JSONL stream. |
 | `aid wait` | Block until selected tasks or a group finish worker settlement, including delivery and verification checks; returns non-zero when any task did not succeed. |
-| `aid show` | Inspect task state, outcome, verification, events, context, output, result, transcript, summary, audit, or diff; prints `Backup: <url>` (also `backup_url` in `--json`) once an artifact backup was uploaded; `--diff --branch` widens the diff from the task's own commits to the whole branch. |
+| `aid show` | `--log` includes per-task `worker.log` stderr/panic diagnostics (`--full` for all lines). Inspect task state, outcome, verification, events, context, output, result, transcript, summary, audit, or diff; prints `Backup: <url>` (also `backup_url` in `--json`) once an artifact backup was uploaded; `--diff --branch` widens the diff from the task's own commits to the whole branch. |
 | `aid tree` | Show task ancestry and retries. |
 | `aid respond` | Supply an answer to a task awaiting input; aid writes it to the PTY and consumption stays unconfirmed. Codex refuses `respond`; use `reply` or `steer` on app-server tasks. |
 | `aid reply` | Send a message to a running task and optionally wait until it is written to the PTY; consumption stays unconfirmed. Codex app-server confirms acceptance with a turn ID; exec fallback refuses input. |

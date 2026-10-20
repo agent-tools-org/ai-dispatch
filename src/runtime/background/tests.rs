@@ -127,10 +127,11 @@ fn marks_running_background_tasks_failed_when_worker_is_missing() {
     let events = store.get_events("t-2b2b").unwrap();
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].event_kind, EventKind::Error);
-    assert_eq!(events[0].detail, ZOMBIE_FAILURE_DETAIL);
+    assert!(events[0].detail.starts_with(ZOMBIE_FAILURE_DETAIL));
+    assert!(events[0].detail.contains("worker.log"));
 
     let stderr = std::fs::read_to_string(paths::stderr_path("t-2b2b")).unwrap();
-    assert_eq!(stderr.trim(), ZOMBIE_FAILURE_DETAIL);
+    assert_eq!(stderr.trim(), events[0].detail);
 }
 
 #[test]

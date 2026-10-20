@@ -5,7 +5,7 @@
 use anyhow::Result;
 
 use crate::store::{Store, TaskCompletionUpdate};
-use crate::types::{ACTIVE_TASK_STATUSES, PendingReason, TaskEvent, TaskId, TaskStatus};
+use crate::types::{ACTIVE_TASK_STATUSES, TaskEvent, TaskId, TaskStatus};
 
 pub(crate) fn mark_running(store: &Store, task_id: &TaskId) -> Result<bool> {
     store.settle_task_status(task_id.as_str(), TaskStatus::Running, Some(&ACTIVE_TASK_STATUSES), None, None)
@@ -66,16 +66,6 @@ pub(crate) fn fail_active_execution(store: &Store, task_id: &str) -> Result<bool
     Ok(failed)
 }
 
-pub(crate) fn fail_pending_with_reason(
-    store: &Store,
-    task_id: &str,
-    pending_reason: PendingReason,
-) -> Result<bool> {
-    let failed = store.fail_pending_with_reason(task_id, pending_reason)?;
-    salvage_failed_id(store, task_id, failed);
-    Ok(failed)
-}
-
 pub(crate) fn fail_waiting_with_reason(
     store: &Store,
     task_id: &str,
@@ -131,7 +121,7 @@ fn salvage_failed_transition(
     }
 }
 
-fn salvage_failed_task(store: &Store, task_id: &TaskId) {
+pub(crate) fn salvage_failed_task(store: &Store, task_id: &TaskId) {
     if let Ok(Some(task)) = store.get_task(task_id.as_str())
         && let Some(message) = crate::routing::capacity::read(store, task_id, task.agent)
     {

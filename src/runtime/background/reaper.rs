@@ -13,7 +13,7 @@ use crate::{config, task::notify, support::paths, support::sanitize};
 use crate::store::Store;
 use crate::types::{EventKind, PendingReason, Task, TaskEvent, TaskFilter, TaskId, TaskStatus};
 
-pub(crate) const ZOMBIE_FAILURE_DETAIL: &str = "Background worker died unexpectedly";
+pub(crate) const ZOMBIE_FAILURE_DETAIL: &str = "worker disappeared; cause unknown";
 const PENDING_TASK_TIMEOUT_SECS: i64 = 600;
 const MAX_RUN_HOURS: i64 = crate::config::timeout_policy::DEFAULT_HARD_CAP_HOURS;
 
@@ -139,7 +139,9 @@ fn cleanup_dead_worker(
 ) -> Result<()> {
     preserve_zombie_changes(store, task_id, spec)?;
     terminate_task_processes(worker_pid, spec);
-    if record_failure(store, task_id, ZOMBIE_FAILURE_DETAIL, ZOMBIE_FAILURE_DETAIL)? {
+    let detail = format!("{ZOMBIE_FAILURE_DETAIL}; worker log: {}",
+        paths::task_dir(task_id).join("worker.log").display());
+    if record_failure(store, task_id, &detail, &detail)? {
         cleaned.push(task_id.to_string());
     }
     Ok(())
@@ -219,41 +221,39 @@ pub(crate) fn fail_stale_pending_task(
     let Some(pending_reason) = infer_pending_reason(store, task)? else {
         return Ok(false);
     };
-    if !crate::task::lifecycle::fail_pending_with_reason(store, task_id, pending_reason)? {
+    let event = TaskEvent {
+        task_id: task.id.clone(), timestamp: now, event_kind: EventKind::Error,
+        detail: format!("Task timed out in pending state after {}s (reason: {})",
+            elapsed_secs, pending_reason),
+        metadata: None,
+    };
+    if !store.settle_task_status(task_id, TaskStatus::Failed, Some(&[TaskStatus::Pending]),
+        PendingReason::parse_str(&pending_reason), Some(&event))? {
         return Ok(false);
     }
-    store.insert_event(&TaskEvent {
-        task_id: task.id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Error,
-        detail: format!(
-            "Task timed out in pending state after {}s (reason: {})",
-            elapsed_secs,
-            pending_reason.as_str()
-        ),
-        metadata: None,
-    })?;
+    crate::task::lifecycle::salvage_failed_task(store, &task.id);
     notify_task_completion(store, task_id)?;
     Ok(true)
 }
 
-fn infer_pending_reason(store: &Store, task: &Task) -> Result<Option<PendingReason>> {
+fn infer_pending_reason(store: &Store, task: &Task) -> Result<Option<String>> {
+    if let Some(reason) = task.pending_reason.as_ref() {
+        return Ok(Some(reason.clone()));
+    }
     let Ok(spec) = load_spec_for_reaper(task.id.as_str()) else {
         return Ok(None);
     };
     if crate::routing::rate_limit::is_rate_limited(&task.agent, task.custom_agent_name.as_deref()) {
-        return Ok(Some(PendingReason::RateLimited));
+        return Ok(Some(PendingReason::RateLimited.as_str().to_string()));
     }
     if store.list_tasks(TaskFilter::Running)?.len() >= MAX_WORKERS {
-        return Ok(Some(PendingReason::WorkerCapacity));
+        return Ok(Some(PendingReason::WorkerCapacity.as_str().to_string()));
     }
-    let has_agent_pid = spec
-        .and_then(|spec| spec.agent_pid)
-        .is_some();
+    let has_agent_pid = spec.and_then(|spec| spec.agent_pid).is_some();
     if has_agent_pid {
-        Ok(Some(PendingReason::AgentStarting))
+        Ok(Some(PendingReason::AgentStarting.as_str().to_string()))
     } else {
-        Ok(Some(PendingReason::Unknown))
+        Ok(Some(PendingReason::Unknown.as_str().to_string()))
     }
 }
 
@@ -263,7 +263,8 @@ pub(super) fn record_failure_skip_notify(store: &Store, task_id: &str, stderr_de
         return Ok(false);
     }
     let stderr_path = paths::stderr_path(task_id);
-    std::fs::write(&stderr_path, format!("{stderr_detail}\n"))?;
+    use std::io::Write;
+    writeln!(std::fs::OpenOptions::new().create(true).append(true).open(&stderr_path)?, "{stderr_detail}")?;
     crate::runtime::pty::watch::append_failed_terminal_sentinel(
         &TaskId(task_id.to_string()),
         &paths::log_path(task_id),

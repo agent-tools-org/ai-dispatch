@@ -272,3 +272,6 @@ fn reaper_skips_unreadable_spec_and_continues_with_other_tasks() {
         TaskStatus::Failed
     );
 }
+
+#[path = "background_diagnostics_tests.rs"]
+mod diagnostics_tests;

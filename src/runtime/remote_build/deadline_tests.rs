@@ -152,7 +152,15 @@ fn repick_consumes_original_deadline_and_persists_the_attempted_replacement() {
     let (store, id, _) = stored_task();
     let temp = tempfile::tempdir().expect("temp");
     let _home = crate::support::paths::AidHomeGuard::set(temp.path());
-    write_executable(&temp.path().join("verify"), "#!/bin/bash\necho \"$AID_BUILD_BOX\" >> attempts\nif [[ $AID_BUILD_BOX == chosen-box ]]; then\n  /bin/sleep 0.5\n  echo 'rbox: disk admission refused' >&2\n  exit 69\nfi\nexec /bin/sleep 1.5\n");
+    write_executable(&temp.path().join("verify"), r#"#!/bin/bash
+echo "$AID_BUILD_BOX" >> attempts
+if [[ $AID_BUILD_BOX == chosen-box ]]; then
+  /bin/sleep 0.5
+  echo 'rbox: chosen-box 9.9 GiB free; requires 10 GiB' >&2
+  exit 69
+fi
+exec /bin/sleep 1.5
+"#);
     let rbox = temp.path().join("rbox");
     write_executable(&rbox, "#!/bin/bash\n/bin/sleep 0.5\necho second-box\n");
     save_policy(&store, &id, Duration::from_secs(2), Duration::from_secs(900));
@@ -184,11 +192,9 @@ fn deadline_exhausted_during_repick_skips_replacement_command() {
     let now = Local::now();
     timestamps(&store, &id, now, Some(now));
     let result = verify_with(&store, id.as_str(), temp.path(), Some("./verify"), None, None,
-        &mut Command::new(&rbox)).expect("expired after pick");
-    assert!(result.timed_out);
-    assert_eq!(result.exit_code, None);
-    assert!(result.output.contains("no command launched"));
-    assert_eq!(saved_box(&store, id.as_str()).expect("box").as_deref(), Some("second-box"));
+        &mut Command::new(&rbox)).expect_err("expired during pick");
+    assert!(result.to_string().contains("Task deadline exhausted during re-pick"));
+    assert_eq!(saved_box(&store, id.as_str()).expect("box").as_deref(), Some("chosen-box"));
 }
 
 #[test]

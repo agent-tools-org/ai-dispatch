@@ -24,7 +24,9 @@ fn resolve_in(args: &mut RunArgs, rbox_present: bool, command: &mut Command) -> 
         Some(dir) => std::path::PathBuf::from(dir),
         None => std::env::current_dir().context("Failed to read the current directory")?,
     };
+    let auto_picked = requested == "auto" || args.remote_build_auto_picked;
     args.remote_build = Some(resolve_with(requested, &repo, command)?);
+    args.remote_build_auto_picked = auto_picked;
     Ok(())
 }
 
@@ -116,7 +118,7 @@ fn configure(cmd: &mut Command, home: &Path, name: &str) -> Result<()> {
 mod lock;
 pub(crate) use lock::LockQueue;
 
-const ADMISSION_REFUSED: i32 = 69;
+mod selection;
 
 pub(crate) fn verify(
     store: &Store, task_id: &str, path: &Path, command: Option<&str>,
@@ -134,26 +136,26 @@ fn verify_with(
     };
     let deadline = verify_deadline(store, task_id, chrono::Local::now())?;
     let result = verify_on(task_id, &name, path, command, target, container, deadline)?;
-    if result.exit_code != Some(ADMISSION_REFUSED) { return Ok(result); }
+    let auto_picked = RunArgs::saved_for_task(store, task_id)?
+        .is_some_and(|args| args.remote_build_auto_picked);
+    if !result.infrastructure_failure || result.exit_code.is_none() || !auto_picked
+        || !crate::task::verify::infrastructure::retryable(&result.output)
+        || remaining_verify_time(deadline, chrono::Local::now()).is_zero()
+    { return Ok(result); }
     let refusal = refusal_line(&result.output);
-    let replacement = pick(rbox, path, Some(&name)).map_err(|error| anyhow::anyhow!(
-        "Remote build box {name} refused admission ({refusal}); re-pick failed: {error}"
-    ))?;
+    let replacement = selection::pick_before(rbox, path, &name, deadline).map_err(|error| {
+        anyhow::anyhow!("Remote build box {name}: {refusal}; re-pick failed: {error}")
+    })?;
     store.insert_event(&TaskEvent {
         task_id: TaskId(task_id.to_string()), timestamp: chrono::Local::now(),
         event_kind: EventKind::Milestone,
-        detail: format!("Remote build box: {name} refused admission (disk); re-picked {replacement}"),
+        detail: format!(
+            "Remote build box: {name} infrastructure failure ({refusal}); re-picked {replacement}"
+        ),
         metadata: Some(serde_json::json!({"remote_build": replacement, "refused_box": name})),
     })?;
     persist_box(store, task_id, &replacement)?;
-    let result = verify_on(task_id, &replacement, path, command, target, container, deadline)?;
-    if result.exit_code == Some(ADMISSION_REFUSED) {
-        bail!(
-            "Remote build box {replacement} refused admission after re-pick from {name} ({})",
-            refusal_line(&result.output)
-        );
-    }
-    Ok(result)
+    verify_on(task_id, &replacement, path, command, target, container, deadline)
 }
 
 fn verify_on(
@@ -198,10 +200,8 @@ fn remaining_verify_time(
 }
 
 fn refusal_line(output: &str) -> String {
-    output.lines().map(str::trim).rev()
-        .find(|line| line.starts_with("rbox:") && !line.starts_with("rbox: job "))
-        .unwrap_or("exit 69 without an rbox refusal line")
-        .to_string()
+    crate::task::verify::infrastructure::diagnostic(output)
+        .unwrap_or("remote verification infrastructure failure").to_string()
 }
 
 fn persist_box(store: &Store, task_id: &str, name: &str) -> Result<()> {
@@ -219,3 +219,6 @@ mod shim_tests;
 mod deadline_tests;
 #[cfg(test)]
 mod launch_deadline_tests;
+
+#[cfg(test)]
+mod infrastructure_tests;

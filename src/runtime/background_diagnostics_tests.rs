@@ -10,13 +10,20 @@ fn reaper_appends_without_losing_agent_stderr() {
     store
         .insert_task(&task(id, crate::types::TaskStatus::Running))
         .expect("insert");
-    save_spec(&spec(id)).expect("spec");
+    let mut run_spec = spec(id);
+    run_spec.idle_timeout_secs = Some(3600);
+    run_spec.agent_pid = None;
+    save_spec(&run_spec).expect("spec");
     std::fs::write(paths::stderr_path(id), "original agent error\n").expect("stderr");
-    check_zombie_tasks_with(&store, |_| false).expect("reap");
+    let cleaned = check_zombie_tasks_with(&store, |_| false).expect("reap");
+    assert_eq!(cleaned, vec![id.to_string()]);
     let stderr = std::fs::read_to_string(paths::stderr_path(id)).expect("read");
-    assert!(stderr.starts_with("original agent error\nworker disappeared; cause unknown"));
-    assert!(stderr.contains("worker.log"));
-    assert!(!stderr.contains("timeout"));
+    assert!(
+        stderr.starts_with("original agent error\nworker disappeared; cause unknown"),
+        "unexpected stderr: {stderr:?}"
+    );
+    assert!(stderr.contains("worker.log"), "missing worker log pointer: {stderr:?}");
+    assert!(!stderr.contains("timeout"), "unexpected timeout diagnostic: {stderr:?}");
 }
 
 #[test]

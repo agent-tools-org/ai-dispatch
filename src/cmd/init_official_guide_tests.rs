@@ -42,7 +42,6 @@ const UNDOCUMENTED_FLAGS: &[&str] = &[
     "--judge",
     "--key",
     "--lines",
-    "--log",
     "--max-runs",
     "--message",
     "--metric",

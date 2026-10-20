@@ -7,6 +7,19 @@ use crate::agent::{CommandContext, RunOpts, codex::CodexAgent};
 mod fixture;
 use fixture::Fixture;
 
+fn read_only_fixture(mode: &str) -> Fixture {
+    let fixture = Fixture::new(mode);
+    fixture
+        .store
+        .db()
+        .execute(
+            "UPDATE tasks SET read_only = 1 WHERE id = ?1",
+            [fixture.task.as_str()],
+        )
+        .unwrap();
+    fixture
+}
+
 fn native_command(fixture: &Fixture, resumed: bool) -> std::process::Command {
     let repo = fixture.home.path().join("checkout");
     let scratch = fixture.home.path().join("staging");
@@ -49,7 +62,7 @@ fn native_command(fixture: &Fixture, resumed: bool) -> std::process::Command {
 #[test]
 fn native_read_only_provenance_is_recorded_on_app_server_fresh_and_resume() {
     for resumed in [false, true] {
-        let mut fixture = Fixture::new("complete");
+        let mut fixture = read_only_fixture("complete");
         fixture.command = native_command(&fixture, resumed);
         fixture.dispatch();
         assert_provenance(&fixture, "app-server");
@@ -59,7 +72,7 @@ fn native_read_only_provenance_is_recorded_on_app_server_fresh_and_resume() {
 #[test]
 fn native_read_only_provenance_is_recorded_on_exec_fallback_and_refused_resume() {
     for (mode, resumed) in [("invalid", false), ("reject-resume", true)] {
-        let mut fixture = Fixture::new(mode);
+        let mut fixture = read_only_fixture(mode);
         fixture.command = native_command(&fixture, resumed);
         fixture.dispatch();
         assert_provenance(&fixture, "exec");
@@ -67,13 +80,12 @@ fn native_read_only_provenance_is_recorded_on_exec_fallback_and_refused_resume()
 }
 
 fn assert_provenance(fixture: &Fixture, transport: &str) {
-    let events = fixture.store.get_events(fixture.task.as_str()).unwrap();
-    let launch = events
-        .iter()
-        .rev()
-        .filter_map(|event| event.metadata.as_ref()?.get("read_only_launch"))
-        .next()
+    let record = fixture
+        .store
+        .read_only_launch(fixture.task.as_str())
+        .unwrap()
         .unwrap();
+    let launch: serde_json::Value = serde_json::from_str(&record).unwrap();
     assert_eq!(launch["transport"], transport);
     assert_eq!(launch["profile"]["identity"], "aid-read-only");
     assert_eq!(launch["profile"]["approval_policy"], "never");

@@ -23,6 +23,7 @@ mod queries;
 mod schema;
 mod schema_rows;
 mod task_profile;
+mod read_only_launch;
 pub use kg_types::{KgStats, KgTriple};
 pub use queries::TaskStatsRow;
 
@@ -96,6 +97,7 @@ impl Store {
     fn create_tables(&self) -> Result<()> {
         schema::create_tables(self)?;
         self.migrate()?;
+        read_only_launch::create_table(self)?;
         migrations::migrate_billing_index(&self.db())?;
         Ok(())
     }

@@ -1,13 +1,9 @@
 // Persist native read-only permissions at the executed launch boundary.
-// Settlement consumes the latest launch, including explicit unknown/reset records.
-// Deps: Codex command translation, canonical root validation and Store events.
+// Settlement consumes the current read-only attempt, including unknown/reset records.
+// Deps: Codex command translation, canonical root validation and private Store records.
 
-use crate::{
-    store::Store,
-    types::{EventKind, TaskEvent, TaskId},
-};
+use crate::{store::Store, types::TaskId};
 use anyhow::Result;
-use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
@@ -59,44 +55,29 @@ fn profile(cmd: &Command) -> Option<Profile> {
 }
 
 pub(crate) fn record(store: &Store, task: &TaskId, cmd: &Command, transport: &str) -> Result<()> {
-    write(
-        store,
-        task,
+    write(store, task, || {
         serde_json::json!({
             "transport": transport, "profile": profile(cmd),
-        }),
-    )
-}
-
-pub(crate) fn reset(store: &Store, task: &TaskId) -> Result<()> {
-    write(store, task, serde_json::Value::Null)
-}
-
-fn write(store: &Store, task: &TaskId, launch: serde_json::Value) -> Result<()> {
-    store.insert_agent_event(&TaskEvent {
-        task_id: task.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Setup,
-        detail: "Read-only launch provenance".into(),
-        metadata: Some(serde_json::json!({"read_only_launch": launch})),
+        })
     })
 }
 
+pub(crate) fn reset(store: &Store, task: &TaskId) -> Result<()> {
+    write(store, task, || serde_json::Value::Null)
+}
+
+fn write(store: &Store, task: &TaskId, launch: impl FnOnce() -> serde_json::Value) -> Result<()> {
+    if !store.get_task(task.as_str())?.is_some_and(|task| task.read_only) {
+        return Ok(());
+    }
+    store.save_read_only_launch(task.as_str(), &serde_json::to_string(&launch())?)
+}
+
 pub(crate) fn enforced(store: &Store, task: &TaskId, dir: &str) -> Result<bool> {
-    let metadata: Option<String> = store
-        .db()
-        .query_row(
-            "SELECT metadata FROM events WHERE task_id = ?1 AND event_type = 'setup'
-         AND json_type(metadata, '$.read_only_launch') IS NOT NULL ORDER BY id DESC LIMIT 1",
-            [task.as_str()],
-            |row| row.get(0),
-        )
-        .optional()?;
-    let Some(metadata) = metadata else {
+    let Some(record) = store.read_only_launch(task.as_str())? else {
         return Ok(false);
     };
-    let value: serde_json::Value = serde_json::from_str(&metadata)?;
-    let launch = &value["read_only_launch"];
+    let launch: serde_json::Value = serde_json::from_str(&record)?;
     if !matches!(launch["transport"].as_str(), Some("exec" | "app-server")) {
         return Ok(false);
     }

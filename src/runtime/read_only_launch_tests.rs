@@ -3,6 +3,10 @@
 
 use super::*;
 use crate::agent::{Agent, CommandContext, RunOpts, codex::CodexAgent};
+use crate::types::{EventKind, TaskEvent};
+
+#[path = "read_only_storage_tests.rs"]
+mod storage_tests;
 
 fn command(repo: &Path, scratch: &Path, resume: bool) -> Command {
     CodexAgent
@@ -141,4 +145,39 @@ fn native_read_only_provenance_reset_and_unknown_launch_invalidate_previous_atte
     assert!(enforced(&store, &task, dir).unwrap());
     record(&store, &task, &Command::new("claude"), "exec").unwrap();
     assert!(!enforced(&store, &task, dir).unwrap());
+}
+
+#[test]
+fn native_read_only_provenance_rejects_overlapping_writable_root() {
+    let repo = tempfile::tempdir().unwrap();
+    let scratch = tempfile::tempdir().unwrap();
+    let mut cmd = command(repo.path(), scratch.path(), false);
+    let root = repo.path().canonicalize().unwrap();
+    let filesystem = toml::Value::Table(toml::Table::from_iter([(
+        root.to_str().unwrap().to_string(),
+        toml::Value::String("write".into()),
+    )]));
+    cmd.args([
+        "-c",
+        &format!(
+            "permissions={{ aid-read-only = {{ extends = \":read-only\", filesystem = {filesystem} }} }}",
+        ),
+    ]);
+    assert!(profile(&cmd).is_none());
+}
+
+#[test]
+fn native_read_only_provenance_requires_ignore_user_config() {
+    let repo = tempfile::tempdir().unwrap();
+    let scratch = tempfile::tempdir().unwrap();
+    let native = command(repo.path(), scratch.path(), false);
+    let mut cmd = Command::new(native.get_program());
+    cmd.args(native.get_args().filter(|arg| *arg != "--ignore-user-config"));
+    cmd.current_dir(repo.path());
+    for (key, value) in native.get_envs() {
+        if let Some(value) = value {
+            cmd.env(key, value);
+        }
+    }
+    assert!(profile(&cmd).is_none());
 }

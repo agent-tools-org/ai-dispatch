@@ -1,11 +1,11 @@
-// Web history regression for removed execution agents.
+// Web history preserves plain names for removed and supported agents.
 // Covers row decoding, task/event APIs, named statistics, and quota markers.
 // Deps: parent API handlers, Store, rusqlite, isolated aid home.
 use super::*;
 use rusqlite::params;
 
 #[tokio::test]
-async fn removed_agent_rows_and_events_keep_plain_names_in_web_history() {
+async fn agent_rows_and_events_keep_plain_names_in_web_history() {
     let home = tempfile::tempdir().expect("home");
     let _home = crate::support::paths::AidHomeGuard::set(home.path());
     let store = Arc::new(Store::open_memory().expect("store"));
@@ -26,12 +26,8 @@ async fn removed_agent_rows_and_events_keep_plain_names_in_web_history() {
         assert_eq!(row.task_count, 5);
         assert_eq!(row.avg_cost, Some(0.25));
     }
-    assert!(
-        store
-            .agent_success_rates()
-            .expect("routing metrics")
-            .is_empty()
-    );
+    let rates = store.agent_success_rates().expect("routing metrics");
+    assert_eq!(rates, vec![(crate::types::AgentKind::Qwen, 1.0, 5)]);
 }
 
 fn seed_history(store: &Store, home: &std::path::Path) {

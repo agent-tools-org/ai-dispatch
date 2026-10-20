@@ -71,7 +71,11 @@ pub fn exec_in_container(cmd: &Command, container_name: &str) -> Command {
         wrapped.arg("-w").arg(dir);
         wrapped.current_dir(dir);
     }
+    let provider_env = crate::agent::codex::provider::forward_environment(cmd, &mut wrapped);
     for (key, value) in cmd.get_envs() {
+        if provider_env.iter().any(|name| key == std::ffi::OsStr::new(name)) {
+            continue;
+        }
         if key == std::ffi::OsStr::new("HOME") {
             continue;
         }
@@ -280,18 +284,13 @@ mod tests {
             .any(|pair| pair == ["-e", "CARGO_TARGET_DIR=/tmp/cache/_base"]));
     }
 
-    #[test]
-    fn agy_mounts_its_auth_directory_without_a_gemini_agent() {
-        let home = TempDir::new().expect("home");
-        fs::create_dir(home.path().join(".gemini")).expect("agy auth directory");
-        let mounts = mount_home_dirs_from(Some(home.path().to_path_buf()));
-        let expected = format!("{}:/root/.gemini", home.path().join(".gemini").display());
-        assert!(mounts.windows(2).any(|pair| pair == ["-v", expected.as_str()]));
-        assert_eq!(crate::types::AgentKind::parse_str("gemini"), None);
-        assert!(mount_home_dirs_from(None).is_empty());
-    }
+
 }
 
 #[cfg(test)]
 #[path = "container_api_route_tests.rs"]
 mod api_route_tests;
+
+#[cfg(test)]
+#[path = "container_auth_tests.rs"]
+mod auth_tests;

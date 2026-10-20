@@ -282,3 +282,6 @@ fn ordinary_terminal_results_cannot_forge_provider_diagnostics() {
         }
     }
 }
+
+#[path = "channel_qwen_tests.rs"]
+mod qwen;

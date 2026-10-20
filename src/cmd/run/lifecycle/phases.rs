@@ -192,14 +192,10 @@ pub(super) async fn run_lifecycle_phases(
     if let Some(task) = store.get_task(task_id.as_str())?
         && task.status == TaskStatus::Failed
         && args.cascade.is_empty()
-        // Already the provider's own sentence: `read_quota_error_message` reads
-        // the stderr and stream channels through `quota_channel` and returns
-        // nothing else. Re-matching it here would only be a second opinion on
-        // text that has already passed the one gate.
-        && let Some(message) = quota_error_message.as_deref()
+        && quota_error_message.is_some()
     {
         if let Some(retry_id) =
-            quota_continuation::continue_quota(store, args, &task, message).await?
+            quota_continuation::continue_quota(store, args, &task).await?
         {
             return Ok(Some(retry_id));
         }

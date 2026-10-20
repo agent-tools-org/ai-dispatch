@@ -8,7 +8,7 @@ use rusqlite::{Connection, params};
 #[test]
 fn removed_agents_fail_with_migration_guidance() {
     let home = tempfile::tempdir().expect("home");
-    for agent in ["gemini", "qwen"] {
+    for agent in ["gemini"] {
         for args in [
             vec!["run", agent, "Review this module", "--no-hint"],
             vec![
@@ -40,7 +40,7 @@ fn removed_agents_fail_with_migration_guidance() {
 }
 
 #[test]
-fn removed_agent_history_loads_in_board_show_and_stats() {
+fn plain_agent_names_load_in_board_show_and_stats() {
     let home = tempfile::tempdir().expect("home");
     assert!(
         aid_cmd_in(home.path())
@@ -115,4 +115,49 @@ fn assert_show(home: &std::path::Path, agent: &str, id: &str) {
         .expect("events");
     assert!(events.status.success());
     assert!(String::from_utf8_lossy(&events.stdout).contains("Old completion"));
+}
+
+#[test]
+fn qwen_is_kept_in_agent_inventory_and_advice() {
+    let home = tempfile::tempdir().expect("home");
+    let shown = aid_cmd_in(home.path())
+        .args(["agent", "show", "qwen"])
+        .output()
+        .expect("supported agent");
+    assert!(
+        shown.status.success(),
+        "{}",
+        String::from_utf8_lossy(&shown.stderr)
+    );
+    for args in [
+        vec!["agent", "list", "--json"],
+        vec![
+            "advise",
+            "Review this module",
+            "--difficulty",
+            "moderate",
+            "--budget",
+            "standard",
+            "--urgency",
+            "normal",
+            "--rigor",
+            "standard",
+            "--top",
+            "0",
+            "--json",
+        ],
+    ] {
+        let output = aid_cmd_in(home.path())
+            .args(args)
+            .output()
+            .expect("inventory or advice");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON");
+        assert!(json.to_string().contains("\"qwen\""), "{json}");
+        assert!(!json.to_string().contains("\"gemini\""), "{json}");
+    }
 }

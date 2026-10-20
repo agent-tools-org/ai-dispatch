@@ -24,11 +24,14 @@ pub const CONFIG_REDIRECT_VARS: &[&str] = &[
     "MIMOCODE_HOME",
 ];
 
-/// Remove every redirect variable from the child's environment. Durable Codex
-/// home and explicit task env are applied after this and still take effect.
+/// Remove redirect variables except Codex's validated provider credential references.
+/// Durable Codex home and explicit task env are applied after this and still take effect.
 pub fn strip_inherited_config_redirects(cmd: &mut Command) {
+    let provider_env = super::codex::provider::referenced_env(cmd);
     for name in CONFIG_REDIRECT_VARS {
-        cmd.env_remove(name);
+        if !provider_env.iter().any(|provider_name| provider_name.as_str() == *name) {
+            cmd.env_remove(name);
+        }
     }
 }
 

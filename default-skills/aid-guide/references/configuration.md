@@ -282,6 +282,29 @@ precedence. A `cli_config` default is what the CLI runs when aid passes no
 `-m`, so aid reports it and never replaces it with an older catalog row.
 The codex home is `$CODEX_HOME` when set, else `~/.codex`; aid reads the codex
 config from it and launches codex with the same `CODEX_HOME`.
+
+Codex launches carry only the top-level `model_provider` and its selected
+`model_providers.<id>` table from that home's `config.toml`. Exec, app-server
+thread start/resume, and exec fallback receive identical overrides; the user's
+config is never copied or linked into the app-server mirror. Absent or `openai`
+selection leaves argv unchanged. Other built-in ids without tables carry only
+selection. Custom-provider tasks remain accounted on the existing Codex route.
+
+Carried provider keys are `name`, `base_url`, `env_key`, `env_key_instructions`,
+`env_http_headers`, `wire_api`, `query_params`, `request_max_retries`,
+`stream_max_retries`, `stream_idle_timeout_ms`, `requires_openai_auth`, and
+`supports_websockets`. Unknown keys and invalid types refuse launch.
+Inline credentials, including `experimental_bearer_token`, `http_headers`,
+credential query parameters, and credentials embedded in URLs, refuse launch;
+use `env_key` / `env_http_headers` to name environment variables instead.
+These variables reach the child without credential values in argv. Home, path,
+and other isolation controls cannot be credential variable references.
+Malformed TOML refuses launch when a top-level provider selection is identified;
+otherwise aid warns with the config path and launches with the default provider.
+
+The global `[query]` table configures OpenRouter models and authentication for
+`aid query`; it is separate from Codex provider `query_params`.
+
 Register a local custom agent
 with `agent add`. Use `clear-limit` only after confirming a provider's
 rate-limit condition has cleared. Each custom agent has its own marker keyed on

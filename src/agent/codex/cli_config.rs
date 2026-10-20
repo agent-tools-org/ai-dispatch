@@ -23,10 +23,19 @@ pub(crate) fn codex_home() -> anyhow::Result<PathBuf> {
     if let Some(home) = TEST_CODEX_HOME.with(|cell| cell.borrow().clone()) {
         return Ok(home);
     }
-    if let Some(home) = std::env::var_os("CODEX_HOME").filter(|value| !value.is_empty()) {
-        return Ok(PathBuf::from(home));
+    #[cfg(test)]
+    {
+        static HOME: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+        let home = HOME.get_or_init(|| tempfile::tempdir().expect("empty test Codex home"));
+        Ok(home.path().to_path_buf())
     }
-    Ok(crate::agent::home_isolation::resolve_real_home()?.join(".codex"))
+    #[cfg(not(test))]
+    {
+        if let Some(home) = std::env::var_os("CODEX_HOME").filter(|value| !value.is_empty()) {
+            return Ok(PathBuf::from(home));
+        }
+        Ok(crate::agent::home_isolation::resolve_real_home()?.join(".codex"))
+    }
 }
 
 /// Top-level `model` from the codex config; `None` when unset or unreadable.

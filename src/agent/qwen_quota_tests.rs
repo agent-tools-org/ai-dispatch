@@ -40,6 +40,7 @@ fn qwen_429_and_generic_rate_limits_only_create_transient_holds() {
         "429 Too Many Requests",
         "rate limit reached",
         "429 try again at Dec 31st, 2099 10:12 AM",
+        "429 reset at 12-31 10:12:00 UTC",
     ] {
         let event = serde_json::json!({"type":"error", "message":message}).to_string();
         QwenAgent
@@ -126,4 +127,34 @@ fn qwen_remains_a_builtin_dispatch_and_configuration_route() {
     let path = home.path().join("batch.toml");
     std::fs::write(&path, "[[tasks]]\nagent = 'qwen'\nprompt = 'Review code'\n").expect("batch");
     crate::batch::parse_batch_file(&path).expect("supported batch route");
+}
+
+#[test]
+fn qwen_weekly_provider_reset_establishes_the_stated_long_hold() {
+    use chrono::{Duration, Local, Utc};
+    let home = tempfile::tempdir().expect("home");
+    let _home = AidHomeGuard::set(home.path());
+    let reset = Utc::now() + Duration::days(7);
+    let message = format!(
+        "Quota exhausted: Your token-plan 1-week quota has been exhausted. The quota will reset at {} UTC.",
+        reset.format("%m-%d %H:%M:%S"),
+    );
+    let event = serde_json::json!({"type":"error", "message":message}).to_string();
+    QwenAgent
+        .parse_event(&TaskId("t-qwen".into()), &event)
+        .expect("error event");
+    let marker = std::fs::read_to_string(rate_limit::marker_path(&AgentKind::Qwen, None))
+        .expect("dated marker");
+    let expected = reset
+        .with_timezone(&Local)
+        .naive_local()
+        .format("%Y-%m-%d %H:%M")
+        .to_string();
+    let availability::StoredHold::Until(actual) =
+        availability::stored_hold(&marker, &AgentKind::Qwen)
+    else {
+        panic!("provider reset must establish a dated hold")
+    };
+    assert_eq!(actual.format("%Y-%m-%d %H:%M").to_string(), expected);
+    assert!(actual - Local::now().naive_local() > Duration::hours(24));
 }

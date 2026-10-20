@@ -96,7 +96,6 @@ const UNDOCUMENTED_CONFIG_KEYS: &[&str] = &[
     "on_done",
     "on_failed",
     "prefer_budget",
-    "query",
     "research",
     "simple_edit",
     "smart_routing",

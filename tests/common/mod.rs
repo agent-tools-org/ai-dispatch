@@ -32,6 +32,7 @@ pub(crate) fn aid_cmd_in(aid_home: &Path) -> Command {
 pub(crate) fn aid_cmd_with_cwd(aid_home: &Path, cwd: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_aid"));
     cmd.env("AID_HOME", aid_home);
+    cmd.env("CODEX_HOME", aid_home.join("empty-codex-home"));
     cmd.env("AID_NO_DETACH", "1");
     // Clear orchestrator environment variables that would pollute tests.
     // Without this, a run executed under an aid task sees AID_TASK_ID and is

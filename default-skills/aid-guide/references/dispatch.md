@@ -286,3 +286,6 @@ Qwen Code is a built-in agent (`aid run qwen "Review the module"`). Its own
 ModelStudio token-plan refusal signatures apply only to Qwen. Provider-attributed
 429/rate-limit errors create transient holds; Google-specific refusal texts do
 not hold Qwen. Unsplit terminal refusals cannot establish long or manual holds.
+
+Qwen reset timestamps in `MM-DD HH:MM:SS UTC` use the next occurrence of that
+date and convert using the local offset at the reset instant.

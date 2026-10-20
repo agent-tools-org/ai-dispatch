@@ -6,6 +6,16 @@ import sys
 import time
 import subprocess
 
+def capture(value):
+    path = os.environ.get("AID_FAKE_PROVIDER_CAPTURE")
+    if path:
+        with open(path, "a", encoding="utf-8") as output:
+            output.write(json.dumps(value) + "\n")
+
+
+capture({"argv": sys.argv[1:], "provider_env": os.environ.get("OPENCODE_CONFIG"),
+         "header_env": os.environ.get("PROVIDER_HEADER")})
+
 if "--help" in sys.argv:
     print("app-server stdio transport")
     sys.exit(0)
@@ -63,6 +73,7 @@ def finish(status="completed"):
 
 for raw in sys.stdin:
     request = json.loads(raw)
+    capture(request)
     method = request.get("method")
     if method == "initialize":
         if mode == "stderr-init":

@@ -6,7 +6,7 @@ use crate::types::AgentKind;
 
 #[test]
 fn removed_names_are_not_builtin_agents() {
-    for name in ["gemini", "qwen", "Gemini", "QWEN"] {
+    for name in ["gemini", "Gemini"] {
         assert_eq!(AgentKind::parse_str(name), None);
         let error = reject(name).expect_err("removed").to_string();
         assert!(
@@ -18,7 +18,7 @@ fn removed_names_are_not_builtin_agents() {
             "{error}"
         );
     }
-    for name in ["agy", "opencode", "kilo", "my-google-agent"] {
+    for name in ["agy", "qwen", "opencode", "kilo", "my-google-agent"] {
         reject(name).expect("supported name");
     }
 }
@@ -27,7 +27,7 @@ fn removed_names_are_not_builtin_agents() {
 fn run_rejects_removed_primary_review_and_cascade_routes() {
     let home = tempfile::tempdir().expect("home");
     let _home = crate::support::paths::AidHomeGuard::set(home.path());
-    for name in ["gemini", "qwen"] {
+    for name in ["gemini"] {
         for args in [
             RunArgs {
                 agent_name: name.into(),
@@ -63,7 +63,7 @@ fn run_rejects_removed_primary_review_and_cascade_routes() {
 fn removed_agent_config_is_rejected_on_write_but_ignored_on_dispatch() {
     let home = tempfile::tempdir().expect("home");
     let _home = crate::support::paths::AidHomeGuard::set(home.path());
-    for name in ["gemini", "qwen"] {
+    for name in ["gemini"] {
         assert!(crate::config::agent::save_agent_disabled(name, true).is_err());
         assert!(crate::config::agent::save_agent_default_model(name, Some("model")).is_err());
         assert!(crate::config::agent::save_agent_idle_timeout(name, Some(30)).is_err());
@@ -83,7 +83,7 @@ fn removed_agent_config_is_rejected_on_write_but_ignored_on_dispatch() {
 fn team_and_batch_reject_removed_routes() {
     let home = tempfile::tempdir().expect("home");
     let _home = crate::support::paths::AidHomeGuard::set(home.path());
-    for name in ["gemini", "qwen"] {
+    for name in ["gemini"] {
         let team =
             format!("[team]\nid = 'test'\ndisplay_name = 'Test'\npreferred_agents = ['{name}']\n");
         assert!(
@@ -115,7 +115,7 @@ fn team_and_batch_reject_removed_routes() {
 fn removed_routes_in_unused_defaults_and_team_overrides_are_rejected() {
     let home = tempfile::tempdir().expect("home");
     let _home = crate::support::paths::AidHomeGuard::set(home.path());
-    for name in ["gemini", "qwen"] {
+    for name in ["gemini"] {
         for setting in [
             format!("default_agent = '{name}'"),
             format!("[team.overrides.{name}]\nresearch = 10"),
@@ -148,7 +148,7 @@ fn dispatch_does_not_silently_ignore_a_team_with_removed_preferences() {
     let home = tempfile::tempdir().expect("home");
     let _home = crate::support::paths::AidHomeGuard::set(home.path());
     std::fs::create_dir(home.path().join("teams")).expect("teams");
-    for name in ["gemini", "qwen"] {
+    for name in ["gemini"] {
         std::fs::write(
             home.path().join("teams/test.toml"),
             format!("[team]\nid = 'test'\ndisplay_name = 'Test'\npreferred_agents = ['{name}']\n"),

@@ -83,9 +83,9 @@ aid run codex "Refactor" -w feat/refactor --bg        # background + worktree
 aid advise "implement feature" --difficulty moderate --budget standard --urgency normal --rigor standard
 ```
 
-Built-in run agents: `agy`, `codex`, `copilot`, `opencode`, `commandcode`, `cursor`, `kilo`, `mimocode`, `droid`, `oz`, `claude`, and `grok`. Use `aid advise` to compare agents; there is no `auto` agent.
+Built-in run agents: `agy`, `qwen`, `codex`, `copilot`, `opencode`, `commandcode`, `cursor`, `kilo`, `mimocode`, `droid`, `oz`, `claude`, and `grok`. Use `aid advise` to compare agents; there is no `auto` agent.
 
-`gemini` and `qwen` agents were removed. Use `agy`, a Google provider through `opencode`/`kilo`, or a custom agent. Stored history retains the original agent names.
+The `gemini` agent was removed. Use `agy`, a Google provider through `opencode`/`kilo`, or a custom agent. Stored history retains the original agent names.
 
 ### Key flags
 

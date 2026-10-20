@@ -21,6 +21,8 @@ pub mod opencode;
 pub(crate) mod opencode_models;
 pub(crate) mod opencode_overlay;
 pub mod oz;
+pub mod qwen;
+mod qwen_support;
 pub(crate) mod read_only;
 pub(crate) mod custom;
 pub(crate) mod cargo_target;
@@ -193,6 +195,7 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
         AgentKind::CommandCode => Box::new(commandcode::CommandCodeAgent),
         AgentKind::Copilot => Box::new(copilot::CopilotAgent),
         AgentKind::Cursor => Box::new(cursor::CursorAgent),
+        AgentKind::Qwen => Box::new(qwen::QwenAgent),
         AgentKind::OpenCode => Box::new(opencode_overlay::OpenCodeOverlayAgent::from_spec(opencode::spec())),
         AgentKind::Kilo => Box::new(kilo::agent()),
         AgentKind::MiMoCode => Box::new(mimocode::agent()),

@@ -11,7 +11,8 @@ pub(crate) fn reasoning_indicator_supported(agent: AgentKind) -> bool {
     // plus the OpenCode-compatible Kilo/MiMoCode delegates and custom JSONL.
     matches!(
         agent,
-        AgentKind::Codex
+        AgentKind::Qwen
+            | AgentKind::Codex
             | AgentKind::Copilot
             | AgentKind::OpenCode
             | AgentKind::CommandCode
@@ -113,6 +114,7 @@ mod tests {
     #[test]
     fn reasoning_indicator_capabilities_are_explicit_per_agent() {
         let expected = [
+            (AgentKind::Qwen, true),
             (AgentKind::Codex, true),
             (AgentKind::Copilot, true),
             (AgentKind::OpenCode, true),

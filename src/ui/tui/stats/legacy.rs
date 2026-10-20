@@ -150,7 +150,7 @@ fn format_tokens(tokens: i64) -> String {
 fn agent_color(agent: AgentKind) -> Color {
     match agent {
         AgentKind::Codex => Color::Cyan, AgentKind::Antigravity => Color::LightYellow,
-        AgentKind::Copilot => Color::LightGreen, AgentKind::OpenCode => Color::Yellow,
+        AgentKind::Qwen => Color::LightRed, AgentKind::Copilot => Color::LightGreen, AgentKind::OpenCode => Color::Yellow,
         AgentKind::CommandCode => Color::LightYellow, AgentKind::Cursor => Color::Magenta, AgentKind::Kilo => Color::Blue,
         AgentKind::MiMoCode => Color::Blue, AgentKind::Droid => Color::LightMagenta, AgentKind::Oz => Color::LightBlue,
         AgentKind::Claude => Color::White, AgentKind::Grok => Color::Rgb(255, 107, 53), AgentKind::Custom => Color::Gray,

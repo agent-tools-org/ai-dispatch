@@ -269,15 +269,20 @@ When dispatches are executed, `aid` isolates the agent process's `HOME` director
 
 ### Removed agent names
 
-`gemini` and `qwen` were removed in this release. Naming either as an agent in
+`gemini` was removed in this release. Naming it as an agent in
 CLI dispatch, batch TOML, team preferences/defaults/overrides, explicit agent
 configuration commands, or cascade/fallback lists fails with migration guidance: use `agy`, a Google
 provider through `opencode`/`kilo`, or a custom agent with a different name.
 Google and Qwen model IDs served by supported agents remain available.
 Stored tasks, events, quota markers, and statistics keep their original agent names.
 `aid ask`, `aid show --explain`, and bare `--judge` default to `agy`.
-Container launches retain `.gemini` for agy authentication and do not mount `.qwen`.
+Container launches retain `.gemini` for agy authentication and mount `.qwen` for Qwen authentication.
 `GEMINI_CLI_HOME` is no longer managed as a built-in CLI config redirect.
-Stale `[gemini]` and `[qwen]` tables in `~/.aid/agent_config.toml` are ignored
+Stale `[gemini]` tables in `~/.aid/agent_config.toml` are ignored
 without modifying the file. A warning names the file and key once per key per
 process; supported agents keep their configured defaults.
+
+Qwen Code is a built-in agent (`aid run qwen "Review the module"`). Its own
+ModelStudio token-plan refusal signatures apply only to Qwen. Provider-attributed
+429/rate-limit errors create transient holds; Google-specific refusal texts do
+not hold Qwen. Unsplit terminal refusals cannot establish long or manual holds.

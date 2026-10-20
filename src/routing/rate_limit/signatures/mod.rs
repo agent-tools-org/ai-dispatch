@@ -127,6 +127,9 @@ pub(crate) const QUOTA_SIGNATURES: &[QuotaSignature] = &[
     // {"errorCode":"quota_exceeded","message":"You have exceeded your monthly quota"}
     // Same class as above: monthly, with no stated reset date.
     QuotaSignature { agent: AgentKind::Copilot, needle: "exceeded your monthly quota", recovery: QuotaRecovery::NeedsHuman },
+    // Qwen Code 0.21.5 ModelStudio token-plan refusals captured in result events.
+    QuotaSignature { agent: AgentKind::Qwen, needle: "your token-plan 5-hour quota has been exhausted", recovery: QuotaRecovery::After(300) },
+    QuotaSignature { agent: AgentKind::Qwen, needle: "your token-plan 1-week quota has been exhausted", recovery: QuotaRecovery::After(300) },
     // grok, captured 2026-08-07:
     // "API error (status 402 Payment Required): Grok Build usage balance exhausted"
     // Land now as Windowed: aidbar already maps the billing period to a dated

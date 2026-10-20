@@ -162,4 +162,18 @@ mod tests {
         assert_eq!(model_selection_info(&args, &run_model, None, &crate::agent::codex::CodexAgent),
             "[aid] codex model: gpt-6-sol; source: CLI config (no -m)");
     }
+    #[test]
+    fn qwen_default_follows_selected_settings_model() {
+        let home = tempfile::tempdir().expect("temporary qwen home");
+        std::fs::create_dir(home.path().join(".qwen")).expect("qwen directory");
+        std::fs::write(home.path().join(".qwen/settings.json"),
+            r#"{"model":{"name":"configured-qwen"}}"#).expect("qwen settings");
+        crate::routing::model_catalog::set_test_qwen_home(Some(home.path().to_path_buf()));
+        let args = RunArgs { agent_name: "qwen".to_string(), ..Default::default() };
+        let info = model_selection_info(&args, &unpinned(), None, &crate::agent::qwen::QwenAgent);
+        crate::routing::model_catalog::set_test_qwen_home(None);
+        assert_eq!(info,
+            "[aid] qwen model: configured-qwen; source: adapter default (no caller -m)");
+    }
+
 }

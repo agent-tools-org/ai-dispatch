@@ -13,6 +13,7 @@ fn fallback_chain_skips_disabled_agent() {
     let _agents = crate::agent::DetectAgentsGuard::set(vec![
         AgentKind::Grok,
         AgentKind::Kilo,
+        AgentKind::Qwen,
         AgentKind::Codex,
     ]);
     agent_config::save_agent_disabled("kilo", true).expect("disable agent");

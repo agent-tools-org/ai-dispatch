@@ -12,6 +12,7 @@ pub(crate) const SERVED_PROBE_AGENTS: &[AgentKind] = &[
     AgentKind::Codex,
     AgentKind::Grok,
     AgentKind::Cursor,
+    AgentKind::Qwen,
     AgentKind::Antigravity,
     AgentKind::OpenCode,
 ];

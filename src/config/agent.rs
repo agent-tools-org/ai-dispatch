@@ -246,15 +246,16 @@ mod tests {
         let dir = tempfile::tempdir().expect("home");
         let _guard = AidHomeGuard::set(dir.path());
         let path = dir.path().join("agent_config.toml");
-        let content = "[gemini]\nmodel = 42\n[qwen]\ndisabled = 'retired'\n\
+        let content = "[gemini]\nmodel = 42\n[qwen]\nmodel = 'configured-qwen'\ndisabled = true\n\
             [codex]\nmodel = 'gpt-6-sol'\nidle_timeout = 321\n\
             [agy]\nmodel = 'gemini-3.7-flash-high'\n";
         std::fs::write(&path, content).expect("config");
         let config = load_agent_config();
-        assert_eq!(config.len(), 2);
+        assert_eq!(config.len(), 3);
         assert_eq!(get_default_model("gemini"), None);
         assert_eq!(get_default_idle_timeout("qwen"), None);
-        assert!(!is_agent_disabled("qwen"));
+        assert!(is_agent_disabled("qwen"));
+        assert_eq!(get_default_model("qwen").as_deref(), Some("configured-qwen"));
         assert_eq!(get_default_model("codex").as_deref(), Some("gpt-6-sol"));
         assert_eq!(get_default_idle_timeout("codex"), Some(321));
         assert_eq!(

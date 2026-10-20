@@ -3,7 +3,7 @@
 
 use super::cursor;
 use crate::types::AgentKind;
-use chrono::{Duration, Local, NaiveDateTime};
+use chrono::{Datelike, Duration, Local, NaiveDateTime};
 
 pub(crate) fn recovery_for_agent(message: &str, agent: AgentKind) -> Option<NaiveDateTime> {
     use crate::routing::rate_limit::{parse_recovery_datetime, parse_recovery_time};
@@ -31,6 +31,7 @@ pub(crate) fn recovery_for_agent(message: &str, agent: AgentKind) -> Option<Naiv
             let reset = format!("resets in {rest}");
             parse_relative_recovery(&reset)
         }
+        AgentKind::Qwen => parse_reset_at_utc(&lower),
         _ => None,
     }
 }
@@ -54,6 +55,20 @@ pub(crate) fn parse_relative_recovery(message: &str) -> Option<NaiveDateTime> {
         return Some(now + duration);
     }
     None
+}
+
+/// "the quota will reset at 08-05 15:12:00 utc" — an absolute instant with no
+/// year, which is how qwen's token plan reports its window. Assumes the current
+/// year and rolls to next year if that would land in the past.
+fn parse_reset_at_utc(lower: &str) -> Option<NaiveDateTime> {
+    let idx = lower.find("reset at ")?;
+    let rest = lower[idx + "reset at ".len()..].trim();
+    let stamp: String = rest.chars().take(14).collect();
+    let year = Local::now().naive_local().year();
+    let candidate =
+        NaiveDateTime::parse_from_str(&format!("{year}-{stamp}"), "%Y-%m-%d %H:%M:%S").ok()?;
+    let utc_offset = Local::now().offset().local_minus_utc();
+    Some(candidate + Duration::seconds(i64::from(utc_offset)))
 }
 
 /// "resets in 59m21s" / "1h30m" — the compact form agy uses. The spaced parser

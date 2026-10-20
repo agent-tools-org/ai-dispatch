@@ -180,11 +180,12 @@ pub(crate) fn clear_feed_for_tests() {
     });
 }
 
-/// Prices the reported model; with none reported, only a model aid observed
-/// run. Otherwise the model price is unknown.
+/// Prices the reported model or Qwen's selected settings model.
+/// Otherwise the model price is unknown.
 pub(crate) fn resolve_pricing(model: Option<&str>, agent: AgentKind) -> Option<ModelPricing> {
     let known = match (model, agent) {
         (Some(model), _) => Some(model.to_string()),
+        (None, AgentKind::Qwen) => crate::routing::model_catalog::get_qwen_selected_model(),
         (None, _) => None,
     };
     match known {

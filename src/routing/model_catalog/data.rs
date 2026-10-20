@@ -13,6 +13,13 @@ pub const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
         true,
     ),
     (
+        AgentKind::Qwen,
+        "Research, coding with Qwen3-Coder models",
+        "free (OAuth) or Alibaba Cloud subscription",
+        "implement, refactor, research, explain",
+        true,
+    ),
+    (
         AgentKind::Codex,
         "Complex implementation, multi-file refactors, test suites",
         "$0.10-$8/M blended",
@@ -111,6 +118,7 @@ pub const AGENT_MODELS: &[AgentModel] = &[
     AgentModel { agent: AgentKind::Antigravity, model: "gemini-3.6-flash-medium", input_per_m: 0.0, output_per_m: 0.0, tier: "free", description: "Flash medium (Google One / BYOK)" },
     AgentModel { agent: AgentKind::Antigravity, model: "gemini-3.1-pro-high", input_per_m: 0.0, output_per_m: 0.0, tier: "free", description: "Pro high (Google One / BYOK)" },
     AgentModel { agent: AgentKind::Antigravity, model: "claude-sonnet-4-6", input_per_m: 0.0, output_per_m: 0.0, tier: "free", description: "Claude Sonnet 4.6 via agy" },
+    AgentModel { agent: AgentKind::Qwen, model: "coder-model", input_per_m: 0.0, output_per_m: 0.0, tier: "free", description: "Default Qwen Code model" },
     AgentModel { agent: AgentKind::OpenCode, model: "opencode/glm-5.2", input_per_m: 0.38, output_per_m: 1.98, tier: "cheap", description: "Paid, good quality" },
     AgentModel { agent: AgentKind::OpenCode, model: "opencode/kimi-k2.6", input_per_m: 0.45, output_per_m: 2.20, tier: "cheap", description: "Paid, good quality" },
     AgentModel { agent: AgentKind::OpenCode, model: "opencode/deepseek-v4-flash-free", input_per_m: 0.0, output_per_m: 0.0, tier: "free", description: "Free tier" },

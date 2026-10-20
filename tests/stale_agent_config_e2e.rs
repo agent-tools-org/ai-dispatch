@@ -24,7 +24,7 @@ fn stale_config_warns_once_per_key_without_disabling_supported_agents() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
-    for key in ["gemini", "qwen"] {
+    for key in ["gemini"] {
         let warning = format!(
             "Ignoring stale removed-agent config key [{key}] in {}",
             path.display()
@@ -38,6 +38,7 @@ fn stale_config_warns_once_per_key_without_disabling_supported_agents() {
         assert!(String::from_utf8_lossy(&explicit.stderr).contains("removed in this release"));
     }
     assert!(String::from_utf8_lossy(&output.stdout).contains("configured-codex"));
+    assert!(!stderr.contains("config key [qwen]"));
     assert_eq!(
         std::fs::read_to_string(path).expect("unchanged config"),
         content

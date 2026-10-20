@@ -98,6 +98,7 @@ pub(crate) fn built_in_binaries(agent_kind: AgentKind) -> &'static [&'static str
         AgentKind::CommandCode => &["commandcode"],
         AgentKind::Copilot => &["copilot"],
         AgentKind::Cursor => &["agent", "cursor-agent"],
+        AgentKind::Qwen => &["qwen"],
         AgentKind::OpenCode => &["opencode"],
         AgentKind::Kilo => &["kilo"],
         AgentKind::MiMoCode => &["mimo"],

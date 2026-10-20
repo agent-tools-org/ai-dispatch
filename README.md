@@ -164,13 +164,13 @@ aid advise "Add request validation and regression tests" \
   --difficulty moderate --budget standard --urgency normal --rigor standard
 ```
 
-Supported built-in agents: `agy`, `codex`, `copilot`, `opencode`,
+Supported built-in agents: `agy`, `qwen`, `codex`, `copilot`, `opencode`,
 `commandcode`, `cursor`, `kilo`, `mimocode`, `droid`, `oz`, `claude`, and `grok`.
 Availability depends on installed CLIs and their authentication. The
 [configuration guide](default-skills/aid-guide/references/configuration.md)
 also covers custom agents.
 
-The `gemini` and `qwen` agents were removed. Use `agy`, a Google provider through
+The `gemini` agent was removed. Use `agy`, a Google provider through
 `opencode`/`kilo`, or a custom agent. Historical tasks keep their original names.
 
 ## Where to go next

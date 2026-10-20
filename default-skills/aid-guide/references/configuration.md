@@ -263,7 +263,7 @@ when a budget is declared. `--model` always wins. With no configured default, ai
 uses the catalog model only for a declared `free` or `cheap` budget. `standard`
 and `premium` leave the model unset so the CLI uses its own default (no `-m`).
 Simple-task smart routing applies only when no budget is declared.
-Stale `[gemini]` and `[qwen]` tables in `~/.aid/agent_config.toml` are ignored
+Stale `[gemini]` tables in `~/.aid/agent_config.toml` are ignored
 without rewriting the file. Each stale key produces one warning per process naming
 the file and key. Explicit requests such as `aid agent config gemini --model ...`
 still fail with removal guidance.

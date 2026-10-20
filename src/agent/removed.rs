@@ -1,7 +1,7 @@
 // Reject removed execution routes while keeping stored agent names readable.
 // Exports: is_removed, reject, validate_run, validate_team. Deps: anyhow, RunArgs, team config.
 
-const REMOVED_AGENTS: &[&str] = &["gemini", "qwen"];
+const REMOVED_AGENTS: &[&str] = &["gemini"];
 
 pub(crate) fn is_removed(name: &str) -> bool {
     REMOVED_AGENTS.iter().any(|removed| name.trim().eq_ignore_ascii_case(removed))

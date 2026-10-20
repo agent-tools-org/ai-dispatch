@@ -121,6 +121,7 @@ fn free_tier_and_subscription_rows_stay_zero() {
     let _guard = isolated();
     for (model, agent) in [
         ("gemini-3.1-pro-high", AgentKind::Antigravity),
+        ("coder-model", AgentKind::Qwen),
         ("opencode/deepseek-v4-flash-free", AgentKind::OpenCode),
         ("kilo/kilo-auto/free", AgentKind::Kilo),
         ("mimo/mimo-auto", AgentKind::MiMoCode),

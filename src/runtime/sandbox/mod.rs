@@ -194,6 +194,7 @@ fn agent_env_keys(kind: AgentKind) -> &'static [&'static str] {
     match kind {
         AgentKind::Codex => &["OPENAI_API_KEY"],
         AgentKind::CommandCode => &[],
+        AgentKind::Qwen => &[],
         AgentKind::Copilot => &[],
         AgentKind::Kilo => &["KILO_API_KEY", "OPENAI_API_KEY"],
         AgentKind::MiMoCode => &["MIMOCODE_SERVER_PASSWORD"],
@@ -207,6 +208,7 @@ fn agent_config_dirs(kind: AgentKind) -> &'static [&'static str] {
     match kind {
         AgentKind::Codex => &[".codex"],
         AgentKind::CommandCode => &[".commandcode"],
+        AgentKind::Qwen => &[".qwen"],
         AgentKind::Copilot => &[".copilot"],
         AgentKind::Kilo => &[".kilo"],
         AgentKind::MiMoCode => &[".mimocode"],

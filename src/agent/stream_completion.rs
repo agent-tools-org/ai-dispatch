@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::types::{CompletionInfo, TaskStatus};
 
-/// Claude / Cursor stream-json terminal `result` is a failure only when
+/// Claude / Cursor / Qwen stream-json terminal `result` is a failure only when
 /// its protocol exposes an explicit error flag or a known non-delivery subtype.
 pub(crate) fn result_envelope_failed(v: &Value) -> bool {
     if v.get("type").and_then(|t| t.as_str()) != Some("result") {

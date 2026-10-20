@@ -177,7 +177,7 @@ const AGY_AUTH_DIR: &str = ".gemini";
 fn mount_home_dirs_from(home: Option<PathBuf>) -> Vec<String> {
     let mut args = Vec::new();
     let Some(home) = home else { return args };
-    for subdir in [".codex", ".copilot", AGY_AUTH_DIR, ".kilo", ".mimocode", ".opencode"] {
+    for subdir in [".codex", ".copilot", AGY_AUTH_DIR, ".qwen", ".kilo", ".mimocode", ".opencode"] {
         let host_path = home.join(subdir);
         if host_path.exists() {
             let container_path = Path::new("/root").join(subdir);
@@ -229,7 +229,8 @@ mod tests {
             .any(|pair| pair[0] == "-v" && pair[1].contains(".copilot:/root/.copilot")));
         assert!(args.windows(2).any(|pair|
             pair[0] == "-v" && pair[1].contains(".gemini:/root/.gemini")));
-        assert!(!args.iter().any(|arg| arg.contains(".qwen")));
+        assert!(args.windows(2).any(|pair|
+            pair[0] == "-v" && pair[1].contains(".qwen:/root/.qwen")));
     }
 
     #[test]

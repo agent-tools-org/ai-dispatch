@@ -224,6 +224,7 @@ fn resumable_agents_report_session_support() {
         AgentKind::Kilo,
         AgentKind::MiMoCode,
         AgentKind::Droid,
+        AgentKind::Qwen,
         AgentKind::Codex,
     ] {
         assert!(kind.supports_session_resume(), "{kind} should resume sessions");

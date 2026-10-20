@@ -6,6 +6,9 @@ use super::*;
 #[test]
 fn the_shapes_that_broke_routing_are_distinct() {
     let (agy, agy_shape) = provider_for_cli(AgentKind::Antigravity);
+    let (qwen, qwen_shape) = provider_for_cli(AgentKind::Qwen);
+    assert_eq!(qwen_shape, MeteringShape::AccountPool);
+    assert_ne!(agy, qwen);
     let (codex, codex_shape) = provider_for_cli(AgentKind::Codex);
     assert_eq!(agy_shape, MeteringShape::PerModelFamily);
     assert_eq!(codex_shape, MeteringShape::AccountPool);

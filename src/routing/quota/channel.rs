@@ -168,6 +168,12 @@ fn keep_envelope_strings(object: &Map<String, Value>, agent: AgentKind, kept: &m
             MAX_DEPTH,
             &mut kept.cli_diagnostic,
         );
+    } else if agent == AgentKind::Qwen
+        && matches!(object.get("type").and_then(Value::as_str), Some("result" | "turn_complete"))
+        && let Some(text) = object.get("result").and_then(Value::as_str)
+        && crate::routing::rate_limit::signatures::match_quota_signature_for_agent(text, agent).is_some()
+    {
+        push_line(&mut kept.unsplit, text);
     }
 }
 

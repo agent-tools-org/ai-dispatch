@@ -1,3 +1,11 @@
+## v11.5.0 (2026-10-20)
+- Codex keeps the user's provider: the `model_provider` selected in the user's `config.toml` and its `[model_providers.<id>]` table are passed to isolated Codex launches as `-c` overrides, identically for `exec`, `app-server` and the exec fallback; a provider table holding an inline credential refuses the launch instead of copying it
+- Quota and failure classification is agent-scoped: a hold uses only signatures of the agent that produced the output, recovery times come only from the agent's own reset phrase or a typed field, holds longer than 24 hours or needing a human require provider-attributed evidence, and Codex app-server typed errors are classified directly; failures no rule recognises are recorded as `unclassified_failure` for review
+- A failed PTY run whose agent-scoped excerpt shows a quota refusal continues on the next route with a transient model hold, without promoting a long hold
+- The Gemini CLI agent is removed: naming `gemini` as an agent, judge, peer reviewer, cascade entry or team agent fails with a migration hint (`agy`, a Google provider through `opencode`/`kilo`, or a custom agent); stale `[gemini]` settings are ignored and stored history keeps the original agent names. Qwen Code remains a built-in agent with its own quota signatures and reset parsing
+- Release builds on platforms without `/proc` no longer warn about an unused `mut` in the process monitor
+
+
 ## v11.4.0 (2026-10-20)
 - Read-only concurrent changes: a `--read-only` launch whose recorded provenance proves aid's restrictive native profile (Codex app-server or exec) reports checkout changes made during the run as an input-instability warning with baseline/current HEAD and the changed paths, instead of a read-only violation; unproven launches (Claude, custom agents, missing provenance) still fail
 - Claude mid-run input: Claude tasks run with streaming input, so `aid steer` and `aid reply` reach a running Claude task and record acceptance only when Claude replays the message; a steer write that fails is recorded unconfirmed without ending the run

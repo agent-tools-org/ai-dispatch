@@ -19,7 +19,7 @@ async fn large_prompt_arrives_intact_after_more_than_five_seconds_of_startup() {
     }
     tokio::time::timeout(
         Duration::from_secs(12),
-        run_process(&store, &spec, &args, &ClaudeAgent, launch),
+        run_process(&store, &spec, &args, &ClaudeAgent, launch, std::time::Instant::now()),
     )
     .await
     .unwrap()

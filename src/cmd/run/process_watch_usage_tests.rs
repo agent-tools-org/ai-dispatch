@@ -32,8 +32,8 @@ async fn worker_timeout_recovers_ingested_claude_usage() {
     let mut args = timeout_args(&store, &id, &log);
     args.cmd.args(["-c", "cat \"$1\"; exec sleep 10", "replay"]);
     args.cmd.arg(input);
-    let mut child = spawn_agent(&mut args).expect("spawn");
-    let result = watch_agent(&args, &mut child, Instant::now())
+    let (mut child, prompt) = spawn_agent(&mut args).expect("spawn");
+    let result = watch_agent(&args, &mut child, Instant::now(), prompt.as_deref())
         .await
         .expect("watch");
     let _ = child.kill().await;

@@ -43,6 +43,7 @@ pub fn run_agent_process(
         crate::config::timeout_policy::TimeoutPolicy::from_command(cmd),
         None,
         None,
+        std::time::Instant::now(),
     )
 }
 
@@ -59,8 +60,8 @@ pub(crate) fn run_agent_process_with_control(
     timeout_policy: crate::config::timeout_policy::TimeoutPolicy,
     max_task_cost: Option<f64>,
     control: Option<PtyRunControl>,
+    start: std::time::Instant,
 ) -> Result<()> {
-    let start = std::time::Instant::now();
     let fallback;
     let mut exec_cmd = cmd;
     if agent.kind() == crate::types::AgentKind::Codex
@@ -70,7 +71,7 @@ pub(crate) fn run_agent_process_with_control(
         if let Some(info) = crate::runtime::codex_app_server::run(crate::runtime::codex_app_server::Run {
             agent, command:cmd, task:task_id, store, log:log_path, output:output_path,
             group:group.as_deref(), policy:timeout_policy, max_cost:max_task_cost,
-            control:control.as_ref(),
+            control:control.as_ref(), start,
         })? {
             return record_completion(agent,task_id,store,model,start.elapsed().as_millis() as i64,&info);
         }

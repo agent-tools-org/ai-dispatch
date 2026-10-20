@@ -164,7 +164,10 @@ timeout, up to the lock notice's timeout. Remote verification's absolute task
 deadline still includes queue time.
 Values below 300 seconds warn without rejecting the run. For caps of at least
 600 seconds, the worker requests one wrap-up at 90% of its effective deadline,
-using the same execution start as enforcement; reaper reconciliation is a backup. Commit work
+using the same execution start as enforcement, before choosing PTY, Codex app-server,
+or piped execution. The timer runs independently of the runner and stops when execution
+settles. PTY monitors consume the queued request through their reply queue; Codex
+app-server uses its existing control transport. Reaper reconciliation is a backup. Commit work
 in progress when changes are permitted, and write the report now. The request
 uses the pending-message queue alone, atomically records its message and milestone,
 and skips agents without steer support. Read-only tasks instead receive a request

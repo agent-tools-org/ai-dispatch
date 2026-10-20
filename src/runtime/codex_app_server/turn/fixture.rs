@@ -58,6 +58,7 @@ impl Fixture {
             policy,
             None,
             None,
+            std::time::Instant::now(),
         )
         .unwrap();
     }

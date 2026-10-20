@@ -30,6 +30,7 @@ async fn assert_deadline(pty: bool, streaming: bool, script: &str, default_max: 
     if pty {
         run_agent_process_with_control(
             &agent, &cmd, &id, &store, &log, None, None, streaming, policy, None, None,
+            std::time::Instant::now(),
         )
         .expect("PTY worker");
     } else {
@@ -45,6 +46,7 @@ async fn assert_deadline(pty: bool, streaming: bool, script: &str, default_max: 
             None,
             policy,
             None,
+            std::time::Instant::now(),
         )
         .await
         .expect("piped worker");

@@ -10,6 +10,8 @@ mod reaper;
 mod spec;
 mod waiting;
 mod spawn;
+#[path = "background_wrap_up.rs"]
+mod wrap_up;
 
 use anyhow::Result;
 use std::process::Stdio;
@@ -153,7 +155,7 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec, args: &Run
     let (std_cmd, container_name) = launch::prepare_launch(
         store, spec, args, agent.as_ref(), &home_guard,
     )?;
-    run_process(store, spec, args, agent.as_ref(), std_cmd).await?;
+    run_process(store, spec, args, agent.as_ref(), std_cmd, std::time::Instant::now()).await?;
     if args.sandbox {
         crate::runtime::sandbox::kill_container(&spec.task_id);
     }
@@ -163,16 +165,17 @@ async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec, args: &Run
 
 async fn run_process(
     store: &Arc<Store>, spec: &BackgroundRunSpec, args: &RunArgs,
-    agent: &dyn agent::Agent, std_cmd: std::process::Command,
+    agent: &dyn agent::Agent, std_cmd: std::process::Command, start: std::time::Instant,
 ) -> Result<()> {
     let task_id = TaskId(spec.task_id.clone());
     let log_path = paths::log_path(&spec.task_id);
     let timeout_policy = crate::config::timeout_policy::TimeoutPolicy::from_env(args.env.as_ref());
+    let _wrap_up = wrap_up::Timer::start(store.clone(), &spec.task_id, start, timeout_policy)?;
     if spec.interactive {
         crate::runtime::pty::runner::run_agent_process_with_control(
             agent, &std_cmd, &task_id, store, &log_path,
             args.output.as_deref(), args.model.as_deref(), agent.streaming(),
-            timeout_policy, args.max_task_cost, None,
+            timeout_policy, args.max_task_cost, None, start,
         )?;
         return Ok(());
     }
@@ -183,6 +186,7 @@ async fn run_process(
         agent, tokio_cmd, &task_id, store, &log_path,
         args.output.as_deref(), args.model.as_deref(), agent.streaming(),
         args.group.as_deref(), timeout_policy, args.max_task_cost,
+        start,
     )
     .await?;
     Ok(())
@@ -216,3 +220,7 @@ mod background_reaper_tests;
 mod lifecycle_bypass_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+#[path = "background_worker_wrap_up_tests.rs"]
+mod worker_wrap_up_tests;

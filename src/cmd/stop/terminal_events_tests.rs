@@ -100,6 +100,7 @@ async fn run_piped(agent: &FinalizingAgent, streaming: bool, ceiling: Option<f64
         None,
         crate::config::timeout_policy::TimeoutPolicy::default(),
         ceiling,
+        std::time::Instant::now(),
     )
     .await
     .expect("piped runner");
@@ -126,6 +127,7 @@ async fn assert_finalization(pty: bool, streaming: bool, status: TaskStatus) {
             crate::config::timeout_policy::TimeoutPolicy::default(),
             None,
             None,
+            std::time::Instant::now(),
         )
         .expect("PTY runner");
     } else {

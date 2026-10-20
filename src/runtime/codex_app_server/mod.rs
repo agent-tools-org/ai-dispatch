@@ -19,6 +19,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 pub(crate) struct Run<'a> {
+    pub start: std::time::Instant,
     pub agent: &'a dyn Agent,
     pub command: &'a std::process::Command,
     pub task: &'a TaskId,
@@ -32,7 +33,7 @@ pub(crate) struct Run<'a> {
 }
 
 pub(crate) fn run(args: Run<'_>) -> Result<Option<CompletionInfo>> {
-    let started = std::time::Instant::now();
+    let started = args.start;
     let info = match run_inner(&args) {
         Ok(info) => info,
         Err(error) => {

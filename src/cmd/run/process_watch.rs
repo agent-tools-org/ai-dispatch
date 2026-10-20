@@ -61,33 +61,8 @@ pub(super) async fn watch_agent(
             .await
         }
     };
-    let result = watch_with_wrap_up(args, start, limit, watch).await;
+    let result = tokio::time::timeout(limit.saturating_sub(start.elapsed()), watch).await;
     settle_result(args, child, start, result).await
-}
-
-async fn watch_with_wrap_up(
-    args: &RunProcessArgs<'_>,
-    start: Instant,
-    limit: std::time::Duration,
-    watch: impl std::future::Future<Output = Result<CompletionInfo>>,
-) -> std::result::Result<Result<CompletionInfo>, tokio::time::error::Elapsed> {
-    let deadline = tokio::time::Instant::from_std(start + limit);
-    let watched = tokio::time::timeout_at(deadline, watch);
-    tokio::pin!(watched);
-    if limit.as_secs() >= 600 {
-        let warning = deadline - std::time::Duration::from_secs(limit.as_secs() / 10);
-        tokio::select! {
-            result = &mut watched => result,
-            _ = tokio::time::sleep_until(warning) => {
-                let _ = crate::cmd::steer::wrap_up_before_timeout(
-                    args.store, args.task_id.as_str(), start.elapsed().as_secs(), limit.as_secs(),
-                );
-                watched.await
-            }
-        }
-    } else {
-        watched.await
-    }
 }
 
 async fn settle_result(

@@ -262,11 +262,13 @@ fn infrastructure_diagnostic_survives_long_output_in_show_and_board() {
     store.update_task_dispatch_args(task.id.as_str(), &args.dispatch_args_json().expect("json"))
         .expect("save remote box");
     let line = "rbox: Box lock not acquired within 60 s";
-    crate::support::test_env::write_executable(&temp.path().join("rbox"), &format!(
+    let bin = temp.path().join("long-remote-checkout-path-".repeat(8));
+    crate::support::test_env::write_executable(&bin.join("rbox"), &format!(
         "#!/bin/sh\necho '{line}'\ni=0\n\
          while [ $i -lt 20 ]; do echo trailing-noise; i=$((i+1)); done\nexit 75\n"
     ));
-    let command = format!("PATH='{}:/usr/bin:/bin' rbox exec box", temp.path().display());
+    let command = format!("PATH='{}:/usr/bin:/bin' rbox exec box", bin.display());
+    assert!(command.len() > 200);
     maybe_verify_impl(&store, &task.id, Some(&command), Some(&dir), None);
     let task = store.get_task(task.id.as_str()).expect("load").expect("task");
     assert_eq!(task.status, TaskStatus::Done);

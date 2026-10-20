@@ -222,6 +222,11 @@ fn append_task_events(out: &mut String, events: &[TaskEvent]) {
 }
 
 fn event_detail_lines(event: &TaskEvent) -> Vec<String> {
+    if !event.detail.is_empty() && event.metadata.as_ref()
+        .is_some_and(|metadata| metadata["verify_execution_error"] == true)
+    {
+        return event.detail.lines().map(str::to_string).collect();
+    }
     let mut lines = vec![truncate(&event.detail, 60)];
     if let Some(eval_output) = iterate_eval_output(event) {
         lines.push(format!("Eval output: {}", truncate(eval_output, 60)));

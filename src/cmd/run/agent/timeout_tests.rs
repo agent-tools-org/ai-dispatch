@@ -74,6 +74,7 @@ async fn assert_worker_timeout(script: &str) {
         None,
         tiny_timeout_policy(),
         None,
+        Instant::now(),
     )
     .await
     .expect("worker");
@@ -114,6 +115,7 @@ async fn max_duration_timeout_reaches_on_fail_lifecycle() {
         None,
         policy,
         None,
+        Instant::now(),
     )
     .await
     .unwrap();
@@ -178,6 +180,7 @@ async fn spawn_failure_marks_task_failed_not_running() {
         None,
         policy,
         None,
+        Instant::now(),
     )
     .await
     .unwrap_err();
@@ -242,6 +245,7 @@ fn process_foreground_completion_records_component_usage() {
         workgroup_id: None,
         timeout_policy: crate::config::timeout_policy::TimeoutPolicy::default(),
         max_task_cost: None,
+        start: std::time::Instant::now(),
     };
     complete_agent(&args, &mut { info }, Instant::now(), &context).expect("record completion");
     let stored = store.get_task(task.id.as_str()).expect("query").expect("stored task");

@@ -68,6 +68,7 @@ async fn settle_worker_failure_after_stop_records_no_failure_event() {
         None,
         crate::config::timeout_policy::TimeoutPolicy::default(),
         None,
+        std::time::Instant::now(),
     )
     .await
     .expect("worker exit");

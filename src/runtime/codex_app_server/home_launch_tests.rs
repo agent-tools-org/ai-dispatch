@@ -56,6 +56,7 @@ async fn dispatch(fixture: &Fixture, foreground: bool) {
         None,
         crate::config::timeout_policy::TimeoutPolicy::default(),
         None,
+        std::time::Instant::now(),
     )
     .await
     .unwrap();

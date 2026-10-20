@@ -38,6 +38,7 @@ async fn run_capture(ceiling: f64) -> Task {
         None,
         crate::config::timeout_policy::TimeoutPolicy::default(),
         Some(ceiling),
+        std::time::Instant::now(),
     )
     .await
     .expect("run captured stream");

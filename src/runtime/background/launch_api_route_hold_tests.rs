@@ -103,9 +103,9 @@ async fn verified_route_task_does_not_hold_next_launch() {
     let (home, _guard, store) = fixture();
     let spec = spec(false);
     let (args, agent, command, _isolated) = prepared(home.path(), &store, &spec);
-    crate::runtime::background::run_process(&store, &spec, &args, agent.as_ref(), command)
-        .await
-        .unwrap();
+    crate::runtime::background::run_process(
+        &store, &spec, &args, agent.as_ref(), command, std::time::Instant::now(),
+    ).await.unwrap();
     assert_eq!(
         store.get_task("t-api-launch").unwrap().unwrap().status,
         crate::types::TaskStatus::Done

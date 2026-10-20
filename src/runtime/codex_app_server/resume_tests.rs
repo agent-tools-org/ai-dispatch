@@ -197,6 +197,7 @@ async fn foreground_rejected_resume_also_dispatches_fresh_exec() {
         None,
         crate::config::timeout_policy::TimeoutPolicy::default(),
         None,
+        std::time::Instant::now(),
     )
     .await
     .unwrap();

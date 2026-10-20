@@ -67,5 +67,6 @@ fn timeout_args<'a>(
             ..Default::default()
         },
         max_task_cost: None,
+        start: std::time::Instant::now(),
     }
 }

@@ -42,7 +42,7 @@ impl<'a> Turn<'a> {
             turn: None,
             completed: false,
             attempted: HashSet::new(),
-            deadline: Instant::now() + run.policy.max_duration.min(run.policy.hard_cap),
+            deadline: run.start + run.policy.max_duration.min(run.policy.hard_cap),
             last_progress: std::time::SystemTime::now(),
             startup_deadline: Instant::now()
                 + Duration::from_secs(10)

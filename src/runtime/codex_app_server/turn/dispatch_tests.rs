@@ -193,6 +193,7 @@ fn piped_dispatch_uses_the_same_transport_and_completion_pipeline() {
             None,
             crate::config::timeout_policy::TimeoutPolicy::default(),
             None,
+            std::time::Instant::now(),
         ))
         .unwrap();
     assert_eq!(

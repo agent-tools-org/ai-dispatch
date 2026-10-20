@@ -2,14 +2,12 @@
 // Exports: run().
 // Deps: run setup/execution helpers, prompt builder, lifecycle wrappers, workspace guard.
 use anyhow::Result;
-use chrono::Local;
 use std::sync::Arc;
 use crate::agent;
 use crate::config::hooks;
 use crate::cmd::show;
 use crate::store::Store;
-use crate::store::TaskCompletionUpdate;
-use crate::types::{EventKind, TaskEvent, TaskId, TaskStatus};
+use crate::types::{TaskId, TaskStatus};
 use super::run_bestof;
 use super::run_dispatch_execute::{
     load_runtime_hooks, maybe_record_start_sha, run_background_task,
@@ -37,26 +35,8 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
             let _ = crate::task::lifecycle::fail_waiting_with_reason(&store, id.as_str(), &error.to_string());
         }
     })?;
-    let mut prompt_bundle = run_prompt::build_prompt_bundle(
-        &store,
-        &args,
-        &prepared.agent_kind,
-        prepared.workgroup.as_ref(),
-        &prepared.requested_skills,
-        prepared.task_id.as_str(),
-        prepared.detected_project.as_ref(),
-        prepared.project_root.as_deref(),
-    )?;
-    crate::runtime::remote_build::append_prompt(&mut prompt_bundle.effective_prompt, args.remote_build.as_deref());
-    prompt_bundle.prompt_tokens = crate::prompt::templates::estimate_tokens(&prompt_bundle.effective_prompt) as i64;
-    store.update_resolved_prompt(prepared.task_id.as_str(), &prompt_bundle.effective_prompt)?;
-    store.update_prompt_tokens(prepared.task_id.as_str(), prompt_bundle.prompt_tokens)?;
-    if args.dry_run {
-        return dry_run(&store, &prepared, &args, &prompt_bundle);
-    }
-    ensure_agent_binary_available(&store, &prepared, &args)?;
-    let runtime_hooks = load_runtime_hooks(&args)?;
-    start_dispatch(&store, &prepared, &runtime_hooks)?;
+    let prompt_bundle = prepare_prompt(&store, &prepared, &args)?;
+    if args.dry_run { return dry_run(&store, &prepared, &args, &prompt_bundle); }
     if args.background {
         run_background_task(&store, &args, &prepared, &prompt_bundle)?;
     } else if let Some(retry_id) = run_foreground_task(
@@ -70,6 +50,36 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         return Ok(retry_id);
     }
     Ok(prepared.task_id)
+}
+
+fn prepare_prompt(
+    store: &Arc<Store>, prepared: &PreparedDispatch, args: &RunArgs,
+) -> Result<run_prompt::PromptBundle> {
+    (|| -> Result<_> {
+        let mut prompt_bundle = run_prompt::build_prompt_bundle(
+            store,
+            args,
+            &prepared.agent_kind,
+            prepared.workgroup.as_ref(),
+            &prepared.requested_skills,
+            prepared.task_id.as_str(),
+            prepared.detected_project.as_ref(),
+            prepared.project_root.as_deref(),
+        )?;
+        crate::runtime::remote_build::append_prompt(&mut prompt_bundle.effective_prompt, args.remote_build.as_deref());
+        prompt_bundle.prompt_tokens = crate::prompt::templates::estimate_tokens(&prompt_bundle.effective_prompt) as i64;
+        store.update_resolved_prompt(prepared.task_id.as_str(), &prompt_bundle.effective_prompt)?;
+        store.update_prompt_tokens(prepared.task_id.as_str(), prompt_bundle.prompt_tokens)?;
+        if !args.dry_run {
+            ensure_agent_binary_available(prepared, args)?;
+            let runtime_hooks = load_runtime_hooks(args)?;
+            start_dispatch(store, prepared, &runtime_hooks)?;
+        }
+        Ok(prompt_bundle)
+    })().or_else(|err| {
+        super::run_dispatch_prepare::record_error(store, &prepared.task_id, &err)?;
+        Err(err)
+    })
 }
 
 fn start_dispatch(
@@ -95,42 +105,13 @@ fn start_dispatch(
 }
 
 fn ensure_agent_binary_available(
-    store: &Arc<Store>,
     prepared: &PreparedDispatch,
     args: &RunArgs,
 ) -> Result<()> {
     if args.container.is_some() || args.sandbox {
         return Ok(());
     }
-    if let Err(err) =
-        agent::ensure_agent_binary_available(prepared.agent_kind, &prepared.agent_display_name)
-    {
-        let detail = err.to_string();
-        crate::task::lifecycle::complete_task_atomic(
-            store.as_ref(),
-            TaskCompletionUpdate {
-                id: prepared.task_id.as_str(),
-                status: TaskStatus::Failed,
-                tokens: None,
-                duration_ms: 0,
-                // Dispatch failed before the agent ran: the request is already on
-                // the row, and no model was observed.
-                observed_model: None,
-                attribution_source: None,
-                cost_usd: None,
-                exit_code: None,
-            },
-            &TaskEvent {
-                task_id: prepared.task_id.clone(),
-                timestamp: Local::now(),
-                event_kind: EventKind::Error,
-                detail,
-                metadata: None,
-            },
-        )?;
-        return Err(err);
-    }
-    Ok(())
+    agent::ensure_agent_binary_available(prepared.agent_kind, &prepared.agent_display_name)
 }
 
 fn dry_run(
@@ -200,8 +181,12 @@ fn run_before_hook(
         runtime_hooks,
         true,
     ) {
-        crate::task::lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
+        super::run_dispatch_prepare::record_error(store, &prepared.task_id, &err)?;
         return Err(err);
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "dispatch_diagnostics_tests.rs"]
+mod diagnostics_tests;

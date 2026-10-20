@@ -37,6 +37,11 @@ pub(super) struct PreparedDispatch {
     pub effective_dir: Option<String>,
 }
 
+#[path = "dispatch_preparation.rs"]
+mod preparation;
+use preparation::prepared_dispatch;
+pub(super) use preparation::record_error;
+
 struct DispatchContext {
     project_root: Option<PathBuf>,
     detected_project: Option<ProjectConfig>,
@@ -70,7 +75,9 @@ where
     args.max_duration_mins = resolve_max_duration_mins(args.timeout, args.max_duration_mins);
     let context = resolve_dispatch_context(store, args)?;
     let claimed = claim_dispatch(store, args, &context, which)?;
-    let prepared = finish_dispatch(store, args, context, claimed)?;
+    let task_id = claimed.task_id.clone();
+    let prepared = finish_dispatch(store, args, context, claimed)
+        .or_else(|err| { record_error(store, &task_id, &err)?; Err(err) })?;
     args.origin = DispatchOrigin::Automatic;
     Ok(prepared)
 }
@@ -142,16 +149,7 @@ where
         which,
     )?;
     insert_task_claiming_id(store, &mut task, &mut task_id, &mut log_path, explicit_id, args.origin)?;
-    if args.origin == DispatchOrigin::ExplicitRetry {
-        store.update_task_dispatch_args(task_id.as_str(), &args.dispatch_args_json()?)?;
-    }
-    maybe_insert_held_route_event(store, &task_id, &context.agent_setup, args.dry_run);
-    let setup = &context.agent_setup;
-    let priced_model = setup.effective_model.clone().or_else(|| setup.agent.default_model());
-    super::run_dispatch_cost_ceiling::warn_unenforceable_cost_ceiling(
-        store, &task_id, args.max_task_cost, setup.agent_kind, &setup.agent_display_name, priced_model.as_deref(),
-    );
-    persist_declaration(store, &task_id, args)?;
+    preparation::finish_claim(store, args, context, &task_id)?;
     Ok(ClaimedDispatch { task_id, task, log_path, workgroup, explicit_repo_path })
 }
 
@@ -264,32 +262,13 @@ fn pending_task(
         log_path: Some(log_path.to_string_lossy().to_string()), output_path: args.output.clone(),
         tokens: None, prompt_tokens: None, duration_ms: None, requested_model: agent_setup.effective_model.clone(), observed_model: None, attribution_source: None,
         cost_usd: None, exit_code: None, created_at: Local::now(), completed_at: None,
-        verify: args.verify.clone(), verify_status: if verify_required(args.verify.as_deref()) { VerifyStatus::Pending } else { VerifyStatus::Skipped }, pending_reason: None,
+        verify: args.verify.clone(), verify_status: if verify_required(args.verify.as_deref()) { VerifyStatus::Pending } else { VerifyStatus::Skipped },
+        pending_reason: None,
         read_only: args.read_only, budget: args.budget, audit_verdict: None, audit_report_path: None,
         delivery_assessment: None,
     }
 }
 
-fn prepared_dispatch(
-    requested_skills: Vec<String>,
-    project_root: Option<PathBuf>,
-    detected_project: Option<ProjectConfig>,
-    agent_setup: AgentSetup,
-    task_id: TaskId,
-    task: Task,
-    log_path: PathBuf,
-    workgroup: Option<Workgroup>,
-    setup: WorktreeSetup,
-) -> PreparedDispatch {
-    PreparedDispatch {
-        detected_project, project_root, agent_kind: agent_setup.agent_kind,
-        agent_display_name: agent_setup.agent_display_name,
-        requested_skills,
-        effective_model: agent_setup.effective_model, budget_active: agent_setup.budget_active,
-        agent: agent_setup.agent, task_id, task, log_path, workgroup,
-        repo_path: setup.repo_path, wt_path: setup.wt_path, effective_dir: setup.effective_dir,
-    }
-}
 #[cfg(test)] #[path = "dispatch_prepare_tests.rs"] mod tests;
 #[cfg(test)] #[path = "dispatch_origin_tests.rs"] mod origin_tests;
 #[cfg(test)] #[path = "dispatch_verify_tests.rs"] mod verify_tests;

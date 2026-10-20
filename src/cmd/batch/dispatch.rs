@@ -294,7 +294,7 @@ pub(super) fn reconcile_and_poll_completed_tasks(
     poll_completed_tasks(store, active)
 }
 
-fn completion_progress_label(
+pub(crate) fn completion_progress_label(
     store: &Store,
     task_id: &str,
     outcome: BatchTaskOutcome,

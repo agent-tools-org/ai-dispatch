@@ -3,13 +3,12 @@
 // Deps: project config, worktree/gitbutler services, Store, and RunArgs.
 
 use anyhow::Result;
-use chrono::Local;
 use std::path::Path;
 use std::sync::Arc;
 
 use crate::config::project::{self, ProjectConfig};
-use crate::store::{Store, TaskCompletionUpdate};
-use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
+use crate::store::Store;
+use crate::types::{Task, TaskId};
 
 use super::run_dispatch_resolve::AgentSetup;
 use super::{RunArgs, context_file_from_spec, run_prompt};
@@ -266,26 +265,9 @@ pub(super) fn fail_claimed_task(
     task_id: &TaskId,
     err: &anyhow::Error,
 ) -> Result<()> {
-    crate::task::lifecycle::complete_task_atomic(
-        store,
-        TaskCompletionUpdate {
-            id: task_id.as_str(),
-            status: TaskStatus::Failed,
-            tokens: None,
-            duration_ms: 0,
-            observed_model: None,
-            attribution_source: None,
-            cost_usd: None,
-            exit_code: None,
-        },
-        &TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Error,
-            detail: format!("Failed during worktree setup: {err}"),
-            metadata: None,
-        },
-    ).map(|_| ())
+    super::run_dispatch_prepare::record_error(
+        store, task_id, &anyhow::anyhow!("Failed during worktree setup: {err:#}"),
+    )
 }
 
 #[cfg(test)]

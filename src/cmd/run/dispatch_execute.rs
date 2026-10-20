@@ -48,14 +48,17 @@ pub(super) fn run_background_task(
     prepared: &PreparedDispatch,
     prompt_bundle: &run_prompt::PromptBundle,
 ) -> Result<()> {
-    background::check_worker_capacity(store)?;
+    background::check_worker_capacity(store).or_else(|err| {
+        super::run_dispatch_prepare::record_error(store, &prepared.task_id, &err)?;
+        Err(err)
+    })?;
     let pre_task_dirty_paths = if args.audit_report_mode && !args.read_only {
         None
     } else if args.read_only {
         match super::run_dirty::capture_baseline(store, &prepared.task_id, prepared.effective_dir.as_deref()) {
             Ok(baseline) => baseline,
             Err(err) => {
-                crate::task::lifecycle::mark_failed(store, &prepared.task_id)?;
+                super::run_dispatch_prepare::record_error(store, &prepared.task_id, &err)?;
                 return Err(err);
             }
         }
@@ -130,7 +133,7 @@ pub(super) fn run_background_task(
         Ok(pid) => pid,
         Err(err) => {
             let _ = background::clear_spec(prepared.task_id.as_str());
-            crate::task::lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
+            super::run_dispatch_prepare::record_error(store, &prepared.task_id, &err)?;
             run_prompt::notify_task_completion(store, &prepared.task_id)?;
             return Err(err);
         }
@@ -144,9 +147,10 @@ pub(super) fn run_background_task(
     {
         background::kill_process(worker_pid);
         let _ = background::clear_spec(prepared.task_id.as_str());
-        crate::task::lifecycle::mark_failed(store.as_ref(), &prepared.task_id)?;
+        let err = anyhow::anyhow!("Worktree {wt_path} lock is owned by task {holder}; background dispatch aborted");
+        super::run_dispatch_prepare::record_error(store, &prepared.task_id, &err)?;
         run_prompt::notify_task_completion(store, &prepared.task_id)?;
-        anyhow::bail!("Worktree {wt_path} lock is owned by task {holder}; background dispatch aborted");
+        return Err(err);
     }
     #[cfg(test)]
     {

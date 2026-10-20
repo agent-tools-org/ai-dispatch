@@ -119,6 +119,7 @@ impl fmt::Display for TaskStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PendingReason {
+    Preparation,
     AgentStarting,
     RateLimited,
     WorkerCapacity,
@@ -129,6 +130,7 @@ pub enum PendingReason {
 impl PendingReason {
     pub fn as_str(&self) -> &'static str {
         match self {
+            Self::Preparation => "preparation",
             Self::AgentStarting => "agent_starting",
             Self::RateLimited => "rate_limited",
             Self::WorkerCapacity => "worker_capacity",
@@ -139,6 +141,7 @@ impl PendingReason {
 
     pub fn parse_str(s: &str) -> Option<Self> {
         match s {
+            "preparation" => Some(Self::Preparation),
             "agent_starting" => Some(Self::AgentStarting),
             "rate_limited" => Some(Self::RateLimited),
             "worker_capacity" => Some(Self::WorkerCapacity),

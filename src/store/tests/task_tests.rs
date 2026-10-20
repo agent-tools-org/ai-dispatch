@@ -364,13 +364,14 @@ fn update_output_path_sets_field() {
 }
 
 #[test]
-fn fail_pending_with_reason_persists_reason() {
+fn settle_pending_failure_persists_reason() {
     let store = Store::open_memory().unwrap();
     let task = make_task("t-0006", AgentKind::Codex, TaskStatus::Pending);
     store.insert_task(&task).unwrap();
 
     let changed = store
-        .fail_pending_with_reason("t-0006", PendingReason::RateLimited)
+        .settle_task_status("t-0006", TaskStatus::Failed, Some(&[TaskStatus::Pending]),
+            Some(PendingReason::RateLimited), None)
         .unwrap();
 
     assert!(changed);

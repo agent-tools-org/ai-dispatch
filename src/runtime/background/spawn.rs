@@ -22,7 +22,7 @@ pub(crate) fn spawn_worker(task_id: &str) -> Result<(Child, u32)> {
     cmd.args(["__run-task", task_id])
         .stdin(Stdio::null())
         .stdout(if detached { Stdio::piped() } else { Stdio::null() })
-        .stderr(Stdio::null());
+        .stderr(worker_log(task_id)?);
     if let Ok(home) = std::env::var("AID_HOME") {
         cmd.env("AID_HOME", home);
     }
@@ -104,7 +104,7 @@ fn redirect_worker_stdio() -> Result<()> {
     if fd < 0 {
         anyhow::bail!("Failed to open null device for background worker");
     }
-    for target in 0..=2 {
+    for target in 0..=1 {
         if unsafe { libc::dup2(fd, target) } < 0 {
             unsafe { libc::close(fd) };
             anyhow::bail!("Failed to detach background worker stdio");
@@ -115,3 +115,15 @@ fn redirect_worker_stdio() -> Result<()> {
     }
     Ok(())
 }
+
+fn worker_log(task_id: &str) -> Result<std::fs::File> {
+    crate::support::sanitize::validate_task_id(task_id)?;
+    let dir = crate::support::paths::task_dir(task_id);
+    std::fs::create_dir_all(&dir)?;
+    std::fs::OpenOptions::new().create(true).append(true).open(dir.join("worker.log"))
+        .context("Failed to open worker log")
+}
+
+#[cfg(test)]
+#[path = "spawn_tests.rs"]
+mod tests;

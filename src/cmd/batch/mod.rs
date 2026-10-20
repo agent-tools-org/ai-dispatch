@@ -38,6 +38,8 @@ use batch_validate::{analyze_file_overlap, task_has_dependencies, validate_batch
 pub(crate) use batch_dispatch_support::{auto_fallback_args, pre_dispatch_fallback_choice, should_auto_fallback};
 #[cfg(test)]
 pub(crate) use batch_types::BatchTaskOutcome;
+#[cfg(test)]
+pub(crate) use batch_dispatch::completion_progress_label;
 pub use batch_retry::retry_failed;
 pub struct BatchArgs {
     pub file: String,

@@ -167,6 +167,7 @@ fn parse_process(line: &str) -> Option<Process> {
         return None;
     }
     let remote_wait = !state.starts_with('T') && is_remote_wait(&fields.collect::<Vec<_>>());
+    #[cfg_attr(not(target_os = "linux"), allow(unused_mut))]
     let mut process = Process {
         pid,
         ppid,

@@ -263,3 +263,6 @@ fn synchronous_reply_and_steer_wait_for_matching_rpc_acceptance() {
         assert!(messages[0].delivered_at.is_some());
     }
 }
+
+#[path = "provider_tests.rs"]
+mod provider_tests;

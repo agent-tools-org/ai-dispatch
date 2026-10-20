@@ -8,6 +8,7 @@ pub(crate) mod cli_config;
 mod output_classifier;
 mod events;
 mod session;
+pub(crate) mod provider;
 use events::{parse_item_event, parse_turn_completed, parse_thread_started, parse_error_event};
 pub(crate) use session::{resume_fallback_needed, resume_fallback_event, rollout_filename_matches_for_attribution};
 #[cfg(test)]
@@ -69,6 +70,7 @@ impl CodexAgent {
         durable_codex_home: bool,
         writable_roots: &[std::path::PathBuf],
     ) -> Result<Command> {
+        let provider = provider::selected()?;
         let effective_prompt = if opts.read_only {
             read_only_prompt(prompt, opts)
         } else {
@@ -95,6 +97,9 @@ impl CodexAgent {
             cmd.arg(&injected);
         }
         capabilities::configure_options(&mut cmd, opts, resume_session_id.is_some(), writable_roots)?;
+        if let Some(provider) = provider {
+            provider.apply(&mut cmd);
+        }
         Ok(cmd)
     }
 }

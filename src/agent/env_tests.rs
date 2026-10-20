@@ -222,7 +222,7 @@ fn rust_build_cache_target_dir_requires_a_rust_project() {
 }
 
 #[test]
-fn apply_codex_home_env_uses_durable_real_home() {
+fn apply_codex_home_env_uses_resolved_codex_home() {
     let mut cmd = Command::new("echo");
 
     apply_codex_home_env(&mut cmd).unwrap();
@@ -230,7 +230,7 @@ fn apply_codex_home_env_uses_durable_real_home() {
     let codex_home = command_env(&cmd, "CODEX_HOME").unwrap();
     assert_eq!(
         PathBuf::from(codex_home),
-        super::super::home_isolation::resolve_real_home().unwrap().join(".codex")
+        super::super::codex::cli_config::codex_home().unwrap()
     );
 }
 

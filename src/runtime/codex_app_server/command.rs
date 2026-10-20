@@ -45,9 +45,9 @@ pub(crate) fn read_only_config(cmd: &Command) -> Option<(Value, std::path::PathB
     let launch = translate(cmd).ok()?;
     if !launch.isolated { return None; }
     let config = launch.thread.get("config")?.as_object()?;
-    if config.keys().any(|key| !matches!(key.as_str(),
+    if config.iter().any(|(key, value)| !matches!(key.as_str(),
         "permissions" | "default_permissions" | "approval_policy" | "model" | "model_reasoning_effort"
-    )) {
+    ) && !crate::agent::codex::provider::read_only_override(key, value)) {
         return None;
     }
     let cwd = std::path::Path::new(launch.thread["cwd"].as_str()?).canonicalize().ok()?;

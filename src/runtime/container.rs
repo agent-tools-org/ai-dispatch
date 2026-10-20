@@ -71,7 +71,11 @@ pub fn exec_in_container(cmd: &Command, container_name: &str) -> Command {
         wrapped.arg("-w").arg(dir);
         wrapped.current_dir(dir);
     }
+    let provider_env = crate::agent::codex::provider::forward_environment(cmd, &mut wrapped);
     for (key, value) in cmd.get_envs() {
+        if provider_env.iter().any(|name| key == std::ffi::OsStr::new(name)) {
+            continue;
+        }
         if key == std::ffi::OsStr::new("HOME") {
             continue;
         }

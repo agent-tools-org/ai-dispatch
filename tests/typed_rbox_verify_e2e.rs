@@ -25,12 +25,16 @@ if [[ "+$*" == *'remote-cargo check' && -n ${FIRST_RECEIPT:-} ]]; then
   receipt=$FIRST_RECEIPT
   status=101
 fi
+if [[ $receipt == null ]]; then
+  echo 'rbox: job missing-receipt' >&2
+  receipt=''
+fi
 result=''
 while [[ $# -gt 0 ]]; do
   if [[ $1 == --result-file ]]; then result=$2; shift; fi
   shift
 done
-if [[ -n $result && $NO_RESULT != 1 ]]; then
+if [[ -n $result && -n $receipt && $NO_RESULT != 1 ]]; then
   printf '%s\n' "$receipt" > "$result"
 fi
 [[ -z $DIAGNOSTIC ]] || printf '%s\n' "$DIAGNOSTIC" >&2
@@ -227,4 +231,18 @@ fn refusal_with_job_is_failed_without_repick() {
 #[test]
 fn two_refusals_are_infrastructure() {
     compound_receipts(refusal(None), refusal(None), true);
+}
+
+#[test]
+fn started_call_without_receipt_then_refusal_is_failed_without_repick() {
+    compound_receipts(serde_json::Value::Null, refusal(None), false);
+}
+
+#[test]
+fn future_phase_then_refusal_is_failed_without_repick() {
+    compound_receipts(
+        serde_json::json!({"version":1, "phase":"future_phase", "job":"job1"}),
+        refusal(None),
+        false,
+    );
 }

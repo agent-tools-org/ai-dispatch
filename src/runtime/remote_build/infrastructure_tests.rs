@@ -193,3 +193,30 @@ fn unusable_replacement_never_falls_back_to_local_or_reuses_failed_host() {
         assert!(rbox.is_file());
     }
 }
+
+#[test]
+fn typed_repick_runs_once_only_when_every_receipt_is_retryable() {
+    for reason in ["lock_timeout", "sync_failed"] {
+        let (store, id, _) = stored_task();
+        let temp = tempfile::tempdir().expect("temp");
+        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+        let refusal = serde_json::json!({"version":1, "phase":"not_started", "job":null,
+            "reason":"lock_timeout", "detail":"typed refusal"});
+        let mut other = refusal.clone();
+        other["reason"] = serde_json::json!(reason);
+        let body = format!(r#"printf '%s\n' '{refusal}' '{other}' >> "$AID_RBOX_RESULT"; exit 1"#);
+        let (rbox, command) = fake_rbox(temp.path(), &body, &body);
+        let result = verify_with(&store, id.as_str(), temp.path(), Some(&command), None, None,
+            &mut Command::new(&rbox)).expect("verify");
+        assert!(!result.success);
+        assert!(result.infrastructure_failure);
+        assert!(result.rbox_result.is_some());
+        let calls = std::fs::read_to_string(temp.path().join("calls")).expect("calls");
+        let repicked = reason == "lock_timeout";
+        let picks = calls.lines().filter(|line| line.starts_with("pick ")).count();
+        assert_eq!(picks, usize::from(repicked));
+        assert_eq!(calls.lines().count(), if repicked { 3 } else { 1 });
+        assert_eq!(saved_box(&store, id.as_str()).expect("box").as_deref(),
+            Some(if repicked { "second-box" } else { "chosen-box" }));
+    }
+}

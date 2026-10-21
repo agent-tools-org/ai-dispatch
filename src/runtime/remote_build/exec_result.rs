@@ -14,6 +14,8 @@ pub(crate) enum ExecResult {
     Completed {},
     TimedOut {},
     Unknown {},
+    #[serde(other)]
+    Future,
 }
 
 #[derive(Deserialize)]
@@ -167,6 +169,7 @@ mod tests {
             ExecResult::Completed {},
             ExecResult::TimedOut {},
             ExecResult::Unknown {},
+            ExecResult::Future,
         ] {
             assert!(!result.not_started());
             assert!(!result.retryable());
@@ -188,7 +191,7 @@ mod tests {
     fn any_started_receipt_blocks_infrastructure_and_repick() {
         let refusal = serde_json::json!({"version":1, "phase":"not_started",
             "job":null, "reason":"lock_timeout", "detail":"locked"});
-        for phase in ["completed", "timed_out", "unknown"] {
+        for phase in ["completed", "timed_out", "unknown", "future_phase"] {
             let started = serde_json::json!({"version":1, "phase":phase, "command_exit":101});
             for lines in [
                 vec![started.clone(), refusal.clone()],

@@ -140,6 +140,7 @@ fn verify_with(
     let auto_picked = RunArgs::saved_for_task(store, task_id)?
         .is_some_and(|args| args.remote_build_auto_picked);
     if !result.infrastructure_failure || result.exit_code.is_none() || !auto_picked
+        || crate::task::verify::infrastructure::started_marker(&result.output)
         || !result.rbox_result.as_ref().map_or_else(
             || crate::task::verify::infrastructure::retryable(&result.output),
             exec_result::ExecResults::retryable)
@@ -185,6 +186,7 @@ fn verify_on(
     )?;
     result.rbox_result = result_file.and_then(|file| exec_result::ExecResults::read(file.path()));
     result.infrastructure_failure = !result.success && !result.timed_out
+        && !crate::task::verify::infrastructure::started_marker(&result.output)
         && result.rbox_result.as_ref().map_or_else(
             || crate::task::verify::infrastructure::diagnostic(&result.output).is_some(),
             exec_result::ExecResults::not_started);

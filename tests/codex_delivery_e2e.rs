@@ -293,3 +293,6 @@ fn test_path(bin_dir: &Path) -> String {
         std::env::var("PATH").unwrap_or_default()
     )
 }
+
+#[path = "common/codex_provider_route.rs"]
+mod provider_route;

@@ -46,8 +46,10 @@ impl Fixture {
 
     pub fn dispatch_with_policy(&self, policy: crate::config::timeout_policy::TimeoutPolicy) {
         let _permit = crate::support::test_subprocess::acquire();
+        let task = self.store.get_task(self.task.as_str()).unwrap().unwrap();
+        let adapter = crate::agent::codex::routed(task.custom_agent_name);
         crate::runtime::pty::runner::run_agent_process_with_control(
-            &crate::agent::codex::CodexAgent,
+            adapter.as_ref(),
             &self.command,
             &self.task,
             &self.store,

@@ -22,13 +22,32 @@ impl Exclusions {
     pub(super) fn quota_and_billing(
         &mut self, kind: AgentKind, model: Option<&str>, declared: crate::types::DeclaredTaskProfile,
         breakdown: &mut super::ScoreBreakdown,
-    ) -> (super::CandidateQuota, Option<crate::routing::quota::billing::Billing>) {
-        let quota = super::selection_quota::candidate_quota(kind, None, model);
-        if quota.status == "held" && needs_human_refusal(kind, model) {
-            let avail = crate::routing::availability::availability_for_model(&kind, None, model);
+    ) -> (
+        super::CandidateQuota,
+        Option<crate::routing::quota::billing::Billing>,
+    ) {
+        let route = if kind == AgentKind::Codex {
+            match crate::agent::codex::provider::route_name() {
+                Ok(route) => route,
+                Err(error) => {
+                    self.push("provider_config", error.to_string());
+                    return (super::CandidateQuota::default(), None);
+                }
+            }
+        } else {
+            None
+        };
+        let custom = route.as_deref();
+        let quota = super::selection_quota::candidate_quota(kind, custom, model);
+        if quota.status == "held" && needs_human_refusal(kind, custom, model) {
+            let avail = crate::routing::availability::availability_for_model(&kind, custom, model);
             self.push("needs_human", avail.why);
         }
-        let billing = crate::routing::quota::live::billing(&kind);
+        let billing = if custom.is_some() {
+            None
+        } else {
+            crate::routing::quota::live::billing(&kind)
+        };
         if let Some(reason) = billing.as_ref().and_then(|item| item.exclusion(declared)) {
             self.push("billing", reason);
         }
@@ -73,14 +92,23 @@ impl Exclusions {
     }
 }
 
-fn needs_human_refusal(kind: AgentKind, model: Option<&str>) -> bool {
+fn needs_human_refusal(kind: AgentKind, custom: Option<&str>, model: Option<&str>) -> bool {
     use crate::routing::rate_limit::{active_group_holds, get_rate_limit_info};
     let group = crate::agent::model_group::model_group(kind, model);
-    let group_holds = active_group_holds(&kind, None).into_iter()
-        .filter(|(name, _)| group == Some(name.as_str())).map(|(_, info)| info);
-    get_rate_limit_info(&kind, None).into_iter().chain(group_holds).any(|info| {
-        info.needs_human && info.marker.lines().any(|line| human_action_line(kind, line))
-    })
+    let group_holds = active_group_holds(&kind, custom)
+        .into_iter()
+        .filter(|(name, _)| group == Some(name.as_str()))
+        .map(|(_, info)| info);
+    get_rate_limit_info(&kind, custom)
+        .into_iter()
+        .chain(group_holds)
+        .any(|info| {
+            info.needs_human
+                && info
+                    .marker
+                    .lines()
+                    .any(|line| human_action_line(kind, line))
+        })
 }
 
 fn human_action_line(kind: AgentKind, line: &str) -> bool {

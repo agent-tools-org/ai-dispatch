@@ -37,7 +37,7 @@ pub(super) fn switch_model_held_route(
         original, hold, next_name, original
     );
     *agent_kind = next_kind;
-    *custom_agent_name = (next_kind == AgentKind::Custom).then_some(next_name);
+    *custom_agent_name = super::route_custom_name(next_kind, &next_name)?;
     *substituted_from = Some((original, hold));
     let next_custom = custom_agent_name.as_deref();
     // `None` would run the fallback's own default model — for agy that is a
@@ -75,8 +75,8 @@ pub(super) fn skip_held_to_fallback(
         .position(|(_, n)| n == held_name)
         .map_or(0, |i| i + 1);
     for (i, (kind, name)) in all[start..].iter().enumerate() {
-        let custom = (*kind == AgentKind::Custom).then_some(name.as_str());
-        if !candidate_is_blocked(kind, custom) {
+        let custom = super::route_custom_name(*kind, name)?;
+        if !candidate_is_blocked(kind, custom.as_deref()) {
             super::super::switch_agent(args, name.clone());
             args.cascade = all[start + i + 1..]
                 .iter()

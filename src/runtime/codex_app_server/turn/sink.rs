@@ -71,7 +71,11 @@ impl<'a> Sink<'a> {
         }
         if let Some(message) = crate::agent::codex::app_server::error_quota_message(&event) {
             crate::routing::rate_limit::mark_rate_limited_for_model_value(
-                &AgentKind::Codex, None, self.info.model.as_deref(), &event, &message,
+                &AgentKind::Codex,
+                self.run.agent.rate_limit_name(),
+                self.info.model.as_deref(),
+                &event,
+                &message,
             );
             self.quota = true;
         }
@@ -115,6 +119,9 @@ impl<'a> Sink<'a> {
     }
 
     fn quota(&mut self, snapshot: &Value) -> Result<()> {
+        if self.run.agent.rate_limit_name().is_some() {
+            return Ok(());
+        }
         self.run.store.insert_agent_event(&TaskEvent {
             task_id: self.run.task.clone(),
             timestamp: chrono::Local::now(),
@@ -125,7 +132,7 @@ impl<'a> Sink<'a> {
         if let Some(message) = crate::agent::codex::app_server::quota_message(snapshot) {
             crate::routing::rate_limit::mark_rate_limited_for_model_value(
                 &AgentKind::Codex,
-                None,
+                self.run.agent.rate_limit_name(),
                 self.info.model.as_deref(),
                 snapshot,
                 &message,
@@ -149,7 +156,7 @@ impl<'a> Sink<'a> {
         ) {
             crate::routing::rate_limit::mark_rate_limited_for_model(
                 &AgentKind::Codex,
-                None,
+                self.run.agent.rate_limit_name(),
                 self.info.model.as_deref(),
                 &message,
             );
@@ -188,7 +195,7 @@ impl<'a> Sink<'a> {
         if self.info.status == TaskStatus::Done && !self.quota {
             crate::routing::rate_limit::clear_rate_limit_for_model(
                 &AgentKind::Codex,
-                None,
+                self.run.agent.rate_limit_name(),
                 self.info.model.as_deref(),
             );
         }
@@ -200,3 +207,7 @@ impl<'a> Sink<'a> {
 #[cfg(test)]
 #[path = "sink_scope_tests.rs"]
 mod scope_tests;
+
+#[cfg(test)]
+#[path = "sink_provider_tests.rs"]
+mod provider_tests;

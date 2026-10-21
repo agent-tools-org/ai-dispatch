@@ -127,3 +127,88 @@ fn prepared(task: Task, dir: &std::path::Path) -> super::super::PreparedDispatch
         effective_dir: None,
     }
 }
+
+struct CodexHomeReset;
+impl Drop for CodexHomeReset {
+    fn drop(&mut self) {
+        crate::agent::codex::cli_config::set_test_codex_home(None);
+    }
+}
+
+#[test]
+fn healthy_plan_cannot_release_provider_hold_or_add_plan_billing_or_advice() {
+    let temp = tempfile::tempdir().unwrap();
+    let _home = AidHomeGuard::set(temp.path());
+    let _cache = CacheDirGuard::set(temp.path());
+    std::fs::write(temp.path().join("config.toml"), "model_provider='X'").unwrap();
+    crate::agent::codex::cli_config::set_test_codex_home(Some(temp.path().to_path_buf()));
+    let _reset = CodexHomeReset;
+    let route = Some("codex-provider:X");
+    crate::routing::rate_limit::mark_rate_limited(
+        &AgentKind::Codex, route, "You have hit your usage limit");
+    std::fs::write(
+        temp.path().join("codex.json"),
+        serde_json::json!({"ok":true,
+        "snapshot":{"provider":"codex","fetched_at":"2099-01-01T00:00:00Z",
+            "windows":[{"label":"5h","used_percent":1,"resets_at":"2099-01-02T00:00:00Z"}],
+            "billing":{"state":"overage"}}})
+        .to_string(),
+    )
+    .unwrap();
+    assert_injected_plan_does_not_release_x(route);
+    let avail = crate::routing::availability::availability(&AgentKind::Codex, route);
+    assert_eq!(
+        avail.status,
+        crate::routing::availability::RouteStatus::Held
+    );
+    assert!(avail.probe.is_none());
+    let store = Store::open_memory().unwrap();
+    let mut task = task();
+    task.custom_agent_name = route.map(str::to_string);
+    store.insert_task(&task).unwrap();
+    record(&store, &task.id, task.agent).unwrap();
+    assert!(store.get_events(task.id.as_str()).unwrap().is_empty());
+    assert_provider_advice_held();
+}
+
+fn assert_provider_advice_held() {
+    use crate::types::{DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
+    let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex]);
+    let report = crate::agent::selection::advise(
+        "Explain routing",
+        DeclaredTaskProfile {
+            difficulty: TaskDifficulty::Moderate,
+            budget: TaskBudget::Standard,
+            urgency: TaskUrgency::Normal,
+            rigor: TaskRigor::Standard,
+        },
+        None,
+        None,
+        None,
+        0,
+        None,
+    );
+    let codex = report
+        .candidates
+        .iter()
+        .find(|candidate| candidate.agent == "codex")
+        .unwrap();
+    assert_eq!(codex.quota.status, "held");
+    assert_eq!(codex.breakdown.billing, 0.0);
+    assert!(codex.billing.is_none());
+}
+
+fn assert_injected_plan_does_not_release_x(route: Option<&str>) {
+    use crate::routing::availability::{decide, RouteStatus};
+    let probe = live::snapshot(&AgentKind::Codex).unwrap();
+    let marker = crate::routing::rate_limit::marker_path(&AgentKind::Codex, route);
+    let content = std::fs::read_to_string(&marker).unwrap();
+    let mtime = std::fs::metadata(marker).unwrap().modified().unwrap();
+    let provider = decide(&AgentKind::Codex, route, None,
+        Some(&content), Some(mtime), Some(probe.clone()));
+    assert_eq!(provider.status, RouteStatus::Held);
+    assert!(provider.probe.is_none());
+    let default = decide(&AgentKind::Codex, None, None,
+        Some(&content), Some(mtime), Some(probe));
+    assert_eq!(default.status, RouteStatus::Dispatchable);
+}

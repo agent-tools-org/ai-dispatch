@@ -351,6 +351,21 @@ captured buffer is the rendered answer — must match that agent's own captured
 refusal template. An agent whose refusal wording has never been captured stays
 undetectable, which is the honest answer rather than a guess.
 
+Codex custom `model_provider = "X"` selections use the route `codex-provider:X`.
+Their holds are independent of the default `codex` ChatGPT route. A hold hint names
+`aid config clear-limit codex-provider:X`; that command clears only X, while
+`aid config clear-limit all` also discovers every Codex provider marker. Provider
+ids accept only letters, digits, hyphens and underscores. ChatGPT plan snapshots
+cannot release a custom provider hold or supply its billing/advice evidence.
+
+Each launch and `aid retry` verify the live provider selection against the saved
+route. A switch from X to Y refuses with `config.toml now selects …; task ran on …`;
+restore the selected route before retry/resume. History keeps the recorded route.
+Settings are not snapshotted: changing settings under the same id is allowed.
+Known limits: pricing by route is not supported; every cost path uses OpenAI rates
+and still enforces `--max-task-cost`. `aid agent quota` retains its ChatGPT plan
+display. `--session` does not check whether the session belongs to another provider.
+
 A hold ends in one of three ways, and `aid config agents` names which:
 
 | Status | Ends when | Example |

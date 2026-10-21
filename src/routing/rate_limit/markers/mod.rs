@@ -10,6 +10,7 @@ use super::*;
 /// one `rate-limit-custom` hold.
 pub fn marker_slug<'a>(agent: &'a AgentKind, custom_name: Option<&'a str>) -> &'a str {
     match (agent, custom_name) {
+        (AgentKind::Codex, Some(name)) if name.starts_with("codex-provider:") => name,
         (AgentKind::Custom, Some(name)) if !name.is_empty() => name,
         _ => agent.as_str(),
     }

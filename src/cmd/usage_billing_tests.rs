@@ -149,3 +149,40 @@ fn usage_ignores_overage_metadata_on_non_dispatch_events() {
     let rows = collect(&store, &[task], None, UsageWindow::All, Local::now()).expect("usage");
     assert!(rows.is_empty(), "only dispatch setup events identify overage");
 }
+
+#[test]
+fn provider_pricing_stays_consistent_in_cost_reports_and_overage() {
+    let temp = tempfile::tempdir().unwrap();
+    let _home = AidHomeGuard::set(temp.path());
+    let _cache = CacheDirGuard::set(temp.path());
+    let store = Store::open_memory().unwrap();
+    let row = crate::routing::model_catalog::AGENT_MODELS
+        .iter()
+        .find(|row| row.agent == AgentKind::Codex && row.input_per_m > 0.0)
+        .unwrap();
+    let expected = row.input_per_m * 0.7 + row.output_per_m * 0.3;
+    for name in [None, Some("codex-provider:X")] {
+        let mut task = task();
+        task.id = TaskId(
+            if name.is_some() {
+                "t-provider"
+            } else {
+                "t-default"
+            }
+            .into(),
+        );
+        task.custom_agent_name = name.map(str::to_string);
+        task.requested_model = Some(row.model.into());
+        task.tokens = Some(1_000_000);
+        overage(&store, &task);
+        assert!(cost::has_known_price(task.costing_model(), task.agent));
+        assert_eq!(cost::task_cost(&store, &task).unwrap(), Some(expected));
+        let (_, totals) =
+            crate::cmd::cost::daily_summary_rows(&[task.clone()], UsageWindow::All, Local::now());
+        assert_eq!(totals.2, Some(expected));
+        let rows = collect(&store, &[task], None, UsageWindow::All, Local::now()).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].estimated_cost_usd, expected);
+        assert_eq!(rows[0].unknown_cost_tasks, 0);
+    }
+}

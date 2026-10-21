@@ -4,6 +4,9 @@ use super::*;
 
 impl RunArgs {
     pub(crate) fn for_retry(store: &Store, task: &crate::types::Task) -> Result<Self> {
+        if task.agent == crate::types::AgentKind::Codex {
+            crate::agent::codex::verify_route(task.custom_agent_name.as_deref())?;
+        }
         let saved = Self::saved_for_task(store, task.id.as_str())?;
         let profile = if saved.is_none() {
             store.get_task_profile(task.id.as_str())?

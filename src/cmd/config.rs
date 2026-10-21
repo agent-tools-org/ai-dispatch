@@ -223,42 +223,9 @@ fn pricing_table() -> Result<String> {
     Ok(out)
 }
 
-fn clear_limit(agent: &str) -> Result<()> {
-    crate::agent::removed::reject(agent)?;
-    if agent == "all" {
-        for (kind, _, _, _, _) in AGENT_PROFILES {
-            if rate_limit::clear_all_rate_limits_for_agent(kind, None) {
-                println!("Cleared rate-limit for {}", kind.as_str());
-            }
-        }
-        for config in crate::agent::registry::list_custom_agents() {
-            if rate_limit::clear_all_rate_limits_for_agent(
-                &AgentKind::Custom,
-                Some(config.id.as_str()),
-            ) {
-                println!("Cleared rate-limit for {}", config.id);
-            }
-        }
-        return Ok(());
-    }
-    if let Some(kind) = AgentKind::parse_str(agent) {
-        if rate_limit::clear_all_rate_limits_for_agent(&kind, None) {
-            println!("Cleared rate-limit for {}", kind.as_str());
-        } else {
-            println!("{} is not rate-limited", agent);
-        }
-        return Ok(());
-    }
-    if crate::agent::registry::custom_agent_exists(agent) {
-        if rate_limit::clear_all_rate_limits_for_agent(&AgentKind::Custom, Some(agent)) {
-            println!("Cleared rate-limit for {agent}");
-        } else {
-            println!("{agent} is not rate-limited");
-        }
-        return Ok(());
-    }
-    anyhow::bail!("Unknown agent: {agent}");
-}
+#[path = "config_limits.rs"]
+mod limits;
+use limits::clear_limit;
 
 fn update_pricing_file() -> Result<usize> {
     let output = Command::new("curl")

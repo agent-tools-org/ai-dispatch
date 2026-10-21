@@ -128,6 +128,12 @@ impl Task {
     /// request that was never confirmed stays `None` rather than being filled in.
     pub fn route(&self) -> Route {
         let route = Route::for_cli(self.agent).with_model(self.attributed_model());
+        if self.agent == AgentKind::Codex
+            && let Some(name) = self.custom_agent_name.as_deref()
+            && name.starts_with("codex-provider:")
+        {
+            return route.via(crate::types::ProviderId::new(name));
+        }
         if let Some(name) = self.custom_agent_name.as_deref()
             && let Ok(Some(_)) = crate::config::api_route::find(name)
         {

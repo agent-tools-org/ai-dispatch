@@ -5,7 +5,7 @@ use super::*;
 use crate::support::paths::AidHomeGuard;
 use crate::routing::rate_limit::{self, dispatch_blocking_hold, format_hold_end, mark_rate_limited};
 use crate::types::AgentKind;
-use chrono::{Duration as ChronoDuration, Local, Utc};
+use chrono::{DateTime, Duration as ChronoDuration, Local, Utc};
 use std::time::{Duration, SystemTime};
 
 fn future_clock() -> (chrono::NaiveDateTime, String) {

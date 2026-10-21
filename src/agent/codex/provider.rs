@@ -19,6 +19,10 @@ pub(crate) fn selected() -> Result<Option<Provider>> {
     parse_config(&config)
 }
 
+pub(crate) fn route_name() -> Result<Option<String>> {
+    Ok(selected()?.map(|provider| format!("codex-provider:{}", provider.id)))
+}
+
 fn read_config() -> Result<toml::Table> {
     let path = super::cli_config::codex_home()?.join("config.toml");
     let text = match std::fs::read_to_string(&path) {

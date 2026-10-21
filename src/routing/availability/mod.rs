@@ -2,9 +2,9 @@
 // Exports: RouteAvailability and availability / availability_for_{model,group}.
 // Deps: live_quota snapshots, rate_limit markers, route_availability_policy.
 
-use chrono::{DateTime, Local, NaiveDateTime, Utc};
+use chrono::Local;
 use std::path::Path;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use crate::routing::quota::live as live_quota;
 use crate::routing::rate_limit::{group_marker_path, marker_path, marker_slug};
@@ -22,64 +22,8 @@ pub(crate) use policy::overrides_marker_at_in_cache;
 
 const DEGRADED_USED: f64 = 80.0;
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct RouteAvailability {
-    pub status: RouteStatus,
-    pub wall: QuotaWall,
-    pub ends: HoldEnd,
-    pub why: String,
-    pub marker: Option<MarkerEvidence>,
-    pub probe: Option<ProbeEvidence>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RouteStatus {
-    Dispatchable,
-    Degraded,
-    Held,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum QuotaWall {
-    Clock,
-    Windowed,
-    Prepaid,
-    PlanChange,
-    Transient,
-    None,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum HoldEnd {
-    At(NaiveDateTime),
-    ClearLimit { slug: String },
-    SnapshotDatedWindow,
-    Cooldown,
-    Nothing,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct MarkerEvidence {
-    pub mtime: SystemTime,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct ProbeEvidence {
-    pub provider: String,
-    pub fetched_at: DateTime<Utc>,
-    pub age: Duration,
-    pub stale: bool,
-    pub ok: bool,
-    pub windows: Vec<WindowView>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct WindowView {
-    pub label: String,
-    pub used_percent: f64,
-    pub resets_at: Option<DateTime<Utc>>,
-    pub group: Option<String>,
-}
+mod types;
+pub use types::*;
 
 pub fn availability(agent: &AgentKind, custom_name: Option<&str>) -> RouteAvailability {
     from_path(agent, custom_name, None, &marker_path(agent, custom_name))
@@ -126,7 +70,13 @@ fn from_path(
         group,
         content.as_deref(),
         mtime,
-        live_quota::snapshot(agent),
+        if *agent == AgentKind::Codex
+            && custom_name.is_some_and(|name| name.starts_with("codex-provider:"))
+        {
+            None
+        } else {
+            live_quota::snapshot(agent)
+        },
     )
 }
 
@@ -138,13 +88,21 @@ pub(crate) fn decide(
     marker_mtime: Option<SystemTime>,
     snapshot: Option<ProbeEvidence>,
 ) -> RouteAvailability {
+    let evidence_agent = if *agent == AgentKind::Codex
+        && custom_name.is_some_and(|name| name.starts_with("codex-provider:"))
+    {
+        &AgentKind::Custom
+    } else {
+        agent
+    };
+    let snapshot = snapshot.filter(|_| evidence_agent == agent);
     match content {
         Some(text) => apply_hold(
             agent,
             custom_name,
             group,
-            stored_hold(text, agent),
-            wall_of(agent, text),
+            stored_hold(text, evidence_agent),
+            wall_of(evidence_agent, text),
             Some(text),
             marker_mtime,
             snapshot,

@@ -129,6 +129,11 @@ fn lifecycle_agent_for_task(
     spec: &BackgroundRunSpec,
     args: &RunArgs,
 ) -> Result<Box<dyn agent::Agent>> {
+    if let Some(task) = store.get_task(&spec.task_id)?
+        && task.agent == AgentKind::Codex
+    {
+        return Ok(agent::codex::routed(task.custom_agent_name));
+    }
     if let Ok(agent) = resolve_agent_for_spec(&args.agent_name) {
         return Ok(agent);
     }
@@ -140,8 +145,12 @@ fn lifecycle_agent_for_task(
     anyhow::bail!("Unknown agent '{}'", args.agent_name)
 }
 
-async fn run_task_inner(store: &Arc<Store>, spec: &BackgroundRunSpec, args: &RunArgs) -> Result<()> {
-    let agent = resolve_agent_for_spec(&args.agent_name)?;
+async fn run_task_inner(
+    store: &Arc<Store>,
+    spec: &BackgroundRunSpec,
+    args: &RunArgs,
+) -> Result<()> {
+    let agent = lifecycle_agent_for_task(store, spec, args)?;
     crate::routing::rate_limit::wait::wait_for_declared_reset(
         store.as_ref(), &spec.task_id, agent.kind(), agent.rate_limit_name(),
     ).await?;
@@ -228,3 +237,7 @@ mod worker_wrap_up_tests;
 #[cfg(test)]
 #[path = "background/claude_stream_tests.rs"]
 mod claude_stream_tests;
+
+#[cfg(test)]
+#[path = "background_provider_tests.rs"]
+mod provider_tests;

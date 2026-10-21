@@ -7,6 +7,7 @@ pub(super) fn parse_item_event(
     task_id: &TaskId,
     v: &Value,
     now: chrono::DateTime<Local>,
+    route: Option<&str>,
 ) -> Option<TaskEvent> {
     let event_type = v.get("type")?.as_str()?;
     let item = v.get("item")?;
@@ -38,7 +39,11 @@ pub(super) fn parse_item_event(
             if message.is_empty() {
                 return None;
             }
-            crate::routing::quota::channel::mark_stream_refusal(AgentKind::Codex, None, &item.to_string());
+            crate::routing::quota::channel::mark_stream_refusal(
+                AgentKind::Codex,
+                route,
+                &item.to_string(),
+            );
             let (detail, metadata) = capped_detail(message);
             Some(TaskEvent {
                 task_id: task_id.clone(),
@@ -158,6 +163,7 @@ pub(super) fn parse_error_event(
     task_id: &TaskId,
     v: &Value,
     now: chrono::DateTime<Local>,
+    route: Option<&str>,
 ) -> Option<TaskEvent> {
     let detail = v
         .get("message")
@@ -165,7 +171,7 @@ pub(super) fn parse_error_event(
         .and_then(|value| value.as_str())
         .filter(|message| !message.is_empty())?;
 
-    crate::routing::quota::channel::mark_stream_refusal(AgentKind::Codex, None, &v.to_string());
+    crate::routing::quota::channel::mark_stream_refusal(AgentKind::Codex, route, &v.to_string());
 
     let (detail, metadata) = capped_detail(detail);
     Some(TaskEvent {

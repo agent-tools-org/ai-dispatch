@@ -6,7 +6,6 @@ use std::sync::Arc;
 use crate::agent;
 use crate::config::agent as agent_config;
 use crate::config;
-use crate::config::project::ProjectConfig;
 use crate::routing::rate_limit;
 use crate::store::Store;
 use crate::types::AgentKind;
@@ -43,52 +42,15 @@ pub(super) struct AgentSetup {
     pub substituted_from: Option<(String, String)>,
 }
 
-pub(super) fn apply_project_defaults(args: &mut RunArgs, detected_project: Option<&ProjectConfig>) {
-    if let Some(project) = detected_project {
-        let mut defaults_applied = false;
-        if args.max_task_cost.is_none() {
-            args.max_task_cost = project.max_task_cost;
-        }
-        if args.team.is_none()
-            && let Some(team) = project.team.as_ref() {
-                args.team = Some(team.clone());
-                defaults_applied = true;
-            }
-        if args.verify.is_none()
-            && let Some(verify) = project.verify.as_ref() {
-                args.verify = Some(verify.clone());
-                defaults_applied = true;
-            }
-        if args.setup.is_none()
-            && let Some(setup) = project.setup.as_ref() {
-                args.setup = Some(setup.clone());
-                defaults_applied = true;
-            }
-        args.remote_build = args.remote_build.take().or_else(|| crate::runtime::remote_build::project_default(project.remote_build.as_deref()));
-        if args.container.is_none()
-            && let Some(container) = project.container.as_ref() {
-                args.container = Some(container.clone());
-                defaults_applied = true;
-            }
-        if !args.budget && project.budget.prefer_budget {
-            args.budget = true;
-            defaults_applied = true;
-        }
-        if args.no_audit {
-            args.audit = false;
-        } else if !args.audit_explicit && project.audit_auto() {
-            args.audit = true;
-            defaults_applied = true;
-        }
-        if defaults_applied {
-            aid_info!(
-                "[aid] Project '{}' defaults: team={}, verify={}, audit={}",
-                project.id,
-                args.team.as_deref().unwrap_or("None"),
-                args.verify.as_deref().unwrap_or("None"),
-                if args.audit { "on" } else { "off" },
-            );
-        }
+#[path = "dispatch_project_defaults.rs"]
+mod project_defaults;
+pub(super) use project_defaults::apply_project_defaults;
+
+pub(super) fn route_custom_name(kind: AgentKind, name: &str) -> Result<Option<String>> {
+    match kind {
+        AgentKind::Custom => Ok(Some(name.to_string())),
+        AgentKind::Codex => agent::codex::provider::route_name(),
+        _ => Ok(None),
     }
 }
 
@@ -117,12 +79,14 @@ pub(super) fn resolve_agent_setup(
     };
     let resolved_agent_name = custom_agent_name
         .as_deref()
-        .unwrap_or_else(|| agent_kind.as_str());
-    if agent_config::is_agent_disabled(resolved_agent_name) {
+        .unwrap_or_else(|| agent_kind.as_str())
+        .to_string();
+    if agent_config::is_agent_disabled(&resolved_agent_name) {
         anyhow::bail!(
             "Agent '{resolved_agent_name}' is disabled (enable with: aid agent config {resolved_agent_name} --enable)"
         );
     }
+    custom_agent_name = route_custom_name(agent_kind, &args.agent_name)?;
     if args.dir.is_none()
         && args.worktree.is_none()
         && matches!(
@@ -144,14 +108,16 @@ pub(super) fn resolve_agent_setup(
         aid_info!("[aid] Auto-set --dir . (git repo detected)");
     }
     super::advice_route::validate_candidate_route(args, agent_kind)?;
-    let api_hold = crate::config::api_route::find_for_dispatch(resolved_agent_name)?
+    let api_hold = crate::config::api_route::find_for_dispatch(&resolved_agent_name)?
         .map(|route| crate::routing::api_budget::for_route(&route, Some(store)))
-        .transpose()?.filter(|budget| budget.billing.state
-            == crate::routing::quota::billing::BillingState::Exhausted)
+        .transpose()?
+        .filter(|budget| {
+            budget.billing.state == crate::routing::quota::billing::BillingState::Exhausted
+        })
         .map(|budget| budget.label());
     let mut substituted_from: Option<(String, String)> = None;
     if args.declared_urgency == Some(crate::types::TaskUrgency::Background)
-        && crate::config::api_route::find_for_dispatch(resolved_agent_name)?.is_none()
+        && crate::config::api_route::find_for_dispatch(&resolved_agent_name)?.is_none()
         && held::background_keeps_hold(agent_kind, custom_agent_name.as_deref())
     {
         aid_warn!(
@@ -171,7 +137,7 @@ pub(super) fn resolve_agent_setup(
             original, hold, next_name, original
         );
         agent_kind = next_kind;
-        custom_agent_name = (next_kind == AgentKind::Custom).then_some(next_name);
+        custom_agent_name = route_custom_name(next_kind, &next_name)?;
         substituted_from = Some((original, hold));
     }
     held::warn_if_degraded(agent_kind, custom_agent_name.as_deref());
@@ -248,7 +214,11 @@ pub(super) fn resolve_agent_setup(
     }
     let agent: Box<dyn agent::Agent> = if agent_kind == AgentKind::Custom {
         agent::registry::resolve_custom_agent(custom_agent_name.as_deref().unwrap_or(""))
-            .ok_or_else(|| anyhow::anyhow!("Custom agent '{}' not found in registry", args.agent_name))?
+            .ok_or_else(|| {
+                anyhow::anyhow!("Custom agent '{}' not found in registry", args.agent_name)
+            })?
+    } else if agent_kind == AgentKind::Codex {
+        agent::codex::routed(custom_agent_name.clone())
     } else {
         agent::get_agent(agent_kind)
     };
@@ -267,6 +237,7 @@ pub(super) fn resolve_agent_setup(
         custom_agent_name: custom_agent_name.clone(),
         agent_display_name: custom_agent_name
             .as_deref()
+            .filter(|_| agent_kind == AgentKind::Custom)
             .unwrap_or_else(|| agent_kind.as_str())
             .to_string(),
         effective_model,
@@ -280,3 +251,7 @@ pub(super) fn resolve_agent_setup(
 #[cfg(test)]
 #[path = "dispatch_api_route_tests.rs"]
 mod api_route_tests;
+
+#[cfg(test)]
+#[path = "dispatch_provider_tests.rs"]
+mod provider_tests;

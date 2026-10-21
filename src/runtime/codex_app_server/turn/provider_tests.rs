@@ -36,7 +36,7 @@ fn prepare(mode: &str, resume: bool) -> (Fixture, ConfigGuard) {
         .store
         .db()
         .execute(
-            "UPDATE tasks SET read_only=1 WHERE id=?1",
+            "UPDATE tasks SET read_only=1, custom_agent_name='codex-provider:fixture' WHERE id=?1",
             [fixture.task.as_str()],
         )
         .unwrap();
@@ -44,7 +44,7 @@ fn prepare(mode: &str, resume: bool) -> (Fixture, ConfigGuard) {
     std::fs::write(home.join("config.toml"), CONFIG).unwrap();
     cli_config::set_test_codex_home(Some(home));
     let opts = options(&fixture, resume);
-    let native = CodexAgent
+    let native = crate::agent::codex::routed(crate::agent::codex::provider::route_name().unwrap())
         .build_command_with_context(
             "retry prompt",
             &opts,
@@ -128,6 +128,10 @@ fn fake_server_start_and_resume_match_exec_and_fallback_provider() {
             )
             .unwrap()
         );
+        let task = fixture.store.get_task(fixture.task.as_str()).unwrap().unwrap();
+        assert_eq!(task.custom_agent_name.as_deref(), Some("codex-provider:fixture"));
+        assert_eq!(task.route().provider.as_str(), "codex-provider:fixture");
+        assert_eq!(task.agent_display_name(), "codex");
         let rows = captures(&fixture);
         let start = rows
             .iter()

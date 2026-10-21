@@ -30,50 +30,16 @@ impl Drop for ConfigGuard {
     }
 }
 
+#[path = "provider_dispatch_fixture.rs"]
+mod dispatch_fixture;
+
 fn prepare(mode: &str, resume: bool) -> (Fixture, ConfigGuard) {
-    let mut fixture = Fixture::new(mode);
-    fixture
-        .store
-        .db()
-        .execute(
-            "UPDATE tasks SET read_only=1, custom_agent_name='codex-provider:fixture' WHERE id=?1",
-            [fixture.task.as_str()],
-        )
-        .unwrap();
+    let mut fixture = Fixture::unclaimed(mode);
     let home = fixture.home.path().join("real-codex");
     std::fs::write(home.join("config.toml"), CONFIG).unwrap();
     cli_config::set_test_codex_home(Some(home));
-    let opts = options(&fixture, resume);
-    let native = crate::agent::codex::routed(crate::agent::codex::provider::route_name().unwrap())
-        .build_command_with_context(
-            "retry prompt",
-            &opts,
-            CommandContext {
-                durable_codex_home: false,
-                writable_roots: vec![],
-            },
-        )
-        .unwrap();
-    let mut command = Command::new(fixture.command.get_program());
-    command.args(native.get_args());
-    command.current_dir(fixture.home.path());
-    for source in [&fixture.command, &native] {
-        for (key, value) in source.get_envs() {
-            if let Some(value) = value {
-                command.env(key, value);
-            }
-        }
-    }
-    command
-        .env("OPENCODE_CONFIG", "synthetic-provider-env")
-        .env("PROVIDER_HEADER", "synthetic-header-env")
-        .env(
-            "AID_FAKE_PROVIDER_CAPTURE",
-            fixture.home.path().join("capture.jsonl"),
-        );
-    crate::agent::env_redirects::strip_inherited_config_redirects(&mut command);
-    crate::agent::apply_codex_home_env(&mut command).unwrap();
-    fixture.command = command;
+    dispatch_fixture::claim(&fixture);
+    dispatch_fixture::command(&mut fixture, resume);
     (fixture, ConfigGuard)
 }
 

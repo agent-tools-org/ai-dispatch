@@ -86,8 +86,9 @@ fn retry_task_to_run_args(
     if announce {
         println!("Retrying {} with feedback: {}", task.id, truncate(&feedback, 60));
     }
-    let mut run_args = RunArgs::for_retry(store, task)?;
+    let mut run_args = RunArgs::retry_inputs(store, task)?;
     apply_retry_route(&mut run_args, task, &args);
+    run_args.verify_retry_route(task)?;
     finish_retry_run_args(&mut run_args, task, args, prompt, dir, worktree_arg, announce)?;
     Ok(run_args)
 }

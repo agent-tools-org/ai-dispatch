@@ -27,20 +27,22 @@ fn switched_provider_refuses_worker_and_retry_before_building_y_argv() {
         Some("t-drift"),
     )
     .unwrap();
+    let builds = agent::codex::command_builds::count();
     let error =
         launch::prepare_launch(&store, &spec, &args, adapter.as_ref(), &isolated).unwrap_err();
     assert!(
         error
             .to_string()
-            .contains("config.toml now selects codex-provider:Y; task ran on codex-provider:X")
+            .contains("config.toml now selects codex-provider:Y; task recorded codex-provider:X")
     );
     assert!(
         RunArgs::for_retry(&store, &task)
-            .unwrap_err()
+            .err()
+            .expect("Codex retry must refuse route drift")
             .to_string()
-            .contains("task ran on codex-provider:X")
+            .contains("task recorded codex-provider:X")
     );
-    assert!(!home.path().join("capture.jsonl").exists());
+    assert_eq!(agent::codex::command_builds::count(), builds);
     std::fs::write(config, "model_provider = [malformed").unwrap();
     assert_eq!(task.route().provider.as_str(), "codex-provider:X");
     assert!(task.display_route().starts_with("codex/codex-provider:X/"));

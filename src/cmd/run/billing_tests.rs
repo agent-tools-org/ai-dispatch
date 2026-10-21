@@ -194,6 +194,7 @@ fn assert_provider_advice_held() {
         .find(|candidate| candidate.agent == "codex")
         .unwrap();
     assert_eq!(codex.quota.status, "held");
+    assert!(codex.exclusion_codes.iter().any(|code| code == "needs_human"));
     assert_eq!(codex.breakdown.billing, 0.0);
     assert!(codex.billing.is_none());
 }

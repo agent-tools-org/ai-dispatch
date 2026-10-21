@@ -235,3 +235,7 @@ pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_i
     let retry_id = Box::pin(run(store.clone(), retry_args)).await?;
     Ok(Some(retry_id))
 }
+
+
+#[cfg(test)]
+pub(crate) use run_dispatch_prepare::claim_test_dispatch;

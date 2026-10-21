@@ -4,9 +4,19 @@ use super::*;
 
 impl RunArgs {
     pub(crate) fn for_retry(store: &Store, task: &crate::types::Task) -> Result<Self> {
-        if task.agent == crate::types::AgentKind::Codex {
+        let args = Self::retry_inputs(store, task)?;
+        args.verify_retry_route(task)?;
+        Ok(args)
+    }
+
+    pub(crate) fn verify_retry_route(&self, task: &crate::types::Task) -> Result<()> {
+        if task.agent == crate::types::AgentKind::Codex && self.agent_name == "codex" {
             crate::agent::codex::verify_route(task.custom_agent_name.as_deref())?;
         }
+        Ok(())
+    }
+
+    pub(crate) fn retry_inputs(store: &Store, task: &crate::types::Task) -> Result<Self> {
         let saved = Self::saved_for_task(store, task.id.as_str())?;
         let profile = if saved.is_none() {
             store.get_task_profile(task.id.as_str())?

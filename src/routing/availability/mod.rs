@@ -25,6 +25,16 @@ const DEGRADED_USED: f64 = 80.0;
 mod types;
 pub use types::*;
 
+pub(crate) fn evidence_agent(agent: AgentKind, custom_name: Option<&str>) -> AgentKind {
+    if agent == AgentKind::Codex
+        && custom_name.is_some_and(|name| name.starts_with("codex-provider:"))
+    {
+        AgentKind::Custom
+    } else {
+        agent
+    }
+}
+
 pub fn availability(agent: &AgentKind, custom_name: Option<&str>) -> RouteAvailability {
     from_path(agent, custom_name, None, &marker_path(agent, custom_name))
 }
@@ -70,13 +80,7 @@ fn from_path(
         group,
         content.as_deref(),
         mtime,
-        if *agent == AgentKind::Codex
-            && custom_name.is_some_and(|name| name.starts_with("codex-provider:"))
-        {
-            None
-        } else {
-            live_quota::snapshot(agent)
-        },
+        live_quota::snapshot(&evidence_agent(*agent, custom_name)),
     )
 }
 
@@ -88,21 +92,15 @@ pub(crate) fn decide(
     marker_mtime: Option<SystemTime>,
     snapshot: Option<ProbeEvidence>,
 ) -> RouteAvailability {
-    let evidence_agent = if *agent == AgentKind::Codex
-        && custom_name.is_some_and(|name| name.starts_with("codex-provider:"))
-    {
-        &AgentKind::Custom
-    } else {
-        agent
-    };
-    let snapshot = snapshot.filter(|_| evidence_agent == agent);
+    let evidence_agent = evidence_agent(*agent, custom_name);
+    let snapshot = snapshot.filter(|_| evidence_agent == *agent);
     match content {
         Some(text) => apply_hold(
             agent,
             custom_name,
             group,
-            stored_hold(text, evidence_agent),
-            wall_of(evidence_agent, text),
+            stored_hold(text, &evidence_agent),
+            wall_of(&evidence_agent, text),
             Some(text),
             marker_mtime,
             snapshot,

@@ -200,7 +200,7 @@ pub(crate) fn auto_fallback_args(
     let task = store
         .get_task(task_id)?
         .ok_or_else(|| anyhow::anyhow!("batch task not found after dispatch: {task_id}"))?;
-    let mut args = run::RunArgs::for_retry(store, &task)?;
+    let mut args = run::RunArgs::retry_inputs(store, &task)?;
     args.prompt = task.prompt.clone();
     let fallback = if run::RunArgs::saved_for_task(store, task_id)?.is_some() {
         if args.cascade.is_empty() && tasks.get(task_idx).is_some_and(|spec| spec.fallback.is_some()) {
@@ -223,6 +223,7 @@ pub(crate) fn auto_fallback_args(
     } else {
         return Ok(None);
     }
+    args.verify_retry_route(&task)?;
     if task.repo_path.is_some() || task.worktree_path.is_some() || task.worktree_branch.is_some() {
         run::apply_retry_target(&task, &mut args)?;
     }

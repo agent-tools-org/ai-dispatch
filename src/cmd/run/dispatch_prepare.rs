@@ -275,3 +275,9 @@ fn pending_task(
 #[cfg(test)] #[path = "dispatch_preflight_tests.rs"] mod preflight_tests;
 #[cfg(test)] #[path = "dispatch_backup_tests.rs"] mod backup_tests;
 #[cfg(test)] #[path = "dispatch_report_tests.rs"] mod report_tests;
+
+
+#[cfg(test)]
+pub(crate) fn claim_test_dispatch(store: &Arc<Store>, args: &mut RunArgs) -> Result<TaskId> {
+    Ok(prepare_dispatch_with(store, args, |_| true)?.task_id)
+}

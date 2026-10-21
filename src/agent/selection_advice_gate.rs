@@ -94,6 +94,7 @@ impl Exclusions {
 
 fn needs_human_refusal(kind: AgentKind, custom: Option<&str>, model: Option<&str>) -> bool {
     use crate::routing::rate_limit::{active_group_holds, get_rate_limit_info};
+    let evidence_agent = crate::routing::availability::evidence_agent(kind, custom);
     let group = crate::agent::model_group::model_group(kind, model);
     let group_holds = active_group_holds(&kind, custom)
         .into_iter()
@@ -104,10 +105,8 @@ fn needs_human_refusal(kind: AgentKind, custom: Option<&str>, model: Option<&str
         .chain(group_holds)
         .any(|info| {
             info.needs_human
-                && info
-                    .marker
-                    .lines()
-                    .any(|line| human_action_line(kind, line))
+                && (evidence_agent != kind
+                    || info.marker.lines().any(|line| human_action_line(kind, line)))
         })
 }
 

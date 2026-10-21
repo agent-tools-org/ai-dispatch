@@ -10,7 +10,7 @@ pub(crate) fn verify_route(route: Option<&str>) -> Result<()> {
     let live = provider::route_name()?;
     anyhow::ensure!(
         live.as_deref() == route,
-        "config.toml now selects {}; task ran on {}; restore that route before retry/resume",
+        "config.toml now selects {}; task recorded {}; select that route before retry/resume",
         live.as_deref().unwrap_or("openai-chatgpt-plan"),
         route.unwrap_or("openai-chatgpt-plan"),
     );

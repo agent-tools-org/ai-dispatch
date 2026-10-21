@@ -228,3 +228,6 @@ fn saved_empty_cascade_preserves_explicit_exhaustion_even_with_conflicting_spec(
     assert_eq!(next.agent_name, "grok");
     assert_eq!(next.cascade, ["claude"]);
 }
+
+#[path = "provider_retry_tests.rs"]
+mod provider_retry_tests;

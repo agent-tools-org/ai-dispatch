@@ -56,6 +56,7 @@ fn held_codex_provider_is_skipped_and_exhausted_cascade_names_its_clear_command(
     let _codex = select(home.path(), "model_provider='X'");
     hold(AgentKind::Codex, Some("codex-provider:X"));
     let store = Arc::new(Store::open_memory().unwrap());
+    let builds = agent::codex::command_builds::count();
     let setup =
         resolve_agent_setup(&store, &mut args("codex", &["codex", "opencode"]), None).unwrap();
     assert_eq!(setup.agent_kind, AgentKind::OpenCode);
@@ -65,7 +66,7 @@ fn held_codex_provider_is_skipped_and_exhausted_cascade_names_its_clear_command(
         .err()
         .expect("held route cannot construct a launch adapter");
     assert!(error.to_string().contains("clear-limit codex-provider:X"));
-    assert!(!home.path().join("capture.jsonl").exists());
+    assert_eq!(agent::codex::command_builds::count(), builds);
 }
 
 #[test]
@@ -86,4 +87,47 @@ fn default_codex_keeps_none_and_its_existing_hold_hint() {
     std::fs::remove_file(rate_limit::marker_path(&AgentKind::Codex, None)).unwrap();
     hold(AgentKind::Codex, Some("codex-provider:X"));
     assert!(resolve_agent_setup(&store, &mut args("codex", &[]), None).is_ok());
+}
+
+#[test]
+fn background_provider_hold_ignores_healthy_plan_and_substitutes_or_refuses() {
+    let home = tempfile::tempdir().unwrap();
+    let _aid = AidHomeGuard::set(home.path());
+    let _codex = select(home.path(), "model_provider='X'");
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
+    std::fs::write(
+        home.path().join("codex.json"),
+        serde_json::json!({"ok":true,
+            "snapshot":{"provider":"codex","fetched_at":"2099-01-01T00:00:00Z",
+            "windows":[{"label":"5h","used_percent":1,"resets_at":"2099-01-02T00:00:00Z"}]}
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let route = Some("codex-provider:X");
+    rate_limit::mark_rate_limited(&AgentKind::Codex, route, "You have hit your usage limit");
+    assert!(
+        rate_limit::get_rate_limit_info(&AgentKind::Codex, route)
+            .unwrap()
+            .needs_human
+    );
+    let store = Arc::new(Store::open_memory().unwrap());
+    let builds = agent::codex::command_builds::count();
+    for cascade in [vec!["opencode"], vec![]] {
+        let mut request = args("codex", &cascade);
+        request.declared_urgency = Some(crate::types::TaskUrgency::Background);
+        let result = resolve_agent_setup(&store, &mut request, None);
+        if cascade.is_empty() {
+            assert!(
+                result
+                    .err()
+                    .expect("held provider must refuse")
+                    .to_string()
+                    .contains("clear-limit codex-provider:X")
+            );
+        } else {
+            assert_eq!(result.unwrap().agent_kind, AgentKind::OpenCode);
+        }
+    }
+    assert_eq!(agent::codex::command_builds::count(), builds);
 }

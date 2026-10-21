@@ -359,8 +359,12 @@ ids accept only letters, digits, hyphens and underscores. ChatGPT plan snapshots
 cannot release a custom provider hold or supply its billing/advice evidence.
 
 Each launch and `aid retry` verify the live provider selection against the saved
-route. A switch from X to Y refuses with `config.toml now selects …; task ran on …`;
-restore the selected route before retry/resume. History keeps the recorded route.
+route. A switch from X to Y refuses with `config.toml now selects …; task recorded …`;
+select the recorded route before retry/resume. History keeps the recorded route.
+Retries switched to another agent skip Codex route verification.
+Tasks from v11.5.0 recorded the default route even when using a custom provider.
+Their original provider cannot be recovered from the row; a live custom provider
+therefore causes refusal. Start a new task on the intended provider instead.
 Settings are not snapshotted: changing settings under the same id is allowed.
 Known limits: pricing by route is not supported; every cost path uses OpenAI rates
 and still enforces `--max-task-cost`. `aid agent quota` retains its ChatGPT plan

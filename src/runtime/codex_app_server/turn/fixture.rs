@@ -18,12 +18,22 @@ pub(super) struct Fixture {
 
 impl Fixture {
     pub fn new(mode: &str) -> Self {
+        Self::with_claim(mode, true)
+    }
+
+    pub fn unclaimed(mode: &str) -> Self {
+        Self::with_claim(mode, false)
+    }
+
+    fn with_claim(mode: &str, claim: bool) -> Self {
         let home = tempfile::tempdir().unwrap();
         let guard = paths::AidHomeGuard::set(home.path());
         paths::ensure_dirs().unwrap();
         let store = Arc::new(Store::open_memory().unwrap());
         let task = TaskId("t-app-server".into());
-        insert_task(&store, &task);
+        if claim {
+            insert_task(&store, &task);
+        }
         let command = command(home.path(), mode);
         let log = paths::log_path(task.as_str());
         let output = home.path().join("output.txt");

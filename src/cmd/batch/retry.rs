@@ -70,7 +70,7 @@ pub(super) fn should_retry_task(status: TaskStatus, include_waiting: bool) -> bo
 }
 
 pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str, agent_override: Option<&str>) -> Result<RunArgs> {
-    let mut run_args = RunArgs::for_retry(store, task)?;
+    let mut run_args = RunArgs::retry_inputs(store, task)?;
     run_args.prompt = task.prompt.clone();
     if let Some(name) = agent_override {
         switch_agent(&mut run_args, name.to_string());
@@ -83,6 +83,7 @@ pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str,
             run::advice_route::apply_candidate(&mut run_args, &candidate);
         }
     }
+    run_args.verify_retry_route(task)?;
     apply_retry_target(task, &mut run_args)?;
     run_args.group = Some(group_id.to_string());
     run_args.background = true;

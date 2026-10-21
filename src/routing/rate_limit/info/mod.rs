@@ -24,14 +24,22 @@ pub fn recovery_datetime(agent: &AgentKind, custom_name: Option<&str>) -> Option
 pub fn get_rate_limit_info(agent: &AgentKind, custom_name: Option<&str>) -> Option<RateLimitInfo> {
     let path = marker_path(agent, custom_name);
     let content = fs::read_to_string(&path).ok()?;
-    Some(info_from_marker_content(&content, agent))
+    Some(info_from_marker_content(&content, agent, custom_name))
 }
 
-fn info_from_marker_content(content: &str, agent: &AgentKind) -> RateLimitInfo {
+fn info_from_marker_content(
+    content: &str,
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+) -> RateLimitInfo {
+    let evidence_agent = crate::routing::availability::evidence_agent(*agent, custom_name);
     RateLimitInfo {
         recovery_at: marker_field(content, "recovery_at: "),
         message: marker_field(content, "message: "),
-        needs_human: matches!(stored_hold(content, agent), StoredHold::NeedsHuman),
+        needs_human: matches!(
+            stored_hold(content, &evidence_agent),
+            StoredHold::NeedsHuman
+        ),
         marker: content.to_string(),
     }
 }
@@ -66,7 +74,10 @@ pub fn active_group_holds(
                 return None;
             }
             let content = fs::read_to_string(&path).ok()?;
-            Some((group, info_from_marker_content(&content, agent)))
+            Some((
+                group,
+                info_from_marker_content(&content, agent, custom_name),
+            ))
         })
         .collect()
 }
@@ -84,7 +95,13 @@ pub fn format_hold_end(
     if let Some(at) = info.recovery_at.as_deref() {
         return format!("resets {at}");
     }
-    format_hold_end_for(&stored_hold(&info.marker, agent), agent, custom_name, None)
+    let evidence_agent = crate::routing::availability::evidence_agent(*agent, custom_name);
+    format_hold_end_for(
+        &stored_hold(&info.marker, &evidence_agent),
+        agent,
+        custom_name,
+        None,
+    )
 }
 
 /// Shared NeedsHuman text for `aid agent list`, the session-start hook, and

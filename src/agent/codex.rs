@@ -63,6 +63,9 @@ fn has_native_model_flag() -> bool {
     codex_version().is_some_and(|version| version >= (0, 116, 0))
 }
 
+#[cfg(test)]
+pub(crate) mod command_builds;
+
 pub struct CodexAgent;
 
 impl CodexAgent {
@@ -73,6 +76,8 @@ impl CodexAgent {
         durable_codex_home: bool,
         writable_roots: &[std::path::PathBuf],
     ) -> Result<Command> {
+        #[cfg(test)]
+        command_builds::record();
         let provider = provider::selected()?;
         let effective_prompt = if opts.read_only {
             read_only_prompt(prompt, opts)

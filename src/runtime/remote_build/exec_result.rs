@@ -44,7 +44,7 @@ impl ExecResult {
 
     pub(crate) fn detail(&self) -> Option<&str> {
         match self {
-            Self::NotStarted { detail, .. } => Some(detail),
+            Self::NotStarted { detail, .. } if !detail.trim().is_empty() => Some(detail),
             _ => None,
         }
     }
@@ -79,6 +79,22 @@ mod tests {
             ExecResult::read(file.path()),
             Some(ExecResult::Completed {})
         ));
+    }
+
+    #[test]
+    fn blank_detail_falls_back_to_text_diagnostics() {
+        for detail in ["", " ", "\t\n", "\u{2003}"] {
+            let result = ExecResult::NotStarted {
+                reason: "lock_timeout".into(),
+                detail: detail.into(),
+            };
+            assert_eq!(result.detail(), None);
+        }
+        let result = ExecResult::NotStarted {
+            reason: "lock_timeout".into(),
+            detail: " typed detail ".into(),
+        };
+        assert_eq!(result.detail(), Some(" typed detail "));
     }
 
     #[test]

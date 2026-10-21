@@ -31,8 +31,18 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/../src/runtime/remote_build/cargo.sh"
 remote_checkout_layout
 remote_cmd="export CARGO_TARGET_DIR=${remote_target}; exec cargo test --workspace \"\$@\""
+result_args=()
+result_tmp=""
+log=""
+if ! "$DRY_RUN" && [[ -n "${AID_RBOX_RESULT:-}" ]] \
+  && rbox_help="$(rbox exec --help 2>/dev/null)" && [[ "$rbox_help" == *--result-file* ]]; then
+  result_tmp="$(mktemp)"
+  result_args=(--result-file "$result_tmp")
+  trap 'rm -f -- "$log" "$result_tmp"' EXIT
+fi
 command=(rbox exec "$BOX" "$repo_root" --to "$remote_dir" --jobs "$JOBS"
-  --timeout "$TIMEOUT" --lock-timeout "$LOCK_TIMEOUT" -- bash -c "$remote_cmd"
+  ${result_args[@]+"${result_args[@]}"} --timeout "$TIMEOUT" --lock-timeout "$LOCK_TIMEOUT"
+  -- bash -c "$remote_cmd"
   remote-test ${EXTRA[@]+"${EXTRA[@]}"})
 
 if "$DRY_RUN"; then
@@ -47,9 +57,16 @@ fi
 command -v rbox >/dev/null || { echo "rbox CLI not found on PATH" >&2; exit 2; }
 
 log="$(mktemp)"
-trap 'rm -f "$log"' EXIT
+trap 'rm -f -- "$log" "$result_tmp"' EXIT
 status=0
 "${command[@]}" 2>&1 | tee "$log" || status=${PIPESTATUS[0]}
+if [[ -n "$result_tmp" ]]; then
+  if [[ -s "$result_tmp" ]]; then
+    cat "$result_tmp" >> "$AID_RBOX_RESULT" || :
+    printf '\n' >> "$AID_RBOX_RESULT" || :
+  fi
+  rm -f -- "$result_tmp"
+fi
 if [[ $status -eq 0 ]] && awk '
   /^test result: / && match($0, /[0-9]+ passed; [0-9]+ failed; [0-9]+ ignored;/) {
     split(substr($0, RSTART, RLENGTH), counts, /[^0-9]+/)

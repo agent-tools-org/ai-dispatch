@@ -31,6 +31,7 @@ pub struct VerifyResult {
     pub output: String,
     pub command: String,
     pub(crate) infrastructure_failure: bool,
+    pub(crate) rbox_result: Option<crate::runtime::remote_build::exec_result::ExecResults>,
     pub(crate) exit_code: Option<i32>,
 }
 
@@ -78,6 +79,7 @@ pub(crate) fn run_verify_with_env(
             output: "Configured verify command was 'skip' and did not run".to_string(),
             command: "skip".to_string(),
             infrastructure_failure: false,
+            rbox_result: None,
             exit_code: None,
         });
     }
@@ -90,6 +92,7 @@ pub(crate) fn run_verify_with_env(
             output: "No project file detected, skipping verification".to_string(),
             command: "skip".to_string(),
             infrastructure_failure: false,
+            rbox_result: None,
             exit_code: None,
         });
     };
@@ -139,6 +142,7 @@ fn execute_verify(
         output: combined,
         command: cmd_str,
         infrastructure_failure: false,
+        rbox_result: None,
         exit_code,
     })
 }

@@ -55,6 +55,7 @@ impl VerifyBudget {
                 .into(),
             command,
             infrastructure_failure: false,
+            rbox_result: None,
             exit_code: None,
         }
     }

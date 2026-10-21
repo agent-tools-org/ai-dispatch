@@ -24,6 +24,7 @@ class RemoteTestCommandTests(unittest.TestCase):
         for key in list(self.env):
             if key.startswith("GIT_"):
                 del self.env[key]
+        self.env.pop("AID_RBOX_RESULT", None)
         self.env.update(AID_BUILD_BOX="fixture", AID_BUILD_JOBS="4")
         self.git("init", "-b", "release/ready")
         self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
@@ -35,8 +36,14 @@ class RemoteTestCommandTests(unittest.TestCase):
         fake = self.bin / "rbox"
         fake.write_text("""#!/usr/bin/env python3
 import json, os, sys
+if sys.argv[1:] == ['exec', '--help']:
+    print(os.environ.get('FAKE_HELP', '--result-file PATH'))
+    sys.exit(0)
 with open(os.environ['CAPTURE'], 'a') as capture:
     capture.write(json.dumps(sys.argv[1:]) + '\\n')
+if '--result-file' in sys.argv and 'FAKE_RECEIPT' in os.environ:
+    with open(sys.argv[sys.argv.index('--result-file') + 1], 'w') as result:
+        result.write(os.environ['FAKE_RECEIPT'])
 if os.environ.get('FAKE_JOB', 'yes') == 'yes':
     print('rbox: job fixture-job', file=sys.stderr, flush=True)
 print(os.environ.get('FAKE_TEST_OUTPUT', ''), end='', flush=True)
@@ -81,6 +88,54 @@ sys.exit(status)
             'export CARGO_TARGET_DIR=$HOME/.rbox/target/sample-repo; '
             'exec cargo test --workspace "$@"', "remote-test",
         ])
+
+    def test_result_file_forwarding_appends_receipts_and_preserves_status(self) -> None:
+        result_file = self.base / "typed results.jsonl"
+        receipt = json.dumps({"version": 1, "phase": "completed", "command_exit": 75})
+        self.env.update(AID_RBOX_RESULT=str(result_file), FAKE_RECEIPT=receipt,
+                        FAKE_STATUS="75", FAKE_COMPLETE="yes")
+        dry = self.run_script("--dry-run")
+        self.assertEqual(dry.returncode, 0, dry.stderr)
+        self.assertNotIn("--result-file", dry.stdout)
+        self.assertEqual(dry.stdout, self.run_script("--dry-run").stdout)
+        self.assertFalse(self.capture.exists())
+        self.assertFalse(result_file.exists())
+        for _ in range(2):
+            result = self.run_script()
+            self.assertEqual(result.returncode, 75, result.stderr)
+            self.assertIn("job fixture-job: tests failed (exit 75)", result.stderr)
+        calls = [json.loads(line) for line in self.capture.read_text().splitlines()]
+        self.assertEqual(len(calls), 2)
+        for args in calls:
+            temporary = Path(args[args.index("--result-file") + 1])
+            self.assertNotEqual(temporary, result_file)
+            self.assertFalse(temporary.exists(), "temporary receipt must be removed")
+        self.assertEqual(result_file.read_text(), (receipt + "\n") * 2)
+
+    def test_older_rbox_omits_result_flag_even_with_receipt_path(self) -> None:
+        result_file = self.base / "results.jsonl"
+        self.env.update(AID_RBOX_RESULT=str(result_file), FAKE_HELP="legacy exec help",
+                        FAKE_STATUS="75")
+        result = self.run_script()
+        self.assertEqual(result.returncode, 75, result.stderr)
+        self.assertNotIn("--result-file", json.loads(self.capture.read_text()))
+        self.assertFalse(result_file.exists())
+
+    def test_unset_or_empty_result_path_omits_flag(self) -> None:
+        for value in [None, ""]:
+            with self.subTest(value=value):
+                if value is None:
+                    self.env.pop("AID_RBOX_RESULT", None)
+                else:
+                    self.env["AID_RBOX_RESULT"] = value
+                self.env["FAKE_STATUS"] = "0"
+                self.assertNotIn("--result-file", self.dry_command())
+                self.env["FAKE_STATUS"] = "75"
+                result = self.run_script()
+                self.assertEqual(result.returncode, 75, result.stderr)
+                args = json.loads(self.capture.read_text())
+                self.assertNotIn("--result-file", args)
+                self.capture.unlink()
 
     def test_main_branch_defaults_and_remote_home(self) -> None:
         self.git("checkout", "-b", "main")

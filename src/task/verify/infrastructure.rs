@@ -1,16 +1,24 @@
-// Recognize confirmed pre-command rbox refusals without interpreting exit numbers.
+// Legacy fallback for older rbox: recognize pre-command refusals without exit numbers.
 // Exports diagnostic selection and safe failover eligibility for remote verification.
 // Deps: anchored rbox diagnostics and completion/job-state markers.
 
-pub(crate) fn diagnostic(output: &str) -> Option<&str> {
-    if output.lines().any(|line| {
+pub(crate) fn started_marker(output: &str) -> bool {
+    output.lines().any(|line| {
         line.starts_with("rbox: job ")
             || line.contains("the job continues on the box")
             || line.starts_with("rbox: warning: job ") && line.contains(" is running;")
             || line.starts_with("rbox: infrastructure: box lost mid-job;")
-    }) {
+    })
+}
+
+pub(crate) fn diagnostic(output: &str) -> Option<&str> {
+    if started_marker(output) {
         return None;
     }
+    refusal_line(output)
+}
+
+fn refusal_line(output: &str) -> Option<&str> {
     output.lines().find(|line| {
         let Some(message) = line.strip_prefix("rbox: ") else {
             return false;

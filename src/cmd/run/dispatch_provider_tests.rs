@@ -106,11 +106,9 @@ fn background_provider_hold_ignores_healthy_plan_and_substitutes_or_refuses() {
     .unwrap();
     let route = Some("codex-provider:X");
     rate_limit::mark_rate_limited(&AgentKind::Codex, route, "You have hit your usage limit");
-    assert!(
-        rate_limit::get_rate_limit_info(&AgentKind::Codex, route)
-            .unwrap()
-            .needs_human
-    );
+    let info = rate_limit::get_rate_limit_info(&AgentKind::Codex, route).unwrap();
+    assert!(info.needs_human);
+    assert!(info.recovery_at.is_none(), "a dateless provider refusal has no reset clock");
     let store = Arc::new(Store::open_memory().unwrap());
     let builds = agent::codex::command_builds::count();
     for cascade in [vec!["opencode"], vec![]] {

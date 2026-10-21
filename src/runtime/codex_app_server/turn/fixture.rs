@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 pub(super) struct Fixture {
     pub home: tempfile::TempDir,
+    pub cwd: tempfile::TempDir,
     pub _guard: paths::AidHomeGuard,
     pub store: Arc<Store>,
     pub task: TaskId,
@@ -27,6 +28,10 @@ impl Fixture {
 
     fn with_claim(mode: &str, claim: bool) -> Self {
         let home = tempfile::tempdir().unwrap();
+        let cwd = tempfile::Builder::new()
+            .prefix("aid-provider-cwd-")
+            .tempdir_in("/tmp")
+            .unwrap();
         let guard = paths::AidHomeGuard::set(home.path());
         paths::ensure_dirs().unwrap();
         let store = Arc::new(Store::open_memory().unwrap());
@@ -39,6 +44,7 @@ impl Fixture {
         let output = home.path().join("output.txt");
         Self {
             home,
+            cwd,
             _guard: guard,
             store,
             task,

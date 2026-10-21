@@ -3,6 +3,9 @@
 
 use super::*;
 
+mod hold;
+use hold::write_marker;
+
 /// Marker file slug under `~/.aid/rate-limit-*`.
 ///
 /// Built-ins keep `AgentKind::as_str()` so live files like `rate-limit-codex`
@@ -53,6 +56,7 @@ pub fn mark_group_rate_limited(
         provider,
         *agent,
         super::identity::signature_agent(*agent, custom_name),
+        custom_name,
     );
 }
 
@@ -162,23 +166,6 @@ pub(crate) fn format_recovery(at: NaiveDateTime) -> String {
     at.format("%b %d, %Y %I:%M %p").to_string()
 }
 
-fn write_marker(
-    path: &std::path::Path,
-    message: &str,
-    provider: Option<&str>,
-    agent: AgentKind,
-    signature_agent: AgentKind,
-) {
-    write_marker_with_hold(
-        path,
-        message,
-        provider,
-        agent,
-        signature_agent,
-        classify_hold(message, signature_agent),
-    );
-}
-
 fn write_marker_with_hold(
     path: &std::path::Path,
     message: &str,
@@ -271,7 +258,9 @@ pub(crate) fn mark_rate_limited_for_signature(
     message: &str,
 ) {
     let signature_agent = if *agent == AgentKind::Custom { signature_agent } else { *agent };
-    write_marker(&marker_path(agent, custom_name), message, None, *agent, signature_agent);
+    write_marker(
+        &marker_path(agent, custom_name), message, None, *agent, signature_agent, custom_name,
+    );
 }
 
 #[cfg(test)]

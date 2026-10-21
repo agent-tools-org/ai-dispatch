@@ -6,18 +6,38 @@ pub(super) fn claim(fixture: &Fixture) {
     let mut args = crate::cmd::run::RunArgs {
         agent_name: "codex".into(),
         prompt: "Inspect the fixture read only".into(),
-        dir: Some(fixture.home.path().display().to_string()),
+        dir: Some(fixture.cwd.path().display().to_string()),
         read_only: true,
         existing_task_id: Some(fixture.task.clone()),
         dry_run: true,
         ..Default::default()
     };
+    let cwd = fixture.cwd.path().canonicalize().unwrap();
+    let task_dir = crate::support::paths::task_dir(fixture.task.as_str());
+    assert!(
+        !task_dir.starts_with(&cwd),
+        "trusted task files must be outside the inspected tree"
+    );
+    assert!(
+        !Command::new("git")
+            .current_dir(&cwd)
+            .args(["rev-parse", "--show-toplevel"])
+            .output()
+            .unwrap()
+            .status
+            .success(),
+        "fixture working directory must be outside a repository"
+    );
     let builds = crate::agent::codex::command_builds::count();
     let id = crate::cmd::run::claim_test_dispatch(&fixture.store, &mut args).unwrap();
     assert_eq!(id, fixture.task);
     assert!(crate::agent::codex::command_builds::count() > builds);
-    assert!(fixture.store.update_task_status(
-        id.as_str(), crate::types::TaskStatus::Running).unwrap());
+    assert!(
+        fixture
+            .store
+            .update_task_status(id.as_str(), crate::types::TaskStatus::Running)
+            .unwrap()
+    );
 }
 
 pub(super) fn command(fixture: &mut Fixture, resume: bool) {
@@ -39,7 +59,7 @@ pub(super) fn command(fixture: &mut Fixture, resume: bool) {
         .unwrap();
     let mut command = Command::new(fixture.command.get_program());
     command.args(native.get_args());
-    command.current_dir(fixture.home.path());
+    command.current_dir(fixture.cwd.path());
     for source in [&fixture.command, &native] {
         for (key, value) in source.get_envs() {
             if let Some(value) = value {

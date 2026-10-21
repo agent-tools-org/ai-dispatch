@@ -357,6 +357,9 @@ Their holds are independent of the default `codex` ChatGPT route. A hold hint na
 `aid config clear-limit all` also discovers every Codex provider marker. Provider
 ids accept only letters, digits, hyphens and underscores. ChatGPT plan snapshots
 cannot release a custom provider hold or supply its billing/advice evidence.
+A recognized custom provider usage-limit refusal without a stated reset requires manual clearing;
+it does not inherit the default Codex plan's fallback reset clock. Stated reset
+times and temporary capacity cooldowns still apply to that provider route.
 
 Each launch and `aid retry` verify the live provider selection against the saved
 route. A switch from X to Y refuses with `config.toml now selects …; task recorded …`;

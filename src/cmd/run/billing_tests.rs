@@ -209,7 +209,12 @@ fn assert_injected_plan_does_not_release_x(route: Option<&str>) {
         Some(&content), Some(mtime), Some(probe.clone()));
     assert_eq!(provider.status, RouteStatus::Held);
     assert!(provider.probe.is_none());
+    let message = crate::routing::rate_limit::marker_field(&content, "message: ").unwrap();
+    crate::routing::rate_limit::mark_rate_limited(&AgentKind::Codex, None, &message);
+    let default_marker = crate::routing::rate_limit::marker_path(&AgentKind::Codex, None);
+    let default_content = std::fs::read_to_string(&default_marker).unwrap();
+    let default_mtime = std::fs::metadata(default_marker).unwrap().modified().unwrap();
     let default = decide(&AgentKind::Codex, None, None,
-        Some(&content), Some(mtime), Some(probe));
+        Some(&default_content), Some(default_mtime), Some(probe));
     assert_eq!(default.status, RouteStatus::Dispatchable);
 }

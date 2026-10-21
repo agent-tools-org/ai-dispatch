@@ -45,7 +45,7 @@ fn prepare(mode: &str, resume: bool) -> (Fixture, ConfigGuard) {
 
 fn options(fixture: &Fixture, resume: bool) -> RunOpts {
     RunOpts {
-        dir: Some(fixture.home.path().display().to_string()),
+        dir: Some(fixture.cwd.path().display().to_string()),
         model: None,
         output: Some(fixture.output.display().to_string()),
         result_file: None,
@@ -90,7 +90,7 @@ fn fake_server_start_and_resume_match_exec_and_fallback_provider() {
             crate::runtime::read_only_launch::enforced(
                 &fixture.store,
                 &fixture.task,
-                fixture.home.path().to_str().unwrap()
+                fixture.cwd.path().to_str().unwrap()
             )
             .unwrap()
         );
@@ -219,7 +219,7 @@ fn startup_failure_and_refused_resume_keep_provider_on_automatic_exec_fallback()
             crate::runtime::read_only_launch::enforced(
                 &fixture.store,
                 &fixture.task,
-                fixture.home.path().to_str().unwrap()
+                fixture.cwd.path().to_str().unwrap()
             )
             .unwrap()
         );

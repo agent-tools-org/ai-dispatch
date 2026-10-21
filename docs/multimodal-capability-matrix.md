@@ -21,7 +21,7 @@ Evidence keys are how each cell was established:
 
 | Agent (aid state) | Dispatched route / probe source | Image input | Image generation | Video generation | Audio input | Computer use (OS/desktop) | Browser control | File / PDF input |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| gemini (installed, disabled) | `gemini`; [gemini.rs](../src/agent/gemini.rs), [gemini_support.rs](../src/agent/gemini_support.rs); P/G/N | Y [G] | Y† [N] | U [P] | Y [G] | U [P] | U [P] | Y [G] |
+| gemini (removed in v11.5.0; measured before removal) | `gemini`; adapter deleted in v11.5.0; P/G/N | Y [G] | Y† [N] | U [P] | Y [G] | U [P] | U [P] | Y [G] |
 | qwen (installed) | `qwen`; [qwen.rs](../src/agent/qwen.rs); P/Q | U* [Q] | U [P] | U* [Q] | U* [Q] | U [P] | U [P] | U* [Q] |
 | codex (installed) | `codex exec`; [codex.rs](../src/agent/codex.rs); P/F/X | Y [F] | U [P] | U [P] | U [P] | U [X] | U [P] | U [P] |
 | copilot (installed, limited) | `copilot`; [copilot.rs](../src/agent/copilot.rs); P | U [P] | U [P] | U [P] | U [P] | U [P] | U [P] |

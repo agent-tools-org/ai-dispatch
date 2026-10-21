@@ -37,6 +37,18 @@ does not assert board closure. New slices need board IDs before implementation.
   re-run for this release.
 - Earlier baseline notes (v10.47.x custody and budget work) remain below for reconciliation.
 
+## Next release (not started)
+
+| Slice | Board | Acceptance contract |
+| --- | --- | --- |
+| Codex custom provider as a route (P2) | wi-3856 | A task launched with a user-selected custom provider records it as its own route identity; quota holds, advice and retry address that route, not `codex/openai`; read-only provenance still proves the restrictive profile |
+| Typed pre-command results from rbox | wi-1ad2 | A remote verify that never started its command is classified from rbox's typed result, not from log text |
+| Advisory review of unrecognised failures | wi-1ad2 | Recorded `unclassified_failure` markers can be summarised by a model as advice only: it never reads agent output and never sets or clears a hold |
+
+Carried follow-ups: Claude read-only under Claude Code's own sandbox (would let the v11.4.0
+read-only slice cover Claude); snapshotting ignored files written by advisory agents; rbox
+ensure-stamp mismatches seen on two boxes.
+
 ## Provider carry-over, scoped classification, Gemini removal (v11.5.0)
 
 | Slice | Board | Acceptance contract |
@@ -50,11 +62,8 @@ fixed before release: a failed PTY run's quota refusal no longer continued to th
 (now it continues with a transient model hold), and the Codex resume end-to-end fixtures read
 an empty Codex home after the provider carry-over. The release candidate passed the full
 workspace suite on the build box with default features (44 test binaries, 3,750 passed,
-0 failed, 16 ignored) and with `--features web` (3,783 passed, 0 failed, 16 ignored).
-
-Next: wi-3856 P2 (a custom provider as its own route identity per task); in wi-1ad2, typed
-pre-command results from rbox, and model-assisted review of recorded unrecognised failures as
-advice only (never on agent output, never setting a hold).
+0 failed, 16 ignored) and with `--features web` (3,783 passed, 0 failed, 16 ignored);
+`scripts/release.sh` re-ran the suite before tagging.
 
 ## Truthful outcomes under concurrency and long runs (v11.4.0)
 
@@ -75,9 +84,7 @@ idle window (now the window starts at the first sample), and a production path u
 dev-only crate. The release candidate passed the full workspace suite on the build box
 (42 test binaries, 3,707 passed, 0 failed, 16 ignored).
 
-Follow-ups: Claude read-only under Claude Code's own sandbox (would let
-slice A cover Claude); snapshotting ignored files written by advisory agents; rbox ensure-stamp
-mismatches seen on two boxes.
+Follow-ups moved to "Next release" above.
 
 ## Failure truthfulness (v11.0.0, from the 2026-10-13 failed-task review)
 

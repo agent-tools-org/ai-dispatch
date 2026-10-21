@@ -5,7 +5,7 @@ a failed job”, and “a remote test gate that reports zero binaries is a trans
 ## Reproduction and captured facts
 
 The read-only local database records t-8aa27628 as done, verify=auto, verify_status=passed,
-effective_dir=/Users/ming/.aid/worktrees/ai-dispatch-5b113037/feat/codex-provider-route,
+effective_dir=~/.aid/worktrees/ai-dispatch-5b113037/feat/codex-provider-route,
 final_head_sha=8462b7c60c4e138e0ee6ebef6ac228f69d9b0906. Saved dispatch_args has verify=auto,
 dir=., worktree=feat/codex-provider-route, and a named remote build box. Four noop events exist.
 The supplied test-compilation failure is not independently rerun: the brief prohibits compilation.
@@ -98,7 +98,7 @@ Commands executed for validation:
 - `python3 scripts/remote-test-test.py`: 19 passed, 0 failed; fake rbox only, no compilation.
   These existing tests check shell argument fidelity, original status preservation (including
   completed 75/124), zero-match handling and guide contracts; they do not execute the Rust fix.
-- `python3 /Users/ming/.codex/skills/.system/skill-creator/scripts/quick_validate.py
+- `python3 ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py
   default-skills/aid-guide`:
   blocked before validation, `ModuleNotFoundError: No module named 'yaml'`. No environment workaround.
 - `rustfmt --edition 2024 --config skip_children=true src/cmd/run/verify_evidence.rs
@@ -220,7 +220,7 @@ this explicitly requested correction. The existing lifecycle's provisional Done 
 its independent settling barrier is the reason the original test's status poll was incorrect.
 
 Guide quick validation was attempted again with
-`python3 /Users/ming/.codex/skills/.system/skill-creator/scripts/quick_validate.py default-skills/aid-guide`;
+`python3 ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py default-skills/aid-guide`;
 it remains blocked before validation by `ModuleNotFoundError: No module named 'yaml'`.
 No environment fallback was installed. Staged credential validation uses
 `security-guard --repo . staged` before the follow-up commit.

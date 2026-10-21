@@ -37,13 +37,26 @@ does not assert board closure. New slices need board IDs before implementation.
   re-run for this release.
 - Earlier baseline notes (v10.47.x custody and budget work) remain below for reconciliation.
 
-## Next release (not started)
+## Next release (in progress)
 
 | Slice | Board | Acceptance contract |
 | --- | --- | --- |
-| Codex custom provider as a route (P2) | wi-3856 | A task launched with a user-selected custom provider records it as its own route identity; quota holds, advice and retry address that route, not `codex/openai`; read-only provenance still proves the restrictive profile |
+| Codex custom provider as a route (P2) — done | wi-3856 | A task launched with a user-selected custom provider records it as its own route identity; quota holds, advice and retry address that route, not `codex/openai`; read-only provenance still proves the restrictive profile |
 | Typed pre-command results from rbox | wi-1ad2 | A remote verify that never started its command is classified from rbox's typed result, not from log text |
 | Advisory review of unrecognised failures | wi-1ad2 | Recorded `unclassified_failure` markers can be summarised by a model as advice only: it never reads agent output and never sets or clears a hold |
+
+| Bare `--verify` honours the project verifier — done | — | `--verify` without a value uses the project's declared verify command (auto-detection only when none is declared); every verify run persists a started/finished event with command, directory, local HEAD, exit code and output excerpt; NoOp is read only from the agent's final message, never tool output |
+
+P2 records only the route name (`codex-provider:<id>`) and refuses a launch, retry or resume when
+`config.toml` now selects a different route; it stores no settings snapshot. Known limits: such
+tasks are priced at OpenAI rates; `aid agent quota` shows the ChatGPT plan under `codex`; tasks
+recorded by v11.5.0 carry no route and cannot be told apart from default-route tasks.
+
+Found during this work (open): `aid accept` fails when a task's recorded worktree directory no
+longer exists, and refuses read-only tasks that never had a worktree ("Task has no worktree path"),
+so `aid gc` cannot collect them; `scripts/remote-test.sh` reports "rbox failed before any test ran"
+when the connection drops after tests started; several P2 build-counter assertions hold without the
+change; the `codex-provider:` predicate is written out in four places.
 
 Carried follow-ups: Claude read-only under Claude Code's own sandbox (would let the v11.4.0
 read-only slice cover Claude); snapshotting ignored files written by advisory agents; rbox

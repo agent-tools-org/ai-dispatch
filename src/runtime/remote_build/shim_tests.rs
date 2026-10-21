@@ -191,3 +191,30 @@ fn remote_cargo_derives_main_and_detached_layout() {
     let recorded = std::fs::read_to_string(f.temp.path().join("argv")).expect("argv");
     assert!(recorded.contains(&format!("/{sha}\n")));
 }
+
+#[test]
+fn typed_receipts_append_for_each_cargo_call_and_preserve_exit() {
+    let f = Fixture::new();
+    write_executable(&f.bin.join("rbox"), r#"#!/bin/bash
+while [[ $# -gt 0 ]]; do
+  if [[ $1 == --result-file ]]; then
+    printf '%s' '{"version":1,"phase":"completed","command_exit":75}' > "$2"
+    shift
+  fi
+  shift
+done
+exit 75
+"#);
+    let result = f.temp.path().join("results.jsonl");
+    for _ in 0..2 {
+        let output = f.command(&["test"], 0).env("AID_RBOX_RESULT", &result)
+            .output().expect("shim");
+        assert_eq!(output.status.code(), Some(75));
+    }
+    let lines = std::fs::read_to_string(result).expect("results");
+    assert_eq!(lines.lines().count(), 2);
+    for line in lines.lines() {
+        let value: serde_json::Value = serde_json::from_str(line).expect("JSON");
+        assert_eq!(value["command_exit"], 75);
+    }
+}

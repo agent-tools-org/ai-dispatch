@@ -1,4 +1,4 @@
-// Recognize confirmed pre-command rbox refusals without interpreting exit numbers.
+// Legacy fallback for older rbox: recognize pre-command refusals without exit numbers.
 // Exports diagnostic selection and safe failover eligibility for remote verification.
 // Deps: anchored rbox diagnostics and completion/job-state markers.
 

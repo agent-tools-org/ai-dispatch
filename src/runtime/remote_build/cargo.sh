@@ -51,8 +51,15 @@ set -e
 remote_checkout_layout
 remote_cmd="mkdir -p -- ${remote_cwd} && cd -- ${remote_cwd} && export CARGO_TARGET_DIR=${remote_target} && exec cargo \"\$@\""
 unset CARGO_TARGET_DIR
+result_args=()
+result_tmp=""
+if [[ -n "${AID_RBOX_RESULT:-}" ]]; then
+  result_tmp="$(mktemp)"
+  result_args=(--result-file "$result_tmp")
+fi
 rbox exec "$AID_BUILD_BOX" "$repo_root" --to "$remote_dir" \
-  --untracked --jobs "${AID_BUILD_JOBS:-4}" --timeout 3600 --lock-timeout 900 \
+  ${result_args[@]+"${result_args[@]}"} --untracked --jobs "${AID_BUILD_JOBS:-4}" \
+  --timeout 3600 --lock-timeout 900 \
   -- bash -c "$remote_cmd" remote-cargo "$@" &
 job_pid=$!
 heartbeat() {
@@ -71,6 +78,13 @@ heartbeat_pid=$!
 trap 'kill "$heartbeat_pid" 2>/dev/null || :; wait "$heartbeat_pid" 2>/dev/null || :' EXIT
 status=0
 wait "$job_pid" || status=$?
+if [[ -n "$result_tmp" ]]; then
+  if [[ -s "$result_tmp" ]]; then
+    cat "$result_tmp" >> "$AID_RBOX_RESULT" || :
+    printf '\n' >> "$AID_RBOX_RESULT" || :
+  fi
+  rm -f -- "$result_tmp"
+fi
 case "$status" in
   69) echo "[remote-build] $AID_BUILD_BOX: box refused admission (disk); aid re-picks at verify" >&2 ;;
   75) echo "[remote-build] $AID_BUILD_BOX: box lock not acquired" >&2 ;;

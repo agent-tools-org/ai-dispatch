@@ -80,7 +80,8 @@ fn record_verify_infrastructure_detail(store: &Store, task_id: &TaskId, detail: 
 }
 
 fn verify_infrastructure_detail(result: &crate::task::verify::VerifyResult) -> String {
-    let diagnostic = crate::task::verify::infrastructure::diagnostic(&result.output);
+    let diagnostic = result.rbox_result.as_ref().and_then(|result| result.detail())
+        .or_else(|| crate::task::verify::infrastructure::diagnostic(&result.output));
     match (diagnostic, verify_output_excerpt(&result.output)) {
         (Some(line), _) => format!("{}\nOutput: {line}", result.command),
         (_, Some(output)) => format!("{}\nOutput: {output}", result.command),

@@ -66,11 +66,19 @@ fn run_help_describes_verify_shell_semantics() {
     assert!(help.contains("--message-format=json"), "{help}");
     assert!(help.contains("sh -c in the task directory"), "{help}");
     assert!(
-        help.contains("bare --verify auto-detects"),
+        help.split_whitespace().collect::<Vec<_>>().join(" ").contains(
+            "bare --verify uses the project verify command when configured, otherwise auto-detects"
+        ),
         "{help}"
     );
-    assert!(help.contains("an absent flag uses the project default"), "{help}");
-    assert!(help.contains("a program missing under sh -c fails verification"), "{help}");
+    assert!(
+        help.contains("an absent flag uses the project default"),
+        "{help}"
+    );
+    assert!(
+        help.contains("a program missing under sh -c fails verification"),
+        "{help}"
+    );
 }
 
 #[test]
@@ -161,7 +169,10 @@ fn background_verify_persists_success_and_failure_evidence() {
     for code in [0, 101] {
         let harness = Harness::with_git_project();
         let id = "t-background-evidence";
-        let command = format!("echo durable-verifier-output; exit {code}");
+        let command = format!(
+            "echo durable-verifier-output; sh '{}'",
+            harness.verifier().display()
+        );
         let output = harness
             .aid()
             .args([
@@ -179,10 +190,19 @@ fn background_verify_persists_success_and_failure_evidence() {
             .output()
             .unwrap();
         assert!(output.status.success(), "{output:?}");
-        harness.wait_for(std::time::Duration::from_secs(30), |h| {
-            h.status(id)
-                .filter(|status| settlement::TERMINAL.contains(&status.as_str()))
-        });
+        harness.wait_verifier_holding();
+        assert_provisional_done(&harness, id);
+        harness.release(code);
+        let settled = harness
+            .aid()
+            .args(["wait", id, "--timeout", "30"])
+            .output()
+            .unwrap();
+        assert_eq!(
+            settled.status.code(),
+            Some(if code == 0 { 0 } else { 1 }),
+            "{settled:?}"
+        );
         assert_verify_evidence(&harness, id, &command, code);
     }
 }
@@ -209,5 +229,41 @@ fn assert_verify_evidence(harness: &Harness, id: &str, command: &str, code: i32)
             .as_str()
             .unwrap()
             .contains("durable-verifier-output")
+    );
+}
+
+fn assert_provisional_done(harness: &Harness, id: &str) {
+    let db = rusqlite::Connection::open(harness.home().join("aid.db")).unwrap();
+    let state: (String, String, Option<String>) = db
+        .query_row(
+            "SELECT status, verify_status, completed_at FROM tasks WHERE id = ?1",
+            [id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(state, ("done".into(), "pending".into(), None));
+    let finished: i64 = db
+        .query_row(
+            "SELECT count(*) FROM events WHERE task_id = ?1
+         AND json_extract(metadata, '$.verification') = 'finished'",
+            [id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        finished, 0,
+        "gated verification must not yet have a finished event"
+    );
+    let started: i64 = db
+        .query_row(
+            "SELECT count(*) FROM events WHERE task_id = ?1
+         AND json_extract(metadata, '$.verification') = 'started'",
+            [id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        started, 1,
+        "verification must have started in this database"
     );
 }

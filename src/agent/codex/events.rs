@@ -36,7 +36,10 @@ pub(super) fn parse_item_event(
 }
 
 fn parse_agent_message(
-    task_id: &TaskId, item: &Value, event_type: &str, now: chrono::DateTime<Local>,
+    task_id: &TaskId,
+    item: &Value,
+    event_type: &str,
+    now: chrono::DateTime<Local>,
 ) -> Option<TaskEvent> {
     let text = item
         .get("text")
@@ -47,14 +50,20 @@ fn parse_agent_message(
         return None;
     }
     if event_type == "item.completed"
-        && matches!(item.get("phase").and_then(Value::as_str), None | Some("final_answer"))
-        && text.trim_start().starts_with("NO_CHANGES_NEEDED")
+        && matches!(
+            item.get("phase").and_then(Value::as_str),
+            None | Some("final_answer")
+        )
+        && let Some(marker) = text
+            .lines()
+            .map(str::trim_start)
+            .find(|line| line.starts_with("NO_CHANGES_NEEDED"))
     {
         return Some(TaskEvent {
             task_id: task_id.clone(),
             timestamp: now,
             event_kind: EventKind::NoOp,
-            detail: extract_noop_reason(text),
+            detail: extract_noop_reason(marker),
             metadata: None,
         });
     }

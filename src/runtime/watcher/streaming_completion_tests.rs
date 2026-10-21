@@ -240,3 +240,35 @@ fn opencode_fix_preserves_claude_and_codex_final_totals() {
         }
     }
 }
+
+#[tokio::test]
+async fn claude_final_noop_persists_alongside_completion_usage() {
+    let lines = [
+        serde_json::json!({"type":"tool_use", "tool":{"name":"Bash",
+            "input":{"command":"grep NO_CHANGES_NEEDED src"}}}),
+        serde_json::json!({"type":"user", "tool_use_result":"NO_CHANGES_NEEDED: tool output"}),
+        serde_json::json!({"type":"assistant", "message":{"content":[
+            {"type":"text", "text":"NO_CHANGES_NEEDED: interim"}]}}),
+        serde_json::json!({"type":"result", "subtype":"success",
+            "result":"Checked the implementation.\n\nNO_CHANGES_NEEDED: already correct",
+            "usage":{"input_tokens":2,"output_tokens":1}, "total_cost_usd":0.25}),
+    ]
+    .iter()
+    .map(|value| value.to_string())
+    .collect::<Vec<_>>()
+    .join("\n");
+    let (info, events) = watch_usage(&ClaudeAgent, &lines, None).await;
+    let noops = events
+        .iter()
+        .filter(|event| event.event_kind == crate::types::EventKind::NoOp)
+        .collect::<Vec<_>>();
+    assert_eq!(noops.len(), 1);
+    assert_eq!(noops[0].detail, "NO_CHANGES_NEEDED: already correct");
+    assert!(
+        events
+            .iter()
+            .any(|event| event.event_kind == crate::types::EventKind::Completion)
+    );
+    assert_eq!(info.tokens, Some(3));
+    assert_eq!(info.cost_usd, Some(0.25));
+}

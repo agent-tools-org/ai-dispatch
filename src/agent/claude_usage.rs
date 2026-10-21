@@ -144,5 +144,26 @@ fn result_metadata(payload: &Value, envelope: &Value, mut metadata: Value) -> Va
     if let Some(session_id) = session_id {
         metadata["agent_session_id"] = json!(session_id);
     }
+    if let Some(reason) = final_noop_reason(payload, envelope) {
+        metadata["final_noop_reason"] = json!(reason);
+    }
     metadata
+}
+
+fn final_noop_reason<'a>(payload: &'a Value, envelope: &Value) -> Option<&'a str> {
+    if [payload, envelope].iter().any(|value| {
+        value.get("is_error").and_then(Value::as_bool) == Some(true)
+            || value
+                .get("subtype")
+                .and_then(Value::as_str)
+                .is_some_and(|kind| kind != "success")
+    }) {
+        return None;
+    }
+    payload
+        .get("result")?
+        .as_str()?
+        .lines()
+        .map(str::trim_start)
+        .find(|line| line.starts_with("NO_CHANGES_NEEDED"))
 }

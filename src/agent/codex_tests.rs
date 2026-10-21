@@ -229,7 +229,7 @@ fn noop_only_comes_from_completed_agent_delivery() {
         );
     }
     let value = serde_json::json!({"type":"item.completed", "item":{
-        "type":"agent_message", "phase":"final_answer", "text":"NO_CHANGES_NEEDED: already fixed"}});
+        "type":"agent_message", "phase":"final_answer", "text":"Checked the implementation.\n\nNO_CHANGES_NEEDED: already fixed"}});
     let event = agent.parse_event(&id, &value.to_string()).unwrap();
     assert_eq!(event.event_kind, EventKind::NoOp);
     assert_eq!(event.detail, "NO_CHANGES_NEEDED:already fixed");

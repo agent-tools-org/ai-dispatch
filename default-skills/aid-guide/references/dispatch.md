@@ -292,3 +292,7 @@ not hold Qwen. Unsplit terminal refusals cannot establish long or manual holds.
 
 Qwen reset timestamps in `MM-DD HH:MM:SS UTC` use the next occurrence of that
 date and convert using the local offset at the reset instant.
+
+Final delivery markers: Codex and Claude recognize `NO_CHANGES_NEEDED` at the start of a
+line in the agent's final message, including after a preface. Tool output and interim messages
+do not count. Claude retains its completion usage event alongside the NoOp label.

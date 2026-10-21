@@ -127,3 +127,109 @@ raw-marker parser was observed but left unchanged because the brief names Codex.
 were dispatched. Independent cross-review remains outstanding under the no-dispatch constraint.
 
 - `security-guard --repo . staged`: passed, zero findings.
+
+## Round 1 follow-up: settlement observation and final-message markers
+
+KB consulted: `~/Develop/knowledge/eng-knowledge-base/kb verification terminal status settlement evidence`.
+Relevant matches included “a negative control can fail for its own reason” and
+“a flag-selected write path makes a new field null on half the fleet”.
+
+Operator-provided remote result on 5345c674: 3753 passed, 1 failed; later targets did not run.
+The failing query in background_verify_persists_success_and_failure_evidence returned no rows.
+CONFIRMED in code: its terminal-status poll is not a settlement barrier. Agent completion calls
+record_agent_completion with settled=false (store/completion_mutations.rs:27-30), publishing
+Done and NULL completed_at (:49). Verification happens later in lifecycle/phases.rs:74;
+post_run_lifecycle settles Done only after those phases (lifecycle.rs:88). Thus the test can
+read the database before verification starts, then drop its temporary home while the worker
+is still running. This does not establish an event insertion failure, wrong metadata key, or
+a different database. The SQL event predicate is correct; the prerequisite wait is wrong.
+
+The independent audit's contrary claim cites tests/settlement_e2e.rs:111, but that test is
+ignored with the reason “task status is terminal before verification settles”. Existing
+cmd/wait.rs checks the worker-spec barrier before reading task status; use that contract.
+Changing lifecycle status semantics would exceed this correction and is unnecessary here.
+
+Claude final-message selection also needs care: a read-only sample of 100 local JSONL logs
+contained 2253 assistant envelopes with absent/null stop_reason and no non-null stop_reason.
+Requiring end_turn would silently discard those messages; classifying all assistant envelopes
+would still admit interim commentary. The result envelope owns final text and usage. Keep its
+Completion event for accounting and derive a separate NoOp from final-text metadata.
+
+### Follow-up changes and validation
+
+The background E2E now uses the harness's gated verifier. While gated it asserts Done,
+Pending verification, NULL completed_at, one started event and zero finished events in
+that same database. It releases with 0 or 101, waits with `aid wait <id> --timeout 30`, then
+retains every original evidence assertion. This corrects the test's observation contract;
+it does not change the production lifecycle or weaken the event query.
+
+Help now says “bare --verify uses the project verify command when configured, otherwise
+auto-detects”. The pinned assertion checks that wording after normalizing help whitespace.
+Codex scans line starts in its completed final message, retaining phase and item restrictions.
+Claude no longer scans raw JSON: only successful final result text supplies final_noop_reason
+metadata. The watcher derives a NoOp alongside the retained Completion event, preserving
+usage accounting. Tool results, tool arguments, interim assistant text, unsuccessful results
+and inline quoted markers are negative fixtures. The guide documents the marker boundary.
+
+New/updated Rust coverage (written, not executed in this sandbox):
+
+- background_verify_persists_success_and_failure_evidence: deterministic pre-settlement
+  state, then durable evidence after the existing worker-settlement barrier for exits 0/101.
+- run_help_describes_verify_shell_semantics: corrected help wording, insensitive to wrapping.
+- noop_only_comes_from_completed_agent_delivery: a preface before the final marker now works.
+- noop_marker_is_only_classified_in_successful_final_result_text: Claude channel isolation,
+  error-envelope exclusion and retained token metadata.
+- claude_final_noop_persists_alongside_completion_usage: streams tool/interim/final fixtures
+  through the watcher, checks exactly one final NoOp, a Completion, 3 tokens and cost 0.25.
+
+Local validation on the follow-up working tree based on 5345c674:
+
+- A hermetic `python3 - <<'PY'` SQLite reproduction extracted the actual UPDATE SQL from
+  src/store/completion_mutations.rs and applied its settled=false parameter. Result: 1 passed,
+  0 failed; status=done, completed_at=NULL, finished-event count=0. This proves the premature
+  status predicate, not the execution of the new Rust tests. Exact reproduction:
+
+```python
+import re, sqlite3
+from pathlib import Path
+source = Path('src/store/completion_mutations.rs').read_text()
+query = re.search(
+    r'"(UPDATE tasks SET status = \?1, tokens.*?completed_at IS NULL\)\))"', source, re.S
+).group(1)
+db = sqlite3.connect(':memory:')
+db.execute('CREATE TABLE tasks(id TEXT, status TEXT, tokens INTEGER, duration_ms INTEGER, '
+           'completed_at TEXT, observed_model TEXT, attribution_source TEXT, '
+           'cost_usd REAL, exit_code INTEGER)')
+db.execute("INSERT INTO tasks(id,status) VALUES('fixture','running')")
+db.execute('CREATE TABLE events(task_id TEXT,metadata TEXT)')
+db.execute(query, ('done', None, 1, '2026-10-21T00:00:00Z', None, None, 0,
+                   'fixture', None, False))
+assert db.execute("SELECT status,completed_at FROM tasks").fetchone() == ('done', None)
+assert db.execute("SELECT count(*) FROM events WHERE task_id='fixture' "
+                  "AND json_extract(metadata,'$.verification')='finished'").fetchone()[0] == 0
+```
+
+- `rustfmt --edition 2024 --config skip_children=true --emit stdout` on the nine touched Rust
+  files parsed successfully. Formatting was applied only to changed/appended functions.
+- `git diff --check`: passed. No compilation, cargo, aid build/test or remote E2E ran here.
+- The reported 3753-pass/1-fail run belongs to 5345c674; it does not validate this follow-up.
+  Remote rerun is required for verify_shell_e2e and the Codex/Claude/watcher marker tests.
+
+No side tasks were dispatched. The earlier note leaving Claude unchanged is superseded by
+this explicitly requested correction. The existing lifecycle's provisional Done status remains;
+its independent settling barrier is the reason the original test's status poll was incorrect.
+
+Guide quick validation was attempted again with
+`python3 /Users/ming/.codex/skills/.system/skill-creator/scripts/quick_validate.py default-skills/aid-guide`;
+it remains blocked before validation by `ModuleNotFoundError: No module named 'yaml'`.
+No environment fallback was installed. Staged credential validation uses
+`security-guard --repo . staged` before the follow-up commit.
+
+Required remote commands for the follow-up:
+
+```sh
+aid test --test verify_shell_e2e
+aid test --bin aid noop_only_comes_from_completed_agent_delivery
+aid test --bin aid noop_marker_is_only_classified_in_successful_final_result_text
+aid test --bin aid claude_final_noop_persists_alongside_completion_usage
+```

@@ -139,7 +139,10 @@ Important controls:
 - `--verify [COMMAND]` and project/batch `verify` send eligible plain `cargo check|test|clippy`
   commands without shell syntax through aid's build runner (adding `--message-format=json`)
   outside remote-build/container runs, otherwise through `sh -c` in the task directory; bare
-  `--verify` auto-detects, and an absent flag uses the project default.
+  `--verify` uses the project verify command when configured, otherwise auto-detects;
+  an absent flag uses the project default. Verification writes durable started/finished task
+  events with command, directory, local HEAD, exit code, and output excerpt. Local HEAD
+  identifies the checkout; a remote tested HEAD is unknown unless reported by the verifier.
   Missing under `sh -c`, a program fails verification; missing `cargo` on the runner is `InfrastructureFailure`.
   A task with verification configured is written with `verify_status = pending` at dispatch; read-only tasks
   or tasks without a working directory skip verification.

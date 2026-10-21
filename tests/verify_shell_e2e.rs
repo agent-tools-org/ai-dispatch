@@ -115,3 +115,99 @@ fn checker_shell_like_stderr_cannot_override_exit_status() {
         verify_command(&command, false);
     }
 }
+
+#[test]
+fn auto_verify_uses_project_command_instead_of_rust_check() {
+    let harness = Harness::with_git_project();
+    std::fs::create_dir(harness.project().join(".aid")).unwrap();
+    std::fs::write(harness.project().join(".aid/project.toml"),
+        "[project]\nid = 'verify-project'\nverify = 'echo test-target-does-not-compile; exit 101'\n").unwrap();
+    // Auto detection would select cargo check; project verification must win before that path.
+    std::fs::write(
+        harness.project().join("Cargo.toml"),
+        "[package]\nname='fixture'\n",
+    )
+    .unwrap();
+    let output = harness
+        .aid()
+        .args([
+            "run",
+            settlement::AGENT,
+            "settle",
+            "--id",
+            "t-auto-project",
+            "--dir",
+            harness.project().to_str().unwrap(),
+            "--verify",
+            "auto",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert_eq!(harness.status("t-auto-project").as_deref(), Some("failed"));
+    let db = rusqlite::Connection::open(harness.home().join("aid.db")).unwrap();
+    let command: String = db
+        .query_row(
+            "SELECT verify FROM tasks WHERE id = 't-auto-project'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(command, "echo test-target-does-not-compile; exit 101");
+}
+
+#[test]
+fn background_verify_persists_success_and_failure_evidence() {
+    for code in [0, 101] {
+        let harness = Harness::with_git_project();
+        let id = "t-background-evidence";
+        let command = format!("echo durable-verifier-output; exit {code}");
+        let output = harness
+            .aid()
+            .args([
+                "run",
+                settlement::AGENT,
+                "settle",
+                "--id",
+                id,
+                "--bg",
+                "--dir",
+                harness.project().to_str().unwrap(),
+                "--verify",
+                &command,
+            ])
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        harness.wait_for(std::time::Duration::from_secs(30), |h| {
+            h.status(id)
+                .filter(|status| settlement::TERMINAL.contains(&status.as_str()))
+        });
+        assert_verify_evidence(&harness, id, &command, code);
+    }
+}
+
+fn assert_verify_evidence(harness: &Harness, id: &str, command: &str, code: i32) {
+    let db = rusqlite::Connection::open(harness.home().join("aid.db")).unwrap();
+    let metadata: String = db
+        .query_row(
+            "SELECT metadata FROM events WHERE task_id = ?1
+         AND json_extract(metadata, '$.verification') = 'finished'",
+            [id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let metadata: serde_json::Value = serde_json::from_str(&metadata).unwrap();
+    assert_eq!(metadata["command"], command);
+    assert_eq!(metadata["exit_code"], code);
+    assert_eq!(metadata["directory"], harness.project().to_str().unwrap());
+    assert_eq!(metadata["success"], code == 0);
+    assert_eq!(metadata["local_head_before"].as_str().unwrap().len(), 40);
+    assert_eq!(metadata["local_head_after"], metadata["local_head_before"]);
+    assert!(
+        metadata["output_excerpt"]
+            .as_str()
+            .unwrap()
+            .contains("durable-verifier-output")
+    );
+}

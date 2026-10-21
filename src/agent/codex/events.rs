@@ -13,24 +13,7 @@ pub(super) fn parse_item_event(
     let item_type = item.get("type")?.as_str()?;
 
     match item_type {
-        "agent_message" => {
-            let text = item
-                .get("text")
-                .or_else(|| item.get("content"))
-                .and_then(|t| t.as_str())
-                .unwrap_or("");
-            if text.is_empty() {
-                return None;
-            }
-            let (detail, metadata) = capped_detail(text);
-            Some(TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: EventKind::Reasoning,
-                detail,
-                metadata,
-            })
-        }
+        "agent_message" => parse_agent_message(task_id, item, event_type, now),
         "command_execution" => parse_command_event(task_id, item, event_type, now),
         "file_change" => parse_file_change_event(task_id, item, now),
         "error" => {
@@ -50,6 +33,39 @@ pub(super) fn parse_item_event(
         }
         _ => None,
     }
+}
+
+fn parse_agent_message(
+    task_id: &TaskId, item: &Value, event_type: &str, now: chrono::DateTime<Local>,
+) -> Option<TaskEvent> {
+    let text = item
+        .get("text")
+        .or_else(|| item.get("content"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("");
+    if text.is_empty() {
+        return None;
+    }
+    if event_type == "item.completed"
+        && matches!(item.get("phase").and_then(Value::as_str), None | Some("final_answer"))
+        && text.trim_start().starts_with("NO_CHANGES_NEEDED")
+    {
+        return Some(TaskEvent {
+            task_id: task_id.clone(),
+            timestamp: now,
+            event_kind: EventKind::NoOp,
+            detail: extract_noop_reason(text),
+            metadata: None,
+        });
+    }
+    let (detail, metadata) = capped_detail(text);
+    Some(TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: now,
+        event_kind: EventKind::Reasoning,
+        detail,
+        metadata,
+    })
 }
 
 fn parse_command_event(

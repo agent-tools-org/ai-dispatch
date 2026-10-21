@@ -54,7 +54,7 @@ pub(super) fn apply_project_defaults(args: &mut RunArgs, detected_project: Optio
                 args.team = Some(team.clone());
                 defaults_applied = true;
             }
-        if args.verify.is_none()
+        if (args.verify.is_none() || args.verify.as_deref() == Some("auto"))
             && let Some(verify) = project.verify.as_ref() {
                 args.verify = Some(verify.clone());
                 defaults_applied = true;

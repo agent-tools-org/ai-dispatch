@@ -204,3 +204,33 @@ fn served_models_probe_reads_models_cache_under_codex_home() {
     super::cli_config::set_test_codex_home(None);
     assert_eq!(served.expect("probe").as_deref(), Some(&["gpt-6-sol".to_string()][..]));
 }
+
+#[test]
+fn noop_only_comes_from_completed_agent_delivery() {
+    let id = TaskId("t-noop-origin".into());
+    let agent = CodexAgent;
+    for value in [
+        serde_json::json!({"type":"item.started", "item":{
+            "type":"command_execution", "command":"rg NO_CHANGES_NEEDED src"}}),
+        serde_json::json!({"type":"item.completed", "item":{
+            "type":"command_execution", "command":"rg marker src", "exit_code":0,
+            "aggregated_output":"NO_CHANGES_NEEDED: source literal"}}),
+        serde_json::json!({"type":"item.started", "item":{
+            "type":"agent_message", "text":"NO_CHANGES_NEEDED: partial"}}),
+        serde_json::json!({"type":"item.completed", "item":{
+            "type":"agent_message", "phase":"commentary", "text":"NO_CHANGES_NEEDED: interim"}}),
+        serde_json::json!({"type":"codex.reasoning", "item":{
+            "text":"NO_CHANGES_NEEDED: thinking"}}),
+    ] {
+        let event = agent.parse_event(&id, &value.to_string());
+        assert!(
+            !event.is_some_and(|event| event.event_kind == EventKind::NoOp),
+            "{value}"
+        );
+    }
+    let value = serde_json::json!({"type":"item.completed", "item":{
+        "type":"agent_message", "phase":"final_answer", "text":"NO_CHANGES_NEEDED: already fixed"}});
+    let event = agent.parse_event(&id, &value.to_string()).unwrap();
+    assert_eq!(event.event_kind, EventKind::NoOp);
+    assert_eq!(event.detail, "NO_CHANGES_NEEDED:already fixed");
+}

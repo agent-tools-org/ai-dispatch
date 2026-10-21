@@ -37,3 +37,29 @@ fn failed_task_with_pending_verification_is_still_failed() {
         TaskOutcome::Failed
     );
 }
+
+#[test]
+fn auto_verify_prefers_project_command_and_preserves_explicit_commands() {
+    let project = crate::config::project::ProjectConfig {
+        verify: Some("scripts/remote-test.sh -- --bin aid".into()),
+        ..Default::default()
+    };
+    for (requested, expected) in [
+        (None, "scripts/remote-test.sh -- --bin aid"),
+        (Some("auto"), "scripts/remote-test.sh -- --bin aid"),
+        (Some("custom-check"), "custom-check"),
+    ] {
+        let mut args = RunArgs {
+            verify: requested.map(str::to_string),
+            ..Default::default()
+        };
+        super::super::run_dispatch_resolve::apply_project_defaults(&mut args, Some(&project));
+        assert_eq!(args.verify.as_deref(), Some(expected));
+    }
+    let mut args = RunArgs {
+        verify: Some("auto".into()),
+        ..Default::default()
+    };
+    super::super::run_dispatch_resolve::apply_project_defaults(&mut args, None);
+    assert_eq!(args.verify.as_deref(), Some("auto"));
+}

@@ -149,17 +149,6 @@ impl super::Agent for CodexAgent {
         let v: serde_json::Value = serde_json::from_str(line).ok()?;
         let now = Local::now();
 
-        // Check for NO_CHANGES_NEEDED in any text content
-        if line.contains("NO_CHANGES_NEEDED") {
-            return Some(TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: EventKind::NoOp,
-                detail: extract_noop_reason(line),
-                metadata: None,
-            });
-        }
-
         let event_type = v.get("type")?.as_str()?;
         match event_type {
             "item.started" | "item.completed" => parse_item_event(task_id, &v, now),

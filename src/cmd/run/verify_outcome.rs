@@ -58,3 +58,51 @@ fn output_excerpt(output: &str) -> Option<String> {
         excerpt
     })
 }
+
+// Keep result classification shared by foreground and background verification.
+pub(super) fn record_result(
+    store: &Store,
+    task_id: &TaskId,
+    result: &VerifyResult,
+    cargo_target_dir: Option<&str>,
+) {
+    use super::{
+        record_verify_failed, record_verify_infrastructure_detail, verify_failure_hint,
+        verify_infrastructure_detail, verify_output_excerpt,
+    };
+    let report = crate::task::verify::format_verify_report(result);
+    println!("{report}");
+    let target_permission_failure = result.infrastructure_failure
+        || crate::task::verify::cargo::target_dir_permission_failure(result, cargo_target_dir);
+    if target_permission_failure {
+        let detail = verify_infrastructure_detail(result);
+        record_verify_infrastructure_detail(store, task_id, detail);
+    } else {
+        crate::task::verify::record_verify_status(store, task_id, result);
+    }
+    if result.timed_out && !target_permission_failure {
+        record_verify_timed_out(store, task_id, result);
+    } else if !result.success && !target_permission_failure {
+        let hint = verify_failure_hint(store, task_id, &result.output);
+        let detail = match verify_output_excerpt(&result.output) {
+            Some(output) => {
+                format!(
+                    "Failed during verification: {}\nOutput: {}{}",
+                    result.command,
+                    output,
+                    hint.as_deref()
+                        .map(|value| format!("\n{value}"))
+                        .unwrap_or_default()
+                )
+            }
+            None => format!(
+                "Failed during verification: {}{}",
+                result.command,
+                hint.as_deref()
+                    .map(|value| format!("\n{value}"))
+                    .unwrap_or_default()
+            ),
+        };
+        record_verify_failed(store, task_id, detail);
+    }
+}

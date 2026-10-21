@@ -34,7 +34,8 @@ remote_cmd="export CARGO_TARGET_DIR=${remote_target}; exec cargo test --workspac
 result_args=()
 result_tmp=""
 log=""
-if [[ -n "${AID_RBOX_RESULT:-}" ]]; then
+if ! "$DRY_RUN" && [[ -n "${AID_RBOX_RESULT:-}" ]] \
+  && rbox_help="$(rbox exec --help 2>/dev/null)" && [[ "$rbox_help" == *--result-file* ]]; then
   result_tmp="$(mktemp)"
   result_args=(--result-file "$result_tmp")
   trap 'rm -f -- "$log" "$result_tmp"' EXIT

@@ -30,7 +30,7 @@ impl Fixture {
         let mut cmd = Command::new(self.home.join(".aid-build-shims/cargo"));
         cmd.env("PATH", format!("{}:{}:{}", self.home.join(".aid-build-shims").display(), self.bin.display(), std::env::var("PATH").expect("PATH")));
         cmd.env("RECORD", self.temp.path().join("argv")).env("STATUS", status.to_string());
-        cmd.env_remove("AID_BUILD_JOBS");
+        cmd.env_remove("AID_BUILD_JOBS").env_remove("AID_RBOX_RESULT");
         cmd.env("CARGO_TARGET_DIR", "/local/must-not-forward").env("AID_BUILD_BOX", "chosen-box");
         cmd.current_dir(self.temp.path()).args(args);
         cmd
@@ -196,6 +196,7 @@ fn remote_cargo_derives_main_and_detached_layout() {
 fn typed_receipts_append_for_each_cargo_call_and_preserve_exit() {
     let f = Fixture::new();
     write_executable(&f.bin.join("rbox"), r#"#!/bin/bash
+if [[ $1 == exec && $2 == --help ]]; then echo --result-file; exit 0; fi
 while [[ $# -gt 0 ]]; do
   if [[ $1 == --result-file ]]; then
     printf '%s' '{"version":1,"phase":"completed","command_exit":75}' > "$2"
@@ -217,4 +218,16 @@ exit 75
         let value: serde_json::Value = serde_json::from_str(line).expect("JSON");
         assert_eq!(value["command_exit"], 75);
     }
+}
+
+#[test]
+fn legacy_rbox_ignores_requested_receipt_path() {
+    let f = Fixture::new();
+    let result = f.temp.path().join("results.jsonl");
+    let output = f.command(&["test"], 75).env("AID_RBOX_RESULT", &result)
+        .output().expect("shim");
+    assert_eq!(output.status.code(), Some(75));
+    let recorded = std::fs::read_to_string(f.temp.path().join("argv")).expect("args");
+    assert!(!recorded.contains("--result-file"));
+    assert!(!result.exists());
 }

@@ -142,10 +142,10 @@ fn verify_with(
     if !result.infrastructure_failure || result.exit_code.is_none() || !auto_picked
         || !result.rbox_result.as_ref().map_or_else(
             || crate::task::verify::infrastructure::retryable(&result.output),
-            exec_result::ExecResult::retryable)
+            exec_result::ExecResults::retryable)
         || remaining_verify_time(deadline, chrono::Local::now()).is_zero()
     { return Ok(result); }
-    let refusal = result.rbox_result.as_ref().and_then(exec_result::ExecResult::detail)
+    let refusal = result.rbox_result.as_ref().and_then(exec_result::ExecResults::detail)
         .map(str::to_string).unwrap_or_else(|| refusal_line(&result.output));
     let replacement = selection::pick_before(rbox, path, &name, deadline).map_err(|error| {
         anyhow::anyhow!("Remote build box {name}: {refusal}; re-pick failed: {error}")
@@ -169,13 +169,11 @@ fn verify_on(
     if remaining_verify_time(deadline, chrono::Local::now()).is_zero() {
         return Ok(crate::task::verify::VerifyBudget::no_launch(command.unwrap_or("auto").to_string()));
     }
-    let result_file = crate::support::paths::task_dir(task_id).join("verify-rbox.jsonl");
-    std::fs::create_dir_all(crate::support::paths::task_dir(task_id))?;
-    std::fs::write(&result_file, "")?;
     let mut environment = Command::new("cargo");
     configure(&mut environment, &crate::support::paths::task_dir(task_id).join("home"), name)?;
-    if exec_result::supported() {
-        environment.env("AID_RBOX_RESULT", &result_file);
+    let result_file = exec_result::ResultFile::create(&crate::support::paths::task_dir(task_id));
+    if let Some(file) = &result_file {
+        environment.env("AID_RBOX_RESULT", file.path());
     } else {
         environment.env("AID_RBOX_RESULT", "");
     }
@@ -185,11 +183,11 @@ fn verify_on(
     let mut result = crate::task::verify::run_verify_with_env(
         path, command, target, container, crate::task::verify::VerifyBudget::Deadline(deadline), &env,
     )?;
-    result.rbox_result = exec_result::ExecResult::read(&result_file);
+    result.rbox_result = result_file.and_then(|file| exec_result::ExecResults::read(file.path()));
     result.infrastructure_failure = !result.success && !result.timed_out
         && result.rbox_result.as_ref().map_or_else(
             || crate::task::verify::infrastructure::diagnostic(&result.output).is_some(),
-            exec_result::ExecResult::not_started);
+            exec_result::ExecResults::not_started);
     Ok(result)
 }
 

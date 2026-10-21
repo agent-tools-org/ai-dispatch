@@ -53,9 +53,11 @@ remote_cmd="mkdir -p -- ${remote_cwd} && cd -- ${remote_cwd} && export CARGO_TAR
 unset CARGO_TARGET_DIR
 result_args=()
 result_tmp=""
-if [[ -n "${AID_RBOX_RESULT:-}" ]]; then
+if [[ -n "${AID_RBOX_RESULT:-}" ]] && rbox_help="$(rbox exec --help 2>/dev/null)" \
+  && [[ "$rbox_help" == *--result-file* ]]; then
   result_tmp="$(mktemp)"
   result_args=(--result-file "$result_tmp")
+  trap 'rm -f -- "$result_tmp"' EXIT
 fi
 rbox exec "$AID_BUILD_BOX" "$repo_root" --to "$remote_dir" \
   ${result_args[@]+"${result_args[@]}"} --untracked --jobs "${AID_BUILD_JOBS:-4}" \
@@ -75,7 +77,8 @@ heartbeat() {
 }
 heartbeat &
 heartbeat_pid=$!
-trap 'kill "$heartbeat_pid" 2>/dev/null || :; wait "$heartbeat_pid" 2>/dev/null || :' EXIT
+trap 'kill "$heartbeat_pid" 2>/dev/null || :; wait "$heartbeat_pid" 2>/dev/null || :;
+  [[ -z "$result_tmp" ]] || rm -f -- "$result_tmp"' EXIT
 status=0
 wait "$job_pid" || status=$?
 if [[ -n "$result_tmp" ]]; then

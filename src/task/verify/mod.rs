@@ -31,7 +31,7 @@ pub struct VerifyResult {
     pub output: String,
     pub command: String,
     pub(crate) infrastructure_failure: bool,
-    pub(crate) rbox_result: Option<crate::runtime::remote_build::exec_result::ExecResult>,
+    pub(crate) rbox_result: Option<crate::runtime::remote_build::exec_result::ExecResults>,
     pub(crate) exit_code: Option<i32>,
 }
 

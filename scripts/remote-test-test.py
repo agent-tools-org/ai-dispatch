@@ -36,6 +36,9 @@ class RemoteTestCommandTests(unittest.TestCase):
         fake = self.bin / "rbox"
         fake.write_text("""#!/usr/bin/env python3
 import json, os, sys
+if sys.argv[1:] == ['exec', '--help']:
+    print(os.environ.get('FAKE_HELP', '--result-file PATH'))
+    sys.exit(0)
 with open(os.environ['CAPTURE'], 'a') as capture:
     capture.write(json.dumps(sys.argv[1:]) + '\\n')
 if '--result-file' in sys.argv and 'FAKE_RECEIPT' in os.environ:
@@ -93,7 +96,8 @@ sys.exit(status)
                         FAKE_STATUS="75", FAKE_COMPLETE="yes")
         dry = self.run_script("--dry-run")
         self.assertEqual(dry.returncode, 0, dry.stderr)
-        self.assertIn("--result-file", dry.stdout)
+        self.assertNotIn("--result-file", dry.stdout)
+        self.assertEqual(dry.stdout, self.run_script("--dry-run").stdout)
         self.assertFalse(self.capture.exists())
         self.assertFalse(result_file.exists())
         for _ in range(2):
@@ -107,6 +111,15 @@ sys.exit(status)
             self.assertNotEqual(temporary, result_file)
             self.assertFalse(temporary.exists(), "temporary receipt must be removed")
         self.assertEqual(result_file.read_text(), (receipt + "\n") * 2)
+
+    def test_older_rbox_omits_result_flag_even_with_receipt_path(self) -> None:
+        result_file = self.base / "results.jsonl"
+        self.env.update(AID_RBOX_RESULT=str(result_file), FAKE_HELP="legacy exec help",
+                        FAKE_STATUS="75")
+        result = self.run_script()
+        self.assertEqual(result.returncode, 75, result.stderr)
+        self.assertNotIn("--result-file", json.loads(self.capture.read_text()))
+        self.assertFalse(result_file.exists())
 
     def test_unset_or_empty_result_path_omits_flag(self) -> None:
         for value in [None, ""]:

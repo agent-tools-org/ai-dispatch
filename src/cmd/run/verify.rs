@@ -12,6 +12,8 @@ use super::RunArgs;
 
 #[path = "verify_outcome.rs"]
 mod outcome;
+#[path = "verify_evidence.rs"]
+mod evidence;
 
 pub(in crate::cmd) fn maybe_verify_impl(
     store: &Store,
@@ -47,49 +49,10 @@ pub(in crate::cmd) fn maybe_verify_impl(
     let cargo_target_dir = crate::agent::env::target_dir_for_project(
         Some(dir_path), worktree_branch.as_deref(),
     );
-    match crate::runtime::remote_build::verify(
-        store, task_id.as_str(),
-        path,
-        command,
-        cargo_target_dir.as_deref(),
-        container_name,
+    match evidence::run(
+        store, task_id, path, verify_arg, command, cargo_target_dir.as_deref(), container_name,
     ) {
-        Ok(result) => {
-            let report = crate::task::verify::format_verify_report(&result);
-            println!("{report}");
-            let target_permission_failure = result.infrastructure_failure
-                || crate::task::verify::cargo::target_dir_permission_failure(
-                    &result,
-                    cargo_target_dir.as_deref(),
-                );
-            if target_permission_failure {
-                let detail = verify_infrastructure_detail(&result);
-                record_verify_infrastructure_detail(store, task_id, detail);
-            } else {
-                crate::task::verify::record_verify_status(store, task_id, &result);
-            }
-            if result.timed_out && !target_permission_failure {
-                outcome::record_verify_timed_out(store, task_id, &result);
-            } else if !result.success && !target_permission_failure {
-                let hint = verify_failure_hint(store, task_id, &result.output);
-                let detail = match verify_output_excerpt(&result.output) {
-                    Some(output) => {
-                        format!(
-                            "Failed during verification: {}\nOutput: {}{}",
-                            result.command,
-                            output,
-                            hint.as_deref().map(|value| format!("\n{value}")).unwrap_or_default()
-                        )
-                    }
-                    None => format!(
-                        "Failed during verification: {}{}",
-                        result.command,
-                        hint.as_deref().map(|value| format!("\n{value}")).unwrap_or_default()
-                    ),
-                };
-                record_verify_failed(store, task_id, detail);
-            }
-        }
+        Ok(result) => outcome::record_result(store, task_id, &result, cargo_target_dir.as_deref()),
         Err(e) => {
             record_verify_infrastructure_failure(store, task_id, &e);
             aid_error!("Verify error: {e}");

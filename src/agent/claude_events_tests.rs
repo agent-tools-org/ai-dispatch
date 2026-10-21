@@ -109,3 +109,43 @@ fn captured_result_counts_all_models_cumulatively() {
     let event = parse_event_line(&TaskId("t-model-totals".into()), CAPTURED_RESULT).expect("result");
     assert_eq!(event.metadata.expect("usage")["tokens"], 10_244_041);
 }
+
+#[test]
+fn noop_marker_is_only_classified_in_successful_final_result_text() {
+    let id = TaskId("t-claude-noop".into());
+    for value in [
+        json!({"type":"tool_use", "tool":{"name":"Bash",
+            "input":{"command":"grep NO_CHANGES_NEEDED src"}}}),
+        json!({"type":"user", "tool_use_result":"NO_CHANGES_NEEDED: tool output"}),
+        json!({"type":"assistant", "message":{"content":[
+            {"type":"text", "text":"NO_CHANGES_NEEDED: interim"}]}}),
+        json!({"type":"result", "is_error":true, "result":"NO_CHANGES_NEEDED: error"}),
+        json!({"type":"result", "subtype":"error_max_turns",
+            "result":"NO_CHANGES_NEEDED: incomplete"}),
+        json!({"type":"result", "result":"Quoted NO_CHANGES_NEEDED inline"}),
+        json!({"type":"result", "is_error":true,
+            "result":{"result":"NO_CHANGES_NEEDED: nested error"}}),
+    ] {
+        if let Some(event) = parse_event_line(&id, &value.to_string()) {
+            assert_ne!(event.event_kind, EventKind::NoOp, "{value}");
+            assert!(
+                event
+                    .metadata
+                    .as_ref()
+                    .and_then(|m| m.get("final_noop_reason"))
+                    .is_none()
+            );
+        }
+    }
+    let result = json!({"type":"result", "subtype":"success",
+        "result":"Checked the implementation.\n\nNO_CHANGES_NEEDED: already correct",
+        "usage":{"input_tokens":2,"output_tokens":1}});
+    let event = parse_event_line(&id, &result.to_string()).unwrap();
+    assert_eq!(event.event_kind, EventKind::Completion);
+    let metadata = event.metadata.unwrap();
+    assert_eq!(metadata["tokens"], 3);
+    assert_eq!(
+        metadata["final_noop_reason"],
+        "NO_CHANGES_NEEDED: already correct"
+    );
+}

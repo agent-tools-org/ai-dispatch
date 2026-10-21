@@ -26,15 +26,6 @@ pub(crate) fn parse_event_line_for_route(
     }
     let v: Value = serde_json::from_str(trimmed).ok()?;
     let now = Local::now();
-    if trimmed.contains("NO_CHANGES_NEEDED") && v["type"] != "result" {
-        return Some(TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: now,
-            event_kind: EventKind::NoOp,
-            detail: extract_noop_reason(trimmed),
-            metadata: None,
-        });
-    }
     match v.get("type").and_then(|value| value.as_str())? {
         "assistant" => parse_assistant_event(task_id, &v, now),
         "tool_use" => parse_tool_use_event(task_id, &v, now),
@@ -215,14 +206,6 @@ fn base_metadata(model: Option<&str>, session_id: Option<&str>) -> Option<Value>
             }
             Some(metadata)
         }
-    }
-}
-
-fn extract_noop_reason(line: &str) -> String {
-    if let Some(pos) = line.find("NO_CHANGES_NEEDED:") {
-        format!("NO_CHANGES_NEEDED: {}", line[pos + 18..].trim().trim_matches('"'))
-    } else {
-        "NO_CHANGES_NEEDED".to_string()
     }
 }
 

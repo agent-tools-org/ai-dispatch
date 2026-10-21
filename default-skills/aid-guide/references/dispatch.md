@@ -139,7 +139,10 @@ Important controls:
 - `--verify [COMMAND]` and project/batch `verify` send eligible plain `cargo check|test|clippy`
   commands without shell syntax through aid's build runner (adding `--message-format=json`)
   outside remote-build/container runs, otherwise through `sh -c` in the task directory; bare
-  `--verify` auto-detects, and an absent flag uses the project default.
+  `--verify` uses the project verify command when configured, otherwise auto-detects;
+  an absent flag uses the project default. Verification writes durable started/finished task
+  events with command, directory, local HEAD, exit code, and output excerpt. Local HEAD
+  identifies the checkout; a remote tested HEAD is unknown unless reported by the verifier.
   Missing under `sh -c`, a program fails verification; missing `cargo` on the runner is `InfrastructureFailure`.
   A task with verification configured is written with `verify_status = pending` at dispatch; read-only tasks
   or tasks without a working directory skip verification.
@@ -289,3 +292,7 @@ not hold Qwen. Unsplit terminal refusals cannot establish long or manual holds.
 
 Qwen reset timestamps in `MM-DD HH:MM:SS UTC` use the next occurrence of that
 date and convert using the local offset at the reset instant.
+
+Final delivery markers: Codex and Claude recognize `NO_CHANGES_NEEDED` at the start of a
+line in the agent's final message, including after a preface. Tool output and interim messages
+do not count. Claude retains its completion usage event alongside the NoOp label.

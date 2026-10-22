@@ -7,9 +7,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row};
 
 use crate::cost;
+use crate::types::{Task, TaskStatus};
 use crate::ui::tui::app::{App, DetailTab};
 use crate::ui::tui::route_display::format_route_fit;
-use crate::types::{Task, TaskStatus};
 
 pub fn task_status_label(task: &Task) -> String {
     if task.status == TaskStatus::AwaitingInput {
@@ -56,28 +56,7 @@ pub fn task_row(app: &App, task: &Task) -> Row<'static> {
 }
 
 pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph<'static> {
-    let status_color = match task.status {
-        TaskStatus::Done | TaskStatus::Merged => Color::Green,
-        TaskStatus::Running => Color::Yellow,
-        TaskStatus::AwaitingInput => Color::Magenta,
-        TaskStatus::Stalled => Color::LightRed,
-        TaskStatus::Failed => Color::Red,
-        TaskStatus::Stopped => Color::Yellow,
-        _ => Color::Indexed(250),
-    };
-    // Detail has room for the full triple; attribution rides on the model segment.
-    // No separate Model line — Route already carries model + grade.
-    let route = task.display_route();
-    let line1 = Line::from(vec![
-        Span::styled(
-            task.id.as_str().to_string(),
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-        ),
-        Span::raw("  "),
-        Span::styled(route, Style::default().fg(Color::Indexed(250))),
-        Span::raw("  "),
-        Span::styled(task_status_label(task), Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
-    ]);
+    let line1 = task_identity_line(task);
     let line2 = Line::from(vec![
         Span::styled("Duration: ", Style::default().fg(Color::Indexed(243))),
         Span::raw(task_duration(task)),
@@ -89,7 +68,10 @@ pub fn task_header(task: &Task, events: &[crate::types::TaskEvent]) -> Paragraph
     let scope = task_scope_line(task);
     let mut lines = vec![line1, line2];
     if !scope.is_empty() {
-        lines.push(Line::from(Span::styled(scope, Style::default().fg(Color::Indexed(243)))));
+        lines.push(Line::from(Span::styled(
+            scope,
+            Style::default().fg(Color::Indexed(243)),
+        )));
     }
     if task.status == TaskStatus::AwaitingInput {
         let latest = events.last();
@@ -210,10 +192,9 @@ pub fn task_progress(app: &App, task: &Task) -> String {
             .unwrap_or_else(|| "—".to_string())
     };
     match task.status {
-        TaskStatus::Running
-        | TaskStatus::Stalled
-        | TaskStatus::Done
-        | TaskStatus::Merged => milestone_or_dash(),
+        TaskStatus::Running | TaskStatus::Stalled | TaskStatus::Done | TaskStatus::Merged => {
+            milestone_or_dash()
+        }
         _ => "—".to_string(),
     }
 }
@@ -227,11 +208,19 @@ pub fn task_progress(app: &App, task: &Task) -> String {
 pub fn status_style(status: TaskStatus) -> Style {
     match status {
         TaskStatus::Done | TaskStatus::Merged => Style::default().fg(Color::Green),
-        TaskStatus::Running => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-        TaskStatus::AwaitingInput => Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
-        TaskStatus::Stalled => Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD),
+        TaskStatus::Running => Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+        TaskStatus::AwaitingInput => Style::default()
+            .fg(Color::Magenta)
+            .add_modifier(Modifier::BOLD),
+        TaskStatus::Stalled => Style::default()
+            .fg(Color::LightRed)
+            .add_modifier(Modifier::BOLD),
         TaskStatus::Failed => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        TaskStatus::Stopped => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        TaskStatus::Stopped => Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
         TaskStatus::Pending => Style::default().fg(Color::Indexed(250)),
         TaskStatus::Waiting => Style::default().fg(Color::Indexed(240)),
         TaskStatus::Skipped => Style::default().fg(Color::Blue),
@@ -272,168 +261,38 @@ fn is_trigger_error(detail: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::{AgentKind, TaskId, VerifyStatus};
-    use chrono::Local;
-    use tempfile::NamedTempFile;
+#[path = "ui_helpers_tests.rs"]
+mod tests;
 
-    fn make_task() -> Task {
-        Task {
-            id: TaskId("t-ui".to_string()),
-            agent: AgentKind::Codex,
-            custom_agent_name: None,
-            prompt: "prompt".to_string(),
-            resolved_prompt: None,
-            category: None,
-            status: TaskStatus::Done,
-            parent_task_id: None,
-            workgroup_id: None,
-            caller_kind: None,
-            caller_session_id: None,
-            agent_session_id: None,
-            repo_path: None, project_id: crate::config::project::current_project_id(),
-            worktree_path: None, effective_dir: None,
-            worktree_branch: None,
-            final_head_sha: None,
-            final_branch: None,
-            start_sha: None,
-            log_path: None,
-            output_path: None,
-            tokens: None,
-            prompt_tokens: None,
-            duration_ms: None,
-            requested_model: None,
-            observed_model: None,
-            attribution_source: None,
-            cost_usd: None,
-            exit_code: None,
-            created_at: Local::now(),
-            completed_at: None,
-            verify: None,
-            verify_status: VerifyStatus::Skipped,
-            pending_reason: None,
-            read_only: false,
-            budget: false,
-            audit_verdict: None,
-            audit_report_path: None,
-            delivery_assessment: None,
-        }
-    }
-
-    #[test]
-    fn task_header_shows_route_triple_not_opaque_agent() {
-        use crate::types::AttributionSource;
-        let mut task = make_task();
-        task.requested_model = Some("gpt-5.6".to_string());
-        task.observed_model = Some("gpt-5.6".to_string());
-        task.attribution_source = Some(AttributionSource::Echoed);
-        // task_header is a Paragraph; assert the source string it is built from.
-        assert_eq!(
-            task.display_route(),
-            "codex/openai-chatgpt-plan/gpt-5.6"
-        );
-        let _ = task_header(&task, &[]);
-    }
-
-    #[test]
-    fn task_header_unknown_model_is_literal_unknown() {
-        let task = make_task();
-        assert!(task.display_route().ends_with("/unknown"));
-        assert_eq!(task.display_model(), None);
-        let _ = task_header(&task, &[]);
-    }
-
-    #[test]
-    fn status_label_shows_inconclusive_verification() {
-        let mut task = make_task();
-        task.verify = Some("cargo test".to_string());
-        task.verify_status = VerifyStatus::TimedOut;
-
-        assert_eq!(task_status_label(&task), "DONE [VTIMEOUT]");
-    }
-
-    #[test]
-    fn detail_output_prefers_output_file() {
-        let output_file = NamedTempFile::new().unwrap();
-        std::fs::write(output_file.path(), "stdout\n").unwrap();
-        let mut task = make_task();
-        task.output_path = Some(output_file.path().display().to_string());
-
-        assert_eq!(read_task_output_for_tui(&task), "stdout\n");
-    }
-
-    #[test]
-    fn last_error_detail_prefers_trigger_error_over_earlier_noise() {
-        use crate::types::{EventKind, TaskEvent};
-        let now = Local::now();
-        let events = vec![
-            TaskEvent {
-                task_id: TaskId("t-trigger".to_string()),
-                timestamp: now,
-                event_kind: EventKind::Error,
-                detail: "bot.rs:41: priority_baseline_ha".to_string(),
-                metadata: None,
-            },
-            TaskEvent {
-                task_id: TaskId("t-trigger".to_string()),
-                timestamp: now,
-                event_kind: EventKind::Error,
-                detail: "apply_patch verification failed: Failed to find expected lines".to_string(),
-                metadata: None,
-            },
-            TaskEvent {
-                task_id: TaskId("t-trigger".to_string()),
-                timestamp: now,
-                event_kind: EventKind::Error,
-                detail: "Failed during verification: cargo check ...".to_string(),
-                metadata: None,
-            },
-        ];
-
-        let reason = last_error_detail(&events).expect("expected a Reason");
-        assert!(reason.contains("apply_patch"));
-    }
-
-    #[test]
-    fn last_error_detail_falls_back_to_first_error_without_trigger() {
-        use crate::types::{EventKind, TaskEvent};
-        let now = Local::now();
-        let events = vec![
-            TaskEvent {
-                task_id: TaskId("t-fallback".to_string()),
-                timestamp: now,
-                event_kind: EventKind::Error,
-                detail: "first generic error".to_string(),
-                metadata: None,
-            },
-            TaskEvent {
-                task_id: TaskId("t-fallback".to_string()),
-                timestamp: now,
-                event_kind: EventKind::Error,
-                detail: "second generic error".to_string(),
-                metadata: None,
-            },
-        ];
-
-        assert_eq!(last_error_detail(&events).as_deref(), Some("first generic error"));
-    }
-
-    #[test]
-    fn detail_output_parses_log_jsonl_content() {
-        let log_file = NamedTempFile::new().unwrap();
-        std::fs::write(
-            log_file.path(),
-            concat!(
-                "not-json-prefix\n",
-                "{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"hello\"}}\n",
-                "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\" world\",\"delta\":true}\n"
-            ),
-        )
-        .unwrap();
-        let mut task = make_task();
-        task.log_path = Some(log_file.path().display().to_string());
-
-        assert_eq!(read_task_output_for_tui(&task), "hello\n---\n world");
-    }
+fn task_identity_line(task: &Task) -> Line<'static> {
+    let status_color = match task.status {
+        TaskStatus::Done | TaskStatus::Merged => Color::Green,
+        TaskStatus::Running => Color::Yellow,
+        TaskStatus::AwaitingInput => Color::Magenta,
+        TaskStatus::Stalled => Color::LightRed,
+        TaskStatus::Failed => Color::Red,
+        TaskStatus::Stopped => Color::Yellow,
+        _ => Color::Indexed(250),
+    };
+    // Detail has room for the full triple; attribution rides on the model segment.
+    // No separate Model line — Route already carries model + grade.
+    let route = task.display_route();
+    let line1 = Line::from(vec![
+        Span::styled(
+            task.id.as_str().to_string(),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw("  "),
+        Span::styled(route, Style::default().fg(Color::Indexed(250))),
+        Span::raw("  "),
+        Span::styled(
+            task_status_label(task),
+            Style::default()
+                .fg(status_color)
+                .add_modifier(Modifier::BOLD),
+        ),
+    ]);
+    line1
 }

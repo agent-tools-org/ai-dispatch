@@ -12,13 +12,13 @@ use crate::ui::format::format_tokens;
 use crate::ui::format::truncate;
 
 mod detail;
+#[cfg(test)]
+mod detail_tests;
+#[cfg(test)]
+mod outcome_tests;
 mod rows;
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-mod outcome_tests;
-#[cfg(test)]
-mod detail_tests;
 
 pub use detail::render_task_detail;
 
@@ -28,24 +28,7 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
         return Ok("No tasks found.".to_string());
     }
 
-    let (done, running, failed) = count_statuses(tasks);
-    let total_tokens: i64 = tasks.iter().filter_map(|t| t.tokens).sum();
-    let total_cost: f64 = tasks.iter().filter_map(|t| t.cost_usd).sum();
-    let unknown_cost = cost::unknown_cost_tasks(tasks);
-
-    let mut out = String::new();
-    out.push_str(&format!(
-        "Tasks: {} total | {} done | {} running | {} failed\n",
-        tasks.len(), done, running, failed,
-    ));
-    if total_tokens > 0 {
-        out.push_str(&format!("Total tokens: {}", format_tokens(total_tokens)));
-        if total_cost > 0.0 || unknown_cost > 0 {
-            out.push_str(&format!("  Cost: {}", cost::format_cost_total(total_cost, unknown_cost)));
-        }
-        out.push('\n');
-    }
-    out.push('\n');
+    let mut out = board_summary(tasks);
 
     let show_repo = tasks.iter().any(|task| task.repo_path.is_some());
     let running_ids: Vec<&str> = tasks
@@ -60,41 +43,9 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
         .collect();
     let latest_milestones = store.latest_milestones_batch(&running_ids)?;
     let awaiting_reasons = store.latest_awaiting_reasons_batch(&awaiting_ids)?;
-    let failed_ids: Vec<&str> = tasks
-        .iter()
-        .filter(|task| task.status == TaskStatus::Failed)
-        .map(|task| task.id.as_str())
-        .collect();
-    let latest_errors = store.latest_errors_batch(&failed_ids)?;
-    // Fallback: for tasks without a filtered error, use any latest error
-    let missing_error_ids: Vec<&str> = failed_ids.iter()
-        .filter(|id| !latest_errors.contains_key(**id))
-        .copied()
-        .collect();
-    let fallback_errors = store.latest_errors_batch_unfiltered(&missing_error_ids)?;
-    let latest_errors = {
-        let mut merged = latest_errors;
-        merged.extend(fallback_errors);
-        merged
-    };
+    let latest_errors = load_latest_errors(tasks, store)?;
 
-    // Header — Route is cli/provider/model (attribution rides on the model segment).
-    // Project is first-class; Group remains for workgroup scope.
-    if show_repo {
-        out.push_str(&format!(
-            "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<14} {:<12} {:<20} {:<16} {}\n",
-            "ID", "Route", "Status", "Duration", "Tokens", "Cost", "Parent", "Project", "Group", "Repo", "Caller", "Model"
-        ));
-        out.push_str(&"-".repeat(206));
-        out.push('\n');
-    } else {
-        out.push_str(&format!(
-            "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<14} {:<12} {:<16} {}\n",
-            "ID", "Route", "Status", "Duration", "Tokens", "Cost", "Parent", "Project", "Group", "Caller", "Model"
-        ));
-        out.push_str(&"-".repeat(185));
-        out.push('\n');
-    }
+    append_column_header(&mut out, show_repo);
 
     rows::append_grouped_task_rows(
         &mut out,
@@ -109,11 +60,26 @@ pub fn render_board(tasks: &[Task], store: &Store) -> Result<String> {
     Ok(out)
 }
 
-fn append_infrastructure_diagnostics(out: &mut String, tasks: &[Task], store: &Store) -> Result<()> {
-    for task in tasks.iter().filter(|task| task.verify_status == VerifyStatus::InfrastructureFailure) {
-        if let Some(event) = store.get_events(task.id.as_str())?.iter().rev().find(|event| {
-            event.metadata.as_ref().is_some_and(|meta| meta["verify_execution_error"] == true)
-        }) {
+fn append_infrastructure_diagnostics(
+    out: &mut String,
+    tasks: &[Task],
+    store: &Store,
+) -> Result<()> {
+    for task in tasks
+        .iter()
+        .filter(|task| task.verify_status == VerifyStatus::InfrastructureFailure)
+    {
+        if let Some(event) = store
+            .get_events(task.id.as_str())?
+            .iter()
+            .rev()
+            .find(|event| {
+                event
+                    .metadata
+                    .as_ref()
+                    .is_some_and(|meta| meta["verify_execution_error"] == true)
+            })
+        {
             out.push_str(&format!("{} [VINFRA] {}\n", task.id, event.detail));
         }
     }
@@ -127,7 +93,14 @@ fn count_statuses(tasks: &[Task]) -> (usize, usize, usize) {
     for t in tasks {
         match t.outcome() {
             TaskOutcome::Verified | TaskOutcome::Delivered => done += 1,
-            TaskOutcome::InProgress if matches!(t.status, TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled) => running += 1,
+            TaskOutcome::InProgress
+                if matches!(
+                    t.status,
+                    TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled
+                ) =>
+            {
+                running += 1
+            }
             TaskOutcome::InProgress => {}
             TaskOutcome::Broken | TaskOutcome::Failed => failed += 1,
             TaskOutcome::Unverified(_) | TaskOutcome::Skipped | TaskOutcome::Stopped => {}
@@ -157,7 +130,10 @@ fn elapsed_since(start: chrono::DateTime<chrono::Local>) -> String {
 
 pub(super) fn format_running_duration(task: &Task, store: &Store) -> String {
     let elapsed = elapsed_since(task.created_at);
-    match (eta::estimate_eta(task, store), eta::estimate_progress(task, store)) {
+    match (
+        eta::estimate_eta(task, store),
+        eta::estimate_progress(task, store),
+    ) {
         (Some(eta_label), Some(progress)) => format!("{elapsed} (ETA {eta_label} {progress}%)"),
         (Some(eta_label), None) => format!("{elapsed} (ETA {eta_label})"),
         (None, Some(progress)) => format!("{elapsed} ({progress}%)"),
@@ -178,7 +154,11 @@ pub(super) fn short_repo(repo: Option<&str>) -> String {
         .unwrap_or_else(|| "-".to_string())
 }
 
-pub(super) fn task_status(task: &Task, milestone: Option<String>, latest_error: Option<String>) -> String {
+pub(super) fn task_status(
+    task: &Task,
+    milestone: Option<String>,
+    latest_error: Option<String>,
+) -> String {
     let base = if task.status == TaskStatus::Failed {
         if let Some(pending_reason) = task.pending_reason.as_deref() {
             truncate(&format!("{} — {}", task.status.label(), pending_reason), 30)
@@ -198,7 +178,10 @@ pub(super) fn task_status(task: &Task, milestone: Option<String>, latest_error: 
 }
 
 fn with_delivery_suffix(task: &Task, base: String) -> String {
-    if !matches!(task.status, TaskStatus::Done | TaskStatus::Failed | TaskStatus::Stopped) {
+    if !matches!(
+        task.status,
+        TaskStatus::Done | TaskStatus::Failed | TaskStatus::Stopped
+    ) {
         return base;
     }
     let Some(delivery) = task.delivery_assessment() else {
@@ -208,4 +191,99 @@ fn with_delivery_suffix(task: &Task, base: String) -> String {
         return base;
     }
     format!("{base} [delivery:{}]", delivery.as_str())
+}
+
+fn append_column_header(out: &mut String, show_repo: bool) {
+    // Header — Route is cli/provider/model (attribution rides on the model segment).
+    // Project is first-class; Group remains for workgroup scope.
+    if show_repo {
+        out.push_str(&format!(
+            "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<14} {:<12} {:<20} {:<16} {}\n",
+            "ID",
+            "Route",
+            "Status",
+            "Duration",
+            "Tokens",
+            "Cost",
+            "Parent",
+            "Project",
+            "Group",
+            "Repo",
+            "Caller",
+            "Model"
+        ));
+        out.push_str(&"-".repeat(206));
+        out.push('\n');
+    } else {
+        out.push_str(&format!(
+            "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<14} {:<12} {:<16} {}\n",
+            "ID",
+            "Route",
+            "Status",
+            "Duration",
+            "Tokens",
+            "Cost",
+            "Parent",
+            "Project",
+            "Group",
+            "Caller",
+            "Model"
+        ));
+        out.push_str(&"-".repeat(185));
+        out.push('\n');
+    }
+}
+
+fn board_summary(tasks: &[Task]) -> String {
+    let (done, running, failed) = count_statuses(tasks);
+    let total_tokens: i64 = tasks.iter().filter_map(|t| t.tokens).sum();
+    let total_cost: f64 = tasks.iter().filter_map(|t| t.cost_usd).sum();
+    let unknown_cost = cost::unknown_cost_tasks(tasks);
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "Tasks: {} total | {} done | {} running | {} failed\n",
+        tasks.len(),
+        done,
+        running,
+        failed,
+    ));
+    if total_tokens > 0 {
+        out.push_str(&format!("Total tokens: {}", format_tokens(total_tokens)));
+        if total_cost > 0.0 || unknown_cost > 0 {
+            out.push_str(&format!(
+                "  Cost: {}",
+                cost::format_cost_total(total_cost, unknown_cost)
+            ));
+        }
+        out.push('\n');
+    }
+    out.push('\n');
+
+    out
+}
+
+fn load_latest_errors(
+    tasks: &[Task],
+    store: &Store,
+) -> Result<std::collections::HashMap<String, String>> {
+    let failed_ids: Vec<&str> = tasks
+        .iter()
+        .filter(|task| task.status == TaskStatus::Failed)
+        .map(|task| task.id.as_str())
+        .collect();
+    let latest_errors = store.latest_errors_batch(&failed_ids)?;
+    // Fallback: for tasks without a filtered error, use any latest error
+    let missing_error_ids: Vec<&str> = failed_ids
+        .iter()
+        .filter(|id| !latest_errors.contains_key(**id))
+        .copied()
+        .collect();
+    let fallback_errors = store.latest_errors_batch_unfiltered(&missing_error_ids)?;
+    let latest_errors = {
+        let mut merged = latest_errors;
+        merged.extend(fallback_errors);
+        merged
+    };
+    Ok(latest_errors)
 }

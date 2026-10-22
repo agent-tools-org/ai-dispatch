@@ -2,25 +2,24 @@
 // Draws table/list widgets from App state with simple status coloring.
 
 use crate::ui::format::truncate;
-pub(crate) mod ui_helpers;
 mod detail;
 mod tree;
+mod tree_rows;
+pub(crate) mod ui_helpers;
 use ui_helpers::*;
 
-use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::prelude::{Alignment, Color, Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{
-    Block, Borders, Cell, Paragraph, Row, Table, TableState,
-};
 use super::app::App;
 use super::charts;
 use super::dashboard;
 use super::multipane;
-use super::status_bar::{render_status_bar, StatusBarMode};
+use super::status_bar::{StatusBarMode, render_status_bar};
 use crate::cost;
 use crate::types::TaskStatus;
 use crate::ui::tui::tree_data::TreeNode;
+use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::prelude::{Alignment, Color, Modifier, Style};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState};
 
 pub fn render(frame: &mut ratatui::Frame<'_>, app: &App) {
     if app.tree_mode {
@@ -39,9 +38,14 @@ pub fn render(frame: &mut ratatui::Frame<'_>, app: &App) {
     if let Some(status) = &app.refresh_status {
         let area = frame.area();
         let width = area.width.min(70);
-        let banner = ratatui::layout::Rect::new(area.right().saturating_sub(width), area.y, width, 1);
-        frame.render_widget(Paragraph::new(status.as_str()).alignment(Alignment::Right)
-            .style(Style::default().fg(Color::Yellow).bg(Color::Black)), banner);
+        let banner =
+            ratatui::layout::Rect::new(area.right().saturating_sub(width), area.y, width, 1);
+        frame.render_widget(
+            Paragraph::new(status.as_str())
+                .alignment(Alignment::Right)
+                .style(Style::default().fg(Color::Yellow).bg(Color::Black)),
+            banner,
+        );
     }
 }
 
@@ -50,54 +54,7 @@ fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
     let panes: Vec<multipane::PaneData> = tasks
         .iter()
         .take(6)
-        .map(|task| {
-            let events_raw = app
-                .events_cache
-                .get(task.id.as_str())
-                .cloned()
-                .unwrap_or_default();
-            let total_events = events_raw.len();
-            let events = events_raw
-                .iter()
-                .map(|e| {
-                    (
-                        e.timestamp.format("%H:%M:%S").to_string(),
-                        e.event_kind.as_str().to_string(),
-                        e.detail.clone(),
-                    )
-                })
-                .collect();
-            let elapsed = if let Some(ms) = task.duration_ms {
-                let secs = ms / 1000;
-                super::stats::format_duration(secs)
-            } else {
-                let secs = (chrono::Local::now() - task.created_at).num_seconds();
-                super::stats::format_duration(secs)
-            };
-            multipane::PaneData {
-                task_id: task.id.as_str().to_string(),
-                // Pane title budget is tight; model still lands in the bottom bar.
-                agent: crate::ui::tui::route_display::format_route_fit(task, 28),
-                status: task_status_label(task),
-                activity: app.task_activity(task),
-                prompt: task.prompt.clone(),
-                events,
-                tokens: task_tokens(task),
-                cost: cost::format_cost_label(task.cost_usd, task.agent),
-                model: task
-                    .display_model()
-                    .unwrap_or_else(|| "unknown".to_string()),
-                milestone: app.get_milestone(task.id.as_str()).unwrap_or("").to_string(),
-                cpu: task_cpu(app, task),
-                memory: task_memory(app, task),
-                workgroup: task.workgroup_id.clone().unwrap_or_default(),
-                worktree_branch: task.worktree_branch.clone().unwrap_or_default(),
-                created: task.created_at.format("%m-%d %H:%M").to_string(),
-                elapsed,
-                scroll_offset: app.pane_scroll_offset(task.id.as_str()),
-                total_events,
-            }
-        })
+        .map(|task| pane_data(app, task))
         .collect();
     multipane::render_multipane(frame, &panes, app, app.active_pane);
 }
@@ -114,7 +71,12 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
 
     frame.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled("aid ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "aid ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(
                 format!("[{}]", app.scope_label()),
                 Style::default().fg(Color::Indexed(250)),
@@ -124,45 +86,7 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
         chunks[0],
     );
 
-    let header = Row::new(vec![
-        "ID", "Route", "Status", "Progress", "CPU", "Mem", "Created", "Duration", "Tokens", "Cost", "Model", "Prompt",
-    ])
-    .style(Style::default().add_modifier(Modifier::BOLD));
-    let nodes = &app.nodes;
-    let height = chunks[1].height.saturating_sub(3) as usize;
-    let start = app.tree_selected.saturating_sub(height.saturating_sub(1));
-    let rows = nodes.iter().skip(start).take(height).map(|node| board_row(app, node));
-    let table = Table::new(
-        rows,
-        [
-            Constraint::Length(10),
-            // cli/provider/model — longer than the old opaque agent column.
-            Constraint::Length(28),
-            Constraint::Length(8),
-            Constraint::Length(24),
-            Constraint::Length(7),
-            Constraint::Length(7),
-            Constraint::Length(11),
-            Constraint::Length(10),
-            Constraint::Length(8),
-            Constraint::Length(8),
-            Constraint::Length(18),
-            Constraint::Min(20),
-        ],
-    )
-    .header(header)
-    .block(Block::default().title("Tasks").borders(Borders::ALL))
-    .row_highlight_style(
-        Style::default()
-            .bg(Color::Indexed(237))
-            .add_modifier(Modifier::BOLD),
-    );
-
-    let mut state = TableState::default();
-    if !nodes.is_empty() {
-        state.select(Some(app.tree_selected.min(nodes.len() - 1).saturating_sub(start)));
-    }
-    frame.render_stateful_widget(table, chunks[1], &mut state);
+    render_board_table(frame, app, chunks[1]);
 
     if app.search_mode {
         frame.render_widget(
@@ -177,13 +101,13 @@ fn render_board(frame: &mut ratatui::Frame<'_>, app: &App) {
     }
 }
 
-fn board_row(
-    app: &App,
-    node: &TreeNode,
-) -> Row<'static> {
+fn board_row(app: &App, node: &TreeNode) -> Row<'static> {
     if node.is_group_header {
-        return Row::new(group_header_cells(&node.prefix))
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
+        return Row::new(group_header_cells(&node.prefix)).style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        );
     }
     task_row(app, &app.tasks[node.task_index])
 }
@@ -226,9 +150,9 @@ fn status_to_color(status: TaskStatus) -> Color {
 
 #[cfg(test)]
 mod tests {
-    use super::{fit_group_header, status_to_color, TABLE_COLUMN_WIDTHS};
-    use ratatui::prelude::Color;
+    use super::{TABLE_COLUMN_WIDTHS, fit_group_header, status_to_color};
     use crate::types::TaskStatus;
+    use ratatui::prelude::Color;
 
     #[test]
     fn status_to_color_maps_terminal_states() {
@@ -255,4 +179,115 @@ mod tests {
 
         assert!(shown.ends_with("(14/14)"));
     }
+}
+
+fn pane_data(app: &App, task: &crate::types::Task) -> multipane::PaneData {
+    let (events, total_events) = pane_events(app, task);
+    let elapsed = if let Some(ms) = task.duration_ms {
+        let secs = ms / 1000;
+        super::stats::format_duration(secs)
+    } else {
+        let secs = (chrono::Local::now() - task.created_at).num_seconds();
+        super::stats::format_duration(secs)
+    };
+    multipane::PaneData {
+        task_id: task.id.as_str().to_string(),
+        // Pane title budget is tight; model still lands in the bottom bar.
+        agent: crate::ui::tui::route_display::format_route_fit(task, 28),
+        status: task_status_label(task),
+        activity: app.task_activity(task),
+        prompt: task.prompt.clone(),
+        events,
+        tokens: task_tokens(task),
+        cost: cost::format_cost_label(task.cost_usd, task.agent),
+        model: task
+            .display_model()
+            .unwrap_or_else(|| "unknown".to_string()),
+        milestone: app
+            .get_milestone(task.id.as_str())
+            .unwrap_or("")
+            .to_string(),
+        cpu: task_cpu(app, task),
+        memory: task_memory(app, task),
+        workgroup: task.workgroup_id.clone().unwrap_or_default(),
+        worktree_branch: task.worktree_branch.clone().unwrap_or_default(),
+        created: task.created_at.format("%m-%d %H:%M").to_string(),
+        elapsed,
+        scroll_offset: app.pane_scroll_offset(task.id.as_str()),
+        total_events,
+    }
+}
+
+fn pane_events(app: &App, task: &crate::types::Task) -> (Vec<(String, String, String)>, usize) {
+    let events_raw = app
+        .events_cache
+        .get(task.id.as_str())
+        .cloned()
+        .unwrap_or_default();
+    let total_events = events_raw.len();
+    let events = events_raw
+        .iter()
+        .map(|e| {
+            (
+                e.timestamp.format("%H:%M:%S").to_string(),
+                e.event_kind.as_str().to_string(),
+                e.detail.clone(),
+            )
+        })
+        .collect();
+    (events, total_events)
+}
+
+fn render_board_table(frame: &mut ratatui::Frame<'_>, app: &App, area: ratatui::layout::Rect) {
+    let header = Row::new(vec![
+        "ID", "Route", "Status", "Progress", "CPU", "Mem", "Created", "Duration", "Tokens", "Cost",
+        "Model", "Prompt",
+    ])
+    .style(Style::default().add_modifier(Modifier::BOLD));
+    let nodes = &app.nodes;
+    let height = area.height.saturating_sub(3) as usize;
+    let start = app.tree_selected.saturating_sub(height.saturating_sub(1));
+    let rows = nodes
+        .iter()
+        .skip(start)
+        .take(height)
+        .map(|node| board_row(app, node));
+    let table = board_table(rows, header);
+
+    let mut state = TableState::default();
+    if !nodes.is_empty() {
+        state.select(Some(
+            app.tree_selected.min(nodes.len() - 1).saturating_sub(start),
+        ));
+    }
+    frame.render_stateful_widget(table, area, &mut state);
+}
+
+fn board_table<'a>(rows: impl Iterator<Item = Row<'a>>, header: Row<'a>) -> Table<'a> {
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Length(10),
+            // cli/provider/model — longer than the old opaque agent column.
+            Constraint::Length(28),
+            Constraint::Length(8),
+            Constraint::Length(24),
+            Constraint::Length(7),
+            Constraint::Length(7),
+            Constraint::Length(11),
+            Constraint::Length(10),
+            Constraint::Length(8),
+            Constraint::Length(8),
+            Constraint::Length(18),
+            Constraint::Min(20),
+        ],
+    )
+    .header(header)
+    .block(Block::default().title("Tasks").borders(Borders::ALL))
+    .row_highlight_style(
+        Style::default()
+            .bg(Color::Indexed(237))
+            .add_modifier(Modifier::BOLD),
+    );
+    table
 }

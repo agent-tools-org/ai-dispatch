@@ -2,6 +2,7 @@
 // Uses the shared test fixtures and imports from the parent test module.
 
 use super::*;
+use serde_json::json;
 
 #[test]
 fn completion_metadata_updates_summary_fields() {

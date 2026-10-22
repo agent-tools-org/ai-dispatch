@@ -77,8 +77,6 @@ try:
             job = ""
         if phase in ("completed", "timed_out"):
             print(phase, job)
-        elif phase == "not_started" and not job:
-            print("not_started")
         elif job:
             print("started", job)
 except (OSError, ValueError):
@@ -86,10 +84,11 @@ except (OSError, ValueError):
 PYTHON
 )"
   if [[ -n "$typed" ]]; then
-    read -r phase typed_job <<< "$typed"
-    if [[ "$phase" == not_started ]]; then
-      job=""
-    elif [[ -n "$typed_job" ]]; then
+    read -r typed_phase typed_job <<< "$typed"
+    if [[ "$typed_phase" == completed || "$typed_phase" == timed_out ]]; then
+      phase="$typed_phase"
+    fi
+    if [[ -z "$job" && -n "$typed_job" ]]; then
       job="$typed_job"
     elif [[ -z "$job" ]]; then
       job="unavailable"

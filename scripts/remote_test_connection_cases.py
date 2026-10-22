@@ -21,7 +21,7 @@ class ConnectionCases:
             ({"phase": "unknown", "job": "typed-job"}, "no", "no", "after the job started"),
             ({"phase": "completed", "job": "typed-job"}, "no", "no", "tests failed"),
             ({"phase": "timed_out", "job": "typed-job"}, "no", "yes", "timed out"),
-            ({"phase": "not_started", "job": None}, "yes", "yes", "failed before any test ran"),
+            ({"phase": "not_started", "job": None}, "no", "no", "failed before any test ran"),
             ({"phase": "unknown", "job": None}, "yes", "no", "after the job started"),
             ({"phase": "future"}, "yes", "no", "after the job started"),
         ]
@@ -33,6 +33,23 @@ class ConnectionCases:
                 result = self.run_script()
                 self.assertEqual(result.returncode, 255)
                 self.assertIn(message, result.stderr)
+
+    def test_not_started_receipt_preserves_log_observed_job(self) -> None:
+        for complete in ["no", "yes"]:
+            with self.subTest(complete=complete):
+                self.env.update(AID_RBOX_RESULT=str(self.base / "results.jsonl"),
+                                FAKE_RECEIPT=json.dumps({"version": 1, "phase": "not_started",
+                                                        "job": None}),
+                                FAKE_STATUS="255", FAKE_COMPLETE=complete)
+                result = self.run_script()
+                self.assertEqual(result.returncode, 255)
+                self.assertIn("job fixture-job:", result.stderr)
+                self.assertNotIn("failed before any test ran", result.stderr)
+                if complete == "no":
+                    self.assertIn("rbox exited 255 after the job started", result.stderr)
+                    self.assertIn("rbox log fixture fixture-job", result.stderr)
+                else:
+                    self.assertIn("tests failed (exit 255)", result.stderr)
 
     def test_unusable_receipts_keep_text_classification(self) -> None:
         for receipt in ["invalid", "[]", '{"version":2,"phase":"not_started"}']:

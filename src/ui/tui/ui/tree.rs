@@ -87,6 +87,7 @@ pub(super) fn tree_duration(task: &Task) -> String {
 #[cfg(test)]
 mod tests {
     use super::{fit_group_header, tree_duration};
+    use crate::ui::tui::route_display::format_route_fit;
     use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
     use chrono::Local;
 

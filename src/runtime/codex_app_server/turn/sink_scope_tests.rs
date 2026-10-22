@@ -2,8 +2,7 @@
 // Exercises the real sink and Store without a subprocess or external provider.
 
 use super::*;
-#[path = "fixture.rs"]
-mod fixture;
+use crate::runtime::codex_app_server::fixture;
 
 #[test]
 fn typed_usage_refusal_sets_quota_even_without_a_text_needle() {

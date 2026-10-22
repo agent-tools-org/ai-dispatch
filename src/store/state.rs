@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+#[cfg(test)]
 use crate::config::project::detect_project_in;
 use crate::store::Store;
 use crate::types::{Task, TaskFilter, TaskOutcome};
@@ -52,12 +53,11 @@ pub fn state_path() -> Option<PathBuf> {
     let cwd = std::env::current_dir().ok()?;
     state_path_from(&cwd)
 }
-pub fn load_state() -> Result<Option<ProjectState>> {
-    load_state_at(state_path())
-}
+#[cfg(test)]
 pub(crate) fn load_state_in(dir: &Path) -> Result<Option<ProjectState>> {
     load_state_at(state_path_from(dir))
 }
+#[cfg(test)]
 fn load_state_at(path: Option<PathBuf>) -> Result<Option<ProjectState>> {
     let Some(path) = path else {
         return Ok(None);
@@ -74,6 +74,7 @@ fn load_state_at(path: Option<PathBuf>) -> Result<Option<ProjectState>> {
 pub fn save_state(state: &ProjectState) -> Result<()> {
     save_state_at(state, state_path())
 }
+#[cfg(test)]
 pub(crate) fn save_state_in(state: &ProjectState, dir: &Path) -> Result<()> {
     save_state_at(state, state_path_from(dir))
 }
@@ -89,6 +90,7 @@ fn save_state_at(state: &ProjectState, path: Option<PathBuf>) -> Result<()> {
 pub(crate) fn refresh_project_state(store: &Store, task_id: &crate::types::TaskId) {
     refresh_project_state_at(store, task_id, state_path());
 }
+#[cfg(test)]
 pub(crate) fn refresh_project_state_in(store: &Store, task_id: &crate::types::TaskId, dir: &Path) {
     refresh_project_state_at(store, task_id, state_path_from(dir));
 }
@@ -164,10 +166,7 @@ pub fn compute_state(store: &Store, repo_path: &str) -> Result<ProjectState> {
         },
     })
 }
-pub fn format_state_summary(state: &ProjectState) -> String {
-    let label = std::env::current_dir().ok().and_then(|cwd| project_label_in(&cwd));
-    format_state_summary_for_project(state, label.as_deref().unwrap_or("unknown"))
-}
+#[cfg(test)]
 pub(crate) fn format_state_summary_in(state: &ProjectState, dir: &Path) -> String {
     let label = project_label_in(dir);
     format_state_summary_for_project(state, label.as_deref().unwrap_or("unknown"))
@@ -246,12 +245,14 @@ fn git_branch(repo_path: &str) -> Option<String> {
     (!branch.is_empty()).then_some(branch)
 }
 
+#[cfg(test)]
 fn project_label_in(dir: &Path) -> Option<String> {
     project_id_from_aid_dir(dir)
         .or_else(|| detect_project_in(dir).map(|config| config.id))
         .or_else(|| dir.file_name().map(|name| name.to_string_lossy().to_string()))
 }
 
+#[cfg(test)]
 fn project_id_from_aid_dir(dir: &Path) -> Option<String> {
     let state_path = state_path_from(dir)?;
     let project_path = state_path.parent()?.join("project.toml");

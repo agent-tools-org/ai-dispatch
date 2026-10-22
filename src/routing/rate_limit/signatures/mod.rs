@@ -151,6 +151,7 @@ pub(crate) fn match_quota_signature_for_agent(
         .map(|signature| signature.recovery)
 }
 
+#[cfg(test)]
 /// Match a message against every provider signature. Returns the agent the
 /// signature belongs to and what ends the refusal, so a caller can both mark the
 /// right agent and avoid the 5-minute default that expires while the provider is
@@ -159,6 +160,7 @@ pub(crate) fn match_quota_signature(message: &str) -> Option<(AgentKind, QuotaRe
     match_quota_signature_with_agent(message, None)
 }
 
+#[cfg(test)]
 /// Prefer `preferred` when several agents share the same needle (e.g. Zen overlays).
 pub(crate) fn match_quota_signature_with_agent(
     message: &str,

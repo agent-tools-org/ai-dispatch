@@ -4,8 +4,11 @@
 
 use super::{aid_worktree_path, create_worktree, ensure_worktree_path_is_isolated, is_valid_git_worktree};
 use crate::support::test_subprocess;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(target_os = "macos")]
+use std::path::PathBuf;
 use std::process::Command;
+#[cfg(target_os = "macos")]
 use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
 
@@ -44,14 +47,6 @@ fn cleanup_worktree(repo_dir: &Path, worktree: &Path) {
     let _ = std::fs::remove_dir_all(worktree);
 }
 
-fn unique_worktree_path(prefix: &str) -> PathBuf {
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    PathBuf::from(format!("/tmp/{prefix}-{}-{unique}", std::process::id()))
-}
-
 #[test]
 fn is_valid_git_worktree_rejects_standalone_repo() {
     let _permit = test_subprocess::acquire();
@@ -82,7 +77,11 @@ fn is_valid_git_worktree_accepts_linked_worktree() {
 fn is_valid_git_worktree_accepts_tmp_and_private_tmp_spellings() {
     let _permit = test_subprocess::acquire();
     let main_repo = init_repo();
-    let worktree = unique_worktree_path("aid-94-alias");
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let worktree = PathBuf::from(format!("/tmp/aid-94-alias-{}-{unique}", std::process::id()));
     let _guard = crate::support::test_env::TmpWorktreeGuard::with_repo(main_repo.path(), worktree.clone());
     let private_worktree = PathBuf::from(
         worktree

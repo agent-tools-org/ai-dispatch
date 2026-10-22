@@ -13,7 +13,7 @@ use super::selection_scoring::{
     CandidateContext, model_capability_score, score_breakdown,
 };
 use super::advise;
-use crate::agent::classifier::{Complexity, TaskCategory, TaskProfile};
+use crate::agent::classifier::{TaskCategory, TaskProfile};
 use crate::routing::quota::live::CacheDirGuard;
 use crate::support::paths::AidHomeGuard;
 use crate::config::team::TeamConfig;
@@ -72,7 +72,6 @@ fn write_clock_hold(home: &Path, agent: &str) {
 fn free_profile() -> TaskProfile {
     TaskProfile {
         category: TaskCategory::SimpleEdit,
-        complexity: Complexity::Low,
     }
 }
 
@@ -86,11 +85,10 @@ fn declared(urgency: TaskUrgency) -> DeclaredTaskProfile {
 }
 
 /// Historical catalog-tier inputs, kept only as scoring regression fixtures.
-fn hint_breakdown(ctx: &CandidateContext<'_>, kind: AgentKind) -> super::selection_scoring::ScoreBreakdown {
+fn hint_breakdown(
+    ctx: &CandidateContext<'_>, kind: AgentKind, tier: &str,
+) -> super::selection_scoring::ScoreBreakdown {
     let models = crate::routing::model_catalog::static_models_for_agent(&kind);
-    let tier = match ctx.profile.complexity {
-        Complexity::Low => "cheap", Complexity::Medium => "standard", Complexity::High => "premium",
-    };
     let model = if ctx.budget {
         crate::routing::model_catalog::budget_model(&kind)
     } else {
@@ -105,7 +103,6 @@ fn breakdown_is_bit_identical_to_pre_decomposition_value() {
     let _guard = AidHomeGuard::set(temp.path());
     let profile = TaskProfile {
         category: TaskCategory::ComplexImpl,
-        complexity: Complexity::High,
     };
     let history_map = HashMap::from([(AgentKind::Codex, (0.9, 10))]);
     let avg_cost_map = HashMap::new();
@@ -120,7 +117,7 @@ fn breakdown_is_bit_identical_to_pre_decomposition_value() {
         toolbox: Default::default(),
     };
     let context = score_ctx(&profile, &history_map, &avg_cost_map, Some(&team), true);
-    let breakdown = hint_breakdown(&context, AgentKind::Codex);
+    let breakdown = hint_breakdown(&context, AgentKind::Codex, "premium");
 
     // Base is NEUTRAL_BASE (6.0), model_capability 0.0, budget/rate penalties 0.0,
     // history bonus +2.0, team bonus +3.0. Total is 11.0 with no complexity bonus.
@@ -170,14 +167,14 @@ fn two_free_agents_ten_percent_ranks_three_above_ninety() {
     let history = HashMap::new();
     let costs = HashMap::new();
     let ctx = score_ctx(&profile, &history, &costs, None, true);
-    let codex_base = hint_breakdown(&ctx, AgentKind::Codex).total;
-    let agy_base = hint_breakdown(&ctx, AgentKind::Antigravity).total;
+    let codex_base = hint_breakdown(&ctx, AgentKind::Codex, "cheap").total;
+    let agy_base = hint_breakdown(&ctx, AgentKind::Antigravity, "cheap").total;
 
     write_snapshot(&cache, "codex", 90.0, 60);
     write_snapshot(&cache, "agy", 10.0, 60);
 
-    let codex = hint_breakdown(&ctx, AgentKind::Codex);
-    let agy = hint_breakdown(&ctx, AgentKind::Antigravity);
+    let codex = hint_breakdown(&ctx, AgentKind::Codex, "cheap");
+    let agy = hint_breakdown(&ctx, AgentKind::Antigravity, "cheap");
     assert_eq!(codex.headroom_penalty, -3.0);
     assert_eq!(agy.headroom_penalty, 0.0);
     assert_eq!(codex.total, codex_base - 3.0);
@@ -192,9 +189,9 @@ fn stale_snapshot_does_not_retune_score() {
     let history = HashMap::new();
     let costs = HashMap::new();
     let ctx = score_ctx(&profile, &history, &costs, None, true);
-    let baseline = hint_breakdown(&ctx, AgentKind::Codex).total;
+    let baseline = hint_breakdown(&ctx, AgentKind::Codex, "cheap").total;
     write_snapshot(&cache, "codex", 90.0, 20 * 60);
-    let breakdown = hint_breakdown(&ctx, AgentKind::Codex);
+    let breakdown = hint_breakdown(&ctx, AgentKind::Codex, "cheap");
     assert_eq!(headroom_penalty(AgentKind::Codex, None), 0.0);
     assert_eq!(breakdown.headroom_penalty, 0.0);
     assert_eq!(breakdown.total.to_bits(), baseline.to_bits());
@@ -207,9 +204,9 @@ fn unused_quota_does_not_boost() {
     let history = HashMap::new();
     let costs = HashMap::new();
     let ctx = score_ctx(&profile, &history, &costs, None, true);
-    let baseline = hint_breakdown(&ctx, AgentKind::Codex).total;
+    let baseline = hint_breakdown(&ctx, AgentKind::Codex, "cheap").total;
     write_snapshot(&cache, "codex", 10.0, 60);
-    let breakdown = hint_breakdown(&ctx, AgentKind::Codex);
+    let breakdown = hint_breakdown(&ctx, AgentKind::Codex, "cheap");
     assert_eq!(breakdown.headroom_penalty, 0.0);
     assert_eq!(breakdown.total.to_bits(), baseline.to_bits());
 }
@@ -223,7 +220,7 @@ fn held_uses_rate_limit_penalty_not_headroom() {
     let history = HashMap::new();
     let costs = HashMap::new();
     let ctx = score_ctx(&profile, &history, &costs, None, true);
-    let breakdown = hint_breakdown(&ctx, AgentKind::Codex);
+    let breakdown = hint_breakdown(&ctx, AgentKind::Codex, "cheap");
     assert_eq!(breakdown.rate_limit_penalty, -10.0);
     assert_eq!(breakdown.headroom_penalty, 0.0);
 }

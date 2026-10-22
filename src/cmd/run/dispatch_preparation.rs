@@ -63,7 +63,6 @@ pub(super) fn prepared_dispatch(
     agent_setup: AgentSetup,
     task_id: TaskId,
     task: Task,
-    log_path: PathBuf,
     workgroup: Option<Workgroup>,
     setup: WorktreeSetup,
 ) -> PreparedDispatch {
@@ -75,12 +74,9 @@ pub(super) fn prepared_dispatch(
         requested_skills,
         effective_model: agent_setup.effective_model,
         budget_active: agent_setup.budget_active,
-        agent: agent_setup.agent,
         task_id,
         task,
-        log_path,
         workgroup,
-        repo_path: setup.repo_path,
         wt_path: setup.wt_path,
         effective_dir: setup.effective_dir,
     }

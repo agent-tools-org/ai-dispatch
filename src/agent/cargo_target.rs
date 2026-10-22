@@ -58,14 +58,6 @@ pub(crate) fn seed_branch_target_from_root_entries(
     clone_entries_to_target(&entries, root, target, target_display)
 }
 
-pub(crate) fn remove_branch_target_dir(target: &Path) -> Result<bool> {
-    if !target.exists() {
-        return Ok(false);
-    }
-    std::fs::remove_dir_all(target)?;
-    Ok(true)
-}
-
 fn root_artifact_entries(root: &Path) -> Vec<PathBuf> {
     ROOT_ARTIFACT_ENTRY_NAMES
         .iter()

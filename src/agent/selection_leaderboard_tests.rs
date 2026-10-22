@@ -44,45 +44,6 @@ fn leaderboard_alias_resolution_is_shared_and_unmapped_models_are_unrated() {
     );
 }
 
-#[test]
-fn leaderboard_complexity_has_no_self_assigned_bonus() {
-    use super::selection_scoring::{CandidateContext, score_breakdown};
-    use crate::agent::classifier::{Complexity, TaskCategory, TaskProfile};
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
-    let high = TaskProfile {
-        category: TaskCategory::ComplexImpl,
-        complexity: Complexity::High,
-    };
-    let low = TaskProfile {
-        category: TaskCategory::ComplexImpl,
-        complexity: Complexity::Low,
-    };
-    let empty = std::collections::HashMap::new();
-    let costs = std::collections::HashMap::new();
-    let mut ctx = CandidateContext {
-        profile: &high,
-        team: None,
-        history_map: &empty,
-        avg_cost_map: &costs,
-        team_default: None,
-        budget: false,
-        penalize_rate_limit: false,
-    };
-    for kind in crate::agent::routable_builtins() {
-        ctx.profile = &high;
-        let high_score = score_breakdown(&ctx, kind, None);
-        ctx.profile = &low;
-        let low_score = score_breakdown(&ctx, kind, None);
-        assert_eq!(high_score, low_score, "{kind:?}");
-        assert!(
-            serde_json::to_value(high_score)
-                .expect("JSON")
-                .get("complexity_bonus")
-                .is_none()
-        );
-    }
-}
 
 #[test]
 fn leaderboard_uses_configured_codex_effort_for_exact_harness() {

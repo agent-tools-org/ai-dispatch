@@ -35,6 +35,7 @@ pub struct PricingFileModel {
     pub output_per_m: f64,
     pub tier: String,
     pub description: String,
+    #[allow(dead_code)] // Retained for deserialization of pricing file metadata.
     pub updated: String,
 }
 

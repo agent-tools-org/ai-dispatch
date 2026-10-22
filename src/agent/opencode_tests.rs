@@ -1,7 +1,7 @@
 // Tests for the OpenCode CLI adapter command builder and JSON event parsing.
 // Covers session reuse, budget variants, context files, and milestone events.
 
-use super::super::{Agent, RunOpts, get_agent};
+use super::super::{RunOpts, get_agent};
 use super::*;
 use crate::{support::paths, routing::rate_limit};
 
@@ -140,16 +140,6 @@ fn budget_mode_sets_minimal_variant() {
         .collect();
 
     assert!(args.windows(2).any(|pair| pair == ["--variant", "minimal"]));
-}
-
-#[test]
-fn opencode_needs_pty() {
-    assert!(get_agent(AgentKind::OpenCode).needs_pty());
-}
-
-#[test]
-fn codex_does_not_need_pty() {
-    assert!(!super::super::codex::CodexAgent.needs_pty());
 }
 
 #[test]

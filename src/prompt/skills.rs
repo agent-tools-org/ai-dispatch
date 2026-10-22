@@ -114,10 +114,6 @@ pub fn load_skill(name: &str) -> Result<String> {
     anyhow::bail!("Skill '{name}' not found in ~/.aid/skills/")
 }
 
-pub fn resolve_skill_content(name: &str) -> Result<String> {
-    load_skill(name)
-}
-
 pub fn estimate_tokens(text: &str) -> usize {
     text.len() / 4
 }

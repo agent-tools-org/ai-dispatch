@@ -24,7 +24,9 @@ pub(crate) use staging::{AidStageMode, stage_aid_files, stage_aid_files_with_ind
 pub(crate) use live_state::{LiveWorktreeState, capture_live_worktree_state, uncommitted_diff_text};
 pub(crate) use baseline::{baseline_contains, extract_baseline_paths};
 pub(crate) use status::{extract_baseline_path, status_line_path};
-pub use path::{aid_worktree_path, aid_worktree_root, is_aid_managed_worktree_path};
+pub use path::{aid_worktree_path, is_aid_managed_worktree_path};
+#[cfg(test)]
+pub use path::aid_worktree_root;
 #[cfg(test)]
 pub use path::is_safe_worktree_path;
 #[cfg(test)]

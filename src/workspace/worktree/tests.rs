@@ -17,17 +17,6 @@ fn git(repo_dir: &Path, args: &[&str]) {
         .success());
 }
 
-fn git_output(repo_dir: &Path, args: &[&str]) -> String {
-    let repo_dir = repo_dir.to_string_lossy().to_string();
-    let out = Command::new("git")
-        .args(["-C", repo_dir.as_str()])
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(out.status.success());
-    String::from_utf8(out.stdout).unwrap()
-}
-
 fn unique_branch(prefix: &str) -> String {
     format!(
         "{prefix}-{}-{}",

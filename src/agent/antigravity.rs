@@ -30,10 +30,6 @@ impl super::Agent for AntigravityAgent {
         false
     }
 
-    fn needs_pty(&self) -> bool {
-        false
-    }
-
     fn validate_cli(&self, model: Option<&str>, run: &super::CliCommandRunner<'_>) -> Result<()> {
         let Some(model) = model else { return Ok(()) };
         let output = match run("agy", &["--help"]) {

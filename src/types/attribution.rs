@@ -50,6 +50,7 @@ impl AttributionSource {
         }
     }
 
+    #[cfg(test)]
     /// Whether this grade may be used to score a model's capability or to learn
     /// an agent's default model. Only a statement by the CLI qualifies.
     pub fn is_conclusive(self) -> bool {

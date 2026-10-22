@@ -19,6 +19,7 @@ use std::process::Command;
 /// `detect_project_in(explicit_path)` instead. Tests that need a project write
 /// one under a temp git root and point cwd there; tests that need git without
 /// project config use a temp git root with no `.aid/project.toml`.
+#[allow(dead_code)] // shared across integration test crates
 pub(crate) fn aid_cmd_in(aid_home: &Path) -> Command {
     aid_cmd_with_cwd(aid_home, aid_home)
 }
@@ -29,6 +30,7 @@ pub(crate) fn aid_cmd_in(aid_home: &Path) -> Command {
 /// git root that contains `.aid/project.toml`) or needs relative path resolution
 /// against a specific tree. Do not pass the developer repo root unless the test
 /// is explicitly probing inheritance.
+#[allow(dead_code)] // shared across integration test crates
 pub(crate) fn aid_cmd_with_cwd(aid_home: &Path, cwd: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_aid"));
     cmd.env("AID_HOME", aid_home);

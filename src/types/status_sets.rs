@@ -12,6 +12,7 @@ pub const ACTIVE_TASK_STATUSES: [TaskStatus; 5] = [
     TaskStatus::Stalled,
 ];
 
+#[cfg(test)]
 pub const ACTIVE_EXECUTION_FAILURE_STATUSES: [TaskStatus; 4] = [
     TaskStatus::Waiting,
     TaskStatus::Running,

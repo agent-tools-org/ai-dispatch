@@ -117,6 +117,7 @@ impl PtyBridge {
             .unwrap_or(false)
     }
 
+    #[cfg(test)]
     pub fn kill(&mut self) -> Result<()> {
         self.child
             .kill()

@@ -4,7 +4,7 @@
 use anyhow::Result;
 use chrono::Local;
 use std::{path::{Path, PathBuf}, sync::Arc};
-use crate::{agent, support::paths, config::project::{self, ProjectConfig}, runtime::session};
+use crate::{support::paths, config::project::{self, ProjectConfig}, runtime::session};
 use crate::{store::Store, types::*};
 use super::run_dispatch_claim::insert_task_claiming_id;
 use super::run_dispatch_resolve::{AgentSetup, apply_project_defaults, maybe_insert_held_route_event, resolve_agent_setup};
@@ -27,12 +27,9 @@ pub(super) struct PreparedDispatch {
     pub requested_skills: Vec<String>,
     pub effective_model: Option<String>,
     pub budget_active: bool,
-    pub agent: Box<dyn agent::Agent>,
     pub task_id: TaskId,
     pub task: Task,
-    pub log_path: PathBuf,
     pub workgroup: Option<Workgroup>,
-    pub repo_path: Option<String>,
     pub wt_path: Option<String>,
     pub effective_dir: Option<String>,
 }
@@ -52,7 +49,6 @@ struct DispatchContext {
 struct ClaimedDispatch {
     task_id: TaskId,
     task: Task,
-    log_path: PathBuf,
     workgroup: Option<Workgroup>,
     explicit_repo_path: Option<String>,
 }
@@ -150,7 +146,7 @@ where
     )?;
     insert_task_claiming_id(store, &mut task, &mut task_id, &mut log_path, explicit_id, args.origin)?;
     preparation::finish_claim(store, args, context, &task_id)?;
-    Ok(ClaimedDispatch { task_id, task, log_path, workgroup, explicit_repo_path })
+    Ok(ClaimedDispatch { task_id, task, workgroup, explicit_repo_path })
 }
 
 fn attach_worktree(
@@ -230,7 +226,6 @@ fn finish_dispatch(
         context.agent_setup,
         claimed.task_id,
         claimed.task,
-        claimed.log_path,
         claimed.workgroup,
         setup,
     ))

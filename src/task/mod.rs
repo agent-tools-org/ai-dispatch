@@ -1,6 +1,7 @@
 // Task operations and supporting modules.
 // Groups related lifecycle and persistence boundaries.
 
+#[cfg(feature = "web")]
 pub(crate) mod actions;
 pub(crate) mod lifecycle;
 pub(crate) mod view;

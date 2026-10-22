@@ -10,7 +10,6 @@ use crate::cmd::agent_json_types::{
 };
 use crate::types::AgentKind;
 use super::{build_quota_json, get_agents_list, rate_limit_kind};
-use crate::cmd::agent_json_helpers::custom_has_endpoint;
 
 #[test]
 fn test_agent_json_serialization_roundtrip() {
@@ -147,7 +146,6 @@ fn custom_with_endpoint_uses_declared_provider_not_builtin_unknown() {
 #[test]
 fn delegate_opencode_with_own_endpoint_does_not_inherit_opencode_rate_limit() {
     let config = sample_custom_config();
-    assert!(custom_has_endpoint(&config));
     assert_eq!(
         rate_limit_kind(AgentKind::Custom, Some(&config)),
         AgentKind::Custom
@@ -160,7 +158,6 @@ fn delegate_opencode_without_endpoint_uses_own_custom_marker() {
     // and there is no base_url.  The read must use the same slot.
     let mut config = sample_custom_config();
     config.base_url = None;
-    assert!(!custom_has_endpoint(&config));
     assert_eq!(
         rate_limit_kind(AgentKind::Custom, Some(&config)),
         AgentKind::Custom

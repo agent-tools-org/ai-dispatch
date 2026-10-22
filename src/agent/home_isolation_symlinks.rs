@@ -30,6 +30,7 @@ pub(crate) fn find_rewrites(iso_home: &Path, real_home: &Path) -> SymlinkScan {
     SymlinkScan { repairs, complete }
 }
 
+#[cfg(test)]
 pub(crate) fn find_doctor_symlinks(real_home: &Path, aid_dir: &Path) -> Result<Vec<SymlinkRepair>> {
     Ok(scan_doctor_symlinks(real_home, aid_dir).repairs)
 }

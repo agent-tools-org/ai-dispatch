@@ -1,7 +1,6 @@
 // Custom agent registry: loads agent definitions from ~/.aid/agents/*.toml.
 // Exports: load_custom_agents, resolve_custom_agent, list_custom_agents.
 // Deps: crate::support::paths, super::custom.
-#![allow(dead_code)]
 
 use super::custom::{parse_config, CustomAgent, CustomAgentConfig};
 use super::opencode_overlay::{OpenCodeOverlayAgent, OpenCodeOverlaySpec};
@@ -118,7 +117,6 @@ fn build_agent(config: &CustomAgentConfig) -> Box<dyn super::Agent> {
 fn opencode_spec(config: &CustomAgentConfig, model: &str) -> OpenCodeOverlaySpec {
     OpenCodeOverlaySpec {
         id: config.id.clone(),
-        display_name: config.display_name.clone(),
         reported_kind: AgentKind::Custom,
         binary: config.binary.clone().unwrap_or_else(|| "opencode".to_string()),
         extra_args: config.extra_args.clone(),

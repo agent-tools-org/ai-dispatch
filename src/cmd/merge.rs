@@ -21,6 +21,7 @@ pub fn run(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approv
     run_with_output(store, task_id, group, approve, check, force, target, lanes, true)
 }
 
+#[cfg(feature = "web")]
 pub(crate) fn run_quiet(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approve: bool, check: bool, force: bool, target: Option<&str>, lanes: bool) -> Result<()> {
     run_with_output(store, task_id, group, approve, check, force, target, lanes, false)
 }
@@ -45,6 +46,7 @@ fn run_with_output(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>
     }
 }
 
+#[cfg(test)]
 fn merge_single(store: &Store, task_id: &str, approve: bool, check: bool, force: bool, target: Option<&str>) -> Result<()> {
     merge_single_with_output(store, task_id, approve, check, force, target, true)
 }
@@ -238,6 +240,7 @@ pub(super) fn is_merge_candidate(task: &Task, outcome: TaskOutcome) -> bool {
     task.status == TaskStatus::Done && outcome.is_merge_candidate()
 }
 
+#[cfg(test)]
 fn merge_group(store: &Store, group_id: &str, approve: bool, check: bool, target: Option<&str>) -> Result<()> {
     merge_group_with_output(store, group_id, approve, check, false, target, true)
 }

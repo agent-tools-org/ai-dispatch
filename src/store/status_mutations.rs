@@ -101,6 +101,7 @@ impl Store {
         Ok(result)
     }
 
+    #[cfg(test)]
     /// Set status to Failed only if currently Running or Waiting.
     /// Prevents zombie cleanup from clobbering a real completion status.
     pub fn fail_if_running(&self, id: &str) -> Result<bool> {

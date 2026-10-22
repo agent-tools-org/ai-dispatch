@@ -4,6 +4,7 @@
 
 use anyhow::Result;
 use rusqlite::{OptionalExtension, params};
+#[cfg(feature = "web")]
 use std::collections::HashMap;
 
 use super::Store;
@@ -52,6 +53,7 @@ impl Store {
         })
     }
 
+    #[cfg(feature = "web")]
     pub fn get_task_profiles_batch(&self, task_ids: &[&str]) -> Result<HashMap<String, TaskProfileDeclaration>> {
         if task_ids.is_empty() {
             return Ok(HashMap::new());

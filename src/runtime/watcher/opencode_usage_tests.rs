@@ -12,7 +12,7 @@ const MULTI_STEP: &str =
     include_str!("../../../tests/fixtures/streaming_completion/opencode-multi-step.jsonl");
 
 fn custom_opencode_agent() -> OpenCodeOverlayAgent {
-    OpenCodeOverlayAgent::new("custom".into(), "Custom".into(), "provider/model".into())
+    OpenCodeOverlayAgent::new("custom".into(), "provider/model".into())
 }
 
 async fn assert_multi_step_sum(agent: &dyn Agent) {

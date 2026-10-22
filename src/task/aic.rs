@@ -8,6 +8,7 @@ use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
+#[cfg(not(test))]
 static AIC_AVAILABLE: OnceLock<bool> = OnceLock::new();
 const DEFAULT_AUDIT_TIMEOUT_SECS: u64 = 300;
 const MAX_AUDIT_TIMEOUT_SECS: u64 = 1_800;

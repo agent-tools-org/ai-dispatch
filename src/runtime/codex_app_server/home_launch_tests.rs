@@ -4,9 +4,7 @@
 use super::*;
 use crate::agent::{Agent, RunOpts};
 use std::process::Command;
-#[path = "turn/fixture.rs"]
-mod fixture;
-use fixture::Fixture;
+use crate::runtime::codex_app_server::fixture::Fixture;
 
 fn build(fixture: &mut Fixture) {
     let opts = RunOpts {

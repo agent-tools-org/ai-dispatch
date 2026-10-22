@@ -3,6 +3,7 @@
 // Deps: rate_limit parse helpers, rate_limit_signatures, live_quota snapshots.
 
 use chrono::{DateTime, Utc};
+#[cfg(test)]
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -206,13 +207,7 @@ fn window_matches_group(window_group: Option<&str>, asked: &str) -> bool {
     }
 }
 
-pub(crate) fn overrides_marker_at(agent: &AgentKind, marker_path: &Path) -> bool {
-    let Some(cache_dir) = live_quota::cache_dir() else {
-        return false;
-    };
-    overrides_marker_at_in_cache(agent, marker_path, &cache_dir)
-}
-
+#[cfg(test)]
 pub(crate) fn overrides_marker_at_in_cache(
     agent: &AgentKind,
     marker_path: &Path,
@@ -237,6 +232,7 @@ pub(crate) fn overrides_marker_at_in_cache(
     )
 }
 
+#[cfg(test)]
 fn group_from_marker_path(path: &Path) -> Option<String> {
     let name = path.file_name()?.to_str()?;
     let rest = name.strip_prefix("rate-limit-")?;

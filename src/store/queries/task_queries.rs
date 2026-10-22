@@ -4,6 +4,7 @@
 
 use anyhow::Result;
 use chrono::Local;
+#[cfg(feature = "web")]
 use std::collections::HashMap;
 use rusqlite::{params, OptionalExtension};
 
@@ -12,6 +13,7 @@ use super::super::Store;
 use crate::types::{AgentKind, Task, TaskFilter, TaskStatus, ACTIVE_TASK_STATUSES};
 
 impl Store {
+    #[cfg(feature = "web")]
     pub fn started_at_batch(&self, task_ids: &[&str]) -> Result<HashMap<String, String>> {
         if task_ids.is_empty() {
             return Ok(HashMap::new());
@@ -207,6 +209,7 @@ impl Store {
         rows.map(|row| row?).collect()
     }
 
+    #[cfg(test)]
     /// Latest model string from the most recently created successful builtin task for `agent`.
     pub fn latest_default_model(&self, agent: AgentKind) -> Result<Option<String>> {
         let tasks = self.list_tasks(TaskFilter::All)?;

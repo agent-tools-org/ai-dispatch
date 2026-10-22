@@ -161,6 +161,7 @@ pub fn is_aid_managed_worktree_path(path: &Path) -> bool {
     path.starts_with("/tmp/aid-wt-") || path.starts_with("/private/tmp/aid-wt-")
 }
 
+#[cfg(test)]
 /// Sandbox guard for worktree cleanup paths.
 pub fn is_safe_worktree_path(wt_path: &str) -> bool {
     if !Path::new(wt_path).is_absolute() {

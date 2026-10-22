@@ -100,7 +100,7 @@ fn billing_insert_failure_does_not_abort_dispatch_after_running_transition() {
         "WHEN NEW.detail LIKE 'billing:%' BEGIN SELECT RAISE(FAIL, 'billing test failure'); END;"
     )).expect("trigger");
     assert!(record(&store, &task.id, task.agent).is_err(), "fault must be exercised");
-    let prepared = prepared(task, temp.path());
+    let prepared = prepared(task);
     super::super::start_dispatch(&store, &prepared, &[]).expect("billing is advisory");
     let saved = store.get_task(prepared.task_id.as_str()).expect("query").expect("task");
     assert_eq!(saved.status, TaskStatus::Running);
@@ -108,7 +108,7 @@ fn billing_insert_failure_does_not_abort_dispatch_after_running_transition() {
         .iter().all(|event| !event.detail.starts_with("billing:")));
 }
 
-fn prepared(task: Task, dir: &std::path::Path) -> super::super::PreparedDispatch {
+fn prepared(task: Task) -> super::super::PreparedDispatch {
     super::super::PreparedDispatch {
         detected_project: None,
         project_root: None,
@@ -117,12 +117,9 @@ fn prepared(task: Task, dir: &std::path::Path) -> super::super::PreparedDispatch
         requested_skills: Vec::new(),
         effective_model: None,
         budget_active: false,
-        agent: crate::agent::get_agent(task.agent),
         task_id: task.id.clone(),
         task,
-        log_path: dir.join("task.log"),
         workgroup: None,
-        repo_path: None,
         wt_path: None,
         effective_dir: None,
     }

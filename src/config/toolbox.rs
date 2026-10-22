@@ -141,6 +141,7 @@ fn list_tools_in_dir(dir: &Path, scope: ToolScope) -> Vec<ToolMeta> {
     tools
 }
 
+#[cfg(test)]
 pub fn list_tools() -> Vec<ToolMeta> {
     list_tools_in_dir(&tools_dir(), ToolScope::Global)
 }

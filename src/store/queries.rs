@@ -4,19 +4,19 @@
 
 mod event_queries;
 mod billing_queries;
+#[cfg(feature = "web")]
 mod agent_queries;
 mod message_queries;
 mod memory_queries;
 mod state_queries;
 mod task_metrics_queries;
 mod task_queries;
-mod task_similarity_queries;
-mod worktree_task_queries;
 mod workgroup_queries;
 
 #[allow(unused_imports)]
 pub use event_queries::*;
 #[allow(unused_imports)]
+#[cfg(feature = "web")]
 pub use agent_queries::*;
 #[allow(unused_imports)]
 pub use message_queries::*;
@@ -28,10 +28,6 @@ pub use state_queries::*;
 pub use task_metrics_queries::*;
 #[allow(unused_imports)]
 pub use task_queries::*;
-#[allow(unused_imports)]
-pub use task_similarity_queries::*;
-#[allow(unused_imports)]
-pub use worktree_task_queries::*;
 #[allow(unused_imports)]
 pub use workgroup_queries::*;
 

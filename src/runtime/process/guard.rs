@@ -3,7 +3,7 @@
 // process group isolation, timeout enforcement, and cleanup.
 
 use anyhow::{Context, Result};
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Child, Command, ExitStatus};
 use std::time::Duration;
 
 /// RAII guard for a subprocess spawned in its own process group.
@@ -29,14 +29,7 @@ impl ProcessGuard {
         })
     }
 
-    /// Spawn a detached command (stdin/stdout/stderr → null) in its own process group.
-    pub fn spawn_detached(cmd: &mut Command) -> Result<Self> {
-        cmd.stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        Self::spawn(cmd)
-    }
-
+    #[cfg(test)]
     /// Get the child's PID.
     pub fn id(&self) -> u32 {
         self.child.id()
@@ -141,16 +134,6 @@ mod tests {
         let mut cmd = Command::new("echo");
         cmd.arg("hello");
         let mut guard = ProcessGuard::spawn(&mut cmd).unwrap();
-        let status = guard.wait().unwrap();
-        assert!(status.success());
-    }
-
-    #[test]
-    fn spawn_detached() {
-        let _permit = crate::support::test_subprocess::acquire();
-        let mut cmd = Command::new("echo");
-        cmd.arg("hello");
-        let mut guard = ProcessGuard::spawn_detached(&mut cmd).unwrap();
         let status = guard.wait().unwrap();
         assert!(status.success());
     }

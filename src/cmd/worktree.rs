@@ -62,6 +62,7 @@ pub fn list(repo: Option<&str>, json: bool, active_only: bool) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
 /// Clear dead lock files while preserving all task artifacts.
 pub fn prune(repo: Option<&str>) -> Result<()> {
     let repo_dir = repo.unwrap_or(".");
@@ -95,7 +96,8 @@ pub fn prune(repo: Option<&str>) -> Result<()> {
         }
         if was_stale {
             aid_warn!(
-                "[aid] Preserved stale worktree {}: deletion requires principal acceptance and `aid gc --task <task>`",
+                "[aid] Preserved stale worktree {}: \
+                 deletion requires principal acceptance and `aid gc --task <task>`",
                 entry.path
             );
         }
@@ -103,15 +105,14 @@ pub fn prune(repo: Option<&str>) -> Result<()> {
     if locks_cleared == 0 {
         println!("[aid] No stale worktrees found");
     } else {
-        if locks_cleared > 0 { println!("[aid] Cleared {locks_cleared} stale lock(s)"); }
+        if locks_cleared > 0 {
+            println!("[aid] Cleared {locks_cleared} stale lock(s)");
+        }
     }
     Ok(())
 }
 
-pub(crate) fn stale_worktree_count(repo: Option<&str>) -> Result<usize> {
-    Ok(stale_worktree_paths(repo.unwrap_or("."))?.len())
-}
-
+#[cfg(test)]
 /// Remove a worktree by branch name and prune stale references.
 pub fn remove(branch: &str, repo: Option<&str>) -> Result<()> {
     let repo_dir = repo.unwrap_or(".");
@@ -127,8 +128,13 @@ pub fn remove(branch: &str, repo: Option<&str>) -> Result<()> {
         anyhow::bail!("Worktree not found: {}", wt_path.display());
     }
     anyhow::bail!(
-        "Direct removal of branch '{branch}' is forbidden; identify its task, run `aid accept <task>`, then `aid gc --task <task>`"
+        "Direct removal of branch '{branch}' is forbidden; \
+         identify its task, run `aid accept <task>`, then `aid gc --task <task>`"
     )
+}
+
+pub(crate) fn stale_worktree_count(repo: Option<&str>) -> Result<usize> {
+    Ok(stale_worktree_paths(repo.unwrap_or("."))?.len())
 }
 
 fn stale_worktree_paths(repo_dir: &str) -> Result<Vec<String>> {

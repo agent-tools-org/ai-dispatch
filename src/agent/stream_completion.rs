@@ -96,6 +96,7 @@ pub(crate) fn merge_parsed_completion(info: &mut CompletionInfo, parsed: Complet
     }
 }
 
+#[cfg(test)]
 /// Record provider error envelopes independently from whether the run delivered.
 /// Unsplit output preserves only a transient excerpt and never fails the run.
 pub(crate) fn record_quota_exhaustion(

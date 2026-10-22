@@ -27,6 +27,7 @@ impl Store {
         .flatten()
     }
 
+    #[cfg(feature = "web")]
     pub fn latest_milestone(&self, task_id: &str) -> Result<Option<String>> {
         let conn = self.db();
         let milestone = conn
@@ -210,6 +211,7 @@ impl Store {
         Ok(map)
     }
 
+    #[cfg(feature = "web")]
     pub fn latest_events_three_batch(&self, task_ids: &[&str]) -> Result<HashMap<String, Vec<TaskEvent>>> {
         if task_ids.is_empty() {
             return Ok(HashMap::new());

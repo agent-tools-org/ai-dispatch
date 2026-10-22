@@ -22,6 +22,7 @@ use command::spawn_bridge;
 mod execution;
 pub(crate) mod completion;
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub fn run_agent_process(
     agent: &dyn Agent,

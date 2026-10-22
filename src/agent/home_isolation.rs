@@ -99,6 +99,8 @@ fn passwd_home() -> anyhow::Result<PathBuf> {
 }
 
 impl IsolatedHomeGuard {
+
+    #[cfg(test)]
     pub fn create(task_id: Option<&str>) -> anyhow::Result<Self> {
         Self::create_with_remote_build(task_id, false)
     }
@@ -108,6 +110,7 @@ impl IsolatedHomeGuard {
         Self::create_from_home_with_remote_build(Some(real_home.as_path()), task_id, remote_build)
     }
 
+    #[cfg(test)]
     pub fn create_from_home(real_home: Option<&Path>, task_id: Option<&str>) -> anyhow::Result<Self> {
         Self::create_from_home_with_remote_build(real_home, task_id, false)
     }

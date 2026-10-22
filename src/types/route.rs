@@ -1,10 +1,10 @@
 // An execution route: which CLI, billed by which provider, running which model.
 // Exports: Route.
-// Deps: crate::types::{AgentKind, MeteringShape, ProviderId}, serde.
+// Deps: crate::types::{AgentKind, ProviderId}, serde.
 
 use serde::Serialize;
 
-use super::{provider_for_cli, AgentKind, MeteringShape, ProviderId};
+use super::{provider_for_cli, AgentKind, ProviderId};
 
 /// The three independent things aid used to collapse into one opaque agent id:
 ///
@@ -55,21 +55,6 @@ impl Route {
         self
     }
 
-    pub fn metering(&self) -> MeteringShape {
-        if self.cli == AgentKind::Claude && self.provider.as_str().starts_with("anthropic-api-") {
-            return MeteringShape::SpendBudget;
-        }
-        let (default_provider, shape) = provider_for_cli(self.cli);
-        // A route pointed somewhere other than its CLI's default provider
-        // cannot borrow that provider's metering shape: BYOK through opencode
-        // has no pool at all, while opencode Zen has a spend budget.
-        if default_provider == self.provider {
-            shape
-        } else {
-            MeteringShape::Unknown
-        }
-    }
-
     /// `<cli>/<provider>/<model>`, with `-` where a model is not pinned. This is
     /// the identity, and it is deliberately readable: the failure it replaces
     /// was a name like `glm5` that said nothing about which of its three
@@ -83,34 +68,6 @@ impl Route {
         )
     }
 
-    /// Whether two routes draw on the same quota pool. The question that
-    /// matters when one of them has just been refused, and the one
-    /// `rate-limit-<agent>` could not answer: an exhausted codex says nothing
-    /// about cursor, but it says everything about another codex route.
-    pub fn shares_pool_with(&self, other: &Route) -> bool {
-        if self.provider.is_unknown() || other.provider.is_unknown() {
-            return false;
-        }
-        if self.provider != other.provider {
-            return false;
-        }
-        match self.metering() {
-            // Families are metered apart, so two routes share a pool only when
-            // their models belong to the same one.
-            MeteringShape::PerModelFamily => model_family(self.model.as_deref())
-                .zip(model_family(other.model.as_deref()))
-                .is_some_and(|(a, b)| a == b),
-            // No pool means nothing to share, however equal the providers look.
-            MeteringShape::None | MeteringShape::Unknown => false,
-            _ => true,
-        }
-    }
-}
-
-/// `None` when the model is not pinned, so two unpinned routes on a
-/// per-family provider are not assumed to share a pool.
-fn model_family(model: Option<&str>) -> Option<&'static str> {
-    model.map(super::provider::model_family)
 }
 
 #[cfg(test)]

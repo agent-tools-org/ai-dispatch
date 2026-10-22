@@ -44,17 +44,6 @@ pub fn current_project_id() -> Option<String> {
     resolve_project_id(&cwd)
 }
 
-/// Prefer an already-loaded config id; otherwise resolve from `start_dir`.
-pub fn resolve_project_id_with_config(
-    config_id: Option<&str>,
-    start_dir: &Path,
-) -> Option<String> {
-    if let Some(id) = config_id.map(str::trim).filter(|id| !id.is_empty()) {
-        return Some(id.to_string());
-    }
-    resolve_project_id(start_dir)
-}
-
 /// Display label: known id, or the explicit unattributed bucket.
 pub fn project_display(project_id: Option<&str>) -> &str {
     match project_id.map(str::trim).filter(|id| !id.is_empty()) {
@@ -69,14 +58,6 @@ pub fn retain_project(tasks: &mut Vec<crate::types::Task>, filter: Option<&str>)
     match filter {
         Some(id) => tasks.retain(|task| task.project_id.as_deref() == Some(id)),
         None => tasks.retain(|task| task.project_id.is_none()),
-    }
-}
-
-/// Whether `task` matches an active project filter.
-pub fn matches_project_filter(task_project_id: Option<&str>, filter: Option<&str>) -> bool {
-    match filter {
-        Some(id) => task_project_id == Some(id),
-        None => task_project_id.is_none(),
     }
 }
 

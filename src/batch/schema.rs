@@ -15,6 +15,7 @@ pub struct BatchConfig {
     #[serde(default)]
     pub title: Option<String>,
     #[serde(default)]
+    #[allow(dead_code)] // Retained as part of the batch TOML schema.
     pub description: Option<String>,
     #[serde(default)]
     pub defaults: BatchDefaults,

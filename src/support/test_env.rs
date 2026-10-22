@@ -8,7 +8,7 @@ use std::process::Command;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 pub(crate) struct CargoTargetDirGuard {
-    lock: MutexGuard<'static, ()>,
+    _lock: MutexGuard<'static, ()>,
     previous: Option<OsString>,
 }
 
@@ -17,7 +17,7 @@ impl CargoTargetDirGuard {
         let lock = cargo_target_dir_lock();
         let previous = std::env::var_os("CARGO_TARGET_DIR");
         unsafe { std::env::set_var("CARGO_TARGET_DIR", value) };
-        Self { lock, previous }
+        Self { _lock: lock, previous }
     }
 }
 
@@ -38,7 +38,7 @@ fn cargo_target_dir_lock() -> MutexGuard<'static, ()> {
 }
 
 pub(crate) struct FallbackTargetDirGuard {
-    lock: MutexGuard<'static, ()>,
+    _lock: MutexGuard<'static, ()>,
     previous: Option<OsString>,
 }
 
@@ -47,7 +47,7 @@ impl FallbackTargetDirGuard {
         let lock = fallback_target_dir_lock();
         let previous = std::env::var_os("AID_TEST_FALLBACK_TARGET_ROOT");
         unsafe { std::env::set_var("AID_TEST_FALLBACK_TARGET_ROOT", value) };
-        Self { lock, previous }
+        Self { _lock: lock, previous }
     }
 }
 

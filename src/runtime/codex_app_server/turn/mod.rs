@@ -54,10 +54,6 @@ impl<'a> Turn<'a> {
         })
     }
 
-    pub fn pid(&self) -> u32 {
-        self.rpc.pid()
-    }
-
     pub fn monitor(mut self) -> Result<CompletionInfo> {
         if let Err(error) = self.monitor_until_completed() {
             self.sink.info.status = TaskStatus::Failed;

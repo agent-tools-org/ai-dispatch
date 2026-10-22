@@ -1,7 +1,6 @@
 // aid — Multi-AI CLI team orchestrator.
 // Entry point wiring: modules, CLI parsing, and dispatch startup.
 
-#![allow(dead_code)]
 #![allow(clippy::boxed_local)]
 #![allow(clippy::clone_on_copy)]
 #![allow(clippy::collapsible_else_if)]

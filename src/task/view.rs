@@ -2,14 +2,18 @@
 // Exports diff and output readers without CLI formatting responsibilities.
 // Deps: cmd::show render helpers, Task, Store.
 
+#[cfg(feature = "web")]
 use anyhow::Result;
 use std::path::Path;
+#[cfg(feature = "web")]
 use std::sync::Arc;
 
 use crate::cmd;
+#[cfg(feature = "web")]
 use crate::store::Store;
 use crate::types::Task;
 
+#[cfg(feature = "web")]
 pub fn diff_text(store: &Arc<Store>, task_id: &str) -> Result<String> {
     cmd::show::diff_text(store, task_id)
 }

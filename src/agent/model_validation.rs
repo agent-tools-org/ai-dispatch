@@ -103,6 +103,7 @@ fn save_to_disk_cache(kind: AgentKind, models: &[String], fingerprint: Option<St
     }
 }
 
+#[cfg(test)]
 pub(crate) fn clear_served_models_cache() {
     if let Ok(mut guard) = cache().lock() {
         guard.clear();

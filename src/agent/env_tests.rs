@@ -193,26 +193,6 @@ fn explicit_cargo_target_dir_namespaces_same_branch_per_project() {
 }
 
 #[test]
-fn apply_rust_build_cache_env_sets_target_only() {
-    let temp = tempfile::tempdir().unwrap();
-    let project = temp.path().join("project");
-    let target = temp.path().join("target");
-    std::fs::create_dir_all(&project).unwrap();
-    std::fs::write(project.join("Cargo.toml"), "[package]\nname = \"demo\"\n").unwrap();
-    let _target_dir = CargoTargetDirGuard::set(&target);
-    let mut cmd = Command::new("echo");
-
-    apply_rust_build_cache_env(&mut cmd, project.to_str(), None);
-
-    let expected = target.join("_base").to_string_lossy().to_string();
-    assert_eq!(
-        command_env(&cmd, "CARGO_TARGET_DIR").as_deref(),
-        Some(expected.as_str())
-    );
-    assert!(command_env(&cmd, "RUSTC_WRAPPER").is_none());
-}
-
-#[test]
 fn rust_build_cache_target_dir_requires_a_rust_project() {
     let temp = tempfile::tempdir().unwrap();
     let target = temp.path().join("target");

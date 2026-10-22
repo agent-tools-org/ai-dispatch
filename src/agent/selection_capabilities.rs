@@ -34,10 +34,6 @@ pub(super) fn custom_strength_bonus(config: &CustomAgentConfig, category: TaskCa
     if config.strengths.iter().any(|item| item.eq_ignore_ascii_case(key)) { 5 } else { 0 }
 }
 
-pub(super) fn custom_command_installed(command: &str) -> bool {
-    crate::agent::custom_route_blocker(command).is_none()
-}
-
 pub(super) fn team_override_score(
     team: &TeamConfig,
     agent_name: &str,

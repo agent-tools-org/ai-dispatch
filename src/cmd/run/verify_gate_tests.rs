@@ -165,6 +165,7 @@ fn auto_verify_without_project_file_remains_legitimate_skip() {
 #[test]
 fn rustc_error_does_not_emit_missing_npm_hint() {
     let worktree = tempfile::tempdir().unwrap();
+    std::fs::write(worktree.path().join("Cargo.toml"), "[workspace]\n").unwrap();
     let dir_str = worktree.path().to_string_lossy().to_string();
     let store = Store::open_memory().unwrap();
     let task_id = TaskId("t-rustc-vfail".to_string());
@@ -177,7 +178,7 @@ fn rustc_error_does_not_emit_missing_npm_hint() {
         false,
         None,
         true,
-        Some("fix/verify-gate"),
+        None,
     )
     .unwrap();
     let script = worktree.path().join("rustc-error.sh");

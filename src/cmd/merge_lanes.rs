@@ -31,27 +31,30 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str, force: bool) -> R
         tasks.first().and_then(|task| task.worktree_path.as_deref()),
     );
 
-    if std::env::var("AID_GITBUTLER").is_ok_and(|value| value == "0") {
-        return Err(anyhow!("GitButler integration disabled via AID_GITBUTLER=0"));
-    }
-    if crate::config::project::detect_project_in(Path::new(&repo_dir))
-        .unwrap_or_default()
-        .gitbutler_mode()
-        == crate::workspace::gitbutler::Mode::Off
-    {
-        return Err(anyhow!(
-            "GitButler integration is off for this project. Set [project] gitbutler = \"auto\" in .aid/project.toml"
-        ));
-    }
+    setup_lanes(&repo_dir)?;
 
-    if !crate::workspace::gitbutler::but_available() {
-        return Err(anyhow!("GitButler CLI not found. Install: https://gitbutler.com"));
-    }
-    crate::workspace::gitbutler::ensure_setup(Path::new(&repo_dir))?;
+    let (applied, skipped) = apply_group_lanes(store, &tasks, &repo_dir)?;
 
+    println!("Applied {applied} lane(s) in group {group_id}. Skipped {skipped}.");
+    println!("Review the workspace: but status. Push selectively: but push <branch>.");
+    println!("Worktrees preserved. The principal may accept tasks and run custody GC later.");
+    if applied > 0 && skipped > 0 {
+        println!(
+            "[aid] Note: partial apply — earlier successful lanes remain applied. Use 'but unapply \
+            <branch>' to roll back individually."
+        );
+    }
+    Ok(())
+}
+
+fn apply_group_lanes(
+    store: &Store,
+    tasks: &[crate::types::Task],
+    repo_dir: &str,
+) -> Result<(usize, usize)> {
     let mut applied = 0;
     let mut skipped = 0;
-    for task in &tasks {
+    for task in tasks {
         let outcome = task.outcome();
         if !is_merge_candidate(task, outcome) {
             skipped += 1;
@@ -70,7 +73,10 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str, force: bool) -> R
         }
         let ahead = commits_ahead(&repo_dir, branch);
         if ahead == 0 {
-            aid_warn!("[aid] Warning: {} — branch {branch} has 0 commits, skipping", task.id);
+            aid_warn!(
+                "[aid] Warning: {} — branch {branch} has 0 commits, skipping",
+                task.id
+            );
             skipped += 1;
             continue;
         }
@@ -89,11 +95,32 @@ pub(super) fn merge_group_lanes(store: &Store, group_id: &str, force: bool) -> R
         }
     }
 
-    println!("Applied {applied} lane(s) in group {group_id}. Skipped {skipped}.");
-    println!("Review the workspace: but status. Push selectively: but push <branch>.");
-    println!("Worktrees preserved. The principal may accept tasks and run custody GC later.");
-    if applied > 0 && skipped > 0 {
-        println!("[aid] Note: partial apply — earlier successful lanes remain applied. Use 'but unapply <branch>' to roll back individually.");
+    Ok((applied, skipped))
+}
+
+fn setup_lanes(repo_dir: &str) -> Result<()> {
+    if std::env::var("AID_GITBUTLER").is_ok_and(|value| value == "0") {
+        return Err(anyhow!(
+            "GitButler integration disabled via AID_GITBUTLER=0"
+        ));
     }
+    if crate::config::project::detect_project_in(Path::new(&repo_dir))
+        .unwrap_or_default()
+        .gitbutler_mode()
+        == crate::workspace::gitbutler::Mode::Off
+    {
+        return Err(anyhow!(
+            "GitButler integration is off for this project. Set [project] gitbutler = \"auto\" in \
+            .aid/project.toml"
+        ));
+    }
+
+    if !crate::workspace::gitbutler::but_available() {
+        return Err(anyhow!(
+            "GitButler CLI not found. Install: https://gitbutler.com"
+        ));
+    }
+    crate::workspace::gitbutler::ensure_setup(Path::new(&repo_dir))?;
+
     Ok(())
 }

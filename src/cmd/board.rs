@@ -8,17 +8,17 @@ use std::io::Write;
 use std::sync::Arc;
 
 use crate::runtime::background;
-use crate::ui::board::render_board;
 use crate::store::Store;
 use crate::types::{Task, TaskFilter, TaskStatus, Workgroup};
+use crate::ui::board::render_board;
 
 #[path = "board_filter.rs"]
 pub(crate) mod board_filter;
 #[path = "board_poll.rs"]
 mod board_poll;
 use board_poll::{
-    anti_poll_status, task_fingerprint, watch_instead_of_polling_hint, write_board_marker,
-    AntiPollStatus, ForceMarkerState,
+    AntiPollStatus, ForceMarkerState, anti_poll_status, task_fingerprint,
+    watch_instead_of_polling_hint, write_board_marker,
 };
 
 const DEFAULT_TASK_LIMIT: usize = 50;
@@ -40,13 +40,7 @@ pub fn run(
     force: bool,
     json: bool,
 ) -> Result<()> {
-    let filter = if running {
-        TaskFilter::Running
-    } else if today {
-        TaskFilter::Today
-    } else {
-        TaskFilter::All
-    };
+    let filter = board_task_filter(running, today);
 
     background::check_zombie_tasks(store)?;
     let mut tasks = store.list_tasks(filter)?;
@@ -56,32 +50,8 @@ pub fn run(
     let fingerprint = task_fingerprint(&tasks);
     let marker_path = crate::support::paths::aid_dir().join("board-last.txt");
     let now = Local::now().timestamp();
-    let mut repeat_count = 0;
-    let mut force_state = ForceMarkerState::default();
-    let mut poll_notice = None;
-    let mut poll_failed = false;
-    if !json {
-        let anti_poll = anti_poll_status(&marker_path, &fingerprint, now, force);
-        force_state = anti_poll.1;
-        let watch_hint = watch_instead_of_polling_hint(&tasks);
-        repeat_count = match anti_poll.0 {
-            AntiPollStatus::Allowed(repeat_count) => repeat_count,
-            AntiPollStatus::Cooldown(elapsed) => {
-                poll_notice = Some(format!("[aid] Board checked {elapsed}s ago. {watch_hint}"));
-                0
-            }
-            AntiPollStatus::Repeat(repeat_count) => {
-                poll_notice = Some(format!("[aid] No changes after {repeat_count} checks. {watch_hint} Exiting."));
-                poll_failed = true;
-                repeat_count
-            }
-            AntiPollStatus::ForceBlocked => {
-                poll_notice = Some(format!("[aid] Repeated polling detected. Board locked for 60s. {watch_hint}"));
-                poll_failed = true;
-                0
-            }
-        };
-    }
+    let (repeat_count, force_state, poll_notice, poll_failed) =
+        board_poll_notice(&tasks, &marker_path, &fingerprint, now, force, json);
     let mut stdout = std::io::stdout();
     write_board_output(
         &mut stdout,
@@ -94,16 +64,15 @@ pub fn run(
         json,
     )?;
     stdout.flush()?;
-    if let Some(notice) = poll_notice {
-        if poll_failed {
-            aid_warn!("{notice}");
-        } else {
-            aid_hint!("{notice}");
-        }
-    }
-    if !json {
-        write_board_marker(&marker_path, &fingerprint, now, repeat_count, force_state.count, force_state.window_start);
-    }
+    print_poll_notice(poll_notice, poll_failed);
+    record_board_poll(
+        json,
+        &marker_path,
+        &fingerprint,
+        now,
+        repeat_count,
+        force_state,
+    );
     if poll_failed {
         std::process::exit(1);
     }
@@ -125,7 +94,16 @@ fn write_board_output<W: Write>(
         writeln!(writer, "{}", serde_json::to_string(&payload)?)?;
         return Ok(());
     }
-    let has_terminal_worktree = tasks.iter().any(|task| matches!(task.status, TaskStatus::Done | TaskStatus::Failed | TaskStatus::Merged | TaskStatus::Skipped | TaskStatus::Stopped) && task.worktree_path.is_some());
+    let has_terminal_worktree = tasks.iter().any(|task| {
+        matches!(
+            task.status,
+            TaskStatus::Done
+                | TaskStatus::Failed
+                | TaskStatus::Merged
+                | TaskStatus::Skipped
+                | TaskStatus::Stopped
+        ) && task.worktree_path.is_some()
+    });
     // Always surface the active project filter so tasks cannot appear to vanish.
     writeln!(
         writer,
@@ -144,15 +122,7 @@ fn write_board_output<W: Write>(
     if let Some(truncation) = truncation {
         writeln!(writer, "{}", truncation_notice_message(truncation))?;
     }
-    if let Some(warning) = long_running_warning(tasks, Local::now()) {
-        writeln!(writer, "{warning}")?;
-    }
-    if has_terminal_worktree
-        && let Ok(stale_count) = crate::cmd::worktree::stale_worktree_count(None)
-        && stale_count > 3
-    {
-        writeln!(writer, "[aid] Stale worktrees remain preserved until principal acceptance and custody GC")?;
-    }
+    write_board_warnings(writer, tasks, has_terminal_worktree)?;
     Ok(())
 }
 
@@ -175,19 +145,36 @@ fn terminal_missing_result_notices(tasks: &[Task]) -> Option<String> {
             notices.push_str(&format!("Status: FAILED {}\n", task.id));
         }
     }
-    if notices.is_empty() { None } else { Some(notices) }
+    if notices.is_empty() {
+        None
+    } else {
+        Some(notices)
+    }
 }
 
 fn group_header(store: &Store, group_id: &str) -> Result<Option<String>> {
-    let Some(workgroup) = store.get_workgroup(group_id)? else { return Ok(None) };
+    let Some(workgroup) = store.get_workgroup(group_id)? else {
+        return Ok(None);
+    };
     Ok(Some(format_group_header(&workgroup)))
 }
 
 fn format_group_header(workgroup: &Workgroup) -> String {
-    if workgroup.name == workgroup.id.as_str() { format!("Workgroup: {}\n\n", workgroup.id) } else { format!("Workgroup: {} ({})\n\n", workgroup.id, workgroup.name) }
+    if workgroup.name == workgroup.id.as_str() {
+        format!("Workgroup: {}\n\n", workgroup.id)
+    } else {
+        format!("Workgroup: {} ({})\n\n", workgroup.id, workgroup.name)
+    }
 }
 
-pub(crate) fn apply_limit(tasks: &mut Vec<Task>, limit: Option<usize>, running: bool, today: bool, mine: bool, group: Option<&str>) -> Option<TruncationNotice> {
+pub(crate) fn apply_limit(
+    tasks: &mut Vec<Task>,
+    limit: Option<usize>,
+    running: bool,
+    today: bool,
+    mine: bool,
+    group: Option<&str>,
+) -> Option<TruncationNotice> {
     let effective_limit = match limit {
         Some(n) => Some(n),
         None if group.is_none() && !running && !today && !mine => Some(DEFAULT_TASK_LIMIT),
@@ -198,15 +185,35 @@ pub(crate) fn apply_limit(tasks: &mut Vec<Task>, limit: Option<usize>, running: 
     }
     let total = tasks.len();
     tasks.truncate(effective_limit);
-    Some(TruncationNotice { shown: effective_limit, total })
+    Some(TruncationNotice {
+        shown: effective_limit,
+        total,
+    })
 }
 
-pub(crate) fn truncation_notice_message(truncation: TruncationNotice) -> String { format!("[aid] Showing {} of {} tasks. Use --limit N or --today/--running for more.", truncation.shown, truncation.total) }
+pub(crate) fn truncation_notice_message(truncation: TruncationNotice) -> String {
+    format!(
+        "[aid] Showing {} of {} tasks. Use --limit N or --today/--running for more.",
+        truncation.shown, truncation.total
+    )
+}
 
-fn long_running_warning(tasks: &[crate::types::Task], now: chrono::DateTime<Local>) -> Option<String> {
-    let count = tasks.iter().filter(|task| task.status == TaskStatus::Running).filter(|task| (now - task.created_at).num_hours() >= 1).count();
-    if count == 0 { return None }
-    Some(format!("[aid] Warning: {} task(s) running >1h — may be stale. Use `aid stop <id>` to clean up.", count))
+fn long_running_warning(
+    tasks: &[crate::types::Task],
+    now: chrono::DateTime<Local>,
+) -> Option<String> {
+    let count = tasks
+        .iter()
+        .filter(|task| task.status == TaskStatus::Running)
+        .filter(|task| (now - task.created_at).num_hours() >= 1)
+        .count();
+    if count == 0 {
+        return None;
+    }
+    Some(format!(
+        "[aid] Warning: {} task(s) running >1h — may be stale. Use `aid stop <id>` to clean up.",
+        count
+    ))
 }
 
 fn board_json_row(task: &Task) -> serde_json::Value {
@@ -216,7 +223,9 @@ fn board_json_row(task: &Task) -> serde_json::Value {
         "status": task.status.as_str(),
         "outcome": task.outcome().as_str(),
         "prompt": task.prompt,
-        "requested_model": task.requested_model, "observed_model": task.observed_model, "attribution_source": task.attribution_source.map(|value| value.as_str()),
+        "requested_model": task.requested_model,
+        "observed_model": task.observed_model,
+        "attribution_source": task.attribution_source.map(|value| value.as_str()),
         "tokens": task.tokens,
         "duration_ms": task.duration_ms,
         "cost_usd": task.cost_usd,
@@ -234,3 +243,47 @@ fn board_json_row(task: &Task) -> serde_json::Value {
 #[cfg(test)]
 #[path = "board_tests.rs"]
 mod tests;
+
+#[path = "board_notice.rs"]
+mod notice;
+use notice::{board_poll_notice, record_board_poll};
+
+fn board_task_filter(running: bool, today: bool) -> TaskFilter {
+    if running {
+        TaskFilter::Running
+    } else if today {
+        TaskFilter::Today
+    } else {
+        TaskFilter::All
+    }
+}
+
+fn print_poll_notice(poll_notice: Option<String>, poll_failed: bool) {
+    if let Some(notice) = poll_notice {
+        if poll_failed {
+            aid_warn!("{notice}");
+        } else {
+            aid_hint!("{notice}");
+        }
+    }
+}
+
+fn write_board_warnings<W: Write>(
+    writer: &mut W,
+    tasks: &[Task],
+    has_terminal_worktree: bool,
+) -> Result<()> {
+    if let Some(warning) = long_running_warning(tasks, Local::now()) {
+        writeln!(writer, "{warning}")?;
+    }
+    if has_terminal_worktree
+        && let Ok(stale_count) = crate::cmd::worktree::stale_worktree_count(None)
+        && stale_count > 3
+    {
+        writeln!(
+            writer,
+            "[aid] Stale worktrees remain preserved until principal acceptance and custody GC"
+        )?;
+    }
+    Ok(())
+}

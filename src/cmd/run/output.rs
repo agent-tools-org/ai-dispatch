@@ -2,7 +2,10 @@
 // Exports fallback output extraction and JSONL cleanup utilities for run_prompt.
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
-pub(in crate::cmd) fn output_file_instruction(output_path: Option<&str>, result_file: Option<&str>) -> Option<String> {
+pub(in crate::cmd) fn output_file_instruction(
+    output_path: Option<&str>,
+    result_file: Option<&str>,
+) -> Option<String> {
     let mut sections = Vec::new();
     if output_path.is_some() {
         sections.push("IMPORTANT: Your final response will be saved to a file. Write ONLY the requested deliverable content in your final response. Do NOT include planning, reasoning, chain-of-thought, or meta-commentary. The file should contain only the finished work product.".to_string());
@@ -22,7 +25,9 @@ pub(in crate::cmd) enum ResultDelivery {
     /// The agent wrote the declared result file.
     File,
     /// The declared file was missing; a captured-output fallback may have been saved.
-    MissingFile { fallback_saved: bool },
+    MissingFile {
+        fallback_saved: bool,
+    },
 }
 
 pub(in crate::cmd) fn persist_result_file(
@@ -32,7 +37,9 @@ pub(in crate::cmd) fn persist_result_file(
     log_path: &Path,
     agent_name: Option<&str>,
 ) -> Result<ResultDelivery> {
-    let Some(result_file) = result_file else { return Ok(ResultDelivery::NotRequested); };
+    let Some(result_file) = result_file else {
+        return Ok(ResultDelivery::NotRequested);
+    };
     let source = resolve_result_path(result_file, base_dir);
     if !file_has_content(&source) {
         return persist_result_from_log(task_id, log_path, agent_name);
@@ -55,7 +62,9 @@ fn persist_result_from_log(
     agent_name: Option<&str>,
 ) -> Result<ResultDelivery> {
     let Some(content) = extract_output_fallback_from_log(log_path, agent_name) else {
-        return Ok(ResultDelivery::MissingFile { fallback_saved: false });
+        return Ok(ResultDelivery::MissingFile {
+            fallback_saved: false,
+        });
     };
     let dest = crate::support::paths::task_dir(task_id).join("result.md");
     if let Some(parent) = dest.parent() {
@@ -63,12 +72,13 @@ fn persist_result_from_log(
     }
     std::fs::write(&dest, content)
         .with_context(|| format!("Failed to persist result file to {}", dest.display()))?;
-    Ok(ResultDelivery::MissingFile { fallback_saved: true })
+    Ok(ResultDelivery::MissingFile {
+        fallback_saved: true,
+    })
 }
 
 fn file_has_content(path: &Path) -> bool {
-    std::fs::read_to_string(path)
-        .is_ok_and(|content| !content.trim().is_empty())
+    std::fs::read_to_string(path).is_ok_and(|content| !content.trim().is_empty())
 }
 
 fn resolve_result_path(result_file: &str, base_dir: Option<&str>) -> PathBuf {
@@ -87,7 +97,9 @@ pub(in crate::cmd) fn fill_empty_output_from_log(
     output_path: Option<&Path>,
     agent_name: Option<&str>,
 ) -> Result<()> {
-    let Some(output_path) = output_path else { return Ok(()) };
+    let Some(output_path) = output_path else {
+        return Ok(());
+    };
     let needs_fallback = match std::fs::metadata(output_path) {
         Ok(metadata) => metadata.len() == 0,
         Err(_) => true,
@@ -99,7 +111,10 @@ pub(in crate::cmd) fn fill_empty_output_from_log(
         return Ok(());
     };
     std::fs::write(output_path, content).with_context(|| {
-        format!("Failed to write output fallback file {}", output_path.display())
+        format!(
+            "Failed to write output fallback file {}",
+            output_path.display()
+        )
     })
 }
 
@@ -159,159 +174,13 @@ pub(in crate::cmd) fn clean_output_if_jsonl(output_path: &Path) -> Result<()> {
         return Ok(());
     };
     std::fs::write(output_path, cleaned).with_context(|| {
-        format!("Failed to rewrite cleaned output file {}", output_path.display())
+        format!(
+            "Failed to rewrite cleaned output file {}",
+            output_path.display()
+        )
     })
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::{NamedTempFile, tempdir};
-
-    #[test]
-    fn fill_empty_output_from_log_extracts_full_text_content() {
-        let log = NamedTempFile::new().unwrap();
-        let output = NamedTempFile::new().unwrap();
-        std::fs::write(
-            log.path(),
-            concat!(
-                "{\"type\":\"text\",\"content\":\"first chunk\"}\n",
-                "{\"type\":\"text\",\"content\":\"second chunk\"}\n"
-            ),
-        )
-        .unwrap();
-        std::fs::write(output.path(), "").unwrap();
-
-        fill_empty_output_from_log(log.path(), Some(output.path()), None).unwrap();
-
-        assert_eq!(
-            std::fs::read_to_string(output.path()).unwrap(),
-            "second chunk"
-        );
-    }
-
-    #[test]
-    fn fill_empty_output_from_log_creates_missing_output_file() {
-        let log = NamedTempFile::new().unwrap();
-        let temp = tempdir().unwrap();
-        let output_path = temp.path().join("missing-output.txt");
-        std::fs::write(log.path(), "{\"type\":\"text\",\"content\":\"gemini output\"}\n").unwrap();
-
-        fill_empty_output_from_log(log.path(), Some(output_path.as_path()), None).unwrap();
-
-        assert_eq!(std::fs::read_to_string(output_path).unwrap(), "gemini output");
-    }
-
-    #[test]
-    fn persist_result_file_resolves_relative_path_from_base_dir() {
-        let temp = tempdir().unwrap();
-        let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
-        let work_dir = temp.path().join("work");
-        std::fs::create_dir_all(&work_dir).unwrap();
-        std::fs::write(work_dir.join("result.md"), "structured result").unwrap();
-
-        let log_path = crate::support::paths::log_path("t-result");
-        let delivery = persist_result_file(
-            "t-result",
-            Some("result.md"),
-            Some(work_dir.to_str().unwrap()),
-            &log_path,
-            None,
-        )
-        .unwrap();
-
-        let saved = crate::support::paths::task_dir("t-result").join("result.md");
-        assert_eq!(std::fs::read_to_string(saved).unwrap(), "structured result");
-        assert_eq!(delivery, ResultDelivery::File);
-    }
-
-    /// The failure that produced a "done" audit with a tool log for a report: the agent
-    /// never wrote the result file and printed only what it was about to do.
-    #[test]
-    fn persist_result_file_flags_narration_only_log_fallback() {
-        let temp = tempdir().unwrap();
-        let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
-        let log_path = crate::support::paths::log_path("t-narration-result");
-        std::fs::create_dir_all(log_path.parent().unwrap()).unwrap();
-        let narration = "I will run `git diff main..HEAD` to get the list of changes made in the branch.\n\
-I will read the generated diff file using the `view_file` tool to inspect the full set of changes.\n\
-I will inspect the indexer snapshot file to answer the second question about determinism.\n";
-        std::fs::write(&log_path, narration).unwrap();
-
-        let delivery =
-            persist_result_file("t-narration-result", Some("result.md"), Some("/missing"), &log_path, None)
-                .unwrap();
-
-        assert_eq!(delivery, ResultDelivery::MissingFile { fallback_saved: true });
-    }
-
-    #[test]
-    fn persist_result_file_uses_log_when_source_missing() {
-        let temp = tempdir().unwrap();
-        let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
-        let log_path = crate::support::paths::log_path("t-log-result");
-        std::fs::create_dir_all(log_path.parent().unwrap()).unwrap();
-        std::fs::write(&log_path, "{\"type\":\"text\",\"content\":\"stdout report\"}\n").unwrap();
-
-        persist_result_file("t-log-result", Some("result.md"), Some("/missing"), &log_path, None)
-            .unwrap();
-
-        let saved = crate::support::paths::task_dir("t-log-result").join("result.md");
-        assert_eq!(std::fs::read_to_string(saved).unwrap(), "stdout report");
-    }
-
-    #[test]
-    fn persist_result_file_uses_raw_text_log_when_source_missing() {
-        let temp = tempdir().unwrap();
-        let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
-        let log_path = crate::support::paths::log_path("t-raw-log-result");
-        std::fs::create_dir_all(log_path.parent().unwrap()).unwrap();
-        std::fs::write(&log_path, "plain text report\nwith final findings").unwrap();
-
-        let delivery =
-            persist_result_file("t-raw-log-result", Some("result.md"), Some("/missing"), &log_path, None)
-                .unwrap();
-
-        let saved = crate::support::paths::task_dir("t-raw-log-result").join("result.md");
-        assert_eq!(
-            std::fs::read_to_string(saved).unwrap(),
-            "plain text report\nwith final findings"
-        );
-        assert_eq!(delivery, ResultDelivery::MissingFile { fallback_saved: true });
-    }
-
-    #[test]
-    fn persist_result_file_skips_empty_or_missing_log_when_source_missing() {
-        let temp = tempdir().unwrap();
-        let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
-        let missing_log = crate::support::paths::log_path("t-missing-log-result");
-
-        persist_result_file(
-            "t-missing-log-result",
-            Some("result.md"),
-            Some("/missing"),
-            &missing_log,
-            None,
-        )
-        .unwrap();
-
-        let missing_saved = crate::support::paths::task_dir("t-missing-log-result").join("result.md");
-        assert!(!missing_saved.exists());
-
-        let empty_log = crate::support::paths::log_path("t-empty-log-result");
-        std::fs::create_dir_all(empty_log.parent().unwrap()).unwrap();
-        std::fs::write(&empty_log, "").unwrap();
-
-        persist_result_file(
-            "t-empty-log-result",
-            Some("result.md"),
-            Some("/missing"),
-            &empty_log,
-            None,
-        )
-        .unwrap();
-
-        let empty_saved = crate::support::paths::task_dir("t-empty-log-result").join("result.md");
-        assert!(!empty_saved.exists());
-    }
-}
+#[path = "output/tests.rs"]
+mod tests;

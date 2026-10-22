@@ -1,46 +1,50 @@
 // Batch dispatch command for running tasks from a TOML file.
 // Exports: BatchArgs, run()
 // Deps: crate::batch, crate::cmd::run, crate::cmd::batch_validate, crate::store::Store
-use anyhow::{Context, Result};
-use std::{path::Path, sync::Arc, time::Instant};
 use crate::batch;
 use crate::cmd::run;
 use crate::store::Store;
-#[path = "validate.rs"]
-mod batch_validate;
-#[path = "init.rs"]
-mod batch_init;
+use anyhow::{Context, Result};
+use std::{path::Path, sync::Arc, time::Instant};
+#[path = "analyze.rs"]
+mod batch_analyze;
 #[path = "args.rs"]
 mod batch_args;
-#[path = "profile.rs"]
-mod batch_profile;
-#[path = "retry.rs"]
-mod batch_retry;
 #[path = "dispatch.rs"]
 mod batch_dispatch;
 #[path = "dispatch_support.rs"]
 mod batch_dispatch_support;
-#[path = "wait_timeout.rs"]
-mod batch_wait_timeout;
-#[path = "analyze.rs"]
-mod batch_analyze;
-#[path = "output_dedup.rs"]
-mod batch_output_dedup;
 #[path = "helpers.rs"]
 mod batch_helpers;
+#[path = "init.rs"]
+mod batch_init;
+#[path = "output_dedup.rs"]
+mod batch_output_dedup;
+#[path = "profile.rs"]
+mod batch_profile;
+#[path = "retry.rs"]
+mod batch_retry;
 #[path = "types.rs"]
 mod batch_types;
+#[path = "validate.rs"]
+mod batch_validate;
+#[path = "wait_timeout.rs"]
+mod batch_wait_timeout;
 
 use batch_analyze::OverlapSeverity;
-use batch_helpers::{finalize_batch, parse_cli_vars, resolve_config_path, warn_nested_repo_for_batch};
-use batch_validate::{analyze_file_overlap, task_has_dependencies, validate_batch_config};
-#[cfg(test)]
-pub(crate) use batch_dispatch_support::{auto_fallback_args, pre_dispatch_fallback_choice, should_auto_fallback};
-#[cfg(test)]
-pub(crate) use batch_types::BatchTaskOutcome;
 #[cfg(test)]
 pub(crate) use batch_dispatch::completion_progress_label;
+#[cfg(test)]
+pub(crate) use batch_dispatch_support::{
+    auto_fallback_args, pre_dispatch_fallback_choice, should_auto_fallback,
+};
+use batch_helpers::{
+    finalize_batch, parse_cli_vars, resolve_config_path, warn_nested_repo_for_batch,
+};
 pub use batch_retry::retry_failed;
+#[cfg(test)]
+pub(crate) use batch_types::BatchTaskOutcome;
+use batch_validate::{analyze_file_overlap, task_has_dependencies, validate_batch_config};
 pub struct BatchArgs {
     pub file: String,
     pub vars: Vec<String>,
@@ -61,203 +65,42 @@ pub fn init(output_path: Option<&str>) -> Result<()> {
 }
 
 pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
-    if args.max_concurrent == Some(0) {
-        anyhow::bail!("--max-concurrent must be at least 1");
-    }
-    let requested_path = Path::new(&args.file);
-    let source_path = requested_path.exists().then_some(requested_path);
-    let invoked_pwd = std::env::current_dir().ok();
-    let resolved_path = batch_helpers::resolve_batch_path(requested_path);
+    let (resolved_path, mut config) = load_batch_config(&args)?;
     let path = resolved_path.as_path();
-    let cli_vars = parse_cli_vars(&args.vars)?;
-    let mut config = if source_path == Some(path) && cli_vars.is_empty() {
-        batch::parse_batch_file(path)
-    } else if source_path == Some(path) {
-        batch::parse_batch_file_with_vars(path, &cli_vars)
-    } else {
-        batch::parse_batch_file_with_vars_and_source(
-            path,
-            &cli_vars,
-            source_path,
-            invoked_pwd.as_deref(),
-        )
-    }
-    .with_context(|| format!("Failed to load batch file {}", path.display()))?;
-    let max_concurrent = args.max_concurrent.or(config.defaults.max_concurrent);
-    if max_concurrent == Some(0) {
-        anyhow::bail!("max_concurrent must be at least 1");
-    }
+    let max_concurrent = resolve_batch_concurrency(&args, &config)?;
     let total = config.tasks.len();
     let shared_dir_enabled = config.defaults.shared_dir.unwrap_or(false);
-    let configured_repo_root = args.repo_root.clone()
-        .or_else(|| config.defaults.repo_root.as_ref().map(|value| resolve_config_path(path, value)));
-    let explicit_repo_path = crate::support::repo_root::resolve_explicit_repo_path(configured_repo_root.as_deref(), None)?;
-    let batch_repo_path = explicit_repo_path
-        .clone()
-        .or_else(|| crate::support::repo_root::resolve_git_root_string(".").ok());
-    if let Some(repo_path) = batch_repo_path.as_deref() {
-        crate::cmd::batch_gitbutler::maybe_prompt_gitbutler_batch_integration(
-            Path::new(repo_path),
-            args.no_prompt || args.yes,
-        )?;
-    }
-    if explicit_repo_path.is_none() { warn_nested_repo_for_batch(&config.tasks); }
-    batch_profile::validate_required_profiles(&config.tasks)?;
-    validate_batch_config(&config.tasks, args.parallel, args.force)?;
-    let deps = batch::dependency_indices(&config.tasks)
-        .unwrap_or_else(|_| vec![Vec::new(); config.tasks.len()]);
-    let deduped = batch_output_dedup::dedup_output_paths(&mut config.tasks, &deps);
-    if deduped > 0 {
-        aid_info!("[aid] Auto-suffixed {deduped} task output path(s) to avoid conflicts");
-    }
+    let (explicit_repo_path, batch_repo_path) = resolve_batch_repository(&args, &config, path)?;
+    prepare_batch_tasks(&args, &mut config, &explicit_repo_path)?;
     let has_dependencies = config.tasks.iter().any(task_has_dependencies);
-    let effective_group = args.group.as_ref().or(config.defaults.group.as_ref());
-    if let Some(group) = effective_group {
-        if store.get_workgroup(group)?.is_none() {
-            anyhow::bail!(
-                "Workgroup '{group}' not found. Create it with: aid group create <name> --id {group}"
-            );
-        }
-        let source = if args.group.is_some() { "--group flag" } else { "[defaults] group" };
-        for task in &mut config.tasks {
-            if task.group.is_none() {
-                task.group = Some(group.clone());
-            }
-        }
-        aid_info!("[aid] Using workgroup {group} from {source}");
-    }
-    let no_groups_set = config.tasks.iter().all(|t| t.group.is_none());
-    if no_groups_set {
-        if let Ok(env_group) = std::env::var("AID_GROUP") {
-            for task in &mut config.tasks {
-                task.group = Some(env_group.clone());
-            }
-            aid_info!("[aid] Using workspace {env_group} from AID_GROUP");
-        } else if total >= 2 {
-            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("batch");
-            let workgroup_name = config.title.as_deref().unwrap_or(stem);
-            let (wg_id, shared_path) = batch_helpers::ensure_batch_workgroup(
-                &store,
-                workgroup_name,
-                config.defaults.group_id.as_deref(),
-                shared_dir_enabled,
-            )?;
-            for task in &mut config.tasks {
-                task.group = Some(wg_id.clone());
-            }
-            if let Some(shared_path) = shared_path {
-                aid_info!("[aid] Shared batch dir: {}", shared_path.display());
-            }
-        }
-    }
-    let shared_dir_path = if shared_dir_enabled {
-        config
-            .tasks
-            .first()
-            .and_then(|task| task.group.as_deref())
-            .and_then(crate::support::shared_dir::shared_dir_path)
-            .map(|path| path.display().to_string())
-    } else {
-        None
-    };
+    assign_batch_groups(&store, &args, &mut config, path, total, shared_dir_enabled)?;
+    let shared_dir_path = batch_shared_directory(&config, shared_dir_enabled);
     if args.dry_run {
-        println!("Batch: previewing {total} task(s) from {}", path.display());
-        for (task_idx, task) in config.tasks.iter().enumerate() {
-            let siblings: Vec<_> = config.tasks
-                .iter()
-                .enumerate()
-                .filter(|(idx, _)| *idx != task_idx)
-                .map(|(_, sibling)| sibling)
-                .collect();
-            let mut run_args = batch_args::task_to_run_args(
-                task,
-                &siblings,
-                false,
-                &store,
-                shared_dir_path.as_deref(),
-            );
-            run_args.repo_root = explicit_repo_path.clone();
-            run_args.suppress_nested_repo_warning = true;
-            run_args.dry_run = true;
-            let _ = run::run(store.clone(), run_args).await?;
-        }
-        println!("Batch: {total} task(s) previewed");
+        preview_batch(
+            &store,
+            &config,
+            path,
+            shared_dir_path.as_deref(),
+            &explicit_repo_path,
+        )
+        .await?;
         return Ok(());
     }
-    if let Some(avail) = batch_helpers::low_disk_space_mb(500) {
-        aid_warn!("[aid] Warning: low disk space ({avail} MB free) — parallel dispatch may fail");
-    }
-    batch_helpers::warn_for_rate_limited_agents(&config.tasks);
-    if args.analyze || config.defaults.analyze.unwrap_or(false) {
-        let overlaps = analyze_file_overlap(&config.tasks, &config.defaults);
-        if !overlaps.is_empty() {
-            let has_errors = overlaps.iter().any(|o| o.severity == OverlapSeverity::Error);
-            let label = if has_errors { "output conflicts" } else { "potential merge conflicts" };
-            aid_warn!("[aid] Warning: {label} detected:");
-            for overlap in &overlaps {
-                let severity = if overlap.severity == OverlapSeverity::Error { "ERROR" } else { "WARN" };
-                aid_warn!(
-                    "  [{severity}] {} - referenced by: {}",
-                    overlap.file,
-                    overlap.task_ids.join(", ")
-                );
-            }
-            if has_errors {
-                anyhow::bail!("Output file conflicts detected — parallel tasks would overwrite each other. Add depends_on or use different output paths.");
-            }
-            aid_warn!("[aid] Consider adding dependencies or using --worktree isolation");
-        }
-    }
+    warn_batch_conflicts(&args, &config)?;
     println!("Batch: dispatching {total} task(s) from {}", path.display());
     let start_time = Instant::now();
-    let auto_fallback = config.defaults.auto_fallback.unwrap_or(false);
-    let dispatch = if has_dependencies && args.parallel {
-        batch_dispatch::dispatch_parallel_with_dependencies(
-            store.clone(),
-            &config.tasks,
-            max_concurrent,
-            auto_fallback,
-            shared_dir_path.as_deref(),
-            explicit_repo_path.as_deref(),
-        )
-        .await?
-    } else if has_dependencies {
-        batch_dispatch::dispatch_sequential_with_dependencies(
-            store.clone(),
-            &config.tasks,
-            auto_fallback,
-            shared_dir_path.as_deref(),
-            explicit_repo_path.as_deref(),
-        )
-        .await?
-    } else if args.parallel {
-        batch_dispatch::dispatch_parallel(
-            store.clone(),
-            &config.tasks,
-            max_concurrent,
-            auto_fallback,
-            shared_dir_path.as_deref(),
-            explicit_repo_path.as_deref(),
-        )
-        .await?
-    } else {
-        batch_dispatch::dispatch_sequential(
-            store.clone(),
-            &config.tasks,
-            auto_fallback,
-            shared_dir_path.as_deref(),
-            explicit_repo_path.as_deref(),
-        )
-        .await?
-    };
+    let dispatch = dispatch_batch(
+        &store,
+        &config,
+        &args,
+        has_dependencies,
+        max_concurrent,
+        shared_dir_path.as_deref(),
+        explicit_repo_path.as_deref(),
+    )
+    .await?;
     let task_ids = dispatch.dispatched_task_ids();
-    let wait_error = if args.wait && args.parallel && !has_dependencies && !task_ids.is_empty() {
-        Some(batch_wait_error(
-            crate::cmd::wait::wait_for_task_ids(&store, &task_ids, None, false, None).await?,
-        ))
-    } else {
-        None
-    };
+    let wait_error = wait_for_batch(&store, &args, has_dependencies, &task_ids).await?;
     finalize_batch(
         path,
         &dispatch,
@@ -266,7 +109,7 @@ pub async fn run(store: Arc<Store>, args: BatchArgs) -> Result<()> {
         &store,
         start_time,
         batch_repo_path.as_deref(),
-        wait_error.flatten(),
+        wait_error,
         total,
     )
 }
@@ -288,3 +131,14 @@ pub(super) fn batch_wait_error(outcome: crate::cmd::wait::WaitOutcome) -> Option
 #[cfg(test)]
 #[path = "tests.rs"]
 mod batch_tests;
+
+#[path = "orchestration/configuration.rs"]
+mod configuration;
+use configuration::{
+    assign_batch_groups, batch_shared_directory, load_batch_config, prepare_batch_tasks,
+    resolve_batch_concurrency, resolve_batch_repository, wait_for_batch,
+};
+
+#[path = "orchestration/execution.rs"]
+mod execution;
+use execution::{dispatch_batch, preview_batch, warn_batch_conflicts};

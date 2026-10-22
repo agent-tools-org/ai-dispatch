@@ -1,9 +1,9 @@
 // Batch task -> run args conversion helpers.
 // Exports: task_to_run_args
 // Deps: crate::cmd::run::RunArgs, crate::batch, crate::store::Store
-use crate::batch;
 use crate::agent::model_validation::ModelSource;
-use crate::cmd::run::{RunArgs, NO_SKILL_SENTINEL};
+use crate::batch;
+use crate::cmd::run::{NO_SKILL_SENTINEL, RunArgs};
 use crate::store::Store;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -18,32 +18,8 @@ pub(crate) fn task_to_run_args(
     let _ = store;
     // Empty/`auto` agents are rejected in batch validation; require an explicit name.
     let agent_name = task.agent.clone();
-    let batch_siblings = siblings
-        .iter()
-        .map(|sibling| {
-            (
-                sibling
-                    .name
-                    .clone()
-                    .or_else(|| sibling.id.clone())
-                    .unwrap_or_else(|| "<unnamed>".to_string()),
-                sibling.agent.clone(),
-                sibling.prompt.clone(),
-            )
-        })
-        .collect();
-    let cascade = task
-        .fallback
-        .as_deref()
-        .map(|fallback| {
-            fallback
-                .split(',')
-                .map(str::trim)
-                .filter(|agent| !agent.is_empty())
-                .map(ToString::to_string)
-                .collect()
-        })
-        .unwrap_or_default();
+    let batch_siblings = batch_siblings(siblings);
+    let cascade = task_cascade(task);
     let env = merged_env(task.env.as_ref(), shared_dir_path);
     let skills = if task.no_skill {
         vec![NO_SKILL_SENTINEL.to_string()]
@@ -93,7 +69,9 @@ pub(crate) fn task_to_run_args(
         cascade,
         read_only: task.read_only,
         sandbox: task.sandbox,
-        budget: task.budget.is_some_and(crate::types::TaskBudget::uses_budget_mode),
+        budget: task
+            .budget
+            .is_some_and(crate::types::TaskBudget::uses_budget_mode),
         best_of: task.best_of,
         metric: task.metric.clone(),
         team: task.team.clone(),
@@ -114,13 +92,20 @@ pub(crate) fn task_to_run_args(
 
 /// Auto-scope result_file when sibling tasks share the same filename.
 /// Appends `-{task_name}` before the extension to prevent parallel overwrites.
-fn auto_scope_result_file(task: &batch::BatchTask, siblings: &[&batch::BatchTask]) -> Option<String> {
+fn auto_scope_result_file(
+    task: &batch::BatchTask,
+    siblings: &[&batch::BatchTask],
+) -> Option<String> {
     let result_file = task.result_file.as_deref()?;
-    let has_collision = siblings.iter().any(|s| s.result_file.as_deref() == Some(result_file));
+    let has_collision = siblings
+        .iter()
+        .any(|s| s.result_file.as_deref() == Some(result_file));
     if !has_collision {
         return Some(result_file.to_string());
     }
-    let task_name = task.name.as_deref()
+    let task_name = task
+        .name
+        .as_deref()
         .or(task.id.as_deref())
         .unwrap_or("task");
     let scoped = scope_filename(result_file, task_name);
@@ -152,7 +137,13 @@ pub(super) fn merged_env(
 mod tests {
     use super::*;
 
-    fn batch_task(toml: &str) -> (tempfile::TempDir, crate::support::paths::AidHomeGuard, batch::BatchTask) {
+    fn batch_task(
+        toml: &str,
+    ) -> (
+        tempfile::TempDir,
+        crate::support::paths::AidHomeGuard,
+        batch::BatchTask,
+    ) {
         let home = tempfile::tempdir().expect("temporary aid home");
         let guard = crate::support::paths::AidHomeGuard::set(home.path());
         let task: batch::BatchTask = toml::from_str(toml).expect("valid batch task");
@@ -170,7 +161,11 @@ mod tests {
         );
         let store = Arc::new(Store::open_memory().expect("in-memory store"));
         let args = task_to_run_args(&task, &[], false, &store, None);
-        assert!(args.env.as_ref().is_none_or(|env| !env.contains_key("PATH")));
+        assert!(
+            args.env
+                .as_ref()
+                .is_none_or(|env| !env.contains_key("PATH"))
+        );
         assert_eq!(args.env_forward, Some(vec!["PATH".to_string()]));
     }
 
@@ -230,4 +225,38 @@ mod tests {
             }
         }
     }
+}
+
+fn batch_siblings(siblings: &[&batch::BatchTask]) -> Vec<(String, String, String)> {
+    let batch_siblings = siblings
+        .iter()
+        .map(|sibling| {
+            (
+                sibling
+                    .name
+                    .clone()
+                    .or_else(|| sibling.id.clone())
+                    .unwrap_or_else(|| "<unnamed>".to_string()),
+                sibling.agent.clone(),
+                sibling.prompt.clone(),
+            )
+        })
+        .collect();
+    batch_siblings
+}
+
+fn task_cascade(task: &batch::BatchTask) -> Vec<String> {
+    let cascade = task
+        .fallback
+        .as_deref()
+        .map(|fallback| {
+            fallback
+                .split(',')
+                .map(str::trim)
+                .filter(|agent| !agent.is_empty())
+                .map(ToString::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    cascade
 }

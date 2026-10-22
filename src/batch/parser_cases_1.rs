@@ -5,9 +5,9 @@ use super::*;
 #[test]
 fn parse_valid_batch() {
     let file = write_temp(concat!(
-            "[[tasks]]\nagent = \"grok\"\nprompt = \"research X\"\nworktree = \"feat/x\"\n",
-            "[[tasks]]\nagent = \"codex\"\nprompt = \"implement Y\"\ndir = \"src\"\nmodel = \"gpt-4\"\ngroup = \"wg-demo\""
-        ));
+        "[[tasks]]\nagent = \"grok\"\nprompt = \"research X\"\nworktree = \"feat/x\"\n",
+        "[[tasks]]\nagent = \"codex\"\nprompt = \"implement Y\"\ndir = \"src\"\nmodel = \"gpt-4\"\ngroup = \"wg-demo\""
+    ));
     std::fs::create_dir_all(file.path().parent().unwrap().join("src")).unwrap();
     let cfg = parse_batch_file(file.path()).unwrap();
     let expected_dir = file.path().parent().unwrap().join("src");
@@ -50,7 +50,10 @@ fn defaults_accept_repo_root() {
 
 #[test]
 fn result_file_deserializes_from_batch_toml() {
-    let config: BatchConfig = toml::from_str("[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\nresult_file = \"result.md\"\n").unwrap();
+    let config: BatchConfig = toml::from_str(
+        "[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\nresult_file = \"result.md\"\n",
+    )
+    .unwrap();
     assert_eq!(config.tasks[0].result_file.as_deref(), Some("result.md"));
 }
 
@@ -201,16 +204,16 @@ prompt = "test"
 #[test]
 fn applies_defaults_to_tasks() {
     let file = write_temp(concat!(
-            "[defaults]\nauto_fallback = true\nagent = \"grok\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
-            "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\nmax_wait_mins = 10\n",
-            "retry = 2\npeer_review = \"cursor\"\nbest_of = 3\nmetric = \"cargo test\"\n",
-            "context = [\"src/lib.rs\", \"src/main.rs:run\"]\n",
-            "skills = [\"rust\", \"cli\"]\non_done = \"notify done\"\nfallback = \"cursor\"\n",
-            "read_only = true\nsandbox = true\nno_skill = true\nbudget = \"cheap\"\n",
-            "env = { DEFAULT_ONLY = \"yes\", SHARED = \"default\" }\n",
-            "env_forward = [\"PATH\"]\n",
-            "[[tasks]]\nname = \"impl\"\nprompt = \"build it\"\n"
-        ));
+        "[defaults]\nauto_fallback = true\nagent = \"grok\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
+        "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\nmax_wait_mins = 10\n",
+        "retry = 2\npeer_review = \"cursor\"\nbest_of = 3\nmetric = \"cargo test\"\n",
+        "context = [\"src/lib.rs\", \"src/main.rs:run\"]\n",
+        "skills = [\"rust\", \"cli\"]\non_done = \"notify done\"\nfallback = \"cursor\"\n",
+        "read_only = true\nsandbox = true\nno_skill = true\nbudget = \"cheap\"\n",
+        "env = { DEFAULT_ONLY = \"yes\", SHARED = \"default\" }\n",
+        "env_forward = [\"PATH\"]\n",
+        "[[tasks]]\nname = \"impl\"\nprompt = \"build it\"\n"
+    ));
     let batch_dir = file.path().parent().unwrap();
     std::fs::create_dir_all(batch_dir.join("src")).unwrap();
     std::fs::write(batch_dir.join("src/lib.rs"), "pub fn lib() {}\n").unwrap();
@@ -233,6 +236,10 @@ fn applies_defaults_to_tasks() {
     assert_eq!(task.peer_review.as_deref(), Some("cursor"));
     assert_eq!(task.best_of, Some(3));
     assert_eq!(task.metric.as_deref(), Some("cargo test"));
+    assert_applies_defaults_to_tasks_context(task, batch_dir);
+}
+
+fn assert_applies_defaults_to_tasks_context(task: &BatchTask, batch_dir: &std::path::Path) {
     assert_eq!(
         task.context.as_deref(),
         Some(

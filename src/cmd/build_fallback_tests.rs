@@ -43,6 +43,19 @@ fn ignores_non_permission_cargo_failures() {
 }
 
 #[test]
+fn retry_skipped_when_cargo_succeeded() {
+    assert!(should_retry_with_fallback_at(true, &[], Some("/tmp/shared"), None).is_none());
+}
+
+#[test]
+fn retry_skipped_when_no_target_dir() {
+    let stderr = vec![
+        "error: Operation not permitted (os error 1) at path \"/tmp/x\"".to_string(),
+    ];
+    assert!(should_retry_with_fallback_at(false, &stderr, None, None).is_none());
+}
+
+#[test]
 fn digest_note_names_both_paths() {
     let note = fallback_digest_note("/shared/a", "/work/target");
     assert!(note.contains("/shared/a"));

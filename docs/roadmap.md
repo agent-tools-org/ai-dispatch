@@ -58,12 +58,27 @@ text rule otherwise. Receipts only refine that rule: any started-job line in the
 blocks an infrastructure classification and re-pick. Known limit: rbox reports local argument
 errors (for example a zero job count) as `launch_error`, so such a verify spends its one re-pick.
 
-Found during this work (open): `aid accept` fails when a task's recorded worktree directory no
-longer exists, and refuses read-only tasks that never had a worktree ("Task has no worktree path"),
-so `aid gc` cannot collect them; `scripts/remote-test.sh` reports "rbox failed before any test ran"
-when the connection drops after tests started; several P2 build-counter assertions hold without the
-change; the `codex-provider:` predicate is written out in four places. `pty_idle_hang_e2e` failed once
-under full-suite load and passed alone and in later full runs.
+Fixed on main from that list (2026-10-22), each with a regression test and an independent audit
+where it was a bug fix:
+- `aid accept` and `aid gc --task` handle terminal tasks with no recorded worktree (read-only and
+  in-place runs): acceptance records no head or manifest; collection touches no repository and
+  reclaims only eligible fallback Cargo targets. A head-less acceptance never authorizes deleting
+  a recorded worktree. A task whose worktree directory is gone was already accepted when its final
+  commit is reachable; an unreachable final commit is still refused (custody unresolved).
+- `scripts/remote-test.sh` reports a connection lost after the remote job started (a logged
+  job id, or a typed receipt other than `not_started` without a job) as such, names
+  `rbox log <box> <job>` when the id is known, and keeps rbox's exit status.
+- The `codex-provider:` route name has one owner (`src/agent/codex/provider.rs`); five P2 tests
+  were strengthened so they fail with the production change reverted.
+- The post-verify "dependencies weren't installed" hint fires only for ecosystems with a separate
+  install step whose install directory is missing; Cargo- and Go-only worktrees never get it.
+
+Still open: `pty_idle_hang_e2e` failed once under full-suite load and passed alone and in later
+full runs. The missing-dependency hint still fires for hoisted npm workspaces, Yarn PnP and
+Python environments outside the project. `aid ask` and MCP `ask_text` run as ordinary agent tasks
+in the caller's project (project rules, memory, team knowledge, default skills, full agent
+permissions); a review of their scope is open. Codex executors could not reach the build box from
+their sandbox in most runs this round, so their remote checks were run by the dispatcher.
 
 Carried follow-ups: Claude read-only under Claude Code's own sandbox (would let the v11.4.0
 read-only slice cover Claude); snapshotting ignored files written by advisory agents; rbox

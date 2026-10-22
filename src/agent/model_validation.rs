@@ -3,13 +3,15 @@
 // Deps: Agent, AgentKind.
 
 use anyhow::{Result, anyhow};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use serde::{Deserialize, Serialize};
 
-use crate::types::AgentKind;
 use super::Agent;
+use crate::types::AgentKind;
+#[path = "model_validation/failure.rs"]
+mod failure;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub(crate) struct ServedModelsCacheEntry {
@@ -27,7 +29,8 @@ struct CachedServedModels {
 }
 
 #[cfg(not(test))]
-static SERVED_CACHE: std::sync::OnceLock<Mutex<HashMap<AgentKind, CachedServedModels>>> = std::sync::OnceLock::new();
+static SERVED_CACHE: std::sync::OnceLock<Mutex<HashMap<AgentKind, CachedServedModels>>> =
+    std::sync::OnceLock::new();
 
 pub(crate) const SERVED_MODELS_CACHE_TTL: Duration = Duration::from_secs(24 * 3600);
 
@@ -43,7 +46,10 @@ fn cache_file_path() -> std::path::PathBuf {
 }
 
 fn now_secs() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 pub(crate) fn load_from_disk_cache(kind: AgentKind) -> Option<Vec<String>> {
@@ -64,7 +70,8 @@ fn load_disk_entry(kind: AgentKind, fingerprint: Option<&str>) -> Option<ServedM
     let entry = map.remove(kind.as_str())?;
     let age = now_secs().saturating_sub(entry.updated_at_secs);
     if age <= SERVED_MODELS_CACHE_TTL.as_secs()
-        && fingerprint.is_none_or(|fp| entry.fingerprint.as_deref() == Some(fp)) {
+        && fingerprint.is_none_or(|fp| entry.fingerprint.as_deref() == Some(fp))
+    {
         Some(entry)
     } else {
         None
@@ -76,7 +83,10 @@ fn atomic_write_cache_file(path: &std::path::Path, content: &str) {
         let _ = std::fs::create_dir_all(parent);
     }
     static WRITE_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
     let count = WRITE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let tmp_path = path.with_extension(format!("tmp.{}.{}.{}", std::process::id(), nanos, count));
     if std::fs::write(&tmp_path, content).is_ok() && std::fs::rename(&tmp_path, path).is_err() {
@@ -142,11 +152,7 @@ impl Default for ModelSource {
     }
 }
 
-pub(crate) fn validate_model_for_agent(
-    agent: &dyn Agent,
-    model: &str,
-    source: ModelSource,
-) -> Result<bool> {
+pub(crate) fn validate_model_for_agent(agent: &dyn Agent, model: &str, source: ModelSource) -> Result<bool> {
     let model_clean = model.trim();
     if model_clean.is_empty() {
         return Ok(true);
@@ -162,19 +168,12 @@ pub(crate) fn validate_model_for_agent(
         return Ok(true);
     };
 
-    if served_list.is_empty() {
-        aid_info!(
-            "[aid] No served models reported for {}; allowing dispatch with model '{model_clean}'",
-            kind.as_str()
-        );
+    if accepts_cached_model(kind, model_clean, &served_list) {
         return Ok(true);
     }
 
-    if served_list.iter().any(|m| m.eq_ignore_ascii_case(model_clean)) {
-        return Ok(true);
-    }
-
-    // Model not in cached list; refresh cache once ONLY if cached list did NOT come from a live probe in this process.
+    // Model not in cached list; refresh cache once ONLY if cached list did NOT come from a live probe in this
+    // process.
     let fresh_served_list = if from_live_probe {
         served_list
     } else {
@@ -188,25 +187,14 @@ pub(crate) fn validate_model_for_agent(
     if source == ModelSource::Advised && fresh_served_list.is_empty() {
         return Ok(true);
     }
-    if fresh_served_list.iter().any(|m| m.eq_ignore_ascii_case(model_clean)) {
+    if fresh_served_list
+        .iter()
+        .any(|m| m.eq_ignore_ascii_case(model_clean))
+    {
         return Ok(true);
     }
 
-    let list_str = fresh_served_list.join(", ");
-    if source == ModelSource::Advised {
-        return Err(anyhow!("advised model '{model_clean}' unavailable for {}; refusing a different default. Served models: {list_str}", kind.as_str()));
-    }
-    if source == ModelSource::UserSupplied {
-        return Err(anyhow!(
-            "Agent '{}' does not serve model '{model_clean}'. Served models: {list_str}",
-            kind.as_str()
-        ));
-    }
-    aid_warn!(
-        "[aid] Agent '{}' does not serve aid-selected model '{model_clean}'; dropping it and using the agent's own default model",
-        kind.as_str()
-    );
-    Ok(false)
+    failure::unavailable_model(kind, model_clean, source, &fresh_served_list)
 }
 
 pub(crate) fn refresh_served_models_cached(agent: &dyn Agent) -> Option<Vec<String>> {
@@ -238,12 +226,17 @@ pub(crate) fn get_served_models_cached(agent: &dyn Agent) -> Option<Vec<String>>
 pub(crate) fn get_served_models_cached_with_status(agent: &dyn Agent) -> (Option<Vec<String>>, bool) {
     let kind = agent.kind();
     #[cfg(test)]
-    if let Some(res) = cache_tests::mock_models(kind) { return (res, true); }
+    if let Some(res) = cache_tests::mock_models(kind) {
+        return (res, true);
+    }
 
     let fingerprint = agent.served_models_fingerprint();
     if let Ok(guard) = cache().lock() {
-        if let Some(cached) = guard.get(&kind).filter(|entry|
-            fingerprint.as_ref().is_none_or(|fp| entry.fingerprint.as_ref() == Some(fp))) {
+        if let Some(cached) = guard.get(&kind).filter(|entry| {
+            fingerprint
+                .as_ref()
+                .is_none_or(|fp| entry.fingerprint.as_ref() == Some(fp))
+        }) {
             return (cached.models.clone(), cached.from_live_probe);
         }
     }
@@ -269,7 +262,8 @@ pub(crate) fn get_served_models_cached_with_status(agent: &dyn Agent) -> (Option
 
 pub(crate) fn run_probe_cmd(program: &str, args: &[&str]) -> Option<super::env::CliCommandOutput> {
     super::env_identity::run_bounded(program, args, super::env_identity::DEFAULT_PROBE_TIMEOUT)
-        .ok().filter(|output| output.success)
+        .ok()
+        .filter(|output| output.success)
 }
 
 #[cfg(test)]
@@ -281,3 +275,19 @@ mod tests;
 mod cache_tests;
 #[cfg(test)]
 pub(crate) use cache_tests::MockServedModelsGuard;
+
+fn accepts_cached_model(kind: AgentKind, model_clean: &str, served_list: &[String]) -> bool {
+    if served_list.is_empty() {
+        aid_info!(
+            "[aid] No served models reported for {}; allowing dispatch with model '{model_clean}'",
+            kind.as_str()
+        );
+        return true;
+    }
+
+    if served_list.iter().any(|m| m.eq_ignore_ascii_case(model_clean)) {
+        return true;
+    }
+
+    false
+}

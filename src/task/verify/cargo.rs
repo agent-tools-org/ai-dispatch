@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use std::path::Path;
 
 use crate::store::Store;
-use crate::task::verify::{VerifyResult, VERIFY_TIMEOUT};
+use crate::task::verify::{VERIFY_TIMEOUT, VerifyResult};
 
 pub(crate) fn run_verify_with_store(
     store: &Store,
@@ -29,7 +29,9 @@ pub(crate) fn run_verify_with_store(
                     .enable_all()
                     .build()
                     .context("Failed to create Cargo verification runtime")?;
-                let _lock = crate::task::verify::VERIFY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+                let _lock = crate::task::verify::VERIFY_LOCK
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
                 runtime.block_on(crate::cmd::build::build_process::run_cargo_outcome(
                     store,
                     request,
@@ -43,21 +45,7 @@ pub(crate) fn run_verify_with_store(
             .join()
             .map_err(|_| anyhow::anyhow!("Cargo verification thread panicked"))?
     })?;
-    let mut output = cargo_output(
-        &result.report.stderr_lines, &result.plain_stdout, result.report.note.as_deref(),
-    );
-    if result.timed_out {
-        output.push_str(&format!("\nVerification timed out after {} seconds", VERIFY_TIMEOUT.as_secs()));
-    }
-    Ok(VerifyResult {
-        success: result.cargo_success,
-        timed_out: result.timed_out,
-        output,
-        command: result.command,
-        infrastructure_failure: result.infrastructure_failure,
-        rbox_result: None,
-        exit_code: Some(result.exit_code),
-    })
+    Ok(verify_result(result))
 }
 
 fn cargo_output(stderr: &[String], stdout: &[String], note: Option<&str>) -> String {
@@ -78,9 +66,9 @@ fn cargo_output(stderr: &[String], stdout: &[String], note: Option<&str>) -> Str
 }
 
 fn plain_command(command: &str) -> bool {
-    command.bytes().all(|byte| {
-        byte.is_ascii_alphanumeric() || b" \t/._-:=,+%@".contains(&byte)
-    })
+    command
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || b" \t/._-:=,+%@".contains(&byte))
 }
 
 #[cfg(test)]
@@ -89,7 +77,11 @@ mod tests {
 
     #[test]
     fn cargo_fast_path_accepts_plain_arguments() {
-        for command in ["cargo check", "cargo test --bin aid", " cargo clippy\t-p example "] {
+        for command in [
+            "cargo check",
+            "cargo test --bin aid",
+            " cargo clippy\t-p example ",
+        ] {
             assert!(plain_command(command), "{command}");
         }
     }
@@ -97,9 +89,28 @@ mod tests {
     #[test]
     fn cargo_fast_path_rejects_shell_syntax() {
         for syntax in [
-            "&& false", "|| true", "; false", "| cat", "&", "> out", "< in",
-            "'a b'", "\"a b\"", "$(true)", "`true`", "$FILTER", "*", "?", "[ab]",
-            "{a,b}", "~/dir", "a\\ b", "\nfalse", "# comment", "(true)", "! true",
+            "&& false",
+            "|| true",
+            "; false",
+            "| cat",
+            "&",
+            "> out",
+            "< in",
+            "'a b'",
+            "\"a b\"",
+            "$(true)",
+            "`true`",
+            "$FILTER",
+            "*",
+            "?",
+            "[ab]",
+            "{a,b}",
+            "~/dir",
+            "a\\ b",
+            "\nfalse",
+            "# comment",
+            "(true)",
+            "! true",
         ] {
             let command = format!("cargo test {syntax}");
             assert!(!plain_command(&command), "{command}");
@@ -112,4 +123,27 @@ pub(crate) fn target_dir_permission_failure(result: &VerifyResult, target_dir: O
         let lines = result.output.lines().map(str::to_string).collect::<Vec<_>>();
         crate::cmd::build::build_fallback::target_dir_permission_blocked(&lines, target)
     })
+}
+
+fn verify_result(result: crate::cmd::build::build_process::CargoRunOutcome) -> VerifyResult {
+    let mut output = cargo_output(
+        &result.report.stderr_lines,
+        &result.plain_stdout,
+        result.report.note.as_deref(),
+    );
+    if result.timed_out {
+        output.push_str(&format!(
+            "\nVerification timed out after {} seconds",
+            VERIFY_TIMEOUT.as_secs()
+        ));
+    }
+    VerifyResult {
+        success: result.cargo_success,
+        timed_out: result.timed_out,
+        output,
+        command: result.command,
+        infrastructure_failure: result.infrastructure_failure,
+        rbox_result: None,
+        exit_code: Some(result.exit_code),
+    }
 }

@@ -9,6 +9,10 @@ use super::truncate::capped_detail_with;
 use crate::routing::rate_limit;
 use crate::types::*;
 
+#[path = "opencode/details.rs"]
+mod details;
+use details::{event_detail, session_metadata};
+
 pub(crate) fn spec() -> OpenCodeOverlaySpec {
     OpenCodeOverlaySpec {
         id: "opencode".to_string(),
@@ -33,66 +37,7 @@ pub(crate) fn parse_json_event(
 ) -> Option<TaskEvent> {
     let event_type = v.get("type").and_then(|t| t.as_str())?;
     let session_id = v.get("sessionID").and_then(|s| s.as_str());
-    let (detail, metadata) = match event_type {
-        "tool_call" | "function_call" => {
-            let name = v.get("name").and_then(|n| n.as_str()).unwrap_or("unknown");
-            let args = v.get("arguments").and_then(|a| a.as_str()).unwrap_or("");
-            (format!("{name}: {args}"), None)
-        }
-        "message" => {
-            let detail = v
-                .get("content")
-                .or(v.get("text"))
-                .and_then(|t| t.as_str())
-                .unwrap_or("")
-                .to_string();
-            (detail, Some(json!({ "assistant_output": true })))
-        }
-        "text" => {
-            (v.pointer("/part/text").and_then(|t| t.as_str()).unwrap_or("").to_string(),
-                Some(json!({ "assistant_output": true })))
-        }
-        "auto_compact" | "git_snapshot" => (milestone_detail(v, event_type), None),
-        "step_start" => return None,
-        "step_finish" => {
-            let total = v.pointer("/part/tokens/total").and_then(|t| t.as_i64())?;
-            let input = v.pointer("/part/tokens/input").and_then(|t| t.as_i64())?;
-            let output = v.pointer("/part/tokens/output").and_then(|t| t.as_i64())?;
-            let cost = v.pointer("/part/cost").and_then(|c| c.as_f64())?;
-            (
-                format!("tokens: {} in + {} out = {}", input, output, total),
-                Some(json!({
-                    "tokens": total,
-                    "input_tokens": input,
-                    "output_tokens": output,
-                    "cost_usd": cost,
-                    "usage_is_delta": event_type == "step_finish",
-                })),
-            )
-        }
-        "completion" | "done" => {
-            let tokens = v.get("tokens").and_then(|t| t.as_i64());
-            (tokens.map(|t| format!("completed with {t} tokens")).unwrap_or_else(|| "completed".to_string()), tokens.map(|value| json!({ "tokens": value })))
-        }
-        "error" => {
-            let detail = error_detail(v).unwrap_or("unknown error");
-            // Watcher owns built-in OpenCode (has the model); overlays write here.
-            if marker_kind != AgentKind::OpenCode {
-                if let Some(message) = rate_limit::refusal_on_channel(
-                    &v.to_string(), signature_kind, crate::routing::quota::channel::Channel::CliStream,
-                ) {
-                    rate_limit::mark_rate_limited_for_signature(
-                        &marker_kind, custom_name, signature_kind, &message,
-                    );
-                }
-            }
-            let auth = crate::routing::auth_marker::auth_failure_line(
-                &v.to_string(), marker_kind, crate::routing::quota::channel::Channel::CliStream,
-            );
-            (detail.to_string(), auth.map(|message| json!({ "opencode_auth_failure": message })))
-        }
-        _ => return None,
-    };
+    let (detail, metadata) = event_detail(signature_kind, marker_kind, custom_name, v, event_type)?;
 
     if detail.is_empty() {
         return None;
@@ -107,19 +52,7 @@ pub(crate) fn parse_json_event(
         _ => EventKind::Reasoning,
     };
 
-    let metadata = if let Some(sid) = session_id {
-        match metadata {
-            Some(mut m) => {
-                if let Some(obj) = m.as_object_mut() {
-                    obj.insert("agent_session_id".to_string(), json!(sid));
-                }
-                Some(m)
-            }
-            None => Some(json!({ "agent_session_id": sid })),
-        }
-    } else {
-        metadata
-    };
+    let metadata = session_metadata(metadata, session_id);
 
     let (detail, metadata) = capped_detail_with(&detail, metadata);
     Some(TaskEvent {
@@ -182,10 +115,15 @@ pub(crate) fn classify_tool_detail(detail: &str) -> EventKind {
 }
 
 fn error_detail(v: &serde_json::Value) -> Option<&str> {
-    [v.get("message"), v.get("text"), v.pointer("/error/message"), v.pointer("/error/data/message")]
-        .into_iter()
-        .flatten()
-        .find_map(|value| value.as_str().filter(|msg| !msg.is_empty()))
+    [
+        v.get("message"),
+        v.get("text"),
+        v.pointer("/error/message"),
+        v.pointer("/error/data/message"),
+    ]
+    .into_iter()
+    .flatten()
+    .find_map(|value| value.as_str().filter(|msg| !msg.is_empty()))
 }
 
 pub(crate) fn extract_tokens_from_output(output: &str) -> (Option<i64>, Option<f64>) {
@@ -217,5 +155,9 @@ pub(crate) fn extract_tokens_from_output(output: &str) -> (Option<i64>, Option<f
     }
 }
 
-#[cfg(test)] #[path = "opencode_tests.rs"] mod tests;
-#[cfg(test)] #[path = "opencode_event_tests.rs"] mod event_tests;
+#[cfg(test)]
+#[path = "opencode_event_tests.rs"]
+mod event_tests;
+#[cfg(test)]
+#[path = "opencode_tests.rs"]
+mod tests;

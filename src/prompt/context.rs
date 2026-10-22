@@ -16,8 +16,7 @@ pub fn parse_context_specs(specs: &[String]) -> Result<Vec<ContextSpec>> {
         .iter()
         .map(|s| {
             let (raw_file, items) = if let Some((file, items_str)) = s.split_once(':') {
-                let items: Vec<String> =
-                    items_str.split(',').map(|i| i.trim().to_string()).collect();
+                let items: Vec<String> = items_str.split(',').map(|i| i.trim().to_string()).collect();
                 (file.to_string(), Some(items))
             } else {
                 (s.to_string(), None)
@@ -55,11 +54,7 @@ pub fn resolve_context(specs: &[ContextSpec]) -> Result<String> {
 
         match &spec.items {
             None => {
-                parts.push(format!(
-                    "### {}\n```rust\n{}\n```",
-                    spec.file,
-                    content.trim()
-                ));
+                parts.push(format!("### {}\n```rust\n{}\n```", spec.file, content.trim()));
             }
             Some(items) => {
                 let extracted = extract_items(&content, items);
@@ -77,11 +72,7 @@ pub fn resolve_context(specs: &[ContextSpec]) -> Result<String> {
 
     let context = parts.join("\n\n");
     let tokens = skills::estimate_tokens(&context);
-    aid_info!(
-        "[aid] Context injected: {} files, ~{} tokens",
-        file_count,
-        tokens
-    );
+    aid_info!("[aid] Context injected: {} files, ~{} tokens", file_count, tokens);
     Ok(context)
 }
 
@@ -115,28 +106,14 @@ fn extract_items(content: &str, items: &[String]) -> String {
 
         for line in &lines {
             if !capturing {
-                // Match `pub struct X`, `pub trait X`, `pub fn X`, `pub enum X`
-                let trimmed = line.trim();
-                let is_match = [
-                    "pub struct ",
-                    "pub trait ",
-                    "pub fn ",
-                    "pub enum ",
-                    "pub type ",
-                ]
-                .iter()
-                .any(|prefix| {
-                    trimmed.starts_with(prefix)
-                        && trimmed[prefix.len()..].starts_with(item_name.as_str())
-                });
+                let is_match = matches_item(line, item_name);
                 if is_match {
                     capturing = true;
                     brace_depth = 0;
                     block.push(*line);
                     brace_depth += line.chars().filter(|&c| c == '{').count() as i32;
                     brace_depth -= line.chars().filter(|&c| c == '}').count() as i32;
-                    if brace_depth <= 0
-                        && (line.contains(';') || (line.contains('{') && line.contains('}')))
+                    if brace_depth <= 0 && (line.contains(';') || (line.contains('{') && line.contains('}')))
                     {
                         capturing = false;
                         result.push(block.join("\n"));
@@ -166,8 +143,8 @@ fn extract_items(content: &str, items: &[String]) -> String {
 mod tests {
     use super::*;
     use std::io::Write;
-    use tempfile::tempdir_in;
     use tempfile::NamedTempFile;
+    use tempfile::tempdir_in;
 
     #[test]
     fn parse_specs_whole_file() {
@@ -190,18 +167,11 @@ mod tests {
         let dir = tempdir_in(&cwd).unwrap();
         let path = dir.path().join("context.rs");
         std::fs::write(&path, "pub struct RelativePath;\n").unwrap();
-        let relative = path
-            .strip_prefix(&cwd)
-            .unwrap()
-            .to_string_lossy()
-            .to_string();
+        let relative = path.strip_prefix(&cwd).unwrap().to_string_lossy().to_string();
 
         let specs = parse_context_specs(&[relative]).unwrap();
 
-        assert_eq!(
-            specs[0].file,
-            path.canonicalize().unwrap().to_string_lossy()
-        );
+        assert_eq!(specs[0].file, path.canonicalize().unwrap().to_string_lossy());
     }
 
     #[test]
@@ -288,4 +258,12 @@ mod tests {
         assert!(result.contains("- src/lib.rs: read entire file"));
         assert!(result.contains("- src/types.rs: focus on Task"));
     }
+}
+
+fn matches_item(line: &str, item_name: &str) -> bool {
+    // Match `pub struct X`, `pub trait X`, `pub fn X`, `pub enum X`
+    let trimmed = line.trim();
+    ["pub struct ", "pub trait ", "pub fn ", "pub enum ", "pub type "]
+        .iter()
+        .any(|prefix| trimmed.starts_with(prefix) && trimmed[prefix.len()..].starts_with(item_name))
 }

@@ -7,9 +7,9 @@ use std::cmp::Ordering;
 
 use crate::config::UsageBudget;
 use crate::cost;
+use crate::cost::usage::{AgentAnalytics, BudgetUsageRow, TaskSummary, UsageSnapshot, filter_budget_tasks};
 use crate::support::paths;
 use crate::types::Task;
-use crate::cost::usage::{filter_budget_tasks, AgentAnalytics, BudgetUsageRow, TaskSummary, UsageSnapshot};
 
 pub fn render_usage(snapshot: &UsageSnapshot) -> String {
     let mut out = String::new();
@@ -18,30 +18,7 @@ pub fn render_usage(snapshot: &UsageSnapshot) -> String {
         snapshot.generated_at.format("%Y-%m-%d %H:%M:%S %:z"),
     ));
 
-    if !snapshot.agent_rows.is_empty() {
-        out.push_str("\nTracked Task History\n");
-        out.push_str(&format!(
-            "{:<12} {:<8} {:<10} {:<10} {:<6} {:<8} {:<7} {}\n",
-            "Agent", "Tasks", "Tokens", "Cost", "Success%", "Avg Time", "Retries", "Last Task"
-        ));
-        out.push_str(&"-".repeat(80));
-        out.push('\n');
-        for row in &snapshot.agent_rows {
-            out.push_str(&format!(
-                "{:<12} {:<8} {:<10} {:<10} {:<6} {:<8} {:<7} {}\n",
-                row.name,
-                row.tasks,
-                format_tokens(row.tokens),
-                cost::format_cost_total(row.cost_usd, row.unknown_cost_tasks),
-                format!("{:.1}%", row.success_rate),
-                format_duration_secs(row.avg_duration_secs),
-                row.retry_count,
-                row.last_task_at
-                    .map(format_last_seen)
-                    .unwrap_or_else(|| "-".to_string()),
-            ));
-        }
-    }
+    render_task_history(&mut out, snapshot);
 
     if snapshot.budget_rows.is_empty() {
         out.push_str(&format!(
@@ -101,19 +78,7 @@ pub fn render_agent_analytics(analytics: &AgentAnalytics) -> String {
         .map(|cost| cost::format_cost(Some(cost)))
         .unwrap_or_else(|| "-".to_string());
     out.push_str(&format!("Cost per success: {}\n", cost_per_success));
-    if let Some(trend) = &analytics.trend {
-        let task_delta = trend.current.tasks as isize - trend.previous.tasks as isize;
-        let cost_delta = trend.current.cost_usd - trend.previous.cost_usd;
-        let cost_delta_label = format!(
-            "{}{}",
-            if cost_delta >= 0.0 { '+' } else { '-' },
-            cost::format_cost(Some(cost_delta.abs()))
-        );
-        out.push_str(&format!(
-            "Trend vs {}: tasks {:+}, cost {}\n",
-            trend.label, task_delta, cost_delta_label
-        ));
-    }
+    render_usage_trend(&mut out, analytics);
     out.push_str("Top 5 most expensive tasks:\n");
     if analytics.top_tasks.is_empty() {
         out.push_str("  (no tasks recorded in this period)\n");
@@ -144,16 +109,10 @@ pub(crate) fn collect_budget_rows(tasks: &[Task], budgets: &[UsageBudget]) -> Ve
         .map(|budget| {
             let budget_tasks = filter_budget_tasks(tasks, budget);
             let tasks_used = budget_tasks.len() as u32 + budget.external_tasks;
-            let tokens_used = budget_tasks
-                .iter()
-                .filter_map(|task| task.tokens)
-                .sum::<i64>()
-                + budget.external_tokens;
-            let cost_used = budget_tasks
-                .iter()
-                .filter_map(|task| task.cost_usd)
-                .sum::<f64>()
-                + budget.external_cost_usd;
+            let tokens_used =
+                budget_tasks.iter().filter_map(|task| task.tokens).sum::<i64>() + budget.external_tokens;
+            let cost_used =
+                budget_tasks.iter().filter_map(|task| task.cost_usd).sum::<f64>() + budget.external_cost_usd;
             BudgetUsageRow {
                 name: budget.name.clone(),
                 plan: budget.plan.clone(),
@@ -248,3 +207,46 @@ fn format_ratio_f64(current: f64, unknown: usize, limit: Option<f64>) -> String 
 #[cfg(test)]
 #[path = "api_route_tests.rs"]
 mod api_route_tests;
+
+fn render_task_history(out: &mut String, snapshot: &UsageSnapshot) {
+    if !snapshot.agent_rows.is_empty() {
+        out.push_str("\nTracked Task History\n");
+        out.push_str(&format!(
+            "{:<12} {:<8} {:<10} {:<10} {:<6} {:<8} {:<7} {}\n",
+            "Agent", "Tasks", "Tokens", "Cost", "Success%", "Avg Time", "Retries", "Last Task"
+        ));
+        out.push_str(&"-".repeat(80));
+        out.push('\n');
+        for row in &snapshot.agent_rows {
+            out.push_str(&format!(
+                "{:<12} {:<8} {:<10} {:<10} {:<6} {:<8} {:<7} {}\n",
+                row.name,
+                row.tasks,
+                format_tokens(row.tokens),
+                cost::format_cost_total(row.cost_usd, row.unknown_cost_tasks),
+                format!("{:.1}%", row.success_rate),
+                format_duration_secs(row.avg_duration_secs),
+                row.retry_count,
+                row.last_task_at
+                    .map(format_last_seen)
+                    .unwrap_or_else(|| "-".to_string()),
+            ));
+        }
+    }
+}
+
+fn render_usage_trend(out: &mut String, analytics: &AgentAnalytics) {
+    if let Some(trend) = &analytics.trend {
+        let task_delta = trend.current.tasks as isize - trend.previous.tasks as isize;
+        let cost_delta = trend.current.cost_usd - trend.previous.cost_usd;
+        let cost_delta_label = format!(
+            "{}{}",
+            if cost_delta >= 0.0 { '+' } else { '-' },
+            cost::format_cost(Some(cost_delta.abs()))
+        );
+        out.push_str(&format!(
+            "Trend vs {}: tasks {:+}, cost {}\n",
+            trend.label, task_delta, cost_delta_label
+        ));
+    }
+}

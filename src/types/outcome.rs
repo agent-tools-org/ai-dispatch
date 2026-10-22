@@ -57,91 +57,33 @@ impl TaskOutcome {
         }
     }
 
-    pub fn derive(
-        status: TaskStatus,
-        verify_status: VerifyStatus,
-        verify_required: bool,
-    ) -> Self {
-        match (status, verify_status, verify_required) {
-            (
-                TaskStatus::Waiting
-                | TaskStatus::Pending
-                | TaskStatus::Running
-                | TaskStatus::AwaitingInput
-                | TaskStatus::Stalled,
-                VerifyStatus::Pending
-                | VerifyStatus::Passed
-                | VerifyStatus::Failed
-                | VerifyStatus::Skipped
-                | VerifyStatus::TimedOut
-                | VerifyStatus::InfrastructureFailure
-                | VerifyStatus::Unobserved,
-                false | true,
-            ) => Self::InProgress,
-            (
-                TaskStatus::Failed,
-                VerifyStatus::Pending
-                | VerifyStatus::Passed
-                | VerifyStatus::Failed
-                | VerifyStatus::Skipped
-                | VerifyStatus::TimedOut
-                | VerifyStatus::InfrastructureFailure
-                | VerifyStatus::Unobserved,
-                false | true,
-            ) => Self::Failed,
-            (
-                TaskStatus::Stopped,
-                VerifyStatus::Pending
-                | VerifyStatus::Passed
-                | VerifyStatus::Failed
-                | VerifyStatus::Skipped
-                | VerifyStatus::TimedOut
-                | VerifyStatus::InfrastructureFailure
-                | VerifyStatus::Unobserved,
-                false | true,
-            ) => Self::Stopped,
-            (
-                TaskStatus::Skipped,
-                VerifyStatus::Pending
-                | VerifyStatus::Passed
-                | VerifyStatus::Failed
-                | VerifyStatus::Skipped
-                | VerifyStatus::TimedOut
-                | VerifyStatus::InfrastructureFailure
-                | VerifyStatus::Unobserved,
-                false | true,
-            ) => Self::Skipped,
-            (TaskStatus::Done | TaskStatus::Merged, VerifyStatus::Passed, false | true) => {
-                Self::Verified
+    pub fn derive(status: TaskStatus, verify_status: VerifyStatus, verify_required: bool) -> Self {
+        match status {
+            TaskStatus::Waiting
+            | TaskStatus::Pending
+            | TaskStatus::Running
+            | TaskStatus::AwaitingInput
+            | TaskStatus::Stalled => Self::InProgress,
+            TaskStatus::Failed => Self::Failed,
+            TaskStatus::Stopped => Self::Stopped,
+            TaskStatus::Skipped => Self::Skipped,
+            TaskStatus::Done | TaskStatus::Merged => Self::derive_completed(verify_status, verify_required),
+        }
+    }
+
+    fn derive_completed(verify_status: VerifyStatus, verify_required: bool) -> Self {
+        match (verify_status, verify_required) {
+            (VerifyStatus::Passed, false | true) => Self::Verified,
+            (VerifyStatus::Failed, false | true) => Self::Broken,
+            (VerifyStatus::TimedOut, false | true) => Self::Unverified(UnverifiedReason::TimedOut),
+            (VerifyStatus::InfrastructureFailure, false | true) => {
+                Self::Unverified(UnverifiedReason::Infrastructure)
             }
-            (TaskStatus::Done | TaskStatus::Merged, VerifyStatus::Failed, false | true) => {
-                Self::Broken
+            (VerifyStatus::Unobserved, false | true) => Self::Unverified(UnverifiedReason::NoResult),
+            (VerifyStatus::Skipped | VerifyStatus::Pending, true) => {
+                Self::Unverified(UnverifiedReason::NoResult)
             }
-            (
-                TaskStatus::Done | TaskStatus::Merged,
-                VerifyStatus::TimedOut,
-                false | true,
-            ) => Self::Unverified(UnverifiedReason::TimedOut),
-            (
-                TaskStatus::Done | TaskStatus::Merged,
-                VerifyStatus::InfrastructureFailure,
-                false | true,
-            ) => Self::Unverified(UnverifiedReason::Infrastructure),
-            (
-                TaskStatus::Done | TaskStatus::Merged,
-                VerifyStatus::Unobserved,
-                false | true,
-            ) => Self::Unverified(UnverifiedReason::NoResult),
-            (
-                TaskStatus::Done | TaskStatus::Merged,
-                VerifyStatus::Skipped | VerifyStatus::Pending,
-                true,
-            ) => Self::Unverified(UnverifiedReason::NoResult),
-            (
-                TaskStatus::Done | TaskStatus::Merged,
-                VerifyStatus::Skipped | VerifyStatus::Pending,
-                false,
-            ) => Self::Delivered,
+            (VerifyStatus::Skipped | VerifyStatus::Pending, false) => Self::Delivered,
         }
     }
 
@@ -160,8 +102,9 @@ impl TaskOutcome {
             return self;
         }
         match delivery {
-            Some(DeliveryAssessment::HollowOutput)
-            | Some(DeliveryAssessment::MissingFinalDelivery) => Self::Failed,
+            Some(DeliveryAssessment::HollowOutput) | Some(DeliveryAssessment::MissingFinalDelivery) => {
+                Self::Failed
+            }
             Some(DeliveryAssessment::EmptyDiff) | None => self,
         }
     }
@@ -184,5 +127,12 @@ impl TaskOutcome {
 
 pub fn verify_required(verify: Option<&str>) -> bool {
     let verify = verify.map(str::trim);
-    !matches!(verify, None | Some("") | Some("none") | Some("false") | Some("skip"))
+    !matches!(
+        verify,
+        None | Some("") | Some("none") | Some("false") | Some("skip")
+    )
 }
+
+#[cfg(test)]
+#[path = "outcome_predicate_tests.rs"]
+mod predicate_tests;

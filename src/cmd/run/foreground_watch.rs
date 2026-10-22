@@ -1,7 +1,6 @@
 // Foreground attachment to a background worker.
 // Exports wait_for_task; depends on Store, background specs, and task outcomes.
 
-use crate::ui::format::format_duration_ms as format_duration;
 use anyhow::Result;
 use std::io::IsTerminal;
 use std::sync::Arc;
@@ -10,6 +9,7 @@ use tokio::time::{sleep, Duration};
 use crate::runtime::background;
 use crate::store::Store;
 use crate::types::{verify_required, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
+use crate::ui::format::format_duration_ms;
 
 #[cfg(unix)]
 use tokio::signal::unix::{signal, Signal, SignalKind};
@@ -102,7 +102,7 @@ fn latest_retry(store: &Store, parent_id: &str) -> Result<Option<Task>> {
 }
 
 fn print_completion(store: &Store, task: &Task) {
-    let duration = format_duration(task.duration_ms.unwrap_or_default().max(0));
+    let duration = format_duration_ms(task.duration_ms.unwrap_or_default().max(0));
     let tokens = task
         .tokens
         .map(|value| format!(", {value} tokens"))

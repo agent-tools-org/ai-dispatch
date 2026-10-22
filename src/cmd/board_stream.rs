@@ -2,8 +2,6 @@
 // Exports run() to print task status updates to stdout.
 // Depends on Store lookups and tokio timing utilities.
 
-use crate::ui::format::format_duration_ms as format_duration;
-use crate::ui::format::truncate;
 use anyhow::Result;
 use chrono::Local;
 use std::collections::HashMap;
@@ -14,6 +12,8 @@ use crate::runtime::background;
 use crate::cmd::eta;
 use crate::store::Store;
 use crate::types::{Task, TaskFilter, TaskOutcome, TaskStatus};
+use crate::ui::format::format_duration_ms;
+use crate::ui::format::truncate;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 const PROMPT_MAX: usize = 60;
@@ -230,7 +230,7 @@ fn duration_for_task(task: &Task, store: &Store) -> String {
     }
     let duration = task
         .duration_ms
-        .map(format_duration)
+        .map(format_duration_ms)
         .unwrap_or_else(|| elapsed_since(task.created_at));
     match eta::estimate_eta(task, store) {
         Some(eta) => format!("{duration} (ETA: {eta})"),

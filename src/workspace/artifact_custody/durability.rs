@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
-use crate::workspace::git::git_output_trimmed as git_output;
+use crate::workspace::git::git_output_trimmed;
 
 #[derive(Debug, Serialize)]
 pub(super) struct DurabilityCertificate {
@@ -29,7 +29,7 @@ pub(super) fn verify(
 ) -> Result<DurabilityCertificate> {
     if !is_missing {
         ensure_clean(worktree)?;
-        let live_head = git_output(worktree, &["rev-parse", "HEAD"])?;
+        let live_head = git_output_trimmed(worktree, &["rev-parse", "HEAD"])?;
         anyhow::ensure!(
             live_head == accepted_head,
             "Artifact changed after acceptance: accepted {accepted_head}, current {live_head}"
@@ -48,11 +48,11 @@ pub(super) fn verify(
 }
 
 pub(super) fn manifest_digest(exec_dir: &Path, head: &str) -> Result<String> {
-    git_output(exec_dir, &["rev-parse", &format!("{head}^{{tree}}")])
+    git_output_trimmed(exec_dir, &["rev-parse", &format!("{head}^{{tree}}")])
 }
 
 fn ensure_clean(worktree: &Path) -> Result<()> {
-    let status = git_output(
+    let status = git_output_trimmed(
         worktree,
         &["status", "--porcelain=v1", "--untracked-files=all"],
     )?;
@@ -64,7 +64,7 @@ fn ensure_clean(worktree: &Path) -> Result<()> {
 }
 
 fn resolve_common_dir(worktree: &Path) -> Result<PathBuf> {
-    let value = git_output(worktree, &["rev-parse", "--git-common-dir"])?;
+    let value = git_output_trimmed(worktree, &["rev-parse", "--git-common-dir"])?;
     let path = PathBuf::from(value);
     if path.is_absolute() {
         return Ok(path);

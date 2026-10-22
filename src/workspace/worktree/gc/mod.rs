@@ -2,9 +2,9 @@
 // Exports candidate discovery and merge heuristics.
 // Deps: anyhow, crate::config::project::ProjectConfig, std::process::Command.
 
-use crate::workspace::git::git_output as git_stdout;
 use crate::config::project::ProjectConfig;
 use crate::workspace::worktree::is_aid_managed_worktree_path;
+use crate::workspace::git::git_output;
 use anyhow::{Context, Result};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -111,8 +111,8 @@ pub(crate) fn branch_merge_reason(
         return Ok(None);
     }
 
-    let cherry = git_stdout(repo_dir, &["cherry", base_branch, branch])?;
-    let log = git_stdout(repo_dir, &["log", "--oneline", &format!("{base_branch}..{branch}")])?;
+    let cherry = git_output(repo_dir, &["cherry", base_branch, branch])?;
+    let log = git_output(repo_dir, &["log", "--oneline", &format!("{base_branch}..{branch}")])?;
     Ok(merge_reason_from_outputs(&cherry, &log))
 }
 
@@ -125,7 +125,7 @@ pub(crate) fn tracked_worktree_paths(store: &crate::store::Store) -> Result<BTre
 }
 
 fn prunable_worktrees(repo_dir: &Path, tracked_paths: &BTreeSet<String>) -> Result<Vec<PrunableWorktree>> {
-    let output = git_stdout(repo_dir, &["worktree", "list", "--porcelain"])?;
+    let output = git_output(repo_dir, &["worktree", "list", "--porcelain"])?;
     Ok(parse_worktree_entries(&output)
         .into_iter()
         .filter(|entry| entry.prunable && should_consider_worktree(&entry.path, tracked_paths))
@@ -138,7 +138,7 @@ fn deletable_branches(
     base_branch: &str,
     prefixes: &[String],
 ) -> Result<Vec<DeletableBranch>> {
-    let branches = git_stdout(repo_dir, &["for-each-ref", "--format=%(refname:short)", "refs/heads"])?;
+    let branches = git_output(repo_dir, &["for-each-ref", "--format=%(refname:short)", "refs/heads"])?;
     let mut deletable = Vec::new();
     for branch in branches.lines().map(str::trim).filter(|line| !line.is_empty()) {
         if !is_managed_branch(branch, prefixes) {

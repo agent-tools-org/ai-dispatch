@@ -1,15 +1,15 @@
 // Text rendering for task board and task detail views.
 // Board rows can enrich output with stored milestone events.
 
-use crate::ui::format::format_duration_ms as format_duration;
-use crate::ui::format::format_tokens;
-use crate::ui::format::truncate;
 use anyhow::Result;
 
 use crate::cmd::eta;
 use crate::cost;
 use crate::store::Store;
 use crate::types::*;
+use crate::ui::format::format_duration_ms;
+use crate::ui::format::format_tokens;
+use crate::ui::format::truncate;
 
 mod detail;
 mod rows;

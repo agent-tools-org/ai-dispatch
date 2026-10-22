@@ -5,8 +5,8 @@ use anyhow::{anyhow, Context, Result};
 use serde::Serialize;
 use std::{fs, sync::Arc};
 use crate::{cmd::show::worktree_diff, support::paths, store::Store, types::{Task, TaskEvent}};
+use crate::ui::format::format_duration_optional_ms;
 
-use crate::ui::format::format_duration_optional_ms as format_duration;
 #[path = "export_sharegpt.rs"]
 mod export_sharegpt;
 
@@ -65,7 +65,7 @@ fn build_markdown(task: &Task, timeline: &[String], output: &str, diff: &str) ->
         task.id,
         task.display_route(),
         task.status.as_str(),
-        format_duration(task.duration_ms),
+        format_duration_optional_ms(task.duration_ms),
         format_cost(task.cost_usd),
         task.created_at.to_rfc3339(),
     );
@@ -95,7 +95,7 @@ fn build_json(task: &Task, timeline: &[String], output: &str, diff: &str) -> Res
         id: task.id.as_str(),
         agent: task.agent_display_name(),
         status: task.status.as_str(),
-        duration: format_duration(task.duration_ms),
+        duration: format_duration_optional_ms(task.duration_ms),
         cost: format_cost(task.cost_usd),
         created_at: task.created_at.to_rfc3339(),
         prompt: &task.prompt,

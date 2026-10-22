@@ -1,7 +1,6 @@
 // PTY-backed agent execution for interactive background tasks.
 // Runs combined stdout/stderr through prompt detection and file-based input forwarding.
 
-use crate::ui::format::format_duration_ms as format_duration;
 use anyhow::Result;
 use chrono::Local;
 use std::io::Read;
@@ -16,6 +15,7 @@ use crate::runtime::pty::watch::{finalize_output, monitor_bridge, MonitorState};
 use crate::store::Store;
 use crate::store::TaskCompletionUpdate;
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
+use crate::ui::format::format_duration_ms;
 
 mod command;
 use command::spawn_bridge;
@@ -185,7 +185,7 @@ fn record_completion(
         "Task {} {} ({}{}{})",
         task_id,
         crate::routing::capacity::terminal_label(store, task_id, agent.kind(), info.status),
-        format_duration(duration_ms),
+        format_duration_ms(duration_ms),
         info.tokens
             .map(|tokens| format!(", {} tokens", tokens))
             .unwrap_or_default(),

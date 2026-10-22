@@ -4,11 +4,11 @@ use chrono::Local;
 use std::sync::Arc;
 use tokio::process::Command;
 
-use crate::ui::format::format_duration_ms as format_duration;
 use crate::{store::Store, types::*};
 use crate::cmd::run::RunArgs;
 use crate::runtime::process::group::cleanup_process_group;
 use crate::store::TaskCompletionUpdate;
+use crate::ui::format::format_duration_ms;
 
 use super::{clean_output_if_jsonl, fill_empty_output_from_log};
 
@@ -240,7 +240,7 @@ fn print_completion(
     agent: &dyn crate::agent::Agent, store: &Store, task_id: &TaskId, info: &CompletionInfo,
     duration_ms: i64, cost_usd: Option<f64>,
 ) {
-    let duration_str = format_duration(duration_ms);
+    let duration_str = format_duration_ms(duration_ms);
     let tokens_str = info.tokens.map(|t| format!(", {} tokens", t)).unwrap_or_default();
     let cost_str = if cost_usd.is_some() { format!(", {}", crate::cost::format_cost(cost_usd)) } else { String::new() };
     let fail_reason = if info.status == TaskStatus::Failed {

@@ -2,7 +2,6 @@
 // Exports: `render_status_bar`; derives counts and resource totals from App state.
 // Deps: App, ProcessMetrics, TaskStatus, and ratatui Paragraph rendering.
 
-use crate::ui::format::truncate_chars as truncate;
 use std::collections::HashMap;
 
 use ratatui::prelude::{Color, Style};
@@ -11,6 +10,7 @@ use ratatui::widgets::Paragraph;
 use super::app::App;
 use super::metrics::ProcessMetrics;
 use crate::types::{Task, TaskStatus};
+use crate::ui::format::truncate_chars;
 
 #[derive(Clone, Copy)]
 pub(crate) enum StatusBarMode {
@@ -130,12 +130,12 @@ fn build_status_text(snapshot: &StatusSnapshot, width: usize, mode: StatusBarMod
         snapshot.counts.failed
     );
     if display_width(&prefix) >= width {
-        return truncate(&prefix, width);
+        return truncate_chars(&prefix, width);
     }
     format!(
         "{}{}",
         prefix,
-        truncate(&snapshot.scope, width - display_width(&prefix))
+        truncate_chars(&snapshot.scope, width - display_width(&prefix))
     )
 }
 

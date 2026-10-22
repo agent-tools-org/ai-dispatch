@@ -2,13 +2,13 @@
 // Exports: run_tool_command.
 // Deps: crate::config::toolbox, crate::support::sanitize, anyhow, std::fs.
 
-use crate::ui::format::truncate as truncate_str;
 use anyhow::{bail, Context, Result};
 use std::fs;
 
 use crate::cli::ToolAction;
 use crate::support::sanitize;
 use crate::config::toolbox;
+use crate::ui::format::truncate;
 
 const TOOL_TEMPLATE: &str = r#"[tool]
 id = "{name}"
@@ -52,7 +52,7 @@ fn list_tools(team: Option<&str>) -> Result<()> {
         } else {
             tool.tags.join(", ")
         };
-        let desc = truncate_str(&tool.description, 30);
+        let desc = truncate(&tool.description, 30);
         println!(
             "{:<16} {:<32} {:<8} {}",
             tool.name, desc, tool.scope.label(), tags

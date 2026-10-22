@@ -5,9 +5,9 @@ use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use crate::store::Store;
 use crate::types::{Task, TaskFilter};
+use crate::ui::format::format_tokens;
+use crate::ui::format::format_duration_optional_ms;
 
-use crate::ui::format::format_tokens as format_token_count;
-use crate::ui::format::format_duration_optional_ms as format_duration;
 pub fn run(store: &Store, task_id: &str) -> Result<()> {
     let chain = store.get_retry_chain(task_id)?;
     if chain.is_empty() {
@@ -87,10 +87,10 @@ fn format_task_line(task: &Task) -> String {
     if let Some(delivery) = task.delivery_assessment() {
         status.push_str(&format!(" [delivery:{}]", delivery.as_str()));
     }
-    let duration = format_duration(task.duration_ms);
+    let duration = format_duration_optional_ms(task.duration_ms);
     let mut parts = vec![duration];
     if let Some(tokens) = task.tokens {
-        parts.push(format!("{} tokens", format_token_count(tokens)));
+        parts.push(format!("{} tokens", format_tokens(tokens)));
     }
     format!(
         "{} {} {} ({})",

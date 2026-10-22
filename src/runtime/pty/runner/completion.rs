@@ -21,7 +21,7 @@ pub(crate) fn event(
         detail: format!(
             "{} ({}{}{})",
             crate::routing::capacity::terminal_label(store, task_id, agent.kind(), info.status),
-            format_duration(duration_ms),
+            format_duration_ms(duration_ms),
             info.tokens
                 .map(|t| format!(", {} tokens", t))
                 .unwrap_or_default(),

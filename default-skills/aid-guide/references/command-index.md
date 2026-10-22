@@ -42,7 +42,7 @@ current arguments.
 |---|---|
 | `aid accept` | Record the principal's explicit acceptance of a terminal task artifact. |
 | `aid reject` | Record rejection while preserving every artifact. |
-| `aid gc` | Delete an accepted task worktree only after recursive durability proof. |
+| `aid gc` | Collect an accepted task; worktree deletion requires recursive durability proof. Tasks without worktrees reclaim only eligible fallback Cargo targets. |
 | `aid worktree` | Create or list AID-managed worktrees; it does not destroy them. |
 
 ## Organize knowledge and collaboration

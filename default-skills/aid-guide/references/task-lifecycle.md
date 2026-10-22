@@ -143,7 +143,8 @@ aid accept <task-id>
 
 Acceptance is an explicit principal act. It records the decision, principal,
 accepted head, branch, and artifact manifest. It does not immediately delete
-anything.
+anything. A terminal task with no recorded worktree path is accepted without
+a head, branch, or manifest.
 
 If a sibling already collected the shared worktree, acceptance uses the task's
 recorded final commit and branch. The worktree must be absent on disk and
@@ -174,7 +175,11 @@ must be another explicit decision.
 aid gc --task <task-id>
 ```
 
-GC is allowed only when:
+For an accepted task with no recorded worktree path, GC reports that there was
+no worktree artifact and reclaims only its fallback Cargo target directories.
+It does not modify the repository. Rejected tasks cannot be collected.
+
+For tasks with a recorded worktree path, GC is allowed only when:
 
 1. the latest decision is `Accepted`;
 2. the manifest still matches acceptance, and a live worktree matches the accepted head;

@@ -17,14 +17,15 @@ pub(crate) fn delete_accepted_worktree(store: &Store, task_id: &str) -> Result<(
         acceptance.decision == AcceptanceDecision::Accepted,
         "Task {task_id} was rejected; its artifacts remain in custody"
     );
+    let Some(worktree_str) = task.worktree_path.as_deref() else {
+        let _ = crate::cmd::clean_cargo_target::remove_task_fallback_target_dirs(store, &task);
+        println!("Task {task_id} had no worktree artifact");
+        return Ok(());
+    };
     let head = acceptance
         .accepted_head_sha
         .as_deref()
         .context("Acceptance record has no head commit")?;
-    let worktree_str = task
-        .worktree_path
-        .as_deref()
-        .context("Task has no worktree artifact")?;
     let worktree = Path::new(worktree_str);
     let repo_path_str = task
         .repo_path

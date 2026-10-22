@@ -9,7 +9,11 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
+mod hooks;
+mod mode;
 mod repo;
+use hooks::{ensure_object_field, read_settings_json, upsert_hook};
+pub use mode::Mode;
 
 #[cfg(not(test))]
 static BUT_AVAILABLE: OnceLock<bool> = OnceLock::new();
@@ -39,32 +43,6 @@ pub(crate) struct TaskWorktreeIntegrationPlan {
     pub install_claude_hooks: bool,
     pub on_done_command: Option<String>,
     pub emit_setup_hint: bool,
-}
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Mode {
-    #[default]
-    Off,
-    Auto,
-    Always,
-}
-
-impl Mode {
-    pub fn from_str(s: &str) -> Result<Self> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "off" => Ok(Self::Off),
-            "auto" => Ok(Self::Auto),
-            "always" => Ok(Self::Always),
-            other => bail!("unknown gitbutler mode '{other}'"),
-        }
-    }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Off => "off",
-            Self::Auto => "auto",
-            Self::Always => "always",
-        }
-    }
 }
 /// Returns true iff the `but` binary is on PATH and `but --version` succeeds.
 /// Result is cached for the process lifetime via OnceLock in production;
@@ -126,8 +104,18 @@ pub fn install_claude_hooks(worktree: &Path) -> Result<()> {
     let settings_path = worktree.join(CLAUDE_SETTINGS_PATH);
     let mut root = read_settings_json(&settings_path)?;
     let hooks = ensure_object_field(&mut root, "hooks")?;
-    upsert_hook(hooks, "PreToolUse", Some(CLAUDE_TOOL_MATCHER), "but claude pre-tool");
-    upsert_hook(hooks, "PostToolUse", Some(CLAUDE_TOOL_MATCHER), "but claude post-tool");
+    upsert_hook(
+        hooks,
+        "PreToolUse",
+        Some(CLAUDE_TOOL_MATCHER),
+        "but claude pre-tool",
+    );
+    upsert_hook(
+        hooks,
+        "PostToolUse",
+        Some(CLAUDE_TOOL_MATCHER),
+        "but claude post-tool",
+    );
     upsert_hook(hooks, "Stop", None, "but claude stop");
     if let Some(parent) = settings_path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -282,77 +270,6 @@ fn command_failure_message(command: &str, output: &std::process::Output) -> Stri
         (false, true) => format!("{command} failed: {stdout}"),
         (true, false) => format!("{command} failed: {stderr}"),
         (false, false) => format!("{command} failed: {stderr} ({stdout})"),
-    }
-}
-
-fn read_settings_json(path: &Path) -> Result<Value> {
-    if !path.exists() {
-        return Ok(Value::Object(Map::new()));
-    }
-    let value = serde_json::from_slice::<Value>(&std::fs::read(path)?)?;
-    if value.is_object() {
-        Ok(value)
-    } else {
-        bail!("{} must contain a JSON object", path.display());
-    }
-}
-
-fn ensure_object_field<'a>(root: &'a mut Value, field: &str) -> Result<&'a mut Map<String, Value>> {
-    let Some(root_object) = root.as_object_mut() else {
-        bail!("settings root must be a JSON object");
-    };
-    let entry = root_object
-        .entry(field.to_string())
-        .or_insert_with(|| Value::Object(Map::new()));
-    if !entry.is_object() {
-        *entry = Value::Object(Map::new());
-    }
-    match entry.as_object_mut() {
-        Some(object) => Ok(object),
-        None => bail!("settings field '{field}' must be a JSON object"),
-    }
-}
-
-fn upsert_hook(
-    hooks: &mut Map<String, Value>,
-    event_name: &str,
-    matcher: Option<&str>,
-    command: &str,
-) {
-    let entry = hooks
-        .entry(event_name.to_string())
-        .or_insert_with(|| Value::Array(Vec::new()));
-    if !entry.is_array() {
-        *entry = Value::Array(Vec::new());
-    }
-    if let Some(items) = entry.as_array_mut() {
-        let index = items.iter().position(|value| matcher_matches(value, matcher));
-        let hook_value = build_hook_value(matcher, command);
-        if let Some(index) = index {
-            items[index] = hook_value;
-        } else {
-            items.push(hook_value);
-        }
-    }
-}
-
-fn matcher_matches(value: &Value, matcher: Option<&str>) -> bool {
-    let current = value.get("matcher").and_then(Value::as_str).unwrap_or("");
-    match matcher {
-        Some(expected) => current == expected,
-        None => current.is_empty(),
-    }
-}
-
-fn build_hook_value(matcher: Option<&str>, command: &str) -> Value {
-    match matcher {
-        Some(matcher) => json!({
-            "matcher": matcher,
-            "hooks": [{"type": "command", "command": command}],
-        }),
-        None => json!({
-            "hooks": [{"type": "command", "command": command}],
-        }),
     }
 }
 

@@ -7,9 +7,9 @@ use tokio::io::{AsyncReadExt, BufReader};
 use tokio::process::Child;
 
 use crate::agent::Agent;
-use crate::support::paths;
 use crate::routing::rate_limit;
 use crate::store::Store;
+use crate::support::paths;
 use crate::types::{AgentKind, CompletionInfo, TaskId, TaskStatus};
 
 use super::extract::is_standalone_milestone_line;
@@ -45,58 +45,7 @@ pub(crate) async fn watch_buffered(
     if let Some(handle) = stderr_handle {
         drain_stderr_capture(handle).await;
     }
-    let diagnostics = std::fs::read_to_string(paths::agent_log_path(task_id.as_str()))
-        .unwrap_or_default();
-    let mut info = if exit_status.success() {
-        agent.parse_completion(&buffer)
-    } else {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Failed,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
-    };
-    let diagnostic_failure = agent.diagnostics_report_terminal_failure(&diagnostics);
-    if diagnostic_failure {
-        info.status = TaskStatus::Failed;
-    }
-    info.exit_code = exit_status.code();
-    let task = store.get_task(task_id.as_str()).ok().flatten();
-    let dispatched_model = task.as_ref().and_then(|t| t.requested_model.as_deref());
-    let delivered = buffered_delivery_confirmed(agent.kind(), &buffer);
-    let quota = crate::agent::stream_completion::record_quota_exhaustion_with_delivery(
-        &buffer,
-        agent.kind(),
-        agent.rate_limit_name(),
-        info.model.as_deref().or(dispatched_model),
-        delivered,
-    );
-    let diagnostic_quota = if diagnostic_failure {
-        record_diagnostic_quota(agent, &diagnostics, info.model.as_deref().or(dispatched_model))
-    } else {
-        crate::agent::stream_completion::QuotaOutcome::None
-    };
-    if quota.should_fail() || diagnostic_quota.should_fail() {
-        info.status = TaskStatus::Failed;
-    }
-    if info.status == TaskStatus::Done && !quota.recorded() && !diagnostic_quota.recorded() {
-        let model = info.model.as_deref().or(dispatched_model);
-        rate_limit::clear_rate_limit_for_model(&agent.kind(), agent.rate_limit_name(), model);
-    }
-    let mut event = match agent.kind() {
-        AgentKind::Grok => crate::agent::grok::make_completion_event(task_id, &info),
-        _ => crate::agent::completion_event::make_completion_event(task_id, &info),
-    };
-    if info.status == TaskStatus::Failed {
-        event.event_kind = crate::types::EventKind::Error;
-        if diagnostic_failure {
-            event.detail = "Agent diagnostic reported a terminal executor failure".to_string();
-        }
-    }
-    store.insert_agent_event_with_usage(&event, &info)?;
-    Ok(info)
+    finish_buffered(agent, task_id, store, &buffer, exit_status)
 }
 
 fn buffered_delivery_confirmed(agent: AgentKind, output: &str) -> bool {
@@ -187,4 +136,89 @@ fn record_diagnostic_quota(
         &message,
     );
     QuotaOutcome::RecordedFailed
+}
+
+fn finish_buffered(
+    agent: &dyn Agent,
+    task_id: &TaskId,
+    store: &Arc<Store>,
+    buffer: &str,
+    exit_status: std::process::ExitStatus,
+) -> Result<CompletionInfo> {
+    let diagnostics =
+        std::fs::read_to_string(paths::agent_log_path(task_id.as_str())).unwrap_or_default();
+    let mut info = if exit_status.success() {
+        agent.parse_completion(&buffer)
+    } else {
+        CompletionInfo {
+            tokens: None,
+            status: TaskStatus::Failed,
+            model: None,
+            cost_usd: None,
+            exit_code: None,
+        }
+    };
+    let diagnostic_failure = agent.diagnostics_report_terminal_failure(&diagnostics);
+    if diagnostic_failure {
+        info.status = TaskStatus::Failed;
+    }
+    info.exit_code = exit_status.code();
+    record_buffered_quota(
+        agent,
+        task_id,
+        store,
+        buffer,
+        &diagnostics,
+        diagnostic_failure,
+        &mut info,
+    );
+    let mut event = match agent.kind() {
+        AgentKind::Grok => crate::agent::grok::make_completion_event(task_id, &info),
+        _ => crate::agent::completion_event::make_completion_event(task_id, &info),
+    };
+    if info.status == TaskStatus::Failed {
+        event.event_kind = crate::types::EventKind::Error;
+        if diagnostic_failure {
+            event.detail = "Agent diagnostic reported a terminal executor failure".to_string();
+        }
+    }
+    store.insert_agent_event_with_usage(&event, &info)?;
+    Ok(info)
+}
+
+fn record_buffered_quota(
+    agent: &dyn Agent,
+    task_id: &TaskId,
+    store: &Store,
+    buffer: &str,
+    diagnostics: &str,
+    diagnostic_failure: bool,
+    info: &mut CompletionInfo,
+) {
+    let task = store.get_task(task_id.as_str()).ok().flatten();
+    let dispatched_model = task.as_ref().and_then(|t| t.requested_model.as_deref());
+    let delivered = buffered_delivery_confirmed(agent.kind(), &buffer);
+    let quota = crate::agent::stream_completion::record_quota_exhaustion_with_delivery(
+        &buffer,
+        agent.kind(),
+        agent.rate_limit_name(),
+        info.model.as_deref().or(dispatched_model),
+        delivered,
+    );
+    let diagnostic_quota = if diagnostic_failure {
+        record_diagnostic_quota(
+            agent,
+            &diagnostics,
+            info.model.as_deref().or(dispatched_model),
+        )
+    } else {
+        crate::agent::stream_completion::QuotaOutcome::None
+    };
+    if quota.should_fail() || diagnostic_quota.should_fail() {
+        info.status = TaskStatus::Failed;
+    }
+    if info.status == TaskStatus::Done && !quota.recorded() && !diagnostic_quota.recorded() {
+        let model = info.model.as_deref().or(dispatched_model);
+        rate_limit::clear_rate_limit_for_model(&agent.kind(), agent.rate_limit_name(), model);
+    }
 }

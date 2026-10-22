@@ -29,17 +29,13 @@ pub(crate) fn monitor_bridge(
         }
         match rx.recv_timeout(INPUT_POLL_INTERVAL) {
             Ok(bytes) => {
-                if let Err(error) = handle_bytes(state, agent, task_id, store, log_file, &mut decoder, bytes) {
+                if let Err(error) =
+                    handle_bytes(state, agent, task_id, store, log_file, &mut decoder, bytes)
+                {
                     let _ = bridge.kill_group();
                     return Err(error);
                 }
-                if state.info.status == TaskStatus::Failed
-                    && agent.api_route().is_some()
-                {
-                    let _ = bridge.kill_group();
-                    break;
-                }
-                if cost_exceeded(state, store, task_id, bridge, max_task_cost) {
+                if stop_after_output(state, agent, store, task_id, bridge, max_task_cost) {
                     break;
                 }
             }
@@ -99,7 +95,10 @@ fn refresh_child_activity(
     last_activity: &mut std::time::SystemTime,
 ) {
     let saw_output = state.received_raw_bytes
-        || crate::support::paths::agent_has_produced_bytes(task_id.as_str(), state.start_system_time);
+        || crate::support::paths::agent_has_produced_bytes(
+            task_id.as_str(),
+            state.start_system_time,
+        );
     if !saw_output {
         return;
     }
@@ -213,4 +212,22 @@ fn forward_input(
         state.maybe_consume_reply(bridge, store, task_id)?;
     }
     state.maybe_handle_idle(store, task_id, accepts_input && agent.accepts_idle_nudge())
+}
+
+fn stop_after_output(
+    state: &mut MonitorState,
+    agent: &dyn Agent,
+    store: &Store,
+    task_id: &TaskId,
+    bridge: &mut PtyBridge,
+    max_task_cost: Option<f64>,
+) -> bool {
+    if state.info.status == TaskStatus::Failed && agent.api_route().is_some() {
+        let _ = bridge.kill_group();
+        return true;
+    }
+    if cost_exceeded(state, store, task_id, bridge, max_task_cost) {
+        return true;
+    }
+    false
 }

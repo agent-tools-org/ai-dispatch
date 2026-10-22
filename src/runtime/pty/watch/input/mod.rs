@@ -16,9 +16,7 @@ impl MonitorState {
         let Some(input) = input_signal::take_response(task_id.as_str())? else {
             return Ok(());
         };
-        if !Self::write_input_or_record_failure(
-            bridge, store, task_id, "Response", &input, None,
-        )? {
+        if !Self::write_input_or_record_failure(bridge, store, task_id, "Response", &input, None)? {
             return Ok(());
         }
         store.insert_event(&TaskEvent {
@@ -42,9 +40,7 @@ impl MonitorState {
         let Some(message) = input_signal::take_steer(task_id.as_str())? else {
             return Ok(());
         };
-        if !Self::write_input_or_record_failure(
-            bridge, store, task_id, "Steer", &message, None,
-        )? {
+        if !Self::write_input_or_record_failure(bridge, store, task_id, "Steer", &message, None)? {
             return Ok(());
         }
         register_inbound_echo(&mut self.inbound_echo_suppress, message.clone());
@@ -142,7 +138,11 @@ impl MonitorState {
         Ok(false)
     }
 
-    pub(super) fn finish_input_delivery(&mut self, store: &Arc<Store>, task_id: &TaskId) -> Result<()> {
+    pub(super) fn finish_input_delivery(
+        &mut self,
+        store: &Arc<Store>,
+        task_id: &TaskId,
+    ) -> Result<()> {
         if !self.awaiting_input {
             return Ok(());
         }
@@ -151,5 +151,27 @@ impl MonitorState {
         self.prompt_detector.reset_after_input();
         Ok(())
     }
+}
 
+impl MonitorState {
+    pub(super) fn queue_idle_nudge(
+        &mut self,
+        store: &Arc<Store>,
+        task_id: &TaskId,
+        message: String,
+    ) -> Result<()> {
+        crate::task::unstick::queue_auto_nudge(store.as_ref(), task_id.as_str(), &message)?;
+        self.idle_nudged = true;
+        self.idle_warned = true;
+        store.insert_event(&TaskEvent {
+            task_id: task_id.clone(),
+            timestamp: Local::now(),
+            event_kind: EventKind::Reasoning,
+            detail: "Auto-nudge queued".to_string(),
+            metadata: Some(json!({
+                "message": message, "source": "unstick-auto", "input_delivery": "queued"
+            })),
+        })?;
+        Ok(())
+    }
 }

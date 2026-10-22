@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod lock_reentry;
+mod record;
 
 const LOCK_FILENAME: &str = ".aid-lock";
 static LOCK_TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -226,14 +227,15 @@ pub(super) fn live_lock_holder(wt_path: &Path) -> Option<String> {
 }
 
 fn sweep_orphan_lock_files(wt_path: &Path) {
-    let Ok(entries) = std::fs::read_dir(wt_path) else { return };
+    let Ok(entries) = std::fs::read_dir(wt_path) else {
+        return;
+    };
     for entry in entries.flatten() {
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
-        if name_str.starts_with(".aid-lock.tmp.")
-            || name_str.starts_with(".aid-lock.malformed.") {
-                let _ = std::fs::remove_file(entry.path());
-            }
+        if name_str.starts_with(".aid-lock.tmp.") || name_str.starts_with(".aid-lock.malformed.") {
+            let _ = std::fs::remove_file(entry.path());
+        }
     }
 }
 
@@ -258,47 +260,6 @@ fn unique_lock_extension(prefix: &str) -> String {
     )
 }
 
-impl LockRecord {
-    fn new(task_id: &str) -> Self {
-        Self {
-            task_id: task_id.to_string(),
-            owner_pid: Some(std::process::id()),
-            worker_pid: None,
-        }
-    }
-
-    fn parse(content: &str) -> Option<Self> {
-        let mut task_id = None;
-        let mut owner_pid = None;
-        let mut worker_pid = None;
-        for line in content.lines() {
-            let Some((key, value)) = line.split_once('=') else { continue };
-            let value = value.trim();
-            match key {
-                "task_id" if !value.is_empty() => task_id = Some(value.to_string()),
-                "owner_pid" => owner_pid = value.parse::<u32>().ok(),
-                "worker_pid" => worker_pid = value.parse::<u32>().ok(),
-                _ => {}
-            }
-        }
-        Some(Self { task_id: task_id?, owner_pid, worker_pid })
-    }
-
-    fn to_content(&self) -> String {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|duration| duration.as_secs())
-            .unwrap_or(0);
-        format!(
-            "version=1\ntask_id={}\nowner_pid={}\nworker_pid={}\nupdated_at={}\n",
-            self.task_id,
-            self.owner_pid.map_or(String::new(), |pid| pid.to_string()),
-            self.worker_pid.map_or(String::new(), |pid| pid.to_string()),
-            now
-        )
-    }
-}
-
 #[cfg(test)]
 pub(crate) fn simulate_stale_recovery_race(
     wt_path: &Path,
@@ -306,5 +267,11 @@ pub(crate) fn simulate_stale_recovery_race(
     before_stale_rename: impl FnOnce(),
     after_stale_rename: impl FnOnce(),
 ) -> std::result::Result<(), String> {
-    try_acquire_worktree_lock_with_hooks(wt_path, task_id, None, before_stale_rename, after_stale_rename)
+    try_acquire_worktree_lock_with_hooks(
+        wt_path,
+        task_id,
+        None,
+        before_stale_rename,
+        after_stale_rename,
+    )
 }

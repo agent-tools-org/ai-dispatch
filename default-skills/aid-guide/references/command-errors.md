@@ -78,15 +78,19 @@ delegation, and filesystem checks retain their own validation paths.
 excerpts are grouped with counts and per-agent counts; time and task ID identify
 the newest occurrence. `--limit` caps matching markers before grouping. Durations
 accept `s`, `m`, `h`, `d`, or `w`. Defaults are `--since 7d --limit 50`.
-`--json` includes full redacted excerpts. Bearer tokens, `sk-` strings, tokens
-of at least 32 ASCII letters/digits or `_`, `-`, `+`, `/`, and values assigned to
-`key`, `api_key`, `api-key`, `apikey`, `token`, `secret`, or `password` with `=` or
-`:` are redacted before display or review.
+`--json` includes full redacted excerpts. Redaction strips URL userinfo and query
+credentials, Bearer/Basic values, JWTs, known API credential prefixes, long
+key-shaped tokens, and values assigned to names ending in `token`, `secret`,
+`key`, `password`, `passwd`, or `authorization`. Malformed marker rows are skipped;
+the command reports their count on stderr without changing the JSON schema.
 
 `--review [<agent>]` asks the one-shot model for advisory classification suggestions
 using only redacted grouped excerpts, agent names and counts. Omitted agents use
-the `aid ask` default. Local-file auto-detection is disabled for this call. Empty
-results never invoke a model. The answer is printed below an advice-only header;
+the `aid ask` default. Review runs read-only in a fresh empty temporary directory,
+with automatic file attachment, project/team context, memories, toolbox, default
+skills, implementation scaffolding, verification, setup, remote build and audit
+injection disabled. Ordinary ask/MCP defaults are unchanged. Empty results never
+invoke a model. The answer is printed below an advice-only header;
 no holds, markers or classification rules are changed based on excerpts or the
 answer. The reviewing task still records its own quota failures normally. Review
 advice must be inspected before any classification change is considered.

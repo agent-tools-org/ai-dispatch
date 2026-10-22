@@ -30,18 +30,16 @@ pub(crate) async fn run(
         limit,
         json,
         review,
-        |prompt, agent| {
-            crate::cmd::ask::ask_text_with_context(
-                store,
-                prompt,
-                agent,
-                None,
-                crate::cmd::ask::ContextFiles::Disabled,
-            )
-        },
+        |prompt, agent| crate::cmd::ask::review::ask_review_text(store, prompt, agent),
     )
     .await?;
-    println!("{output}");
+    if output.1 > 0 {
+        eprintln!(
+            "Skipped {} malformed unclassified failure marker rows.",
+            output.1
+        );
+    }
+    println!("{}", output.0);
     Ok(())
 }
 
@@ -53,7 +51,7 @@ async fn run_with_answer<F, Fut>(
     json: bool,
     review: Option<String>,
     answer: F,
-) -> Result<String>
+) -> Result<(String, usize)>
 where
     F: FnOnce(String, Option<String>) -> Fut,
     Fut: std::future::Future<Output = Result<String>>,
@@ -61,9 +59,9 @@ where
     let cutoff = Local::now()
         .checked_sub_signed(duration(since)?)
         .context("Duration is out of range")?;
-    let groups = load(&store, agent.as_deref(), cutoff, limit)?;
+    let (groups, skipped) = load_report(&store, agent.as_deref(), cutoff, limit)?;
     if groups.is_empty() {
-        return Ok("No unclassified failure markers in range.".into());
+        return Ok(("No unclassified failure markers in range.".into(), skipped));
     }
     if let Some(agent) = review {
         let response = answer(
@@ -71,15 +69,18 @@ where
             (!agent.is_empty()).then_some(agent),
         )
         .await?;
-        return Ok(format!(
-            "Advice only: no hold, marker or classification rule was changed \
+        return Ok((
+            format!(
+                "Advice only: no hold, marker or classification rule was changed \
             based on these excerpts or this answer.\n\n{response}"
+            ),
+            skipped,
         ));
     }
     if json {
-        return Ok(serde_json::to_string_pretty(&groups)?);
+        return Ok((serde_json::to_string_pretty(&groups)?, skipped));
     }
-    Ok(listing(&groups))
+    Ok((listing(&groups), skipped))
 }
 
 fn listing(groups: &[FailureGroup]) -> String {
@@ -112,20 +113,21 @@ fn duration(value: &str) -> Result<chrono::Duration> {
         _ => bail!("Use a duration such as 30m, 24h or 7d"),
     };
     let seconds = number
-        .parse::<i64>()?
+        .parse::<i64>()
+        .context("Use a numeric duration such as 30m, 24h or 7d")?
         .checked_mul(multiplier)
         .filter(|n| *n >= 0)
         .context("Duration is out of range")?;
     chrono::Duration::try_seconds(seconds).context("Duration is out of range")
 }
 
-fn load(
+fn load_report(
     store: &Store,
     agent: Option<&str>,
     cutoff: DateTime<Local>,
     limit: usize,
-) -> Result<Vec<FailureGroup>> {
-    let mut markers = markers(store, agent, cutoff)?;
+) -> Result<(Vec<FailureGroup>, usize)> {
+    let (mut markers, skipped) = markers(store, agent, cutoff)?;
     markers.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
     let mut groups: Vec<FailureGroup> = Vec::new();
     let mut indices = BTreeMap::new();
@@ -143,92 +145,16 @@ fn load(
         groups[index].count += 1;
         *groups[index].agents.entry(redact(&agent)).or_default() += 1;
     }
-    Ok(groups)
+    Ok((groups, skipped))
 }
 
-type Marker = (DateTime<Local>, String, String, String);
+#[path = "agent_failure_markers.rs"]
+mod marker_rows;
+use marker_rows::markers;
 
-fn markers(store: &Store, agent: Option<&str>, cutoff: DateTime<Local>) -> Result<Vec<Marker>> {
-    let conn = store.db();
-    let mut query = conn.prepare(
-        "SELECT task_id, timestamp, metadata FROM events
-        WHERE event_type = 'milestone' AND json_valid(metadata)
-        AND json_type(metadata, '$.unclassified_failure') = 'true'",
-    )?;
-    let rows = query.query_map([], |row| {
-        Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, String>(2)?,
-        ))
-    })?;
-    let mut markers = Vec::new();
-    for row in rows {
-        let (id, time, metadata) = row?;
-        let time = DateTime::parse_from_rfc3339(&time)?.with_timezone(&Local);
-        let data: serde_json::Value = serde_json::from_str(&metadata)?;
-        if time < cutoff {
-            continue;
-        }
-        if let (Some(name), Some(excerpt)) =
-            (data["agent"].as_str(), data["provider_excerpt"].as_str())
-            && agent.is_none_or(|filter| filter == name)
-        {
-            markers.push((time, id, name.to_string(), excerpt.to_string()));
-        }
-    }
-    Ok(markers)
-}
-
-fn redact(raw: &str) -> String {
-    let mut output = String::with_capacity(raw.len());
-    let mut offset = 0;
-    let mut redact_next = false;
-    while let Some(first) = raw[offset..].chars().next() {
-        if token_separator(first) {
-            output.push(first);
-            offset += first.len_utf8();
-            continue;
-        }
-        let rest = &raw[offset..];
-        let end = rest
-            .find(|ch: char| token_separator(ch) && (!redact_next || !matches!(ch, '=' | ':')))
-            .unwrap_or(rest.len());
-        let token = &rest[..end];
-        let lower = token.to_ascii_lowercase();
-        if redact_next || key_shaped(token) {
-            output.push_str("[REDACTED]");
-            redact_next = false;
-        } else {
-            output.push_str(token);
-            let following = rest[end..]
-                .trim_start_matches(|ch: char| ch.is_whitespace() || matches!(ch, '\'' | '"'));
-            let named_secret = matches!(
-                lower.as_str(),
-                "key" | "api_key" | "api-key" | "apikey" | "token" | "secret" | "password"
-            );
-            redact_next = lower == "bearer" || (named_secret && following.starts_with(['=', ':']));
-        }
-        offset += end;
-    }
-    output
-}
-
-fn token_separator(ch: char) -> bool {
-    ch.is_whitespace()
-        || matches!(
-            ch,
-            '=' | ':' | ',' | ';' | '\'' | '"' | '{' | '}' | '[' | ']' | '(' | ')'
-        )
-}
-
-fn key_shaped(token: &str) -> bool {
-    token.to_ascii_lowercase().starts_with("sk-")
-        || (token.len() >= 32
-            && token
-                .bytes()
-                .all(|ch| ch.is_ascii_alphanumeric() || b"_-+/".contains(&ch)))
-}
+#[path = "agent_failure_redaction.rs"]
+mod redaction;
+use redaction::redact;
 
 fn review_prompt(groups: &[FailureGroup]) -> Result<String> {
     let records: Vec<_> = groups

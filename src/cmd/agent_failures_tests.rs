@@ -3,6 +3,15 @@
 use super::*;
 use crate::{support::paths::AidHomeGuard, types::AgentKind};
 
+fn load(
+    store: &Store,
+    agent: Option<&str>,
+    cutoff: DateTime<Local>,
+    limit: usize,
+) -> Result<Vec<FailureGroup>> {
+    Ok(load_report(store, agent, cutoff, limit)?.0)
+}
+
 fn insert(store: &Store, kind: &str, excerpt: &str, age: i64, agent: &str) {
     store
         .db()
@@ -114,7 +123,8 @@ async fn no_markers_skips_model_and_preserves_rate_limit_marker() {
         |_, _| async { panic!("empty results must not invoke a model") },
     )
     .await
-    .expect("empty review");
+    .expect("empty review")
+    .0;
     assert!(output.contains("No unclassified failure markers"));
     assert_eq!(std::fs::read(&path).expect("after"), before);
 }
@@ -158,7 +168,8 @@ async fn populated_review_preserves_markers_and_never_acts_on_answer() {
             },
         )
         .await
-        .expect("review");
+        .expect("review")
+        .0;
         assert!(
             output.starts_with("Advice only: no hold, marker or classification rule was changed")
         );
@@ -187,7 +198,8 @@ async fn listing_and_json_never_invoke_model() {
             panic!("listing must not invoke model")
         })
         .await
-        .expect("listing");
+        .expect("listing")
+        .0;
         if json {
             let records: serde_json::Value = serde_json::from_str(&output).expect("JSON");
             assert_eq!(
@@ -254,27 +266,8 @@ fn redaction_does_not_merge_byte_distinct_excerpts() {
     assert_eq!(groups[0].provider_excerpt, groups[1].provider_excerpt);
 }
 
-#[test]
-fn scanner_redacts_named_secrets_and_key_shaped_tokens() {
-    let long_key = "SyntheticApiCredentialValue1234567890";
-    let cases = [
-        ("Authorization: bEaReR short:value==", "short:value=="),
-        ("key = short", "short"),
-        ("token: short", "short"),
-        ("secret=short", "short"),
-        ("password = 'short'", "short"),
-        (r#"{"API_KEY": "short", "token":"other"}"#, "short"),
-        ("sk-synthetic-example", "sk-synthetic-example"),
-        (long_key, long_key),
-        ("échec token=short\nretry", "short"),
-    ];
-    for (input, secret) in cases {
-        let output = redact(input);
-        assert!(!output.contains(secret), "{input}");
-        assert!(output.contains("[REDACTED]"));
-    }
-    assert!(!redact(r#"{"token":"other"}"#).contains("other"));
-    let diagnostic = "Provider connection closed\nretry after 30s; key rotation required: 東京";
-    assert_eq!(redact(diagnostic), diagnostic);
-    assert_eq!(redact(""), "");
-}
+#[path = "agent_failure_redaction_tests.rs"]
+mod redaction_cases;
+
+#[path = "agent_failure_state_tests.rs"]
+mod state_invariants;

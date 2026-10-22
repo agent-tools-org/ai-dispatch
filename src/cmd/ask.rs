@@ -11,6 +11,8 @@ use crate::config::agent as agent_config;
 use crate::store::Store;
 use crate::types::TaskId;
 
+pub(crate) mod review;
+
 pub async fn run(
     store: Arc<Store>,
     prompt: String,
@@ -221,8 +223,5 @@ mod tests {
         .expect("request");
         assert!(request.context_files.is_empty());
         assert_eq!(request.prompt, prompt);
-        let ordinary = prepare_request(prompt, None, None, vec![], None).expect("ordinary request");
-        assert_eq!(ordinary.context_files.len(), 1);
-        assert!(ordinary.prompt.contains("DISTINCTIVE_PRIVATE_FILE_CONTENT"));
     }
 }

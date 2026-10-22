@@ -54,15 +54,19 @@ pub enum AgentCommands {
     },
     /// List or review unclassified provider failures (advice only)
     Failures {
+        /// Filter markers by their originating agent
         #[arg(long)]
         agent: Option<String>,
+        /// Lookback duration with s, m, h, d or w suffix
         #[arg(long, default_value = "7d")]
         since: String,
         /// Maximum matching markers before grouping identical excerpts
         #[arg(long, default_value_t = 50)]
         limit: usize,
+        /// Print full grouped records as JSON
         #[arg(long, conflicts_with = "review")]
         json: bool,
+        /// Request advice only; omitted reviewer uses the aid ask default
         #[arg(long, num_args = 0..=1, default_missing_value = "")]
         review: Option<String>,
     },

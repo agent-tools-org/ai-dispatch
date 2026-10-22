@@ -45,6 +45,7 @@ does not assert board closure. New slices need board IDs before implementation.
 | Typed pre-command results from rbox — done | wi-1ad2 | A remote verify that never started its command is classified from rbox's typed result, not from log text |
 | Listing of unrecognised failures — done (reduced) | wi-1ad2 | `aid agent failures` lists recorded `unclassified_failure` markers, grouped and masked by a fail-closed allowlist; it dispatches no agent and never sets or clears a hold. Advice comes from piping `--json` to the tool-free `aid classify` |
 
+| Code-quality round — done (local) | — | No crate-wide `dead_code` allowance; zero compiler warnings in default/web check and test builds (chrono deprecations excepted); no source file over 300 lines; duplicated display/Git helpers have one owner; output strings unchanged |
 | Bare `--verify` honours the project verifier — done | — | `--verify` without a value uses the project's declared verify command (auto-detection only when none is declared); every verify run persists a started/finished event with command, directory, local HEAD, exit code and output excerpt; NoOp is read only from the agent's final message, never tool output |
 
 P2 records only the route name (`codex-provider:<id>`) and refuses a launch, retry or resume when
@@ -296,6 +297,34 @@ zero failed and 14 existing ignored per suite. [Validation and audit evidence](v
 records the exact source, commands, job IDs and limits. Issue #118 retains three
 separate source-only configuration/prelaunch gaps; live Drive and M0 API/Swift
 gates remain open. These changes do not constitute a release.
+
+### Code-quality round — 2026-10-22
+
+Behaviour-preserving; no command, flag or output changed.
+
+| Area | Result |
+| --- | --- |
+| Dead code | `#![allow(dead_code)]` removed from `main.rs` and two agent modules; 116 compiler-reported items deleted, moved under `#[cfg(test)]`, or kept with an item-level allow naming the serde/TOML schema that reads them; web-only store queries and task actions gated by `feature = "web"` |
+| Helpers | `ui::format` owns byte/char truncation, token counts and millisecond durations; `workspace::git` owns checked `git -C` output |
+| Size | Source files over 300 lines: 28 → 0; production functions over 50 lines: about 100 → 10 |
+
+Two deliberate output differences: Git failure messages from the worktree live-state reader now
+trim stderr like the other readers, and the GC reader passes a non-UTF-8 repository path to Git
+unchanged instead of lossily converting it.
+
+Open:
+
+- `watch_streaming_with_input`, `run_lifecycle_phases` and `dispatch_with_dependencies` (200+
+  lines each) cannot be split further without a state struct; that is a design slice, not a move.
+- Remaining functions over 50 lines: `cli::dispatch` (one arm per command), `RunArgs::default`,
+  `task_to_run_args`, `insert_skipped_task` (struct literals), `run_background_task`,
+  `stats::collect`, `monitor_bridge`.
+- About 50 items now exist only under `#[cfg(test)]` (for example `merge_single`, `merge_group`,
+  `Store::update_task_completion`); tests that exercise these wrappers do not exercise the
+  production entry points.
+- Timing-bound tests in `runtime::background::claude_stream_tests`, `codex_app_server` and
+  `process::guard` fail intermittently on a loaded build box; one failed on the unchanged base.
+- Directories over ten files are unchanged (see M3).
 
 ### Known limits of the current code
 

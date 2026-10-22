@@ -13,7 +13,7 @@ use hold::write_marker;
 /// one `rate-limit-custom` hold.
 pub fn marker_slug<'a>(agent: &'a AgentKind, custom_name: Option<&'a str>) -> &'a str {
     match (agent, custom_name) {
-        (AgentKind::Codex, Some(name)) if name.starts_with("codex-provider:") => name,
+        (AgentKind::Codex, Some(name)) if crate::agent::codex::provider::route_id(name).is_some() => name,
         (AgentKind::Custom, Some(name)) if !name.is_empty() => name,
         _ => agent.as_str(),
     }

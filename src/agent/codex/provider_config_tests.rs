@@ -153,3 +153,17 @@ fn every_carried_setting_is_accepted_by_read_only_provenance() {
         ));
     }
 }
+
+#[test]
+fn route_names_preserve_prefix_recognition_without_validating_ids() {
+    for id in ["X", "azure-1_2", "", "../X", "X/Y", "X.Y"] {
+        let name = route_for_id(id);
+        assert_eq!(name, format!("codex-provider:{id}"));
+        assert_eq!(route_id(&name), Some(id));
+    }
+    for name in ["codex", "Codex-provider:X", "rate-limit-codex-provider:X", "other:X"] {
+        assert_eq!(route_id(name), None);
+    }
+    let _home = tests::HomeGuard::new("model_provider='X'");
+    assert_eq!(route_name().unwrap().as_deref(), Some("codex-provider:X"));
+}

@@ -12,7 +12,7 @@ pub(super) fn record(store: &Store, task_id: &TaskId, agent: AgentKind) -> anyho
     if agent == AgentKind::Codex
         && name
             .as_deref()
-            .is_some_and(|n| n.starts_with("codex-provider:"))
+            .is_some_and(|n| crate::agent::codex::provider::route_id(n).is_some())
     {
         return Ok(());
     }

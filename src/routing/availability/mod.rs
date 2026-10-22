@@ -27,7 +27,7 @@ pub use types::*;
 
 pub(crate) fn evidence_agent(agent: AgentKind, custom_name: Option<&str>) -> AgentKind {
     if agent == AgentKind::Codex
-        && custom_name.is_some_and(|name| name.starts_with("codex-provider:"))
+        && custom_name.is_some_and(|name| crate::agent::codex::provider::route_id(name).is_some())
     {
         AgentKind::Custom
     } else {

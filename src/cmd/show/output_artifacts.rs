@@ -37,7 +37,9 @@ fn extract_edits_from_log(log_path: &Path) -> Option<String> {
         let Some("tool_use") = obj.get("type").and_then(|v| v.as_str()) else {
             continue;
         };
-        let Some(part) = obj.get("part") else { continue };
+        let Some(part) = obj.get("part") else {
+            continue;
+        };
         let Some(tool) = part.get("tool").and_then(|v| v.as_str()) else {
             continue;
         };
@@ -68,6 +70,10 @@ fn extract_edits_from_log(log_path: &Path) -> Option<String> {
             .to_string();
         edits.push((file_path, tool.to_string(), old, new));
     }
+    render_log_edits(&edits)
+}
+
+fn render_log_edits(edits: &[(String, String, String, String)]) -> Option<String> {
     if edits.is_empty() {
         return None;
     }
@@ -84,7 +90,7 @@ fn extract_edits_from_log(log_path: &Path) -> Option<String> {
         let short = shorten_path(file, 3);
         out.push_str(&format!("    {short}\n"));
     }
-    for (file, tool, old, new) in &edits {
+    for (file, tool, old, new) in edits {
         let short = shorten_path(file, 2);
         out.push_str(&format!("\n  [{tool}] {short}\n"));
         push_preview_lines(&mut out, old, "-");

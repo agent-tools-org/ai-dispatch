@@ -25,39 +25,14 @@ pub(super) async fn dispatch_level_with_ids(
     let repo_root = repo_root.map(str::to_string);
     let mut prepared = Vec::with_capacity(task_indices.len());
     for &task_idx in task_indices {
-        let siblings: Vec<_> = tasks
-            .iter()
-            .enumerate()
-            .filter(|(idx, _)| *idx != task_idx)
-            .map(|(_, task)| task)
-            .collect();
-        let mut run_args = task_to_run_args(
-            &tasks[task_idx],
-            &siblings,
-            true,
+        let (progress_ref, run_args) = prepare_dispatch_task(
             &store,
+            tasks,
+            task_idx,
+            waiting_ids,
             shared_dir_path.as_deref(),
-        );
-        run_args.repo_root = repo_root.clone();
-        run_args.suppress_nested_repo_warning = true;
-        run_args.existing_task_id = Some(crate::types::TaskId(waiting_ids[task_idx].clone()));
-        if let Some((fallback_agent, remaining_cascade)) =
-            pre_dispatch_fallback_choice(&run_args.agent_name, tasks[task_idx].fallback.as_deref())?
-        {
-            aid_info!(
-                "[batch] {} rate-limited → using fallback: {} for task '{}'",
-                run_args.agent_name,
-                fallback_agent,
-                dispatch_task_ref(&tasks[task_idx], task_idx),
-            );
-            crate::cmd::run::switch_agent(&mut run_args, fallback_agent);
-            run_args.cascade = remaining_cascade;
-        }
-        let progress_ref = format!(
-            "{}: {}",
-            run_args.agent_name,
-            dispatch_task_ref(&tasks[task_idx], task_idx),
-        );
+            repo_root.as_deref(),
+        )?;
         prepared.push((task_idx, progress_ref, run_args));
     }
     let handles: Vec<_> = prepared
@@ -70,25 +45,12 @@ pub(super) async fn dispatch_level_with_ids(
     let mut dispatches = Vec::with_capacity(task_indices.len());
     for handle in handles {
         let (task_idx, progress_ref, result) = handle.await.context("Batch task join failure")?;
-        match result {
-            Ok(task_id) => {
-                aid_progress!("[batch] {} dispatched ({})", task_id, progress_ref);
-                dispatches.push(DispatchedTask {
-                    index: task_idx,
-                    task_id: Some(task_id.to_string()),
-                });
-            }
-            Err(err) => {
-                aid_error!(
-                    "Batch task failed ({}): {err}",
-                    dispatch_task_ref(&tasks[task_idx], task_idx)
-                );
-                dispatches.push(DispatchedTask {
-                    index: task_idx,
-                    task_id: None,
-                });
-            }
-        }
+        dispatches.push(record_dispatch_result(
+            tasks,
+            task_idx,
+            progress_ref,
+            result,
+        ));
     }
     Ok(dispatches)
 }
@@ -203,7 +165,11 @@ pub(crate) fn auto_fallback_args(
     let mut args = run::RunArgs::retry_inputs(store, &task)?;
     args.prompt = task.prompt.clone();
     let fallback = if run::RunArgs::saved_for_task(store, task_id)?.is_some() {
-        if args.cascade.is_empty() && tasks.get(task_idx).is_some_and(|spec| spec.fallback.is_some()) {
+        if args.cascade.is_empty()
+            && tasks
+                .get(task_idx)
+                .is_some_and(|spec| spec.fallback.is_some())
+        {
             return Ok(None);
         }
         (!args.cascade.is_empty()).then(|| args.cascade.join(","))
@@ -249,22 +215,7 @@ fn available_fallback_after(
     if names.is_empty() {
         return Ok(None);
     }
-    let all: Vec<(AgentKind, String)> = names
-        .iter()
-        .map(|s| {
-            AgentKind::parse_str(s)
-                .map(|k| (k, (*s).to_string()))
-                .or_else(|| {
-                    crate::agent::registry::custom_agent_exists(s)
-                        .then(|| (AgentKind::Custom, (*s).to_string()))
-                })
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Unknown cascade agent '{s}'. Use `aid config agents` to list available agents."
-                    )
-                })
-        })
-        .collect::<Result<_>>()?;
+    let all = resolve_cascade_agents(&names)?;
     let start = all
         .iter()
         .position(|(_, n)| n == current_agent)
@@ -286,4 +237,35 @@ fn available_fallback_after(
             .map(|(_, name)| name.clone())
             .collect(),
     )))
+}
+
+#[path = "dispatch_support/cascade.rs"]
+mod cascade;
+use cascade::{prepare_dispatch_task, resolve_cascade_agents};
+
+fn record_dispatch_result(
+    tasks: &[batch::BatchTask],
+    task_idx: usize,
+    progress_ref: String,
+    result: Result<crate::types::TaskId>,
+) -> DispatchedTask {
+    match result {
+        Ok(task_id) => {
+            aid_progress!("[batch] {} dispatched ({})", task_id, progress_ref);
+            DispatchedTask {
+                index: task_idx,
+                task_id: Some(task_id.to_string()),
+            }
+        }
+        Err(err) => {
+            aid_error!(
+                "Batch task failed ({}): {err}",
+                dispatch_task_ref(&tasks[task_idx], task_idx)
+            );
+            DispatchedTask {
+                index: task_idx,
+                task_id: None,
+            }
+        }
+    }
 }

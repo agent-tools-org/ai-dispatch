@@ -11,7 +11,9 @@ use super::BatchTask;
 pub(super) fn validate_agents(tasks: &[BatchTask]) -> Result<()> {
     for (task_idx, task) in tasks.iter().enumerate() {
         for name in std::iter::once(task.agent.as_str())
-            .chain(task.judge.as_deref()).chain(task.peer_review.as_deref()) {
+            .chain(task.judge.as_deref())
+            .chain(task.peer_review.as_deref())
+        {
             crate::agent::removed::reject(name)?;
         }
         if crate::agent::selection::is_removed_auto_agent(&task.agent) {
@@ -61,29 +63,7 @@ pub fn auto_sequence_shared_worktrees(
     tasks: &mut [BatchTask],
     writer: &mut impl Write,
 ) -> io::Result<()> {
-    let mut worktree_users: HashMap<&str, Vec<usize>> = HashMap::new();
-    for (idx, task) in tasks.iter().enumerate() {
-        if let Some(wt) = task.worktree.as_deref() {
-            worktree_users.entry(wt).or_default().push(idx);
-        }
-    }
-    for (wt, indices) in &worktree_users {
-        if indices.len() < 2 {
-            continue;
-        }
-        for &idx in indices {
-            if tasks[idx].name.is_none() {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!(
-                        "task #{idx} shares worktree '{wt}' with {} other task(s) but has no name — \
-                         add name = \"...\" so aid can auto-sequence shared worktree access",
-                        indices.len() - 1
-                    ),
-                ));
-            }
-        }
-    }
+    validate_shared_worktree_names(tasks)?;
 
     let mut last_task_by_worktree: HashMap<String, String> = HashMap::new();
     for (task_idx, task) in tasks.iter_mut().enumerate() {
@@ -93,15 +73,16 @@ pub fn auto_sequence_shared_worktrees(
         let current_label = task_label(task, task_idx);
         if let Some(previous_task) = last_task_by_worktree.get(worktree).cloned() {
             let depends_on = task.depends_on.get_or_insert_with(Vec::new);
-            if !depends_on.iter().any(|dependency| dependency == &previous_task) {
+            if !depends_on
+                .iter()
+                .any(|dependency| dependency == &previous_task)
+            {
                 depends_on.push(previous_task.clone());
             }
             writeln!(
                 writer,
                 "[aid] Warning: task '{}' shares worktree '{}' with '{}'; auto-sequencing execution.",
-                current_label,
-                worktree,
-                previous_task
+                current_label, worktree, previous_task
             )?;
         }
         if let Some(name) = task.name.as_ref() {
@@ -262,5 +243,33 @@ fn visit_task(
         visit_task(dependency_idx, tasks, dependencies, states)?;
     }
     states[task_idx] = VisitState::Visited;
+    Ok(())
+}
+
+fn validate_shared_worktree_names(tasks: &[BatchTask]) -> io::Result<()> {
+    let mut worktree_users: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (idx, task) in tasks.iter().enumerate() {
+        if let Some(wt) = task.worktree.as_deref() {
+            worktree_users.entry(wt).or_default().push(idx);
+        }
+    }
+    for (wt, indices) in &worktree_users {
+        if indices.len() < 2 {
+            continue;
+        }
+        for &idx in indices {
+            if tasks[idx].name.is_none() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!(
+                        "task #{idx} shares worktree '{wt}' with {} other task(s) but has no name — \
+                         add name = \"...\" so aid can auto-sequence shared worktree access",
+                        indices.len() - 1
+                    ),
+                ));
+            }
+        }
+    }
+
     Ok(())
 }

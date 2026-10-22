@@ -153,6 +153,47 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx:
     if task.peer_review.is_none() {
         task.peer_review = defaults.peer_review.clone();
     }
+    apply_execution_defaults(task, defaults);
+    apply_context_defaults(task, defaults);
+    apply_profile_defaults(task, defaults);
+}
+
+fn default_worktree(task: &BatchTask, defaults: &BatchDefaults, task_idx: usize) -> Option<String> {
+    let prefix = defaults.worktree_prefix.as_deref()?;
+    match task
+        .name
+        .as_deref()
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+    {
+        Some(name) => Some(format!("{prefix}/{name}")),
+        None => Some(format!("{prefix}/task-{task_idx}")),
+    }
+}
+
+fn merge_env_maps(
+    defaults: Option<&HashMap<String, String>>,
+    task: Option<&HashMap<String, String>>,
+) -> Option<HashMap<String, String>> {
+    let mut merged = defaults.cloned().unwrap_or_default();
+    if let Some(task) = task {
+        merged.extend(task.clone());
+    }
+    (!merged.is_empty()).then_some(merged)
+}
+
+fn merge_env_lists(
+    defaults: Option<&Vec<String>>,
+    task: Option<&Vec<String>>,
+) -> Option<Vec<String>> {
+    let mut merged = defaults.cloned().unwrap_or_default();
+    if let Some(task) = task {
+        merged.extend(task.iter().cloned());
+    }
+    (!merged.is_empty()).then_some(merged)
+}
+
+fn apply_execution_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
     if task.max_duration_mins.is_none() {
         task.max_duration_mins = defaults.max_duration_mins;
     }
@@ -180,6 +221,9 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx:
     if task.metric.is_none() {
         task.metric = defaults.metric.clone();
     }
+}
+
+fn apply_context_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
     if task.context.is_none() {
         task.context = defaults.context.clone();
     }
@@ -198,6 +242,9 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx:
     if task.scope.is_none() {
         task.scope = defaults.scope.clone();
     }
+}
+
+fn apply_profile_defaults(task: &mut BatchTask, defaults: &BatchDefaults) {
     if task.difficulty.is_none() {
         task.difficulty = defaults.difficulty;
     }
@@ -233,34 +280,4 @@ fn apply_task_defaults(task: &mut BatchTask, defaults: &BatchDefaults, task_idx:
     if task.worktree_link_deps.is_none() {
         task.worktree_link_deps = defaults.worktree_link_deps;
     }
-}
-
-fn default_worktree(task: &BatchTask, defaults: &BatchDefaults, task_idx: usize) -> Option<String> {
-    let prefix = defaults.worktree_prefix.as_deref()?;
-    match task.name.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
-        Some(name) => Some(format!("{prefix}/{name}")),
-        None => Some(format!("{prefix}/task-{task_idx}")),
-    }
-}
-
-fn merge_env_maps(
-    defaults: Option<&HashMap<String, String>>,
-    task: Option<&HashMap<String, String>>,
-) -> Option<HashMap<String, String>> {
-    let mut merged = defaults.cloned().unwrap_or_default();
-    if let Some(task) = task {
-        merged.extend(task.clone());
-    }
-    (!merged.is_empty()).then_some(merged)
-}
-
-fn merge_env_lists(
-    defaults: Option<&Vec<String>>,
-    task: Option<&Vec<String>>,
-) -> Option<Vec<String>> {
-    let mut merged = defaults.cloned().unwrap_or_default();
-    if let Some(task) = task {
-        merged.extend(task.iter().cloned());
-    }
-    (!merged.is_empty()).then_some(merged)
 }

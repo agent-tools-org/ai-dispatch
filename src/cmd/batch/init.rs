@@ -63,88 +63,21 @@ fn render_template(dir: &str, team: &str, verify: &str, language: &str) -> Strin
     lines.push("# fallback = \"cursor,opencode\" # Comma-separated fallback agents".to_string());
     lines.push(String::new());
 
-    // [defaults] — context & constraints
-    lines.push("# --- Context & constraints ---".to_string());
-    lines.push("# context = [\"src/types.rs\"]    # Files to inject as context".to_string());
-    lines.push("# skills = [\"implementer\"]      # Methodology skills".to_string());
-    lines.push("# no_skill = false              # Disable skill injection".to_string());
-    lines.push("# scope = [\"src/\"]              # Restrict file access".to_string());
-    lines.push("# checklist = [\"must compile\", \"must have tests\"]  # Quality checklist".to_string());
-    lines.push("# read_only = false             # Read-only mode".to_string());
-    lines.push("# sandbox = false               # Run agent in sandbox mode".to_string());
-    lines.push("# budget = \"standard\"         # free, cheap, standard, or premium".to_string());
-    lines.push(String::new());
-
-    // [defaults] — execution
-    lines.push("# --- Execution ---".to_string());
-    lines.push("# max_duration_mins = 30        # Per-task hard timeout (minutes)".to_string());
-    lines.push("# max_wait_mins = 30            # Fail WAIT tasks after 30 minutes".to_string());
-    lines.push("# retry = 1                     # Retry failed runs N times".to_string());
-    lines.push("# idle_timeout = 120            # Kill if idle for N seconds".to_string());
-    lines.push("# judge = true                  # AI judge evaluates output quality".to_string());
-    lines.push("# peer_review = \"agy\"       # Run a second-agent review".to_string());
-    lines.push("# best_of = 3                   # Run N copies, pick best".to_string());
-    lines.push("# metric = \"cargo test\"        # Best-of scoring command".to_string());
-    lines.push("# container = \"node:20\"         # Run agent inside container".to_string());
-    lines.push("# on_done = \"notify done\"      # Shell command after completion".to_string());
-    lines.push("# hooks = [\"pre:lint\"]           # Hook specs".to_string());
-    lines.push(String::new());
+    append_execution_defaults(&mut lines);
 
     // [defaults] — worktree & grouping
     lines.push("# --- Worktree & grouping ---".to_string());
     lines.push("# worktree_prefix = \"feat/v9\"   # Auto-generate worktree per task".to_string());
     lines.push("# group = \"wg-abc1\"             # Assign all tasks to workgroup".to_string());
-    lines.push("# shared_dir = false            # Shared directory for inter-task files".to_string());
+    lines.push(
+        "# shared_dir = false            # Shared directory for inter-task files".to_string(),
+    );
     lines.push("# analyze = true                # Warn about overlapping file edits".to_string());
     lines.push(String::new());
 
-    // First task
-    lines.push("[[task]]".to_string());
-    lines.push("name = \"task-1\"".to_string());
-    lines.push("agent = \"codex\"".to_string());
-    lines.push("prompt = \"\"\"".to_string());
-    if language.is_empty() {
-        lines.push("<DESCRIBE_TASK_HERE>".to_string());
-    } else {
-        lines.push(format!("Implement <FEATURE> in {language}."));
-    }
-    lines.push("\"\"\"".to_string());
-    lines.push("# worktree = \"feat/<BRANCH>\"    # Git worktree for isolation".to_string());
-    lines.push("# context = [\"src/types.rs\"]    # Extra context files".to_string());
-    lines.push("# context_from = [\"task-0\"]     # Inject output from previous tasks".to_string());
-    lines.push("# checklist = [\"no unwrap()\"]    # Quality checklist items".to_string());
-    lines.push("# no_skill = true               # Disable skill injection".to_string());
-    lines.push("# sandbox = true                # Run in sandbox mode".to_string());
-    lines.push("# max_wait_mins = 30            # Fail WAIT tasks after 30 minutes".to_string());
-    lines.push("# idle_timeout = 120            # Kill if idle for N seconds".to_string());
-    lines.push("# retry = 2                     # Retry the task on failure".to_string());
-    lines.push("# peer_review = \"agy\"       # Run a second-agent review".to_string());
-    lines.push("# best_of = 3                   # Run N copies, pick best".to_string());
-    lines.push("# metric = \"cargo test\"        # Best-of scoring command".to_string());
-    lines.push("# scope = [\"src/parser/\"]       # Restrict file access".to_string());
-    lines.push("# depends_on = [\"other-task\"]   # Run after named task(s)".to_string());
-    lines.push("# on_done = \"notify done\"      # Shell command after completion".to_string());
-    lines.push("# on_success = \"deploy\"         # Trigger conditional task on success".to_string());
-    lines.push("# on_fail = \"notify\"            # Trigger conditional task on failure".to_string());
-    lines.push("# env = { RUST_LOG = \"debug\" }  # Task-specific env vars".to_string());
-    lines.push(String::new());
+    append_first_task(&mut lines, language);
 
-    // Second task (dependent example)
-    lines.push("# [[task]]".to_string());
-    lines.push("# name = \"task-2\"".to_string());
-    lines.push("# agent = \"opencode\"".to_string());
-    lines.push("# prompt = \"<DESCRIBE_TASK_HERE>\"".to_string());
-    lines.push("# depends_on = [\"task-1\"]".to_string());
-    lines.push("# context_from = [\"task-1\"]     # Use task-1 output as context".to_string());
-    lines.push(String::new());
-
-    // Conditional task example
-    lines.push("# [[task]]".to_string());
-    lines.push("# name = \"deploy\"".to_string());
-    lines.push("# conditional = true             # Only runs when triggered".to_string());
-    lines.push("# agent = \"codex\"".to_string());
-    lines.push("# prompt = \"Run deploy script\"".to_string());
-    lines.push(String::new());
+    append_dependent_examples(&mut lines);
 
     lines.join("\n") + "\n"
 }
@@ -164,7 +97,9 @@ mod tests {
         // New fields present
         assert!(template.contains("# idle_timeout"));
         assert!(template.contains("# max_wait_mins"));
-        assert!(template.contains("# max_wait_mins = 30            # Fail WAIT tasks after 30 minutes"));
+        assert!(
+            template.contains("# max_wait_mins = 30            # Fail WAIT tasks after 30 minutes")
+        );
         assert!(template.contains("# checklist"));
         assert!(template.contains("# context_from"));
         assert!(template.contains("# scope"));
@@ -208,4 +143,91 @@ mod tests {
         assert!(content.contains("[defaults]"));
         assert!(content.contains("[[task]]"));
     }
+}
+
+fn append_first_task(lines: &mut Vec<String>, language: &str) {
+    // First task
+    lines.push("[[task]]".to_string());
+    lines.push("name = \"task-1\"".to_string());
+    lines.push("agent = \"codex\"".to_string());
+    lines.push("prompt = \"\"\"".to_string());
+    if language.is_empty() {
+        lines.push("<DESCRIBE_TASK_HERE>".to_string());
+    } else {
+        lines.push(format!("Implement <FEATURE> in {language}."));
+    }
+    lines.push("\"\"\"".to_string());
+    lines.push("# worktree = \"feat/<BRANCH>\"    # Git worktree for isolation".to_string());
+    lines.push("# context = [\"src/types.rs\"]    # Extra context files".to_string());
+    lines.push("# context_from = [\"task-0\"]     # Inject output from previous tasks".to_string());
+    lines.push("# checklist = [\"no unwrap()\"]    # Quality checklist items".to_string());
+    lines.push("# no_skill = true               # Disable skill injection".to_string());
+    lines.push("# sandbox = true                # Run in sandbox mode".to_string());
+    lines.push("# max_wait_mins = 30            # Fail WAIT tasks after 30 minutes".to_string());
+    lines.push("# idle_timeout = 120            # Kill if idle for N seconds".to_string());
+    lines.push("# retry = 2                     # Retry the task on failure".to_string());
+    lines.push("# peer_review = \"agy\"       # Run a second-agent review".to_string());
+    lines.push("# best_of = 3                   # Run N copies, pick best".to_string());
+    lines.push("# metric = \"cargo test\"        # Best-of scoring command".to_string());
+    lines.push("# scope = [\"src/parser/\"]       # Restrict file access".to_string());
+    lines.push("# depends_on = [\"other-task\"]   # Run after named task(s)".to_string());
+    lines.push("# on_done = \"notify done\"      # Shell command after completion".to_string());
+    lines.push(
+        "# on_success = \"deploy\"         # Trigger conditional task on success".to_string(),
+    );
+    lines.push(
+        "# on_fail = \"notify\"            # Trigger conditional task on failure".to_string(),
+    );
+    lines.push("# env = { RUST_LOG = \"debug\" }  # Task-specific env vars".to_string());
+    lines.push(String::new());
+}
+
+fn append_execution_defaults(lines: &mut Vec<String>) {
+    // [defaults] — context & constraints
+    lines.push("# --- Context & constraints ---".to_string());
+    lines.push("# context = [\"src/types.rs\"]    # Files to inject as context".to_string());
+    lines.push("# skills = [\"implementer\"]      # Methodology skills".to_string());
+    lines.push("# no_skill = false              # Disable skill injection".to_string());
+    lines.push("# scope = [\"src/\"]              # Restrict file access".to_string());
+    lines.push(
+        "# checklist = [\"must compile\", \"must have tests\"]  # Quality checklist".to_string(),
+    );
+    lines.push("# read_only = false             # Read-only mode".to_string());
+    lines.push("# sandbox = false               # Run agent in sandbox mode".to_string());
+    lines.push("# budget = \"standard\"         # free, cheap, standard, or premium".to_string());
+    lines.push(String::new());
+
+    // [defaults] — execution
+    lines.push("# --- Execution ---".to_string());
+    lines.push("# max_duration_mins = 30        # Per-task hard timeout (minutes)".to_string());
+    lines.push("# max_wait_mins = 30            # Fail WAIT tasks after 30 minutes".to_string());
+    lines.push("# retry = 1                     # Retry failed runs N times".to_string());
+    lines.push("# idle_timeout = 120            # Kill if idle for N seconds".to_string());
+    lines.push("# judge = true                  # AI judge evaluates output quality".to_string());
+    lines.push("# peer_review = \"agy\"       # Run a second-agent review".to_string());
+    lines.push("# best_of = 3                   # Run N copies, pick best".to_string());
+    lines.push("# metric = \"cargo test\"        # Best-of scoring command".to_string());
+    lines.push("# container = \"node:20\"         # Run agent inside container".to_string());
+    lines.push("# on_done = \"notify done\"      # Shell command after completion".to_string());
+    lines.push("# hooks = [\"pre:lint\"]           # Hook specs".to_string());
+    lines.push(String::new());
+}
+
+fn append_dependent_examples(lines: &mut Vec<String>) {
+    // Second task (dependent example)
+    lines.push("# [[task]]".to_string());
+    lines.push("# name = \"task-2\"".to_string());
+    lines.push("# agent = \"opencode\"".to_string());
+    lines.push("# prompt = \"<DESCRIBE_TASK_HERE>\"".to_string());
+    lines.push("# depends_on = [\"task-1\"]".to_string());
+    lines.push("# context_from = [\"task-1\"]     # Use task-1 output as context".to_string());
+    lines.push(String::new());
+
+    // Conditional task example
+    lines.push("# [[task]]".to_string());
+    lines.push("# name = \"deploy\"".to_string());
+    lines.push("# conditional = true             # Only runs when triggered".to_string());
+    lines.push("# agent = \"codex\"".to_string());
+    lines.push("# prompt = \"Run deploy script\"".to_string());
+    lines.push(String::new());
 }

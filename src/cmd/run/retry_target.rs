@@ -41,26 +41,14 @@ pub(crate) fn apply_retry_target(task: &Task, retry_args: &mut RunArgs) -> Resul
     }
     let (dir, worktree) = retry_target(task)?;
     if let Some(dir) = dir {
-        if retry_args.repo.is_none() {
-            retry_args.repo = find_repo_dir(task, retry_args)?;
-        }
-        if retry_args.repo.is_none() {
-            // Without a repo anchor the worktree dir below would be resolved as its own repo
-            // root, and the isolation guard would then reject a legitimate re-entry.
-            anyhow::bail!(
-                "cannot retry task {}: legacy task metadata has no repo_path, so its live worktree cannot be anchored to a repository",
-                task.id
-            );
-        }
-        retry_args.dir = Some(dir);
-        retry_args.worktree = worktree
-            .or_else(|| task.worktree_branch.clone())
-            .or_else(|| retry_args.worktree.clone());
+        apply_live_retry_target(task, retry_args, dir, worktree)?;
         return Ok(());
     }
     if let Some(branch) = worktree.clone().or_else(|| task.worktree_branch.clone()) {
         let repo = recover_repo_dir(task, retry_args, &branch)?;
-        let Some(base_branch) = crate::workspace::worktree::branch_tip_resume_base(Path::new(&repo), &branch)? else {
+        let Some(base_branch) =
+            crate::workspace::worktree::branch_tip_resume_base(Path::new(&repo), &branch)?
+        else {
             anyhow::bail!(
                 "cannot retry task {} on branch {}: recorded worktree is missing and branch does not exist in {}; refusing to run in repo root",
                 task.id,
@@ -101,12 +89,18 @@ fn recover_repo_dir(task: &Task, retry_args: &RunArgs, branch: &str) -> Result<S
 }
 
 fn find_repo_dir(task: &Task, retry_args: &RunArgs) -> Result<Option<String>> {
-    for candidate in [task.repo_path.as_deref(), retry_args.repo.as_deref()].into_iter().flatten() {
+    for candidate in [task.repo_path.as_deref(), retry_args.repo.as_deref()]
+        .into_iter()
+        .flatten()
+    {
         if let Some(repo) = preserved_repo_root(candidate)? {
             return Ok(Some(repo));
         }
     }
-    for candidate in [retry_args.dir.as_deref(), task.worktree_path.as_deref()].into_iter().flatten() {
+    for candidate in [retry_args.dir.as_deref(), task.worktree_path.as_deref()]
+        .into_iter()
+        .flatten()
+    {
         if let Some(repo) = main_worktree_root(candidate)? {
             return Ok(Some(repo));
         }
@@ -199,7 +193,9 @@ fn git_root(path: &str) -> Result<Option<String>> {
     if !output.status.success() {
         return Ok(None);
     }
-    Ok(Some(String::from_utf8_lossy(&output.stdout).trim().to_string()))
+    Ok(Some(
+        String::from_utf8_lossy(&output.stdout).trim().to_string(),
+    ))
 }
 
 fn ensure_live_worktree_branch(task: &Task, path: &str) -> Result<()> {
@@ -230,4 +226,29 @@ fn current_branch(path: &str) -> Result<Option<String>> {
     }
     let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
     Ok((!branch.is_empty()).then_some(branch))
+}
+
+fn apply_live_retry_target(
+    task: &Task,
+    retry_args: &mut RunArgs,
+    dir: String,
+    worktree: Option<String>,
+) -> Result<()> {
+    if retry_args.repo.is_none() {
+        retry_args.repo = find_repo_dir(task, retry_args)?;
+    }
+    if retry_args.repo.is_none() {
+        // Without a repo anchor the worktree dir below would be resolved as its own repo
+        // root, and the isolation guard would then reject a legitimate re-entry.
+        anyhow::bail!(
+            "cannot retry task {}: legacy task metadata has no repo_path, so its live worktree \
+            cannot be anchored to a repository",
+            task.id
+        );
+    }
+    retry_args.dir = Some(dir);
+    retry_args.worktree = worktree
+        .or_else(|| task.worktree_branch.clone())
+        .or_else(|| retry_args.worktree.clone());
+    Ok(())
 }

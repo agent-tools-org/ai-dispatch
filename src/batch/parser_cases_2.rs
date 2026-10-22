@@ -5,21 +5,21 @@ use super::*;
 #[test]
 fn task_values_override_defaults() {
     let file = write_temp(concat!(
-            "[defaults]\nagent = \"grok\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
-            "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\nmax_wait_mins = 10\n",
-            "retry = 2\npeer_review = \"grok\"\nbest_of = 3\nmetric = \"cargo test\"\n",
-            "context = [\"src/default.rs\"]\nskills = [\"rust\"]\non_done = \"notify done\"\n",
-            "fallback = \"cursor\"\n",
-            "env = { DEFAULT_ONLY = \"yes\", SHARED = \"default\" }\n",
-            "env_forward = [\"PATH\"]\n",
-            "[[tasks]]\nname = \"impl\"\nagent = \"codex\"\nprompt = \"build it\"\n",
-            "dir = \"custom\"\nmodel = \"gpt-4\"\nworktree = \"manual/impl\"\n",
-            "verify = \"manual\"\nmax_duration_mins = 5\nmax_wait_mins = 2\nretry = 7\npeer_review = \"cursor\"\n",
-            "best_of = 5\nmetric = \"just verify\"\ncontext = [\"src/task.rs\"]\n",
-            "skills = [\"own\"]\non_done = \"echo done\"\nfallback = \"opencode\"\n",
-            "env = { SHARED = \"task\", TASK_ONLY = \"set\" }\n",
-            "env_forward = [\"HOME\"]\n"
-        ));
+        "[defaults]\nagent = \"grok\"\ndir = \"src\"\nmodel = \"gpt-5\"\n",
+        "worktree_prefix = \"feat\"\nverify = true\nmax_duration_mins = 25\nmax_wait_mins = 10\n",
+        "retry = 2\npeer_review = \"grok\"\nbest_of = 3\nmetric = \"cargo test\"\n",
+        "context = [\"src/default.rs\"]\nskills = [\"rust\"]\non_done = \"notify done\"\n",
+        "fallback = \"cursor\"\n",
+        "env = { DEFAULT_ONLY = \"yes\", SHARED = \"default\" }\n",
+        "env_forward = [\"PATH\"]\n",
+        "[[tasks]]\nname = \"impl\"\nagent = \"codex\"\nprompt = \"build it\"\n",
+        "dir = \"custom\"\nmodel = \"gpt-4\"\nworktree = \"manual/impl\"\n",
+        "verify = \"manual\"\nmax_duration_mins = 5\nmax_wait_mins = 2\nretry = 7\npeer_review = \"cursor\"\n",
+        "best_of = 5\nmetric = \"just verify\"\ncontext = [\"src/task.rs\"]\n",
+        "skills = [\"own\"]\non_done = \"echo done\"\nfallback = \"opencode\"\n",
+        "env = { SHARED = \"task\", TASK_ONLY = \"set\" }\n",
+        "env_forward = [\"HOME\"]\n"
+    ));
     let batch_dir = file.path().parent().unwrap();
     std::fs::create_dir_all(batch_dir.join("custom")).unwrap();
     std::fs::create_dir_all(batch_dir.join("src")).unwrap();
@@ -41,38 +41,7 @@ fn task_values_override_defaults() {
     assert_eq!(task.peer_review.as_deref(), Some("cursor"));
     assert_eq!(task.best_of, Some(5));
     assert_eq!(task.metric.as_deref(), Some("just verify"));
-    assert_eq!(
-        task.context.as_deref(),
-        Some(&[batch_dir.join("src/task.rs").to_string_lossy().into_owned()][..])
-    );
-    assert_eq!(task.skills.as_deref(), Some(&["own".to_string()][..]));
-    assert_eq!(task.on_done.as_deref(), Some("echo done"));
-    assert_eq!(task.fallback.as_deref(), Some("opencode"));
-    assert_eq!(
-        task.env
-            .as_ref()
-            .and_then(|env| env.get("DEFAULT_ONLY"))
-            .map(String::as_str),
-        Some("yes")
-    );
-    assert_eq!(
-        task.env
-            .as_ref()
-            .and_then(|env| env.get("SHARED"))
-            .map(String::as_str),
-        Some("task")
-    );
-    assert_eq!(
-        task.env
-            .as_ref()
-            .and_then(|env| env.get("TASK_ONLY"))
-            .map(String::as_str),
-        Some("set")
-    );
-    assert_eq!(
-        task.env_forward.as_deref(),
-        Some(&["PATH".to_string(), "HOME".to_string()][..])
-    );
+    assert_task_values_override_defaults_context(task, batch_dir);
 }
 
 #[test]
@@ -113,7 +82,10 @@ fn resolve_batch_paths_leaves_absolute_dir_unchanged() {
 
     let cfg = parse_batch_file(&batch_path).unwrap();
 
-    assert_eq!(cfg.tasks[0].dir.as_deref(), Some(absolute_dir.to_string_lossy().as_ref()));
+    assert_eq!(
+        cfg.tasks[0].dir.as_deref(),
+        Some(absolute_dir.to_string_lossy().as_ref())
+    );
 }
 
 #[test]
@@ -159,7 +131,10 @@ fn resolve_batch_paths_resolves_dot_relative_to_toml_dir() {
 
     let cfg = parse_batch_file(&batch_path).unwrap();
 
-    assert_eq!(cfg.tasks[0].dir.as_deref(), Some(repo_dir.to_string_lossy().as_ref()));
+    assert_eq!(
+        cfg.tasks[0].dir.as_deref(),
+        Some(repo_dir.to_string_lossy().as_ref())
+    );
 }
 
 #[test]
@@ -248,7 +223,10 @@ fn rejects_missing_agent_without_defaults() {
     let err = parse_batch_file(write_temp("[[tasks]]\nprompt = \"do something\"\n").path())
         .unwrap_err()
         .to_string();
-    assert!(err.contains("aid advise"), "expected advise hint, got: {err}");
+    assert!(
+        err.contains("aid advise"),
+        "expected advise hint, got: {err}"
+    );
 }
 
 #[test]
@@ -258,8 +236,14 @@ fn rejects_auto_agent() {
     )
     .unwrap_err()
     .to_string();
-    assert!(err.contains("aid advise"), "expected advise hint, got: {err}");
-    assert!(err.contains("removed"), "expected removed message, got: {err}");
+    assert!(
+        err.contains("aid advise"),
+        "expected advise hint, got: {err}"
+    );
+    assert!(
+        err.contains("removed"),
+        "expected removed message, got: {err}"
+    );
 }
 
 #[test]
@@ -269,5 +253,43 @@ fn rejects_empty_agent_even_with_team() {
     )
     .unwrap_err()
     .to_string();
-    assert!(err.contains("aid advise"), "expected advise hint, got: {err}");
+    assert!(
+        err.contains("aid advise"),
+        "expected advise hint, got: {err}"
+    );
+}
+
+fn assert_task_values_override_defaults_context(task: &BatchTask, batch_dir: &std::path::Path) {
+    assert_eq!(
+        task.context.as_deref(),
+        Some(&[batch_dir.join("src/task.rs").to_string_lossy().into_owned()][..])
+    );
+    assert_eq!(task.skills.as_deref(), Some(&["own".to_string()][..]));
+    assert_eq!(task.on_done.as_deref(), Some("echo done"));
+    assert_eq!(task.fallback.as_deref(), Some("opencode"));
+    assert_eq!(
+        task.env
+            .as_ref()
+            .and_then(|env| env.get("DEFAULT_ONLY"))
+            .map(String::as_str),
+        Some("yes")
+    );
+    assert_eq!(
+        task.env
+            .as_ref()
+            .and_then(|env| env.get("SHARED"))
+            .map(String::as_str),
+        Some("task")
+    );
+    assert_eq!(
+        task.env
+            .as_ref()
+            .and_then(|env| env.get("TASK_ONLY"))
+            .map(String::as_str),
+        Some("set")
+    );
+    assert_eq!(
+        task.env_forward.as_deref(),
+        Some(&["PATH".to_string(), "HOME".to_string()][..])
+    );
 }

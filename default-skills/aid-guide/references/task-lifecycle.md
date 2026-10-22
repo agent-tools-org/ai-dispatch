@@ -176,7 +176,8 @@ aid gc --task <task-id>
 ```
 
 For an accepted task with no recorded worktree path, GC reports that there was
-no worktree artifact and reclaims only its fallback Cargo target directories.
+no worktree artifact and reclaims only its eligible fallback Cargo target
+directories (source directory gone, not in use by a live task).
 It does not modify the repository. Rejected tasks cannot be collected.
 
 For tasks with a recorded worktree path, GC is allowed only when:

@@ -1,3 +1,13 @@
+## v11.6.0 (2026-10-22)
+- Codex custom provider as a route: a task launched with a user-selected Codex custom provider records it as its own route (`codex-provider:<id>`); quota holds, advice and retry address that route instead of the ChatGPT plan, and a launch, retry or resume is refused when `config.toml` now selects a different route
+- Bare `--verify` uses the project's declared verify command (auto-detection only when none is declared); every verify run persists started and finished events with command, directory, local HEAD, exit code and an output excerpt; NoOp is read only from the agent's final message
+- Remote verify failures are classified from rbox's typed result (`rbox exec --result-file`, rbox 0.7.0 or later) when available, falling back to the text rule; a started-job line in the output always blocks an infrastructure classification
+- `aid accept` and `aid gc --task` handle terminal tasks without a worktree (read-only and in-place runs): acceptance records no head or manifest, and collection touches no repository and reclaims only eligible fallback Cargo targets
+- `aid agent failures [--agent] [--since] [--limit] [--json]` lists recorded unclassified-failure markers grouped by excerpt and masked by a fail-closed allowlist; it dispatches no agent and changes no hold. Pipe `--json` to `aid classify` for an advisory category
+- `scripts/remote-test.sh` reports a connection lost after the remote job started as such, names `rbox log <box> <job>` when the job id is known, and keeps rbox's exit status
+- The post-verify "dependencies weren't installed" hint fires only when an ecosystem with a separate install step is missing its install directory; Cargo- and Go-only worktrees never get it
+
+
 ## v11.5.0 (2026-10-20)
 - Codex keeps the user's provider: the `model_provider` selected in the user's `config.toml` and its `[model_providers.<id>]` table are passed to isolated Codex launches as `-c` overrides, identically for `exec`, `app-server` and the exec fallback; a provider table holding an inline credential refuses the launch instead of copying it
 - Quota and failure classification is agent-scoped: a hold uses only signatures of the agent that produced the output, recovery times come only from the agent's own reset phrase or a typed field, holds longer than 24 hours or needing a human require provider-attributed evidence, and Codex app-server typed errors are classified directly; failures no rule recognises are recorded as `unclassified_failure` for review

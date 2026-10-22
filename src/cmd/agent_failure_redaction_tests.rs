@@ -1,4 +1,4 @@
-// Credential-shape regressions for failure listing and review.
+// Credential-shape regressions for failure listing in text and JSON.
 // Synthetic credentials only; exercises the dependency-free scanner.
 use super::*;
 
@@ -43,10 +43,9 @@ fn audit_credential_shapes_are_redacted() {
         ("https://host/path?token=abc&key=def", "abc"),
         ("https://host/path?token=abc&key=def", "def"),
         (
-            "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature",
+            "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature123",
             "eyJhbGciOiJIUzI1NiJ9",
         ),
-        ("header.payload.signature", "header.payload.signature"),
         ("AKIA0000000000000000", "AKIA0000000000000000"),
         ("ASIA0000000000000000", "ASIA0000000000000000"),
         ("ghp_example", "ghp_example"),
@@ -71,7 +70,7 @@ fn assert_hidden(input: &str, secret: &str) {
     for output in [
         redact(input),
         serde_json::to_string(&groups).expect("JSON"),
-        review_prompt(&groups).expect("review"),
+        listing(&groups),
     ] {
         assert!(!output.contains(secret), "{input}");
         assert!(output.contains("[REDACTED]"));
@@ -83,5 +82,22 @@ fn long_provider_credentials_are_redacted() {
     for prefix in ["ghp_", "xoxb-", "github_pat_", "AIza", ""] {
         let credential = format!("{prefix}{}", "SyntheticCredentialValue1234567890".repeat(2));
         assert_hidden(&credential, &credential);
+    }
+}
+
+#[test]
+fn diagnostic_domains_versions_and_regions_are_preserved() {
+    for input in [
+        "api.openai.com",
+        "codex 0.46.0",
+        "v1.2.3",
+        "foo.tar.gz",
+        "asia-northeast1",
+        "Asia",
+        "akia-short",
+        "aiza-short",
+        "eyJshort.payload.signature",
+    ] {
+        assert_eq!(redact(input), input);
     }
 }

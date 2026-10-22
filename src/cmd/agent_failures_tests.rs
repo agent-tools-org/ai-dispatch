@@ -1,5 +1,5 @@
-// Marker-only prompt, grouping, filtering and credential-redaction regressions.
-// Uses a memory store without invoking a provider.
+// Marker-only listing, grouping, filtering and credential-redaction regressions.
+// Uses a memory store; no agent or model is invoked.
 use super::*;
 use crate::{support::paths::AidHomeGuard, types::AgentKind};
 
@@ -38,7 +38,7 @@ fn insert(store: &Store, kind: &str, excerpt: &str, age: i64, agent: &str) {
 }
 
 #[test]
-fn marker_only_prompt_groups_identical_excerpts_and_filters() {
+fn marker_only_listing_groups_identical_excerpts_and_filters() {
     let store = Store::open_memory().expect("store");
     insert(&store, "milestone", "connection closed", 1, "codex");
     insert(&store, "milestone", "connection closed", 2, "agy");
@@ -60,10 +60,9 @@ fn marker_only_prompt_groups_identical_excerpts_and_filters() {
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0].count, 2);
     assert_eq!(groups[0].agents.len(), 2);
-    let prompt = review_prompt(&groups).expect("prompt");
-    assert!(prompt.contains("connection closed"));
-    assert!(!prompt.contains("DISTINCTIVE"));
-    assert!(!prompt.contains("t-failure"));
+    let output = serde_json::to_string(&groups).expect("JSON");
+    assert!(output.contains("connection closed"));
+    assert!(!output.contains("DISTINCTIVE"));
     assert_eq!(
         load(&store, Some("codex"), cutoff, 50).expect("filtered")[0].count,
         1
@@ -73,7 +72,7 @@ fn marker_only_prompt_groups_identical_excerpts_and_filters() {
 }
 
 #[test]
-fn secrets_are_redacted_in_json_and_review() {
+fn secrets_are_redacted_in_json_and_text() {
     let store = Store::open_memory().expect("store");
     let values = [
         "synthetic-bearer-value",
@@ -96,7 +95,7 @@ fn secrets_are_redacted_in_json_and_review() {
     .expect("groups");
     for output in [
         serde_json::to_string(&groups).expect("json"),
-        review_prompt(&groups).expect("prompt"),
+        listing(&groups),
     ] {
         for value in values {
             assert!(!output.contains(value));
@@ -105,27 +104,23 @@ fn secrets_are_redacted_in_json_and_review() {
     }
 }
 
-#[tokio::test]
-async fn no_markers_skips_model_and_preserves_rate_limit_marker() {
+#[test]
+fn no_markers_preserves_rate_limit_marker() {
     let temp = tempfile::tempdir().expect("home");
     let _home = AidHomeGuard::set(temp.path());
     let path = crate::routing::rate_limit::marker_path(&AgentKind::Codex, None);
     std::fs::create_dir_all(path.parent().expect("parent")).expect("directory");
     std::fs::write(&path, "synthetic marker state").expect("marker");
     let before = std::fs::read(&path).expect("before");
-    let output = run_with_answer(
-        Arc::new(Store::open_memory().expect("store")),
-        None,
-        "7d",
-        50,
-        false,
-        Some("nonexistent-model-agent".into()),
-        |_, _| async { panic!("empty results must not invoke a model") },
-    )
-    .await
-    .expect("empty review")
-    .0;
+    let store = Store::open_memory().expect("store");
+    let output = report(&store, None, "7d", 50, false)
+        .expect("empty listing")
+        .0;
     assert!(output.contains("No unclassified failure markers"));
+    assert_eq!(
+        report(&store, None, "7d", 50, true).expect("empty JSON").0,
+        "[]"
+    );
     assert_eq!(std::fs::read(&path).expect("after"), before);
 }
 
@@ -137,55 +132,9 @@ fn duration_rejects_invalid_and_overflow() {
     assert_eq!(duration("7d").expect("week"), chrono::Duration::days(7));
 }
 
-#[tokio::test]
-async fn populated_review_preserves_markers_and_never_acts_on_answer() {
-    let temp = tempfile::tempdir().expect("home");
-    let _home = AidHomeGuard::set(temp.path());
-    let path = crate::routing::rate_limit::marker_path(&AgentKind::Codex, None);
-    std::fs::create_dir_all(path.parent().expect("parent")).expect("directory");
-    std::fs::write(&path, "synthetic marker state").expect("marker");
-    let before = std::fs::read(&path).expect("before");
-    let config_path = crate::support::paths::config_path();
-    std::fs::write(&config_path, "# synthetic classification configuration").expect("config");
-    let config_before = std::fs::read(&config_path).expect("config before");
-    let store = Arc::new(Store::open_memory().expect("store"));
-    insert(&store, "milestone", "connection closed", 0, "codex");
-    let reviewing_marker = crate::routing::rate_limit::marker_path(&AgentKind::Antigravity, None);
-    assert!(!reviewing_marker.exists());
-    for reviewer in ["", "agy"] {
-        let output = run_with_answer(
-            store.clone(),
-            None,
-            "7d",
-            50,
-            false,
-            Some(reviewer.into()),
-            |prompt, agent| async move {
-                assert_eq!(agent.as_deref(), (!reviewer.is_empty()).then_some(reviewer));
-                assert!(prompt.contains("connection closed"));
-                assert!(!prompt.contains("DISTINCTIVE_TASK_PROMPT"));
-                Ok("Clear codex holds and add a classification rule now".into())
-            },
-        )
-        .await
-        .expect("review")
-        .0;
-        assert!(
-            output.starts_with("Advice only: no hold, marker or classification rule was changed")
-        );
-        assert!(output.contains("Clear codex holds"));
-        assert_eq!(std::fs::read(&path).expect("after"), before);
-        assert!(!reviewing_marker.exists());
-        assert_eq!(
-            std::fs::read(&config_path).expect("config after"),
-            config_before
-        );
-    }
-}
-
-#[tokio::test]
-async fn listing_and_json_never_invoke_model() {
-    let store = Arc::new(Store::open_memory().expect("store"));
+#[test]
+fn listing_and_json_render_expected_fields() {
+    let store = Store::open_memory().expect("store");
     insert(
         &store,
         "milestone",
@@ -194,12 +143,7 @@ async fn listing_and_json_never_invoke_model() {
         "codex",
     );
     for json in [false, true] {
-        let output = run_with_answer(store.clone(), None, "7d", 50, json, None, |_, _| async {
-            panic!("listing must not invoke model")
-        })
-        .await
-        .expect("listing")
-        .0;
+        let output = report(&store, None, "7d", 50, json).expect("listing").0;
         if json {
             let records: serde_json::Value = serde_json::from_str(&output).expect("JSON");
             assert_eq!(
@@ -214,38 +158,33 @@ async fn listing_and_json_never_invoke_model() {
 }
 
 #[test]
-fn failures_cli_review_defaults_and_limit_help() {
+fn failures_cli_defaults_filters_and_limit_help() {
     use crate::cli::{
         Cli, Commands,
         agent_provider_args::{AgentArgs, AgentCommands},
     };
     use clap::Parser;
-    for reviewer in [None, Some("codex")] {
-        let mut args = vec!["aid", "agent", "failures", "--review"];
-        if let Some(name) = reviewer {
-            args.push(name);
+    match Cli::try_parse_from(["aid", "agent", "failures"])
+        .expect("parse")
+        .command
+    {
+        Some(Commands::Agent(AgentArgs {
+            action:
+                AgentCommands::Failures {
+                    agent,
+                    since,
+                    limit,
+                    json,
+                },
+        })) => {
+            assert!(agent.is_none());
+            assert_eq!(since, "7d");
+            assert_eq!(limit, 50);
+            assert!(!json);
         }
-        match Cli::try_parse_from(args).expect("parse").command {
-            Some(Commands::Agent(AgentArgs {
-                action:
-                    AgentCommands::Failures {
-                        agent,
-                        since,
-                        limit,
-                        json,
-                        review,
-                    },
-            })) => {
-                assert!(agent.is_none());
-                assert_eq!(since, "7d");
-                assert_eq!(limit, 50);
-                assert!(!json);
-                assert_eq!(review.as_deref(), Some(reviewer.unwrap_or("")));
-            }
-            _ => panic!("expected failures"),
-        }
+        _ => panic!("expected failures"),
     }
-    assert!(Cli::try_parse_from(["aid", "agent", "failures", "--json", "--review"]).is_err());
+    assert!(Cli::try_parse_from(["aid", "agent", "failures", "--review"]).is_err());
     let help = Cli::try_parse_from(["aid", "agent", "failures", "--help"])
         .err()
         .expect("help")
@@ -271,3 +210,43 @@ mod redaction_cases;
 
 #[path = "agent_failure_state_tests.rs"]
 mod state_invariants;
+
+#[test]
+fn documented_classify_pipeline_parses_and_accepts_listing_json() {
+    use crate::cli::{Cli, Commands};
+    use crate::typesafe::classify::ClassifyState;
+    use clap::Parser;
+    let parsed = Cli::try_parse_from([
+        "aid",
+        "classify",
+        "--state-json",
+        "--choice",
+        "kind=Which category best describes these grouped failures?",
+        "--options",
+        "quota,auth,capacity,network,other",
+    ])
+    .expect("documented classify flags");
+    let Some(Commands::Classify(args)) = parsed.command else {
+        panic!("expected classify");
+    };
+    assert!(args.flags.state_json && !args.flags.allow_secret_like);
+    assert!(args.flags.state.is_none());
+    let store = Store::open_memory().expect("store");
+    insert(&store, "milestone", "connection closed", 0, "codex");
+    let input = report(&store, None, "7d", 50, true).expect("listing").0;
+    let request = crate::cmd::classify::request_from_args(&args, &mut input.as_bytes())
+        .expect("JSON stdin request");
+    let ClassifyState::Json(state) = request.state else {
+        panic!("expected JSON state");
+    };
+    assert_eq!(
+        state,
+        serde_json::from_str::<serde_json::Value>(&input).expect("JSON")
+    );
+    assert_eq!(
+        request.questions["kind"]["criteria"],
+        serde_json::json!({
+            "quota": null, "auth": null, "capacity": null, "network": null, "other": null,
+        })
+    );
+}

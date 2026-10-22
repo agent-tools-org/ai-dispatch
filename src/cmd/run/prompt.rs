@@ -55,9 +55,6 @@ pub(super) fn build_prompt_bundle(
     detected_project: Option<&project::ProjectConfig>,
     project_root: Option<&std::path::Path>,
 ) -> Result<PromptBundle> {
-    if let Some(bundle) = isolated_review_bundle(args, agent_kind, project_root) {
-        return Ok(bundle);
-    }
     let (composed, context_files, category, suppress_implementation_scaffolding) =
         prepare_composed_prompt(store, args, agent_kind, workgroup)?;
     let mut omissions = composed.omissions;
@@ -91,35 +88,6 @@ pub(super) fn build_prompt_bundle(
         prompt_tokens,
         injected_memory_ids,
     })
-}
-
-fn isolated_review_bundle(
-    args: &RunArgs,
-    agent_kind: &AgentKind,
-    project_root: Option<&std::path::Path>,
-) -> Option<PromptBundle> {
-    if args.read_only
-        && project_root.is_none()
-        && args.team.is_none()
-        && args.no_audit
-        && args
-            .skills
-            .iter()
-            .any(|skill| skill.as_str() == super::NO_SKILL_SENTINEL)
-    {
-        let (output, result) = super::read_only_delivery::agent_paths(args, *agent_kind);
-        let mut text = args.prompt.clone();
-        if let Some(instruction) = output_file_instruction(output.as_deref(), result.as_deref()) {
-            text.push_str(&format!("\n\n{instruction}"));
-        }
-        return Some(PromptBundle {
-            prompt_tokens: templates::estimate_tokens(&text) as i64,
-            effective_prompt: text,
-            context_files: vec![],
-            injected_memory_ids: vec![],
-        });
-    }
-    None
 }
 
 fn prepare_composed_prompt(

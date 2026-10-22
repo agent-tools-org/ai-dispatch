@@ -79,18 +79,25 @@ excerpts are grouped with counts and per-agent counts; time and task ID identify
 the newest occurrence. `--limit` caps matching markers before grouping. Durations
 accept `s`, `m`, `h`, `d`, or `w`. Defaults are `--since 7d --limit 50`.
 `--json` includes full redacted excerpts. Redaction strips URL userinfo and query
-credentials, Bearer/Basic values, JWTs, known API credential prefixes, long
+credentials, Bearer/Basic values, JWT-shaped tokens, known API credential prefixes, long
 key-shaped tokens, and values assigned to names ending in `token`, `secret`,
 `key`, `password`, `passwd`, or `authorization`. Malformed marker rows are skipped;
 the command reports their count on stderr without changing the JSON schema.
+JWT matching requires an `eyJ` prefix and three segments of at least 10 characters.
+`AKIA`, `ASIA`, and `AIza` prefixes are case-sensitive; ordinary domains, versions,
+and region names are preserved. Empty JSON results are `[]`.
 
-`--review [<agent>]` asks the one-shot model for advisory classification suggestions
-using only redacted grouped excerpts, agent names and counts. Omitted agents use
-the `aid ask` default. Review runs read-only in a fresh empty temporary directory,
-with automatic file attachment, project/team context, memories, toolbox, default
-skills, implementation scaffolding, verification, setup, remote build and audit
-injection disabled. Ordinary ask/MCP defaults are unchanged. Empty results never
-invoke a model. The answer is printed below an advice-only header;
-no holds, markers or classification rules are changed based on excerpts or the
-answer. The reviewing task still records its own quota failures normally. Review
-advice must be inspected before any classification change is considered.
+This command only lists stored markers: it dispatches no agent and changes no
+holds, markers, or classification rules. For optional advisory classification,
+compose it with the existing [tool-free API command](classify.md):
+
+```bash
+aid agent failures --json | aid classify --state-json \
+  --choice 'kind=Which category best describes these grouped failures?' \
+  --options quota,auth,capacity,network,other
+```
+
+`aid classify` requires its own key setup and screens the supplied state for
+secret-like values before sending it. Its answer is a hint and changes nothing;
+it does not install rules or update holds or markers. Inspect the records and the
+hint before deciding whether a classification rule should be added.

@@ -52,7 +52,7 @@ pub enum AgentCommands {
         #[arg(long = "as")]
         new_name: Option<String>,
     },
-    /// List or review unclassified provider failures (advice only)
+    /// List grouped, redacted unclassified provider failure markers
     Failures {
         /// Filter markers by their originating agent
         #[arg(long)]
@@ -64,11 +64,8 @@ pub enum AgentCommands {
         #[arg(long, default_value_t = 50)]
         limit: usize,
         /// Print full grouped records as JSON
-        #[arg(long, conflicts_with = "review")]
+        #[arg(long)]
         json: bool,
-        /// Request advice only; omitted reviewer uses the aid ask default
-        #[arg(long, num_args = 0..=1, default_missing_value = "")]
-        review: Option<String>,
     },
     /// Show rate-limit / quota status for all agents
     Quota {

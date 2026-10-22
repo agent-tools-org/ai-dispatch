@@ -256,10 +256,7 @@ mod tests {
     #[test]
     fn stats_query_returns_only_rows_inside_literal_date_range() {
         let store = Store::open_memory().unwrap();
-        let at = |value: &str| {
-            let naive = chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S").unwrap();
-            chrono::Local.from_local_datetime(&naive).single().unwrap()
-        };
+        let at = |value: &str| Local.datetime_from_str(value, "%Y-%m-%d %H:%M:%S").unwrap();
         store.insert_task(&task("t-before", at("2026-08-05 23:59:59"), &"old".repeat(10_000))).unwrap();
         store.insert_task(&task("t-in", at("2026-08-06 00:00:00"), "in range")).unwrap();
         store.insert_task(&task("t-after", at("2026-08-07 00:00:00"), "outside")).unwrap();

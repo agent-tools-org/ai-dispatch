@@ -11,8 +11,6 @@ use crate::config::agent as agent_config;
 use crate::store::Store;
 use crate::types::TaskId;
 
-pub(crate) mod review;
-
 pub async fn run(
     store: Arc<Store>,
     prompt: String,
@@ -33,30 +31,13 @@ pub async fn ask_text(
     agent: Option<String>,
     model: Option<String>,
 ) -> Result<String> {
-    ask_text_with_context(store, prompt, agent, model, ContextFiles::AutoDetect).await
-}
-
-#[derive(Clone, Copy)]
-pub(crate) enum ContextFiles {
-    AutoDetect,
-    Disabled,
-}
-
-pub(crate) async fn ask_text_with_context(
-    store: Arc<Store>,
-    prompt: String,
-    agent: Option<String>,
-    model: Option<String>,
-    context: ContextFiles,
-) -> Result<String> {
     let capture_path = temp_output_path();
-    let request = prepare_request_with_context(
+    let request = prepare_request(
         prompt,
         agent,
         model,
         vec![],
         Some(capture_path.display().to_string()),
-        context,
     )?;
     let task_id = dispatch(store.clone(), request, false).await?;
     let answer = read_answer(&task_id, &capture_path)?;
@@ -79,36 +60,13 @@ fn prepare_request(
     files: Vec<String>,
     output: Option<String>,
 ) -> Result<AskRequest> {
-    prepare_request_with_context(
-        prompt,
-        agent,
-        model,
-        files,
-        output,
-        ContextFiles::AutoDetect,
-    )
-}
-
-fn prepare_request_with_context(
-    prompt: String,
-    agent: Option<String>,
-    model: Option<String>,
-    files: Vec<String>,
-    output: Option<String>,
-    context: ContextFiles,
-) -> Result<AskRequest> {
-    let context_files = match context {
-        ContextFiles::AutoDetect => detect_context_files(&prompt, files),
-        ContextFiles::Disabled => Vec::new(),
-    };
+    let context_files = detect_context_files(&prompt, files);
     let prompt = inject_context(prompt, &context_files)?;
     let agent_name = match agent {
         Some(agent) => agent,
         None => {
             if agent_config::is_agent_disabled("agy") {
-                anyhow::bail!(
-                    "Default agent 'agy' is disabled (choose another with: aid ask --agent <name>)"
-                );
+                anyhow::bail!("Default agent 'agy' is disabled (choose another with: aid ask --agent <name>)");
             }
             "agy".to_string()
         }
@@ -194,7 +152,13 @@ mod tests {
         let _guard = AidHomeGuard::set(dir.path());
         agent_config::save_agent_disabled("agy", true).expect("disable agent");
 
-        let err = match prepare_request("Explain this".to_string(), None, None, vec![], None) {
+        let err = match prepare_request(
+            "Explain this".to_string(),
+            None,
+            None,
+            vec![],
+            None,
+        ) {
             Ok(_) => panic!("disabled default should fail"),
             Err(err) => err.to_string(),
         };
@@ -203,25 +167,5 @@ mod tests {
             err,
             "Default agent 'agy' is disabled (choose another with: aid ask --agent <name>)"
         );
-    }
-
-    #[test]
-    fn disabled_context_does_not_attach_existing_file() {
-        let home = tempfile::tempdir().expect("home");
-        let _guard = AidHomeGuard::set(home.path());
-        let path = home.path().join("private-context.rs");
-        std::fs::write(&path, "DISTINCTIVE_PRIVATE_FILE_CONTENT").expect("file");
-        let prompt = format!("Provider error at {}", path.display());
-        let request = prepare_request_with_context(
-            prompt.clone(),
-            None,
-            None,
-            vec![],
-            None,
-            ContextFiles::Disabled,
-        )
-        .expect("request");
-        assert!(request.context_files.is_empty());
-        assert_eq!(request.prompt, prompt);
     }
 }

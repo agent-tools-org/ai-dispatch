@@ -137,11 +137,11 @@ pub(super) fn changelog(version: Option<String>, all: bool, count: usize, git: b
     cmd::changelog::run(version, all, count, git)
 }
 
-pub(super) async fn agent(store: Arc<store::Store>, action: AgentCommands) -> Result<()> {
+pub(super) fn agent(store: Arc<store::Store>, action: AgentCommands) -> Result<()> {
     use cmd::agent::{AgentAction, run_agent_command};
     let action = match action {
-        AgentCommands::Failures { agent, since, limit, json, review } => {
-            return cmd::agent_failures::run(store, agent, &since, limit, json, review).await;
+        AgentCommands::Failures { agent, since, limit, json } => {
+            return cmd::agent_failures::run(&store, agent.as_deref(), &since, limit, json);
         }
         AgentCommands::List { json } => AgentAction::List { json },
         AgentCommands::Show { name, json } => AgentAction::Show { name, json },

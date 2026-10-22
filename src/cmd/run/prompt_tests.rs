@@ -182,7 +182,3 @@ fn write_task_mentioning_read_only_audit_keeps_implementation_instructions() {
     assert!(bundle.effective_prompt.contains("Git Staging Rule"));
     assert!(bundle.effective_prompt.contains("implementation method"));
 }
-
-
-#[path = "prompt_review_tests.rs"]
-mod isolated_review;

@@ -55,8 +55,6 @@ fn key_shaped(token: &str) -> bool {
     let lower = token.to_ascii_lowercase();
     let known_prefix = [
         "sk-",
-        "akia",
-        "asia",
         "ghp_",
         "gho_",
         "github_pat_",
@@ -64,15 +62,21 @@ fn key_shaped(token: &str) -> bool {
         "xoxb-",
         "xoxp-",
         "xoxr-",
-        "aiza",
     ]
     .iter()
     .any(|prefix| lower.starts_with(*prefix));
-    let jwt = token.bytes().filter(|ch| *ch == b'.').count() == 2
+    let segments: Vec<_> = token.split('.').collect();
+    let jwt = token.starts_with("eyJ")
+        && segments.len() == 3
+        && segments.iter().all(|segment| segment.len() >= 10)
         && token
             .bytes()
             .all(|ch| ch.is_ascii_alphanumeric() || b"_-.".contains(&ch));
+    let provider_key = ["AKIA", "ASIA", "AIza"]
+        .iter()
+        .any(|prefix| token.starts_with(*prefix));
     known_prefix
+        || provider_key
         || jwt
         || (token.len() >= 32
             && token

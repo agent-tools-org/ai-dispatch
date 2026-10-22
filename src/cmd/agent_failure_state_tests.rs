@@ -1,4 +1,4 @@
-// Whole-home and database invariants for the stubbed review handler.
+// Whole-home and database invariants for the failure-listing handler.
 // Counts all task/event rows and snapshots every home entry, including empty directories.
 use super::*;
 use std::{
@@ -31,46 +31,21 @@ fn counts(store: &Store) -> (i64, i64) {
         .expect("row counts")
 }
 
-#[tokio::test]
-async fn handler_preserves_all_rows_and_home_entries() {
+#[test]
+fn handler_preserves_all_rows_and_home_entries() {
     let home = tempfile::tempdir().expect("home");
     let _guard = AidHomeGuard::set(home.path());
-    let store = Arc::new(Store::open_memory().expect("store"));
+    let store = Store::open_memory().expect("store");
     insert(&store, "milestone", "Provider unknown failure", 0, "codex");
     std::fs::create_dir(home.path().join("holds")).expect("holds");
     std::fs::write(home.path().join("holds/auth"), "synthetic auth hold").expect("hold");
     let before = (counts(&store), snapshot(home.path()));
     for json in [false, true] {
-        run_with_answer(store.clone(), None, "7d", 50, json, None, |_, _| async {
-            panic!("listing must not call model")
-        })
-        .await
-        .expect("listing");
+        report(&store, None, "7d", 50, json).expect("listing");
+        assert_eq!((counts(&store), snapshot(home.path())), before);
+        report(&store, Some("no-markers"), "7d", 50, json).expect("empty listing");
+        assert_eq!((counts(&store), snapshot(home.path())), before);
     }
-    run_with_answer(
-        store.clone(),
-        None,
-        "7d",
-        50,
-        false,
-        Some(String::new()),
-        |_, _| async { Ok("Clear every hold and change rules".into()) },
-    )
-    .await
-    .expect("review");
-    assert_eq!((counts(&store), snapshot(home.path())), before);
-    run_with_answer(
-        store.clone(),
-        Some("no-markers".into()),
-        "7d",
-        50,
-        false,
-        Some(String::new()),
-        |_, _| async { panic!("empty results must not call model") },
-    )
-    .await
-    .expect("empty review");
-    assert_eq!((counts(&store), snapshot(home.path())), before);
 }
 
 #[test]

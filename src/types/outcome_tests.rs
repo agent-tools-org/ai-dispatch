@@ -2,9 +2,7 @@
 // Exports: none; loaded by outcome.rs under `#[cfg(test)]`.
 // Deps: crate::types public outcome and status re-exports.
 
-use crate::types::{
-    DeliveryAssessment, TaskOutcome, TaskStatus, VerifyStatus, outcome::UnverifiedReason, verify_required,
-};
+use crate::types::{TaskOutcome, TaskStatus, VerifyStatus, outcome::UnverifiedReason};
 
 #[rustfmt::skip]
 const GOLDEN_TABLE: [(TaskStatus, VerifyStatus, bool, TaskOutcome); 140] = [

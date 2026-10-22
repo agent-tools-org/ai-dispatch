@@ -101,7 +101,3 @@ fn only_a_diagnostic_event_can_mark_a_route_rate_limited() {
         "the same words from the CLI's own error envelope must still hold cursor"
     );
 }
-
-
-
-/// Tool-derived Error events carry the model's request, not the provider.

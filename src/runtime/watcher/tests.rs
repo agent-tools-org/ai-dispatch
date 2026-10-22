@@ -2,14 +2,11 @@
 // Deps: super::*, types
 
 use super::*;
-use super::{
-    SyntheticMilestoneTracker, apply_completion_event, exceeds_cost_ceiling, parse_milestone_event,
-};
+use super::{SyntheticMilestoneTracker, parse_milestone_event};
 use crate::agent::Agent;
 use crate::support::paths;
 use crate::types::{AgentKind, CompletionInfo, EventKind, Task, TaskEvent, TaskId, TaskStatus};
 use chrono::Local;
-use serde_json::json;
 
 fn tracker_event(kind: EventKind, detail: &str) -> TaskEvent {
     TaskEvent {
@@ -107,6 +104,7 @@ mod milestone_tests;
 #[path = "summary_tests.rs"]
 mod summary_tests;
 
+/// Tool-derived Error events carry the model's request, not the provider.
 #[test]
 fn tool_error_events_do_not_mark_quota() {
     let temp = tempfile::tempdir().unwrap();

@@ -2,6 +2,7 @@
 // Exports candidate discovery and merge heuristics.
 // Deps: anyhow, crate::config::project::ProjectConfig, std::process::Command.
 
+use crate::workspace::git::git_output as git_stdout;
 use crate::config::project::ProjectConfig;
 use crate::workspace::worktree::is_aid_managed_worktree_path;
 use anyhow::{Context, Result};
@@ -167,21 +168,6 @@ fn local_branch_exists(repo_dir: &Path, branch: &str) -> Result<bool> {
         .status()
         .with_context(|| format!("Failed to inspect branch {branch}"))?;
     Ok(status.success())
-}
-
-fn git_stdout(repo_dir: &Path, args: &[&str]) -> Result<String> {
-    let output = Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .output()
-        .with_context(|| format!("Failed to run git {}", args.join(" ")))?;
-    anyhow::ensure!(
-        output.status.success(),
-        "git {} failed: {}",
-        args.join(" "),
-        String::from_utf8_lossy(&output.stderr).trim()
-    );
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 fn is_protected_branch(branch: &str) -> bool {

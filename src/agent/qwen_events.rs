@@ -20,7 +20,7 @@ pub(super) fn parse_stream_event(
         }
         "tool_call" | "tool_use" => {
             let name = extract_tool_name(v).unwrap_or("unknown");
-            let args = support::truncate(&extract_tool_arguments(v).unwrap_or_default(), 100);
+            let args = crate::ui::format::truncate(&extract_tool_arguments(v).unwrap_or_default(), 100);
             (EventKind::ToolCall, format!("{name}({args})"), None)
         }
         "tool_result" => {

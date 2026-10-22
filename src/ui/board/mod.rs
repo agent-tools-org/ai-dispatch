@@ -1,6 +1,9 @@
 // Text rendering for task board and task detail views.
 // Board rows can enrich output with stored milestone events.
 
+use crate::ui::format::format_duration_ms as format_duration;
+use crate::ui::format::format_tokens;
+use crate::ui::format::truncate;
 use anyhow::Result;
 
 use crate::cmd::eta;
@@ -140,15 +143,6 @@ pub(super) fn format_with_outcome(task: &Task, base: String) -> String {
         .unwrap_or(base)
 }
 
-pub(super) fn format_duration(ms: i64) -> String {
-    let secs = ms / 1000;
-    if secs < 60 {
-        format!("{secs}s")
-    } else {
-        format!("{}m {:02}s", secs / 60, secs % 60)
-    }
-}
-
 fn elapsed_since(start: chrono::DateTime<chrono::Local>) -> String {
     let elapsed = chrono::Local::now() - start;
     let secs = elapsed.num_seconds();
@@ -168,25 +162,6 @@ pub(super) fn format_running_duration(task: &Task, store: &Store) -> String {
         (Some(eta_label), None) => format!("{elapsed} (ETA {eta_label})"),
         (None, Some(progress)) => format!("{elapsed} ({progress}%)"),
         (None, None) => elapsed,
-    }
-}
-
-pub(super) fn format_tokens(n: i64) -> String {
-    if n >= 1_000_000 {
-        format!("{:.1}M", n as f64 / 1_000_000.0)
-    } else if n >= 1_000 {
-        format!("{:.1}k", n as f64 / 1_000.0)
-    } else {
-        n.to_string()
-    }
-}
-
-pub(super) fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        let safe = s.floor_char_boundary(max.saturating_sub(3));
-        format!("{}...", &s[..safe])
     }
 }
 

@@ -8,7 +8,8 @@ use crate::types::{Task, TaskEvent, TaskStatus};
 use std::path::Path;
 use std::process::Command;
 
-use super::{elapsed_since, format_duration, format_tokens, truncate};
+use super::elapsed_since;
+use crate::ui::format::{format_duration_ms as format_duration, format_tokens, truncate};
 
 /// Render detailed view of a single task (for `aid audit`)
 pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option<Vec<Task>>) -> String {

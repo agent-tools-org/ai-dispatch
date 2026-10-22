@@ -2,6 +2,7 @@
 // Exports: StatsRange, StatsSnapshot, and aggregate_tasks.
 // Deps: chrono, task records from crate::types, and std collections.
 
+use crate::ui::format::format_tokens;
 pub(super) mod legacy;
 
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate};
@@ -201,10 +202,6 @@ fn streaks(days: &[DailyStats]) -> (usize, usize) {
     }
     let current = days.iter().rev().take_while(|day| day.task_count > 0).count();
     (current, best)
-}
-
-pub fn format_tokens(tokens: i64) -> String {
-    if tokens >= 1_000_000 { format!("{:.1}M", tokens as f64 / 1_000_000.0) } else if tokens >= 1_000 { format!("{:.1}k", tokens as f64 / 1_000.0) } else { tokens.to_string() }
 }
 
 pub fn format_duration(seconds: i64) -> String {

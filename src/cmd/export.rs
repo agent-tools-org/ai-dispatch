@@ -6,6 +6,7 @@ use serde::Serialize;
 use std::{fs, sync::Arc};
 use crate::{cmd::show::worktree_diff, support::paths, store::Store, types::{Task, TaskEvent}};
 
+use crate::ui::format::format_duration_optional_ms as format_duration;
 #[path = "export_sharegpt.rs"]
 mod export_sharegpt;
 
@@ -116,18 +117,6 @@ fn format_event_timeline(events: &[TaskEvent]) -> Vec<String> {
             )
         })
         .collect()
-}
-fn format_duration(duration_ms: Option<i64>) -> String {
-    if let Some(ms) = duration_ms {
-        let secs = ms / 1000;
-        if secs < 60 {
-            format!("{}s", secs)
-        } else {
-            format!("{}m {:02}s", secs / 60, secs % 60)
-        }
-    } else {
-        "n/a".to_string()
-    }
 }
 fn format_cost(cost: Option<f64>) -> String {
     cost

@@ -4,6 +4,7 @@ use chrono::Local;
 use std::sync::Arc;
 use tokio::process::Command;
 
+use crate::ui::format::format_duration_ms as format_duration;
 use crate::{store::Store, types::*};
 use crate::cmd::run::RunArgs;
 use crate::runtime::process::group::cleanup_process_group;
@@ -278,11 +279,6 @@ pub(crate) fn inherit_retry_base_branch_impl(repo_dir: Option<&str>, task: &Task
     if retry_args.worktree.as_deref() == Some(branch) { return; }
     let repo_dir = std::path::Path::new(task.repo_path.as_deref().or(retry_args.repo.as_deref()).or(repo_dir).unwrap_or("."));
     if let Ok(true) = crate::workspace::worktree::branch_has_commits_ahead_of_main(repo_dir, branch) { retry_args.base_branch = Some(branch.to_string()); }
-}
-
-fn format_duration(ms: i64) -> String {
-    let secs = ms / 1000;
-    if secs < 60 { format!("{secs}s") } else { format!("{}m {:02}s", secs / 60, secs % 60) }
 }
 
 #[cfg(test)]

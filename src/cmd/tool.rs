@@ -2,6 +2,7 @@
 // Exports: run_tool_command.
 // Deps: crate::config::toolbox, crate::support::sanitize, anyhow, std::fs.
 
+use crate::ui::format::truncate as truncate_str;
 use anyhow::{bail, Context, Result};
 use std::fs;
 
@@ -138,15 +139,6 @@ fn title_case(name: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-fn truncate_str(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        let safe = s.floor_char_boundary(max.saturating_sub(3));
-        format!("{}...", &s[..safe])
-    }
 }
 
 #[cfg(test)]

@@ -146,13 +146,10 @@ async fn wait_for_task_ids_inner(
                 if status.is_terminal() {
                     completed += 1;
                     let duration = task.duration_ms
-                        .map(|ms| {
-                            let secs = ms / 1000;
-                            if secs < 60 { format!("{secs}s") } else { format!("{}m {:02}s", secs / 60, secs % 60) }
-                        })
+                        .map(crate::ui::format::format_duration_ms)
                         .unwrap_or_else(|| "-".to_string());
                     let tokens = task.tokens
-                        .map(|t| if t >= 1_000_000 { format!("{:.1}M", t as f64 / 1_000_000.0) } else if t >= 1_000 { format!("{:.1}k", t as f64 / 1_000.0) } else { t.to_string() })
+                        .map(crate::ui::format::format_tokens)
                         .unwrap_or_else(|| "-".to_string());
                     let fail_reason = if status == TaskStatus::Failed {
                         store.latest_error(task_id)

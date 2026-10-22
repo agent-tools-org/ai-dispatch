@@ -1,6 +1,7 @@
 // PTY-backed agent execution for interactive background tasks.
 // Runs combined stdout/stderr through prompt detection and file-based input forwarding.
 
+use crate::ui::format::format_duration_ms as format_duration;
 use anyhow::Result;
 use chrono::Local;
 use std::io::Read;
@@ -193,15 +194,6 @@ fn record_completion(
             .unwrap_or_default(),
     );
     Ok(())
-}
-
-fn format_duration(ms: i64) -> String {
-    let secs = ms / 1000;
-    if secs < 60 {
-        format!("{secs}s")
-    } else {
-        format!("{}m {:02}s", secs / 60, secs % 60)
-    }
 }
 
 #[cfg(test)]

@@ -2,6 +2,7 @@
 // Exports: TestHarnessSummary, parse_libtest_lines, evaluate_test_run.
 // Deps: std only.
 
+use super::build_parse::format_duration;
 use std::time::Duration;
 
 const MAX_DIGEST_LINES: usize = 50;
@@ -251,14 +252,6 @@ impl TestStatus {
             Self::Ignored => "ignored",
         }
     }
-}
-
-fn format_duration(duration: Duration) -> String {
-    let millis = duration.as_millis();
-    if millis < 1_000 {
-        return format!("{millis}ms");
-    }
-    format!("{:.1}s", millis as f64 / 1_000.0)
 }
 
 fn cap_digest_lines(mut lines: Vec<String>) -> Vec<String> {

@@ -2,6 +2,7 @@
 // Exports: `render_status_bar`; derives counts and resource totals from App state.
 // Deps: App, ProcessMetrics, TaskStatus, and ratatui Paragraph rendering.
 
+use crate::ui::format::truncate_chars as truncate;
 use std::collections::HashMap;
 
 use ratatui::prelude::{Color, Style};
@@ -165,17 +166,6 @@ fn mode_hint(mode: StatusBarMode) -> String {
             )
         }
     }
-}
-
-fn truncate(value: &str, width: usize) -> String {
-    if value.chars().count() <= width {
-        return value.to_string();
-    }
-    if width <= 3 {
-        return value.chars().take(width).collect();
-    }
-    let prefix: String = value.chars().take(width - 3).collect();
-    format!("{prefix}...")
 }
 
 #[cfg(test)]

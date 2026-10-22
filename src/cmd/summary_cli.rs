@@ -6,6 +6,7 @@ use crate::types::{Finding, Task, TaskOutcome, TaskStatus, Workgroup};
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 
+use crate::ui::format::format_tokens;
 pub fn run(store: &Store, group_id: &str) -> Result<()> {
     let tasks = store.list_tasks_by_group(group_id)?;
     let workgroup = store
@@ -144,16 +145,6 @@ fn format_duration(ms: i64) -> String {
         format!("{}s", secs)
     } else {
         "0s".to_string()
-    }
-}
-
-fn format_tokens(tokens: i64) -> String {
-    if tokens >= 1_000_000 {
-        format!("{:.1}M", tokens as f64 / 1_000_000.0)
-    } else if tokens >= 1_000 {
-        format!("{:.1}k", tokens as f64 / 1_000.0)
-    } else {
-        tokens.to_string()
     }
 }
 

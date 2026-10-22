@@ -1,6 +1,7 @@
 // Records explicit principal decisions without mutating task artifacts.
 // Exports accept and reject; depends on Store, task state, and Git.
 
+use crate::workspace::git::git_output_trimmed as git_output;
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -108,22 +109,6 @@ fn terminal_task(store: &Store, task_id: &str) -> Result<crate::types::Task> {
         "Task {task_id} is not complete; principal acceptance is not allowed"
     );
     Ok(task)
-}
-
-pub(super) fn git_output(repo: &Path, args: &[&str]) -> Result<String> {
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args(args)
-        .output()
-        .with_context(|| format!("Failed to run git {}", args.join(" ")))?;
-    anyhow::ensure!(
-        output.status.success(),
-        "git {} failed: {}",
-        args.join(" "),
-        String::from_utf8_lossy(&output.stderr).trim()
-    );
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 #[cfg(test)]

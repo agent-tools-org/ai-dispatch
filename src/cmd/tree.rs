@@ -6,6 +6,8 @@ use std::collections::{HashMap, HashSet};
 use crate::store::Store;
 use crate::types::{Task, TaskFilter};
 
+use crate::ui::format::format_tokens as format_token_count;
+use crate::ui::format::format_duration_optional_ms as format_duration;
 pub fn run(store: &Store, task_id: &str) -> Result<()> {
     let chain = store.get_retry_chain(task_id)?;
     if chain.is_empty() {
@@ -98,28 +100,6 @@ fn format_task_line(task: &Task) -> String {
         parts.join(", ")
     )
 }
-fn format_duration(duration_ms: Option<i64>) -> String {
-    if let Some(ms) = duration_ms {
-        let secs = ms / 1000;
-        if secs < 60 {
-            format!("{}s", secs)
-        } else {
-            format!("{}m {:02}s", secs / 60, secs % 60)
-        }
-    } else {
-        "n/a".to_string()
-    }
-}
-fn format_token_count(count: i64) -> String {
-    if count >= 1_000_000 {
-        format!("{:.1}M", count as f64 / 1_000_000.0)
-    } else if count >= 1_000 {
-        format!("{:.1}k", count as f64 / 1_000.0)
-    } else {
-        count.to_string()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

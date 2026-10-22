@@ -3,7 +3,8 @@
 // Deps: ratatui widgets, tui::stats aggregation, shared status bar, and legacy charts.
 
 use super::app::App;
-use super::stats::{format_duration, format_tokens, DailyStats, ProjectStats, StatsRange};
+use super::stats::{format_duration, DailyStats, ProjectStats, StatsRange};
+use crate::ui::format::format_tokens;
 use super::stats::legacy::render_legacy_grid;
 use super::status_bar::{render_status_bar, StatusBarMode};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};

@@ -1,6 +1,7 @@
 // Handler for `aid retry` plus a silent helper that returns the new task id.
 // Reuses the original task config and dispatches a child task with feedback.
 
+use crate::ui::format::truncate;
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::sync::Arc;
@@ -266,15 +267,6 @@ fn run_git(path: &str, args: &[&str]) -> Result<()> {
         String::from_utf8_lossy(&output.stderr).trim()
     );
     Ok(())
-}
-
-fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        let safe = s.floor_char_boundary(max.saturating_sub(3));
-        format!("{}...", &s[..safe])
-    }
 }
 
 #[cfg(test)]

@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
-use super::acceptance::git_output;
+use crate::workspace::git::git_output_trimmed as git_output;
 
 #[derive(Debug, Serialize)]
 pub(super) struct DurabilityCertificate {

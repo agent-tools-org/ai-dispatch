@@ -11,56 +11,8 @@ impl App {
         if self.search_mode {
             return self.handle_search_key(key);
         }
-        match key.code {
-            KeyCode::Char('q') => {
-                self.should_quit = true;
-                return Ok(());
-            }
-            KeyCode::Char('d') => {
-                self.tree_mode = false;
-                self.dashboard_mode = !self.dashboard_mode;
-                self.refresh_requested = true;
-                return Ok(());
-            }
-            KeyCode::Char('a') => {
-                self.show_all = !self.show_all;
-                self.refresh_requested = true;
-                return Ok(());
-            }
-            KeyCode::Char('s') => {
-                self.tree_mode = false;
-                self.stats_mode = !self.stats_mode;
-                if self.stats_mode {
-                    self.refresh_requested = true;
-                }
-                return Ok(());
-            }
-            KeyCode::Char('m') => {
-                self.tree_mode = false;
-                self.multipane_mode = !self.multipane_mode;
-                self.refresh_requested = true;
-                if self.multipane_mode {
-                    self.active_pane = 0;
-                    self.pane_scroll_offsets.clear();
-                    self.active_pane_task_id = self
-                        .multipane_tasks()
-                        .first()
-                        .map(|task| task.id.as_str().to_string());
-                }
-                return Ok(());
-            }
-            KeyCode::Char('t') => {
-                self.tree_mode = !self.tree_mode;
-                if self.tree_mode {
-                    self.dashboard_mode = false;
-                    self.stats_mode = false;
-                    self.multipane_mode = false;
-                    self.detail_mode = false;
-                    self.select_first_task_if_header();
-                }
-                return Ok(());
-            }
-            _ => {}
+        if self.handle_mode_key(key) {
+            return Ok(());
         }
         if self.multipane_mode {
             return self.handle_multipane_key(key);
@@ -81,6 +33,69 @@ impl App {
         self.handle_board_navigation(key)
     }
 
+    fn handle_mode_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Char('q') => {
+                self.should_quit = true;
+                return true;
+            }
+            KeyCode::Char('d') => {
+                self.tree_mode = false;
+                self.dashboard_mode = !self.dashboard_mode;
+                self.refresh_requested = true;
+                return true;
+            }
+            KeyCode::Char('a') => {
+                self.show_all = !self.show_all;
+                self.refresh_requested = true;
+                return true;
+            }
+            KeyCode::Char('s') => {
+                self.tree_mode = false;
+                self.stats_mode = !self.stats_mode;
+                if self.stats_mode {
+                    self.refresh_requested = true;
+                }
+                return true;
+            }
+            KeyCode::Char('m') => {
+                self.toggle_multipane();
+                return true;
+            }
+            KeyCode::Char('t') => {
+                self.toggle_tree();
+                return true;
+            }
+            _ => {}
+        }
+        false
+    }
+
+    fn toggle_multipane(&mut self) {
+        self.tree_mode = false;
+        self.multipane_mode = !self.multipane_mode;
+        self.refresh_requested = true;
+        if self.multipane_mode {
+            self.active_pane = 0;
+            self.pane_scroll_offsets.clear();
+            self.active_pane_task_id = self
+                .multipane_tasks()
+                .first()
+                .map(|task| task.id.as_str().to_string());
+        }
+    }
+
+    fn toggle_tree(&mut self) {
+        self.tree_mode = !self.tree_mode;
+        if self.tree_mode {
+            self.dashboard_mode = false;
+            self.stats_mode = false;
+            self.multipane_mode = false;
+            self.detail_mode = false;
+            self.select_first_task_if_header();
+        }
+    }
+
     fn handle_stats_key(&mut self, key: KeyEvent) -> Result<()> {
         let next_range = match key.code {
             KeyCode::Left | KeyCode::Char('h') => Some(self.stats_range.previous()),
@@ -97,24 +112,10 @@ impl App {
 
     fn handle_multipane_key(&mut self, key: KeyEvent) -> Result<()> {
         self.reconcile_active_pane();
+        if self.handle_pane_selection_key(key) {
+            return Ok(());
+        }
         match key.code {
-            KeyCode::Tab => {
-                let pane_count = self.pane_count();
-                if pane_count > 0 {
-                    self.set_active_pane((self.active_pane + 1) % pane_count);
-                }
-            }
-            KeyCode::BackTab => {
-                let pane_count = self.pane_count();
-                if pane_count > 0 {
-                    let index = if self.active_pane == 0 {
-                        pane_count - 1
-                    } else {
-                        self.active_pane - 1
-                    };
-                    self.set_active_pane(index);
-                }
-            }
             KeyCode::Down | KeyCode::Char('j') => {
                 if let Some(task_id) = self.current_pane_task_id() {
                     let offset = self.pane_scroll_offsets.entry(task_id).or_default();
@@ -146,21 +147,48 @@ impl App {
                     self.pane_scroll_offsets.insert(task_id, 0);
                 }
             }
-            KeyCode::Enter => {
-                if let Some(task_id) = self.current_pane_task_id()
-                    && let Some(idx) = self.tasks.iter().position(|t| t.id.as_str() == task_id)
-                {
-                    self.selected = idx;
-                    self.multipane_mode = false;
-                    self.enter_detail_mode()?;
-                }
-            }
+            KeyCode::Enter => self.open_active_pane()?,
             KeyCode::Esc => {
                 self.multipane_mode = false;
             }
             _ => {}
         }
         Ok(())
+    }
+
+    fn open_active_pane(&mut self) -> Result<()> {
+        if let Some(task_id) = self.current_pane_task_id()
+            && let Some(idx) = self.tasks.iter().position(|t| t.id.as_str() == task_id)
+        {
+            self.selected = idx;
+            self.multipane_mode = false;
+            self.enter_detail_mode()?;
+        }
+        Ok(())
+    }
+
+    fn handle_pane_selection_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Tab => {
+                let pane_count = self.pane_count();
+                if pane_count > 0 {
+                    self.set_active_pane((self.active_pane + 1) % pane_count);
+                }
+            }
+            KeyCode::BackTab => {
+                let pane_count = self.pane_count();
+                if pane_count > 0 {
+                    let index = if self.active_pane == 0 {
+                        pane_count - 1
+                    } else {
+                        self.active_pane - 1
+                    };
+                    self.set_active_pane(index);
+                }
+            }
+            _ => return false,
+        }
+        true
     }
 
     fn handle_detail_key(&mut self, key: KeyEvent) -> Result<()> {
@@ -244,7 +272,6 @@ impl App {
         self.detail_tab = tab;
         self.detail_scroll = 0;
     }
-
 }
 
 fn prompt_line_count(task: &crate::types::Task) -> usize {

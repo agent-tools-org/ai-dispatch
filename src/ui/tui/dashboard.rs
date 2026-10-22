@@ -1,12 +1,12 @@
 // Dashboard card rendering for the aid TUI.
 // Exports the checklist-style dashboard view; depends on ratatui and App state.
-use crate::ui::format::truncate;
 use super::app::App;
 use super::metrics::ProcessMetrics;
 use super::route_display::format_route_fit;
-use super::status_bar::{render_status_bar, StatusBarMode};
+use super::status_bar::{StatusBarMode, render_status_bar};
 use super::ui::ui_helpers::task_status_label;
 use crate::types::{EventKind, Task, TaskStatus};
+use crate::ui::format::truncate;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Alignment, Color, Modifier, Style};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
@@ -34,7 +34,12 @@ pub fn render_dashboard(frame: &mut ratatui::Frame<'_>, app: &App) {
         .split(frame.area());
     frame.render_widget(
         Paragraph::new(ratatui::text::Line::from(vec![
-            ratatui::text::Span::styled("aid ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            ratatui::text::Span::styled(
+                "aid ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
             ratatui::text::Span::styled(
                 format!("dashboard [{}]", app.scope_label()),
                 Style::default().fg(Color::Indexed(250)),
@@ -105,21 +110,7 @@ pub fn render_task_card(
         )),
         ListItem::new(format!("Activity: {}", truncate(&activity, 56))),
     ];
-    let active = matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput);
-    let last = milestones.len().saturating_sub(1);
-    if milestones.is_empty() {
-        items.push(ListItem::new("Progress: no milestones yet"));
-    } else {
-        for (index, milestone) in milestones.iter().enumerate() {
-            let current = active && index == last;
-            let marker = if current { "[ ]" } else { "[x]" };
-            let suffix = if current { " <- current" } else { "" };
-            items.push(ListItem::new(format!(
-                "{marker} {}{suffix}",
-                truncate(milestone, 52)
-            )));
-        }
-    }
+    append_milestones(&mut items, task, &milestones);
     let mut style = status_style(task.status);
     if selected {
         style = style.bg(Color::Indexed(237)).add_modifier(Modifier::BOLD);
@@ -212,5 +203,23 @@ fn status_style(status: TaskStatus) -> Style {
         TaskStatus::Pending => Style::default().fg(Color::Gray),
         TaskStatus::Waiting => Style::default().fg(Color::DarkGray),
         TaskStatus::Skipped => Style::default().fg(Color::Blue),
+    }
+}
+
+fn append_milestones(items: &mut Vec<ListItem<'static>>, task: &Task, milestones: &[String]) {
+    let active = matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput);
+    let last = milestones.len().saturating_sub(1);
+    if milestones.is_empty() {
+        items.push(ListItem::new("Progress: no milestones yet"));
+    } else {
+        for (index, milestone) in milestones.iter().enumerate() {
+            let current = active && index == last;
+            let marker = if current { "[ ]" } else { "[x]" };
+            let suffix = if current { " <- current" } else { "" };
+            items.push(ListItem::new(format!(
+                "{marker} {}{suffix}",
+                truncate(milestone, 52)
+            )));
+        }
     }
 }

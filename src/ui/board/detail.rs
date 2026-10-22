@@ -10,9 +10,16 @@ use std::path::Path;
 use std::process::Command;
 
 use super::elapsed_since;
+#[path = "detail_retry.rs"]
+mod retry;
+use retry::append_retry_chain;
 
 /// Render detailed view of a single task (for `aid audit`)
-pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option<Vec<Task>>) -> String {
+pub fn render_task_detail(
+    task: &Task,
+    events: &[TaskEvent],
+    retry_chain: Option<Vec<Task>>,
+) -> String {
     let mut out = String::new();
 
     out.push_str(&format!(
@@ -22,48 +29,31 @@ pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option
         truncate(&task.prompt, 60),
     ));
 
-    let duration = task.duration_ms
+    let duration = task
+        .duration_ms
         .map(format_duration_ms)
         .unwrap_or_else(|| elapsed_since(task.created_at));
     let status = if task.status == TaskStatus::Failed
-        && events.iter().any(|event| event.detail.starts_with("provider capacity"))
-    { "provider capacity" } else { task.status.label() };
+        && events
+            .iter()
+            .any(|event| event.detail.starts_with("provider capacity"))
+    {
+        "provider capacity"
+    } else {
+        task.status.label()
+    };
     let verification = task
         .outcome()
         .verification_tag()
         .map(|tag| format!(" [{tag}]"))
         .unwrap_or_default();
-    out.push_str(&format!("Status: {status}{verification}  Duration: {duration}\n"));
+    out.push_str(&format!(
+        "Status: {status}{verification}  Duration: {duration}\n"
+    ));
     if let Some(pending_reason) = task.pending_reason.as_deref() {
         out.push_str(&format!("Pending reason: {pending_reason}\n"));
     }
-    if let Some(parent) = task.parent_task_id.as_deref() {
-        out.push_str(&format!("Parent: {parent}\n"));
-        if let Some(retry_chain) = retry_chain.as_deref()
-            && retry_chain.len() > 1
-        {
-            out.push_str("Retry chain:\n");
-            for retry_task in retry_chain {
-                let duration = retry_task.duration_ms
-                    .map(format_duration_ms)
-                    .unwrap_or_else(|| elapsed_since(retry_task.created_at));
-                let current = if retry_task.id == task.id {
-                    "  ← current"
-                } else {
-                    ""
-                };
-                out.push_str(&format!(
-                    "  {} ({})  → {:<7} {:>5}  {}{}\n",
-                    retry_task.id,
-                    retry_kind(retry_task),
-                    retry_status(retry_task.status),
-                    duration,
-                    cost::format_cost(retry_task.cost_usd),
-                    current,
-                ));
-            }
-        }
-    }
+    append_retry_chain(&mut out, task, retry_chain.as_deref());
     append_task_metadata(&mut out, task);
     append_task_events(&mut out, events);
     out
@@ -87,8 +77,15 @@ fn append_task_metadata(out: &mut String, task: &Task) {
         out.push('\n');
     }
     if let Some(prompt_tokens) = task.prompt_tokens {
-        let bytes = task.resolved_prompt.as_deref().map(|p| p.len()).unwrap_or(0);
-        out.push_str(&format!("Prompt: ~{} tokens ({} bytes)\n", prompt_tokens, bytes));
+        let bytes = task
+            .resolved_prompt
+            .as_deref()
+            .map(|p| p.len())
+            .unwrap_or(0);
+        out.push_str(&format!(
+            "Prompt: ~{} tokens ({} bytes)\n",
+            prompt_tokens, bytes
+        ));
     }
     append_paths_and_audit(out, task);
 }
@@ -125,11 +122,15 @@ fn append_delivery(out: &mut String, task: &Task) {
     if let Some(final_sha) = task.final_head_sha.as_deref() {
         let repo_path = delivery_repo_path(task);
         let stat = match (repo_path, task.start_sha.as_deref()) {
-            (Some(repo_path), Some(start_sha)) => delivery_diff_stat(repo_path, start_sha, final_sha),
+            (Some(repo_path), Some(start_sha)) => {
+                delivery_diff_stat(repo_path, start_sha, final_sha)
+            }
             _ => DeliveryDiffStat::default(),
         };
         let short_sha = short_sha(final_sha);
-        let subject = repo_path.and_then(|path| commit_subject(path, final_sha)).unwrap_or_default();
+        let subject = repo_path
+            .and_then(|path| commit_subject(path, final_sha))
+            .unwrap_or_default();
         out.push_str(&format!(
             "Delivered: {} files (+{}/-{}) — {} \"{}\"\n",
             stat.files, stat.insertions, stat.deletions, short_sha, subject,
@@ -137,7 +138,11 @@ fn append_delivery(out: &mut String, task: &Task) {
     }
     if let Some(final_branch) = task.final_branch.as_deref() {
         out.push_str(&format!("Branch:    {final_branch}\n"));
-        if task.worktree_branch.as_deref().is_some_and(|branch| branch != final_branch) {
+        if task
+            .worktree_branch
+            .as_deref()
+            .is_some_and(|branch| branch != final_branch)
+        {
             let original = task.worktree_branch.as_deref().unwrap_or("-");
             out.push_str(&format!(
                 "  ⚠ agent switched branch: {original} -> {final_branch}\n"
@@ -147,9 +152,11 @@ fn append_delivery(out: &mut String, task: &Task) {
 }
 
 fn delivery_repo_path(task: &Task) -> Option<&str> {
-    task.repo_path
-        .as_deref()
-        .or_else(|| task.worktree_path.as_deref().filter(|path| Path::new(path).exists()))
+    task.repo_path.as_deref().or_else(|| {
+        task.worktree_path
+            .as_deref()
+            .filter(|path| Path::new(path).exists())
+    })
 }
 
 #[derive(Default)]
@@ -161,7 +168,13 @@ struct DeliveryDiffStat {
 
 fn delivery_diff_stat(repo_path: &str, start_sha: &str, final_sha: &str) -> DeliveryDiffStat {
     let output = Command::new("git")
-        .args(["-C", repo_path, "diff", "--numstat", &format!("{start_sha}..{final_sha}")])
+        .args([
+            "-C",
+            repo_path,
+            "diff",
+            "--numstat",
+            &format!("{start_sha}..{final_sha}"),
+        ])
         .output();
     let Ok(output) = output else {
         return DeliveryDiffStat::default();
@@ -223,8 +236,11 @@ fn append_task_events(out: &mut String, events: &[TaskEvent]) {
 }
 
 fn event_detail_lines(event: &TaskEvent) -> Vec<String> {
-    if !event.detail.is_empty() && event.metadata.as_ref()
-        .is_some_and(|metadata| metadata["verify_execution_error"] == true)
+    if !event.detail.is_empty()
+        && event
+            .metadata
+            .as_ref()
+            .is_some_and(|metadata| metadata["verify_execution_error"] == true)
     {
         return event.detail.lines().map(str::to_string).collect();
     }
@@ -244,27 +260,4 @@ fn iterate_eval_output(event: &TaskEvent) -> Option<&str> {
         .as_str()
         .map(str::trim)
         .filter(|output| !output.is_empty() && *output != "(no output)")
-}
-
-fn retry_kind(task: &Task) -> &'static str {
-    if task.parent_task_id.is_some() {
-        "retry"
-    } else {
-        "root"
-    }
-}
-
-fn retry_status(status: TaskStatus) -> &'static str {
-    match status {
-        TaskStatus::Waiting => "Waiting",
-        TaskStatus::Pending => "Pending",
-        TaskStatus::Running => "Running",
-        TaskStatus::AwaitingInput => "Await",
-        TaskStatus::Stalled => "Stalled",
-        TaskStatus::Done => "Done",
-        TaskStatus::Merged => "Merged",
-        TaskStatus::Failed => "Failed",
-        TaskStatus::Skipped => "Skipped",
-        TaskStatus::Stopped => "Stopped",
-    }
 }

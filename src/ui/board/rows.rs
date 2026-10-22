@@ -61,6 +61,56 @@ fn append_task_row(
     latest_milestones: &HashMap<String, String>,
     latest_errors: &HashMap<String, String>,
 ) {
+    let status = row_status(task, awaiting_reasons, latest_milestones, latest_errors);
+    let (duration, tokens, cost_str) = row_usage(task, store);
+    let (parent, project, group, repo, caller, model, route) = row_labels(task);
+    if show_repo {
+        out.push_str(&format!(
+            "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<14} {:<12} {:<20} {:<16} {}\n",
+            task.id.as_str(),
+            route,
+            status,
+            duration,
+            tokens,
+            cost_str,
+            parent,
+            project,
+            group,
+            repo,
+            caller,
+            model,
+        ));
+    } else {
+        out.push_str(&format!(
+            "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<14} {:<12} {:<16} {}\n",
+            task.id.as_str(),
+            route,
+            status,
+            duration,
+            tokens,
+            cost_str,
+            parent,
+            project,
+            group,
+            caller,
+            model,
+        ));
+    }
+}
+
+fn project_sort_key(project_id: Option<&str>) -> (u8, &str) {
+    match project_id {
+        Some(id) => (0, id),
+        None => (1, crate::config::project::UNATTRIBUTED),
+    }
+}
+
+fn row_status(
+    task: &Task,
+    awaiting_reasons: &HashMap<String, String>,
+    latest_milestones: &HashMap<String, String>,
+    latest_errors: &HashMap<String, String>,
+) -> String {
     let status = if task.status == TaskStatus::AwaitingInput {
         match awaiting_reasons.get(task.id.as_str()) {
             Some(r) => truncate(&format!("AWAIT — {r}"), 30),
@@ -75,6 +125,10 @@ fn append_task_row(
         );
         format_with_outcome(task, base)
     };
+    status
+}
+
+fn row_usage(task: &Task, store: &Store) -> (String, String, String) {
     let skipped = task.status == TaskStatus::Skipped;
     let duration = if skipped {
         "-".to_string()
@@ -86,38 +140,30 @@ fn append_task_row(
     let tokens = if skipped {
         "-".to_string()
     } else {
-        task.tokens.map(format_tokens).unwrap_or_else(|| "-".to_string())
+        task.tokens
+            .map(format_tokens)
+            .unwrap_or_else(|| "-".to_string())
     };
     let cost_str = if skipped {
         "-".to_string()
     } else {
         cost::format_cost_label(task.cost_usd, task.agent)
     };
+    (duration, tokens, cost_str)
+}
+
+fn row_labels(task: &Task) -> (String, String, String, String, String, String, String) {
     let parent = short_parent(task.parent_task_id.as_deref());
-    let project = truncate(crate::config::project::project_display(task.project_id.as_deref()), 14);
+    let project = truncate(
+        crate::config::project::project_display(task.project_id.as_deref()),
+        14,
+    );
     let group = short_group(task.workgroup_id.as_deref());
     let repo = short_repo(task.repo_path.as_deref());
     let caller = session::display(task);
-    let model = task.display_model().unwrap_or_else(|| "unknown".to_string());
+    let model = task
+        .display_model()
+        .unwrap_or_else(|| "unknown".to_string());
     let route = truncate(&task.display_route(), 36);
-    if show_repo {
-        out.push_str(&format!(
-            "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<14} {:<12} {:<20} {:<16} {}\n",
-            task.id.as_str(), route, status, duration, tokens, cost_str, parent, project, group,
-            repo, caller, model,
-        ));
-    } else {
-        out.push_str(&format!(
-            "{:<11} {:<36} {:<30} {:<10} {:<10} {:<8} {:<11} {:<14} {:<12} {:<16} {}\n",
-            task.id.as_str(), route, status, duration, tokens, cost_str, parent, project, group,
-            caller, model,
-        ));
-    }
-}
-
-fn project_sort_key(project_id: Option<&str>) -> (u8, &str) {
-    match project_id {
-        Some(id) => (0, id),
-        None => (1, crate::config::project::UNATTRIBUTED),
-    }
+    (parent, project, group, repo, caller, model, route)
 }

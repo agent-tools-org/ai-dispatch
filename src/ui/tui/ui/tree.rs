@@ -7,13 +7,10 @@ use ratatui::prelude::{Alignment, Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
 
-use crate::ui::tui::app::App;
-use super::status_to_color;
-use super::ui_helpers::task_status_label;
-use crate::ui::format::truncate;
-use crate::cost;
-use crate::ui::tui::route_display::format_route_fit;
+use super::tree_rows::tree_item;
 use crate::types::{Task, TaskStatus};
+use crate::ui::format::truncate;
+use crate::ui::tui::app::App;
 
 pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
     let chunks = Layout::default()
@@ -25,19 +22,7 @@ pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
         ])
         .split(frame.area());
 
-    let done = app.tasks.iter().filter(|t| t.status.is_terminal()).count();
-    let running = app.tasks.iter().filter(|t| matches!(t.status, TaskStatus::Running)).count();
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled("aid tree ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Span::styled(format!("[{}]", app.scope_label()), Style::default().fg(Color::Indexed(250))),
-            Span::raw("  "),
-            Span::styled(format!("{done}✓ "), Style::default().fg(Color::Green)),
-            Span::styled(format!("{running}▶"), Style::default().fg(Color::Yellow)),
-        ]))
-        .alignment(Alignment::Center),
-        chunks[0],
-    );
+    render_tree_header(frame, app, chunks[0]);
 
     let nodes = &app.nodes;
     let height = chunks[1].height.saturating_sub(2) as usize;
@@ -50,85 +35,7 @@ pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
             .enumerate()
             .skip(start)
             .take(height)
-            .map(|(i, node)| {
-                let task = &app.tasks[node.task_index];
-                let status_color = status_to_color(task.status);
-                let is_selected = i == app.tree_selected;
-
-                if node.is_group_header {
-                    let header = fit_group_header(&node.prefix, chunks[1].width as usize);
-                    let item = ListItem::new(Span::styled(
-                        header,
-                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-                    ));
-                    if is_selected {
-                        item.style(Style::default().bg(Color::Indexed(237)).add_modifier(Modifier::BOLD))
-                    } else {
-                        item
-                    }
-                } else {
-                    // Task line
-                    let duration = tree_duration(task);
-                    let milestone = app.get_milestone(task.id.as_str()).map(|m| truncate(m, 25));
-                    let cost_str = cost::format_cost_label(task.cost_usd, task.agent);
-                    let prompt_width = if milestone.is_some() { 25 } else { 40 };
-                    let prompt_preview = truncate(&task.prompt, prompt_width);
-
-                    let is_done = matches!(task.status, TaskStatus::Done | TaskStatus::Merged);
-                    let id_color = if is_done { Color::Green } else { Color::White };
-                    // Success must read as success. Dimming a finished row harder
-                    // than a running one made the whole line grey, so a completed
-                    // task looked spent rather than good — the green id and route
-                    // were not enough to carry it.
-                    let dim = Color::Indexed(248);
-
-                    // Tree rows are dense: 22 chars keeps route visible without
-                    // crowding status/duration. Truncation drops provider first.
-                    let route = format_route_fit(task, 22);
-                    let mut spans = vec![
-                        Span::styled(node.prefix.clone(), Style::default().fg(Color::Indexed(240))),
-                        Span::styled(task.id.as_str(), Style::default().fg(id_color).add_modifier(Modifier::BOLD)),
-                        Span::raw(" "),
-                        Span::styled(route, Style::default().fg(if is_done { Color::Green } else { Color::Cyan })),
-                        Span::raw(" "),
-                        Span::styled(task_status_label(task), Style::default().fg(status_color)),
-                        Span::raw(" "),
-                        Span::styled(duration, Style::default().fg(dim)),
-                    ];
-                    if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput) {
-                        spans.push(Span::raw(" "));
-                        spans.push(Span::styled(
-                            truncate(&app.task_activity(task), 42),
-                            Style::default().fg(if task.status == TaskStatus::AwaitingInput {
-                                Color::Magenta
-                            } else {
-                                Color::Indexed(245)
-                            }),
-                        ));
-                    }
-                    if cost_str != "—" && cost_str != "-" {
-                        spans.push(Span::raw(" "));
-                        spans.push(Span::styled(
-                            cost_str,
-                            Style::default().fg(if is_done { Color::Green } else { Color::Indexed(243) }),
-                        ));
-                    }
-                    if let Some(ms) = milestone {
-                        spans.push(Span::raw(" "));
-                        spans.push(Span::styled(ms, Style::default().fg(Color::Green)));
-                    } else {
-                        spans.push(Span::raw("  "));
-                        spans.push(Span::styled(prompt_preview, Style::default().fg(Color::Indexed(245))));
-                    }
-
-                    let item = ListItem::new(Line::from(spans));
-                    if is_selected {
-                        item.style(Style::default().bg(Color::Indexed(237)).add_modifier(Modifier::BOLD))
-                    } else {
-                        item
-                    }
-                }
-            })
+            .map(|(i, node)| tree_item(app, i, node, chunks[1].width as usize))
             .collect();
         frame.render_widget(
             List::new(items).block(Block::default().title("Task Tree").borders(Borders::ALL)),
@@ -136,32 +43,10 @@ pub(super) fn render_tree_view(frame: &mut ratatui::Frame<'_>, app: &App) {
         );
     }
 
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(" j/k", Style::default().fg(Color::Yellow)),
-            Span::raw(":tasks "),
-            Span::styled("h/l", Style::default().fg(Color::Yellow)),
-            Span::raw(":groups "),
-            Span::styled("Space", Style::default().fg(Color::Yellow)),
-            Span::raw(":collapse "),
-            Span::styled("/", Style::default().fg(Color::Yellow)),
-            Span::raw(":find "),
-            Span::styled("Enter", Style::default().fg(Color::Yellow)),
-            Span::raw(":detail "),
-            Span::styled("t", Style::default().fg(Color::Yellow)),
-            Span::raw(":table "),
-            Span::styled("d", Style::default().fg(Color::Yellow)),
-            Span::raw(":dashboard "),
-            Span::styled("m", Style::default().fg(Color::Yellow)),
-            Span::raw(":multipane "),
-            Span::styled("q", Style::default().fg(Color::Yellow)),
-            Span::raw(":quit"),
-        ])),
-        chunks[2],
-    );
+    render_tree_footer(frame, chunks[2]);
 }
 
-fn fit_group_header(prefix: &str, width: usize) -> String {
+pub(super) fn fit_group_header(prefix: &str, width: usize) -> String {
     let value = prefix.trim_end();
     let Some((label, count)) = value.rsplit_once(" (") else {
         return truncate(value, width);
@@ -172,20 +57,28 @@ fn fit_group_header(prefix: &str, width: usize) -> String {
     format!("{visible_label}{suffix}")
 }
 
-fn tree_duration(task: &Task) -> String {
+pub(super) fn tree_duration(task: &Task) -> String {
     if let Some(ms) = task.duration_ms {
         let secs = ms / 1000;
-        if secs < 60 { format!("{secs}s") }
-        else if secs < 3600 { format!("{}m{:02}s", secs / 60, secs % 60) }
-        else { format!("{}h{:02}m", secs / 3600, (secs % 3600) / 60) }
+        if secs < 60 {
+            format!("{secs}s")
+        } else if secs < 3600 {
+            format!("{}m{:02}s", secs / 60, secs % 60)
+        } else {
+            format!("{}h{:02}m", secs / 3600, (secs % 3600) / 60)
+        }
     } else if matches!(
         task.status,
         TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled
     ) {
         let elapsed = (chrono::Local::now() - task.created_at).num_seconds();
-        if elapsed < 60 { format!("{elapsed}s") }
-        else if elapsed < 3600 { format!("{}m{:02}s", elapsed / 60, elapsed % 60) }
-        else { format!("{}h{:02}m", elapsed / 3600, (elapsed % 3600) / 60) }
+        if elapsed < 60 {
+            format!("{elapsed}s")
+        } else if elapsed < 3600 {
+            format!("{}m{:02}s", elapsed / 60, elapsed % 60)
+        } else {
+            format!("{}h{:02}m", elapsed / 3600, (elapsed % 3600) / 60)
+        }
     } else {
         "-".to_string()
     }
@@ -211,8 +104,10 @@ mod tests {
             caller_kind: None,
             caller_session_id: None,
             agent_session_id: None,
-            repo_path: None, project_id: crate::config::project::current_project_id(),
-            worktree_path: None, effective_dir: None,
+            repo_path: None,
+            project_id: crate::config::project::current_project_id(),
+            worktree_path: None,
+            effective_dir: None,
             worktree_branch: None,
             final_head_sha: None,
             final_branch: None,
@@ -242,7 +137,6 @@ mod tests {
 
     #[test]
     fn tree_route_fit_uses_provider_not_just_cli() {
-        use crate::ui::tui::route_display::format_route_fit;
         use crate::types::AttributionSource;
         let mut t = base_task();
         t.requested_model = Some("gpt-5.6".to_string());
@@ -284,4 +178,58 @@ mod tests {
         assert!(shown.contains("(1/42)"), "{shown}");
         assert!(shown.chars().count() <= 12, "{shown}");
     }
+}
+
+fn render_tree_header(frame: &mut ratatui::Frame<'_>, app: &App, area: ratatui::layout::Rect) {
+    let done = app.tasks.iter().filter(|t| t.status.is_terminal()).count();
+    let running = app
+        .tasks
+        .iter()
+        .filter(|t| matches!(t.status, TaskStatus::Running))
+        .count();
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(
+                "aid tree ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("[{}]", app.scope_label()),
+                Style::default().fg(Color::Indexed(250)),
+            ),
+            Span::raw("  "),
+            Span::styled(format!("{done}✓ "), Style::default().fg(Color::Green)),
+            Span::styled(format!("{running}▶"), Style::default().fg(Color::Yellow)),
+        ]))
+        .alignment(Alignment::Center),
+        area,
+    );
+}
+
+fn render_tree_footer(frame: &mut ratatui::Frame<'_>, area: ratatui::layout::Rect) {
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(" j/k", Style::default().fg(Color::Yellow)),
+            Span::raw(":tasks "),
+            Span::styled("h/l", Style::default().fg(Color::Yellow)),
+            Span::raw(":groups "),
+            Span::styled("Space", Style::default().fg(Color::Yellow)),
+            Span::raw(":collapse "),
+            Span::styled("/", Style::default().fg(Color::Yellow)),
+            Span::raw(":find "),
+            Span::styled("Enter", Style::default().fg(Color::Yellow)),
+            Span::raw(":detail "),
+            Span::styled("t", Style::default().fg(Color::Yellow)),
+            Span::raw(":table "),
+            Span::styled("d", Style::default().fg(Color::Yellow)),
+            Span::raw(":dashboard "),
+            Span::styled("m", Style::default().fg(Color::Yellow)),
+            Span::raw(":multipane "),
+            Span::styled("q", Style::default().fg(Color::Yellow)),
+            Span::raw(":quit"),
+        ])),
+        area,
+    );
 }

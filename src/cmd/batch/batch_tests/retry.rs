@@ -5,6 +5,7 @@ use super::shared::make_stored_task;
 use crate::cmd::run::RunArgs;
 use crate::store::Store;
 use crate::types::{AgentKind, TaskStatus};
+use std::sync::Arc;
 
 use super::super::batch_retry::retry_task_to_run_args;
 

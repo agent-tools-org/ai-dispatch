@@ -10,14 +10,12 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 
 use super::build_diag::BuildReport;
-use crate::cmd::build_parse::evaluate_build_run;
 use super::build_fallback::{
     fallback_digest_note, should_retry_with_fallback_at, target_dir_permission_blocked,
 };
-use super::build_stream::{
-    drain_streams, emit_event, pump_lines, CargoStreamState, StreamEvent,
-};
+use super::build_stream::{CargoStreamState, StreamEvent, drain_streams, emit_event, pump_lines};
 use super::{BuildRequest, CargoTargetChoice};
+use crate::cmd::build_parse::evaluate_build_run;
 use crate::store::Store;
 
 pub(crate) use super::build_progress::{ProgressConfig, ProgressState};
@@ -105,33 +103,7 @@ pub(crate) async fn run_cargo_outcome(
         child_env,
     )
     .await?;
-    let status = attempt.status;
-    let timed_out = attempt.timed_out;
-    let infrastructure_failure = !status.success()
-        && attempt.target.value.as_deref().is_some_and(|target_dir| {
-            target_dir_permission_blocked(&attempt.stream_state.stderr_lines, target_dir)
-        });
-    let compiled_units = attempt.stream_state.compiled_units;
-    let plain_stdout = attempt.stream_state.plain_stdout;
-    let report = BuildReport {
-        success: status.success(),
-        command: command.clone(),
-        elapsed: start.elapsed(),
-        diagnostics: attempt.stream_state.collector.into_diagnostics(),
-        stderr_lines: attempt.stream_state.stderr_lines,
-        note,
-    };
-    Ok(CargoRunOutcome {
-        exit_code: status.code().unwrap_or(1),
-        cargo_success: status.success(),
-        command,
-        elapsed: start.elapsed(),
-        compiled_units,
-        plain_stdout,
-        report,
-        timed_out,
-        infrastructure_failure,
-    })
+    Ok(cargo_outcome(attempt, command, note, start))
 }
 
 async fn maybe_retry_after_permission_block(
@@ -224,7 +196,12 @@ async fn run_one_attempt(
     )
     .await?;
     drain_streams(&mut rx, store, task_id, &mut stream_state).await;
-    Ok(CargoAttempt { status, stream_state, timed_out, target: target.clone() })
+    Ok(CargoAttempt {
+        status,
+        stream_state,
+        timed_out,
+        target: target.clone(),
+    })
 }
 
 fn spawn_cargo(
@@ -255,3 +232,38 @@ mod tests;
 
 #[path = "build_process_wait.rs"]
 mod wait;
+
+fn cargo_outcome(
+    attempt: CargoAttempt,
+    command: String,
+    note: Option<String>,
+    start: Instant,
+) -> CargoRunOutcome {
+    let status = attempt.status;
+    let timed_out = attempt.timed_out;
+    let infrastructure_failure = !status.success()
+        && attempt.target.value.as_deref().is_some_and(|target_dir| {
+            target_dir_permission_blocked(&attempt.stream_state.stderr_lines, target_dir)
+        });
+    let compiled_units = attempt.stream_state.compiled_units;
+    let plain_stdout = attempt.stream_state.plain_stdout;
+    let report = BuildReport {
+        success: status.success(),
+        command: command.clone(),
+        elapsed: start.elapsed(),
+        diagnostics: attempt.stream_state.collector.into_diagnostics(),
+        stderr_lines: attempt.stream_state.stderr_lines,
+        note,
+    };
+    CargoRunOutcome {
+        exit_code: status.code().unwrap_or(1),
+        cargo_success: status.success(),
+        command,
+        elapsed: start.elapsed(),
+        compiled_units,
+        plain_stdout,
+        report,
+        timed_out,
+        infrastructure_failure,
+    }
+}

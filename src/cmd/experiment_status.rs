@@ -40,6 +40,11 @@ pub fn run_status(dir: Option<&str>) -> Result<()> {
         "Run", "Agent", "Metric", "Kept", "Checks"
     );
     println!("{}", "-".repeat(60));
+    print_run_history(&state);
+    Ok(())
+}
+
+fn print_run_history(state: &super::experiment_types::ExperimentState) {
     for run in &state.runs {
         let metric = run
             .metric_value
@@ -60,5 +65,4 @@ pub fn run_status(dir: Option<&str>) -> Result<()> {
             run.run_id, run.agent, metric, kept, checks, duration
         );
     }
-    Ok(())
 }

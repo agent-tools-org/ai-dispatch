@@ -10,27 +10,27 @@ use std::sync::Arc;
 
 use crate::agent;
 use crate::agent::registry;
-use crate::config::agent as agent_config;
 use crate::cli::ConfigAction;
-use crate::routing::rate_limit;
+use crate::config::agent as agent_config;
 use crate::prompt::skills;
-use crate::store::Store;
 use crate::prompt::templates;
+use crate::routing::rate_limit;
+use crate::store::Store;
 use crate::types::{AgentKind, TaskFilter};
 
 #[path = "config_display.rs"]
 mod config_display;
 #[cfg(test)]
-#[path = "config_tests.rs"]
-mod tests;
-#[cfg(test)]
 #[path = "config_pricing_tests.rs"]
 mod pricing_tests;
+#[cfg(test)]
+#[path = "config_tests.rs"]
+mod tests;
 
-use config_display::{agent_profile, compute_agent_history, compute_model_history, format_capabilities};
 use crate::routing::model_catalog::AGENT_PROFILES;
-pub(crate) use crate::routing::model_catalog::merged_agent_models;
 use crate::routing::model_catalog::PricingResponse;
+pub(crate) use crate::routing::model_catalog::merged_agent_models;
+use config_display::{agent_profile, compute_agent_history, compute_model_history, format_capabilities};
 
 pub fn run(store: &Arc<Store>, action: ConfigAction) -> Result<()> {
     match action {
@@ -58,9 +58,7 @@ fn maybe_refresh_pricing_if_stale() {
         Ok(meta) => match meta.modified() {
             Err(_) => true,
             Ok(mtime) => {
-                SystemTime::now()
-                    .duration_since(mtime)
-                    .unwrap_or(Duration::ZERO)
+                SystemTime::now().duration_since(mtime).unwrap_or(Duration::ZERO)
                     > Duration::from_secs(DAY_SECS)
             }
         },
@@ -95,44 +93,15 @@ fn print_agents(store: &Arc<Store>) {
         let profile = agent_profile(*kind, installed.contains(kind), history.get(kind), &model_history);
         println!("{} {}\n{}", status, kind.as_str(), profile);
     }
-    let custom_agents = registry::list_custom_agents();
-    if custom_agents.is_empty() {
-        println!("\nCustom agents: none found.");
-    } else {
-        println!("\nCustom agents:");
-        for agent in custom_agents {
-            if agent_config::is_agent_disabled(&agent.id) {
-                continue;
-            }
-            let install_status = if command_installed(&agent.command) {
-                "installed"
-            } else {
-                "not installed"
-            };
-            println!("  - Name: {}", agent.id);
-            println!("    Display name: {}", agent.display_name);
-            println!("    Command: {} ({})", agent.command, install_status);
-            println!("    Capabilities: {}", format_capabilities(&agent.capabilities));
-            // Rate-limit status: uses the custom agent's own id in the hint
-            // (clear-limit <id>) rather than the kind constant "custom".
-            if rate_limit::is_rate_limited(&AgentKind::Custom, Some(agent.id.as_str())) {
-                let hint = match rate_limit::dispatch_blocking_hold(
-                    &AgentKind::Custom,
-                    Some(agent.id.as_str()),
-                ) {
-                    Some(h) => format!(" — {h}"),
-                    None => String::new(),
-                };
-                println!("    Status: LIMITED{hint}");
-            }
-        }
-    }
+    print_custom_agents();
     if let Some(line) = disabled_summary_line(&disabled_agent_names()) {
         println!("\n{line}");
     }
 }
 
-fn builtin_agent_visible(kind: AgentKind) -> bool { !agent_config::is_agent_disabled(kind.as_str()) }
+fn builtin_agent_visible(kind: AgentKind) -> bool {
+    !agent_config::is_agent_disabled(kind.as_str())
+}
 
 fn disabled_agent_names() -> Vec<String> {
     let mut names: Vec<String> = agent_config::load_agent_config()
@@ -144,9 +113,18 @@ fn disabled_agent_names() -> Vec<String> {
 }
 
 fn disabled_summary_line(names: &[String]) -> Option<String> {
-    if names.is_empty() { return None; }
-    let hint = if names.len() == 1 { names[0].as_str() } else { "<name>" };
-    Some(format!("Disabled: {} (enable with aid agent config {hint} --enable)", names.join(", ")))
+    if names.is_empty() {
+        return None;
+    }
+    let hint = if names.len() == 1 {
+        names[0].as_str()
+    } else {
+        "<name>"
+    };
+    Some(format!(
+        "Disabled: {} (enable with aid agent config {hint} --enable)",
+        names.join(", ")
+    ))
 }
 
 fn print_skills() -> Result<()> {
@@ -198,7 +176,10 @@ fn print_templates() {
 fn print_pricing(update: bool) -> Result<()> {
     if update {
         let updated = update_pricing_file()?;
-        println!("Updated {updated} models in {}.", crate::support::paths::pricing_path().display());
+        println!(
+            "Updated {updated} models in {}.",
+            crate::support::paths::pricing_path().display()
+        );
     }
     print!("{}", pricing_table()?);
     Ok(())
@@ -208,15 +189,22 @@ fn print_pricing(update: bool) -> Result<()> {
 fn pricing_table() -> Result<String> {
     let pricing = merged_agent_models()?;
     let usd = |value: Option<f64>| value.map_or_else(|| "unknown".to_string(), |v| format!("${v:.2}"));
-    let mut out = format!("{:<10} {:<25} {:>10} {:>10} {:>10} Description\n", "Agent", "Model", "Tier", "Input/M", "Output/M");
+    let mut out = format!(
+        "{:<10} {:<25} {:>10} {:>10} {:>10} Description\n",
+        "Agent", "Model", "Tier", "Input/M", "Output/M"
+    );
     out.push_str(&format!("{}\n", "-".repeat(85)));
     for agent in crate::agent::routable_builtins() {
         for am in pricing.iter().filter(|model| model.agent == agent) {
             let price = crate::cost::resolve_pricing(Some(&am.model), agent);
             out.push_str(&format!(
                 "{:<10} {:<25} {:>10} {:>10} {:>10} {}\n",
-                agent.as_str(), am.model, am.tier,
-                usd(price.map(|p| p.input_per_m)), usd(price.map(|p| p.output_per_m)), am.description
+                agent.as_str(),
+                am.model,
+                am.tier,
+                usd(price.map(|p| p.input_per_m)),
+                usd(price.map(|p| p.output_per_m)),
+                am.description
             ));
         }
     }
@@ -246,4 +234,37 @@ fn update_pricing_file() -> Result<usize> {
 
 fn command_installed(command: &str) -> bool {
     crate::agent::custom_route_blocker(command).is_none()
+}
+
+fn print_custom_agents() {
+    let custom_agents = registry::list_custom_agents();
+    if custom_agents.is_empty() {
+        println!("\nCustom agents: none found.");
+    } else {
+        println!("\nCustom agents:");
+        for agent in custom_agents {
+            if agent_config::is_agent_disabled(&agent.id) {
+                continue;
+            }
+            let install_status = if command_installed(&agent.command) {
+                "installed"
+            } else {
+                "not installed"
+            };
+            println!("  - Name: {}", agent.id);
+            println!("    Display name: {}", agent.display_name);
+            println!("    Command: {} ({})", agent.command, install_status);
+            println!("    Capabilities: {}", format_capabilities(&agent.capabilities));
+            // Rate-limit status: uses the custom agent's own id in the hint
+            // (clear-limit <id>) rather than the kind constant "custom".
+            if rate_limit::is_rate_limited(&AgentKind::Custom, Some(agent.id.as_str())) {
+                let hint =
+                    match rate_limit::dispatch_blocking_hold(&AgentKind::Custom, Some(agent.id.as_str())) {
+                        Some(h) => format!(" — {h}"),
+                        None => String::new(),
+                    };
+                println!("    Status: LIMITED{hint}");
+            }
+        }
+    }
 }

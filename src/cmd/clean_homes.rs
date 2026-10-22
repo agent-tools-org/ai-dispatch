@@ -13,7 +13,9 @@ pub(crate) fn clean_isolated_task_homes(
     sizes: &mut crate::cmd::clean_size::SizeTracker,
 ) -> Result<u64> {
     clean_isolated_task_homes_with(
-        store, dry_run, sizes,
+        store,
+        dry_run,
+        sizes,
         crate::agent::home_isolation::resolve_real_home,
         crate::agent::home_isolation::remove_isolated_home,
         |warning| aid_warn!("{warning}"),
@@ -30,24 +32,22 @@ pub(super) fn clean_isolated_task_homes_with(
 ) -> Result<u64> {
     let mut bytes = 0u64;
     let mut removed = 0usize;
-    let real_home = if dry_run { None } else {
-        match resolve_home() {
-            Ok(home) => Some(home),
-            Err(err) => {
-                warn(format!("[aid] Warning: cannot resolve real HOME; isolated task homes remain: {err:#}"));
-                None
-            }
-        }
-    };
+    let real_home = resolve_cleanup_home(dry_run, resolve_home, &mut warn);
     for id in crate::cmd::clean_cargo_target::terminal_task_ids(store)? {
         let home_dir = crate::support::paths::task_dir(&id).join("home");
         if home_dir.exists() {
             let size = sizes.get_dir_size(&home_dir)?;
             if dry_run {
-                println!("[dry-run] Would remove isolated task home for {} ({})", id, format_bytes(size));
+                println!(
+                    "[dry-run] Would remove isolated task home for {} ({})",
+                    id,
+                    format_bytes(size)
+                );
                 bytes += size;
             } else {
-                let Some(real_home) = real_home.as_deref() else { continue };
+                let Some(real_home) = real_home.as_deref() else {
+                    continue;
+                };
                 if let Err(err) = remove_home(&home_dir, real_home) {
                     warn(format!(
                         "[aid] Warning: failed to remove isolated task home for {} at '{}': {err:#}",
@@ -62,12 +62,41 @@ pub(super) fn clean_isolated_task_homes_with(
             removed += 1;
         }
     }
+    print_home_cleanup_summary(removed, dry_run, bytes);
+    Ok(bytes)
+}
+
+fn resolve_cleanup_home(
+    dry_run: bool,
+    resolve_home: impl FnOnce() -> Result<PathBuf>,
+    warn: &mut impl FnMut(String),
+) -> Option<PathBuf> {
+    let real_home = if dry_run {
+        None
+    } else {
+        match resolve_home() {
+            Ok(home) => Some(home),
+            Err(err) => {
+                warn(format!(
+                    "[aid] Warning: cannot resolve real HOME; isolated task homes remain: {err:#}"
+                ));
+                None
+            }
+        }
+    };
+    real_home
+}
+
+fn print_home_cleanup_summary(removed: usize, dry_run: bool, bytes: u64) {
     if removed > 0 || dry_run {
         println!(
             "{} {removed} isolated task homes ({})",
-            if dry_run { "[dry-run] Would remove" } else { "Removed" },
+            if dry_run {
+                "[dry-run] Would remove"
+            } else {
+                "Removed"
+            },
             format_bytes(bytes)
         );
     }
-    Ok(bytes)
 }

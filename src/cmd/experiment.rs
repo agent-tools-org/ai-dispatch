@@ -1,17 +1,17 @@
 // Core experiment loop: dispatch → measure → keep/revert.
 // Exports: run_experiment().
 // Deps: experiment_types, experiment_persist, cmd::run, store.
+use crate::cmd::experiment_persist::{experiment_file_path, load_state, save_run};
+use crate::cmd::experiment_types::{ExperimentConfig, ExperimentRun, ExperimentState};
+use crate::cmd::run::{self, RunArgs};
+use crate::store::Store;
+use crate::types::Task;
 use anyhow::{Context, Result};
 use chrono::Utc;
 use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
 use std::time::Instant;
-use crate::cmd::experiment_persist::{experiment_file_path, load_state, save_run};
-use crate::cmd::experiment_types::{ExperimentConfig, ExperimentRun, ExperimentState};
-use crate::cmd::run::{self, RunArgs};
-use crate::store::Store;
-use crate::types::Task;
 pub async fn run_experiment(store: Arc<Store>, config: ExperimentConfig) -> Result<()> {
     let base_dir = std::env::current_dir()?.to_string_lossy().to_string();
     let state_path = experiment_file_path(&base_dir);
@@ -20,46 +20,30 @@ pub async fn run_experiment(store: Arc<Store>, config: ExperimentConfig) -> Resu
     for run_id in 1..=max_runs {
         git_snapshot(&base_dir)?;
         let start = Instant::now();
-        let task_id = match run::run(store.clone(), RunArgs {
-            agent_name: config.agent.clone(),
-            prompt: config.prompt.clone(),
-            verify: config.verify.clone(),
-            worktree: config.worktree.clone(),
-            announce: false,
-            ..Default::default()
-        })
-        .await
-        {
-            Ok(id) => id,
-            Err(err) => {
-                let _ = git_revert(&base_dir);
-                return Err(err.context("experiment dispatch failed"));
-            }
-        };
+        let task_id = dispatch_run(&store, &config, &base_dir).await?;
 
         let task = store
             .get_task(task_id.as_str())?
             .context("missing task for experiment run")?;
         let dir = work_dir(&task);
 
-        if let Some(ref checks_cmd) = config.checks && !run_check(checks_cmd, &dir)? {
+        if let Some(ref checks_cmd) = config.checks
+            && !run_check(checks_cmd, &dir)?
+        {
             git_revert(&dir)?;
-            let run = make_run(run_id, &task, None, Some(false), false, start.elapsed().as_millis() as i64);
+            let run = make_run(
+                run_id,
+                &task,
+                None,
+                Some(false),
+                false,
+                start.elapsed().as_millis() as i64,
+            );
             persist_run(&mut state, &state_path, run)?;
             aid_warn!("[aid experiment] run {run_id}: checks failed, reverted");
             continue;
         }
-        let metric_value = evaluate_metric(&config.metric_command, &dir).with_context(|| "metric command failed")?;
-        let kept = state.is_improvement(metric_value);
-        if kept {
-            git_commit(&dir, &format!("experiment run {run_id}: {metric_value}"))?;
-        } else {
-            git_revert(&dir)?;
-        }
-
-        let run = make_run(run_id, &task, Some(metric_value), config.checks.as_ref().map(|_| true), kept, start.elapsed().as_millis() as i64);
-        persist_run(&mut state, &state_path, run)?;
-        aid_info!("[aid experiment] run {run_id}: metric={metric_value} kept={kept}");
+        measure_and_record(&config, &dir, &mut state, &state_path, run_id, &task, start)?;
     }
     Ok(())
 }
@@ -88,8 +72,7 @@ fn persist_run(state: &mut ExperimentState, path: &Path, run: ExperimentRun) -> 
     save_run(path, &run)
 }
 fn work_dir(task: &Task) -> String {
-    task
-        .worktree_path
+    task.worktree_path
         .as_deref()
         .or(task.repo_path.as_deref())
         .unwrap_or(".")
@@ -112,10 +95,10 @@ fn evaluate_metric(cmd: &str, dir: &str) -> Result<f64> {
         anyhow::bail!("metric command exited with {}", output.status);
     }
     let stdout = String::from_utf8_lossy(&output.stdout);
-        stdout
-            .lines()
-            .last()
-            .and_then(|line| line.split_whitespace().last())
+    stdout
+        .lines()
+        .last()
+        .and_then(|line| line.split_whitespace().last())
         .and_then(|word| word.parse::<f64>().ok())
         .ok_or_else(|| anyhow::anyhow!("metric command output is not a number"))
 }
@@ -134,7 +117,11 @@ fn git_revert(dir: &str) -> Result<()> {
     Ok(())
 }
 fn git_commit(dir: &str, message: &str) -> Result<()> {
-    crate::workspace::worktree::stage_aid_files(Path::new(dir), crate::workspace::worktree::AidStageMode::All, &[])?;
+    crate::workspace::worktree::stage_aid_files(
+        Path::new(dir),
+        crate::workspace::worktree::AidStageMode::All,
+        &[],
+    )?;
     Command::new("git")
         .args(["commit", "-m", message])
         .current_dir(dir)
@@ -149,11 +136,28 @@ mod tests {
     use std::process::Command;
 
     fn git(dir: &std::path::Path, args: &[&str]) {
-        assert!(Command::new("git").arg("-C").arg(dir).args(args).status().unwrap().success());
+        assert!(
+            Command::new("git")
+                .arg("-C")
+                .arg(dir)
+                .args(args)
+                .status()
+                .unwrap()
+                .success()
+        );
     }
 
     fn git_stdout(dir: &std::path::Path, args: &[&str]) -> String {
-        String::from_utf8(Command::new("git").arg("-C").arg(dir).args(args).output().unwrap().stdout).unwrap()
+        String::from_utf8(
+            Command::new("git")
+                .arg("-C")
+                .arg(dir)
+                .args(args)
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -176,4 +180,62 @@ mod tests {
         let committed = git_stdout(dir.path(), &["show", "--name-only", "--format=", "HEAD"]);
         assert_eq!(committed, "tracked.txt\n", "got: {committed}");
     }
+}
+
+async fn dispatch_run(
+    store: &Arc<Store>,
+    config: &ExperimentConfig,
+    base_dir: &str,
+) -> Result<crate::types::TaskId> {
+    let task_id = match run::run(
+        store.clone(),
+        RunArgs {
+            agent_name: config.agent.clone(),
+            prompt: config.prompt.clone(),
+            verify: config.verify.clone(),
+            worktree: config.worktree.clone(),
+            announce: false,
+            ..Default::default()
+        },
+    )
+    .await
+    {
+        Ok(id) => id,
+        Err(err) => {
+            let _ = git_revert(base_dir);
+            return Err(err.context("experiment dispatch failed"));
+        }
+    };
+    Ok(task_id)
+}
+
+fn measure_and_record(
+    config: &ExperimentConfig,
+    dir: &str,
+    state: &mut ExperimentState,
+    state_path: &Path,
+    run_id: usize,
+    task: &Task,
+    start: Instant,
+) -> Result<()> {
+    let metric_value =
+        evaluate_metric(&config.metric_command, dir).with_context(|| "metric command failed")?;
+    let kept = state.is_improvement(metric_value);
+    if kept {
+        git_commit(dir, &format!("experiment run {run_id}: {metric_value}"))?;
+    } else {
+        git_revert(dir)?;
+    }
+
+    let run = make_run(
+        run_id,
+        task,
+        Some(metric_value),
+        config.checks.as_ref().map(|_| true),
+        kept,
+        start.elapsed().as_millis() as i64,
+    );
+    persist_run(state, state_path, run)?;
+    aid_info!("[aid experiment] run {run_id}: metric={metric_value} kept={kept}");
+    Ok(())
 }

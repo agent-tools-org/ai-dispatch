@@ -3,7 +3,7 @@
 // Deps: super::truncate, crate::types, serde_json, chrono.
 
 use chrono::Local;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::agent::truncate::{capped_detail, capped_detail_with};
 use crate::types::*;
@@ -72,21 +72,7 @@ pub(crate) fn parse_stream_event(
                 }
             })
         }
-        "tool_queued" | "tool_running" | "tool_completed" => {
-            let tool = event
-                .get("toolName")
-                .and_then(Value::as_str)
-                .unwrap_or("tool");
-            let detail = format!("{tool}: {}", event.get("type").and_then(Value::as_str)?);
-            let (detail, metadata) = capped_detail_with(&detail, Some(json!({ "tool": tool })));
-            Some(TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: EventKind::ToolCall,
-                detail,
-                metadata,
-            })
-        }
+        "tool_queued" | "tool_running" | "tool_completed" => tool_event(task_id, event, now),
         "turn_end" => usage_event(task_id, event.get("usage")?, now),
         _ => None,
     }
@@ -133,7 +119,11 @@ pub(crate) fn parse_result_event(
     }
 }
 
-pub(crate) fn usage_event(task_id: &TaskId, usage: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
+pub(crate) fn usage_event(
+    task_id: &TaskId,
+    usage: &Value,
+    now: chrono::DateTime<Local>,
+) -> Option<TaskEvent> {
     let detail = usage_detail(usage)?;
     let metadata = usage_metadata(usage);
     let (detail, metadata) = capped_detail_with(&detail, metadata);
@@ -149,10 +139,7 @@ pub(crate) fn usage_event(task_id: &TaskId, usage: &Value, now: chrono::DateTime
 pub(crate) fn usage_detail(usage: &Value) -> Option<String> {
     let input = usage.get("inputTokens").and_then(Value::as_i64)?;
     let output = usage.get("outputTokens").and_then(Value::as_i64)?;
-    let cached = usage
-        .get("cacheReadTokens")
-        .and_then(Value::as_i64)
-        .unwrap_or(0);
+    let cached = usage.get("cacheReadTokens").and_then(Value::as_i64).unwrap_or(0);
     let total = input + output;
     Some(if cached > 0 {
         format!("tokens: {input} in + {output} out = {total} ({cached} cached)")
@@ -164,14 +151,8 @@ pub(crate) fn usage_detail(usage: &Value) -> Option<String> {
 pub(crate) fn usage_metadata(usage: &Value) -> Option<Value> {
     let input = usage.get("inputTokens").and_then(Value::as_i64)?;
     let output = usage.get("outputTokens").and_then(Value::as_i64)?;
-    let cached = usage
-        .get("cacheReadTokens")
-        .and_then(Value::as_i64)
-        .unwrap_or(0);
-    let written = usage
-        .get("cacheWriteTokens")
-        .and_then(Value::as_i64)
-        .unwrap_or(0);
+    let cached = usage.get("cacheReadTokens").and_then(Value::as_i64).unwrap_or(0);
+    let written = usage.get("cacheWriteTokens").and_then(Value::as_i64).unwrap_or(0);
     Some(json!({
         "tokens": input + output,
         "input_tokens": input,
@@ -187,6 +168,21 @@ pub(crate) fn commandcode_result_failed(value: &Value) -> bool {
     }
     let subtype = value.get("subtype").and_then(Value::as_str);
     let stop_reason = value.get("stopReason").and_then(Value::as_str);
-    matches!(subtype, Some("error_during_execution" | "max_turns" | "cancelled"))
-        || matches!(stop_reason, Some("error" | "max_turns" | "cancelled"))
+    matches!(
+        subtype,
+        Some("error_during_execution" | "max_turns" | "cancelled")
+    ) || matches!(stop_reason, Some("error" | "max_turns" | "cancelled"))
+}
+
+fn tool_event(task_id: &TaskId, event: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
+    let tool = event.get("toolName").and_then(Value::as_str).unwrap_or("tool");
+    let detail = format!("{tool}: {}", event.get("type").and_then(Value::as_str)?);
+    let (detail, metadata) = capped_detail_with(&detail, Some(json!({ "tool": tool })));
+    Some(TaskEvent {
+        task_id: task_id.clone(),
+        timestamp: now,
+        event_kind: EventKind::ToolCall,
+        detail,
+        metadata,
+    })
 }

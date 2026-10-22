@@ -42,31 +42,7 @@ pub(super) fn upsert_budget_at(
     let budget_value = usage.entry("budget").or_insert_with(|| Value::Array(Vec::new()));
     let budgets = ensure_array(budget_value);
 
-    let mut updated = false;
-    for entry in budgets.iter_mut() {
-        if let Value::Table(table) = entry
-            && table.get("name").and_then(|n| n.as_str()) == Some(name)
-        {
-            apply_budget_limits(table, cost_limit_usd, token_limit)?;
-            if let Some(window) = window {
-                table.insert("window".to_string(), Value::String(window.to_string()));
-            } else {
-                table.remove("window");
-            }
-            updated = true;
-            break;
-        }
-    }
-
-    if !updated {
-        let mut entry = Table::new();
-        entry.insert("name".to_string(), Value::String(name.to_string()));
-        apply_budget_limits(&mut entry, cost_limit_usd, token_limit)?;
-        if let Some(window) = window {
-            entry.insert("window".to_string(), Value::String(window.to_string()));
-        }
-        budgets.push(Value::Table(entry));
-    }
+    update_budget_entries(budgets, name, cost_limit_usd, token_limit, window)?;
 
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).with_context(|| format!("Failed to create {}", parent.display()))?;
@@ -149,4 +125,39 @@ fn ensure_array(value: &mut Value) -> &mut Vec<Value> {
 
 fn value_to_f64(value: &Value) -> Option<f64> {
     value.as_float().or_else(|| value.as_integer().map(|i| i as f64))
+}
+
+fn update_budget_entries(
+    budgets: &mut Vec<Value>,
+    name: &str,
+    cost_limit_usd: Option<f64>,
+    token_limit: Option<u64>,
+    window: Option<&str>,
+) -> Result<()> {
+    let mut updated = false;
+    for entry in budgets.iter_mut() {
+        if let Value::Table(table) = entry
+            && table.get("name").and_then(|n| n.as_str()) == Some(name)
+        {
+            apply_budget_limits(table, cost_limit_usd, token_limit)?;
+            if let Some(window) = window {
+                table.insert("window".to_string(), Value::String(window.to_string()));
+            } else {
+                table.remove("window");
+            }
+            updated = true;
+            break;
+        }
+    }
+
+    if !updated {
+        let mut entry = Table::new();
+        entry.insert("name".to_string(), Value::String(name.to_string()));
+        apply_budget_limits(&mut entry, cost_limit_usd, token_limit)?;
+        if let Some(window) = window {
+            entry.insert("window".to_string(), Value::String(window.to_string()));
+        }
+        budgets.push(Value::Table(entry));
+    }
+    Ok(())
 }

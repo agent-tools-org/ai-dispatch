@@ -2,15 +2,17 @@
 // Exports: Store task lookup, listing, metrics, and similarity methods.
 // Deps: super::super::Store, rusqlite, chrono, crate::types.
 
+mod query_sql;
+
 use anyhow::Result;
 use chrono::Local;
+use rusqlite::{OptionalExtension, params};
 #[cfg(feature = "web")]
 use std::collections::HashMap;
-use rusqlite::{params, OptionalExtension};
 
-use super::super::schema::row_to_task;
 use super::super::Store;
-use crate::types::{AgentKind, Task, TaskFilter, TaskStatus, ACTIVE_TASK_STATUSES};
+use super::super::schema::row_to_task;
+use crate::types::{ACTIVE_TASK_STATUSES, AgentKind, Task, TaskFilter, TaskStatus};
 
 impl Store {
     #[cfg(feature = "web")]
@@ -58,7 +60,9 @@ impl Store {
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
              created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-             exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment, final_head_sha, final_branch, observed_model, attribution_source, project_id, effective_dir
+             exit_code, category, pending_reason, audit_verdict, audit_report_path, \
+            delivery_assessment, final_head_sha, final_branch, observed_model, attribution_source, \
+            project_id, effective_dir
              FROM tasks WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(params![id], row_to_task)?;
@@ -141,7 +145,9 @@ impl Store {
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
              created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-             exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment, final_head_sha, final_branch, observed_model, attribution_source, project_id, effective_dir
+             exit_code, category, pending_reason, audit_verdict, audit_report_path, \
+            delivery_assessment, final_head_sha, final_branch, observed_model, attribution_source, \
+            project_id, effective_dir
              FROM tasks WHERE parent_task_id = ?1 ORDER BY created_at",
         )?;
         let rows = stmt.query_map(params![parent_id], row_to_task)?;
@@ -154,57 +160,12 @@ impl Store {
 
     pub fn list_tasks(&self, filter: TaskFilter) -> Result<Vec<Task>> {
         let conn = self.db();
-        let (sql, filter_params): (&str, Vec<String>) = match filter {
-            TaskFilter::All => (
-                "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
-                 caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
-                 start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
-                 created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-                 exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment, final_head_sha, final_branch, observed_model, attribution_source, project_id, effective_dir
-                 FROM tasks ORDER BY created_at DESC",
-                vec![],
-            ),
-            TaskFilter::Active => (
-                "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
-                 caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
-                 start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
-                 created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-                 exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment, final_head_sha, final_branch, observed_model, attribution_source, project_id, effective_dir
-                 FROM tasks WHERE status IN (?1, ?2, ?3, ?4, ?5) ORDER BY created_at DESC",
-                ACTIVE_TASK_STATUSES
-                    .iter()
-                    .map(|status| status.as_str().to_string())
-                    .collect(),
-            ),
-            TaskFilter::Running => (
-                "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
-                 caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
-                 start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
-                 created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-                 exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment, final_head_sha, final_branch, observed_model, attribution_source, project_id, effective_dir
-                 FROM tasks WHERE status IN (?1, ?2, ?3) ORDER BY created_at DESC",
-                vec![
-                    "running".to_string(),
-                    "awaiting_input".to_string(),
-                    "stalled".to_string(),
-                ],
-            ),
-            TaskFilter::Today => {
-                let today = Local::now().format("%Y-%m-%d").to_string();
-                (
-                    "SELECT id, agent, prompt, resolved_prompt, status, parent_task_id, workgroup_id,
-                     caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
-                     start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
-                     created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-                     exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment, final_head_sha, final_branch, observed_model, attribution_source, project_id, effective_dir
-                     FROM tasks WHERE created_at >= ?1 ORDER BY created_at DESC",
-                    vec![today],
-                )
-            }
-        };
+        let (sql, filter_params) = query_sql::list_tasks_query(filter);
         let mut stmt = conn.prepare(sql)?;
-        let params: Vec<&dyn rusqlite::ToSql> =
-            filter_params.iter().map(|value| value as &dyn rusqlite::ToSql).collect();
+        let params: Vec<&dyn rusqlite::ToSql> = filter_params
+            .iter()
+            .map(|value| value as &dyn rusqlite::ToSql)
+            .collect();
         let rows = stmt.query_map(params.as_slice(), row_to_task)?;
         rows.map(|row| row?).collect()
     }
@@ -246,13 +207,18 @@ impl Store {
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
              created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-             exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment, final_head_sha, final_branch, observed_model, attribution_source, project_id, effective_dir
+             exit_code, category, pending_reason, audit_verdict, audit_report_path, \
+            delivery_assessment, final_head_sha, final_branch, observed_model, attribution_source, \
+            project_id, effective_dir
              FROM tasks
              WHERE agent = ?1 AND status = ?2 AND duration_ms IS NOT NULL AND created_at >= ?3
              ORDER BY created_at DESC
              LIMIT ?4",
         )?;
-        let rows = stmt.query_map(params![agent.as_str(), TaskStatus::Done.as_str(), cutoff, limit], row_to_task)?;
+        let rows = stmt.query_map(
+            params![agent.as_str(), TaskStatus::Done.as_str(), cutoff, limit],
+            row_to_task,
+        )?;
         rows.map(|row| row?).collect()
     }
 
@@ -263,7 +229,9 @@ impl Store {
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
              created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-             exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment, final_head_sha, final_branch, observed_model, attribution_source, project_id, effective_dir
+             exit_code, category, pending_reason, audit_verdict, audit_report_path, \
+            delivery_assessment, final_head_sha, final_branch, observed_model, attribution_source, \
+            project_id, effective_dir
              FROM tasks WHERE caller_session_id = ?1 ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map(params![session_id], row_to_task)?;
@@ -277,11 +245,12 @@ impl Store {
              caller_kind, caller_session_id, agent_session_id, repo_path, worktree_path, worktree_branch,
              start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd,
              created_at, completed_at, verify, read_only, budget, custom_agent_name, verify_status,
-             exit_code, category, pending_reason, audit_verdict, audit_report_path, delivery_assessment, final_head_sha, final_branch, observed_model, attribution_source, project_id, effective_dir
+             exit_code, category, pending_reason, audit_verdict, audit_report_path, \
+            delivery_assessment, final_head_sha, final_branch, observed_model, attribution_source, \
+            project_id, effective_dir
              FROM tasks WHERE workgroup_id = ?1 ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map(params![group_id], row_to_task)?;
         rows.map(|row| row?).collect()
     }
-
 }

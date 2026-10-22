@@ -1,13 +1,13 @@
 // aid CLI definitions.
 // Exports parser structs and subcommands; depends on clap derive and cli helper modules.
 
-pub(crate) mod diagnostics;
-pub(crate) mod dispatch;
 pub(crate) mod admin_args;
 pub(crate) mod advise_args;
 pub(crate) mod agent_provider_args;
 pub(crate) mod cargo_args;
 pub(crate) mod classify_args;
+pub(crate) mod diagnostics;
+pub(crate) mod dispatch;
 mod extras;
 pub(crate) mod group_args;
 pub(crate) mod inspect_args;
@@ -17,37 +17,35 @@ pub(crate) mod run_args;
 pub(crate) mod task_control_args;
 
 #[cfg(test)]
-mod tests;
+mod build_flag_tests;
+#[cfg(test)]
+mod doctor_tests;
 #[cfg(test)]
 mod export_tests;
+#[cfg(test)]
+mod removed_path_tests;
+#[cfg(test)]
+mod respond_reply_flag_tests;
+#[cfg(test)]
+mod retry_flag_tests;
 #[cfg(test)]
 mod run_audit_flag_tests;
 #[cfg(test)]
 mod run_timeout_help_tests;
 #[cfg(test)]
-mod version_tests;
-#[cfg(test)]
-mod doctor_tests;
-#[cfg(test)]
-mod build_flag_tests;
-#[cfg(test)]
-mod retry_flag_tests;
-#[cfg(test)]
-mod respond_reply_flag_tests;
-#[cfg(test)]
 mod show_flag_tests;
 #[cfg(test)]
-mod watch_wait_flag_tests;
+mod tests;
 #[cfg(test)]
-mod removed_path_tests;
+mod version_tests;
+#[cfg(test)]
+mod watch_wait_flag_tests;
 
 use clap::{Parser, Subcommand};
 
-pub(crate) use extras::RunExtrasArgs;
 pub use admin_args::{ConfigAction, ContainerAction, HookAction, StoreCommands};
-pub use agent_provider_args::{
-    AgentCommands, ByokCommands, CredentialAction, TeamAction, ToolAction,
-};
+pub use agent_provider_args::{AgentCommands, ByokCommands, CredentialAction, TeamAction, ToolAction};
+pub(crate) use extras::RunExtrasArgs;
 pub use group_args::{FindingCommands, GroupAction};
 pub use knowledge_args::{KgCommands, MemoryCommands};
 pub use project_args::{ExperimentCommands, ProjectAction, WorktreeAction};
@@ -141,3 +139,7 @@ pub enum Commands {
     #[command(name = "web")]
     Web(admin_args::WebArgs),
 }
+
+#[cfg(test)]
+#[path = "command_tests.rs"]
+mod command_tests;

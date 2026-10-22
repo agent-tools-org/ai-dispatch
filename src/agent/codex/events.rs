@@ -2,6 +2,9 @@
 // Exports parsing helpers to the adapter; depends on serde_json and shared event types.
 
 use super::*;
+#[path = "events/commands.rs"]
+mod commands;
+use commands::parse_command_event;
 
 pub(super) fn parse_item_event(
     task_id: &TaskId,
@@ -22,11 +25,7 @@ pub(super) fn parse_item_event(
             if message.is_empty() {
                 return None;
             }
-            crate::routing::quota::channel::mark_stream_refusal(
-                AgentKind::Codex,
-                route,
-                &item.to_string(),
-            );
+            crate::routing::quota::channel::mark_stream_refusal(AgentKind::Codex, route, &item.to_string());
             let (detail, metadata) = capped_detail(message);
             Some(TaskEvent {
                 task_id: task_id.clone(),
@@ -82,78 +81,18 @@ fn parse_agent_message(
     })
 }
 
-fn parse_command_event(
-    task_id: &TaskId,
-    item: &Value,
-    event_type: &str,
-    now: chrono::DateTime<Local>,
-) -> Option<TaskEvent> {
-    let command = item.get("command").and_then(|v| v.as_str()).unwrap_or("");
-    if command.is_empty() {
-        return None;
-    }
-
-    if event_type == "item.started" {
-        let (detail, metadata) =
-            capped_detail_with(command, Some(json!({ "command": command, "status": "in_progress" })));
-        return Some(TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: now,
-            event_kind: classify_command(command),
-            detail,
-            metadata,
-        });
-    }
-
-    let exit_code = item.get("exit_code").and_then(|v| v.as_i64());
-    if matches!(exit_code, Some(code) if code != 0) {
-        return Some(TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: now,
-            event_kind: EventKind::Error,
-            detail: format!(
-                "command failed ({}) {}",
-                exit_code.unwrap_or(-1),
-                truncate_text(command, 60)
-            ),
-            metadata: Some(json!({ "command": command, "exit_code": exit_code })),
-        });
-    }
-
-    let output = item
-        .get("aggregated_output")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let event_kind = classify_output(output)?;
-    let (detail, metadata) =
-        capped_detail_with(output, Some(json!({ "command": command, "exit_code": exit_code })));
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind,
-        detail,
-        metadata,
-    })
-}
-
 pub(super) fn parse_turn_completed(
     task_id: &TaskId,
     v: &Value,
     now: chrono::DateTime<Local>,
 ) -> Option<TaskEvent> {
     let usage = v.get("usage")?;
-    let input_tokens = usage
-        .get("input_tokens")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
+    let input_tokens = usage.get("input_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
     let cached_input_tokens = usage
         .get("cached_input_tokens")
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
-    let output_tokens = usage
-        .get("output_tokens")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
+    let output_tokens = usage.get("output_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
     let total_tokens = input_tokens + output_tokens;
     let detail = if cached_input_tokens > 0 {
         format!(
@@ -271,10 +210,7 @@ fn completion_metadata(
             json!(input_tokens.saturating_sub(cached_input_tokens)),
         ),
         ("output_tokens".to_string(), json!(output_tokens)),
-        (
-            "cached_input_tokens".to_string(),
-            json!(cached_input_tokens),
-        ),
+        ("cached_input_tokens".to_string(), json!(cached_input_tokens)),
     ]);
     if let Some(value) = model {
         map.insert("model".to_string(), json!(value));

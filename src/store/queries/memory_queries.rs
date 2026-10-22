@@ -6,8 +6,8 @@ use anyhow::Result;
 use chrono::Local;
 use rusqlite::params;
 
-use super::super::schema::row_to_memory;
 use super::super::Store;
+use super::super::schema::row_to_memory;
 use crate::types::{Memory, MemoryTier, MemoryType};
 
 fn escape_like(s: &str) -> String {
@@ -25,7 +25,8 @@ impl Store {
         let type_value = memory_type.map(|memory_type| memory_type.as_str().to_string());
         let mut stmt = conn.prepare(
             "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
-             created_at, expires_at, supersedes, version, inject_count, last_injected_at, success_count, tier
+             created_at, expires_at, supersedes, version, inject_count, last_injected_at, \
+            success_count, tier
              FROM memories
              WHERE (?1 IS NULL OR project_path = ?1)
                AND (?2 IS NULL OR memory_type = ?2)
@@ -39,7 +40,11 @@ impl Store {
         rows.map(|row| row?).collect()
     }
 
-    pub fn list_memories_by_tier(&self, project_path: Option<&str>, tiers: &[MemoryTier]) -> Result<Vec<Memory>> {
+    pub fn list_memories_by_tier(
+        &self,
+        project_path: Option<&str>,
+        tiers: &[MemoryTier],
+    ) -> Result<Vec<Memory>> {
         if tiers.is_empty() {
             return Ok(vec![]);
         }
@@ -51,7 +56,8 @@ impl Store {
         let include_deep = tiers.contains(&MemoryTier::Deep);
         let mut stmt = conn.prepare(
             "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
-             created_at, expires_at, supersedes, version, inject_count, last_injected_at, success_count, tier
+             created_at, expires_at, supersedes, version, inject_count, last_injected_at, \
+            success_count, tier
              FROM memories
              WHERE (?1 IS NULL OR project_path = ?1)
                AND ((?2 = 1 AND tier = 'identity')
@@ -82,12 +88,14 @@ impl Store {
         let conn = self.db();
         let mut stmt = conn.prepare(
             "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
-             created_at, expires_at, supersedes, version, inject_count, last_injected_at, success_count, tier
+             created_at, expires_at, supersedes, version, inject_count, last_injected_at, \
+            success_count, tier
              FROM memories WHERE id = ?1",
         )?;
         let mut child_stmt = conn.prepare(
             "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
-             created_at, expires_at, supersedes, version, inject_count, last_injected_at, success_count, tier
+             created_at, expires_at, supersedes, version, inject_count, last_injected_at, \
+            success_count, tier
              FROM memories WHERE supersedes = ?1
              ORDER BY version ASC
              LIMIT 1",
@@ -99,39 +107,9 @@ impl Store {
         };
         let mut history = vec![base_memory.clone()];
 
-        let mut previous_id = base_memory.supersedes.as_ref().map(|value| value.as_str().to_string());
-        for _ in 0..50 {
-            let prev = match previous_id {
-                Some(ref prev) => prev.clone(),
-                None => break,
-            };
-            match stmt.query_row(params![prev], row_to_memory) {
-                Ok(row) => {
-                    let memory = row?;
-                    previous_id = memory.supersedes.as_ref().map(|value| value.as_str().to_string());
-                    history.push(memory);
-                }
-                Err(rusqlite::Error::QueryReturnedNoRows) => break,
-                Err(err) => return Err(err.into()),
-            }
-        }
+        collect_predecessors(&mut stmt, &base_memory, &mut history)?;
 
-        let mut next_id = Some(base_memory.id.as_str().to_string());
-        for _ in 0..50 {
-            let curr = match next_id {
-                Some(ref curr) => curr.clone(),
-                None => break,
-            };
-            match child_stmt.query_row(params![curr], row_to_memory) {
-                Ok(row) => {
-                    let memory = row?;
-                    next_id = Some(memory.id.as_str().to_string());
-                    history.push(memory);
-                }
-                Err(rusqlite::Error::QueryReturnedNoRows) => break,
-                Err(err) => return Err(err.into()),
-            }
-        }
+        collect_successors(&mut child_stmt, &base_memory, &mut history)?;
 
         history.sort_by_key(|entry| std::cmp::Reverse(entry.version));
         Ok(history)
@@ -154,7 +132,8 @@ impl Store {
         let include_deep = tiers.is_some_and(|value| value.contains(&MemoryTier::Deep));
         let mut stmt = conn.prepare(
             "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
-             created_at, expires_at, supersedes, version, inject_count, last_injected_at, success_count, tier
+             created_at, expires_at, supersedes, version, inject_count, last_injected_at, \
+            success_count, tier
              FROM memories
              WHERE content LIKE ?1 ESCAPE '\\'
                AND (?2 IS NULL OR project_path = ?2)
@@ -183,4 +162,55 @@ impl Store {
         )?;
         rows.map(|row| row?).collect()
     }
+}
+
+fn collect_predecessors(
+    stmt: &mut rusqlite::Statement<'_>,
+    base_memory: &Memory,
+    history: &mut Vec<Memory>,
+) -> Result<()> {
+    let mut previous_id = base_memory
+        .supersedes
+        .as_ref()
+        .map(|value| value.as_str().to_string());
+    for _ in 0..50 {
+        let prev = match previous_id {
+            Some(ref prev) => prev.clone(),
+            None => break,
+        };
+        match stmt.query_row(params![prev], row_to_memory) {
+            Ok(row) => {
+                let memory = row?;
+                previous_id = memory.supersedes.as_ref().map(|value| value.as_str().to_string());
+                history.push(memory);
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => break,
+            Err(err) => return Err(err.into()),
+        }
+    }
+    Ok(())
+}
+
+fn collect_successors(
+    child_stmt: &mut rusqlite::Statement<'_>,
+    base_memory: &Memory,
+    history: &mut Vec<Memory>,
+) -> Result<()> {
+    let mut next_id = Some(base_memory.id.as_str().to_string());
+    for _ in 0..50 {
+        let curr = match next_id {
+            Some(ref curr) => curr.clone(),
+            None => break,
+        };
+        match child_stmt.query_row(params![curr], row_to_memory) {
+            Ok(row) => {
+                let memory = row?;
+                next_id = Some(memory.id.as_str().to_string());
+                history.push(memory);
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => break,
+            Err(err) => return Err(err.into()),
+        }
+    }
+    Ok(())
 }

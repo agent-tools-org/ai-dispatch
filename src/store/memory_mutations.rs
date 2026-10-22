@@ -5,8 +5,8 @@ use anyhow::Result;
 use chrono::Local;
 use rusqlite::params;
 
-use super::schema::row_to_memory;
 use super::Store;
+use super::schema::row_to_memory;
 use crate::types::*;
 
 impl Store {
@@ -45,7 +45,8 @@ impl Store {
         let conn = self.db();
         let existing = match conn.query_row(
             "SELECT id, memory_type, content, source_task_id, agent, project_path, content_hash,
-             created_at, expires_at, supersedes, version, inject_count, last_injected_at, success_count, tier
+             created_at, expires_at, supersedes, version, inject_count, last_injected_at, \
+            success_count, tier
              FROM memories WHERE id = ?1",
             params![id],
             row_to_memory,
@@ -54,47 +55,7 @@ impl Store {
             Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(false),
             Err(err) => return Err(err.into()),
         };
-        let Memory {
-            id: old_id,
-            memory_type,
-            tier,
-            source_task_id,
-            agent,
-            project_path,
-            expires_at,
-            version,
-            inject_count,
-            last_injected_at,
-            success_count,
-            ..
-        } = existing;
-        let supersedes_id = old_id.as_str().to_string();
-        let expires_at_str = expires_at.map(|dt| dt.to_rfc3339());
-        let last_injected_at_str = last_injected_at.map(|dt| dt.to_rfc3339());
-        let new_id = MemoryId::generate();
-        conn.execute(
-            "INSERT INTO memories (id, memory_type, content, source_task_id, agent, project_path,
-             content_hash, created_at, expires_at, supersedes, version, inject_count, last_injected_at,
-             success_count, tier)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
-            params![
-                new_id.as_str(),
-                memory_type.as_str(),
-                content,
-                source_task_id,
-                agent,
-                project_path,
-                hash,
-                now,
-                expires_at_str,
-                supersedes_id,
-                version + 1,
-                inject_count,
-                last_injected_at_str,
-                success_count,
-                tier.as_str(),
-            ],
-        )?;
+        insert_memory_revision(&conn, existing, content, hash, now)?;
         Ok(true)
     }
 
@@ -120,4 +81,55 @@ impl Store {
             .execute("DELETE FROM memories WHERE id = ?1", params![id])?;
         Ok(())
     }
+}
+
+fn insert_memory_revision(
+    conn: &rusqlite::Connection,
+    existing: Memory,
+    content: &str,
+    hash: String,
+    now: String,
+) -> Result<()> {
+    let Memory {
+        id: old_id,
+        memory_type,
+        tier,
+        source_task_id,
+        agent,
+        project_path,
+        expires_at,
+        version,
+        inject_count,
+        last_injected_at,
+        success_count,
+        ..
+    } = existing;
+    let supersedes_id = old_id.as_str().to_string();
+    let expires_at_str = expires_at.map(|dt| dt.to_rfc3339());
+    let last_injected_at_str = last_injected_at.map(|dt| dt.to_rfc3339());
+    let new_id = MemoryId::generate();
+    conn.execute(
+        "INSERT INTO memories (id, memory_type, content, source_task_id, agent, project_path,
+             content_hash, created_at, expires_at, supersedes, version, inject_count, last_injected_at,
+             success_count, tier)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+        params![
+            new_id.as_str(),
+            memory_type.as_str(),
+            content,
+            source_task_id,
+            agent,
+            project_path,
+            hash,
+            now,
+            expires_at_str,
+            supersedes_id,
+            version + 1,
+            inject_count,
+            last_injected_at_str,
+            success_count,
+            tier.as_str(),
+        ],
+    )?;
+    Ok(())
 }

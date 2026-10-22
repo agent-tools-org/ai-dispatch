@@ -61,7 +61,7 @@ pub fn run_audit(task_id: &str, current_dir: Option<&Path>) -> AuditResult {
         command.current_dir(current_dir);
     }
 
-    let mut child = match command.spawn() {
+    let child = match command.spawn() {
         Ok(child) => child,
         Err(err) => {
             return AuditResult {
@@ -73,64 +73,13 @@ pub fn run_audit(task_id: &str, current_dir: Option<&Path>) -> AuditResult {
             };
         }
     };
-    let stdout_handle = child.stdout.take().map(read_pipe);
-    let stderr_handle = child.stderr.take().map(read_pipe);
-    let deadline = Instant::now() + Duration::from_secs(timeout_secs);
-    let mut status = None;
-
-    while Instant::now() < deadline {
-        match child.try_wait() {
-            Ok(Some(exit_status)) => {
-                status = Some(exit_status);
-                break;
-            }
-            Ok(None) => std::thread::sleep(Duration::from_millis(50)),
-            Err(err) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return AuditResult {
-                    verdict: "error".to_string(),
-                    report_path: None,
-                    stdout: join_reader(stdout_handle),
-                    stderr: append_message(join_reader(stderr_handle), &err.to_string()),
-                    exit_code: None,
-                };
-            }
-        }
-    }
-
-    if status.is_none() {
-        let _ = child.kill();
-        let _ = child.wait();
-    }
-
-    let stdout = join_reader(stdout_handle);
-    let stderr = join_reader(stderr_handle);
-    match status.and_then(|exit_status| exit_status.code()) {
-        Some(code) => AuditResult {
-            verdict: verdict_for_exit_code(code).to_string(),
-            report_path: report_path_from_stdout(&stdout),
-            stdout,
-            stderr,
-            exit_code: Some(code),
-        },
-        None => AuditResult {
-            verdict: "error".to_string(),
-            report_path: None,
-            stdout,
-            stderr: append_message(stderr, &format!("aic audit timed out after {timeout_secs}s")),
-            exit_code: None,
-        },
-    }
+    collect_audit_result(child, timeout_secs)
 }
 
 fn detect_available() -> bool {
     #[cfg(test)]
     if let Ok(value) = std::env::var("AIC_TEST_PRESENT") {
-        return matches!(
-            value.trim().to_ascii_lowercase().as_str(),
-            "1" | "true" | "yes"
-        );
+        return matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes");
     }
 
     Command::new(aic_binary_path())
@@ -183,9 +132,7 @@ where
     })
 }
 
-fn join_reader(
-    handle: Option<std::thread::JoinHandle<std::io::Result<String>>>,
-) -> String {
+fn join_reader(handle: Option<std::thread::JoinHandle<std::io::Result<String>>>) -> String {
     handle
         .and_then(|handle| handle.join().ok())
         .and_then(Result::ok)
@@ -238,7 +185,8 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         install_aic_shim(
             temp.path(),
-            "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'ok\\nreport: /tmp/report.md\\n'\nexit 0",
+            "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'ok\\nreport: \
+            /tmp/report.md\\n'\nexit 0",
         );
         set_env("AIC_TEST_BINARY", temp.path().join("aic"));
 
@@ -263,7 +211,8 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         install_aic_shim(
             temp.path(),
-            "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nsleep 2\nprintf 'report: /tmp/late.md\\n'\nexit 0",
+            "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nsleep 2\nprintf 'report: \
+            /tmp/late.md\\n'\nexit 0",
         );
         set_env("AIC_TEST_BINARY", temp.path().join("aic"));
         set_env("AID_AUDIT_TIMEOUT_SECS", "1");
@@ -274,5 +223,66 @@ mod tests {
         assert_eq!(result.report_path, None);
         remove_env("AID_AUDIT_TIMEOUT_SECS");
         remove_env("AIC_TEST_BINARY");
+    }
+}
+
+fn collect_audit_result(mut child: std::process::Child, timeout_secs: u64) -> AuditResult {
+    let stdout_handle = child.stdout.take().map(read_pipe);
+    let stderr_handle = child.stderr.take().map(read_pipe);
+    let deadline = Instant::now() + Duration::from_secs(timeout_secs);
+    let mut status = None;
+
+    while Instant::now() < deadline {
+        match child.try_wait() {
+            Ok(Some(exit_status)) => {
+                status = Some(exit_status);
+                break;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(50)),
+            Err(err) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return AuditResult {
+                    verdict: "error".to_string(),
+                    report_path: None,
+                    stdout: join_reader(stdout_handle),
+                    stderr: append_message(join_reader(stderr_handle), &err.to_string()),
+                    exit_code: None,
+                };
+            }
+        }
+    }
+
+    if status.is_none() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+
+    audit_result(status, stdout_handle, stderr_handle, timeout_secs)
+}
+
+fn audit_result(
+    status: Option<std::process::ExitStatus>,
+    stdout_handle: Option<std::thread::JoinHandle<std::io::Result<String>>>,
+    stderr_handle: Option<std::thread::JoinHandle<std::io::Result<String>>>,
+    timeout_secs: u64,
+) -> AuditResult {
+    let stdout = join_reader(stdout_handle);
+    let stderr = join_reader(stderr_handle);
+    match status.and_then(|exit_status| exit_status.code()) {
+        Some(code) => AuditResult {
+            verdict: verdict_for_exit_code(code).to_string(),
+            report_path: report_path_from_stdout(&stdout),
+            stdout,
+            stderr,
+            exit_code: Some(code),
+        },
+        None => AuditResult {
+            verdict: "error".to_string(),
+            report_path: None,
+            stdout,
+            stderr: append_message(stderr, &format!("aic audit timed out after {timeout_secs}s")),
+            exit_code: None,
+        },
     }
 }

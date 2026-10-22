@@ -2,15 +2,15 @@
 // Probes runtime CLI capabilities once, then builds the safest command shape
 // supported by the installed agy version.
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
-use super::read_only::read_only_prompt;
-use super::env_identity::{DEFAULT_PROBE_TIMEOUT, help_defines_flag, run_bounded};
 use super::RunOpts;
+use super::env_identity::{DEFAULT_PROBE_TIMEOUT, help_defines_flag, run_bounded};
+use super::read_only::read_only_prompt;
 use crate::types::*;
 
 const TERMINAL_EXECUTOR_ERROR: &str = "agent executor error:";
@@ -41,7 +41,8 @@ impl super::Agent for AntigravityAgent {
         };
         if !parse_agy_capabilities(&format!("{}{}", output.stdout, output.stderr)).has_model_flag {
             bail!(
-                "agy {} does not support --model; cannot run requested model {model}. Omit --model or upgrade agy",
+                "agy {} does not support --model; cannot run requested model {model}. Omit --model \
+            or upgrade agy",
                 agy_version_string().unwrap_or_else(|| "(unknown version)".into())
             );
         }
@@ -56,7 +57,10 @@ impl super::Agent for AntigravityAgent {
         let use_plan = opts.read_only && plan_flag.is_some() && !allow_result;
         let effective_prompt = if opts.read_only && !use_plan {
             if plan_flag.is_none() {
-                aid_warn!("[aid] agy read-only does not sandbox the agent; aid fails the task if the Git run directory changes.");
+                aid_warn!(
+                    "[aid] agy read-only does not sandbox the agent; aid fails the task if the Git \
+            run directory changes."
+                );
             }
             read_only_prompt(prompt, opts)
         } else {
@@ -66,16 +70,7 @@ impl super::Agent for AntigravityAgent {
         if use_plan && let Some(flag) = plan_flag {
             cmd.args([flag, "plan"]);
         }
-        if let Some(ref model) = opts.model {
-            if caps.has_model_flag {
-                cmd.args(["--model", model]);
-            } else {
-                aid_warn!(
-                    "[aid] agy {} has no model flag; ignoring --model {model}",
-                    agy_version_string().unwrap_or_else(|| "1.0".into())
-                );
-            }
-        }
+        configure_model(&mut cmd, opts, caps.has_model_flag);
         cmd.arg("-p");
         cmd.arg(&effective_prompt);
         cmd.args(["--print-timeout", "24h"]);
@@ -88,21 +83,7 @@ impl super::Agent for AntigravityAgent {
         for dir in agy_include_directories(run_dir.as_deref(), &opts.context_files) {
             cmd.args(["--add-dir", &dir]);
         }
-        // agy runs in print mode: it emits nothing on stdout until a turn completes, so
-        // aid's "no output since spawn" liveness check cannot tell a long first turn from
-        // a dead process and reaps healthy runs at the first-token budget. agy's own log
-        // does grow throughout, so point it at a per-task path aid can watch.
-        // AGY_LOG_FILE stays an operator override.
-        // agy runs in print mode: nothing reaches stdout until a turn completes, so aid's
-        // "no output since spawn" check cannot tell a long first turn from a dead process
-        // and reaps healthy runs at the first-token budget. agy's own log grows throughout.
-        // The caller decides whether that path is watchable; this adapter just uses it.
-        if let Some(log_file) = super::agent_log_from_opts(opts) {
-            if let Some(parent) = std::path::Path::new(log_file).parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            cmd.args(["--log-file", log_file]);
-        }
+        configure_log_file(&mut cmd, opts);
 
         if let Some(ref dir) = run_dir {
             // The sandbox and container wrappers mount this cwd verbatim (`-v dir:dir`),
@@ -118,9 +99,7 @@ impl super::Agent for AntigravityAgent {
     }
 
     fn diagnostics_report_terminal_failure(&self, output: &str) -> bool {
-        output
-            .lines()
-            .any(|line| line.contains(TERMINAL_EXECUTOR_ERROR))
+        output.lines().any(|line| line.contains(TERMINAL_EXECUTOR_ERROR))
     }
 
     fn served_models(&self) -> Result<Option<Vec<String>>> {
@@ -256,11 +235,42 @@ fn absolute_dir(path: &Path) -> Option<PathBuf> {
 }
 
 #[cfg(test)]
-#[path = "antigravity_tests.rs"]
-mod tests;
-#[cfg(test)]
 #[path = "antigravity_model_tests.rs"]
 mod model_tests;
 #[cfg(test)]
 #[path = "antigravity_preflight_tests.rs"]
 mod preflight_tests;
+#[cfg(test)]
+#[path = "antigravity_tests.rs"]
+mod tests;
+
+fn configure_log_file(cmd: &mut Command, opts: &RunOpts) {
+    // agy runs in print mode: it emits nothing on stdout until a turn completes, so
+    // aid's "no output since spawn" liveness check cannot tell a long first turn from
+    // a dead process and reaps healthy runs at the first-token budget. agy's own log
+    // does grow throughout, so point it at a per-task path aid can watch.
+    // AGY_LOG_FILE stays an operator override.
+    // agy runs in print mode: nothing reaches stdout until a turn completes, so aid's
+    // "no output since spawn" check cannot tell a long first turn from a dead process
+    // and reaps healthy runs at the first-token budget. agy's own log grows throughout.
+    // The caller decides whether that path is watchable; this adapter just uses it.
+    if let Some(log_file) = super::agent_log_from_opts(opts) {
+        if let Some(parent) = std::path::Path::new(log_file).parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        cmd.args(["--log-file", log_file]);
+    }
+}
+
+fn configure_model(cmd: &mut Command, opts: &RunOpts, has_model_flag: bool) {
+    if let Some(ref model) = opts.model {
+        if has_model_flag {
+            cmd.args(["--model", model]);
+        } else {
+            aid_warn!(
+                "[aid] agy {} has no model flag; ignoring --model {model}",
+                agy_version_string().unwrap_or_else(|| "1.0".into())
+            );
+        }
+    }
+}

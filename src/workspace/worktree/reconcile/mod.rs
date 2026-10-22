@@ -35,9 +35,7 @@ pub(super) fn maybe_refresh_existing_worktree(
         return Err(stale_worktree_error(
             wt_path,
             branch,
-            format!(
-                "it has {unique_commits} commit(s) not on the current repo HEAD"
-            ),
+            format!("it has {unique_commits} commit(s) not on the current repo HEAD"),
         ));
     }
 
@@ -49,26 +47,7 @@ pub(super) fn maybe_refresh_existing_worktree(
         ));
     }
 
-    let status = Command::new("git")
-        .args(["-C", &wt_path.to_string_lossy(), "reset", "--hard", &repo_head])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .context("Failed to refresh stale worktree")?;
-    anyhow::ensure!(
-        status.success(),
-        "{}",
-        stale_worktree_error(
-            wt_path,
-            branch,
-            "git reset --hard failed while refreshing".to_string(),
-        )
-    );
-    aid_info!(
-        "[aid] Refreshed stale worktree {} to current repo HEAD",
-        wt_path.display()
-    );
-    Ok(())
+    refresh_worktree_to_head(wt_path, branch, &repo_head)
 }
 
 pub(super) fn ensure_branch_force_reset_is_safe(
@@ -105,7 +84,13 @@ fn rev_parse(repo_dir: &Path, rev: &str) -> Result<String> {
 
 fn rev_list_count(repo_dir: &Path, range: &str) -> Result<u32> {
     let output = Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy(), "rev-list", "--count", range])
+        .args([
+            "-C",
+            &repo_dir.to_string_lossy(),
+            "rev-list",
+            "--count",
+            range,
+        ])
         .output()
         .with_context(|| format!("Failed to inspect git history for {range}"))?;
     anyhow::ensure!(
@@ -148,15 +133,13 @@ fn ensure_worktree_on_branch(wt_path: &Path, branch: &str) -> Result<()> {
     }
     let observed = current.as_deref().unwrap_or("(detached HEAD)");
     let reason = if has_uncommitted_changes(wt_path)? {
-        format!("HEAD is on {observed} but expected {branch} and the worktree has uncommitted changes")
+        format!(
+            "HEAD is on {observed} but expected {branch} and the worktree has uncommitted changes"
+        )
     } else {
         format!("HEAD is on {observed} but expected {branch}")
     };
-    Err(stale_worktree_error(
-        wt_path,
-        branch,
-        reason,
-    ))
+    Err(stale_worktree_error(wt_path, branch, reason))
 }
 
 fn current_branch(wt_path: &Path) -> Result<Option<String>> {
@@ -180,4 +163,33 @@ fn current_branch(wt_path: &Path) -> Result<Option<String>> {
     } else {
         Ok(Some(raw))
     }
+}
+
+fn refresh_worktree_to_head(wt_path: &Path, branch: &str, repo_head: &str) -> Result<()> {
+    let status = Command::new("git")
+        .args([
+            "-C",
+            &wt_path.to_string_lossy(),
+            "reset",
+            "--hard",
+            repo_head,
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .context("Failed to refresh stale worktree")?;
+    anyhow::ensure!(
+        status.success(),
+        "{}",
+        stale_worktree_error(
+            wt_path,
+            branch,
+            "git reset --hard failed while refreshing".to_string(),
+        )
+    );
+    aid_info!(
+        "[aid] Refreshed stale worktree {} to current repo HEAD",
+        wt_path.display()
+    );
+    Ok(())
 }

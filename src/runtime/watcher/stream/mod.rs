@@ -9,12 +9,10 @@ use crate::agent::Agent;
 use crate::routing::rate_limit;
 use crate::store::Store;
 use crate::task::delivery_guard::{DeliveryOutcome, DeliveryOutcome::MissingFinalDelivery};
-use crate::types::{
-    CompletionInfo, DeliveryAssessment, EventKind, TaskEvent, TaskId, TaskStatus,
-};
+use crate::types::{CompletionInfo, DeliveryAssessment, EventKind, TaskEvent, TaskId, TaskStatus};
 
 use super::extract::{append_to_broadcast, extract_finding_detail, parse_milestone_event};
-use super::{apply_completion_event, SyntheticMilestoneTracker};
+use super::{SyntheticMilestoneTracker, apply_completion_event};
 
 pub(crate) fn apply_codex_delivery_guard(
     store: &Arc<Store>,
@@ -85,72 +83,28 @@ pub(crate) fn handle_streaming_line_with_session(
     let cleaned = crate::runtime::watcher::strip_terminal_escapes(line);
     let line = cleaned.as_ref();
 
-    if let Some(finding) = extract_finding_detail(line)
-        && let Some(group_id) = workgroup_id
-    {
-        let _ = store.insert_finding(
-            group_id,
-            &finding,
-            Some(task_id.as_str()),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        );
-        append_to_broadcast(group_id, task_id.as_str(), &finding);
-    }
-
-    let milestone = parse_milestone_event(task_id, line);
-    if let Some(event) = &milestone {
-        synthetic_tracker.observe(event);
-        store.insert_agent_event(event)?;
-        *event_count += 1;
-    }
-    // A milestone line is published once; only a completion on the same line
-    // (which carries cost and usage) is still processed by the adapter.
+    publish_finding(store, task_id, workgroup_id, line);
+    let milestone = record_milestone(task_id, line, synthetic_tracker, store, event_count)?;
     let parsed = agent.parse_event(task_id, line);
-    if let Some(event) = &milestone
-        && !parsed.as_ref().is_some_and(|event| event.event_kind == EventKind::Completion)
-    {
-        return Ok(Some(EventDetail::from_event(event)));
+    if let Some(detail) = standalone_milestone_detail(milestone.as_ref(), parsed.as_ref()) {
+        return Ok(Some(detail));
     }
 
     if let Some(mut event) = parsed {
-        if let Some(metadata) = event.metadata.get_or_insert_with(|| serde_json::json!({})).as_object_mut() {
-            metadata.insert("provider_stdout".into(), serde_json::json!(line));
-        }
-        apply_completion_event(info, &event);
-        crate::cost::apply_completion_usage_cost(store, task_id, info, &event, agent.kind())?;
-        synthetic_tracker.observe(&event);
-        save_session_id(store, task_id, &event, session_saved)?;
-        // The raw line, never `event.detail`. An adapter's detail is a rendering
-        // aid composed: cursor's is `completed: grep <the pattern the model
-        // chose>`, and on 2026-08-07 one of those — an audit's own `grep
-        // "you're out of usage|…"` — became a hold on cursor that no clock would
-        // release. `event_kind` is used only as a cheap prefilter over lines the
-        // adapter already parsed; it can narrow what is looked at and never
-        // admit anything, because `quota_channel` decides admission.
-        if event.event_kind == EventKind::Error
-            && let Some(message) = rate_limit::refusal_on_channel(
-                line,
-                agent.kind(),
-                crate::routing::quota::channel::Channel::CliStream,
-            )
-        {
-            mark_stream_rate_limit(store, task_id, agent, line, &message);
-        }
-        if event.event_kind == EventKind::Completion {
-            store.insert_agent_event_with_usage(&event, info)?;
-        } else {
-            store.insert_agent_event(&event)?;
-        }
-        *event_count += 1;
-        if let Some(event) = synthetic_tracker.synthetic_event(task_id, &event) {
-            store.insert_agent_event(&event)?;
-            *event_count += 1;
-        }
+        record_parsed_event(
+            StreamLineContext {
+                agent,
+                task_id,
+                store,
+                workgroup_id,
+                synthetic_tracker,
+            },
+            info,
+            event_count,
+            line,
+            session_saved,
+            &mut event,
+        )?;
         return Ok(Some(EventDetail::from_event(&event)));
     }
 
@@ -214,4 +168,115 @@ fn save_session_id(
     store.update_agent_session_id(task_id.as_str(), session_id)?;
     *session_saved = true;
     Ok(())
+}
+
+fn record_parsed_event(
+    ctx: StreamLineContext<'_>,
+    info: &mut CompletionInfo,
+    event_count: &mut u32,
+    line: &str,
+    session_saved: &mut bool,
+    event: &mut TaskEvent,
+) -> Result<()> {
+    let StreamLineContext {
+        agent,
+        task_id,
+        store,
+        synthetic_tracker,
+        ..
+    } = ctx;
+    record_provider_stdout(event, line);
+    apply_completion_event(info, &event);
+    crate::cost::apply_completion_usage_cost(store, task_id, info, &event, agent.kind())?;
+    synthetic_tracker.observe(&event);
+    save_session_id(store, task_id, &event, session_saved)?;
+    // The raw line, never `event.detail`. An adapter's detail is a rendering
+    // aid composed: cursor's is `completed: grep <the pattern the model
+    // chose>`, and on 2026-08-07 one of those — an audit's own `grep
+    // "you're out of usage|…"` — became a hold on cursor that no clock would
+    // release. `event_kind` is used only as a cheap prefilter over lines the
+    // adapter already parsed; it can narrow what is looked at and never
+    // admit anything, because `quota_channel` decides admission.
+    if event.event_kind == EventKind::Error
+        && let Some(message) = rate_limit::refusal_on_channel(
+            line,
+            agent.kind(),
+            crate::routing::quota::channel::Channel::CliStream,
+        )
+    {
+        mark_stream_rate_limit(store, task_id, agent, line, &message);
+    }
+    if event.event_kind == EventKind::Completion {
+        store.insert_agent_event_with_usage(&event, info)?;
+    } else {
+        store.insert_agent_event(&event)?;
+    }
+    *event_count += 1;
+    if let Some(event) = synthetic_tracker.synthetic_event(task_id, &event) {
+        store.insert_agent_event(&event)?;
+        *event_count += 1;
+    }
+    Ok(())
+}
+
+fn publish_finding(store: &Store, task_id: &TaskId, workgroup_id: Option<&str>, line: &str) {
+    if let Some(finding) = extract_finding_detail(line)
+        && let Some(group_id) = workgroup_id
+    {
+        let _ = store.insert_finding(
+            group_id,
+            &finding,
+            Some(task_id.as_str()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        append_to_broadcast(group_id, task_id.as_str(), &finding);
+    }
+}
+
+fn record_provider_stdout(event: &mut TaskEvent, line: &str) {
+    if let Some(metadata) = event
+        .metadata
+        .get_or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+    {
+        metadata.insert("provider_stdout".into(), serde_json::json!(line));
+    }
+}
+
+fn record_milestone(
+    task_id: &TaskId,
+    line: &str,
+    synthetic_tracker: &mut SyntheticMilestoneTracker,
+    store: &Store,
+    event_count: &mut u32,
+) -> Result<Option<TaskEvent>> {
+    let milestone = parse_milestone_event(task_id, line);
+    if let Some(event) = &milestone {
+        synthetic_tracker.observe(event);
+        store.insert_agent_event(event)?;
+        *event_count += 1;
+    }
+    Ok(milestone)
+}
+
+fn standalone_milestone_detail(
+    milestone: Option<&TaskEvent>,
+    parsed: Option<&TaskEvent>,
+) -> Option<EventDetail> {
+    // A milestone line is published once; only a completion on the same line
+    // (which carries cost and usage) is still processed by the adapter.
+    if let Some(event) = milestone
+        && !parsed
+            .as_ref()
+            .is_some_and(|event| event.event_kind == EventKind::Completion)
+    {
+        return Some(EventDetail::from_event(event));
+    }
+
+    None
 }

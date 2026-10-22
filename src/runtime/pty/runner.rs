@@ -157,7 +157,11 @@ fn record_completion(
     // (`t-bd455a68`, which failed for exactly that reason) and cursor's
     // `composer-2` as an `agy` model (`t-702f7bcb`).
     let (observed_model, attribution_source) = crate::agent::codex::grade_completion_observation(
-        agent, store.as_ref(), task_id, info, model,
+        agent,
+        store.as_ref(),
+        task_id,
+        info,
+        model,
     );
     // Costing still falls back to the request, because an estimate is openly an
     // estimate — and with both values now stored, a reader can tell which basis
@@ -182,18 +186,7 @@ fn record_completion(
         return Ok(());
     }
     crate::store::state::refresh_project_state(store.as_ref(), task_id);
-    println!(
-        "Task {} {} ({}{}{})",
-        task_id,
-        crate::routing::capacity::terminal_label(store, task_id, agent.kind(), info.status),
-        format_duration_ms(duration_ms),
-        info.tokens
-            .map(|tokens| format!(", {} tokens", tokens))
-            .unwrap_or_default(),
-        cost_usd
-            .map(|cost| format!(", {}", cost::format_cost(Some(cost))))
-            .unwrap_or_default(),
-    );
+    print_completion(agent, task_id, store, duration_ms, info, cost_usd);
     Ok(())
 }
 
@@ -208,3 +201,25 @@ mod cost_tests;
 #[cfg(test)]
 #[path = "worker_deadline_tests.rs"]
 mod deadline_tests;
+
+fn print_completion(
+    agent: &dyn Agent,
+    task_id: &TaskId,
+    store: &Arc<Store>,
+    duration_ms: i64,
+    info: &CompletionInfo,
+    cost_usd: Option<f64>,
+) {
+    println!(
+        "Task {} {} ({}{}{})",
+        task_id,
+        crate::routing::capacity::terminal_label(store, task_id, agent.kind(), info.status),
+        format_duration_ms(duration_ms),
+        info.tokens
+            .map(|tokens| format!(", {} tokens", tokens))
+            .unwrap_or_default(),
+        cost_usd
+            .map(|cost| format!(", {}", cost::format_cost(Some(cost))))
+            .unwrap_or_default(),
+    );
+}

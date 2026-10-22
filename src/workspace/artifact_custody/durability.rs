@@ -245,14 +245,7 @@ mod tests {
                 worktree.to_str().unwrap(),
             ],
         );
-        git(&worktree, &["submodule", "update", "--init"]);
-        let child_worktree = worktree.join("lib/fast-wallet");
-        git(
-            &child_worktree,
-            &["config", "user.email", "aid@example.invalid"],
-        );
-        git(&child_worktree, &["config", "user.name", "AID Test"]);
-        commit_file(&child_worktree, "rpc.rs", "fanout", "fanout");
+        advance_private_submodule(&worktree);
         git(&worktree, &["add", "lib/fast-wallet"]);
         git(&worktree, &["commit", "-m", "advance gitlink"]);
         let head = git(&worktree, &["rev-parse", "HEAD"]);
@@ -266,5 +259,16 @@ mod tests {
             "{error}"
         );
         assert!(worktree.exists());
+    }
+
+    fn advance_private_submodule(worktree: &Path) {
+        git(&worktree, &["submodule", "update", "--init"]);
+        let child_worktree = worktree.join("lib/fast-wallet");
+        git(
+            &child_worktree,
+            &["config", "user.email", "aid@example.invalid"],
+        );
+        git(&child_worktree, &["config", "user.name", "AID Test"]);
+        commit_file(&child_worktree, "rpc.rs", "fanout", "fanout");
     }
 }

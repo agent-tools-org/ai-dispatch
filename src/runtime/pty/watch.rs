@@ -6,35 +6,38 @@ use chrono::Local;
 use serde_json::json;
 use std::collections::HashSet;
 use std::io::Write;
-use std::sync::{Arc, mpsc::{self, RecvTimeoutError}};
+use std::sync::{
+    Arc,
+    mpsc::{self, RecvTimeoutError},
+};
 use std::time::{Duration, Instant};
 
 use crate::agent::Agent;
-use crate::task::delivery_guard::{DeliveryEvidence, DeliveryOutcome};
+use crate::prompt::PromptDetector;
 use crate::runtime::input_signal;
 use crate::runtime::process;
-use crate::prompt::PromptDetector;
 use crate::runtime::pty::bridge::PtyBridge;
 use crate::runtime::pty::watch_idle::{
-    is_agent_output, load_monitor_status, register_inbound_echo, take_inbound_echo, InboundEcho,
-    IdleAction, IdleDetector,
+    IdleAction, IdleDetector, InboundEcho, is_agent_output, load_monitor_status,
+    register_inbound_echo, take_inbound_echo,
 };
-use crate::store::Store;
-use crate::types::{AgentKind, CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 use crate::runtime::watcher::{self, SyntheticMilestoneTracker};
+use crate::store::Store;
+use crate::task::delivery_guard::{DeliveryEvidence, DeliveryOutcome};
+use crate::types::{AgentKind, CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
 
 pub(crate) mod piped;
 mod prompt_liveness;
 mod utf8;
 
-mod output;
+mod finalize;
 mod input;
 mod monitor;
-mod finalize;
-pub(crate) use monitor::monitor_bridge;
-pub(crate) use finalize::{finalize_output, append_failed_terminal_sentinel};
+mod output;
 #[cfg(test)]
 use finalize::finalize_streaming;
+pub(crate) use finalize::{append_failed_terminal_sentinel, finalize_output};
+pub(crate) use monitor::monitor_bridge;
 use output::{extract_awaiting_prompt, mark_awaiting_input, persist_transcript, write_output_file};
 
 const INPUT_POLL_INTERVAL: Duration = Duration::from_millis(500);
@@ -153,20 +156,11 @@ impl MonitorState {
             }
             IdleAction::WarnEvent => {}
             IdleAction::SendNudge(message) => {
-                crate::task::unstick::queue_auto_nudge(store.as_ref(), task_id.as_str(), &message)?;
-                self.idle_nudged = true;
-                self.idle_warned = true;
-                store.insert_event(&TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: Local::now(),
-                    event_kind: EventKind::Reasoning,
-                    detail: "Auto-nudge queued".to_string(),
-                    metadata: Some(json!({
-                        "message": message, "source": "unstick-auto", "input_delivery": "queued"
-                    })),
-                })?;
+                self.queue_idle_nudge(store, task_id, message)?;
             }
-            IdleAction::Escalate if crate::task::unstick::mark_task_stalled(store.as_ref(), task_id.as_str())? => {
+            IdleAction::Escalate
+                if crate::task::unstick::mark_task_stalled(store.as_ref(), task_id.as_str())? =>
+            {
                 store.insert_event(&TaskEvent {
                     task_id: task_id.clone(),
                     timestamp: Local::now(),
@@ -213,12 +207,7 @@ impl MonitorState {
     /// `last_progress_time` is not enough — also require that agent-owned logs
     /// have not grown within the idle window (same `agent_has_produced_bytes`
     /// question the first-token detector and orphan reaper ask).
-    fn idle_hang_elapsed(
-        &self,
-        agent_streaming: bool,
-        idle: Duration,
-        task_id: &str,
-    ) -> bool {
+    fn idle_hang_elapsed(&self, agent_streaming: bool, idle: Duration, task_id: &str) -> bool {
         self.idle_hang_elapsed_at(agent_streaming, idle, task_id, Instant::now())
     }
 
@@ -269,22 +258,22 @@ impl MonitorState {
 }
 
 #[cfg(test)]
-mod tests;
+#[path = "watch_activity_tests.rs"]
+mod activity_tests;
 #[cfg(test)]
-mod log_tests;
+#[path = "watch_child_tests.rs"]
+mod child_tests;
 #[cfg(test)]
 mod first_token_tests;
 #[cfg(test)]
 mod idle_hang_tests;
 #[cfg(test)]
-#[path = "watch_activity_tests.rs"]
-mod activity_tests;
+mod log_tests;
+#[cfg(test)]
+mod tests;
 #[cfg(test)]
 #[path = "watch_write_tests.rs"]
 mod write_tests;
-#[cfg(test)]
-#[path = "watch_child_tests.rs"]
-mod child_tests;
 
 #[cfg(test)]
 mod input_status_tests;

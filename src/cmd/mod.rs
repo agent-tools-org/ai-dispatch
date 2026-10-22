@@ -2,6 +2,7 @@
 // Each module implements one subcommand.
 
 pub mod agent;
+pub(crate) mod agent_failures;
 pub mod advise;
 pub mod agent_display;
 pub mod agent_json;

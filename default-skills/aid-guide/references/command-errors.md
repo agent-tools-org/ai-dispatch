@@ -71,3 +71,51 @@ count/evaluation requirements. It runs before agent command preflight and task
 insertion. Clap still reports its own first parsing/dependency error; invalid
 syntax cannot be fully evaluated as a run request. Contextual routing, nested
 delegation, and filesystem checks retain their own validation paths.
+
+## Unclassified provider failures
+
+`aid agent failures` lists only `unclassified_failure` milestone markers.
+Byte-identical raw excerpts are grouped with counts and per-agent counts before
+redaction, so distinct groups can display the same masked excerpt. Time and task
+ID identify the newest occurrence. `--limit` caps matching markers before grouping.
+Durations accept `s`, `m`, `h`, `d`, or `w`; defaults are `--since 7d --limit 50`.
+Malformed rows are skipped and counted on stderr without changing the JSON schema.
+
+Text and `--json` use a diagnostic allowlist. It keeps short ASCII words (up to
+20 characters, lowercase or Capitalized; ALL-CAPS up to 12), internal hyphens,
+underscores and apostrophes, decimal codes up to 6 digits, dotted versions up to
+12 characters, lowercase hostnames and region labels with up to 8 trailing digits
+(`asia-northeast1`), and punctuation/separators. Hostname labels are limited to
+20 characters. Most model IDs (`gpt-4o`, `claude-sonnet-4-20250514`), durations
+and compact JSON bodies are masked. Other
+tokens, including mixed-case opaque values, become `[…]`. URLs retain only an
+allowed scheme and hostname; userinfo, path and query are replaced with `[…]`.
+A credential-name trigger, including authorization, cookies, sessions, password,
+secret, token, key, credential, signature or auth suffixes, keeps the trigger word
+and replaces the rest of that line with `[REDACTED]`; bare Bearer/Basic do the same.
+Only the matched suffix of the name is kept (`OAuth` shows as `Auth`), and a name
+at the end of a line masks nothing. Masking resets on the next line. This
+intentionally discards non-allowlisted context rather than attempting to recognise
+every credential format. Values that themselves match the allowlist (lowercase or
+Capitalized words, short digit codes, dotted lowercase labels) are kept unless they
+follow a trigger on the same line, so a value on the line after its label, or under
+a label such as `pass` or `pw`, is shown. The text listing prints only the first
+excerpt line; `--json` carries every line.
+
+Empty JSON results are `[]`. Piping `[]` to `aid classify` refuses the request
+with `state is empty`; only use the advisory pipe when markers are present.
+
+This command only lists stored markers: it dispatches no agent and changes no
+holds, markers, or classification rules. For optional advisory classification,
+compose it with the existing [tool-free API command](classify.md):
+
+```bash
+aid agent failures --json | aid classify --state-json \
+  --choice 'kind=Which category best describes these grouped failures?' \
+  --options quota,auth,capacity,network,other
+```
+
+`aid classify` requires its own key setup and screens the supplied state for
+secret-like values before sending it. Its answer is a hint and changes nothing;
+it does not install rules or update holds or markers. Inspect the records and the
+hint before deciding whether a classification rule should be added.

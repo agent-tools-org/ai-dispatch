@@ -52,6 +52,21 @@ pub enum AgentCommands {
         #[arg(long = "as")]
         new_name: Option<String>,
     },
+    /// List grouped, redacted unclassified provider failure markers
+    Failures {
+        /// Filter markers by their originating agent
+        #[arg(long)]
+        agent: Option<String>,
+        /// Lookback duration with s, m, h, d or w suffix
+        #[arg(long, default_value = "7d")]
+        since: String,
+        /// Maximum matching markers before grouping identical excerpts
+        #[arg(long, default_value_t = 50)]
+        limit: usize,
+        /// Print full grouped records as JSON
+        #[arg(long)]
+        json: bool,
+    },
     /// Show rate-limit / quota status for all agents
     Quota {
         #[arg(long)]

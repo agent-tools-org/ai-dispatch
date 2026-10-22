@@ -62,6 +62,7 @@ status=0
 "${command[@]}" 2>&1 | tee "$log" || status=${PIPESTATUS[0]}
 job="$(awk '/^rbox: job / { print $3; exit }' "$log")"
 phase=""
+job_unavailable=false
 if grep -q '^rbox: job .* exited with code ' "$log"; then phase=completed; fi
 if [[ -s "$result_tmp" ]] && command -v python3 >/dev/null; then
   typed="$(python3 - "$result_tmp" <<'PYTHON' || :
@@ -77,7 +78,7 @@ try:
             job = ""
         if phase in ("completed", "timed_out"):
             print(phase, job)
-        elif job:
+        elif phase != "not_started" or job:
             print("started", job)
 except (OSError, ValueError):
     pass
@@ -92,6 +93,7 @@ PYTHON
       job="$typed_job"
     elif [[ -z "$job" ]]; then
       job="unavailable"
+      job_unavailable=true
     fi
   fi
 fi
@@ -132,7 +134,9 @@ else
          if grep -q 'test result:' "$log"; then
            echo "[remote-test] tests had started" >&2
          fi
-         printf '[remote-test] inspect with: rbox log %q %q\n' "$BOX" "$job" >&2
+         if ! "$job_unavailable"; then
+           printf '[remote-test] inspect with: rbox log %q %q\n' "$BOX" "$job" >&2
+         fi
        else
          echo "[remote-test] rbox failed before any test ran (exit ${status}); "\
 "see the rbox line above" >&2

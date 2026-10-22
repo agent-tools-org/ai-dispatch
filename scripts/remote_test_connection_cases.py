@@ -51,6 +51,22 @@ class ConnectionCases:
                 else:
                     self.assertIn("tests failed (exit 255)", result.stderr)
 
+    def test_uncertain_launch_without_job_id_never_claims_no_tests_ran(self) -> None:
+        for phase in ["unknown", "future_phase"]:
+            for status in [1, 255]:
+                with self.subTest(phase=phase, status=status):
+                    receipt = {"version": 1, "phase": phase, "job": None,
+                               "reason": "transport_lost"}
+                    self.env.update(AID_RBOX_RESULT=str(self.base / "results.jsonl"),
+                                    FAKE_RECEIPT=json.dumps(receipt), FAKE_JOB="no",
+                                    FAKE_STATUS=str(status))
+                    result = self.run_script()
+                    self.assertEqual(result.returncode, status)
+                    self.assertIn(f"job unavailable: rbox exited {status} after the job started; "
+                                  "the job may continue on the box", result.stderr)
+                    self.assertNotIn("failed before any test ran", result.stderr)
+                    self.assertNotIn("rbox log", result.stderr)
+
     def test_unusable_receipts_keep_text_classification(self) -> None:
         for receipt in ["invalid", "[]", '{"version":2,"phase":"not_started"}']:
             with self.subTest(receipt=receipt):

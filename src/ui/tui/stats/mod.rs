@@ -2,7 +2,6 @@
 // Exports: StatsRange, StatsSnapshot, and aggregate_tasks.
 // Deps: chrono, task records from crate::types, and std collections.
 
-use crate::ui::format::format_tokens;
 pub(super) mod legacy;
 
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate};

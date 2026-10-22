@@ -142,24 +142,11 @@ where
     F: FnMut(i64),
     S: FnMut(Duration),
 {
-    let task = store
-        .get_task(task_id)?
-        .ok_or_else(|| anyhow!("Task {task_id} not found"))?;
-    if !matches!(
-        task.status,
-        TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled
-    ) {
-        bail!(
-            "Task {task_id} is {} — can only reply to running tasks",
-            task.status.label()
-        );
-    }
-    ensure_interactive_input(&task, command)?;
+    validate_reply_task(store, task_id, command)?;
 
     let text = read_message(message, file)?;
     let queued = store.insert_message(task_id, MessageDirection::In, &text, source)?;
-    if !crate::runtime::codex_app_server::active(task_id)
-        && !crate::runtime::claude_input::active(task_id) {
+    if !crate::runtime::codex_app_server::active(task_id) && !crate::runtime::claude_input::active(task_id) {
         input_signal::write_steer(task_id, &text)?;
     }
     if async_mode {
@@ -179,11 +166,12 @@ where
 
 pub(crate) fn ensure_interactive_input(task: &Task, command: InputCommand) -> Result<()> {
     if matches!(command, InputCommand::Reply | InputCommand::Steer)
-        && crate::runtime::claude_input::active(task.id.as_str()) {
+        && crate::runtime::claude_input::active(task.id.as_str())
+    {
         return Ok(());
     }
     if task.agent == crate::types::AgentKind::Codex
-        && matches!(command,InputCommand::Reply | InputCommand::Steer)
+        && matches!(command, InputCommand::Reply | InputCommand::Steer)
         && crate::runtime::codex_app_server::active(task.id.as_str())
     {
         return Ok(());
@@ -223,8 +211,7 @@ pub(crate) fn ensure_interactive_input(task: &Task, command: InputCommand) -> Re
 
 fn read_message(message: Option<&str>, file: Option<&str>) -> Result<String> {
     if let Some(path) = file {
-        return std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read reply file: {path}"));
+        return std::fs::read_to_string(path).with_context(|| format!("Failed to read reply file: {path}"));
     }
     if let Some(message) = message {
         return Ok(message.to_string());
@@ -256,7 +243,7 @@ where
             .into_iter()
             .find(|entry| entry.id == message_id)
             .ok_or_else(|| anyhow!("Reply message {message_id} disappeared for task {task_id}"))?;
-        if let Some(turn_id) = crate::runtime::codex_app_server::receipt(store,task_id,message_id)? {
+        if let Some(turn_id) = crate::runtime::codex_app_server::receipt(store, task_id, message_id)? {
             return Ok(ReplyOutcome::Accepted { turn_id });
         }
         if crate::runtime::claude_input::receipt(store, task_id, message_id)? {
@@ -281,3 +268,20 @@ where
 #[cfg(test)]
 #[path = "reply_tests.rs"]
 mod tests;
+
+fn validate_reply_task(store: &Store, task_id: &str, command: InputCommand) -> Result<()> {
+    let task = store
+        .get_task(task_id)?
+        .ok_or_else(|| anyhow!("Task {task_id} not found"))?;
+    if !matches!(
+        task.status,
+        TaskStatus::Running | TaskStatus::AwaitingInput | TaskStatus::Stalled
+    ) {
+        bail!(
+            "Task {task_id} is {} — can only reply to running tasks",
+            task.status.label()
+        );
+    }
+    ensure_interactive_input(&task, command)?;
+    Ok(())
+}

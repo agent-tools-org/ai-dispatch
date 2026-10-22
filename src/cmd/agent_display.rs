@@ -4,12 +4,12 @@
 
 use crate::agent::custom::CustomAgentConfig;
 use crate::agent::egress::resolve_agent_egress;
-use crate::types::{egress_for_cli, AgentKind};
+use crate::types::{AgentKind, egress_for_cli};
 use std::path::Path;
 
 #[path = "agent_display_quota.rs"]
 mod quota;
-use quota::{quota_row, QuotaRow, NO_PROBE};
+use quota::{NO_PROBE, QuotaRow, quota_row};
 
 pub(super) fn show_builtin_profile(kind: AgentKind) {
     let Some((_, description, cost, best_for, streaming)) = kind.profile() else {
@@ -19,14 +19,7 @@ pub(super) fn show_builtin_profile(kind: AgentKind) {
     println!("  Description: {}", description);
     println!("  Cost: {}", cost);
     println!("  Best for: {}", best_for);
-    println!(
-        "  Mode: {}",
-        if streaming {
-            "streaming"
-        } else {
-            "buffered"
-        }
-    );
+    println!("  Mode: {}", if streaming { "streaming" } else { "buffered" });
     // Egress is a property of the provider, not a per-CLI constant.
     println!("  Egress: {}", egress_for_cli(kind).label());
 }
@@ -83,24 +76,33 @@ pub(super) fn show_quota() -> anyhow::Result<()> {
         print_quota_row(kind.as_str(), quota_row(kind, None));
     }
     for config in registry::list_custom_agents() {
-        if print_api_quota(&config.id)? { continue; }
+        if print_api_quota(&config.id)? {
+            continue;
+        }
         print_quota_row(&config.id, quota_row(AgentKind::Custom, Some(config.id.as_str())));
     }
     Ok(())
 }
 
 fn api_quota_line(id: &str) -> anyhow::Result<Option<String>> {
-    let Some(route) = crate::config::api_route::find(id)? else { return Ok(None) };
+    let Some(route) = crate::config::api_route::find(id)? else {
+        return Ok(None);
+    };
     let budget = crate::routing::api_budget::for_route(&route, None)?;
     let state = budget.billing.label().replace('_', " ").to_uppercase();
     Ok(Some(format!("{id:<20} {state:<10} {}", budget.detail())))
 }
 
 fn print_api_quota(id: &str) -> anyhow::Result<bool> {
-    let Some(line) = api_quota_line(id)? else { return Ok(false) };
+    let Some(line) = api_quota_line(id)? else {
+        return Ok(false);
+    };
     let row = quota_row(AgentKind::Custom, Some(id));
-    if matches!(row, QuotaRow::Limited { .. }) { print_quota_row(id, row); }
-    else { println!("{line}"); }
+    if matches!(row, QuotaRow::Limited { .. }) {
+        print_quota_row(id, row);
+    } else {
+        println!("{line}");
+    }
     Ok(true)
 }
 
@@ -146,7 +148,10 @@ pub(super) fn show_quota_json() -> anyhow::Result<()> {
                 "resets_at": budget.resets_at.to_rfc3339(), "hold": hold,
             }));
         } else {
-            rows.push(agent_row(&config.id, quota_row(AgentKind::Custom, Some(&config.id))));
+            rows.push(agent_row(
+                &config.id,
+                quota_row(AgentKind::Custom, Some(&config.id)),
+            ));
         }
     }
     println!("{}", serde_json::to_string(&rows)?);
@@ -154,13 +159,10 @@ pub(super) fn show_quota_json() -> anyhow::Result<()> {
 }
 
 pub(super) fn list_agents() -> anyhow::Result<()> {
-    use crate::agent::registry;
     let rows: Vec<_> = crate::agent::routable_builtins()
         .filter_map(|kind| kind.profile().map(|_| (kind, quota_row(kind, None))))
         .collect();
-    let any_hold = rows
-        .iter()
-        .any(|(_, row)| !matches!(row, QuotaRow::Ok { .. }));
+    let any_hold = rows.iter().any(|(_, row)| !matches!(row, QuotaRow::Ok { .. }));
 
     println!("Built-in agents:");
     if any_hold {
@@ -190,10 +192,24 @@ pub(super) fn list_agents() -> anyhow::Result<()> {
             );
         }
     }
-    for route in crate::config::load_config()?.api_route { print_api_quota(&route.id)?; }
+    for route in crate::config::load_config()?.api_route {
+        print_api_quota(&route.id)?;
+    }
+    print_custom_agents()
+}
+
+fn print_custom_agents() -> anyhow::Result<()> {
+    use crate::agent::registry;
     println!("\nCustom agents:");
-    let custom: Vec<_> = registry::list_custom_agents().into_iter()
-        .filter(|config| crate::config::api_route::find(&config.id).ok().flatten().is_none()).collect();
+    let custom: Vec<_> = registry::list_custom_agents()
+        .into_iter()
+        .filter(|config| {
+            crate::config::api_route::find(&config.id)
+                .ok()
+                .flatten()
+                .is_none()
+        })
+        .collect();
     if custom.is_empty() {
         println!("  (none installed — use `aid agent add <name>` to create one)");
         return Ok(());

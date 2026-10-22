@@ -58,8 +58,14 @@ pub fn session_start() -> Result<()> {
 }
 
 enum QuotaState {
-    Ok { used_percent: Option<f64>, stale: bool },
-    Partial { used_percent: Option<f64>, stale: bool },
+    Ok {
+        used_percent: Option<f64>,
+        stale: bool,
+    },
+    Partial {
+        used_percent: Option<f64>,
+        stale: bool,
+    },
     Degraded {
         used_percent: Option<f64>,
         resets: Option<String>,
@@ -73,9 +79,7 @@ enum QuotaState {
     },
 }
 
-fn probe_bits(
-    probe: Option<&crate::routing::availability::ProbeEvidence>,
-) -> (Option<f64>, bool) {
+fn probe_bits(probe: Option<&crate::routing::availability::ProbeEvidence>) -> (Option<f64>, bool) {
     match probe {
         Some(probe) if probe.ok && !probe.windows.is_empty() => {
             let used = probe
@@ -109,10 +113,7 @@ fn quota_state_for(kind: AgentKind, custom: Option<&str>) -> QuotaState {
         };
     }
     if !crate::routing::rate_limit::active_group_holds(&kind, custom).is_empty() {
-        return QuotaState::Partial {
-            used_percent,
-            stale,
-        };
+        return QuotaState::Partial { used_percent, stale };
     }
     if avail.status == crate::routing::availability::RouteStatus::Degraded {
         let resets = avail
@@ -127,10 +128,7 @@ fn quota_state_for(kind: AgentKind, custom: Option<&str>) -> QuotaState {
             stale,
         };
     }
-    QuotaState::Ok {
-        used_percent,
-        stale,
-    }
+    QuotaState::Ok { used_percent, stale }
 }
 
 fn agents_status_line() -> Option<String> {
@@ -172,47 +170,7 @@ fn render_agents_status_line(entries: &[(String, QuotaState)]) -> Option<String>
     }
     let parts = entries
         .iter()
-        .map(|(name, state)| match state {
-            QuotaState::Ok {
-                used_percent,
-                stale,
-            } => format!("{name} ok{}", suffix(*used_percent, *stale)),
-            QuotaState::Partial {
-                used_percent,
-                stale,
-            } => format!("{name} PARTIAL{}", suffix(*used_percent, *stale)),
-            QuotaState::Degraded {
-                used_percent,
-                resets,
-                stale,
-            } => format!(
-                "{name} DEGRADED{}{}",
-                degraded_suffix(*used_percent, resets.as_deref()),
-                if *stale { " STALE" } else { "" }
-            ),
-            QuotaState::Limited {
-                resets: Some(time),
-                used_percent,
-                stale,
-                human: _,
-            } => format!(
-                "{name} LIMITED (resets {}){}",
-                time.format("%H:%M"),
-                suffix(*used_percent, *stale)
-            ),
-            QuotaState::Limited {
-                resets: None,
-                used_percent,
-                stale,
-                human: Some(reason),
-            } => format!("{name} {reason}{}", suffix(*used_percent, *stale)),
-            QuotaState::Limited {
-                resets: None,
-                used_percent,
-                stale,
-                human: None,
-            } => format!("{name} LIMITED{}", suffix(*used_percent, *stale)),
-        })
+        .map(|(name, state)| render_agent_status(name, state))
         .collect::<Vec<_>>();
     Some(format!("agents: {}", parts.join(" - ")))
 }
@@ -249,3 +207,43 @@ fn render_session_start(project: Option<&ProjectConfig>, team: Option<&TeamConfi
 #[cfg(test)]
 #[path = "hook_tests.rs"]
 mod tests;
+
+fn render_agent_status(name: &str, state: &QuotaState) -> String {
+    match state {
+        QuotaState::Ok { used_percent, stale } => format!("{name} ok{}", suffix(*used_percent, *stale)),
+        QuotaState::Partial { used_percent, stale } => {
+            format!("{name} PARTIAL{}", suffix(*used_percent, *stale))
+        }
+        QuotaState::Degraded {
+            used_percent,
+            resets,
+            stale,
+        } => format!(
+            "{name} DEGRADED{}{}",
+            degraded_suffix(*used_percent, resets.as_deref()),
+            if *stale { " STALE" } else { "" }
+        ),
+        QuotaState::Limited {
+            resets: Some(time),
+            used_percent,
+            stale,
+            human: _,
+        } => format!(
+            "{name} LIMITED (resets {}){}",
+            time.format("%H:%M"),
+            suffix(*used_percent, *stale)
+        ),
+        QuotaState::Limited {
+            resets: None,
+            used_percent,
+            stale,
+            human: Some(reason),
+        } => format!("{name} {reason}{}", suffix(*used_percent, *stale)),
+        QuotaState::Limited {
+            resets: None,
+            used_percent,
+            stale,
+            human: None,
+        } => format!("{name} LIMITED{}", suffix(*used_percent, *stale)),
+    }
+}

@@ -9,6 +9,8 @@ use std::process::Command;
 #[path = "setup_typesafe.rs"]
 mod typesafe;
 
+mod openrouter;
+
 pub fn run() -> Result<()> {
     println!();
     println!("  aid setup");
@@ -25,152 +27,25 @@ pub fn run() -> Result<()> {
     let config = crate::config::load_config().unwrap_or_default();
     let qc = &config.query;
     let current_env_key = std::env::var("OPENROUTER_API_KEY").ok();
-    let has_key = qc.api_key.as_deref().filter(|k| !k.is_empty()).is_some()
-        || current_env_key.is_some();
+    let has_key = qc.api_key.as_deref().filter(|k| !k.is_empty()).is_some() || current_env_key.is_some();
 
     // 1. OpenRouter API key
-    section("OpenRouter API Key");
-    println!("  Free model:  {}", qc.free_model);
-    println!("  Auto model:  {}", qc.auto_model);
-
-    if let Some(k) = qc.api_key.as_deref().filter(|k| !k.is_empty()) {
-        println!("  API key:     {} (config.toml)", mask_key(k));
-        print!("\n  Update key? Enter new key or press Enter to keep: ");
-        io::stdout().flush()?;
-        let key = read_line()?;
-        if !key.is_empty() {
-            eprint!("  Verifying... ");
-            io::stderr().flush()?;
-            if test_openrouter_key(&key) {
-                aid_info!("OK");
-                println!("  ✓ Key updated ({})", mask_key(&key));
-                replace_api_key(&mut existing, &key);
-            } else {
-                aid_warn!("failed");
-                println!("  ✗ Could not verify — saved anyway");
-                replace_api_key(&mut existing, &key);
-            }
-        }
-    } else if let Some(k) = &current_env_key {
-        println!("  API key:     {} (env)", mask_key(k));
-        print!("\n  Save to config? Enter key or press Enter to keep using env: ");
-        io::stdout().flush()?;
-        let key = read_line()?;
-        if !key.is_empty() {
-            eprint!("  Verifying... ");
-            io::stderr().flush()?;
-            if test_openrouter_key(&key) {
-                aid_info!("OK");
-                println!("  ✓ Key saved ({})", mask_key(&key));
-            } else {
-                aid_warn!("failed");
-                println!("  ✗ Could not verify — saved anyway");
-            }
-            append_query_section(&mut existing, &key);
-        }
-    } else {
-        println!("  API key:     not set");
-        println!("\n  Enables `aid query` — fast LLM queries without agent startup.");
-        println!("  Get a key at: https://openrouter.ai/keys\n");
-        print!("  Key: ");
-        io::stdout().flush()?;
-        let key = read_line()?;
-        if !key.is_empty() {
-            eprint!("  Verifying... ");
-            io::stderr().flush()?;
-            if test_openrouter_key(&key) {
-                aid_info!("OK");
-                println!("  ✓ Key verified ({})", mask_key(&key));
-            } else {
-                aid_warn!("failed");
-                println!("  ✗ Could not verify — saved anyway");
-            }
-            append_query_section(&mut existing, &key);
-        } else {
-            println!("  Skipped");
-        }
-    }
+    openrouter::configure(qc, current_env_key.as_deref(), &mut existing)?;
 
     section("TypeSafe (Jev)");
     typesafe::run()?;
 
     // 2. Detect installed agents
-    section("Agents");
-    let builtin = [
-        ("agy", crate::types::AgentKind::Antigravity),
-        ("qwen", crate::types::AgentKind::Qwen),
-        ("codex", crate::types::AgentKind::Codex),
-        ("copilot", crate::types::AgentKind::Copilot),
-        ("opencode", crate::types::AgentKind::OpenCode),
-        ("cursor", crate::types::AgentKind::Cursor),
-        ("kilo", crate::types::AgentKind::Kilo),
-        ("mimocode", crate::types::AgentKind::MiMoCode),
-        ("droid", crate::types::AgentKind::Droid),
-        ("oz", crate::types::AgentKind::Oz),
-        ("claude", crate::types::AgentKind::Claude),
-    ];
-    let detected = crate::agent::detect_agents();
-    let mut installed = 0;
-    let mut missing = Vec::new();
-    for (name, kind) in builtin {
-        let found = detected.contains(&kind);
-        if found {
-            installed += 1;
-            println!("  ✓ {name}");
-        } else {
-            missing.push(name);
-        }
-    }
-    let agents_dir = crate::support::paths::aid_dir().join("agents");
-    if agents_dir.is_dir()
-        && let Ok(entries) = std::fs::read_dir(&agents_dir)
-    {
-        for entry in entries.flatten() {
-            if entry.path().extension().is_some_and(|e| e == "toml") {
-                let path = entry.path();
-                let Some(stem) = path.file_stem() else { continue };
-                let name = stem.to_string_lossy().to_string();
-                installed += 1;
-                println!("  ✓ {name} (custom)");
-            }
-        }
-    }
-    if !missing.is_empty() {
-        println!("  · not found: {}", missing.join(", "));
-    }
-    println!("  {installed} agent(s) ready");
+    detect_installed_agents();
 
     // 3. Write config
     let dir = config_path.parent().context("config path has no parent")?;
     std::fs::create_dir_all(dir)?;
     std::fs::write(&config_path, &existing)?;
 
-    // 4. Auto-init skills & templates if missing
-    let skills_dir = crate::support::paths::aid_dir().join("skills");
-    let needs_init = !skills_dir.is_dir()
-        || std::fs::read_dir(&skills_dir)
-            .map(|d| d.count() == 0)
-            .unwrap_or(true);
-    if needs_init {
-        section("Skills & Templates");
-        crate::cmd::init::run()?;
-    } else {
-        crate::cmd::init::refresh_official_guide()?;
-    }
+    initialize_skills()?;
 
-    // 5. Summary
-    section(if has_key { "Status" } else { "Done" });
-    println!("  Config: {}", config_path.display());
-    if has_key {
-        println!("  Ready to use.");
-    } else {
-        println!();
-        println!("  Quick start:");
-        println!("    aid query \"your question\"          free LLM query");
-        println!("    aid query --auto \"question\"         paid, better quality");
-        println!("    aid run codex \"task\" --worktree x   dispatch agent");
-    }
-    println!();
+    print_setup_summary(has_key, &config_path);
     Ok(())
 }
 
@@ -251,4 +126,89 @@ fn replace_api_key(config: &mut String, new_key: &str) {
             .unwrap_or(config.len());
         config.replace_range(val_start..line_end, &format!(" \"{new_key}\""));
     }
+}
+
+fn detect_installed_agents() {
+    // 2. Detect installed agents
+    section("Agents");
+    let builtin = [
+        ("agy", crate::types::AgentKind::Antigravity),
+        ("qwen", crate::types::AgentKind::Qwen),
+        ("codex", crate::types::AgentKind::Codex),
+        ("copilot", crate::types::AgentKind::Copilot),
+        ("opencode", crate::types::AgentKind::OpenCode),
+        ("cursor", crate::types::AgentKind::Cursor),
+        ("kilo", crate::types::AgentKind::Kilo),
+        ("mimocode", crate::types::AgentKind::MiMoCode),
+        ("droid", crate::types::AgentKind::Droid),
+        ("oz", crate::types::AgentKind::Oz),
+        ("claude", crate::types::AgentKind::Claude),
+    ];
+    let detected = crate::agent::detect_agents();
+    let mut installed = 0;
+    let mut missing = Vec::new();
+    for (name, kind) in builtin {
+        let found = detected.contains(&kind);
+        if found {
+            installed += 1;
+            println!("  ✓ {name}");
+        } else {
+            missing.push(name);
+        }
+    }
+    print_custom_agents(&mut installed);
+    if !missing.is_empty() {
+        println!("  · not found: {}", missing.join(", "));
+    }
+    println!("  {installed} agent(s) ready");
+}
+
+fn print_custom_agents(installed: &mut usize) {
+    let agents_dir = crate::support::paths::aid_dir().join("agents");
+    if agents_dir.is_dir()
+        && let Ok(entries) = std::fs::read_dir(&agents_dir)
+    {
+        for entry in entries.flatten() {
+            if entry.path().extension().is_some_and(|e| e == "toml") {
+                let path = entry.path();
+                let Some(stem) = path.file_stem() else { continue };
+                let name = stem.to_string_lossy().to_string();
+                *installed += 1;
+                println!("  ✓ {name} (custom)");
+            }
+        }
+    }
+}
+
+fn initialize_skills() -> Result<()> {
+    // 4. Auto-init skills & templates if missing
+    let skills_dir = crate::support::paths::aid_dir().join("skills");
+    let needs_init = !skills_dir.is_dir()
+        || std::fs::read_dir(&skills_dir)
+            .map(|d| d.count() == 0)
+            .unwrap_or(true);
+    if needs_init {
+        section("Skills & Templates");
+        crate::cmd::init::run()?;
+    } else {
+        crate::cmd::init::refresh_official_guide()?;
+    }
+
+    Ok(())
+}
+
+fn print_setup_summary(has_key: bool, config_path: &std::path::Path) {
+    // 5. Summary
+    section(if has_key { "Status" } else { "Done" });
+    println!("  Config: {}", config_path.display());
+    if has_key {
+        println!("  Ready to use.");
+    } else {
+        println!();
+        println!("  Quick start:");
+        println!("    aid query \"your question\"          free LLM query");
+        println!("    aid query --auto \"question\"         paid, better quality");
+        println!("    aid run codex \"task\" --worktree x   dispatch agent");
+    }
+    println!();
 }

@@ -1,3 +1,6 @@
+// Memory filtering and tier parsing tests.
+// Deps: parent memory command helpers.
+
 use super::*;
 
 #[test]
@@ -63,8 +66,5 @@ fn parse_memory_tier_defaults_to_on_demand() {
 
 #[test]
 fn parse_memory_tier_accepts_explicit_values() {
-    assert_eq!(
-        parse_memory_tier(Some("critical")).unwrap(),
-        MemoryTier::Critical
-    );
+    assert_eq!(parse_memory_tier(Some("critical")).unwrap(), MemoryTier::Critical);
 }

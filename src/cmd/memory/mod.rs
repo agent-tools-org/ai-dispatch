@@ -2,9 +2,12 @@
 // Exports: add, list, search, forget.
 // Deps: store::Store, types::{Memory, MemoryId, MemoryType}.
 
+mod display;
+use display::{format_age, print_memory_table};
+
 use crate::ui::format::truncate;
-use anyhow::{anyhow, Result};
-use chrono::{DateTime, Local};
+use anyhow::{Result, anyhow};
+use chrono::Local;
 use std::collections::hash_map::DefaultHasher;
 use std::env;
 use std::hash::{Hash, Hasher};
@@ -141,8 +144,7 @@ fn parse_memory_type(value: &str) -> Result<MemoryType> {
 
 fn parse_memory_tier(value: Option<&str>) -> Result<MemoryTier> {
     match value {
-        Some(value) => MemoryTier::parse_str(value)
-            .ok_or_else(|| anyhow!("Invalid memory tier: {}", value)),
+        Some(value) => MemoryTier::parse_str(value).ok_or_else(|| anyhow!("Invalid memory tier: {}", value)),
         None => Ok(MemoryTier::OnDemand),
     }
 }
@@ -162,66 +164,6 @@ fn detect_git_root() -> Result<Option<String>> {
         if !dir.pop() {
             return Ok(None);
         }
-    }
-}
-
-fn print_memory_table(memories: &[Memory], stats: bool) {
-    if memories.is_empty() {
-        println!("No memories found.");
-        return;
-    }
-    if stats {
-        println!(
-            "{:<10} {:<10} {:<8} {:<9} {:<19} CONTENT",
-            "ID", "TYPE", "INJECTS", "SUCCESS", "LAST USED"
-        );
-        println!("{}", "-".repeat(120));
-        for memory in memories {
-            println!(
-                "{:<10} {:<10} {:<8} {:<9} {:<19} {}",
-                memory.id,
-                memory.memory_type.label(),
-                memory.inject_count,
-                memory.success_count,
-                format_last_used(memory.last_injected_at.as_ref()),
-                truncate(&memory.content, 60),
-            );
-        }
-    } else {
-        println!(
-            "{:<10} {:<10} {:<60} {:<8} SOURCE",
-            "ID", "TYPE", "CONTENT", "AGE"
-        );
-        println!("{}", "-".repeat(94));
-        for memory in memories {
-            println!(
-                "{:<10} {:<10} {:<60} {:<8} {}",
-                memory.id,
-                memory.memory_type.label(),
-                truncate(&memory.content, 60),
-                format_age(&memory.created_at),
-                memory.project_path.as_deref().unwrap_or("-"),
-            );
-        }
-    }
-}
-
-fn format_last_used(last: Option<&DateTime<Local>>) -> String {
-    last.map(format_age).unwrap_or_else(|| "-".to_string())
-}
-
-fn format_age(created_at: &DateTime<Local>) -> String {
-    let now = Local::now();
-    let duration = now.signed_duration_since(*created_at);
-    let mins = duration.num_minutes();
-    if mins <= 0 {
-        format!("{}s", duration.num_seconds().max(0))
-    } else if mins < 60 {
-        format!("{}m", mins)
-    } else if mins < 24 * 60 {
-        format!("{}h", duration.num_hours())
-    } else {
-        format!("{}d", duration.num_days())
     }
 }
 
@@ -305,9 +247,9 @@ fn looks_like_signature(text: &str) -> bool {
     }
     let is_single_word = trimmed.split_whitespace().count() == 1;
     if is_single_word
-        && trimmed.chars().all(|c| {
-            c.is_ascii_alphanumeric() || matches!(c, ':' | '_' | '<' | '>' | '-' | '.' | ',')
-        })
+        && trimmed
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, ':' | '_' | '<' | '>' | '-' | '.' | ','))
     {
         return true;
     }

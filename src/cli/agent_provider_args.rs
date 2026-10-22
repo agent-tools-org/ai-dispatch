@@ -52,6 +52,19 @@ pub enum AgentCommands {
         #[arg(long = "as")]
         new_name: Option<String>,
     },
+    /// List or review unclassified provider failures (advice only)
+    Failures {
+        #[arg(long)]
+        agent: Option<String>,
+        #[arg(long, default_value = "7d")]
+        since: String,
+        #[arg(long, default_value_t = 50)]
+        limit: usize,
+        #[arg(long, conflicts_with = "review")]
+        json: bool,
+        #[arg(long, num_args = 0..=1, default_missing_value = "")]
+        review: Option<String>,
+    },
     /// Show rate-limit / quota status for all agents
     Quota {
         #[arg(long)]

@@ -1,6 +1,7 @@
 // Width-aware formatting of a task's CLI / provider / model route for the TUI.
 // Exports: format_route_fit. Deps: crate::types::Task (via display_route).
 
+use crate::ui::format::truncate_chars;
 use crate::types::Task;
 
 /// Format `cli/provider/model` for a given width budget.
@@ -50,22 +51,6 @@ pub fn format_route_fit(task: &Task, max_width: usize) -> String {
 
 fn char_len(s: &str) -> usize {
     s.chars().count()
-}
-
-fn truncate_chars(s: &str, max: usize) -> String {
-    if max == 0 {
-        return String::new();
-    }
-    if char_len(s) <= max {
-        return s.to_string();
-    }
-    if max <= 3 {
-        return s.chars().take(max).collect();
-    }
-    let keep = max - 3;
-    let mut out: String = s.chars().take(keep).collect();
-    out.push_str("...");
-    out
 }
 
 #[cfg(test)]

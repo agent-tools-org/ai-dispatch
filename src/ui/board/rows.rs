@@ -10,7 +10,7 @@ use crate::store::Store;
 use crate::types::{Task, TaskStatus};
 
 use super::{
-    format_duration, format_running_duration, format_tokens, format_with_outcome, short_group,
+    format_duration_ms, format_running_duration, format_tokens, format_with_outcome, short_group,
     short_parent, short_repo, task_status, truncate,
 };
 
@@ -80,7 +80,7 @@ fn append_task_row(
         "-".to_string()
     } else {
         task.duration_ms
-            .map(format_duration)
+            .map(format_duration_ms)
             .unwrap_or_else(|| format_running_duration(task, store))
     };
     let tokens = if skipped {

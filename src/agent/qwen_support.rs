@@ -1,6 +1,7 @@
 // Qwen stream event text, tool, and milestone helpers.
 // Deps: serde_json values and shared event-detail bounds.
 
+use crate::ui::format::truncate;
 use serde_json::Value;
 
 pub(super) fn is_skill_or_hook_event(event_type: &str) -> bool {
@@ -47,15 +48,6 @@ pub(super) fn milestone_detail(event_type: &str, value: &Value) -> String {
         (Some(name), None) => format!("{label} {name}"),
         (None, Some(status)) => format!("{label}: {status}"),
         (None, None) => label.to_string(),
-    }
-}
-
-pub(super) fn truncate(text: &str, max_len: usize) -> String {
-    if text.len() <= max_len {
-        text.to_string()
-    } else {
-        let safe = text.floor_char_boundary(max_len.saturating_sub(3));
-        format!("{}...", &text[..safe])
     }
 }
 

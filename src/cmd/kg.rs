@@ -2,6 +2,7 @@
 // Exports: add, query, invalidate, timeline, search, stats.
 // Deps: crate::store::{KgStats, KgTriple, Store}.
 
+use crate::ui::format::truncate;
 use anyhow::{Result, bail};
 
 use crate::store::{KgStats, KgTriple, Store};
@@ -114,12 +115,4 @@ fn format_valid_to_suffix(value: Option<&chrono::DateTime<chrono::Local>>) -> St
         Some(date) => format!(" until={}", date.format("%Y-%m-%d")),
         None => String::new(),
     }
-}
-
-fn truncate(value: &str, max: usize) -> String {
-    if value.len() <= max {
-        return value.to_string();
-    }
-    let safe = value.floor_char_boundary(max.saturating_sub(3));
-    format!("{}...", &value[..safe])
 }

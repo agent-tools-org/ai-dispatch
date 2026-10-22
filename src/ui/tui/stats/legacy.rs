@@ -2,6 +2,7 @@
 // Exports: cost chart, success chart, budget gauges, and legacy summary.
 // Deps: App task/config state, cost formatting, and ratatui chart widgets.
 
+use crate::ui::format::format_tokens;
 use super::super::app::App;
 use crate::cost;
 use crate::types::{AgentKind, TaskOutcome};
@@ -141,10 +142,6 @@ fn budget_usage(app: &App) -> Vec<BudgetUsage> {
 fn recent_costs(app: &App) -> Vec<u64> {
     let values = app.tasks.iter().rev().take(20).filter_map(|task| task.cost_usd.map(|cost| (cost * 100.0) as u64)).collect::<Vec<_>>();
     if values.is_empty() { vec![0] } else { values }
-}
-
-fn format_tokens(tokens: i64) -> String {
-    if tokens >= 1_000_000 { format!("{:.1}M", tokens as f64 / 1_000_000.0) } else if tokens >= 1_000 { format!("{:.1}k", tokens as f64 / 1_000.0) } else { tokens.to_string() }
 }
 
 fn agent_color(agent: AgentKind) -> Color {

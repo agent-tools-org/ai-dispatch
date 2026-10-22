@@ -1,6 +1,7 @@
 // Render helpers for usage snapshots and agent analytics.
 // Exports render_usage(), render_agent_analytics(), and formatting utilities.
 
+use crate::ui::format::format_tokens;
 use chrono::{DateTime, Local};
 use std::cmp::Ordering;
 
@@ -221,16 +222,6 @@ fn format_duration_secs(seconds: f64) -> String {
         format!("{secs}s")
     } else {
         format!("{}m {:02}s", secs / 60, secs % 60)
-    }
-}
-
-fn format_tokens(tokens: i64) -> String {
-    if tokens >= 1_000_000 {
-        format!("{:.1}M", tokens as f64 / 1_000_000.0)
-    } else if tokens >= 1_000 {
-        format!("{:.1}k", tokens as f64 / 1_000.0)
-    } else {
-        tokens.to_string()
     }
 }
 

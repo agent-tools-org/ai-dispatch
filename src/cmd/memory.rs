@@ -2,6 +2,7 @@
 // Exports: add, list, search, forget.
 // Deps: store::Store, types::{Memory, MemoryId, MemoryType}.
 
+use crate::ui::format::truncate;
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Local};
 use std::collections::hash_map::DefaultHasher;
@@ -207,14 +208,6 @@ fn print_memory_table(memories: &[Memory], stats: bool) {
 
 fn format_last_used(last: Option<&DateTime<Local>>) -> String {
     last.map(format_age).unwrap_or_else(|| "-".to_string())
-}
-
-fn truncate(value: &str, max: usize) -> String {
-    if value.len() <= max {
-        return value.to_string();
-    }
-    let safe = value.floor_char_boundary(max.saturating_sub(3));
-    format!("{}...", &value[..safe])
 }
 
 fn format_age(created_at: &DateTime<Local>) -> String {

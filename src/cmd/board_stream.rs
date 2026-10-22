@@ -12,6 +12,8 @@ use crate::runtime::background;
 use crate::cmd::eta;
 use crate::store::Store;
 use crate::types::{Task, TaskFilter, TaskOutcome, TaskStatus};
+use crate::ui::format::format_duration_ms;
+use crate::ui::format::truncate;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 const PROMPT_MAX: usize = 60;
@@ -228,20 +230,11 @@ fn duration_for_task(task: &Task, store: &Store) -> String {
     }
     let duration = task
         .duration_ms
-        .map(format_duration)
+        .map(format_duration_ms)
         .unwrap_or_else(|| elapsed_since(task.created_at));
     match eta::estimate_eta(task, store) {
         Some(eta) => format!("{duration} (ETA: {eta})"),
         None => duration,
-    }
-}
-
-fn format_duration(ms: i64) -> String {
-    let secs = ms / 1000;
-    if secs < 60 {
-        format!("{secs}s")
-    } else {
-        format!("{}m {:02}s", secs / 60, secs % 60)
     }
 }
 
@@ -264,15 +257,6 @@ fn prompt_snippet(task: &Task) -> String {
         .collect::<Vec<_>>()
         .join(" ");
     truncate(&normalized, PROMPT_MAX)
-}
-
-fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        let safe = s.floor_char_boundary(max.saturating_sub(3));
-        format!("{}...", &s[..safe])
-    }
 }
 
 fn print_summary(tasks: &[Task], label: &str) {

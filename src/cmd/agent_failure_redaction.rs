@@ -1,104 +1,104 @@
-// Credential redaction for untrusted provider diagnostics.
-// Preserves diagnostic separators and strips URL userinfo before token scanning.
+// Fail-closed diagnostic allowlist for failure-marker display.
+// Keeps classification words, codes and hostnames; secret triggers mask the line tail.
 pub(super) fn redact(raw: &str) -> String {
-    let cleaned = strip_userinfo(raw);
-    let raw = cleaned.as_str();
-    let mut output = String::with_capacity(raw.len());
-    let mut offset = 0;
-    let mut redact_next = false;
-    while let Some(first) = raw[offset..].chars().next() {
-        if token_separator(first) {
-            output.push(first);
-            offset += first.len_utf8();
-            continue;
-        }
-        let rest = &raw[offset..];
-        let end = rest
-            .find(|ch: char| token_separator(ch) && (!redact_next || !matches!(ch, '=' | ':')))
-            .unwrap_or(rest.len());
-        let token = &rest[..end];
-        let lower = token.to_ascii_lowercase();
-        if redact_next || key_shaped(token) {
-            output.push_str("[REDACTED]");
-            redact_next = matches!(lower.as_str(), "basic" | "bearer");
-        } else {
-            output.push_str(token);
-            let following = rest[end..]
-                .trim_start_matches(|ch: char| ch.is_whitespace() || matches!(ch, '\'' | '"'));
-            let named_secret = [
-                "token",
-                "secret",
-                "key",
-                "password",
-                "passwd",
-                "authorization",
-            ]
-            .iter()
-            .any(|suffix| lower.ends_with(*suffix));
-            redact_next = matches!(lower.as_str(), "bearer" | "basic")
-                || (named_secret && following.starts_with(['=', ':']));
-        }
-        offset += end;
-    }
-    output
+    raw.split_inclusive('\n').map(line).collect()
 }
 
-fn token_separator(ch: char) -> bool {
-    ch.is_whitespace()
-        || matches!(
-            ch,
-            '=' | ':' | ',' | ';' | '\'' | '"' | '{' | '}' | '[' | ']' | '(' | ')' | '?' | '&'
-        )
-}
-
-fn key_shaped(token: &str) -> bool {
-    let lower = token.to_ascii_lowercase();
-    let known_prefix = [
-        "sk-",
-        "ghp_",
-        "gho_",
-        "github_pat_",
-        "xoxa-",
-        "xoxb-",
-        "xoxp-",
-        "xoxr-",
-    ]
-    .iter()
-    .any(|prefix| lower.starts_with(*prefix));
-    let segments: Vec<_> = token.split('.').collect();
-    let jwt = token.starts_with("eyJ")
-        && segments.len() == 3
-        && segments.iter().all(|segment| segment.len() >= 10)
-        && token
-            .bytes()
-            .all(|ch| ch.is_ascii_alphanumeric() || b"_-.".contains(&ch));
-    let provider_key = ["AKIA", "ASIA", "AIza"]
-        .iter()
-        .any(|prefix| token.starts_with(*prefix));
-    known_prefix
-        || provider_key
-        || jwt
-        || (token.len() >= 32
-            && token
-                .bytes()
-                .all(|ch| ch.is_ascii_alphanumeric() || b"_-+/".contains(&ch)))
-}
-
-fn strip_userinfo(raw: &str) -> String {
+fn line(raw: &str) -> String {
     let mut output = String::new();
-    let mut remaining = raw;
-    while let Some(start) = remaining.find("://") {
-        let host_start = start + 3;
-        output.push_str(&remaining[..host_start]);
-        remaining = &remaining[host_start..];
-        let end = remaining
-            .find(|ch: char| ch.is_whitespace() || matches!(ch, '/' | '?' | '#'))
-            .unwrap_or(remaining.len());
-        if let Some(at) = remaining[..end].rfind('@') {
-            output.push_str("[REDACTED]@");
-            remaining = &remaining[at + 1..];
+    let mut offset = 0;
+    let body = raw.trim_end_matches(['\r', '\n']);
+    for part in body.split_inclusive(char::is_whitespace) {
+        let token = part.trim_end_matches(char::is_whitespace);
+        let core = token.trim_matches(|ch: char| ch.is_ascii_punctuation());
+        let name = token
+            .split(['=', ':'])
+            .next()
+            .unwrap_or("")
+            .trim_matches(|ch: char| ch.is_ascii_punctuation());
+        let lower = name.to_ascii_lowercase();
+        let trigger = concat!(
+            "authorization cookie session sessionid sid password passwd passphrase pwd ",
+            "secret token key credential credentials signature sig auth bearer basic"
+        )
+        .split_whitespace()
+        .find(|suffix| lower.ends_with(*suffix));
+        if let Some(trigger) = trigger
+            && (matches!(lower.as_str(), "bearer" | "basic")
+                || token.contains(['=', ':'])
+                || !raw[offset + token.len()..].trim().is_empty())
+        {
+            output.push_str(&name[name.len() - trigger.len()..]);
+            output.push_str(" [REDACTED]");
+            break;
         }
+        output.push_str(&if core.contains("://") {
+            url(token.trim_start_matches(|ch: char| ch.is_ascii_punctuation()))
+        } else if core.is_empty() || allowed(core) {
+            token.to_string()
+        } else {
+            "[…]".into()
+        });
+        output.push_str(&part[token.len()..]);
+        offset += part.len();
     }
-    output.push_str(remaining);
+    output.push_str(&raw[body.len()..]);
     output
+}
+
+fn word(token: &str) -> bool {
+    let bytes = token.as_bytes();
+    if bytes.is_empty()
+        || bytes.len() > 20
+        || !bytes[0].is_ascii_alphabetic()
+        || !bytes[bytes.len() - 1].is_ascii_alphabetic()
+        || bytes
+            .iter()
+            .any(|b| !b.is_ascii_alphabetic() && !b"-_'".contains(b))
+    {
+        return false;
+    }
+    let lower = token.to_ascii_lowercase();
+    token[1..] == lower[1..] || (token.len() <= 12 && token == token.to_ascii_uppercase())
+}
+
+fn host(token: &str) -> bool {
+    token.split('.').all(|label| {
+        let base = label.trim_end_matches(|ch: char| ch.is_ascii_digit());
+        label.len() <= 20
+            && base == base.to_ascii_lowercase()
+            && (word(base) || (base.len() < label.len() && word(base.trim_end_matches('-'))))
+    })
+}
+
+fn allowed(token: &str) -> bool {
+    let version = token.strip_prefix('v').unwrap_or(token);
+    word(token)
+        || (token.len() <= 6 && token.bytes().all(|ch| ch.is_ascii_digit()))
+        || (token.len() <= 12
+            && version.contains('.')
+            && version
+                .split('.')
+                .all(|part| !part.is_empty() && part.bytes().all(|ch| ch.is_ascii_digit())))
+        || ((token.contains('.') || token.contains('-')) && host(token))
+}
+
+fn url(token: &str) -> String {
+    let Some((scheme, rest)) = token.split_once("://") else {
+        return "[…]".into();
+    };
+    if !word(scheme) || scheme != scheme.to_ascii_lowercase() {
+        return "[…]".into();
+    }
+    let authority = rest.split(['/', '?', '#', '"', '\'']).next().unwrap_or("");
+    let hostport = authority.rsplit('@').next().unwrap_or("");
+    let hostname = hostport.split(':').next().unwrap_or("");
+    let userinfo = if authority.contains('@') {
+        "[…]@"
+    } else {
+        ""
+    };
+    let hostname = if host(hostname) { hostname } else { "[…]" };
+    let tail = if rest != authority { "[…]" } else { "" };
+    format!("{scheme}://{userinfo}{hostname}{tail}")
 }

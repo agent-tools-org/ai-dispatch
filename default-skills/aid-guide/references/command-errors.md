@@ -74,18 +74,28 @@ delegation, and filesystem checks retain their own validation paths.
 
 ## Unclassified provider failures
 
-`aid agent failures` lists only `unclassified_failure` milestone markers. Identical
-excerpts are grouped with counts and per-agent counts; time and task ID identify
-the newest occurrence. `--limit` caps matching markers before grouping. Durations
-accept `s`, `m`, `h`, `d`, or `w`. Defaults are `--since 7d --limit 50`.
-`--json` includes full redacted excerpts. Redaction strips URL userinfo and query
-credentials, Bearer/Basic values, JWT-shaped tokens, known API credential prefixes, long
-key-shaped tokens, and values assigned to names ending in `token`, `secret`,
-`key`, `password`, `passwd`, or `authorization`. Malformed marker rows are skipped;
-the command reports their count on stderr without changing the JSON schema.
-JWT matching requires an `eyJ` prefix and three segments of at least 10 characters.
-`AKIA`, `ASIA`, and `AIza` prefixes are case-sensitive; ordinary domains, versions,
-and region names are preserved. Empty JSON results are `[]`.
+`aid agent failures` lists only `unclassified_failure` milestone markers.
+Byte-identical raw excerpts are grouped with counts and per-agent counts before
+redaction, so distinct groups can display the same masked excerpt. Time and task
+ID identify the newest occurrence. `--limit` caps matching markers before grouping.
+Durations accept `s`, `m`, `h`, `d`, or `w`; defaults are `--since 7d --limit 50`.
+Malformed rows are skipped and counted on stderr without changing the JSON schema.
+
+Text and `--json` use a diagnostic allowlist. It keeps short ASCII words (up to
+20 characters, lowercase or Capitalized; ALL-CAPS up to 12), internal hyphens,
+underscores and apostrophes, decimal codes up to 6 digits, dotted versions up to
+12 characters, lowercase hostnames and region/model labels with trailing digits,
+and punctuation/separators. Hostname labels are limited to 20 characters. Other
+tokens, including mixed-case opaque values, become `[…]`. URLs retain only an
+allowed scheme and hostname; userinfo, path and query are replaced with `[…]`.
+A credential-name trigger, including authorization, cookies, sessions, password,
+secret, token, key, credential, signature or auth suffixes, keeps the trigger word
+and replaces the rest of that line with `[REDACTED]`; bare Bearer/Basic do the same.
+Masking resets on the next line. This intentionally discards non-allowlisted
+context rather than attempting to recognise every credential format.
+
+Empty JSON results are `[]`. Piping `[]` to `aid classify` refuses the request
+with `state is empty`; only use the advisory pipe when markers are present.
 
 This command only lists stored markers: it dispatches no agent and changes no
 holds, markers, or classification rules. For optional advisory classification,

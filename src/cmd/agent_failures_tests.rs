@@ -250,3 +250,25 @@ fn documented_classify_pipeline_parses_and_accepts_listing_json() {
         })
     );
 }
+
+#[test]
+fn empty_listing_is_refused_by_classify_secret_screen() {
+    let store = Store::open_memory().expect("store");
+    let output = report(&store, None, "7d", 50, true)
+        .expect("empty listing")
+        .0;
+    let state = serde_json::from_str(&output).expect("JSON");
+    use crate::typesafe::classify::{
+        ClassifyRequest, ClassifyState, DEFAULT_MODEL, DEFAULT_TIMEOUT_SECS,
+    };
+    let questions = serde_json::json!({"q": {"type": "noul", "instructions": "Any failures?"}});
+    let request = ClassifyRequest {
+        state: ClassifyState::Json(state),
+        questions: questions.as_object().expect("questions map").clone(),
+        model: DEFAULT_MODEL.into(),
+        timeout_secs: DEFAULT_TIMEOUT_SECS,
+        allow_secret_like: false,
+    };
+    let refusal = crate::typesafe::classify::prepare(&request).expect_err("empty state");
+    assert_eq!(refusal.to_string(), "state is empty");
+}

@@ -17,7 +17,7 @@ pub(super) fn clear_limit(agent: &str) -> Result<()> {
         }
         return Ok(());
     }
-    if let Some(id) = agent.strip_prefix("codex-provider:") {
+    if let Some(id) = crate::agent::codex::provider::route_id(agent) {
         anyhow::ensure!(
             !id.is_empty()
                 && id
@@ -66,7 +66,9 @@ fn clear_provider_markers() -> Result<()> {
         if entry
             .file_name()
             .to_string_lossy()
-            .starts_with("rate-limit-codex-provider:")
+            .strip_prefix("rate-limit-")
+            .and_then(crate::agent::codex::provider::route_id)
+            .is_some()
         {
             fs::remove_file(entry.path())?;
         }

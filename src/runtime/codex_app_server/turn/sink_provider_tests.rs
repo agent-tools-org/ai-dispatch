@@ -85,6 +85,12 @@ fn provider_usage_still_enforces_the_task_cost_ceiling() {
     let adapter = crate::agent::codex::routed(ROUTE.map(str::to_string));
     let mut run = run(&fixture, adapter.as_ref());
     run.max_cost = Some(0.000001);
+    fixture.store.db().execute(
+        "UPDATE tasks SET custom_agent_name=?1 WHERE id=?2",
+        [ROUTE.unwrap(), fixture.task.as_str()],
+    ).unwrap();
+    let task = fixture.store.get_task(fixture.task.as_str()).unwrap().unwrap();
+    assert_eq!(task.route().provider.as_str(), ROUTE.unwrap());
     let mut sink = Sink::new(&run).unwrap();
     let model = crate::routing::model_catalog::AGENT_MODELS
         .iter()

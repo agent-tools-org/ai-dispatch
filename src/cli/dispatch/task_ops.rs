@@ -70,7 +70,7 @@ pub(super) fn reject(store: Arc<store::Store>, task_id: String) -> Result<()> {
 
 pub(super) fn gc(store: Arc<store::Store>, task_id: String) -> Result<()> {
     crate::workspace::artifact_custody::delete_accepted_worktree(&store, &task_id)?;
-    println!("[aid] Deleted durable artifacts for accepted task {task_id}");
+    println!("[aid] Collected accepted task {task_id}");
     Ok(())
 }
 

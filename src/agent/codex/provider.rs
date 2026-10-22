@@ -19,8 +19,18 @@ pub(crate) fn selected() -> Result<Option<Provider>> {
     parse_config(&config)
 }
 
+const ROUTE_PREFIX: &str = "codex-provider:";
+
+pub(crate) fn route_id(name: &str) -> Option<&str> {
+    name.strip_prefix(ROUTE_PREFIX)
+}
+
+pub(crate) fn route_for_id(id: &str) -> String {
+    format!("{ROUTE_PREFIX}{id}")
+}
+
 pub(crate) fn route_name() -> Result<Option<String>> {
-    Ok(selected()?.map(|provider| format!("codex-provider:{}", provider.id)))
+    Ok(selected()?.map(|provider| route_for_id(&provider.id)))
 }
 
 fn read_config() -> Result<toml::Table> {

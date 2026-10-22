@@ -96,7 +96,7 @@ pub enum Commands {
     Accept(task_control_args::ArtifactDecisionArgs),
     /// Reject a completed task while preserving every artifact.
     Reject(task_control_args::ArtifactDecisionArgs),
-    /// Delete accepted artifacts after recursive durability proof.
+    /// Collect an accepted task; worktree deletion requires recursive durability proof.
     Gc(task_control_args::ArtifactGcArgs),
     Respond(task_control_args::RespondArgs),
     Reply(task_control_args::ReplyArgs),

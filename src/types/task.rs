@@ -130,7 +130,7 @@ impl Task {
         let route = Route::for_cli(self.agent).with_model(self.attributed_model());
         if self.agent == AgentKind::Codex
             && let Some(name) = self.custom_agent_name.as_deref()
-            && name.starts_with("codex-provider:")
+            && crate::agent::codex::provider::route_id(name).is_some()
         {
             return route.via(crate::types::ProviderId::new(name));
         }

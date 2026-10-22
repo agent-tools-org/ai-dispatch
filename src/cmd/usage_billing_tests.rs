@@ -175,6 +175,10 @@ fn provider_pricing_stays_consistent_in_cost_reports_and_overage() {
         task.requested_model = Some(row.model.into());
         task.tokens = Some(1_000_000);
         overage(&store, &task);
+        assert_eq!(
+            task.route().provider.as_str(),
+            name.unwrap_or("openai-chatgpt-plan")
+        );
         assert!(cost::has_known_price(task.costing_model(), task.agent));
         assert_eq!(cost::task_cost(&store, &task).unwrap(), Some(expected));
         let (_, totals) =

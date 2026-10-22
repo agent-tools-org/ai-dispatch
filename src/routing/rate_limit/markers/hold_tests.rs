@@ -38,6 +38,8 @@ fn provider_stated_reset_and_capacity_keep_clocks_and_generic_refusals_stay_tran
     let _home = AidHomeGuard::set(home.path());
     let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
     let route = Some("codex-provider:X");
+    let default_marker = marker_path(&AgentKind::Codex, None);
+    fs::write(&default_marker, "hold: manual\nmessage: default plan\n").unwrap();
     for (message, dated) in [
         (
             "You have hit your usage limit; try again at 2099-01-02T03:04:05Z",
@@ -54,5 +56,7 @@ fn provider_stated_reset_and_capacity_keep_clocks_and_generic_refusals_stay_tran
         assert!(!info.needs_human, "{message}");
         assert_eq!(info.recovery_at.is_some(), dated, "{message}");
         assert!(clear_rate_limit(&AgentKind::Codex, route));
+        assert_eq!(fs::read_to_string(&default_marker).unwrap(),
+            "hold: manual\nmessage: default plan\n");
     }
 }

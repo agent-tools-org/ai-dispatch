@@ -11,8 +11,6 @@ pub(crate) use checkpoint::preserve_shared_checkout;
 pub use rescue::{RescueOutcome, rescue_dirty_worktree_with_baseline};
 #[allow(unused_imports)]
 pub use rescue::detect_untracked_source_files;
-#[cfg(test)]
-pub use rescue::rescue_dirty_worktree;
 use rescue::stage_untracked_source_files;
 
 pub fn has_uncommitted_changes(dir: &str) -> Result<bool> {

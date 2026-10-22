@@ -1,7 +1,7 @@
 // Tests for the OpenCode CLI adapter command builder and JSON event parsing.
 // Covers session reuse, budget variants, context files, and milestone events.
 
-use super::super::{Agent, RunOpts, get_agent};
+use super::super::{RunOpts, get_agent};
 use super::*;
 use crate::{support::paths, routing::rate_limit};
 

@@ -26,7 +26,6 @@ fn parse_idle_timeout_secs(value: &str) -> Option<u64> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::batch::parse_batch_file;
     use std::io::Write;
     use tempfile::NamedTempFile;

@@ -53,6 +53,7 @@ impl Store {
         self.budget_usage_summary_for_agent(Some(agent), since)
     }
 
+    #[cfg(test)]
     pub fn budget_usage_summary_all(
         &self,
         since: Option<DateTime<Local>>,
@@ -112,6 +113,7 @@ impl Store {
         }).collect())
     }
 
+    #[cfg(feature = "web")]
     pub fn named_agent_success_rates(&self) -> Result<Vec<(String, f64, usize)>> {
         self.success_rates(None, 5)
     }

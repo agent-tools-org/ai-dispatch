@@ -27,6 +27,7 @@ fn insert_and_get_events() {
 }
 
 #[test]
+#[cfg(feature = "web")]
 fn gets_latest_milestone() {
     let store = Store::open_memory().unwrap();
     store
@@ -66,6 +67,7 @@ fn gets_latest_milestone() {
 }
 
 #[test]
+#[cfg(feature = "web")]
 fn latest_observed_models_keep_the_newest_model_per_agent() {
     let store = Store::open_memory().unwrap();
     let mut older = make_task("t-model-old", AgentKind::Codex, TaskStatus::Done);
@@ -81,6 +83,7 @@ fn latest_observed_models_keep_the_newest_model_per_agent() {
 }
 
 #[test]
+#[cfg(feature = "web")]
 fn latest_events_batch_returns_only_three_events_per_task() {
     let store = Store::open_memory().unwrap();
     store.insert_task(&make_task("t-events", AgentKind::Codex, TaskStatus::Running)).unwrap();
@@ -102,6 +105,7 @@ fn latest_events_batch_returns_only_three_events_per_task() {
 }
 
 #[test]
+#[cfg(feature = "web")]
 fn started_at_batch_uses_the_earliest_start_event_when_column_is_empty() {
     let store = Store::open_memory().unwrap();
     store.insert_task(&make_task("t-started-event", AgentKind::Codex, TaskStatus::Done)).unwrap();

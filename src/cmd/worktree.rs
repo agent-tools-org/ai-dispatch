@@ -62,6 +62,77 @@ pub fn list(repo: Option<&str>, json: bool, active_only: bool) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+/// Clear dead lock files while preserving all task artifacts.
+pub fn prune(repo: Option<&str>) -> Result<()> {
+    let repo_dir = repo.unwrap_or(".");
+    let entries = aid_worktree_entries(repo_dir)?;
+    let mut locks_cleared = 0usize;
+    for entry in entries {
+        let path = Path::new(&entry.path);
+        let was_stale = is_stale_worktree_path(path);
+        if let Some(lock) = read_worktree_lock(path) {
+            if crate::workspace::worktree::process_alive_check(lock.pid) {
+                if was_stale {
+                    let task = lock.task_id.as_deref().unwrap_or("unknown");
+                    aid_warn!(
+                        "[aid] Skipping prune: {} has active task {} (pid {})",
+                        entry.path,
+                        task,
+                        lock.pid
+                    );
+                }
+                continue;
+            }
+            let task = lock.task_id.as_deref().unwrap_or("unknown");
+            println!(
+                "[aid] Cleared stale lock in {} (task={}, pid={} dead)",
+                entry.path,
+                task,
+                lock.pid
+            );
+            let _ = std::fs::remove_file(path.join(".aid-lock"));
+            locks_cleared += 1;
+        }
+        if was_stale {
+            aid_warn!(
+                "[aid] Preserved stale worktree {}: \
+                 deletion requires principal acceptance and `aid gc --task <task>`",
+                entry.path
+            );
+        }
+    }
+    if locks_cleared == 0 {
+        println!("[aid] No stale worktrees found");
+    } else {
+        if locks_cleared > 0 {
+            println!("[aid] Cleared {locks_cleared} stale lock(s)");
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+/// Remove a worktree by branch name and prune stale references.
+pub fn remove(branch: &str, repo: Option<&str>) -> Result<()> {
+    let repo_dir = repo.unwrap_or(".");
+    let repo_path = Path::new(repo_dir).canonicalize()?;
+    let mut wt_path = crate::workspace::worktree::aid_worktree_path(&repo_path, branch);
+    if !wt_path.exists() {
+        let legacy_path = Path::new("/tmp").join(format!("aid-wt-{branch}"));
+        if legacy_path.exists() {
+            wt_path = legacy_path;
+        }
+    }
+    if !wt_path.exists() {
+        anyhow::bail!("Worktree not found: {}", wt_path.display());
+    }
+    anyhow::bail!(
+        "Direct removal of branch '{branch}' is forbidden; \
+         identify its task, run `aid accept <task>`, then `aid gc --task <task>`"
+    )
+}
+
 pub(crate) fn stale_worktree_count(repo: Option<&str>) -> Result<usize> {
     Ok(stale_worktree_paths(repo.unwrap_or("."))?.len())
 }

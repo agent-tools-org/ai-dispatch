@@ -4,6 +4,7 @@
 
 mod event_queries;
 mod billing_queries;
+#[cfg(feature = "web")]
 mod agent_queries;
 mod message_queries;
 mod memory_queries;
@@ -15,6 +16,7 @@ mod workgroup_queries;
 #[allow(unused_imports)]
 pub use event_queries::*;
 #[allow(unused_imports)]
+#[cfg(feature = "web")]
 pub use agent_queries::*;
 #[allow(unused_imports)]
 pub use message_queries::*;

@@ -4,6 +4,7 @@
 
 use anyhow::Result;
 use chrono::Local;
+#[cfg(feature = "web")]
 use std::collections::HashMap;
 use rusqlite::{params, OptionalExtension};
 
@@ -12,6 +13,7 @@ use super::super::Store;
 use crate::types::{AgentKind, Task, TaskFilter, TaskStatus, ACTIVE_TASK_STATUSES};
 
 impl Store {
+    #[cfg(feature = "web")]
     pub fn started_at_batch(&self, task_ids: &[&str]) -> Result<HashMap<String, String>> {
         if task_ids.is_empty() {
             return Ok(HashMap::new());

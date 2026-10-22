@@ -21,6 +21,7 @@ pub fn run(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approv
     run_with_output(store, task_id, group, approve, check, force, target, lanes, true)
 }
 
+#[cfg(feature = "web")]
 pub(crate) fn run_quiet(store: Arc<Store>, task_id: Option<&str>, group: Option<&str>, approve: bool, check: bool, force: bool, target: Option<&str>, lanes: bool) -> Result<()> {
     run_with_output(store, task_id, group, approve, check, force, target, lanes, false)
 }

@@ -43,7 +43,7 @@ does not assert board closure. New slices need board IDs before implementation.
 | --- | --- | --- |
 | Codex custom provider as a route (P2) — done | wi-3856 | A task launched with a user-selected custom provider records it as its own route identity; quota holds, advice and retry address that route, not `codex/openai`; read-only provenance still proves the restrictive profile |
 | Typed pre-command results from rbox — done | wi-1ad2 | A remote verify that never started its command is classified from rbox's typed result, not from log text |
-| Advisory review of unrecognised failures | wi-1ad2 | Recorded `unclassified_failure` markers can be summarised by a model as advice only: it never reads agent output and never sets or clears a hold |
+| Listing of unrecognised failures — done (reduced) | wi-1ad2 | `aid agent failures` lists recorded `unclassified_failure` markers, grouped and masked by a fail-closed allowlist; it dispatches no agent and never sets or clears a hold. Advice comes from piping `--json` to the tool-free `aid classify` |
 
 | Bare `--verify` honours the project verifier — done | — | `--verify` without a value uses the project's declared verify command (auto-detection only when none is declared); every verify run persists a started/finished event with command, directory, local HEAD, exit code and output excerpt; NoOp is read only from the agent's final message, never tool output |
 
@@ -72,6 +72,14 @@ where it was a bug fix:
   were strengthened so they fail with the production change reverted.
 - The post-verify "dependencies weren't installed" hint fires only for ecosystems with a separate
   install step whose install directory is missing; Cargo- and Go-only worktrees never get it.
+
+The failure slice was cut down after two audit FIX rounds: a model review dispatched as an
+agent ran a tool-capable process on provider stderr that an attacker can influence, and a
+denylist redactor kept missing credential shapes. The listing masks everything except short
+words, short codes, versions and lowercase hostnames; values that are themselves such words are
+kept unless a credential name precedes them on the same line (documented in the guide).
+Follow-ups: markers still store the raw excerpt (redact at write time); compact JSON error
+bodies are masked whole, losing their error type.
 
 Still open: `pty_idle_hang_e2e` failed once under full-suite load and passed alone and in later
 full runs. The missing-dependency hint still fires for hoisted npm workspaces, Yarn PnP and

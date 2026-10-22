@@ -137,11 +137,11 @@ fn load(
                 task_id,
                 agents: BTreeMap::new(),
                 count: 0,
-                provider_excerpt: redact(&raw)?,
+                provider_excerpt: redact(&raw),
             });
         }
         groups[index].count += 1;
-        *groups[index].agents.entry(redact(&agent)?).or_default() += 1;
+        *groups[index].agents.entry(redact(&agent)).or_default() += 1;
     }
     Ok(groups)
 }
@@ -180,11 +180,54 @@ fn markers(store: &Store, agent: Option<&str>, cutoff: DateTime<Local>) -> Resul
     Ok(markers)
 }
 
-fn redact(raw: &str) -> Result<String> {
-    let pattern = regex::Regex::new(
-        r#"(?i)(bearer\s+)[^\s,;"']+|\bsk-[a-z0-9_-]+|\b(?:api[_-]?key|key|token)\s*[=:]\s*["']?[^\s,;"']+"#,
-    )?;
-    Ok(pattern.replace_all(raw, "[REDACTED]").into_owned())
+fn redact(raw: &str) -> String {
+    let mut output = String::with_capacity(raw.len());
+    let mut offset = 0;
+    let mut redact_next = false;
+    while let Some(first) = raw[offset..].chars().next() {
+        if token_separator(first) {
+            output.push(first);
+            offset += first.len_utf8();
+            continue;
+        }
+        let rest = &raw[offset..];
+        let end = rest
+            .find(|ch: char| token_separator(ch) && (!redact_next || !matches!(ch, '=' | ':')))
+            .unwrap_or(rest.len());
+        let token = &rest[..end];
+        let lower = token.to_ascii_lowercase();
+        if redact_next || key_shaped(token) {
+            output.push_str("[REDACTED]");
+            redact_next = false;
+        } else {
+            output.push_str(token);
+            let following = rest[end..]
+                .trim_start_matches(|ch: char| ch.is_whitespace() || matches!(ch, '\'' | '"'));
+            let named_secret = matches!(
+                lower.as_str(),
+                "key" | "api_key" | "api-key" | "apikey" | "token" | "secret" | "password"
+            );
+            redact_next = lower == "bearer" || (named_secret && following.starts_with(['=', ':']));
+        }
+        offset += end;
+    }
+    output
+}
+
+fn token_separator(ch: char) -> bool {
+    ch.is_whitespace()
+        || matches!(
+            ch,
+            '=' | ':' | ',' | ';' | '\'' | '"' | '{' | '}' | '[' | ']' | '(' | ')'
+        )
+}
+
+fn key_shaped(token: &str) -> bool {
+    token.to_ascii_lowercase().starts_with("sk-")
+        || (token.len() >= 32
+            && token
+                .bytes()
+                .all(|ch| ch.is_ascii_alphanumeric() || b"_-+/".contains(&ch)))
 }
 
 fn review_prompt(groups: &[FailureGroup]) -> Result<String> {

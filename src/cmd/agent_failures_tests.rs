@@ -253,3 +253,28 @@ fn redaction_does_not_merge_byte_distinct_excerpts() {
     assert!(groups.iter().all(|group| group.count == 1));
     assert_eq!(groups[0].provider_excerpt, groups[1].provider_excerpt);
 }
+
+#[test]
+fn scanner_redacts_named_secrets_and_key_shaped_tokens() {
+    let long_key = "SyntheticApiCredentialValue1234567890";
+    let cases = [
+        ("Authorization: bEaReR short:value==", "short:value=="),
+        ("key = short", "short"),
+        ("token: short", "short"),
+        ("secret=short", "short"),
+        ("password = 'short'", "short"),
+        (r#"{"API_KEY": "short", "token":"other"}"#, "short"),
+        ("sk-synthetic-example", "sk-synthetic-example"),
+        (long_key, long_key),
+        ("échec token=short\nretry", "short"),
+    ];
+    for (input, secret) in cases {
+        let output = redact(input);
+        assert!(!output.contains(secret), "{input}");
+        assert!(output.contains("[REDACTED]"));
+    }
+    assert!(!redact(r#"{"token":"other"}"#).contains("other"));
+    let diagnostic = "Provider connection closed\nretry after 30s; key rotation required: 東京";
+    assert_eq!(redact(diagnostic), diagnostic);
+    assert_eq!(redact(""), "");
+}

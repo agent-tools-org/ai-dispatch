@@ -502,8 +502,10 @@ and does not replace `aid gc --task`.
 excerpts are grouped with counts and per-agent counts; time and task ID identify
 the newest occurrence. `--limit` caps matching markers before grouping. Durations
 accept `s`, `m`, `h`, `d`, or `w`. Defaults are `--since 7d --limit 50`.
-`--json` includes full redacted excerpts. Bearer tokens, `sk-` strings and
-`key=`/`token=` values are redacted before display or review.
+`--json` includes full redacted excerpts. Bearer tokens, `sk-` strings, tokens
+of at least 32 ASCII letters/digits or `_`, `-`, `+`, `/`, and values assigned to
+`key`, `api_key`, `api-key`, `apikey`, `token`, `secret`, or `password` with `=` or
+`:` are redacted before display or review.
 
 `--review [<agent>]` asks the one-shot model for advisory classification suggestions
 using only redacted grouped excerpts, agent names and counts. Omitted agents use

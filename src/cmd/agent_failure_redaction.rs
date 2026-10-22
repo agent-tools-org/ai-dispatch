@@ -68,11 +68,11 @@ const MAX_LABEL_DIGITS: usize = 8;
 fn host(token: &str) -> bool {
     token.split('.').all(|label| {
         let base = label.trim_end_matches(|ch: char| ch.is_ascii_digit());
+        let digits = label.len() - base.len();
         label.len() <= 20
+            && digits <= MAX_LABEL_DIGITS
             && base == base.to_ascii_lowercase()
-            && (word(base)
-                || ((1..=MAX_LABEL_DIGITS).contains(&(label.len() - base.len()))
-                    && word(base.trim_end_matches('-'))))
+            && (word(base) || (digits > 0 && word(base.trim_end_matches('-'))))
     })
 }
 

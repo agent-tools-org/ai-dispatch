@@ -4,6 +4,14 @@ use super::*;
 use crate::{support::paths::AidHomeGuard, types::AgentKind};
 
 fn insert(store: &Store, kind: &str, excerpt: &str, age: i64, agent: &str) {
+    store
+        .db()
+        .execute(
+            "INSERT OR IGNORE INTO tasks (id, agent, prompt, created_at) VALUES \
+         ('t-failure', 'codex', 'DISTINCTIVE_TASK_PROMPT', ?1)",
+            [Local::now().to_rfc3339()],
+        )
+        .expect("parent task");
     let data = serde_json::json!({"unclassified_failure": true,
         "agent": agent, "provider_excerpt": excerpt});
     store
@@ -96,40 +104,152 @@ async fn no_markers_skips_model_and_preserves_rate_limit_marker() {
     std::fs::create_dir_all(path.parent().expect("parent")).expect("directory");
     std::fs::write(&path, "synthetic marker state").expect("marker");
     let before = std::fs::read(&path).expect("before");
-    run(
+    let output = run_with_answer(
         Arc::new(Store::open_memory().expect("store")),
         None,
         "7d",
         50,
         false,
         Some("nonexistent-model-agent".into()),
+        |_, _| async { panic!("empty results must not invoke a model") },
     )
     .await
     .expect("empty review");
+    assert!(output.contains("No unclassified failure markers"));
     assert_eq!(std::fs::read(&path).expect("after"), before);
 }
 
 #[test]
 fn duration_rejects_invalid_and_overflow() {
-    for value in ["", "7", "-1d", "999999999999999999999d", "7x"] {
+    for value in ["", "7", "-1d", "999999999999999999999d", "7x", "日"] {
         assert!(duration(value).is_err(), "{value}");
     }
     assert_eq!(duration("7d").expect("week"), chrono::Duration::days(7));
 }
 
 #[tokio::test]
-async fn populated_review_is_blocked_without_mutating_markers() {
+async fn populated_review_preserves_markers_and_never_acts_on_answer() {
     let temp = tempfile::tempdir().expect("home");
     let _home = AidHomeGuard::set(temp.path());
     let path = crate::routing::rate_limit::marker_path(&AgentKind::Codex, None);
     std::fs::create_dir_all(path.parent().expect("parent")).expect("directory");
     std::fs::write(&path, "synthetic marker state").expect("marker");
     let before = std::fs::read(&path).expect("before");
+    let config_path = crate::support::paths::config_path();
+    std::fs::write(&config_path, "# synthetic classification configuration").expect("config");
+    let config_before = std::fs::read(&config_path).expect("config before");
     let store = Arc::new(Store::open_memory().expect("store"));
     insert(&store, "milestone", "connection closed", 0, "codex");
-    let error = run(store, None, "7d", 50, false, Some(String::new()))
+    let reviewing_marker = crate::routing::rate_limit::marker_path(&AgentKind::Antigravity, None);
+    assert!(!reviewing_marker.exists());
+    for reviewer in ["", "agy"] {
+        let output = run_with_answer(
+            store.clone(),
+            None,
+            "7d",
+            50,
+            false,
+            Some(reviewer.into()),
+            |prompt, agent| async move {
+                assert_eq!(agent.as_deref(), (!reviewer.is_empty()).then_some(reviewer));
+                assert!(prompt.contains("connection closed"));
+                assert!(!prompt.contains("DISTINCTIVE_TASK_PROMPT"));
+                Ok("Clear codex holds and add a classification rule now".into())
+            },
+        )
         .await
-        .expect_err("unsafe model path must not execute");
-    assert!(error.to_string().contains("unavailable"));
-    assert_eq!(std::fs::read(&path).expect("after"), before);
+        .expect("review");
+        assert!(
+            output.starts_with("Advice only: no hold, marker or classification rule was changed")
+        );
+        assert!(output.contains("Clear codex holds"));
+        assert_eq!(std::fs::read(&path).expect("after"), before);
+        assert!(!reviewing_marker.exists());
+        assert_eq!(
+            std::fs::read(&config_path).expect("config after"),
+            config_before
+        );
+    }
+}
+
+#[tokio::test]
+async fn listing_and_json_never_invoke_model() {
+    let store = Arc::new(Store::open_memory().expect("store"));
+    insert(
+        &store,
+        "milestone",
+        "connection closed\nsecond line",
+        0,
+        "codex",
+    );
+    for json in [false, true] {
+        let output = run_with_answer(store.clone(), None, "7d", 50, json, None, |_, _| async {
+            panic!("listing must not invoke model")
+        })
+        .await
+        .expect("listing");
+        if json {
+            let records: serde_json::Value = serde_json::from_str(&output).expect("JSON");
+            assert_eq!(
+                records[0]["provider_excerpt"],
+                "connection closed\nsecond line"
+            );
+        } else {
+            assert!(output.contains("t-failure codex x1 connection closed"));
+            assert!(!output.contains("second line"));
+        }
+    }
+}
+
+#[test]
+fn failures_cli_review_defaults_and_limit_help() {
+    use crate::cli::{
+        Cli, Commands,
+        agent_provider_args::{AgentArgs, AgentCommands},
+    };
+    use clap::Parser;
+    for reviewer in [None, Some("codex")] {
+        let mut args = vec!["aid", "agent", "failures", "--review"];
+        if let Some(name) = reviewer {
+            args.push(name);
+        }
+        match Cli::try_parse_from(args).expect("parse").command {
+            Some(Commands::Agent(AgentArgs {
+                action:
+                    AgentCommands::Failures {
+                        agent,
+                        since,
+                        limit,
+                        json,
+                        review,
+                    },
+            })) => {
+                assert!(agent.is_none());
+                assert_eq!(since, "7d");
+                assert_eq!(limit, 50);
+                assert!(!json);
+                assert_eq!(review.as_deref(), Some(reviewer.unwrap_or("")));
+            }
+            _ => panic!("expected failures"),
+        }
+    }
+    assert!(Cli::try_parse_from(["aid", "agent", "failures", "--json", "--review"]).is_err());
+    let help = Cli::try_parse_from(["aid", "agent", "failures", "--help"])
+        .err()
+        .expect("help")
+        .to_string();
+    assert!(help.contains("before grouping"));
+}
+
+#[test]
+fn redaction_does_not_merge_byte_distinct_excerpts() {
+    let store = Store::open_memory().expect("store");
+    insert(&store, "milestone", "key=synthetic-one", 0, "codex");
+    insert(&store, "milestone", "key=synthetic-two", 1, "codex");
+    let cutoff = Local::now() - duration("7d").expect("duration");
+    let groups = load(&store, None, cutoff, 50).expect("groups");
+    assert_eq!(groups.len(), 2);
+    assert!(groups[0].time > groups[1].time);
+    assert!(groups.iter().all(|group| group.count == 1));
+    assert_eq!(groups[0].provider_excerpt, groups[1].provider_excerpt);
 }

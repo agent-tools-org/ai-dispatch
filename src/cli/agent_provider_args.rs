@@ -58,6 +58,7 @@ pub enum AgentCommands {
         agent: Option<String>,
         #[arg(long, default_value = "7d")]
         since: String,
+        /// Maximum matching markers before grouping identical excerpts
         #[arg(long, default_value_t = 50)]
         limit: usize,
         #[arg(long, conflicts_with = "review")]

@@ -505,7 +505,10 @@ accept `s`, `m`, `h`, `d`, or `w`. Defaults are `--since 7d --limit 50`.
 `--json` includes full redacted excerpts. Bearer tokens, `sk-` strings and
 `key=`/`token=` values are redacted before display or review.
 
-`--review [<agent>]` is reserved for advisory classification suggestions using
-grouped excerpts, agent names and counts. It currently returns an unavailable
-error because the one-shot model lifecycle can mutate provider markers. Empty results never invoke a model. Review advice
-must be inspected before any classification change is considered.
+`--review [<agent>]` asks the one-shot model for advisory classification suggestions
+using only redacted grouped excerpts, agent names and counts. Omitted agents use
+the `aid ask` default. Local-file auto-detection is disabled for this call. Empty
+results never invoke a model. The answer is printed below an advice-only header;
+no holds, markers or classification rules are changed based on excerpts or the
+answer. The reviewing task still records its own quota failures normally. Review
+advice must be inspected before any classification change is considered.

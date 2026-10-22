@@ -23,35 +23,81 @@ pub(crate) async fn run(
     json: bool,
     review: Option<String>,
 ) -> Result<()> {
+    let output = run_with_answer(
+        store.clone(),
+        agent,
+        since,
+        limit,
+        json,
+        review,
+        |prompt, agent| {
+            crate::cmd::ask::ask_text_with_context(
+                store,
+                prompt,
+                agent,
+                None,
+                crate::cmd::ask::ContextFiles::Disabled,
+            )
+        },
+    )
+    .await?;
+    println!("{output}");
+    Ok(())
+}
+
+async fn run_with_answer<F, Fut>(
+    store: Arc<Store>,
+    agent: Option<String>,
+    since: &str,
+    limit: usize,
+    json: bool,
+    review: Option<String>,
+    answer: F,
+) -> Result<String>
+where
+    F: FnOnce(String, Option<String>) -> Fut,
+    Fut: std::future::Future<Output = Result<String>>,
+{
     let cutoff = Local::now()
         .checked_sub_signed(duration(since)?)
         .context("Duration is out of range")?;
     let groups = load(&store, agent.as_deref(), cutoff, limit)?;
     if groups.is_empty() {
-        println!("No unclassified failure markers in range.");
-        return Ok(());
+        return Ok("No unclassified failure markers in range.".into());
     }
-    if review.is_some() {
-        let _prompt = review_prompt(&groups)?;
-        bail!(
-            "Advisory review is unavailable: ask_text can mutate provider hold and rate-limit markers"
-        );
-    } else if json {
-        println!("{}", serde_json::to_string_pretty(&groups)?);
-    } else {
-        for group in groups {
+    if let Some(agent) = review {
+        let response = answer(
+            review_prompt(&groups)?,
+            (!agent.is_empty()).then_some(agent),
+        )
+        .await?;
+        return Ok(format!(
+            "Advice only: no hold, marker or classification rule was changed \
+            based on these excerpts or this answer.\n\n{response}"
+        ));
+    }
+    if json {
+        return Ok(serde_json::to_string_pretty(&groups)?);
+    }
+    Ok(listing(&groups))
+}
+
+fn listing(groups: &[FailureGroup]) -> String {
+    groups
+        .iter()
+        .map(|group| {
             let agents = group.agents.keys().cloned().collect::<Vec<_>>().join(", ");
-            println!(
+            format!(
                 "{} {} {} x{} {}",
                 group.time.to_rfc3339(),
                 group.task_id,
                 agents,
                 group.count,
                 group.provider_excerpt.lines().next().unwrap_or("")
-            );
-        }
-    }
-    Ok(())
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn duration(value: &str) -> Result<chrono::Duration> {
@@ -79,11 +125,35 @@ fn load(
     cutoff: DateTime<Local>,
     limit: usize,
 ) -> Result<Vec<FailureGroup>> {
+    let mut markers = markers(store, agent, cutoff)?;
+    markers.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+    let mut groups: Vec<FailureGroup> = Vec::new();
+    let mut indices = BTreeMap::new();
+    for (time, task_id, agent, raw) in markers.into_iter().take(limit) {
+        let index = *indices.entry(raw.clone()).or_insert(groups.len());
+        if index == groups.len() {
+            groups.push(FailureGroup {
+                time,
+                task_id,
+                agents: BTreeMap::new(),
+                count: 0,
+                provider_excerpt: redact(&raw)?,
+            });
+        }
+        groups[index].count += 1;
+        *groups[index].agents.entry(redact(&agent)?).or_default() += 1;
+    }
+    Ok(groups)
+}
+
+type Marker = (DateTime<Local>, String, String, String);
+
+fn markers(store: &Store, agent: Option<&str>, cutoff: DateTime<Local>) -> Result<Vec<Marker>> {
     let conn = store.db();
     let mut query = conn.prepare(
         "SELECT task_id, timestamp, metadata FROM events
         WHERE event_type = 'milestone' AND json_valid(metadata)
-        AND json_extract(metadata, '$.unclassified_failure') = 1",
+        AND json_type(metadata, '$.unclassified_failure') = 'true'",
     )?;
     let rows = query.query_map([], |row| {
         Ok((
@@ -107,24 +177,7 @@ fn load(
             markers.push((time, id, name.to_string(), excerpt.to_string()));
         }
     }
-    markers.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
-    let mut groups: Vec<FailureGroup> = Vec::new();
-    let mut indices = BTreeMap::new();
-    for (time, task_id, agent, raw) in markers.into_iter().take(limit) {
-        let index = *indices.entry(raw.clone()).or_insert(groups.len());
-        if index == groups.len() {
-            groups.push(FailureGroup {
-                time,
-                task_id,
-                agents: BTreeMap::new(),
-                count: 0,
-                provider_excerpt: redact(&raw)?,
-            });
-        }
-        groups[index].count += 1;
-        *groups[index].agents.entry(redact(&agent)?).or_default() += 1;
-    }
-    Ok(groups)
+    Ok(markers)
 }
 
 fn redact(raw: &str) -> Result<String> {

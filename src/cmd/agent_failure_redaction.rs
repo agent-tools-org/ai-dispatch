@@ -62,12 +62,17 @@ fn word(token: &str) -> bool {
     token[1..] == lower[1..] || (token.len() <= 12 && token == token.to_ascii_uppercase())
 }
 
+// Region and model labels need a few trailing digits; longer runs can carry IDs or card numbers.
+const MAX_LABEL_DIGITS: usize = 8;
+
 fn host(token: &str) -> bool {
     token.split('.').all(|label| {
         let base = label.trim_end_matches(|ch: char| ch.is_ascii_digit());
         label.len() <= 20
             && base == base.to_ascii_lowercase()
-            && (word(base) || (base.len() < label.len() && word(base.trim_end_matches('-'))))
+            && (word(base)
+                || ((1..=MAX_LABEL_DIGITS).contains(&(label.len() - base.len()))
+                    && word(base.trim_end_matches('-'))))
     })
 }
 

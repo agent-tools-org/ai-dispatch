@@ -84,15 +84,23 @@ Malformed rows are skipped and counted on stderr without changing the JSON schem
 Text and `--json` use a diagnostic allowlist. It keeps short ASCII words (up to
 20 characters, lowercase or Capitalized; ALL-CAPS up to 12), internal hyphens,
 underscores and apostrophes, decimal codes up to 6 digits, dotted versions up to
-12 characters, lowercase hostnames and region/model labels with trailing digits,
-and punctuation/separators. Hostname labels are limited to 20 characters. Other
+12 characters, lowercase hostnames and region labels with up to 8 trailing digits
+(`asia-northeast1`), and punctuation/separators. Hostname labels are limited to
+20 characters. Most model IDs (`gpt-4o`, `claude-sonnet-4-20250514`), durations
+and compact JSON bodies are masked. Other
 tokens, including mixed-case opaque values, become `[…]`. URLs retain only an
 allowed scheme and hostname; userinfo, path and query are replaced with `[…]`.
 A credential-name trigger, including authorization, cookies, sessions, password,
 secret, token, key, credential, signature or auth suffixes, keeps the trigger word
 and replaces the rest of that line with `[REDACTED]`; bare Bearer/Basic do the same.
-Masking resets on the next line. This intentionally discards non-allowlisted
-context rather than attempting to recognise every credential format.
+Only the matched suffix of the name is kept (`OAuth` shows as `Auth`), and a name
+at the end of a line masks nothing. Masking resets on the next line. This
+intentionally discards non-allowlisted context rather than attempting to recognise
+every credential format. Values that themselves match the allowlist (lowercase or
+Capitalized words, short digit codes, dotted lowercase labels) are kept unless they
+follow a trigger on the same line, so a value on the line after its label, or under
+a label such as `pass` or `pw`, is shown. The text listing prints only the first
+excerpt line; `--json` carries every line.
 
 Empty JSON results are `[]`. Piping `[]` to `aid classify` refuses the request
 with `state is empty`; only use the advisory pipe when markers are present.

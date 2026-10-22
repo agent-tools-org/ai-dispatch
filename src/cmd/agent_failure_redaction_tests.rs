@@ -248,6 +248,9 @@ fn unrecognised_values_are_masked_and_urls_keep_only_safe_hosts() {
         "verylonglowercasewordbeyondlimit",
         "UPPERCASETOOLONG",
         "label1middle.example.com",
+        "cc-4111111111111111",
+        "sk-f151057611688600",
+        "xoxb-123456789012",
     ] {
         assert_eq!(redact(opaque), "[…]", "{opaque}");
     }
@@ -262,4 +265,7 @@ fn unrecognised_values_are_masked_and_urls_keep_only_safe_hosts() {
     );
     assert_eq!(redact("https://AbCdEfGhIj/path"), "https://[…][…]");
     assert_eq!(redact("{}\n\nretry\n"), "{}\n\nretry\n");
+    for kept in ["asia-northeast1", "gpt-5", "build-20251022"] {
+        assert_eq!(redact(kept), kept);
+    }
 }

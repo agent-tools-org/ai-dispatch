@@ -1,6 +1,7 @@
 // MCP tool definitions and handlers for the `aid mcp` stdio server.
 // Exports tool_definitions() and call_tool(), reusing existing command logic.
 
+use crate::ui::format::truncate;
 use anyhow::{Context, Result};
 use chrono::Local;
 use serde::Deserialize;
@@ -378,13 +379,4 @@ fn default_true() -> bool {
 
 fn default_top() -> usize {
     5
-}
-
-fn truncate(value: &str, max: usize) -> String {
-    if value.len() <= max {
-        value.to_string()
-    } else {
-        let safe = value.floor_char_boundary(max.saturating_sub(3));
-        format!("{}...", &value[..safe])
-    }
 }

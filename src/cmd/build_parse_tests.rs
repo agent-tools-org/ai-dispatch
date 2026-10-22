@@ -78,3 +78,16 @@ fn event_detail_uses_succeeded_not_finished() {
     let detail = event_detail_for("cargo check", &report, 42, true);
     assert_eq!(detail, "cargo check succeeded: 0 errors, 0 warnings, 42 units compiled");
 }
+
+#[test]
+fn duration_format_preserves_millisecond_threshold_and_precision() {
+    for (millis, expected) in [
+        (0, "0ms"),
+        (999, "999ms"),
+        (1_000, "1.0s"),
+        (1_234, "1.2s"),
+        (60_000, "60.0s"),
+    ] {
+        assert_eq!(format_duration(Duration::from_millis(millis)), expected);
+    }
+}

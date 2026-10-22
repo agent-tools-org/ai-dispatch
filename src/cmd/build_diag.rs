@@ -2,6 +2,7 @@
 // Exports: DiagnosticCollector, BuildReport, render_digest().
 // Deps: serde_json, std collections/time.
 
+use crate::cmd::build_parse::format_duration;
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -222,14 +223,6 @@ fn normalize_message(message: &str) -> String {
 
 fn count_level(diagnostics: &[Diagnostic], level: DiagnosticLevel) -> usize {
     diagnostics.iter().filter(|diagnostic| diagnostic.level == level).count()
-}
-
-fn format_duration(duration: Duration) -> String {
-    let millis = duration.as_millis();
-    if millis < 1_000 {
-        return format!("{millis}ms");
-    }
-    format!("{:.1}s", millis as f64 / 1_000.0)
 }
 
 impl DiagnosticLevel {

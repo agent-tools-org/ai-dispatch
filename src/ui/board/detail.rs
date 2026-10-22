@@ -5,10 +5,11 @@
 use crate::cost;
 use crate::runtime::session;
 use crate::types::{Task, TaskEvent, TaskStatus};
+use crate::ui::format::{format_duration_ms, format_tokens, truncate};
 use std::path::Path;
 use std::process::Command;
 
-use super::{elapsed_since, format_duration, format_tokens, truncate};
+use super::elapsed_since;
 
 /// Render detailed view of a single task (for `aid audit`)
 pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option<Vec<Task>>) -> String {
@@ -22,7 +23,7 @@ pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option
     ));
 
     let duration = task.duration_ms
-        .map(format_duration)
+        .map(format_duration_ms)
         .unwrap_or_else(|| elapsed_since(task.created_at));
     let status = if task.status == TaskStatus::Failed
         && events.iter().any(|event| event.detail.starts_with("provider capacity"))
@@ -44,7 +45,7 @@ pub fn render_task_detail(task: &Task, events: &[TaskEvent], retry_chain: Option
             out.push_str("Retry chain:\n");
             for retry_task in retry_chain {
                 let duration = retry_task.duration_ms
-                    .map(format_duration)
+                    .map(format_duration_ms)
                     .unwrap_or_else(|| elapsed_since(retry_task.created_at));
                 let current = if retry_task.id == task.id {
                     "  ← current"

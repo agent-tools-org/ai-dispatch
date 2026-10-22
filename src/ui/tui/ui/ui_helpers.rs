@@ -1,6 +1,7 @@
 // Helper and formatting functions for the TUI board and detail views.
 // Extracted from ui.rs to keep individual files under 300 lines.
 
+use crate::ui::format::truncate;
 use ratatui::prelude::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row};
@@ -171,28 +172,13 @@ pub fn detail_scroll_offset(detail_scroll: usize) -> u16 {
 
 pub fn task_duration(task: &Task) -> String {
     task.duration_ms
-        .map(|ms| {
-            let secs = ms / 1000;
-            if secs < 60 {
-                format!("{secs}s")
-            } else {
-                format!("{}m {:02}s", secs / 60, secs % 60)
-            }
-        })
+        .map(crate::ui::format::format_duration_ms)
         .unwrap_or_else(|| "-".to_string())
 }
 
 pub fn task_tokens(task: &Task) -> String {
     task.tokens
-        .map(|tokens| {
-            if tokens >= 1_000_000 {
-                format!("{:.1}M", tokens as f64 / 1_000_000.0)
-            } else if tokens >= 1_000 {
-                format!("{:.1}k", tokens as f64 / 1_000.0)
-            } else {
-                tokens.to_string()
-            }
-        })
+        .map(crate::ui::format::format_tokens)
         .unwrap_or_else(|| "-".to_string())
 }
 
@@ -283,17 +269,6 @@ fn is_trigger_error(detail: &str) -> bool {
     ];
     let detail = detail.to_ascii_lowercase();
     TRIGGERS.iter().any(|trigger| detail.contains(trigger))
-}
-
-pub fn truncate(value: &str, max: usize) -> String {
-    if value.len() <= max {
-        value.to_string()
-    } else {
-        let end = max.saturating_sub(3);
-        // Find a valid UTF-8 char boundary at or before `end`
-        let safe = value.floor_char_boundary(end);
-        format!("{}...", &value[..safe])
-    }
 }
 
 #[cfg(test)]

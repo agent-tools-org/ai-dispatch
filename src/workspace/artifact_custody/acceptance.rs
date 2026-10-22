@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use std::path::Path;
 
 use crate::store::{AcceptanceDecision, AcceptanceRecord, Store};
+use crate::workspace::git::git_output_trimmed;
 
 pub(crate) fn accept(store: &Store, task_id: &str, principal_id: &str) -> Result<()> {
     if store
@@ -20,8 +21,8 @@ pub(crate) fn accept(store: &Store, task_id: &str, principal_id: &str) -> Result
         .map(Path::new)
         .map(|worktree| {
             if worktree.try_exists()? {
-                let head = git_output(worktree, &["rev-parse", "HEAD"])?;
-                let branch = Some(git_output(worktree, &["branch", "--show-current"])?);
+                let head = git_output_trimmed(worktree, &["rev-parse", "HEAD"])?;
+                let branch = Some(git_output_trimmed(worktree, &["branch", "--show-current"])?);
                 let manifest = super::durability::manifest_digest(worktree, &head)?;
                 Ok((head, branch, manifest))
             } else {
@@ -110,22 +111,6 @@ fn terminal_task(store: &Store, task_id: &str) -> Result<crate::types::Task> {
     Ok(task)
 }
 
-pub(super) fn git_output(repo: &Path, args: &[&str]) -> Result<String> {
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args(args)
-        .output()
-        .with_context(|| format!("Failed to run git {}", args.join(" ")))?;
-    anyhow::ensure!(
-        output.status.success(),
-        "git {} failed: {}",
-        args.join(" "),
-        String::from_utf8_lossy(&output.stderr).trim()
-    );
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use super::{accept, reject};
@@ -182,8 +167,8 @@ mod tests {
     }
 
     fn init_repo(repo: &std::path::Path) {
-        super::git_output(repo, &["init", "-b", "main"]).unwrap();
-        super::git_output(
+        super::git_output_trimmed(repo, &["init", "-b", "main"]).unwrap();
+        super::git_output_trimmed(
             repo,
             &[
                 "-c",
@@ -205,7 +190,7 @@ mod tests {
         let repo = tempfile::tempdir().unwrap();
         init_repo(repo.path());
         let wt = repo.path().join("worktree");
-        super::git_output(
+        super::git_output_trimmed(
             repo.path(),
             &["worktree", "add", wt.to_str().unwrap(), "-b", "task"],
         )
@@ -234,7 +219,7 @@ mod tests {
             .contains("Acceptance record has no head commit"));
         assert!(wt.join(".git").exists());
         assert!(
-            super::git_output(repo.path(), &["worktree", "list", "--porcelain"])
+            super::git_output_trimmed(repo.path(), &["worktree", "list", "--porcelain"])
                 .unwrap()
                 .contains(wt.to_str().unwrap())
         );

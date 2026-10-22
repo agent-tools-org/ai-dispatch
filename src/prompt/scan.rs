@@ -120,13 +120,7 @@ fn build_warning(pattern: &'static str, line_num: usize, snippet: &str) -> ScanW
 }
 
 fn truncate_snippet(line: &str) -> String {
-    let trimmed = line.trim();
-    let char_count = trimmed.chars().count();
-    if char_count <= MAX_SNIPPET_LEN {
-        return trimmed.to_string();
-    }
-    let truncated: String = trimmed.chars().take(MAX_SNIPPET_LEN - 3).collect();
-    format!("{truncated}...")
+    crate::ui::format::truncate_chars(line.trim(), MAX_SNIPPET_LEN)
 }
 
 #[cfg(test)]

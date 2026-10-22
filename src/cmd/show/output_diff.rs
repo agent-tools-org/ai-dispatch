@@ -7,6 +7,7 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
 
+use crate::ui::format::truncate;
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent};
 use crate::workspace::worktree::{capture_live_worktree_state, uncommitted_diff_text};
@@ -254,13 +255,4 @@ fn full_diff_file(wt_path: &str, start_sha: Option<&str>, file: &str, base_ref: 
         "  (no diff available)\n",
         file,
     )
-}
-
-fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        let end = s.floor_char_boundary(max.saturating_sub(3));
-        format!("{}...", &s[..end])
-    }
 }

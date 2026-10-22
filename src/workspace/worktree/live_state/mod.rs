@@ -2,6 +2,7 @@
 // Exports status counts plus a capture boundary for show, salvage, and prune.
 // Deps: git CLI via std::process, anyhow, std::path.
 
+use crate::workspace::git::git_output;
 use super::status::{WorktreeStatusSummary, summarize_status};
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -88,22 +89,6 @@ fn read_status_lines(dir: &Path) -> Result<Vec<String>> {
         .lines()
         .map(str::to_string)
         .collect())
-}
-
-fn git_output(dir: &Path, args: &[&str]) -> Result<String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .output()
-        .with_context(|| format!("Failed to run git {}", args.join(" ")))?;
-    anyhow::ensure!(
-        output.status.success(),
-        "git {} failed: {}",
-        args.join(" "),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 fn push_stat_block(out: &mut String, label: &str, stat: &str) {

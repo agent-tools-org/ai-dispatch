@@ -15,6 +15,7 @@ use crate::runtime::pty::watch::{finalize_output, monitor_bridge, MonitorState};
 use crate::store::Store;
 use crate::store::TaskCompletionUpdate;
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId, TaskStatus};
+use crate::ui::format::format_duration_ms;
 
 mod command;
 use command::spawn_bridge;
@@ -185,7 +186,7 @@ fn record_completion(
         "Task {} {} ({}{}{})",
         task_id,
         crate::routing::capacity::terminal_label(store, task_id, agent.kind(), info.status),
-        format_duration(duration_ms),
+        format_duration_ms(duration_ms),
         info.tokens
             .map(|tokens| format!(", {} tokens", tokens))
             .unwrap_or_default(),
@@ -194,15 +195,6 @@ fn record_completion(
             .unwrap_or_default(),
     );
     Ok(())
-}
-
-fn format_duration(ms: i64) -> String {
-    let secs = ms / 1000;
-    if secs < 60 {
-        format!("{secs}s")
-    } else {
-        format!("{}m {:02}s", secs / 60, secs % 60)
-    }
 }
 
 #[cfg(test)]

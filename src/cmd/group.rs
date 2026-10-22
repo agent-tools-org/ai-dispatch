@@ -2,6 +2,7 @@
 // Creates, lists, and shows workgroups plus their shared context and member tasks.
 // Depends on Store for persistence and board-style task listing.
 
+use crate::ui::format::truncate;
 use anyhow::Result;
 use std::sync::Arc;
 
@@ -147,15 +148,6 @@ pub fn cancel(store: &Arc<Store>, workgroup_id: &str) -> Result<()> {
     }
     println!("Cancelled {cancelled} tasks in group {workgroup_id}");
     Ok(())
-}
-
-fn truncate(value: &str, max: usize) -> String {
-    if value.len() <= max {
-        value.to_string()
-    } else {
-        let safe = value.floor_char_boundary(max.saturating_sub(3));
-        format!("{}...", &value[..safe])
-    }
 }
 
 #[cfg(test)]

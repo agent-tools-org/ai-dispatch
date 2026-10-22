@@ -9,6 +9,7 @@ use tokio::time::{sleep, Duration};
 use crate::runtime::background;
 use crate::store::Store;
 use crate::types::{verify_required, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
+use crate::ui::format::format_duration_ms;
 
 #[cfg(unix)]
 use tokio::signal::unix::{signal, Signal, SignalKind};
@@ -101,7 +102,7 @@ fn latest_retry(store: &Store, parent_id: &str) -> Result<Option<Task>> {
 }
 
 fn print_completion(store: &Store, task: &Task) {
-    let duration = format_duration(task.duration_ms.unwrap_or_default());
+    let duration = format_duration_ms(task.duration_ms.unwrap_or_default().max(0));
     let tokens = task
         .tokens
         .map(|value| format!(", {value} tokens"))
@@ -127,15 +128,6 @@ fn print_completion(store: &Store, task: &Task) {
         cost,
         reason
     );
-}
-
-fn format_duration(milliseconds: i64) -> String {
-    let seconds = milliseconds.max(0) / 1_000;
-    if seconds < 60 {
-        format!("{seconds}s")
-    } else {
-        format!("{}m {:02}s", seconds / 60, seconds % 60)
-    }
 }
 
 fn handle_signal(

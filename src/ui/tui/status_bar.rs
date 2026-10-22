@@ -10,6 +10,7 @@ use ratatui::widgets::Paragraph;
 use super::app::App;
 use super::metrics::ProcessMetrics;
 use crate::types::{Task, TaskStatus};
+use crate::ui::format::truncate_chars;
 
 #[derive(Clone, Copy)]
 pub(crate) enum StatusBarMode {
@@ -129,12 +130,12 @@ fn build_status_text(snapshot: &StatusSnapshot, width: usize, mode: StatusBarMod
         snapshot.counts.failed
     );
     if display_width(&prefix) >= width {
-        return truncate(&prefix, width);
+        return truncate_chars(&prefix, width);
     }
     format!(
         "{}{}",
         prefix,
-        truncate(&snapshot.scope, width - display_width(&prefix))
+        truncate_chars(&snapshot.scope, width - display_width(&prefix))
     )
 }
 
@@ -165,17 +166,6 @@ fn mode_hint(mode: StatusBarMode) -> String {
             )
         }
     }
-}
-
-fn truncate(value: &str, width: usize) -> String {
-    if value.chars().count() <= width {
-        return value.to_string();
-    }
-    if width <= 3 {
-        return value.chars().take(width).collect();
-    }
-    let prefix: String = value.chars().take(width - 3).collect();
-    format!("{prefix}...")
 }
 
 #[cfg(test)]

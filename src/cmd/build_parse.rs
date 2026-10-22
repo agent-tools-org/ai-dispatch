@@ -102,7 +102,7 @@ fn failed_verdict(
     }
 }
 
-fn format_duration(duration: Duration) -> String {
+pub(super) fn format_duration(duration: Duration) -> String {
     let millis = duration.as_millis();
     if millis < 1_000 {
         return format!("{millis}ms");

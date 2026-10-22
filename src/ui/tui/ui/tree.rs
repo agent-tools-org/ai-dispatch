@@ -9,7 +9,8 @@ use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
 
 use crate::ui::tui::app::App;
 use super::status_to_color;
-use super::ui_helpers::{task_status_label, truncate};
+use super::ui_helpers::task_status_label;
+use crate::ui::format::truncate;
 use crate::cost;
 use crate::ui::tui::route_display::format_route_fit;
 use crate::types::{Task, TaskStatus};

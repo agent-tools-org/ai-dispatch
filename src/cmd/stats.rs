@@ -1,6 +1,7 @@
 // Agent performance dashboard for the `aid stats` command.
 // Exports: run(). Deps: crate::store::Store, crate::types, crate::cost::usage, crate::cost.
 
+use crate::ui::format::format_tokens;
 use anyhow::Result;
 use chrono::{DateTime, Local, Timelike};
 use std::collections::{BTreeMap, HashMap};
@@ -158,10 +159,6 @@ fn classify_failure(detail: Option<&str>, exit_code: Option<i32>) -> String {
 fn format_duration(duration_ms: Option<i64>) -> String {
     let secs = duration_ms.unwrap_or(0) / 1_000;
     match (secs / 60, secs % 60) { (0, s) => format!("{s}s"), (m, 0) => format!("{m}m"), (m, s) => format!("{m}m {s}s") }
-}
-
-fn format_tokens(tokens: i64) -> String {
-    if tokens >= 1_000_000 { format!("{:.1}M", tokens as f64 / 1_000_000.0) } else if tokens >= 1_000 { format!("{:.1}k", tokens as f64 / 1_000.0) } else { tokens.to_string() }
 }
 
 fn usage_share(tasks: usize, total_tasks: usize) -> usize {

@@ -1,6 +1,7 @@
 // ratatui rendering for the aid dashboard board and detail screens.
 // Draws table/list widgets from App state with simple status coloring.
 
+use crate::ui::format::truncate;
 pub(crate) mod ui_helpers;
 mod detail;
 mod tree;
@@ -68,22 +69,10 @@ fn render_multipane_view(frame: &mut ratatui::Frame<'_>, app: &App) {
                 .collect();
             let elapsed = if let Some(ms) = task.duration_ms {
                 let secs = ms / 1000;
-                if secs < 60 {
-                    format!("{secs}s")
-                } else if secs < 3600 {
-                    format!("{}m {:02}s", secs / 60, secs % 60)
-                } else {
-                    format!("{}h {:02}m", secs / 3600, (secs % 3600) / 60)
-                }
+                super::stats::format_duration(secs)
             } else {
                 let secs = (chrono::Local::now() - task.created_at).num_seconds();
-                if secs < 60 {
-                    format!("{secs}s")
-                } else if secs < 3600 {
-                    format!("{}m {:02}s", secs / 60, secs % 60)
-                } else {
-                    format!("{}h {:02}m", secs / 3600, (secs % 3600) / 60)
-                }
+                super::stats::format_duration(secs)
             };
             multipane::PaneData {
                 task_id: task.id.as_str().to_string(),

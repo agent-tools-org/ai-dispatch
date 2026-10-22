@@ -1,5 +1,6 @@
 // Dashboard card rendering for the aid TUI.
 // Exports the checklist-style dashboard view; depends on ratatui and App state.
+use crate::ui::format::truncate;
 use super::app::App;
 use super::metrics::ProcessMetrics;
 use super::route_display::format_route_fit;
@@ -211,13 +212,5 @@ fn status_style(status: TaskStatus) -> Style {
         TaskStatus::Pending => Style::default().fg(Color::Gray),
         TaskStatus::Waiting => Style::default().fg(Color::DarkGray),
         TaskStatus::Skipped => Style::default().fg(Color::Blue),
-    }
-}
-fn truncate(value: &str, max: usize) -> String {
-    if value.len() <= max {
-        value.to_string()
-    } else {
-        let safe = value.floor_char_boundary(max.saturating_sub(3));
-        format!("{}...", &value[..safe])
     }
 }

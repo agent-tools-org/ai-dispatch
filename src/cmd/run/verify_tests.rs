@@ -88,6 +88,7 @@ fn verify_output_excerpt_keeps_last_lines() {
 fn maybe_verify_records_missing_deps_hint_for_fresh_worktree() {
     let store = Store::open_memory().unwrap();
     let worktree = TempDir::new().unwrap();
+    std::fs::write(worktree.path().join("package.json"), "{}").unwrap();
     let worktree_str = worktree.path().to_string_lossy().to_string();
     crate::workspace::worktree::deps::prepare_worktree_dependencies(
         &store, &TaskId("t-verify-hint".to_string()), worktree.path(), worktree.path(),

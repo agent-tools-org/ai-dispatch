@@ -222,7 +222,7 @@ fn prepare_dispatch_updates_log_path_when_id_is_auto_suffixed() {
     let expected = crate::support::paths::log_path("t-ebcf-2");
     let saved = store.get_task("t-ebcf-2").unwrap().unwrap();
     assert_eq!(prepared.task_id.as_str(), "t-ebcf-2");
-    assert_eq!(prepared.log_path, expected);
+    assert_eq!(prepared.task.log_path.as_deref(), expected.to_str());
     assert_eq!(saved.log_path.as_deref(), Some(expected.to_str().unwrap()));
 }
 
@@ -260,7 +260,7 @@ fn prepare_dispatch_rejects_requested_worktree_when_it_is_the_repo_root() {
     let err = match prepare_dispatch_with(&store, &mut args, |_| true) {
         Ok(prepared) => panic!(
             "dispatch should reject repo-root worktree: repo={:?} worktree={:?}",
-            prepared.repo_path, prepared.wt_path
+            prepared.task.repo_path, prepared.wt_path
         ),
         Err(err) => err,
     };

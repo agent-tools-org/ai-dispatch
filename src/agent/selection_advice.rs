@@ -31,7 +31,7 @@ mod gate;
 mod recommend;
 #[path = "selection_advice_profile.rs"]
 mod profile;
-use profile::{inferred_advice, complexity_for};
+use profile::inferred_advice;
 pub(crate) use gate::{CallerAdvice, caller_advice};
 use gate::{Exclusions, PoolVerdict};
 
@@ -137,7 +137,6 @@ pub(crate) fn advise(
     let inferred = inferred_advice(prompt, kind_override);
     let profile = TaskProfile {
         category: inferred.kind,
-        complexity: complexity_for(declared.difficulty),
     };
     let (history_map, avg_cost_map, duration_map) = history_maps(store, inferred.kind);
     let team_default = team.and_then(|item| item.default_agent.as_deref())

@@ -32,7 +32,6 @@ struct BestOfDispatch {
 struct CandidateResult {
     task_id: TaskId,
     agent_label: String,
-    status: TaskStatus,
     is_success: bool,
     diff_line_count: usize,
     metric_score: Option<f64>,
@@ -109,7 +108,6 @@ impl CandidateResult {
         CandidateResult {
             task_id: task.id.clone(),
             agent_label,
-            status: task.status,
             is_success,
             diff_line_count,
             metric_score,

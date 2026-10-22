@@ -6,7 +6,6 @@ use super::super::super::selection_scoring::{
     CandidateContext, NEUTRAL_BASE, model_capability_score, score_breakdown,
 };
 use super::*;
-use crate::agent::classifier::Complexity;
 use tempfile::TempDir;
 
 fn testing_advice(difficulty: TaskDifficulty, team: Option<&TeamConfig>) -> AdviceReport {
@@ -175,7 +174,6 @@ fn discovered_agy_model_uses_neutral_base_when_capability_is_unknown() {
     assert_eq!(capability, None);
     let profile = TaskProfile {
         category: TaskCategory::SimpleEdit,
-        complexity: Complexity::Low,
     };
     let history = HashMap::new();
     let costs = HashMap::new();

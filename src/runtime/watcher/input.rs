@@ -2,6 +2,7 @@
 // Keeps the existing watcher API for transports without streaming stdin.
 use super::*;
 
+#[cfg(test)]
 pub async fn watch_streaming(
     agent: &dyn Agent,
     child: &mut Child,

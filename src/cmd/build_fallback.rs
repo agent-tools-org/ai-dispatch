@@ -51,14 +51,6 @@ pub(crate) fn fallback_digest_note(from: &str, to: &str) -> String {
     format!("note: CARGO_TARGET_DIR unwritable; fell back from {from} to {to}")
 }
 
-pub(crate) fn should_retry_with_fallback(
-    success: bool,
-    stderr_lines: &[String],
-    target_dir: Option<&str>,
-) -> Option<String> {
-    should_retry_with_fallback_at(success, stderr_lines, target_dir, None)
-}
-
 pub(crate) fn should_retry_with_fallback_at(
     success: bool,
     stderr_lines: &[String],

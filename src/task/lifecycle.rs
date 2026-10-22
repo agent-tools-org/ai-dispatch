@@ -29,6 +29,7 @@ pub(crate) fn mark_skipped(store: &Store, task_id: &str) -> Result<bool> {
     store.update_task_status(task_id, TaskStatus::Skipped)
 }
 
+#[cfg(test)]
 pub(crate) fn mark_stopped(store: &Store, task_id: &str) -> Result<bool> {
     store.update_task_status(task_id, TaskStatus::Stopped)
 }
@@ -56,12 +57,6 @@ pub(crate) fn fail_completed_verify_gate(store: &Store, task_id: &TaskId) -> Res
     Ok(changed)
 }
 
-pub(crate) fn fail_if_running(store: &Store, task_id: &str) -> Result<bool> {
-    let failed = store.fail_if_running(task_id)?;
-    salvage_failed_id(store, task_id, failed);
-    Ok(failed)
-}
-
 pub(crate) fn fail_active_execution(store: &Store, task_id: &str) -> Result<bool> {
     let failed = store.fail_active_execution(task_id)?;
     salvage_failed_id(store, task_id, failed);
@@ -78,6 +73,7 @@ pub(crate) fn fail_waiting_with_reason(
     Ok(failed)
 }
 
+#[cfg(test)]
 pub(crate) fn update_task_completion(
     store: &Store,
     payload: TaskCompletionUpdate<'_>,

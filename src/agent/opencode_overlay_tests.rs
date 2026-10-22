@@ -28,7 +28,7 @@ fn command_args(cmd: &Command) -> Vec<String> {
 
 #[test]
 fn overlay_kind_and_model_resolution() {
-    let agent = OpenCodeOverlayAgent::new("mimo".into(), "MiMo".into(), "mimo/mimo-v2.5-pro".into());
+    let agent = OpenCodeOverlayAgent::new("mimo".into(), "mimo/mimo-v2.5-pro".into());
     assert_eq!(agent.kind(), AgentKind::Custom);
 
     let cmd_default = agent.build_command("hi", &base_opts()).unwrap();
@@ -52,7 +52,6 @@ fn overlay_spec_uses_binary_args_kind_and_rate_limit_kind() {
     rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
     let agent = OpenCodeOverlayAgent::from_spec(OpenCodeOverlaySpec {
         id: "mimocode".into(),
-        display_name: "MiMo Code".into(),
         reported_kind: AgentKind::MiMoCode,
         binary: "mimo".into(),
         extra_args: vec!["--dangerously-skip-permissions".into()],
@@ -87,7 +86,6 @@ fn custom_overlay_marks_its_own_id_not_opencode() {
     let _aid_home = paths::AidHomeGuard::set(temp.path());
     let agent = OpenCodeOverlayAgent::from_spec(OpenCodeOverlaySpec {
         id: "auditor".into(),
-        display_name: "Auditor".into(),
         reported_kind: AgentKind::Custom,
         binary: "opencode".into(),
         extra_args: Vec::new(),
@@ -113,13 +111,13 @@ fn overlay_served_models_probe_behavior() {
         let native = crate::agent::get_agent(AgentKind::OpenCode);
         assert_eq!(native.kind(), AgentKind::OpenCode);
         assert_eq!(native.rate_limit_name(), None);
-        assert!(native.streaming() && native.accepts_interactive_input() && native.needs_pty());
+        assert!(native.streaming() && native.accepts_interactive_input());
         assert_eq!(native.default_model(), None);
         assert_eq!(native.served_models().unwrap(), Some(vec!["provider/native".into()]));
         for kind in [AgentKind::Kilo, AgentKind::MiMoCode] {
             assert_eq!(crate::agent::get_agent(kind).served_models().unwrap(), None);
         }
-        let custom = OpenCodeOverlayAgent::new("custom".into(), "Custom".into(), "provider/model".into());
+        let custom = OpenCodeOverlayAgent::new("custom".into(), "provider/model".into());
         assert_eq!(custom.served_models().unwrap(), None);
         assert_eq!(std::fs::read_to_string(std::path::Path::new(&home).join("calls")).unwrap(), "models\n");
         return;
@@ -164,7 +162,7 @@ fn argv_parity_base_opts_across_all_variants() {
     );
 
     // Custom Delegate
-    let custom = OpenCodeOverlayAgent::new("custom-del".into(), "Custom".into(), "provider/model-x".into());
+    let custom = OpenCodeOverlayAgent::new("custom-del".into(), "provider/model-x".into());
     let custom_cmd = custom.build_command(prompt, &opts).unwrap();
     assert_eq!(custom_cmd.get_program().to_string_lossy(), "opencode");
     assert_eq!(
@@ -228,7 +226,7 @@ fn argv_parity_complex_opts_across_all_variants() {
     assert_eq!(command_args(&mimo_cmd), expected_mimo);
 
     // Custom Delegate
-    let custom = OpenCodeOverlayAgent::new("custom-del".into(), "Custom".into(), "provider/default-model".into());
+    let custom = OpenCodeOverlayAgent::new("custom-del".into(), "provider/default-model".into());
     let custom_cmd = custom.build_command(prompt, &opts).unwrap();
     assert_eq!(custom_cmd.get_program().to_string_lossy(), "opencode");
     let mut expected_custom = vec!["run"];

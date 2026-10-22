@@ -119,7 +119,7 @@ mod tests {
     #[test]
     fn self_heal_retry_reports_known_delegate_default() {
         let agent = crate::agent::opencode_overlay::OpenCodeOverlayAgent::new(
-            "byok".to_string(), "BYOK".to_string(), "provider/custom-model".to_string(),
+            "byok".to_string(), "provider/custom-model".to_string(),
         );
         let args = RunArgs {
             agent_name: "byok".to_string(), force_default_model: true, ..Default::default()

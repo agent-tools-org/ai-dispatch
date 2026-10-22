@@ -59,10 +59,12 @@ pub(crate) use binary::{RouteBlocker, custom_route_blocker, route_inventory, rou
 pub(crate) use binary::DetectAgentsGuard;
 #[allow(unused_imports)]
 pub use env::{
-    agent_has_fs_access, apply_cargo_target_env, apply_codex_home_env, apply_run_env, apply_rust_build_cache_env,
+    agent_has_fs_access, apply_cargo_target_env, apply_codex_home_env, apply_run_env,
     cargo_target_env_arg, is_rust_project, rust_build_cache_target_dir, set_git_ceiling,
-    shared_target_dir, target_dir_for_worktree,
+    target_dir_for_worktree,
 };
+#[cfg(test)]
+pub use env::shared_target_dir;
 pub(crate) use env::{should_use_durable_codex_home, CliCommandOutput, CliCommandRunner};
 /// Adapter trait for AI CLI tools
 pub trait Agent: Send + Sync {
@@ -123,11 +125,6 @@ pub trait Agent: Send + Sync {
 
     /// Whether the agent's private diagnostic log proves terminal failure.
     fn diagnostics_report_terminal_failure(&self, _output: &str) -> bool { false }
-
-    /// Whether this agent requires a PTY even for foreground execution.
-    fn needs_pty(&self) -> bool {
-        false
-    }
 
     fn served_models_fingerprint(&self) -> Option<String> { None }
 

@@ -48,6 +48,7 @@ pub struct CustomAgentConfig {
     /// egress is established from [`Self::base_url`] (or is Unknown). Kept so
     /// existing agent TOML still parses.
     #[serde(default = "default_trust_tier")]
+    #[allow(dead_code)] // Retained for deserialization of existing agent TOML.
     pub trust_tier: String,
     /// OpenAI-compatible endpoint for this agent, when known. A loopback host
     /// is the only evidence that admits `--egress local`.

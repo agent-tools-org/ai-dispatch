@@ -1,6 +1,6 @@
 // Prompt classification for intelligent task routing.
-// Categorizes prompts by type and estimates complexity.
-// Exports: TaskCategory, Complexity, TaskProfile, classify()
+// Categorizes prompts by type.
+// Exports: TaskCategory, TaskProfile, classify()
 
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
@@ -18,16 +18,8 @@ pub enum TaskCategory {
     Documentation,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Complexity {
-    Low,
-    Medium,
-    High,
-}
-
 pub struct TaskProfile {
     pub category: TaskCategory,
-    pub complexity: Complexity,
 }
 
 impl TaskCategory {
@@ -55,16 +47,6 @@ impl TaskCategory {
             "refactoring" => Some(Self::Refactoring),
             "documentation" => Some(Self::Documentation),
             _ => None,
-        }
-    }
-}
-
-impl Complexity {
-    pub fn label(&self) -> &'static str {
-        match self {
-            Self::Low => "low",
-            Self::Medium => "medium",
-            Self::High => "high",
         }
     }
 }
@@ -139,25 +121,11 @@ const DOCUMENTATION_TERMS: &[&str] = &[
     "jsdoc",
 ];
 
-pub(crate) const LOW_VALUE_TERMS: &[&str] = &[
-    "run test",
-    "cargo test",
-    "cargo fmt",
-    "cargo clippy",
-    "format code",
-    "lint",
-    "update docs",
-    "update readme",
-    "update changelog",
-    "add comment",
-    "add docstring",
-    "type annotation",
-];
 const FILE_SUFFIXES: &[&str] = &[
     ".rs", ".toml", ".md", ".json", ".yaml", ".yml", ".ts", ".tsx", ".js", ".jsx", ".css", ".html",
 ];
 
-pub fn classify(prompt: &str, file_count: usize, prompt_len: usize) -> TaskProfile {
+pub fn classify(prompt: &str, file_count: usize, _prompt_len: usize) -> TaskProfile {
     let norm = prompt.trim().to_lowercase();
 
     let category = if contains_any_word(&norm, FRONTEND_TERMS) {
@@ -184,19 +152,7 @@ pub fn classify(prompt: &str, file_count: usize, prompt_len: usize) -> TaskProfi
         TaskCategory::Research
     };
 
-    let has_scope = contains_any(&norm, &["across", "all files", "entire"]);
-    let complexity = if prompt_len > 500 || file_count > 3 || has_scope {
-        Complexity::High
-    } else if prompt_len < 150 && file_count <= 1 {
-        Complexity::Low
-    } else {
-        Complexity::Medium
-    };
-
-    TaskProfile {
-        category,
-        complexity,
-    }
+    TaskProfile { category }
 }
 
 pub(crate) fn count_file_mentions(prompt: &str) -> usize {
@@ -248,7 +204,6 @@ mod tests {
     fn complex_impl_long() {
         let prompt = "Implement a multi-file feature across many modules. ".repeat(12);
         assert_eq!(classify(&prompt, 5, prompt.len()).category, TaskCategory::ComplexImpl);
-        assert_eq!(classify(&prompt, 5, prompt.len()).complexity, Complexity::High);
     }
 
     #[test]
@@ -262,15 +217,5 @@ mod tests {
 
     #[test]
     fn refactoring_category() { assert_eq!(classify("refactor the dispatch module", 0, 28).category, TaskCategory::Refactoring); }
-
-    #[test]
-    fn low_complexity_short() {
-        assert_eq!(classify("fix typo in name", 0, 16).complexity, Complexity::Low);
-    }
-
-    #[test]
-    fn high_complexity_long() {
-        assert_eq!(classify(&"x".repeat(600), 5, 600).complexity, Complexity::High);
-    }
 
 }

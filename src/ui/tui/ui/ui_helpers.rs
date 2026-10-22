@@ -285,17 +285,6 @@ fn is_trigger_error(detail: &str) -> bool {
     TRIGGERS.iter().any(|trigger| detail.contains(trigger))
 }
 
-pub fn pending_prompt(events: &[crate::types::TaskEvent]) -> Option<&str> {
-    events.iter().rev().find_map(|event| {
-        let metadata = event.metadata.as_ref()?;
-        metadata
-            .get("awaiting_input")
-            .and_then(|value| value.as_bool())
-            .filter(|value| *value)
-            .map(|_| event.detail.as_str())
-    })
-}
-
 pub fn truncate(value: &str, max: usize) -> String {
     if value.len() <= max {
         value.to_string()

@@ -81,6 +81,7 @@ impl Store {
         Ok(())
     }
 
+    #[cfg(test)]
     /// Replace a waiting task's row with full task data (called when dispatch begins).
     /// The only legal move is the waiting row -> the dispatch status; anything else
     /// is rejected by the status guard and aborts the dispatch.

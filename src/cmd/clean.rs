@@ -6,18 +6,16 @@ use anyhow::Result;
 use chrono::{Duration, Local};
 use std::collections::HashSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::support::paths;
 use crate::store::Store;
-use crate::workspace::worktree::{aid_worktree_root, is_aid_managed_worktree_path};
 
 #[path = "clean_homes.rs"]
 mod homes;
 pub(crate) use homes::clean_isolated_task_homes;
 
-const ACTIVE_WORKTREES_SQL: &str = "SELECT DISTINCT worktree_path FROM tasks WHERE worktree_path IS NOT NULL AND status IN ('pending', 'running', 'awaiting_input')";
 const TASK_IDS_SQL: &str = "SELECT id FROM tasks";
 const WORKGROUP_IDS_SQL: &str = "SELECT id FROM workgroups";
 const LOG_SUFFIX: &str = ".jsonl";
@@ -176,50 +174,6 @@ fn query_string_set(store: &Store, sql: &str) -> Result<HashSet<String>> {
     let mut stmt = conn.prepare(sql)?;
     let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
     Ok(rows.collect::<rusqlite::Result<HashSet<_>>>()?)
-}
-
-fn worktree_paths() -> Result<Vec<PathBuf>> {
-    let mut paths = Vec::new();
-    collect_aid_home_worktree_paths(&aid_worktree_root(), &mut paths)?;
-    collect_legacy_tmp_worktree_paths(Path::new("/tmp"), &mut paths)?;
-    paths.sort();
-    Ok(paths)
-}
-
-fn collect_aid_home_worktree_paths(root: &Path, paths: &mut Vec<PathBuf>) -> Result<()> {
-    if !root.exists() {
-        return Ok(());
-    }
-    for entry in fs::read_dir(root)? {
-        let entry = entry?;
-        if !entry.file_type()?.is_dir() {
-            continue;
-        }
-        let path = entry.path();
-        if path.join(".git").is_file() && is_aid_managed_worktree_path(&path) {
-            paths.push(path);
-        } else {
-            collect_aid_home_worktree_paths(&path, paths)?;
-        }
-    }
-    Ok(())
-}
-
-fn collect_legacy_tmp_worktree_paths(root: &Path, paths: &mut Vec<PathBuf>) -> Result<()> {
-    if !root.exists() {
-        return Ok(());
-    }
-    for entry in fs::read_dir(root)? {
-        let entry = entry?;
-        if !entry.file_type()?.is_dir() {
-            continue;
-        }
-        let path = entry.path();
-        if is_aid_managed_worktree_path(&path) {
-            paths.push(path);
-        }
-    }
-    Ok(())
 }
 
 fn log_paths() -> Result<Vec<PathBuf>> {

@@ -14,7 +14,6 @@ use crate::types::*;
 #[derive(Debug, Clone)]
 pub(crate) struct OpenCodeOverlaySpec {
     pub id: String,
-    pub display_name: String,
     pub reported_kind: AgentKind,
     pub binary: String,
     pub extra_args: Vec<String>,
@@ -30,10 +29,10 @@ pub struct OpenCodeOverlayAgent {
 }
 
 impl OpenCodeOverlayAgent {
-    pub fn new(id: String, display_name: String, forced_model: String) -> Self {
+    #[cfg(test)]
+    pub fn new(id: String, forced_model: String) -> Self {
         Self::from_spec(OpenCodeOverlaySpec {
             id,
-            display_name,
             reported_kind: AgentKind::Custom,
             binary: "opencode".to_string(),
             extra_args: Vec::new(),
@@ -155,10 +154,6 @@ impl Agent for OpenCodeOverlayAgent {
         info.tokens = tokens;
         info.cost_usd = cost_usd;
         info
-    }
-
-    fn needs_pty(&self) -> bool {
-        true
     }
 
     fn served_models(&self) -> Result<Option<Vec<String>>> {

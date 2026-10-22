@@ -24,6 +24,7 @@ pub enum VerifyStatus {
 }
 
 impl VerifyStatus {
+    #[cfg(test)]
     pub const ALL: [Self; 7] = [
         Self::Pending,
         Self::Passed,
@@ -59,6 +60,7 @@ impl VerifyStatus {
         }
     }
 
+    #[cfg(test)]
     /// True when a verify command was started (pass, fail, or timeout).
     /// Distinct from delivery: an empty-diff task can still have been verified.
     pub fn was_attempted(self) -> bool {

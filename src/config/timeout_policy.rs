@@ -3,6 +3,7 @@
 // Deps: project config, agent config, std::time, and HashMap env storage.
 
 use std::collections::HashMap;
+#[cfg(test)]
 use std::ffi::OsStr;
 use std::time::Duration;
 
@@ -125,10 +126,12 @@ impl TimeoutPolicy {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn from_command(cmd: &std::process::Command) -> Self {
         Self::from_env_pairs(cmd.get_envs())
     }
 
+    #[cfg(test)]
     pub(crate) fn from_tokio_command(cmd: &tokio::process::Command) -> Self {
         Self::from_env_pairs(cmd.as_std().get_envs())
     }
@@ -141,6 +144,7 @@ impl TimeoutPolicy {
         (self.hard_cap.as_secs() / 60 / 60) as i64
     }
 
+    #[cfg(test)]
     fn from_env_pairs<'a, I>(envs: I) -> Self
     where
         I: Iterator<Item = (&'a OsStr, Option<&'a OsStr>)>,

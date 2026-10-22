@@ -27,13 +27,13 @@ pub(crate) type CliCommandRunner<'a> = dyn Fn(&str, &[&str]) -> Result<CliComman
 
 const CARGO_TARGET_DIR_ENV: &str = "CARGO_TARGET_DIR";
 const CARGO_MANIFEST_NAME: &str = "Cargo.toml";
-const BASE_TARGET_DIR_NAME: &str = "_base";
 const SHARED_TARGET_DIR_NAME: &str = "cargo-target";
 
 pub fn agent_has_fs_access(_kind: &AgentKind) -> bool {
     true // all supported agents have file system access
 }
 
+#[cfg(test)]
 pub fn shared_target_dir() -> Option<String> {
     Some(target_layout(None)?.source.to_string_lossy().into_owned())
 }
@@ -106,30 +106,6 @@ fn ensure_branch_target_dir(
     }
 }
 
-pub(crate) fn remove_branch_target_dir_if_unused(repo_dir: &Path, branch: &str) -> anyhow::Result<bool> {
-    let Some(layout) = target_layout(repo_dir.to_str()) else {
-        return Ok(false);
-    };
-    let target = target_dir_for_branch(&layout.branch_root, branch);
-    if target.file_name().and_then(|name| name.to_str()) == Some(BASE_TARGET_DIR_NAME) {
-        return Ok(false);
-    }
-    if branch_has_live_worktree(repo_dir, branch)? {
-        return Ok(false);
-    }
-    super::cargo_target::remove_branch_target_dir(&target)
-}
-
-pub fn apply_rust_build_cache_env(
-    cmd: &mut Command,
-    project_dir: Option<&str>,
-    worktree_branch: Option<&str>,
-) {
-    if let Some(target_dir) = rust_build_cache_target_dir(project_dir, worktree_branch) {
-        apply_cargo_target_env(cmd, Some(target_dir.as_str()));
-    }
-}
-
 pub fn rust_build_cache_target_dir(
     project_dir: Option<&str>,
     worktree_branch: Option<&str>,
@@ -165,26 +141,6 @@ pub fn cargo_target_env_arg(cargo_target_dir: &str) -> String {
 
 fn target_dir_for_branch(base: &Path, branch: &str) -> PathBuf {
     base.join(branch_target_name(branch))
-}
-
-fn branch_has_live_worktree(repo_dir: &Path, branch: &str) -> anyhow::Result<bool> {
-    let output = Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy(), "worktree", "list", "--porcelain"])
-        .output()?;
-    if !output.status.success() {
-        return Ok(true);
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(worktree_list_has_branch(&stdout, branch))
-}
-
-fn worktree_list_has_branch(output: &str, branch: &str) -> bool {
-    output.split("\n\n").any(|block| {
-        !block.lines().any(|line| line.starts_with("prunable "))
-            && block.lines().any(|line| {
-                line.strip_prefix("branch refs/heads/") == Some(branch)
-            })
-    })
 }
 
 pub fn is_rust_project(dir: Option<&str>) -> bool {

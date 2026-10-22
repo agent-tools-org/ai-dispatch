@@ -12,7 +12,6 @@ pub(crate) fn agent() -> OpenCodeOverlayAgent {
 pub(crate) fn spec() -> OpenCodeOverlaySpec {
     OpenCodeOverlaySpec {
         id: "mimocode".to_string(),
-        display_name: "MiMo Code".to_string(),
         reported_kind: AgentKind::MiMoCode,
         binary: "mimo".to_string(),
         extra_args: vec!["--dangerously-skip-permissions".to_string()],

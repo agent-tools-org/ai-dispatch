@@ -117,7 +117,6 @@ fn build_agent(config: &CustomAgentConfig) -> Box<dyn super::Agent> {
 fn opencode_spec(config: &CustomAgentConfig, model: &str) -> OpenCodeOverlaySpec {
     OpenCodeOverlaySpec {
         id: config.id.clone(),
-        display_name: config.display_name.clone(),
         reported_kind: AgentKind::Custom,
         binary: config.binary.clone().unwrap_or_else(|| "opencode".to_string()),
         extra_args: config.extra_args.clone(),

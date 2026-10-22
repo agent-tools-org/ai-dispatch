@@ -113,6 +113,7 @@ pub fn mark_rate_limited_for_model(
     }
 }
 
+#[cfg(test)]
 pub fn mark_rate_limited_for_value(
     agent: &AgentKind,
     custom_name: Option<&str>,

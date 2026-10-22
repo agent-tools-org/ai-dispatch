@@ -3,13 +3,6 @@
 
 use super::*;
 
-/// The agent a quota message names, when the provider's wording identifies it.
-/// Lets a caller mark the right agent even when the failure surfaced somewhere
-/// that does not know which CLI produced it.
-pub fn quota_signature_agent(message: &str) -> Option<AgentKind> {
-    crate::routing::rate_limit::signatures::match_quota_signature(message).map(|(agent, _)| agent)
-}
-
 /// Where a quota signal was observed. Generic tokens (429, "rate limit") are
 /// evidence on channels the agent does not author; they must never match prose.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,13 +10,16 @@ pub enum QuotaEvidence {
     /// Structured CLI error events, stderr, HTTP status lines.
     NonAgentChannel,
     /// Assistant-authored text — per-agent templates only.
+    #[cfg(test)]
     AgentProse,
 }
 
+#[cfg(test)]
 pub fn is_rate_limit_error(message: &str) -> bool {
     is_rate_limit_error_with_evidence(message, QuotaEvidence::AgentProse)
 }
 
+#[cfg(test)]
 pub fn is_rate_limit_error_with_evidence(message: &str, evidence: QuotaEvidence) -> bool {
     if crate::routing::rate_limit::signatures::match_quota_signature(message).is_some() {
         return true;

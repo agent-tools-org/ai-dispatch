@@ -43,73 +43,6 @@ fn insert_event(
 }
 
 #[test]
-fn finds_matching_tasks_with_keyword_scores() {
-    let store = Store::open_memory().unwrap();
-    insert_task(
-        &store,
-        "t-routing",
-        AgentKind::Codex,
-        TaskStatus::Done,
-        "Implement cross-session hints for agent selection",
-    );
-    insert_task(
-        &store,
-        "t-gemini",
-        AgentKind::Grok,
-        TaskStatus::Done,
-        "Document routing hints and selection strategy",
-    );
-    insert_task(
-        &store,
-        "t-cursor",
-        AgentKind::Cursor,
-        TaskStatus::Failed,
-        "Cleanup the build pipeline wiring",
-    );
-
-    let results = store
-        .find_similar_tasks("Add routing hints for agent selection", 5)
-        .unwrap();
-    assert_eq!(results.len(), 2);
-    assert_eq!(results[0].0, "t-gemini");
-    assert_eq!(results[0].1, AgentKind::Grok);
-    assert_eq!(results[1].0, "t-routing");
-    assert_eq!(results[1].1, AgentKind::Codex);
-}
-
-#[test]
-fn includes_merged_tasks_in_results() {
-    let store = Store::open_memory().unwrap();
-    insert_task(
-        &store,
-        "t-merged",
-        AgentKind::Codex,
-        TaskStatus::Merged,
-        "Implement routing hints for budget selection",
-    );
-    let results = store
-        .find_similar_tasks("Add routing hints for selection", 5)
-        .unwrap();
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].0, "t-merged");
-    assert_eq!(results[0].2, TaskStatus::Merged);
-}
-
-#[test]
-fn limits_results_to_positive_scores() {
-    let store = Store::open_memory().unwrap();
-    insert_task(
-        &store,
-        "t-empty",
-        AgentKind::Kilo,
-        TaskStatus::Done,
-        "Refactor the logging toolchain",
-    );
-    let results = store.find_similar_tasks("Short", 3).unwrap();
-    assert!(results.is_empty());
-}
-
-#[test]
 fn latest_awaiting_reasons_batch_returns_latest_prompt_per_task() {
     let store = Store::open_memory().unwrap();
     insert_task(&store, "t-await-1", AgentKind::Codex, TaskStatus::AwaitingInput, "Prompt one");
@@ -195,30 +128,6 @@ fn latest_events_batch_returns_one_refresh_snapshot_per_task() {
     assert_eq!(latest.get("t-latest").map(|event| event.event_kind.as_str()), Some("reasoning"));
     assert_eq!(latest.get("t-other").map(|event| event.detail.as_str()), Some("Write"));
 }
-
-#[test]
-fn active_worktree_siblings_counts_stalled_tasks() {
-    let store = Store::open_memory().unwrap();
-    let conn = store.db();
-    conn.execute(
-        "INSERT INTO tasks (id, agent, prompt, status, worktree_path, created_at)
-         VALUES (?1, 'codex', 'prompt', ?2, ?3, '2026-03-15T00:00:00Z')",
-        params!["t-current", TaskStatus::Done.as_str(), "/tmp/shared-wt"],
-    )
-    .unwrap();
-    conn.execute(
-        "INSERT INTO tasks (id, agent, prompt, status, worktree_path, created_at)
-         VALUES (?1, 'codex', 'prompt', ?2, ?3, '2026-03-15T00:00:00Z')",
-        params!["t-stalled", TaskStatus::Stalled.as_str(), "/tmp/shared-wt"],
-    )
-    .unwrap();
-    drop(conn);
-
-    assert!(store
-        .has_active_worktree_siblings("/tmp/shared-wt", "t-current")
-        .unwrap());
-}
-
 
 #[path = "budget_usage_tests.rs"]
 mod budget_usage;

@@ -9,7 +9,7 @@ fn pick_best_result_prefers_longest_diff() {
     let winner = CandidateResult {
         task_id: TaskId::generate(),
         agent_label: "kilo".to_string(),
-        status: TaskStatus::Done,
+
         is_success: true,
         diff_line_count: 12,
         metric_score: None,
@@ -17,7 +17,7 @@ fn pick_best_result_prefers_longest_diff() {
     let runner = CandidateResult {
         task_id: TaskId::generate(),
         agent_label: "cursor".to_string(),
-        status: TaskStatus::Done,
+
         is_success: true,
         diff_line_count: 3,
         metric_score: None,
@@ -25,7 +25,7 @@ fn pick_best_result_prefers_longest_diff() {
     let failed = CandidateResult {
         task_id: TaskId::generate(),
         agent_label: "grok".to_string(),
-        status: TaskStatus::Failed,
+
         is_success: false,
         diff_line_count: 0,
         metric_score: None,
@@ -40,7 +40,7 @@ fn pick_best_result_none_when_no_done() {
     let failed = CandidateResult {
         task_id: TaskId::generate(),
         agent_label: "opencode".to_string(),
-        status: TaskStatus::Failed,
+
         is_success: false,
         diff_line_count: 0,
         metric_score: None,
@@ -54,7 +54,7 @@ fn pick_best_result_prefers_metric_score() {
         CandidateResult {
             task_id: TaskId("t-1".into()),
             agent_label: "a".into(),
-            status: TaskStatus::Done,
+
             is_success: true,
             diff_line_count: 100,
             metric_score: Some(3.0),
@@ -62,7 +62,7 @@ fn pick_best_result_prefers_metric_score() {
         CandidateResult {
             task_id: TaskId("t-2".into()),
             agent_label: "b".into(),
-            status: TaskStatus::Done,
+
             is_success: true,
             diff_line_count: 10,
             metric_score: Some(9.0),
@@ -77,7 +77,7 @@ fn pick_best_result_treats_merged_as_success() {
     let merged = CandidateResult {
         task_id: TaskId("t-merged".into()),
         agent_label: "a".into(),
-        status: TaskStatus::Merged,
+
         is_success: true,
         diff_line_count: 4,
         metric_score: None,
@@ -85,7 +85,7 @@ fn pick_best_result_treats_merged_as_success() {
     let failed = CandidateResult {
         task_id: TaskId("t-failed".into()),
         agent_label: "b".into(),
-        status: TaskStatus::Failed,
+
         is_success: false,
         diff_line_count: 10,
         metric_score: None,
@@ -101,7 +101,7 @@ fn pick_best_result_ignores_nan_metric_scores() {
         CandidateResult {
             task_id: TaskId("t-nan".into()),
             agent_label: "a".into(),
-            status: TaskStatus::Done,
+
             is_success: true,
             diff_line_count: 100,
             metric_score: Some(f64::NAN),
@@ -109,7 +109,7 @@ fn pick_best_result_ignores_nan_metric_scores() {
         CandidateResult {
             task_id: TaskId("t-finite".into()),
             agent_label: "b".into(),
-            status: TaskStatus::Done,
+
             is_success: true,
             diff_line_count: 1,
             metric_score: Some(9.0),
@@ -124,7 +124,7 @@ fn pick_best_result_ignores_done_without_successful_outcome() {
     let hollow = CandidateResult {
         task_id: TaskId("t-hollow".into()),
         agent_label: "a".into(),
-        status: TaskStatus::Done,
+
         is_success: false,
         diff_line_count: 50,
         metric_score: Some(99.0),
@@ -132,7 +132,7 @@ fn pick_best_result_ignores_done_without_successful_outcome() {
     let good = CandidateResult {
         task_id: TaskId("t-good".into()),
         agent_label: "b".into(),
-        status: TaskStatus::Done,
+
         is_success: true,
         diff_line_count: 1,
         metric_score: None,

@@ -1,5 +1,5 @@
 // CLAUDE.md aid section management — inject/update aid config into project CLAUDE.md.
-// Exports: sync_claude_md, read_aid_section.
+// Exports: sync_claude_md.
 // Deps: crate::config::project::ProjectConfig, std::{fs, path}.
 
 use crate::config::project::ProjectConfig;
@@ -30,13 +30,6 @@ pub fn sync_claude_md(git_root: &Path, config: &ProjectConfig) -> Result<()> {
     };
     fs::write(path, next)?;
     Ok(())
-}
-
-pub fn read_aid_section(git_root: &Path) -> Option<String> {
-    let path = git_root.join("CLAUDE.md");
-    let contents = fs::read_to_string(path).ok()?;
-    let (start, end) = marker_range(&contents)?;
-    Some(contents[start..end].to_string())
 }
 
 fn generate_aid_section(config: &ProjectConfig) -> String {
@@ -143,20 +136,6 @@ mod tests {
         let body = fs::read_to_string(dir.path().join("CLAUDE.md")).unwrap();
         assert!(body.starts_with("before\n"));
         assert!(body.ends_with("after\n"));
-    }
-
-    #[test]
-    fn read_returns_none_without_file() {
-        let dir = TempDir::new().unwrap();
-        assert_eq!(read_aid_section(dir.path()), None);
-    }
-
-    #[test]
-    fn read_returns_section() {
-        let dir = TempDir::new().unwrap();
-        let body = "x\n<!-- aid:start -->\nsection\n<!-- aid:end -->\ny\n";
-        fs::write(dir.path().join("CLAUDE.md"), body).unwrap();
-        assert_eq!(read_aid_section(dir.path()), Some("<!-- aid:start -->\nsection\n<!-- aid:end -->\n".to_string()));
     }
 
     #[test]

@@ -125,6 +125,7 @@ pub(crate) fn get_dir_size(path: &Path) -> Result<u64> {
     SizeTracker::new().get_dir_size(path)
 }
 
+#[cfg(test)]
 pub(crate) fn get_dir_size_bounded(
     path: &Path,
     byte_limit: u64,

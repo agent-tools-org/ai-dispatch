@@ -73,6 +73,7 @@ pub(crate) struct MonitorState {
 }
 
 impl MonitorState {
+    #[cfg(test)]
     pub(crate) fn new(streaming: bool, workgroup_id: Option<String>) -> Self {
         Self::with_policy(
             streaming,

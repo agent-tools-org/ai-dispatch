@@ -173,23 +173,6 @@ pub enum TaskEgress {
 }
 
 impl TaskEgress {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Any => "any",
-            Self::Local => "local",
-            Self::PrivateNetwork => "private-network",
-        }
-    }
-
-    pub(crate) fn parse_str(value: &str) -> Option<Self> {
-        match value {
-            "any" => Some(Self::Any),
-            "local" => Some(Self::Local),
-            "private-network" => Some(Self::PrivateNetwork),
-            _ => None,
-        }
-    }
-
     pub fn requires_local(self) -> bool {
         matches!(self, Self::Local)
     }

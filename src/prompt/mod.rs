@@ -3,7 +3,6 @@
 
 pub(crate) mod scan;
 pub(crate) mod templates;
-pub(crate) mod compaction;
 pub(crate) mod context;
 pub(crate) mod skills;
 pub(crate) mod claudemd;

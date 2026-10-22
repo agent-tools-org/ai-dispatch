@@ -1,5 +1,5 @@
 // Reads aidbar quota snapshots. Parse only; override policy lives in route_availability.
-// Exports: snapshot, overrides_marker, provider_name, cache_dir.
+// Exports: snapshot, provider_name, cache_dir.
 // Deps: serde, chrono, route_availability types.
 
 use chrono::{DateTime, Utc};
@@ -36,10 +36,6 @@ struct UsageWindow {
     resets_at: Option<DateTime<Utc>>,
     #[serde(default)]
     group: Option<String>,
-}
-
-pub(crate) fn overrides_marker(agent: &AgentKind, marker_path: &Path) -> bool {
-    crate::routing::availability::overrides_marker_at(agent, marker_path)
 }
 
 /// Parse the aidbar cache for this agent. No override policy.

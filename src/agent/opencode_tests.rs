@@ -143,16 +143,6 @@ fn budget_mode_sets_minimal_variant() {
 }
 
 #[test]
-fn opencode_needs_pty() {
-    assert!(get_agent(AgentKind::OpenCode).needs_pty());
-}
-
-#[test]
-fn codex_does_not_need_pty() {
-    assert!(!super::super::codex::CodexAgent.needs_pty());
-}
-
-#[test]
 fn no_session_flags_when_session_id_absent() {
     let opts = RunOpts {
         dir: None,

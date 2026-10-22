@@ -92,6 +92,7 @@ impl Task {
         self.observed_model.as_deref()
     }
 
+    #[cfg(test)]
     /// The model, but only when the CLI itself said so. Capability scoring and
     /// an agent's learned default model read this rather than
     /// `attributed_model`, because a model inferred from a run merely not

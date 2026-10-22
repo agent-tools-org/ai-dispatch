@@ -21,6 +21,7 @@ pub enum TaskStatus {
 }
 
 impl TaskStatus {
+    #[cfg(test)]
     pub const ALL: [Self; 10] = [
         Self::Waiting,
         Self::Pending,

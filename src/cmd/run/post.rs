@@ -112,6 +112,7 @@ pub(crate) fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> {
     store.update_output_path(task.id.as_str(), &output_path.display().to_string())
 }
 
+#[cfg(test)]
 pub(crate) fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> {
     worktree_is_empty_diff_with_base(worktree_dir, None)
 }

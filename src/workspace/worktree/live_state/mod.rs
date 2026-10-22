@@ -56,10 +56,6 @@ pub(crate) fn capture_live_worktree_state(dir: &Path) -> Result<LiveWorktreeStat
     })
 }
 
-pub(crate) fn worktree_has_uncommitted_changes(dir: &Path) -> Result<bool> {
-    Ok(!read_status_lines(dir)?.is_empty())
-}
-
 pub(crate) fn uncommitted_diff_text(dir: &Path) -> Result<String> {
     let unstaged = git_output(dir, &["diff"])?;
     let staged = git_output(dir, &["diff", "--cached"])?;
@@ -124,7 +120,7 @@ fn push_stat_block(out: &mut String, label: &str, stat: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{capture_live_worktree_state, worktree_has_uncommitted_changes};
+    use super::capture_live_worktree_state;
     use crate::support::test_subprocess;
     use std::path::Path;
     use std::process::Command;
@@ -160,6 +156,5 @@ mod tests {
         assert_eq!(state.summary.staged, 1);
         assert_eq!(state.summary.untracked, 1);
         assert!(state.dirty_stat_text().contains("?? new.txt"));
-        assert!(worktree_has_uncommitted_changes(dir.path()).expect("dirty"));
     }
 }

@@ -81,6 +81,7 @@ pub struct ProjectConfig {
     #[serde(default, deserialize_with = "deserialize_budget")]
     pub budget: ProjectBudget,
     #[serde(default)]
+    #[allow(dead_code)] // Retained as part of the project TOML schema.
     pub agents: ProjectAgents,
     #[serde(skip)]
     pub audit: ProjectAuditConfig,
@@ -138,10 +139,13 @@ impl ProjectBudget {
 #[derive(Default)]
 pub struct ProjectAgents {
     #[serde(default)]
+    #[allow(dead_code)] // Retained as part of the project agent TOML schema.
     pub default: Option<String>,
     #[serde(default)]
+    #[allow(dead_code)] // Retained as part of the project agent TOML schema.
     pub research: Option<String>,
     #[serde(default)]
+    #[allow(dead_code)] // Retained as part of the project agent TOML schema.
     pub simple_edit: Option<String>,
 }
 

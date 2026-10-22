@@ -12,7 +12,6 @@ use crate::types::*;
 pub(crate) fn spec() -> OpenCodeOverlaySpec {
     OpenCodeOverlaySpec {
         id: "opencode".to_string(),
-        display_name: "OpenCode".to_string(),
         reported_kind: AgentKind::OpenCode,
         binary: "opencode".to_string(),
         extra_args: Vec::new(),

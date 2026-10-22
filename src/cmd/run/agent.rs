@@ -15,6 +15,7 @@ use crate::types::TaskId;
 
 use super::run_prompt;
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_agent_process(
     agent: &dyn crate::agent::Agent,

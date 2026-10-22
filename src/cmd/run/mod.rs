@@ -142,6 +142,7 @@ fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> { ru
 pub(crate) fn switch_agent(args: &mut RunArgs, next_agent: String) { run_post::switch_agent(args, next_agent) }
 #[cfg(test)]
 fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> { run_post::auto_save_task_output(store, task) }
+#[cfg(test)]
 pub(crate) fn read_quota_error_message(task_id: &TaskId, agent: &crate::types::AgentKind) -> Option<String> { run_post::read_quota_error_message(task_id, agent) }
 #[cfg(test)]
 fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> { run_post::worktree_is_empty_diff(worktree_dir) }

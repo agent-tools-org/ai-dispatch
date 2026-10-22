@@ -1,10 +1,13 @@
 // Credential pool: multiple API keys per provider with rotation strategies.
-// Exports: CredentialPool, load_pool(), get_credential(), mark_exhausted().
+// Exports: CredentialPool, load_pool().
 // Deps: serde/toml, std::fs, chrono, crate::support::paths.
 
-use chrono::{DateTime, Duration, Local};
+use chrono::{DateTime, Local};
+#[cfg(test)]
+use chrono::Duration;
 use serde::Deserialize;
-use std::cell::{Cell, RefCell};
+#[cfg(test)]
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -28,10 +31,6 @@ pub struct CredentialPool {
 pub struct ProviderPool {
     pub strategy: Strategy,
     pub keys: Vec<KeyEntry>,
-    #[serde(skip)]
-    next_index: Cell<usize>,
-    #[serde(skip)]
-    usage_counts: RefCell<Vec<u64>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -55,22 +54,7 @@ pub fn load_pool() -> Option<CredentialPool> {
     load_pool_from_path(&crate::support::paths::aid_dir().join("credentials.toml"))
 }
 
-pub fn get_credential(pool: &CredentialPool, agent: &str) -> Option<(String, String)> {
-    let provider = pool.providers.get(agent)?;
-    let now = Local::now();
-    let mut usage_counts = provider.usage_counts.borrow_mut();
-    if usage_counts.len() != provider.keys.len() {
-        usage_counts.resize(provider.keys.len(), 0);
-    }
-    let selection = match provider.strategy {
-        Strategy::FillFirst => select_fill_first(&provider.keys, &now),
-        Strategy::RoundRobin => select_round_robin(provider, &now),
-        Strategy::LeastUsed => select_least_used(&provider.keys, &usage_counts, &now),
-    }?;
-    usage_counts[selection.0] = usage_counts[selection.0].saturating_add(1);
-    Some((provider.keys[selection.0].env.clone(), selection.1))
-}
-
+#[cfg(test)]
 pub fn mark_exhausted(
     pool: &mut CredentialPool,
     agent: &str,
@@ -95,53 +79,6 @@ fn load_pool_from_path(path: &Path) -> Option<CredentialPool> {
     toml::from_str(&contents).ok()
 }
 
-fn select_fill_first(keys: &[KeyEntry], now: &DateTime<Local>) -> Option<(usize, String)> {
-    keys.iter()
-        .enumerate()
-        .find_map(|(index, key)| key_value_if_ready(key, now).map(|value| (index, value)))
-}
-
-fn select_round_robin(provider: &ProviderPool, now: &DateTime<Local>) -> Option<(usize, String)> {
-    let len = provider.keys.len();
-    if len == 0 {
-        return None;
-    }
-    let start = provider.next_index.get() % len;
-    for offset in 0..len {
-        let index = (start + offset) % len;
-        if let Some(value) = key_value_if_ready(&provider.keys[index], now) {
-            provider.next_index.set((index + 1) % len);
-            return Some((index, value));
-        }
-    }
-    None
-}
-
-fn select_least_used(
-    keys: &[KeyEntry],
-    usage_counts: &[u64],
-    now: &DateTime<Local>,
-) -> Option<(usize, String)> {
-    let mut best: Option<(usize, u64, String)> = None;
-    for (index, key) in keys.iter().enumerate() {
-        let Some(value) = key_value_if_ready(key, now) else {
-            continue;
-        };
-        let usage = usage_counts.get(index).copied().unwrap_or(0);
-        if best.as_ref().is_none_or(|(_, best_usage, _)| usage < *best_usage) {
-            best = Some((index, usage, value));
-        }
-    }
-    best.map(|(index, _, value)| (index, value))
-}
-
-fn key_value_if_ready(key: &KeyEntry, now: &DateTime<Local>) -> Option<String> {
-    if key.exhausted_until.as_ref().is_some_and(|until| *until > *now) {
-        return None;
-    }
-    credential_env(&key.env).filter(|value| !value.is_empty())
-}
-
 fn credential_env(name: &str) -> Option<String> {
     #[cfg(test)]
     if let Some(values) = TEST_ENV.with(|cell| cell.borrow().clone()) {
@@ -156,9 +93,8 @@ pub(crate) fn credential_is_set(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{CredentialPool, Strategy, get_credential, load_pool, load_pool_from_path, mark_exhausted};
+    use super::{Strategy, load_pool, load_pool_from_path};
     use crate::support::paths::AidHomeGuard;
-    use std::collections::HashMap;
     use std::fs;
     use tempfile::TempDir;
 
@@ -191,70 +127,6 @@ keys = [
         assert_eq!(pool.providers.len(), 2);
         assert_eq!(pool.providers["codex"].strategy, Strategy::RoundRobin);
         assert_eq!(pool.providers["codex"].keys[0].name, "personal");
-    }
-
-    #[test]
-    fn round_robin_returns_keys_in_order() {
-        let dir = TempDir::new().unwrap();
-        write_pool(&dir);
-        let pool: CredentialPool = load_pool_from_path(&dir.path().join("credentials.toml")).unwrap();
-        super::set_test_env(Some(HashMap::from([
-            ("OPENAI_API_KEY".to_string(), "first".to_string()),
-            ("OPENAI_API_KEY_2".to_string(), "second".to_string()),
-        ])));
-
-        let first = get_credential(&pool, "codex");
-        let second = get_credential(&pool, "codex");
-        let third = get_credential(&pool, "codex");
-
-        assert_eq!(first, Some(("OPENAI_API_KEY".to_string(), "first".to_string())));
-        assert_eq!(second, Some(("OPENAI_API_KEY_2".to_string(), "second".to_string())));
-        assert_eq!(third, Some(("OPENAI_API_KEY".to_string(), "first".to_string())));
-        super::set_test_env(None);
-    }
-
-    #[test]
-    fn fill_first_returns_first_non_exhausted_key() {
-        let dir = TempDir::new().unwrap();
-        write_pool(&dir);
-        let mut pool = load_pool_from_path(&dir.path().join("credentials.toml")).unwrap();
-        pool.providers.get_mut("grok").unwrap().keys.push(super::KeyEntry {
-            name: "backup".to_string(),
-            env: "XAI_API_KEY_BACKUP".to_string(),
-            exhausted_until: None,
-        });
-        super::set_test_env(Some(HashMap::from([
-            ("XAI_API_KEY".to_string(), "primary".to_string()),
-            ("XAI_API_KEY_BACKUP".to_string(), "backup".to_string()),
-        ])));
-
-        mark_exhausted(&mut pool, "grok", "default", 5);
-
-        let selected = get_credential(&pool, "grok");
-
-        assert_eq!(
-            selected,
-            Some(("XAI_API_KEY_BACKUP".to_string(), "backup".to_string()))
-        );
-        super::set_test_env(None);
-    }
-
-    #[test]
-    fn mark_exhausted_skips_exhausted_keys() {
-        let dir = TempDir::new().unwrap();
-        write_pool(&dir);
-        let mut pool = load_pool_from_path(&dir.path().join("credentials.toml")).unwrap();
-        super::set_test_env(Some(HashMap::from([
-            ("OPENAI_API_KEY".to_string(), "first".to_string()),
-            ("OPENAI_API_KEY_2".to_string(), "second".to_string()),
-        ])));
-
-        mark_exhausted(&mut pool, "codex", "personal", 5);
-
-        let selected = get_credential(&pool, "codex");
-
-        assert_eq!(selected, Some(("OPENAI_API_KEY_2".to_string(), "second".to_string())));
-        super::set_test_env(None);
     }
 
     #[test]

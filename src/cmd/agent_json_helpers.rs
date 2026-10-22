@@ -63,14 +63,6 @@ pub(crate) fn builtin_profile(name: &str) -> Option<AgentKind> {
     crate::agent::routable_builtins().find(|kind| kind.as_str().eq_ignore_ascii_case(name))
 }
 
-pub(crate) fn custom_has_endpoint(config: &CustomAgentConfig) -> bool {
-    config
-        .base_url
-        .as_deref()
-        .map(str::trim)
-        .is_some_and(|url| !url.is_empty())
-}
-
 pub(crate) fn rate_limit_kind(kind: AgentKind, _custom_config: Option<&CustomAgentConfig>) -> AgentKind {
     kind
 }

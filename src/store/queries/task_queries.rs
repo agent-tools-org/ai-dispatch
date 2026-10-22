@@ -207,6 +207,7 @@ impl Store {
         rows.map(|row| row?).collect()
     }
 
+    #[cfg(test)]
     /// Latest model string from the most recently created successful builtin task for `agent`.
     pub fn latest_default_model(&self, agent: AgentKind) -> Result<Option<String>> {
         let tasks = self.list_tasks(TaskFilter::All)?;

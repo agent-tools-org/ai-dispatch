@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use super::selection_scoring::{CandidateContext, ScoreBreakdown, score_breakdown};
 use super::{AdviceCandidate, advise};
-use crate::agent::classifier::{Complexity, TaskCategory, TaskProfile};
+use crate::agent::classifier::{TaskCategory, TaskProfile};
 use crate::agent::run_model::RunModelSource;
 use crate::cost::clear_feed_for_tests;
 use crate::routing::quota::live::CacheDirGuard;
@@ -38,7 +38,6 @@ fn route_score(agent: AgentKind, model: &str, budget: TaskBudget) -> AdviceCandi
     crate::config::agent::save_agent_default_model(agent.as_str(), Some(model)).expect("sticky model");
     let profile = TaskProfile {
         category: TaskCategory::SimpleEdit,
-        complexity: Complexity::Low,
     };
     let context = CandidateContext {
         profile: &profile,

@@ -45,11 +45,6 @@ pub(crate) fn active(task_id: &str) -> bool {
 pub(super) struct Active(pub String);
 
 impl Active {
-    pub fn create(task_id: &str, pid: u32) -> Result<Self> {
-        let active = Self::starting(task_id, pid)?;
-        active.ready()?;
-        Ok(active)
-    }
 
     pub fn starting(task_id: &str, pid: u32) -> Result<Self> {
         let started = crate::runtime::process::monitor::activity::root_started(pid);

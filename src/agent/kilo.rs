@@ -12,7 +12,6 @@ pub(crate) fn agent() -> OpenCodeOverlayAgent {
 pub(crate) fn spec() -> OpenCodeOverlaySpec {
     OpenCodeOverlaySpec {
         id: "kilo".to_string(),
-        display_name: "Kilo".to_string(),
         reported_kind: AgentKind::Kilo,
         binary: "kilo".to_string(),
         extra_args: vec!["--auto".to_string()],
@@ -99,12 +98,6 @@ mod tests {
         let args = args_of("inspect", &opts);
         let last_arg = args.last().expect("should have prompt as last arg");
         assert!(last_arg.contains("Do NOT modify, create, or delete any files."));
-    }
-
-    #[test]
-    fn kilo_reports_kind_and_needs_pty() {
-        assert_eq!(agent().kind(), AgentKind::Kilo);
-        assert!(agent().needs_pty());
     }
 
     #[test]

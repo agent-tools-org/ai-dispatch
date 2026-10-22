@@ -22,12 +22,6 @@ pub(super) fn canonical_worktree_path(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
-pub(crate) fn is_main_working_tree_path(repo_dir: &Path, wt_path: &Path) -> bool {
-    main_working_tree_dir(repo_dir)
-        .ok()
-        .is_some_and(|main| canonical_worktree_path(wt_path) == canonical_worktree_path(&main))
-}
-
 pub(crate) fn ensure_worktree_path_is_isolated(repo_dir: &Path, wt_path: &Path, context: &str) -> Result<()> {
     let wt = canonical_existing_path(wt_path, "worktree path")?;
     let repo = canonical_existing_path(repo_dir, "repo path")?;

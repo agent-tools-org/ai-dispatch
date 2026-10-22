@@ -495,22 +495,3 @@ aid upgrade
 line and unlock command, and must not prune unaccepted artifacts. Run cleanup in
 dry-run mode first. `clean` retains task records and events as custody evidence
 and does not replace `aid gc --task`.
-
-### Unclassified provider failures
-
-`aid agent failures` lists only `unclassified_failure` milestone markers. Identical
-excerpts are grouped with counts and per-agent counts; time and task ID identify
-the newest occurrence. `--limit` caps matching markers before grouping. Durations
-accept `s`, `m`, `h`, `d`, or `w`. Defaults are `--since 7d --limit 50`.
-`--json` includes full redacted excerpts. Bearer tokens, `sk-` strings, tokens
-of at least 32 ASCII letters/digits or `_`, `-`, `+`, `/`, and values assigned to
-`key`, `api_key`, `api-key`, `apikey`, `token`, `secret`, or `password` with `=` or
-`:` are redacted before display or review.
-
-`--review [<agent>]` asks the one-shot model for advisory classification suggestions
-using only redacted grouped excerpts, agent names and counts. Omitted agents use
-the `aid ask` default. Local-file auto-detection is disabled for this call. Empty
-results never invoke a model. The answer is printed below an advice-only header;
-no holds, markers or classification rules are changed based on excerpts or the
-answer. The reviewing task still records its own quota failures normally. Review
-advice must be inspected before any classification change is considered.

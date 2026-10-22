@@ -8,24 +8,24 @@ use anyhow::{Result, anyhow};
 use chrono::Local;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
-#[path = "merge/final_branch.rs"]
+#[path = "final_branch.rs"]
 mod final_branch;
 use final_branch::*;
-#[path = "merge_git.rs"]
+#[path = "../merge_git.rs"]
 mod merge_git;
 use merge_git::*;
-#[path = "merge_lanes.rs"]
+#[path = "../merge_lanes.rs"]
 mod merge_lanes;
 
-#[path = "merge_single.rs"]
+#[path = "single.rs"]
 mod single;
 use single::*;
 
-#[path = "merge_group.rs"]
+#[path = "group.rs"]
 mod group;
 use group::*;
 
-#[path = "merge_approval.rs"]
+#[path = "approval.rs"]
 mod approval;
 use approval::*;
 
@@ -257,10 +257,10 @@ pub(super) fn ensure_task_worktree_is_safe(task: &Task) -> Result<()> {
 }
 
 #[cfg(test)]
-#[path = "merge/final_branch_tests.rs"]
+#[path = "final_branch_tests.rs"]
 mod final_branch_tests;
 #[cfg(test)]
-#[path = "merge_guard_tests.rs"]
+#[path = "../merge_guard_tests.rs"]
 mod merge_guard_tests;
 #[cfg(test)]
 mod tests;

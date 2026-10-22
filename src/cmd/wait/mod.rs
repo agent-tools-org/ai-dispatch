@@ -11,7 +11,7 @@ use crate::cost;
 use crate::store::Store;
 use crate::task::verify::VERIFY_TIMEOUT;
 use crate::types::{Task, TaskFilter, TaskOutcome, TaskStatus, VerifyStatus, verify_required};
-#[path = "wait_settlement.rs"]
+#[path = "../wait_settlement.rs"]
 mod settlement;
 use settlement::worker_is_settling;
 
@@ -174,11 +174,11 @@ fn verification_is_in_flight(task: &Task) -> bool {
 }
 
 #[cfg(test)]
-#[path = "wait_tests.rs"]
+#[path = "../wait_tests.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "wait_settlement_tests.rs"]
+#[path = "../wait_settlement_tests.rs"]
 mod settlement_tests;
 
 fn track_group_tasks(
@@ -281,6 +281,6 @@ fn task_remains_pending(
     false
 }
 
-#[path = "wait_report.rs"]
+#[path = "report.rs"]
 mod report;
 use report::*;

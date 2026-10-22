@@ -261,6 +261,6 @@ fn run_git_merge(repo_dir: &str, branch: &str, head_before: Option<String>) -> M
     }
 }
 
-#[path = "merge_commit.rs"]
+#[path = "merge/commit.rs"]
 mod commit;
 pub(crate) use commit::auto_commit_uncommitted;

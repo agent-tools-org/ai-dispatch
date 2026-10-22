@@ -12,9 +12,9 @@ use crate::store::Store;
 use crate::types::{Task, TaskFilter, TaskStatus, Workgroup};
 use crate::ui::board::render_board;
 
-#[path = "board_filter.rs"]
+#[path = "../board_filter.rs"]
 pub(crate) mod board_filter;
-#[path = "board_poll.rs"]
+#[path = "../board_poll.rs"]
 mod board_poll;
 use board_poll::{
     AntiPollStatus, ForceMarkerState, anti_poll_status, task_fingerprint,
@@ -241,10 +241,10 @@ fn board_json_row(task: &Task) -> serde_json::Value {
 }
 
 #[cfg(test)]
-#[path = "board_tests.rs"]
+#[path = "../board_tests.rs"]
 mod tests;
 
-#[path = "board_notice.rs"]
+#[path = "notice.rs"]
 mod notice;
 use notice::{board_poll_notice, record_board_poll};
 

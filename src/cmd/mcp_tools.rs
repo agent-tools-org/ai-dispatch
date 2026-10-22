@@ -267,6 +267,6 @@ fn advise_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
     Ok(serde_json::to_value(&report)?)
 }
 
-#[path = "mcp_tool_values.rs"]
+#[path = "mcp/tool_values.rs"]
 mod values;
 use values::*;

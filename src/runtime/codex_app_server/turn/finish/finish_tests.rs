@@ -2,9 +2,7 @@
 // Uses a fake server that explicitly persists a marker after input EOF.
 
 use crate::runtime::codex_app_server::*;
-#[path = "../fixture.rs"]
-mod fixture;
-use fixture::Fixture;
+use crate::runtime::codex_app_server::fixture::Fixture;
 
 #[test]
 fn late_final_items_and_session_flush_survive_turn_completion() {

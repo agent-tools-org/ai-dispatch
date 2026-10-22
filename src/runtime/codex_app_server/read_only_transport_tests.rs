@@ -3,9 +3,7 @@
 
 use super::*;
 use crate::agent::{CommandContext, RunOpts, codex::CodexAgent};
-#[path = "turn/fixture.rs"]
-mod fixture;
-use fixture::Fixture;
+use crate::runtime::codex_app_server::fixture::Fixture;
 
 fn read_only_fixture(mode: &str) -> Fixture {
     let fixture = Fixture::new(mode);

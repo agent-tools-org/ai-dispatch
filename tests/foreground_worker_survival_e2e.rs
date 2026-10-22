@@ -254,10 +254,6 @@ fn wait_for_status_for(aid_home: &Path, task_id: &str, expected: &str, timeout: 
     panic!("task did not reach {expected}; status: {:?}", task_status_for(aid_home, task_id));
 }
 
-fn task_status(aid_home: &Path) -> Option<String> {
-    task_status_for(aid_home, TASK_ID)
-}
-
 fn task_status_for(aid_home: &Path, task_id: &str) -> Option<String> {
     let conn = Connection::open(aid_home.join("aid.db")).ok()?;
     conn.query_row(

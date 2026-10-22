@@ -2,9 +2,7 @@
 // Slow fake replies exercise the bounded ten-second startup deadline.
 
 use crate::runtime::codex_app_server::*;
-#[path = "../fixture.rs"]
-mod fixture;
-use fixture::Fixture;
+use crate::runtime::codex_app_server::fixture::Fixture;
 use std::time::Duration;
 
 fn policy(seconds: u64) -> crate::config::timeout_policy::TimeoutPolicy {

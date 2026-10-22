@@ -2,9 +2,7 @@
 // Covers receipts, refusal, resume, interruption, malformed protocol, and early EOF.
 
 use super::super::*;
-#[path = "fixture.rs"]
-mod fixture;
-use fixture::Fixture;
+use crate::runtime::codex_app_server::fixture::Fixture;
 
 #[test]
 fn full_dispatch_confirms_steer_and_preserves_events_cost_and_output() {

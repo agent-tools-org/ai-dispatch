@@ -2,9 +2,7 @@
 // No Codex credentials, shared database edits, or model calls are involved.
 
 use super::*;
-#[path = "turn/fixture.rs"]
-mod fixture;
-use fixture::Fixture;
+use crate::runtime::codex_app_server::fixture::Fixture;
 
 fn retry(fixture: &mut Fixture) {
     let session = fixture

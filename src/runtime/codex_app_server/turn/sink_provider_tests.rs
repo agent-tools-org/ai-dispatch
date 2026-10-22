@@ -1,8 +1,7 @@
 // Provider-scoped stream, app-server and stderr holds plus success and cost ceilings.
 // Exercises the production sink with synthetic events and an in-memory store.
 use super::*;
-#[path = "fixture.rs"]
-mod fixture;
+use crate::runtime::codex_app_server::fixture;
 const ROUTE: Option<&str> = Some("codex-provider:X");
 
 fn run<'a>(fixture: &'a fixture::Fixture, agent: &'a dyn crate::agent::Agent) -> Run<'a> {

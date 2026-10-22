@@ -2,9 +2,7 @@
 // The fake server starts real silent child work without invoking a model.
 
 use super::*;
-#[path = "fixture.rs"]
-mod fixture;
-use fixture::Fixture;
+use crate::runtime::codex_app_server::fixture::Fixture;
 
 fn policy(idle_ms: u64) -> crate::config::timeout_policy::TimeoutPolicy {
     let mut policy = crate::config::timeout_policy::TimeoutPolicy::default();

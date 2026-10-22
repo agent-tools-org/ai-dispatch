@@ -1,7 +1,7 @@
 // Fake Codex captures provider configuration on exec, app-server and fallback.
 // Covers fresh/resumed threads, environment inheritance and isolation provenance.
 
-use super::fixture::Fixture;
+use crate::runtime::codex_app_server::fixture::Fixture;
 use crate::agent::{
     Agent, CommandContext, RunOpts,
     codex::{CodexAgent, cli_config},

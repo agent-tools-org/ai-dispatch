@@ -7,6 +7,9 @@ mod home;
 mod io;
 mod resume;
 mod turn;
+#[cfg(test)]
+#[path = "turn/fixture.rs"]
+mod fixture;
 pub(crate) use command::available;
 pub(crate) use control::{active, receipt, wait_for_interrupt};
 pub(crate) use resume::exec_fallback;

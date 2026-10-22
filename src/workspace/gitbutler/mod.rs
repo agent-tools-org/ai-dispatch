@@ -11,6 +11,7 @@ use std::sync::{Mutex, OnceLock};
 
 mod repo;
 
+#[cfg(not(test))]
 static BUT_AVAILABLE: OnceLock<bool> = OnceLock::new();
 static MAIN_REPO_PROJECT_CACHE: OnceLock<Mutex<HashMap<String, bool>>> = OnceLock::new();
 

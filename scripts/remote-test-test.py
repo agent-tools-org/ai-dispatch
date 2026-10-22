@@ -8,12 +8,14 @@ import subprocess
 import tempfile
 import unittest
 
+from remote_test_connection_cases import ConnectionCases
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/remote-test.sh"
 
 
-class RemoteTestCommandTests(unittest.TestCase):
+class RemoteTestCommandTests(ConnectionCases, unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory(prefix="remote-test-proof-")
         self.addCleanup(self.temp.cleanup)

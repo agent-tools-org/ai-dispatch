@@ -15,6 +15,9 @@ use crate::runtime::process::guard::ProcessGuard;
 use crate::store::Store;
 use crate::types::{EventKind, TaskEvent, TaskId};
 
+mod hint;
+pub use hint::missing_deps_hint;
+
 const SETUP_DONE_MARKER: &str = ".aid-setup-done";
 const VERIFY_STATE_FILE: &str = ".aid-verify-deps-state";
 const MAX_SCAN_DEPTH: usize = 3;
@@ -71,23 +74,6 @@ fn maybe_seed_cargo_target(
             ));
         }
     }
-}
-
-pub fn missing_deps_hint(worktree_dir: &Path) -> Option<&'static str> {
-    let state = fs::read_to_string(worktree_dir.join(VERIFY_STATE_FILE)).ok()?;
-    let mut fresh = false;
-    let mut setup_defined = false;
-    let mut linked_any = false;
-    for line in state.lines() {
-        if let Some(value) = line.strip_prefix("fresh=") {
-            fresh = value == "1";
-        } else if let Some(value) = line.strip_prefix("setup_defined=") {
-            setup_defined = value == "1";
-        } else if let Some(value) = line.strip_prefix("linked_any=") {
-            linked_any = value == "1";
-        }
-    }
-    (fresh && !setup_defined && !linked_any).then_some(MISSING_DEPS_HINT)
 }
 
 fn maybe_run_setup(

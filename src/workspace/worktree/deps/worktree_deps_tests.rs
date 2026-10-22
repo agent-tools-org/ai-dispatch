@@ -185,8 +185,52 @@ fn rust_worktree_setup_records_cargo_target_seed() {
 #[test]
 fn missing_deps_hint_requires_fresh_worktree_without_setup_or_links() {
     let worktree = TempDir::new().unwrap();
+    write(&worktree.path().join("package.json"), "{}");
     write_verify_state(worktree.path(), true, false, false).unwrap();
     assert_eq!(missing_deps_hint(worktree.path()), Some(MISSING_DEPS_HINT));
-    write_verify_state(worktree.path(), true, true, false).unwrap();
-    assert_eq!(missing_deps_hint(worktree.path()), None);
+    for (fresh, setup, linked) in [(false, false, false), (true, true, false), (true, false, true)] {
+        write_verify_state(worktree.path(), fresh, setup, linked).unwrap();
+        assert_eq!(missing_deps_hint(worktree.path()), None);
+    }
+}
+
+#[test]
+fn missing_deps_hint_ignores_self_managed_ecosystems() {
+    for manifests in [vec![], vec!["Cargo.toml"], vec!["go.mod"], vec!["Cargo.toml", "go.mod"]] {
+        let worktree = TempDir::new().unwrap();
+        for manifest in &manifests {
+            write(&worktree.path().join(manifest), "");
+        }
+        write_verify_state(worktree.path(), true, false, false).unwrap();
+        assert_eq!(missing_deps_hint(worktree.path()), None, "{manifests:?}");
+    }
+}
+
+#[test]
+fn missing_deps_hint_requires_a_missing_install_directory() {
+    for (manifest, installed) in [
+        ("package.json", "node_modules"),
+        ("frontend/package.json", "frontend/node_modules"),
+        ("pyproject.toml", ".venv"),
+        ("pyproject.toml", "venv"),
+        ("requirements.txt", ".venv"),
+        ("requirements.txt", "venv"),
+        ("Gemfile", "vendor"),
+    ] {
+        let worktree = TempDir::new().unwrap();
+        write(&worktree.path().join(manifest), "");
+        write_verify_state(worktree.path(), true, false, false).unwrap();
+        assert_eq!(missing_deps_hint(worktree.path()), Some(MISSING_DEPS_HINT), "{manifest}");
+        fs::create_dir_all(worktree.path().join(installed)).unwrap();
+        assert_eq!(missing_deps_hint(worktree.path()), None, "{installed}");
+    }
+}
+
+#[test]
+fn missing_deps_hint_detects_node_dependencies_in_a_rust_project() {
+    let worktree = TempDir::new().unwrap();
+    write(&worktree.path().join("Cargo.toml"), "");
+    write(&worktree.path().join("package.json"), "{}");
+    write_verify_state(worktree.path(), true, false, false).unwrap();
+    assert_eq!(missing_deps_hint(worktree.path()), Some(MISSING_DEPS_HINT));
 }

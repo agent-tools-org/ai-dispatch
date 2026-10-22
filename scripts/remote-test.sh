@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run workspace tests through one rbox exec; exit with its status.
 # Usage: scripts/remote-test.sh [--dry-run] [--jobs N] [--timeout S] [--lock-timeout S] [-- <cargo args>]
-# Dependencies: bash, git, rbox, tee, awk, grep; AID_BUILD_BOX selects the configured box.
+# Dependencies: bash, git, rbox, tee, awk, grep, python3; AID_BUILD_BOX selects the configured box.
 set -euo pipefail
 
 BOX="${AID_BUILD_BOX:-}"
@@ -60,6 +60,43 @@ log="$(mktemp)"
 trap 'rm -f -- "$log" "$result_tmp"' EXIT
 status=0
 "${command[@]}" 2>&1 | tee "$log" || status=${PIPESTATUS[0]}
+job="$(awk '/^rbox: job / { print $3; exit }' "$log")"
+phase=""
+job_unavailable=false
+if grep -q '^rbox: job .* exited with code ' "$log"; then phase=completed; fi
+if [[ -s "$result_tmp" ]] && command -v python3 >/dev/null; then
+  typed="$(python3 - "$result_tmp" <<'PYTHON' || :
+import json
+import sys
+try:
+    with open(sys.argv[1]) as source:
+        result = json.load(source)
+    if isinstance(result, dict) and result.get("version") == 1:
+        phase = result.get("phase")
+        job = result.get("job")
+        if not isinstance(job, str) or not job or any(c.isspace() for c in job):
+            job = ""
+        if phase in ("completed", "timed_out"):
+            print(phase, job)
+        elif phase != "not_started" or job:
+            print("started", job)
+except (OSError, ValueError):
+    pass
+PYTHON
+)"
+  if [[ -n "$typed" ]]; then
+    read -r typed_phase typed_job <<< "$typed"
+    if [[ "$typed_phase" == completed || "$typed_phase" == timed_out ]]; then
+      phase="$typed_phase"
+    fi
+    if [[ -z "$job" && -n "$typed_job" ]]; then
+      job="$typed_job"
+    elif [[ -z "$job" ]]; then
+      job="unavailable"
+      job_unavailable=true
+    fi
+  fi
+fi
 if [[ -n "$result_tmp" ]]; then
   if [[ -s "$result_tmp" ]]; then
     cat "$result_tmp" >> "$AID_RBOX_RESULT" || :
@@ -78,17 +115,32 @@ if [[ $status -eq 0 ]] && awk '
   echo "[remote-test] no tests matched the filter" >&2
   exit 66
 fi
-job="$(awk '/^rbox: job / { print $3; exit }' "$log")"
+started_job="$job"
 job="${job:-not started (no job id assigned)}"
-if grep -q '^rbox: job .* exited with code ' "$log" && [[ $status -ne 0 ]]; then
+if [[ "$phase" == completed && $status -ne 0 ]]; then
   echo "[remote-test] job ${job}: tests failed (exit ${status})" >&2
+elif [[ "$phase" == timed_out && $status -ne 0 ]]; then
+  echo "[remote-test] job ${job}: timed out; the job continues on the box" >&2
 else
   case "$status" in
     124) echo "[remote-test] job ${job}: timed out after ${TIMEOUT}s; the job continues on the box" >&2 ;;
     75) echo "[remote-test] job ${job}: box lock not acquired within ${LOCK_TIMEOUT}s" >&2 ;;
     69) echo "[remote-test] job ${job}: box ${BOX} refused admission (disk); no test ran" >&2 ;;
+    66) echo "[remote-test] job ${job}: rbox exited 66" >&2 ;;
     0) ;;
-    *) echo "[remote-test] rbox failed before any test ran (exit ${status}); see the rbox line above" >&2 ;;
+    *) if [[ -n "$started_job" ]]; then
+         echo "[remote-test] job ${job}: rbox exited ${status} after the job started; "\
+"the job may continue on the box" >&2
+         if grep -q 'test result:' "$log"; then
+           echo "[remote-test] tests had started" >&2
+         fi
+         if ! "$job_unavailable"; then
+           printf '[remote-test] inspect with: rbox log %q %q\n' "$BOX" "$job" >&2
+         fi
+       else
+         echo "[remote-test] rbox failed before any test ran (exit ${status}); "\
+"see the rbox line above" >&2
+       fi ;;
   esac
 fi
 exit "$status"

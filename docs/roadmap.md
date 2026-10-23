@@ -331,6 +331,33 @@ Open:
   leader; that group id can be reused only once no member of the group remains.
 - Directories over ten files are unchanged (see M3).
 
+### Database lock and growth — 2026-10-23
+
+Source: [SQLite lock and growth investigation](investigation-db-lock-2026-10.md).
+
+| Area | Result |
+| --- | --- |
+| Opening the store | `busy_timeout` is set first; the schema version lives in `PRAGMA user_version` (now 3). A current database runs no DDL, migration or UPDATE on open, so read commands never wait for a writer; an older one migrates once under `BEGIN IMMEDIATE` and re-reads the version first. Column additions check `table_info` instead of swallowing errors |
+| Launch transactions | Spec writing, directories, logs and command preparation happen before the guard; inside it remain the status and parent check, the spawn, and the PID publication of the process it launched |
+| Reads | `board` applies its limit in SQL and counts the rest; `cost` and `stats` read only the latest completion with usage fields; the API-route launch lookup reads only `setup` events through the task/kind index (3.3 s to 18 ms on a 735 MB database); the duplicate `idx_events_task_id_id` index is dropped |
+| Retention | `aid clean` and a daily post-settlement pass trim `full` and `provider_stdout` values over 4 KB from old terminal tasks in bounded batches (failed, stopped and skipped tasks keep provider output); `aid clean --vacuum` compacts explicitly. On a 735 MB sample: 3,962 rows trimmed, 579 MB after VACUUM |
+
+With another connection holding the write lock, `aid board` returned in 0.01 s (it previously
+waited 29-40 s and failed with `database is locked`).
+
+Known limits:
+
+- Waiting for the detached worker's PID holds the write lock for at most 500 ms; process spawn
+  and the PID spec write inside the guards have no hard deadline.
+- A current-version open no longer recreates tables or indexes removed by hand after the upgrade.
+  Binaries older than v8.91.0 writing to an upgraded database can leave `delivery_assessment`
+  unset for their hollow-output tasks.
+- Board and cost no longer fail on a malformed payload in a row they do not display.
+- Agent-only reports still scan `tasks`; failed-task provider output remains the bulk of a
+  trimmed database.
+- `runtime::watcher::idle_tests` (CPU-using and remote-lock descendants within a 400 ms idle
+  window) can fail under build-box load; a rerun on the same commit passed.
+
 ### Known limits of the current code
 
 - `--read-only` compares only files under the run directory (from a repository

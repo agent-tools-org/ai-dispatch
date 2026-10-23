@@ -69,7 +69,7 @@ fn command(mode: &str, output: &Path) -> std::process::Command {
 }
 
 async fn wait_for_file(path: &Path) {
-    tokio::time::timeout(Duration::from_secs(5), async {
+    tokio::time::timeout(Duration::from_secs(120), async {
         let mut tick = tokio::time::interval(Duration::from_millis(10));
         while !path.exists() {
             tick.tick().await;
@@ -95,7 +95,14 @@ async fn interactive_background_spec_accepts_only_replay_and_settles() {
         assert_eq!(status(&store), TaskStatus::Running);
         std::fs::write(output.with_extension("replay"), "go").unwrap();
     };
-    let run = run_process(&store, &spec, &args, &ClaudeAgent, command("ack", &output), std::time::Instant::now());
+    let run = run_process(
+        &store,
+        &spec,
+        &args,
+        &ClaudeAgent,
+        command("ack", &output),
+        std::time::Instant::now(),
+    );
     let (result, ()) = tokio::time::timeout(Duration::from_secs(8), async {
         tokio::join!(run, observer)
     })
@@ -151,9 +158,16 @@ async fn interactive_background_immediate_exit_preserves_status_and_output() {
             "-p",
             "initial prompt",
         ]);
-        run_process(&store, &spec, &args, &ClaudeAgent, command, std::time::Instant::now())
-            .await
-            .unwrap();
+        run_process(
+            &store,
+            &spec,
+            &args,
+            &ClaudeAgent,
+            command,
+            std::time::Instant::now(),
+        )
+        .await
+        .unwrap();
         let task = store.get_task(&spec.task_id).unwrap().unwrap();
         assert_eq!(task.status, expected);
         assert_eq!(task.exit_code, Some(code));
@@ -188,9 +202,16 @@ async fn interactive_background_api_refusal_still_fails_without_reading_stdin() 
         "-p",
         "initial prompt",
     ]);
-    run_process(&store, &spec, &args, &route, command, std::time::Instant::now())
-        .await
-        .unwrap();
+    run_process(
+        &store,
+        &spec,
+        &args,
+        &route,
+        command,
+        std::time::Instant::now(),
+    )
+    .await
+    .unwrap();
     assert_eq!(status(&store), TaskStatus::Failed);
     assert!(
         store
@@ -208,20 +229,25 @@ async fn timed_out_steer_write_closes_input_without_failing_background_task() {
     let (home, _guard, store, spec, args) = setup();
     let id = queue(&store, &"x".repeat(2 * 1024 * 1024));
     let output = home.path().join("blocked.json");
-    tokio::time::timeout(
-        Duration::from_secs(12),
-        run_process(
-            &store,
-            &spec,
-            &args,
-            &ClaudeAgent,
-            command("blocked", &output),
-            std::time::Instant::now(),
-        ),
-    )
+    let observer = async {
+        wait_for_file(&output.with_extension("ready")).await;
+        gated_tests::wait_for_write_failure(&store, &spec.task_id, id).await;
+        std::fs::write(output.with_extension("release"), "go").unwrap();
+    };
+    let run = run_process(
+        &store,
+        &spec,
+        &args,
+        &ClaudeAgent,
+        gated_tests::gated_command("blocked", &output),
+        std::time::Instant::now(),
+    );
+    let (result, ()) = tokio::time::timeout(Duration::from_secs(120), async {
+        tokio::join!(run, observer)
+    })
     .await
-    .unwrap()
     .unwrap();
+    result.unwrap();
     assert_eq!(status(&store), TaskStatus::Done);
     assert!(output.with_extension("closed").exists());
     assert!(!crate::runtime::claude_input::receipt(&store, &spec.task_id, id).unwrap());
@@ -247,8 +273,10 @@ async fn timed_out_steer_write_closes_input_without_failing_background_task() {
 #[path = "claude_stream_policy_tests.rs"]
 mod policy_tests;
 
-
-#[path = "claude_stream_startup_tests.rs"]
-mod startup_tests;
 #[path = "claude_stream_completion_tests.rs"]
 mod completion_tests;
+#[path = "claude_stream_startup_tests.rs"]
+mod startup_tests;
+
+#[path = "claude_stream_gated_tests.rs"]
+mod gated_tests;

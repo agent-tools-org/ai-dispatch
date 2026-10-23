@@ -2,6 +2,11 @@
 // Exports run_lifecycle_phases; deps: parent lifecycle helpers and task state.
 use super::*;
 
+use std::ops::ControlFlow;
+
+#[path = "phases_finish.rs"]
+mod phases_finish;
+
 pub(super) async fn run_lifecycle_phases(
     mode: LifecycleMode,
     store: &Arc<Store>,
@@ -18,200 +23,239 @@ pub(super) async fn run_lifecycle_phases(
     pre_verify_status: TaskStatus,
     pre_task_dirty_paths: Option<&[String]>,
 ) -> Result<Option<TaskId>> {
-    run_teardown_phase(task_id, args, wt_path);
-    run_escape_checks_phase(args, effective_dir, repo_path, wt_path);
-    if let Some(task) = store.get_task(task_id.as_str())?
-        && task.status == TaskStatus::Failed
-        && crate::routing::capacity::read(store, task_id, task.agent).is_some()
-    {
-        if task.verify_status == VerifyStatus::Pending {
-            store.update_verify_status(task_id.as_str(), VerifyStatus::Skipped)?;
-        }
-        if args.read_only
-            && run_worktree_settlement_phase(store, task_id, args, effective_dir, pre_task_dirty_paths)
-                .await? == LifecyclePhaseDecision::Stop
-        {
-            return Ok(None);
-        }
-        capture_final_worktree_state(store, task_id)?;
-        persist_result_file(store, task_id, args, &task, effective_dir);
-        return retry_or_cascade(store, args, task_id).await;
-    }
-    match run_worktree_settlement_phase(
+    let mut run = LifecycleRun::new(
+        mode,
         store,
         task_id,
         args,
-        effective_dir,
-        pre_task_dirty_paths,
-    )
-    .await?
-    {
-        LifecyclePhaseDecision::Continue => {}
-        LifecyclePhaseDecision::Retry(retry_id) => {
-            record_skipped_configured_verify(
-                store,
-                task_id,
-                args,
-                format!("dirty worktree rescue dispatched retry {retry_id} before verify"),
-            );
-            return Ok(Some(retry_id));
-        }
-        LifecyclePhaseDecision::Stop => {
-            if args.read_only {
-                store.update_verify_status(task_id.as_str(), VerifyStatus::Skipped)?;
-                if let Some(task) = store.get_task(task_id.as_str())? {
-                    persist_result_file(store, task_id, args, &task, effective_dir);
-                }
-                maybe_run_post_done_audit(store, task_id, args,
-                    effective_dir.map(String::as_str), repo_path.map(String::as_str))?;
-            } else {
-                record_skipped_configured_verify(store, task_id, args,
-                    "dirty worktree settlement failed before verify".to_string());
-            }
-            return Ok(None);
-        }
-    }
-    run_verify_scope_phase(
-        store,
-        task_id,
-        args,
-        effective_dir.map(String::as_str),
-        container_name,
-    );
-    let checklist_result = run_checklist_phase(store, task_id, args)?;
-    let quota_error_message = run_task_postprocess_phase(
-        store,
-        task_id,
-        args,
-        agent_kind,
         agent_display_name,
         effective_dir,
         repo_path,
         runtime_hooks,
-        prompt_bundle,
-    )?;
-    if let Some(retry_id) = maybe_judge_retry(store, args, task_id).await? {
-        return Ok(Some(retry_id));
-    }
-    if let Some(ref reviewer_agent) = args.peer_review
-        && let Some(task) = store.get_task(task_id.as_str())?
-        && task.status == TaskStatus::Done
+    );
+    if let ControlFlow::Break(outcome) = run
+        .prepare(
+            wt_path,
+            pre_task_dirty_paths,
+            container_name,
+            agent_kind,
+            prompt_bundle,
+        )
+        .await?
     {
-        match judge::peer_review_task(&task, reviewer_agent, &args.prompt).await {
-            Ok(review) => {
-                aid_info!(
-                    "[aid] Peer review by {reviewer_agent}: {}/10 — {}",
-                    review.score, review.feedback
-                );
-                store.save_peer_review(
-                    task_id.as_str(),
-                    reviewer_agent,
-                    review.score,
-                    &review.feedback,
-                )?;
-            }
-            Err(e) => aid_error!("[aid] Peer review failed: {e}"),
-        }
+        return Ok(outcome);
     }
-    run_prompt::notify_task_completion(store, task_id)?;
-    if let Some(task) = store.get_task(task_id.as_str())?
-        && task.output_path.is_none()
-    {
-        auto_save_task_output(store.as_ref(), &task)?;
+    if let ControlFlow::Break(outcome) = run.complete().await? {
+        return Ok(outcome);
     }
-    if let Some(task) = store.get_task(task_id.as_str())? {
-        maybe_flag_hollow_output(store.as_ref(), task_id, &task, args.base_branch.as_deref());
+    if let ControlFlow::Break(outcome) = run.retry_verification(pre_verify_status).await? {
+        return Ok(outcome);
     }
-    maybe_run_post_done_audit(
-        store.as_ref(),
-        task_id,
-        args,
-        effective_dir.map(String::as_str),
-        repo_path.map(String::as_str),
-    )?;
-    let Some(task) = store.get_task(task_id.as_str())? else { return Ok(None) };
-    let summary_json = serde_json::to_string(&crate::cmd::summary::generate_summary(&task)).unwrap_or_default();
-    let _ = store.save_completion_summary(task_id.as_str(), &summary_json);
-    if let Some(task) = store.get_task(task_id.as_str())? {
-        let done_payload = show::task_hook_json(
-            &task,
+    if let ControlFlow::Break(outcome) = run.retry_execution().await? {
+        return Ok(outcome);
+    }
+    run.finish().await
+}
+
+struct LifecycleRun<'a> {
+    mode: LifecycleMode,
+    store: &'a Arc<Store>,
+    task_id: &'a TaskId,
+    args: &'a RunArgs,
+    agent_display_name: &'a str,
+    effective_dir: Option<&'a String>,
+    repo_path: Option<&'a String>,
+    runtime_hooks: &'a [hooks::Hook],
+    checklist_result: Option<checklist_scan::ChecklistResult>,
+    quota_error_message: Option<String>,
+}
+
+impl<'a> LifecycleRun<'a> {
+    fn new(
+        mode: LifecycleMode,
+        store: &'a Arc<Store>,
+        task_id: &'a TaskId,
+        args: &'a RunArgs,
+        agent_display_name: &'a str,
+        effective_dir: Option<&'a String>,
+        repo_path: Option<&'a String>,
+        runtime_hooks: &'a [hooks::Hook],
+    ) -> Self {
+        Self {
+            mode,
+            store,
+            task_id,
+            args,
             agent_display_name,
-            effective_dir.map(String::as_str),
-        );
-        if let Err(err) = hooks::run_hooks_with(
-            "after_complete",
-            &done_payload,
-            Some(agent_display_name),
+            effective_dir,
+            repo_path,
             runtime_hooks,
-            false,
-        ) {
-            aid_error!("[aid] Hook after_complete failed: {err}");
+            checklist_result: None,
+            quota_error_message: None,
         }
     }
-    crate::task::webhook::fire_task_webhooks(store, task_id.as_str()).await;
-    if mode.is_foreground() && args.announce && !args.background {
-        if let Some(status_hint) = foreground_status_hint(store.as_ref(), task_id.as_str())? {
-            aid_hint!("{status_hint}");
-        }
-    }
-    let iterate_config = iterate_config(args)?;
-    if let Some(iterate_config) = iterate_config.as_ref()
-        && let Some(retry_id) = maybe_iterate(store, task_id, args, iterate_config).await?
-    {
-        return Ok(Some(retry_id));
-    }
-    if iterate_config.is_none() {
-        if let Some(retry_id) =
-            maybe_auto_retry_after_verify_failure(store, task_id, args, pre_verify_status).await?
+
+    async fn prepare(
+        &mut self,
+        wt_path: Option<&String>,
+        pre_task_dirty_paths: Option<&[String]>,
+        container_name: Option<&str>,
+        agent_kind: AgentKind,
+        prompt_bundle: &run_prompt::PromptBundle,
+    ) -> Result<ControlFlow<Option<TaskId>>> {
+        if let ControlFlow::Break(outcome) =
+            self.settle_capacity(wt_path, pre_task_dirty_paths).await?
         {
-            return Ok(Some(retry_id));
+            return Ok(ControlFlow::Break(outcome));
         }
-        if let Some(retry_id) =
-            maybe_auto_retry_after_checklist_miss(store, task_id, args, checklist_result.as_ref()).await?
+        if let ControlFlow::Break(outcome) = self.settle_worktree(pre_task_dirty_paths).await? {
+            return Ok(ControlFlow::Break(outcome));
+        }
+        self.verify_postprocess(container_name, agent_kind, prompt_bundle)
+            .await
+    }
+
+    async fn settle_capacity(
+        &mut self,
+        wt_path: Option<&String>,
+        pre_task_dirty_paths: Option<&[String]>,
+    ) -> Result<ControlFlow<Option<TaskId>>> {
+        let store = self.store;
+        let task_id = self.task_id;
+        let args = self.args;
+        let effective_dir = self.effective_dir;
+        let repo_path = self.repo_path;
+        run_teardown_phase(task_id, args, wt_path);
+        run_escape_checks_phase(args, effective_dir, repo_path, wt_path);
+        if let Some(task) = store.get_task(task_id.as_str())?
+            && task.status == TaskStatus::Failed
+            && crate::routing::capacity::read(store, task_id, task.agent).is_some()
         {
-            return Ok(Some(retry_id));
+            if task.verify_status == VerifyStatus::Pending {
+                store.update_verify_status(task_id.as_str(), VerifyStatus::Skipped)?;
+            }
+            if args.read_only
+                && run_worktree_settlement_phase(
+                    store,
+                    task_id,
+                    args,
+                    effective_dir,
+                    pre_task_dirty_paths,
+                )
+                .await?
+                    == LifecyclePhaseDecision::Stop
+            {
+                return Ok(ControlFlow::Break(None));
+            }
+            capture_final_worktree_state(store, task_id)?;
+            persist_result_file(store, task_id, args, &task, effective_dir);
+            return retry_or_cascade(store, args, task_id)
+                .await
+                .map(ControlFlow::Break);
         }
+        Ok(ControlFlow::Continue(()))
     }
-    if let Some(retry_id) = maybe_auto_retry_after_hang(store, task_id, args).await? {
-        return Ok(Some(retry_id));
-    }
-    if let Some(retry_id) =
-        maybe_auto_retry_after_model_unavailable(store, task_id, args).await?
-    {
-        return Ok(Some(retry_id));
-    }
-    if let Some(retry_id) =
-        maybe_auto_recover_missing_delivery(store, task_id, args).await?
-    {
-        return Ok(Some(retry_id));
-    }
-    crate::task::verify::enforce_verify_status(store, task_id);
-    if let Some(retry_id) = retry_or_cascade(store, args, task_id).await? {
-        return Ok(Some(retry_id));
-    }
-    if let Some(task) = store.get_task(task_id.as_str())?
-        && task.status == TaskStatus::Failed
-        && args.cascade.is_empty()
-        && quota_error_message.is_some()
-    {
-        if let Some(retry_id) =
-            quota_continuation::continue_quota(store, args, &task).await?
+    async fn settle_worktree(
+        &mut self,
+        pre_task_dirty_paths: Option<&[String]>,
+    ) -> Result<ControlFlow<Option<TaskId>>> {
+        let store = self.store;
+        let task_id = self.task_id;
+        let args = self.args;
+        let effective_dir = self.effective_dir;
+        match run_worktree_settlement_phase(
+            store,
+            task_id,
+            args,
+            effective_dir,
+            pre_task_dirty_paths,
+        )
+        .await?
         {
-            return Ok(Some(retry_id));
+            LifecyclePhaseDecision::Continue => {}
+            LifecyclePhaseDecision::Retry(retry_id) => {
+                record_skipped_configured_verify(
+                    store,
+                    task_id,
+                    args,
+                    format!("dirty worktree rescue dispatched retry {retry_id} before verify"),
+                );
+                return Ok(ControlFlow::Break(Some(retry_id)));
+            }
+            LifecyclePhaseDecision::Stop => {
+                self.settle_stopped()?;
+                return Ok(ControlFlow::Break(None));
+            }
         }
+        Ok(ControlFlow::Continue(()))
     }
-    if mode.is_foreground() && !args.background {
-        aid_info!("[aid] View in TUI: aid board");
+    fn settle_stopped(&self) -> Result<()> {
+        let store = self.store;
+        let task_id = self.task_id;
+        let args = self.args;
+        let effective_dir = self.effective_dir;
+        let repo_path = self.repo_path;
+        if args.read_only {
+            store.update_verify_status(task_id.as_str(), VerifyStatus::Skipped)?;
+            if let Some(task) = store.get_task(task_id.as_str())? {
+                persist_result_file(store, task_id, args, &task, effective_dir);
+            }
+            maybe_run_post_done_audit(
+                store,
+                task_id,
+                args,
+                effective_dir.map(String::as_str),
+                repo_path.map(String::as_str),
+            )?;
+        } else {
+            record_skipped_configured_verify(
+                store,
+                task_id,
+                args,
+                "dirty worktree settlement failed before verify".to_string(),
+            );
+        }
+        Ok(())
     }
-    Ok(None)
+
+    async fn verify_postprocess(
+        &mut self,
+        container_name: Option<&str>,
+        agent_kind: AgentKind,
+        prompt_bundle: &run_prompt::PromptBundle,
+    ) -> Result<ControlFlow<Option<TaskId>>> {
+        run_verify_scope_phase(
+            self.store,
+            self.task_id,
+            self.args,
+            self.effective_dir.map(String::as_str),
+            container_name,
+        );
+        self.checklist_result = run_checklist_phase(self.store, self.task_id, self.args)?;
+        self.quota_error_message = run_task_postprocess_phase(
+            self.store,
+            self.task_id,
+            self.args,
+            agent_kind,
+            self.agent_display_name,
+            self.effective_dir,
+            self.repo_path,
+            self.runtime_hooks,
+            prompt_bundle,
+        )?;
+        if let Some(retry_id) = maybe_judge_retry(self.store, self.args, self.task_id).await? {
+            return Ok(ControlFlow::Break(Some(retry_id)));
+        }
+        Ok(ControlFlow::Continue(()))
+    }
 }
 
 pub(in crate::cmd::run) async fn retry_or_cascade(
-    store: &Arc<Store>, args: &RunArgs, task_id: &TaskId,
+    store: &Arc<Store>,
+    args: &RunArgs,
+    task_id: &TaskId,
 ) -> Result<Option<TaskId>> {
-    if let Some(mut retry_args) =
-        retry_logic::prepare_retry(store.clone(), task_id, args).await?
-    {
+    if let Some(mut retry_args) = retry_logic::prepare_retry(store.clone(), task_id, args).await? {
         if let Some(task) = store.get_task(task_id.as_str())? {
             inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
         }

@@ -1,6 +1,10 @@
 // Execution helpers for `aid run` after dispatch setup and prompt assembly.
 // Exports: load_runtime_hooks(), run_background_task(), run_foreground_task().
 // Deps: hooks, background, container/sandbox wrappers, run lifecycle modules.
+#[path = "dispatch_execute/background_run.rs"]
+mod background_run;
+use background_run::BackgroundRun;
+
 use super::run_dispatch_prepare::PreparedDispatch;
 use super::{RunArgs, run_foreground_watch, run_prompt};
 use crate::config::hooks;
@@ -48,83 +52,9 @@ pub(super) fn run_background_task(
     prepared: &PreparedDispatch,
     prompt_bundle: &run_prompt::PromptBundle,
 ) -> Result<()> {
-    background::check_worker_capacity(store).or_else(|err| {
-        super::run_dispatch_prepare::record_error(store, &prepared.task_id, &err)?;
-        Err(err)
-    })?;
-    let pre_task_dirty_paths = background_dirty_baseline(store, args, prepared)?;
-    let spec = BackgroundRunSpec {
-        task_id: prepared.task_id.as_str().to_string(),
-        worker_pid: None,
-        agent_name: prepared.agent_display_name.clone(),
-        prompt: prompt_bundle.effective_prompt.clone(),
-        dir: prepared.effective_dir.clone(),
-        output: args.output.clone(),
-        result_file: args.result_file.clone(),
-        result_file_required: args.result_file_required,
-        model: prepared.effective_model.clone(),
-        budget: prepared.budget_active,
-        session_id: args.session_id.clone(),
-        verify: args.verify.clone(),
-        setup: args.setup.clone(),
-        iterate: args.iterate,
-        eval: args.eval.clone(),
-        eval_feedback_template: args.eval_feedback_template.clone(),
-        judge: args.judge.clone(),
-        judge_retry: args.judge_retry,
-        max_duration_mins: Some(args.timeout_policy.max_duration_mins()),
-        max_duration_secs: Some(args.timeout_policy.max_duration.as_secs()),
-        idle_timeout_secs: Some(args.timeout_policy.idle.as_secs()),
-        max_task_cost: args.max_task_cost,
-        retry: args.retry,
-        group: args.group.clone(),
-        skills: args.skills.clone(),
-        checklist: args.checklist.clone(),
-        hooks: args.hooks.clone(),
-        template: args.template.clone(),
-        worktree: args.worktree.clone(),
-        base_branch: args.base_branch.clone(),
-        peer_review: args.peer_review.clone(),
-        audit: args.audit,
-        audit_explicit: args.audit_explicit,
-        no_audit: args.no_audit,
-        scope: args.scope.clone(),
-        interactive: true,
-        on_done: args.on_done.clone(),
-        cascade: args.cascade.clone(),
-        parent_task_id: args.parent_task_id.clone(),
-        env: args.env.clone(),
-        env_forward: args.env_forward.clone(),
-        agent_pid: None,
-        agent_started: None,
-        sandbox: args.sandbox,
-        read_only: args.read_only,
-        audit_report_mode: args.audit_report_mode,
-        container: args.container.clone(),
-        link_deps: args.link_deps,
-        pre_task_dirty_paths,
-        foreground: args.foreground,
-    };
-    launch_background_worker(store, prepared, &spec)?;
-    #[cfg(test)]
-    {
-        let worker_store = Arc::clone(store);
-        let worker_task_id = prepared.task_id.as_str().to_string();
-        tokio::spawn(async move {
-            let _ = background::run_task(worker_store, &worker_task_id).await;
-        });
-    }
-    if args.announce {
-        println!(
-            "{}",
-            crate::cli::dispatch::background_status_line(
-                &prepared.task_id,
-                &prepared.agent_display_name,
-                &args.prompt,
-            )
-        );
-        aid_hint!("[aid] Wait: aid wait {}", prepared.task_id);
-    }
+    let run = BackgroundRun::prepare(store, args, prepared, prompt_bundle)?;
+    run.launch()?;
+    run.announce();
     Ok(())
 }
 

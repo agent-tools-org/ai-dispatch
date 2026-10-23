@@ -265,7 +265,7 @@ fn trimmed_event_readers_explain_missing_output() {
         event_kind: EventKind::Build, detail: "build output".into(),
         metadata: Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})),
     };
-    assert!(event.output_trimmed());
+    assert!(event.trimmed_note().is_some());
     assert_eq!(event.full_detail(), "build output [full output trimmed]");
     assert_eq!(event.display_detail(), "build output [full output trimmed]");
 }
@@ -277,7 +277,7 @@ fn provider_only_marker_is_visible_to_event_readers() {
         event_kind: EventKind::Error, detail: "provider output".into(),
         metadata: Some(serde_json::json!({"provider_stdout": {"trimmed": true, "bytes": 5000}})),
     };
-    assert!(event.output_trimmed());
+    assert!(event.trimmed_note().is_some());
     assert_eq!(event.full_detail(), "provider output [provider_stdout output trimmed]");
     assert!(event.display_detail().contains("output trimmed"));
 }

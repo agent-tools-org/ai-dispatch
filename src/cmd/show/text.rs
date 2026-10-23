@@ -62,7 +62,7 @@ pub(super) fn events_text(store: &Arc<Store>, task_id: &str, full: bool) -> Resu
     }
     let mut out = String::from("Events:\n");
     for event in events {
-        let detail = if full { event.full_detail() } else { &event.detail };
+        let detail = if full { event.full_detail().into() } else { event.display_detail() };
         out.push_str(&format!(
             "  {}  [{:>10}] {}\n",
             event.timestamp.format("%H:%M:%S"),

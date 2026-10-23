@@ -1,9 +1,8 @@
-// CLI handler for `aid clean` — removes old tasks, orphaned logs, and worktrees.
+// CLI handler for `aid clean` — trims old output and removes disposable artifacts.
 // Exports: run().
-// Deps: crate::support::paths, crate::store::Store, chrono, rusqlite.
+// Deps: crate::support::paths, crate::store::Store, rusqlite.
 
 use anyhow::Result;
-use chrono::{Duration, Local};
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
@@ -11,6 +10,10 @@ use std::sync::Arc;
 
 use crate::support::paths;
 use crate::store::Store;
+
+#[path = "clean_retention.rs"]
+mod retention;
+pub(crate) use retention::auto_trim;
 
 #[path = "clean_homes.rs"]
 mod homes;
@@ -38,8 +41,9 @@ pub fn run(
     older_than_days: u64,
     clean_worktrees: bool,
     dry_run: bool,
+    vacuum: bool,
 ) -> Result<()> {
-    let _cutoff = Local::now() - Duration::days(older_than_days as i64);
+    retention::run(&store, older_than_days, dry_run, vacuum)?;
     if dry_run {
         println!("[dry-run] Task records and events are retained as custody evidence");
     } else {

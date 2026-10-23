@@ -88,6 +88,7 @@ pub(crate) async fn post_run_lifecycle(
         store.settle_task_status(task_id.as_str(), TaskStatus::Done, Some(&[TaskStatus::Done]), None, None)?;
     }
     crate::workspace::backup::on_settled(store.as_ref(), task_id.as_str());
+    crate::cmd::clean::auto_trim(store);
     outcome
 }
 

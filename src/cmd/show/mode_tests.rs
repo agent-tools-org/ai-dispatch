@@ -150,3 +150,18 @@ fn log_mode_uses_full_flag_for_untruncated_log() {
     assert!(full.contains("line-000"));
     assert!(full.contains("line-219"));
 }
+
+#[test]
+fn trimmed_events_text_explains_missing_output() {
+    let store = std::sync::Arc::new(crate::store::Store::open_memory().unwrap());
+    store.db().execute_batch("INSERT INTO tasks (id,agent,prompt,status,created_at)
+        VALUES ('trimmed','codex','test','done','2020-01-01')").unwrap();
+    store.insert_event(&crate::types::TaskEvent {
+        task_id: crate::types::TaskId("trimmed".into()), timestamp: chrono::Local::now(),
+        event_kind: crate::types::EventKind::Build, detail: "build".into(),
+        metadata: Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})),
+    }).unwrap();
+    for full in [false, true] {
+        assert!(super::text::events_text(&store, "trimmed", full).unwrap().contains("output trimmed"));
+    }
+}

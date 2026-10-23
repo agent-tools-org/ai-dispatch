@@ -113,7 +113,7 @@ fn event_line(event: &TaskEvent) -> Line<'static> {
             Style::default().fg(kind_color),
         ),
         Span::raw(" "),
-        Span::raw(event.detail.clone()),
+        Span::raw(event.display_detail().into_owned()),
     ])
 }
 
@@ -140,4 +140,16 @@ mod tests {
         assert_eq!(event_kind_color(EventKind::Error), Color::Red);
         assert_eq!(event_kind_color(EventKind::ToolCall), Color::Yellow);
     }
+
+    #[test]
+    fn trimmed_event_line_explains_missing_output() {
+        let event = crate::types::TaskEvent {
+            task_id: crate::types::TaskId("trimmed".into()), timestamp: chrono::Local::now(),
+            event_kind: EventKind::Build, detail: "build".into(),
+            metadata: Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})),
+        };
+        let line = super::event_line(&event);
+        assert!(line.spans.iter().any(|span| span.content.contains("output trimmed")));
+    }
+
 }

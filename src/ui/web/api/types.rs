@@ -132,7 +132,7 @@ impl From<TaskEvent> for TaskEventResponse {
             task_id: event.task_id.to_string(),
             timestamp: event.timestamp.to_rfc3339(),
             event_kind: event.event_kind.as_str().to_string(),
-            detail: event.detail,
+            detail: event.display_detail().into_owned(),
             metadata: event.metadata,
         }
     }
@@ -226,5 +226,20 @@ impl AgentResponse {
             task_count: history.map(|value| value.tasks).unwrap_or(0),
             avg_cost_usd: history.and_then(|value| value.avg_cost_usd),
         }
+    }
+}
+
+#[cfg(test)]
+mod retention_tests {
+    #[test]
+    fn trimmed_event_response_explains_missing_output() {
+        let event = crate::types::TaskEvent {
+            task_id: crate::types::TaskId("trimmed".into()), timestamp: chrono::Local::now(),
+            event_kind: crate::types::EventKind::Build, detail: "build".into(),
+            metadata: Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})),
+        };
+        let response = super::TaskEventResponse::from(event);
+        assert!(response.detail.contains("output trimmed"));
+        assert_eq!(response.metadata.unwrap()["full"]["trimmed"], true);
     }
 }

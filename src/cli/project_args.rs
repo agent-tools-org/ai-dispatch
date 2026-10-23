@@ -65,12 +65,16 @@ pub enum WorktreeAction {
 
 #[derive(Args)]
 pub struct CleanArgs {
-    #[arg(long, value_name = "DAYS", default_value = "7", help = "Remove records older than this many days")]
+    /// Trim tool output from tasks finished more than this many days ago
+    #[arg(long, value_name = "DAYS", default_value = "7")]
     pub older_than: u64,
     #[arg(long)]
     pub worktrees: bool,
     #[arg(long)]
     pub dry_run: bool,
+    /// Compact the database after trimming; requires idle tasks and temporary disk space
+    #[arg(long)]
+    pub vacuum: bool,
 }
 
 #[derive(Args)]

@@ -223,12 +223,13 @@ pub struct TaskEvent {
 impl TaskEvent {
     /// Untruncated detail: parsers stash text over the display cap in
     /// metadata under `"full"`.
-    pub fn full_detail(&self) -> &str {
-        self.metadata
+    pub fn full_detail(&self) -> std::borrow::Cow<'_, str> {
+        let detail = self.metadata
             .as_ref()
             .and_then(|meta| meta.get("full"))
             .and_then(|value| value.as_str())
-            .unwrap_or(&self.detail)
+            .unwrap_or(&self.detail);
+        self.render_detail(detail)
     }
 }
 

@@ -15,15 +15,15 @@ fn policy(args: &mut RunArgs, values: &[(&str, &str)]) {
 async fn deadline_preserves_partial_transcript_and_pid_for_stop() {
     let _permit = crate::support::test_subprocess::acquire();
     let (home, _guard, store, spec, mut args) = setup();
-    policy(&mut args, &[("AID_MAX_DURATION_SECS", "1")]);
+    policy(&mut args, &[("AID_MAX_DURATION_SECS", "30")]);
     tokio::time::timeout(
-        Duration::from_secs(5),
+        Duration::from_secs(120),
         run_process(
             &store,
             &spec,
             &args,
             &ClaudeAgent,
-            command("partial", &home.path().join("input")),
+            gated_tests::gated_command("partial", &home.path().join("input")),
             std::time::Instant::now(),
         ),
     )
@@ -38,7 +38,7 @@ async fn deadline_preserves_partial_transcript_and_pid_for_stop() {
             .get_events(&spec.task_id)
             .unwrap()
             .iter()
-            .any(|event| event.detail.contains("exceeded hard timeout of 1 seconds"))
+            .any(|event| event.detail.contains("exceeded hard timeout of 30 seconds"))
     );
     assert!(
         load_spec_if_exists(&spec.task_id)
@@ -53,8 +53,10 @@ async fn deadline_preserves_partial_transcript_and_pid_for_stop() {
 async fn first_token_and_idle_timeouts_remain_distinct_on_interactive_specs() {
     let _permit = crate::support::test_subprocess::acquire();
     let (home, _guard, store, spec, mut args) = setup();
-    for (mode, first, idle, transient) in [("startup", "1", "60", true), ("idle", "60", "1", false)]
-    {
+    for (mode, first, idle, transient) in [
+        ("startup", "30", "3600", true),
+        ("idle", "3600", "30", false),
+    ] {
         store
             .db()
             .execute(
@@ -70,13 +72,13 @@ async fn first_token_and_idle_timeouts_remain_distinct_on_interactive_specs() {
             ],
         );
         tokio::time::timeout(
-            Duration::from_secs(4),
+            Duration::from_secs(120),
             run_process(
                 &store,
                 &spec,
                 &args,
                 &ClaudeAgent,
-                command(mode, &home.path().join("input")),
+                gated_tests::gated_command(mode, &home.path().join("input")),
                 std::time::Instant::now(),
             ),
         )
@@ -84,6 +86,8 @@ async fn first_token_and_idle_timeouts_remain_distinct_on_interactive_specs() {
         .unwrap()
         .unwrap();
         assert_eq!(status(&store), TaskStatus::Failed);
+        let transcript = std::fs::read_to_string(paths::transcript_path(&spec.task_id)).unwrap();
+        assert_eq!(transcript.contains("working"), mode == "idle");
         assert!(
             store
                 .get_events(&spec.task_id)
@@ -94,7 +98,7 @@ async fn first_token_and_idle_timeouts_remain_distinct_on_interactive_specs() {
                         .metadata
                         .as_ref()
                         .is_some_and(|value| value["transient"] == transient
-                            && value["hung_duration_secs"] == 1))
+                            && value["hung_duration_secs"] == 30))
         );
     }
 }
@@ -129,13 +133,13 @@ async fn cost_ceiling_and_usage_checkpoints_survive_piped_routing() {
     let (home, _guard, store, spec, mut args) = setup();
     args.max_task_cost = Some(1.0);
     tokio::time::timeout(
-        Duration::from_secs(4),
+        Duration::from_secs(120),
         run_process(
             &store,
             &spec,
             &args,
             &ClaudeAgent,
-            command("cost", &home.path().join("input")),
+            gated_tests::gated_command("cost", &home.path().join("input")),
             std::time::Instant::now(),
         ),
     )

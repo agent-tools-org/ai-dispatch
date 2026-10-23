@@ -53,32 +53,31 @@ impl ProcessGuard {
     /// On normal exit, SIGTERMs the process group. On timeout, SIGKILLs it.
     pub fn wait_with_timeout(&mut self, timeout: Duration) -> Result<Option<ExitStatus>> {
         let pid = self.child.id();
-        let fired = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let fired2 = fired.clone();
-        let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let done2 = done.clone();
-
-        std::thread::spawn(move || {
-            std::thread::sleep(timeout);
-            if !done2.load(std::sync::atomic::Ordering::SeqCst) {
-                #[cfg(unix)]
-                unsafe {
-                    libc::kill(-(pid as i32), libc::SIGKILL);
-                }
-                fired2.store(true, std::sync::atomic::Ordering::SeqCst);
+        let (done, completed) = std::sync::mpsc::channel();
+        let timer = std::thread::spawn(move || {
+            if !timeout_expired(completed.recv_timeout(timeout)) {
+                return false;
             }
+            #[cfg(unix)]
+            unsafe {
+                libc::kill(-(pid as i32), libc::SIGKILL);
+            }
+            true
         });
 
-        let status = self.child.wait().context("failed to wait for subprocess")?;
-        done.store(true, std::sync::atomic::Ordering::SeqCst);
+        let status = self.child.wait().context("failed to wait for subprocess");
+        if status.is_ok() {
+            let _ = done.send(());
+        }
+        drop(done);
+        let fired = timer
+            .join()
+            .map_err(|_| anyhow::anyhow!("timeout worker panicked"))?;
+        let status = status?;
         self.sigterm_group(); // clean up orphaned grandchildren
         self.killed = true;
 
-        if fired.load(std::sync::atomic::Ordering::SeqCst) {
-            Ok(None)
-        } else {
-            Ok(Some(status))
-        }
+        if fired { Ok(None) } else { Ok(Some(status)) }
     }
 
     /// SIGTERM the process group (clean up orphaned grandchildren).
@@ -124,9 +123,21 @@ impl Drop for ProcessGuard {
     }
 }
 
+fn timeout_expired(result: std::result::Result<(), std::sync::mpsc::RecvTimeoutError>) -> bool {
+    matches!(result, Err(std::sync::mpsc::RecvTimeoutError::Timeout))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn timer_signals_only_on_expiry() {
+        use std::sync::mpsc::RecvTimeoutError;
+        assert!(timeout_expired(Err(RecvTimeoutError::Timeout)));
+        assert!(!timeout_expired(Ok(())));
+        assert!(!timeout_expired(Err(RecvTimeoutError::Disconnected)));
+    }
 
     #[test]
     fn spawn_and_wait() {
@@ -144,9 +155,7 @@ mod tests {
         let mut cmd = Command::new("echo");
         cmd.arg("hello");
         let mut guard = ProcessGuard::spawn(&mut cmd).unwrap();
-        let status = guard
-            .wait_with_timeout(Duration::from_secs(5))
-            .unwrap();
+        let status = guard.wait_with_timeout(Duration::from_secs(5)).unwrap();
         assert!(status.is_some());
         assert!(status.unwrap().success());
     }
@@ -155,13 +164,26 @@ mod tests {
     #[test]
     fn wait_with_timeout_kills_on_expiry() {
         let _permit = crate::support::test_subprocess::acquire();
-        let mut cmd = Command::new("sleep");
-        cmd.arg("60");
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "read hold"]);
+        cmd.stdin(std::process::Stdio::piped());
         let mut guard = ProcessGuard::spawn(&mut cmd).unwrap();
-        let status = guard
-            .wait_with_timeout(Duration::from_millis(100))
-            .unwrap();
-        assert!(status.is_none());
+        // Child::wait closes its own stdin; retain the writer so read cannot see EOF.
+        let _input = guard.child_mut().stdin.take().unwrap();
+        use std::os::unix::process::ExitStatusExt;
+        let started = std::time::Instant::now();
+        let status = guard.wait_with_timeout(Duration::from_millis(100)).unwrap();
+        assert!(
+            status.is_none(),
+            "timeout child returned {status:?}, code={:?}, signal={:?}, elapsed={:?}",
+            status.as_ref().and_then(|status| status.code()),
+            status.as_ref().and_then(|status| status.signal()),
+            started.elapsed(),
+        );
+        assert_eq!(
+            guard.child_mut().wait().unwrap().signal(),
+            Some(libc::SIGKILL)
+        );
     }
 
     #[cfg(unix)]

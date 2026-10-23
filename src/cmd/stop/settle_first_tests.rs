@@ -3,14 +3,16 @@
 // Deps: stop command, isolated AID home, shell subprocess and Store.
 
 use super::{stop, tests::make_task};
-use crate::{runtime::background, support::paths, store::Store, types::TaskStatus};
+use crate::{runtime::background, store::Store, support::paths, types::TaskStatus};
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 
 pub(super) fn save_worker(id: &str, pid: u32) {
-    let mut spec: background::BackgroundRunSpec =
-        serde_json::from_str(include_str!("../../../testdata/legacy-background-spec.json")).expect("spec");
+    let mut spec: background::BackgroundRunSpec = serde_json::from_str(include_str!(
+        "../../../testdata/legacy-background-spec.json"
+    ))
+    .expect("spec");
     spec.task_id = id.to_string();
     spec.worker_pid = Some(pid);
     spec.agent_pid = None;
@@ -104,7 +106,7 @@ fn settle_first_reaper_snapshot_before_stop_cannot_record_failure() {
     store
         .insert_task(&make_task("t-stop-reaper", TaskStatus::Running))
         .expect("insert");
-    save_worker("t-stop-reaper", 999999);
+    save_worker("t-stop-reaper", i32::MAX as u32 - 5);
     let cleaned = background::check_zombie_tasks_with(&store, |_| {
         stop(&store, "t-stop-reaper").expect("stop before reaper write");
         false
@@ -129,7 +131,10 @@ fn settle_first_restop_signals_live_worker_without_duplicate_event() {
         .insert_task(&make_task("t-stop-interrupted", TaskStatus::Pending))
         .expect("insert");
     stop(&store, "t-stop-interrupted").expect("settle");
-    let before = store.get_task("t-stop-interrupted").expect("get").expect("task");
+    let before = store
+        .get_task("t-stop-interrupted")
+        .expect("get")
+        .expect("task");
     let mut worker = Command::new("sleep").arg("30").spawn().expect("worker");
     save_worker("t-stop-interrupted", worker.id());
     let result = stop(&store, "t-stop-interrupted");
@@ -140,8 +145,17 @@ fn settle_first_restop_signals_live_worker_without_duplicate_event() {
     }
     result.expect("repeat stop must recover signal delivery");
     assert!(!live, "repeat stop must kill the worker");
-    let after = store.get_task("t-stop-interrupted").expect("get").expect("task");
+    let after = store
+        .get_task("t-stop-interrupted")
+        .expect("get")
+        .expect("task");
     assert_eq!(before.completed_at, after.completed_at);
     assert_eq!(before.duration_ms, after.duration_ms);
-    assert_eq!(store.get_events("t-stop-interrupted").expect("events").len(), 1);
+    assert_eq!(
+        store
+            .get_events("t-stop-interrupted")
+            .expect("events")
+            .len(),
+        1
+    );
 }

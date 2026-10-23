@@ -11,7 +11,7 @@ pub(super) fn replace_string(
     let mut index = 0;
     let mut found = None;
     while index < bytes.len() {
-        if index % 4096 == 0 && deadline.expired() {
+        if index.is_multiple_of(4096) && deadline.expired() {
             return None;
         }
         match bytes[index] {
@@ -65,7 +65,7 @@ fn string_end(bytes: &[u8], start: usize, deadline: &super::Deadline) -> Option<
 
 fn skip_space(bytes: &[u8], mut index: usize, deadline: &super::Deadline) -> Option<usize> {
     while bytes.get(index).is_some_and(u8::is_ascii_whitespace) {
-        if index % 4096 == 0 && deadline.expired() {
+        if index.is_multiple_of(4096) && deadline.expired() {
             return None;
         }
         index += 1;

@@ -13,14 +13,6 @@ pub fn current_caller() -> Option<CallerSession> {
     explicit_caller().or_else(detect_known_caller)
 }
 
-pub fn matches_current(task: &Task) -> bool {
-    let Some(current) = current_caller() else {
-        return false;
-    };
-    task.caller_kind.as_deref() == Some(current.kind.as_str())
-        && task.caller_session_id.as_deref() == Some(current.session_id.as_str())
-}
-
 pub fn display(task: &Task) -> String {
     match (
         task.caller_kind.as_deref(),

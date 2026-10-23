@@ -3,10 +3,6 @@
 use super::TaskEvent;
 
 impl TaskEvent {
-    pub fn output_trimmed(&self) -> bool {
-        self.trimmed_note().is_some()
-    }
-
     pub(crate) fn trimmed_note(&self) -> Option<&'static str> {
         let trimmed = |key| {
             self.metadata

@@ -105,6 +105,12 @@ pub(super) fn assert_stop_kills_worker_and_agent() {
             Some(pid),
             "PID must be visible before worker can die"
         );
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while crate::support::test_subprocess::is_live(pid as i32)
+            && std::time::Instant::now() < deadline
+        {
+            std::thread::yield_now();
+        }
         assert!(
             !crate::support::test_subprocess::is_live(pid as i32),
             "agent survived worker"

@@ -224,6 +224,9 @@ impl TaskEvent {
     /// Untruncated detail: parsers stash text over the display cap in
     /// metadata under `"full"`.
     pub fn full_detail(&self) -> &str {
+        if self.output_trimmed() {
+            return "output trimmed";
+        }
         self.metadata
             .as_ref()
             .and_then(|meta| meta.get("full"))

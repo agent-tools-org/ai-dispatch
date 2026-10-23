@@ -257,3 +257,15 @@ fn task_event_full_detail_prefers_metadata_full() {
     event.metadata = None;
     assert_eq!(event.full_detail(), "truncated...");
 }
+
+#[test]
+fn trimmed_event_readers_explain_missing_output() {
+    let event = TaskEvent {
+        task_id: TaskId("t-trimmed".into()), timestamp: Local::now(),
+        event_kind: EventKind::Build, detail: "build output".into(),
+        metadata: Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})),
+    };
+    assert!(event.output_trimmed());
+    assert_eq!(event.full_detail(), "output trimmed");
+    assert_eq!(event.display_detail(), "build output [output trimmed]");
+}

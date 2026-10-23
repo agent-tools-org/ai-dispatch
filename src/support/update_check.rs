@@ -1,5 +1,5 @@
-// Update notification cache and crates.io refresh for the aid CLI.
-// Exports maybe_check_update(); depends on chrono, serde, serde_json, and paths.
+// Update notifications and shared maintenance-cache persistence for the aid CLI.
+// Exports maybe_check_update(), with_cache_state(); uses chrono, serde_json, paths, flock.
 
 use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -60,7 +60,39 @@ fn read_cache(path: &Path) -> Result<UpdateCache, ()> {
 }
 
 fn write_cache(path: &Path, cache: &UpdateCache) -> Result<(), ()> {
-    fs::write(path, serde_json::to_vec(cache).map_err(|_| ())?).map_err(|_| ())
+    with_cache_state(path, |state| {
+        state["last_check"] = serde_json::json!(cache.last_check);
+        state["latest_version"] = serde_json::json!(cache.latest_version);
+        Ok(Some(()))
+    }).map(|_| ()).map_err(|_| ())
+}
+
+/// Serialize maintenance and version-cache updates across aid processes.
+pub(crate) fn with_cache_state<T>(
+    path: &Path,
+    update: impl FnOnce(&mut serde_json::Value) -> anyhow::Result<Option<T>>,
+) -> anyhow::Result<Option<T>> {
+    use std::os::fd::AsRawFd;
+    let lock = fs::OpenOptions::new().create(true).truncate(false).write(true)
+        .open(path.with_extension("lock"))?;
+    if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+        return Ok(None);
+    }
+    let mut state = match fs::read(path) {
+        Ok(bytes) => serde_json::from_slice(&bytes)?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => serde_json::json!({}),
+        Err(error) => return Err(error.into()),
+    };
+    if !state.is_object() {
+        anyhow::bail!("Update-check state must be a JSON object");
+    }
+    let result = update(&mut state)?;
+    if result.is_some() {
+        let temporary = path.with_extension("tmp");
+        fs::write(&temporary, serde_json::to_vec(&state)?)?;
+        fs::rename(temporary, path)?;
+    }
+    Ok(result)
 }
 
 fn parse_crates_io_response(body: &str) -> Option<String> {
@@ -142,4 +174,18 @@ mod tests {
 
         maybe_check_update();
     }
+
+    #[test]
+    fn version_refresh_preserves_retention_state() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("update-check.json");
+        std::fs::write(&path, r#"{"payload_trim_last_run":1000,"payload_trim_cursor":123}"#).unwrap();
+        write_cache(&path, &UpdateCache {
+            last_check: "today".into(), latest_version: "1.0.0".into(),
+        }).unwrap();
+        let state: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        assert_eq!(state["payload_trim_last_run"], 1000);
+        assert_eq!(state["payload_trim_cursor"], 123);
+    }
+
 }

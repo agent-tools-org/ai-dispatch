@@ -156,8 +156,10 @@ pub(super) fn agent(store: Arc<store::Store>, action: AgentCommands) -> Result<(
     run_agent_command(&store, action)
 }
 
-pub(super) fn clean(store: Arc<store::Store>, older_than: u64, worktrees: bool, dry_run: bool) -> Result<()> {
-    cmd::clean::run(store, older_than, worktrees, dry_run)
+pub(super) fn clean(
+    store: Arc<store::Store>, older_than: u64, worktrees: bool, dry_run: bool, vacuum: bool,
+) -> Result<()> {
+    cmd::clean::run(store, older_than, worktrees, dry_run, vacuum)
 }
 
 pub(super) fn doctor(store: Arc<store::Store>, apply: bool) -> Result<()> {

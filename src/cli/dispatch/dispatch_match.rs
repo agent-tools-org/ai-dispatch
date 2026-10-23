@@ -33,7 +33,8 @@ pub(crate) async fn dispatch(
         Commands::Notifications => display::notifications(),
         Commands::Changelog(inspect_args::ChangelogArgs { version, all, count, git }) => display::changelog(version, all, count, git),
         Commands::Agent(agent_provider_args::AgentArgs { action }) => display::agent(store, action),
-        Commands::Clean(project_args::CleanArgs { older_than, worktrees, dry_run }) => display::clean(store, older_than, worktrees, dry_run),
+        Commands::Clean(project_args::CleanArgs { older_than, worktrees, dry_run, vacuum }) =>
+            display::clean(store, older_than, worktrees, dry_run, vacuum),
         Commands::Show(inspect_args::ShowArgs { task_id, events, context, diff, summary, file, branch, output, result, transcript, full, brief, explain, log, json, agent, model }) => display::show(store, task_id, events, context, diff, summary, file, branch, output, result, transcript, full, brief, explain, log, json, agent, model).await,
         Commands::Export(inspect_args::ExportArgs { task_id, format, sharegpt, output }) => {
             display::export(store, task_id, format, sharegpt, output).await

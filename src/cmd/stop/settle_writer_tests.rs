@@ -69,20 +69,9 @@ fn assert_writer_timing(store: &Store, index: usize, status: TaskStatus) {
     let changed = match index {
         0 => store.update_task_status(&id, TaskStatus::Failed),
         1 => store.update_task_status(&id, TaskStatus::Stopped),
-        2 => store.settle_task_status(
-            &id,
-            TaskStatus::Failed,
-            Some(&[TaskStatus::Running, TaskStatus::Waiting]),
-            None,
-            None,
-        ),
-        3 => store.settle_task_status(
-            &id,
-            TaskStatus::Failed,
-            Some(&[TaskStatus::Pending]),
-            Some(PendingReason::Unknown),
-            None,
-        ),
+        2 => store.fail_if_running(&id),
+        3 => store.settle_task_status(&id, TaskStatus::Failed, Some(&[TaskStatus::Pending]),
+            Some(PendingReason::Unknown), None),
         4 => store.fail_waiting_with_reason(&id, "timeout"),
         5 => store.fail_active_execution(&id),
         6 => store.record_agent_completion(payload(&id, TaskStatus::Failed), None),

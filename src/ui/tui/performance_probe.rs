@@ -17,11 +17,7 @@ fn profile_tui_snapshot() {
     let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     let store = Arc::new(Store::open_read_only(std::path::Path::new(&path)).unwrap().unwrap());
     crate::store::optimize_for_concurrency(&store.db()).unwrap();
-    let mut app = measure("app_new", || {
-        let mut app = App::empty(store.clone(), RunOptions::default());
-        app.reload_tasks().unwrap();
-        app
-    });
+    let mut app = measure("app_new", || App::new(store.clone(), RunOptions::default()).unwrap());
     println!("PROFILE visible_tasks={}", app.tasks.len());
     let ids: Vec<&str> = app.tasks.iter().map(|task| task.id.as_str()).collect();
     for _ in 0..3 {

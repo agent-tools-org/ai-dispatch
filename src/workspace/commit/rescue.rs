@@ -26,6 +26,11 @@ pub fn detect_untracked_source_files(dir: &str) -> Result<Vec<String>> {
         .collect())
 }
 
+#[cfg(test)]
+pub fn rescue_dirty_worktree(dir: &str, task_id: &str, start_sha: Option<&str>) -> Result<RescueOutcome> {
+    rescue_dirty_worktree_with_baseline(dir, task_id, None, start_sha)
+}
+
 pub fn rescue_dirty_worktree_with_baseline(
     dir: &str,
     task_id: &str,

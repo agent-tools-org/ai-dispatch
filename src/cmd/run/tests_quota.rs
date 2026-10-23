@@ -12,10 +12,7 @@ fn failed_pty_quota_excerpt_allows_continuation_without_promoting_its_hold() {
     task.agent = AgentKind::Oz;
     let message = "Error: Quota limit reached.";
     std::fs::write(paths::log_path(task.id.as_str()), message).expect("PTY log");
-    assert_eq!(
-        crate::cmd::run::run_post::read_quota_error_message(&task.id, &task.agent),
-        None
-    );
+    assert_eq!(read_quota_error_message(&task.id, &task.agent), None);
     assert_eq!(
         run_post::record_failed_quota(&task, task.agent).as_deref(),
         Some(message)
@@ -60,15 +57,9 @@ fn empty_diff_detection_respects_worktree_state() {
     std::fs::write(&file, "initial").unwrap();
     git(dir.path(), &["add", "file.txt"]);
     git(dir.path(), &["commit", "-m", "initial"]);
-    assert_eq!(
-        run_post::worktree_is_empty_diff_with_base(dir.path(), None),
-        Some(true)
-    );
+    assert_eq!(worktree_is_empty_diff(dir.path()), Some(true));
     std::fs::write(&file, "updated").unwrap();
-    assert_eq!(
-        run_post::worktree_is_empty_diff_with_base(dir.path(), None),
-        Some(false)
-    );
+    assert_eq!(worktree_is_empty_diff(dir.path()), Some(false));
 }
 
 #[test]
@@ -78,14 +69,14 @@ fn take_next_cascade_agent_consumes_first_entry() {
         cascade: vec!["codex".to_string(), "cursor".to_string()],
         ..Default::default()
     };
-    let result = crate::cmd::run::run_post::take_next_cascade_agent(&args);
+    let result = take_next_cascade_agent(&args);
     assert_eq!(result, Some(("codex".to_string(), vec!["cursor".to_string()])));
 }
 
 #[test]
 fn take_next_cascade_agent_returns_none_when_empty() {
     let args = RunArgs { cascade: vec![], ..Default::default() };
-    assert!(crate::cmd::run::run_post::take_next_cascade_agent(&args).is_none());
+    assert!(take_next_cascade_agent(&args).is_none());
 }
 
 #[test]
@@ -98,10 +89,7 @@ fn read_quota_error_message_uses_stderr() {
         "You have hit your usage limit.",
     )
     .unwrap();
-    let message = crate::cmd::run::run_post::read_quota_error_message(
-        &TaskId("t-quota-stderr".to_string()),
-        &AgentKind::Codex,
-    );
+    let message = read_quota_error_message(&TaskId("t-quota-stderr".to_string()), &AgentKind::Codex);
     assert_eq!(message.as_deref(), Some("You have hit your usage limit."));
 }
 
@@ -115,10 +103,7 @@ fn read_quota_error_message_falls_back_to_log() {
         "{\"error\":\"You have hit your usage limit.\"}\n",
     )
     .unwrap();
-    let message = crate::cmd::run::run_post::read_quota_error_message(
-        &TaskId("t-quota-log".to_string()),
-        &AgentKind::Codex,
-    );
+    let message = read_quota_error_message(&TaskId("t-quota-log".to_string()), &AgentKind::Codex);
     // The provider's sentence, lifted out of the envelope it arrived in — not
     // the raw JSON, which is what the marker used to end up holding.
     assert_eq!(message.as_deref(), Some("You have hit your usage limit."));
@@ -134,10 +119,7 @@ fn read_quota_error_message_extracts_rate_limit_line_only() {
         "tokens: 8714294 in + 27373 out = 8741667 (8442752 cached)\nYou have hit your usage limit.\nsome other line\n",
     )
     .unwrap();
-    let message = crate::cmd::run::run_post::read_quota_error_message(
-        &TaskId("t-quota-mixed".to_string()),
-        &AgentKind::Codex,
-    );
+    let message = read_quota_error_message(&TaskId("t-quota-mixed".to_string()), &AgentKind::Codex);
     assert_eq!(message.as_deref(), Some("You have hit your usage limit."));
 }
 
@@ -151,14 +133,8 @@ fn read_quota_error_message_detects_402_payment_errors() {
         "{\"type\":\"error\",\"source\":\"agent_loop\",\"message\":\"402 payment required: reload your tokens\"}\n",
     )
     .unwrap();
-    let message = crate::cmd::run::run_post::read_quota_error_message(
-        &TaskId("t-quota-402".to_string()),
-        &AgentKind::Codex,
-    );
-    assert_eq!(
-        message.as_deref(),
-        Some("402 payment required: reload your tokens")
-    );
+    let message = read_quota_error_message(&TaskId("t-quota-402".to_string()), &AgentKind::Codex);
+    assert_eq!(message.as_deref(), Some("402 payment required: reload your tokens"));
 }
 
 #[test]
@@ -174,7 +150,7 @@ fn read_quota_error_message_ignores_agent_grep_in_log() {
     )
     .unwrap();
     let task_id = TaskId("t-quota-grep-log".to_string());
-    let message = crate::cmd::run::run_post::read_quota_error_message(&task_id, &AgentKind::Cursor);
+    let message = read_quota_error_message(&task_id, &AgentKind::Cursor);
     assert_eq!(message, None);
     if let Some(line) = message.as_deref() {
         crate::routing::rate_limit::mark_rate_limited(&AgentKind::Cursor, None, line);
@@ -205,7 +181,7 @@ fn terminal_failure_refuses_empty_worktree_rescue() {
     assert_terminal_failure_preserved(
         &store,
         &task.id,
-        crate::cmd::run::run_post::read_quota_error_message(&task.id, &task.agent).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
 
     let task = store.get_task("t-empty-wt").unwrap().unwrap();
@@ -236,7 +212,7 @@ fn terminal_failure_preserves_worktree_with_modified_code() {
     assert_terminal_failure_preserved(
         &store,
         &task.id,
-        crate::cmd::run::run_post::read_quota_error_message(&task.id, &task.agent).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
     let checked_task = store.get_task("t-work-wt").unwrap().unwrap();
     assert_eq!(checked_task.status, TaskStatus::Failed);
@@ -246,7 +222,7 @@ fn terminal_failure_preserves_worktree_with_modified_code() {
     assert_terminal_failure_preserved(
         &store,
         &task.id,
-        crate::cmd::run::run_post::read_quota_error_message(&task.id, &task.agent).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
 
     let task = store.get_task("t-work-wt").unwrap().unwrap();
@@ -278,7 +254,7 @@ fn terminal_failure_preserves_untracked_source_files() {
     assert_terminal_failure_preserved(
         &store,
         &task.id,
-        crate::cmd::run::run_post::read_quota_error_message(&task.id, &task.agent).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
     let checked = store.get_task("t-untracked-wt").unwrap().unwrap();
     assert_eq!(checked.status, TaskStatus::Failed);
@@ -290,7 +266,7 @@ fn terminal_failure_preserves_untracked_source_files() {
     assert_terminal_failure_preserved(
         &store,
         &task.id,
-        crate::cmd::run::run_post::read_quota_error_message(&task.id, &task.agent).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
 
     let task = store.get_task("t-untracked-wt").unwrap().unwrap();

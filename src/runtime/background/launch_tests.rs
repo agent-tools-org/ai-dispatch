@@ -37,12 +37,9 @@ fn worker_launch_preservation_uses_resolved_prompt_with_raw_lifecycle_args() {
     .unwrap();
     let args = RunArgs::for_worker(&store, &spec).unwrap();
     let agent = capture_agent();
-    let isolated = agent::home_isolation::IsolatedHomeGuard::create_from_home_with_remote_build(
-        Some(home.path()),
-        Some(id),
-        false,
-    )
-    .unwrap();
+    let isolated =
+        agent::home_isolation::IsolatedHomeGuard::create_from_home(Some(home.path()), Some(id))
+            .unwrap();
     let (command, _) = prepare_launch(&store, &spec, &args, &agent, &isolated).unwrap();
     assert_eq!(args.prompt, "Caller brief");
     assert_eq!(command.get_args().last().unwrap(), resolved);

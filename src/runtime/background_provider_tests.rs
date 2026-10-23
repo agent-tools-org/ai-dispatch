@@ -23,10 +23,9 @@ fn switched_provider_refuses_worker_and_retry_before_building_y_argv() {
     assert_eq!(adapter.rate_limit_name(), Some("codex-provider:X"));
     let opts = assert_matching_command(adapter.as_ref());
     std::fs::write(&config, "model_provider='Y'").unwrap();
-    let isolated = agent::home_isolation::IsolatedHomeGuard::create_from_home_with_remote_build(
+    let isolated = agent::home_isolation::IsolatedHomeGuard::create_from_home(
         Some(home.path()),
         Some("t-drift"),
-        false,
     )
     .unwrap();
     let builds = agent::codex::command_builds::count();

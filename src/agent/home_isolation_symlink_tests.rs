@@ -3,7 +3,8 @@
 // Deps: home isolation API, tempfile, and std::fs.
 
 use super::super::home_isolation::{
-    IsolatedHomeGuard, SymlinkRepair, apply_repairs, reconcile_leaked_symlinks, scan_doctor_symlinks,
+    apply_repairs, scan_doctor_symlinks, reconcile_leaked_symlinks, IsolatedHomeGuard,
+    SymlinkRepair,
 };
 use std::fs;
 use std::path::Path;
@@ -20,7 +21,7 @@ fn drop_rewrites_passthrough_installer_symlink_and_preserves_negative_controls()
     fs::write(&tool, "tool payload").expect("tool payload");
 
     let (iso_path, unrelated_link, missing_link) = {
-        let guard = IsolatedHomeGuard::create_from_home_with_remote_build(Some(&real_home), None, false)
+        let guard = IsolatedHomeGuard::create_from_home(Some(&real_home), None)
             .expect("guard");
         let iso_path = guard.path().to_path_buf();
         let bin = iso_path.join(".local/bin");

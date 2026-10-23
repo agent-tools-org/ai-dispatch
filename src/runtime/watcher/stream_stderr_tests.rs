@@ -21,7 +21,7 @@ async fn streaming_watch_fast_fail_preserves_stderr_in_log() {
         .spawn()
         .unwrap();
 
-    let info = watch_streaming_with_input(
+    let info = watch_streaming(
         &StubStreamingAgent,
         &mut child,
         &task_id,
@@ -29,8 +29,6 @@ async fn streaming_watch_fast_fail_preserves_stderr_in_log() {
         &log_path,
         None,
         crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT,
-        None,
-        None,
         None,
     )
     .await
@@ -59,7 +57,7 @@ async fn streaming_watch_signal_killed_process_does_not_replay_stderr() {
         .spawn()
         .unwrap();
 
-    let info = watch_streaming_with_input(
+    let info = watch_streaming(
         &StubStreamingAgent,
         &mut child,
         &task_id,
@@ -67,8 +65,6 @@ async fn streaming_watch_signal_killed_process_does_not_replay_stderr() {
         &log_path,
         None,
         std::time::Duration::from_millis(100),
-        None,
-        None,
         None,
     )
     .await
@@ -100,7 +96,7 @@ async fn streaming_watch_caps_preserved_stderr() {
         .spawn()
         .unwrap();
 
-    let info = watch_streaming_with_input(
+    let info = watch_streaming(
         &StubStreamingAgent,
         &mut child,
         &task_id,
@@ -108,8 +104,6 @@ async fn streaming_watch_caps_preserved_stderr() {
         &log_path,
         None,
         crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT,
-        None,
-        None,
         None,
     )
     .await

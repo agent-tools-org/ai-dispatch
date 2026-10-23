@@ -47,16 +47,9 @@ fn remote_home_materializes_cargo_and_plain_home_keeps_symlink() {
         assert_eq!(fs::read_link(cargo.join(entry)).expect("passthrough link"), real.join(".cargo").join(entry));
     }
     drop(guard);
-    assert_eq!(
-        fs::read_link(real.join(".cargo/bin/rustc")).expect("operator link"),
-        PathBuf::from("rustup")
-    );
-    let plain =
-        IsolatedHomeGuard::create_from_home_with_remote_build(Some(&real), None, false).expect("plain home");
-    assert_eq!(
-        fs::read_link(plain.path().join(".cargo")).expect("plain link"),
-        real.join(".cargo")
-    );
+    assert_eq!(fs::read_link(real.join(".cargo/bin/rustc")).expect("operator link"), PathBuf::from("rustup"));
+    let plain = IsolatedHomeGuard::create_from_home(Some(&real), None).expect("plain home");
+    assert_eq!(fs::read_link(plain.path().join(".cargo")).expect("plain link"), real.join(".cargo"));
 }
 
 fn shell_command(guard: &IsolatedHomeGuard, real: &Path, shell: &str, script: &str) -> Command {

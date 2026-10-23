@@ -8,11 +8,7 @@ use std::time::{Duration, Instant};
 
 #[test]
 fn first_token_hang_fires_for_streaming_without_raw_bytes() {
-    let mut state = MonitorState::with_policy(
-        true,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(true, None);
     state.last_raw_chunk_time = Instant::now() - Duration::from_secs(181);
 
     assert!(state.first_token_hang_elapsed(true, Duration::from_secs(180), "t-stream-hang"));
@@ -23,11 +19,7 @@ fn first_token_hang_fires_for_streaming_without_raw_bytes() {
 
 #[test]
 fn first_token_hang_is_inert_when_raw_bytes_keep_arriving() {
-    let mut state = MonitorState::with_policy(
-        true,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(true, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(181);
     state.last_raw_chunk_time = Instant::now();
 
@@ -42,11 +34,7 @@ fn first_token_hang_fires_for_buffered_without_raw_bytes_and_no_log() {
     let _home = paths::AidHomeGuard::set(temp.path());
     paths::ensure_dirs().expect("ensure dirs");
 
-    let mut state = MonitorState::with_policy(
-        false,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(false, None);
     state.last_raw_chunk_time = Instant::now() - Duration::from_secs(181);
 
     // No log file written — nothing at the agent_log_path.
@@ -69,11 +57,7 @@ fn first_token_hang_is_inert_for_buffered_with_growing_log() {
     let agent_log = paths::agent_log_path("t-buf-live");
     std::fs::write(&agent_log, "grok debug output...\n").expect("write log");
 
-    let mut state = MonitorState::with_policy(
-        false,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(false, None);
     // Make the log look written after MonitorState was created.
     state.start_system_time = std::time::SystemTime::now() - Duration::from_secs(200);
     state.last_raw_chunk_time = Instant::now() - Duration::from_secs(181);
@@ -87,11 +71,7 @@ fn first_token_hang_is_inert_for_buffered_with_growing_log() {
 #[test]
 fn first_token_hang_is_inert_for_buffered_after_any_raw_bytes() {
     // Silence after progress deserves the long idle budget, not first-token.
-    let mut state = MonitorState::with_policy(
-        false,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(false, None);
     state.received_raw_bytes = true;
     state.last_raw_chunk_time = Instant::now() - Duration::from_secs(181);
 
@@ -100,11 +80,7 @@ fn first_token_hang_is_inert_for_buffered_after_any_raw_bytes() {
 
 #[test]
 fn first_token_hang_is_inert_after_real_progress() {
-    let mut state = MonitorState::with_policy(
-        true,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(true, None);
     state.event_count = 2;
     state.last_raw_chunk_time = Instant::now() - Duration::from_secs(181);
 

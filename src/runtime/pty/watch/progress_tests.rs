@@ -8,11 +8,7 @@ fn auto_nudge_echo_does_not_reset_idle_progress_clock() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = pty_task("t-nudge-echo-idle", TaskStatus::Running);
     store.insert_task(&task).unwrap();
-    let mut state = MonitorState::with_policy(
-        true,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(true, None);
     let idle = Duration::from_secs(2);
     let stale = Instant::now() - idle - Duration::from_millis(50);
     state.last_progress_time = stale;
@@ -63,11 +59,7 @@ fn agent_resume_after_nudge_echo_does_reset_idle_progress_clock() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = pty_task("t-nudge-then-resume", TaskStatus::Running);
     store.insert_task(&task).unwrap();
-    let mut state = MonitorState::with_policy(
-        true,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(true, None);
     let idle = Duration::from_secs(2);
     state.last_progress_time = Instant::now() - idle - Duration::from_millis(50);
     state.idle_nudged = true;
@@ -113,11 +105,7 @@ fn reasoning_events_refresh_liveness_clock() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = pty_task("t-opencode-reasoning-progress", TaskStatus::Running);
     store.insert_task(&task).unwrap();
-    let mut state = MonitorState::with_policy(
-        true,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(true, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(10);
     let mut log = tempfile::NamedTempFile::new().unwrap();
 
@@ -140,11 +128,7 @@ fn milestone_output_refreshes_progress_clock() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = pty_task("t-milestone-progress", TaskStatus::Running);
     store.insert_task(&task).unwrap();
-    let mut state = MonitorState::with_policy(
-        true,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(true, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(10);
     let mut log = tempfile::NamedTempFile::new().unwrap();
 
@@ -169,11 +153,7 @@ fn finding_line_with_workgroup_records_shared_finding() {
     let mut task = pty_task("t-pty-finding", TaskStatus::Running);
     task.workgroup_id = Some("wg-pty-finding".to_string());
     store.insert_task(&task).unwrap();
-    let mut state = MonitorState::with_policy(
-        true,
-        task.workgroup_id.clone(),
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(true, task.workgroup_id.clone());
     let mut log = tempfile::NamedTempFile::new().unwrap();
 
     state
@@ -200,11 +180,7 @@ fn session_id_is_saved_once_across_stream_events() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = pty_task("t-pty-session", TaskStatus::Running);
     store.insert_task(&task).unwrap();
-    let mut state = MonitorState::with_policy(
-        true,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(true, None);
     let mut log = tempfile::NamedTempFile::new().unwrap();
 
     state

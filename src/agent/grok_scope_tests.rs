@@ -26,12 +26,11 @@ fn grok_only_classifies_the_typed_error_message() {
     let home = tempfile::tempdir().expect("home");
     let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     assert!(
-        !crate::agent::stream_completion::record_quota_exhaustion_with_delivery(
+        !crate::agent::stream_completion::record_quota_exhaustion(
             "usage balance exhausted",
             AgentKind::Grok,
             None,
-            None,
-            false
+            None
         )
         .recorded()
     );
@@ -39,12 +38,11 @@ fn grok_only_classifies_the_typed_error_message() {
         json!({"type":"result", "text":"usage balance exhausted", "stopReason":"end_turn"}),
         json!({"type":"error", "message":"socket closed", "text":"usage balance exhausted"}),
     ] {
-        crate::agent::stream_completion::record_quota_exhaustion_with_delivery(
+        crate::agent::stream_completion::record_quota_exhaustion(
             &event.to_string(),
             AgentKind::Grok,
             None,
             None,
-            false,
         );
         assert!(!rate_limit::marker_path(&AgentKind::Grok, None).exists());
     }

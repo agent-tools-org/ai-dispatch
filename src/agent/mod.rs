@@ -63,6 +63,8 @@ pub use env::{
     cargo_target_env_arg, is_rust_project, rust_build_cache_target_dir, set_git_ceiling,
     target_dir_for_worktree,
 };
+#[cfg(test)]
+pub use env::shared_target_dir;
 pub(crate) use env::{should_use_durable_codex_home, CliCommandOutput, CliCommandRunner};
 /// Adapter trait for AI CLI tools
 pub trait Agent: Send + Sync {

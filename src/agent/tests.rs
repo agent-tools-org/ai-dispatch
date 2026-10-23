@@ -1,7 +1,7 @@
 // Integration-style tests for agent env helpers and subprocess markers.
 // Exports: none (test module). Deps: crate::agent, crate::support::paths, tempfile.
 
-use super::{RunOpts, apply_run_env, is_rust_project, set_git_ceiling, target_dir_for_worktree};
+use super::{apply_run_env, is_rust_project, set_git_ceiling, shared_target_dir, target_dir_for_worktree, RunOpts};
 use crate::support::paths::AidHomeGuard;
 use crate::support::test_subprocess;
 use std::collections::HashMap;
@@ -135,13 +135,13 @@ fn reports_shared_target_dir_for_subprocess() {
     let _permit = test_subprocess::acquire();
     println!(
         "SHARED_TARGET_DIR={}",
-        target_dir_for_worktree(None).unwrap_or_default()
+        shared_target_dir().unwrap_or_default()
     );
 }
 
 #[test]
 fn target_dir_for_worktree_isolates_branches() {
-    let base = target_dir_for_worktree(None).unwrap();
+    let base = shared_target_dir().unwrap();
     let isolated = target_dir_for_worktree(Some("feat/my-feature")).unwrap();
     let root = Path::new(&base).parent().unwrap();
     assert_eq!(isolated, root.join("feat-my-feature").to_string_lossy().as_ref());
@@ -168,8 +168,7 @@ fn apply_run_env_sets_explicit_vars_on_command() {
         env_forward: None,
     };
 
-    let home_guard =
-        crate::agent::home_isolation::IsolatedHomeGuard::create_with_remote_build(None, false).unwrap();
+    let home_guard = crate::agent::home_isolation::IsolatedHomeGuard::create(None).unwrap();
     apply_run_env(&mut cmd, &opts, &home_guard);
 
     let envs: Vec<_> = cmd.get_envs().collect();
@@ -201,8 +200,7 @@ fn apply_run_env_sets_aid_home_on_command() {
         env_forward: Some(vec![]),
     };
 
-    let home_guard =
-        crate::agent::home_isolation::IsolatedHomeGuard::create_with_remote_build(None, false).unwrap();
+    let home_guard = crate::agent::home_isolation::IsolatedHomeGuard::create(None).unwrap();
     apply_run_env(&mut cmd, &opts, &home_guard);
 
     let envs: Vec<_> = cmd.get_envs().collect();
@@ -250,8 +248,7 @@ fn reports_forwarded_env_for_subprocess() {
         env: None,
         env_forward: Some(vec!["AID_TEST_FORWARDED_ENV".to_string()]),
     };
-    let home_guard =
-        crate::agent::home_isolation::IsolatedHomeGuard::create_with_remote_build(None, false).unwrap();
+    let home_guard = crate::agent::home_isolation::IsolatedHomeGuard::create(None).unwrap();
     apply_run_env(&mut cmd, &opts, &home_guard);
     let envs: Vec<_> = cmd.get_envs().collect();
     let forwarded = envs

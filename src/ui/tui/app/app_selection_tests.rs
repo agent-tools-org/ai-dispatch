@@ -63,17 +63,14 @@ fn selection_follows_task_identity_when_newer_task_appears() {
     mid.created_at = Local::now() - Duration::seconds(10);
     store.insert_task(&mid).unwrap();
 
-    let mut app = {
-        let mut app = App::empty(
-            store.clone(),
-            super::super::RunOptions {
-                task_id: None,
-                group: None,
-            },
-        );
-        app.reload_tasks().unwrap();
-        app
-    };
+    let mut app = App::new(
+        store.clone(),
+        super::super::RunOptions {
+            task_id: None,
+            group: None,
+        },
+    )
+    .unwrap();
 
     // Newest-first list: select the older task explicitly.
     let old_idx = app
@@ -110,17 +107,14 @@ fn detail_scroll_clamps_to_content() {
     let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
     let store = Arc::new(Store::open_memory().unwrap());
     store.insert_task(&make_task("t-scroll-1")).unwrap();
-    let mut app = {
-        let mut app = App::empty(
-            store,
-            super::super::RunOptions {
-                task_id: None,
-                group: None,
-            },
-        );
-        app.reload_tasks().unwrap();
-        app
-    };
+    let mut app = App::new(
+        store,
+        super::super::RunOptions {
+            task_id: None,
+            group: None,
+        },
+    )
+    .unwrap();
 
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
         .unwrap();
@@ -146,17 +140,14 @@ fn multipane_focus_follows_task_identity_when_refresh_reorders_panes() {
     older.created_at = Local::now() - Duration::seconds(20);
     store.insert_task(&older).unwrap();
 
-    let mut app = {
-        let mut app = App::empty(
-            store.clone(),
-            super::super::RunOptions {
-                task_id: None,
-                group: None,
-            },
-        );
-        app.reload_tasks().unwrap();
-        app
-    };
+    let mut app = App::new(
+        store.clone(),
+        super::super::RunOptions {
+            task_id: None,
+            group: None,
+        },
+    )
+    .unwrap();
     app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE))
         .unwrap();
 
@@ -178,17 +169,14 @@ fn multipane_scroll_follows_task_identity_when_refresh_reorders_panes() {
     older.created_at = Local::now() - Duration::seconds(20);
     store.insert_task(&older).unwrap();
 
-    let mut app = {
-        let mut app = App::empty(
-            store.clone(),
-            super::super::RunOptions {
-                task_id: None,
-                group: None,
-            },
-        );
-        app.reload_tasks().unwrap();
-        app
-    };
+    let mut app = App::new(
+        store.clone(),
+        super::super::RunOptions {
+            task_id: None,
+            group: None,
+        },
+    )
+    .unwrap();
     app.multipane_mode = true;
     app.pane_scroll_offsets
         .insert("t-pane-scroll".to_string(), 3);
@@ -213,17 +201,14 @@ fn tree_selection_survives_refresh_while_tree_mode_is_inactive() {
     first.created_at = Local::now() - Duration::seconds(10);
     store.insert_task(&first).unwrap();
 
-    let mut app = {
-        let mut app = App::empty(
-            store.clone(),
-            super::super::RunOptions {
-                task_id: None,
-                group: None,
-            },
-        );
-        app.reload_tasks().unwrap();
-        app
-    };
+    let mut app = App::new(
+        store.clone(),
+        super::super::RunOptions {
+            task_id: None,
+            group: None,
+        },
+    )
+    .unwrap();
     app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE))
         .unwrap();
     app.tick().unwrap();
@@ -240,11 +225,7 @@ fn tree_selection_survives_refresh_while_tree_mode_is_inactive() {
         .unwrap();
     app.tick().unwrap();
 
-    let nodes = crate::ui::tui::tree_data::build_task_tree_with_state(
-        &app.tasks,
-        &app.wg_creators,
-        &std::collections::HashSet::new(),
-    );
+    let nodes = crate::ui::tui::tree_data::build_task_tree_with_creators(&app.tasks, &app.wg_creators);
     assert_eq!(nodes[app.tree_selected].task_id.as_str(), "t-tree-selected");
 }
 
@@ -258,17 +239,14 @@ fn multipane_enter_opens_task_identity_after_refresh_reorders_panes() {
     older.created_at = Local::now() - Duration::seconds(20);
     store.insert_task(&older).unwrap();
 
-    let mut app = {
-        let mut app = App::empty(
-            store.clone(),
-            super::super::RunOptions {
-                task_id: None,
-                group: None,
-            },
-        );
-        app.reload_tasks().unwrap();
-        app
-    };
+    let mut app = App::new(
+        store.clone(),
+        super::super::RunOptions {
+            task_id: None,
+            group: None,
+        },
+    )
+    .unwrap();
     app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE))
         .unwrap();
 

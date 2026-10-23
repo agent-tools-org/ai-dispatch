@@ -83,11 +83,7 @@ mod tests {
     #[test]
     fn toggles_dashboard_mode_with_d_key() {
         let store = Arc::new(Store::open_memory().unwrap());
-        let mut app = {
-            let mut app = app::App::empty(store, RunOptions::default());
-            app.reload_tasks().unwrap();
-            app
-        };
+        let mut app = app::App::new(store, RunOptions::default()).unwrap();
 
         assert!(!app.dashboard_mode);
         app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE)).unwrap();
@@ -99,11 +95,7 @@ mod tests {
     #[test]
     fn toggles_multipane_mode_with_m_key() {
         let store = Arc::new(Store::open_memory().unwrap());
-        let mut app = {
-            let mut app = app::App::empty(store, RunOptions::default());
-            app.reload_tasks().unwrap();
-            app
-        };
+        let mut app = app::App::new(store, RunOptions::default()).unwrap();
 
         assert!(!app.multipane_mode);
         app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE)).unwrap();
@@ -116,11 +108,7 @@ mod tests {
     #[test]
     fn toggles_show_all_with_a_key() {
         let store = Arc::new(Store::open_memory().unwrap());
-        let mut app = {
-            let mut app = app::App::empty(store, RunOptions::default());
-            app.reload_tasks().unwrap();
-            app
-        };
+        let mut app = app::App::new(store, RunOptions::default()).unwrap();
 
         assert!(!app.show_all);
         app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)).unwrap();
@@ -132,11 +120,7 @@ mod tests {
     #[test]
     fn toggles_stats_mode_with_s_key() {
         let store = Arc::new(Store::open_memory().unwrap());
-        let mut app = {
-            let mut app = app::App::empty(store, RunOptions::default());
-            app.reload_tasks().unwrap();
-            app
-        };
+        let mut app = app::App::new(store, RunOptions::default()).unwrap();
 
         assert!(!app.stats_mode);
         app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE)).unwrap();
@@ -148,11 +132,7 @@ mod tests {
     #[test]
     fn toggles_legacy_stats_view_with_v_key() {
         let store = Arc::new(Store::open_memory().unwrap());
-        let mut app = {
-            let mut app = app::App::empty(store, RunOptions::default());
-            app.reload_tasks().unwrap();
-            app
-        };
+        let mut app = app::App::new(store, RunOptions::default()).unwrap();
 
         app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE)).unwrap();
         assert!(!app.legacy_stats_view);
@@ -165,11 +145,7 @@ mod tests {
     #[test]
     fn stats_tab_and_backtab_select_adjacent_ranges() {
         let store = Arc::new(Store::open_memory().unwrap());
-        let mut app = {
-            let mut app = app::App::empty(store, RunOptions::default());
-            app.reload_tasks().unwrap();
-            app
-        };
+        let mut app = app::App::new(store, RunOptions::default()).unwrap();
 
         app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE)).unwrap();
         app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)).unwrap();
@@ -181,11 +157,7 @@ mod tests {
     #[test]
     fn toggles_tree_mode_with_t_key() {
         let store = Arc::new(Store::open_memory().unwrap());
-        let mut app = {
-            let mut app = app::App::empty(store, RunOptions::default());
-            app.reload_tasks().unwrap();
-            app
-        };
+        let mut app = app::App::new(store, RunOptions::default()).unwrap();
 
         assert!(!app.tree_mode);
         app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE)).unwrap();

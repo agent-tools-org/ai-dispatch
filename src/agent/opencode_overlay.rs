@@ -29,6 +29,21 @@ pub struct OpenCodeOverlayAgent {
 }
 
 impl OpenCodeOverlayAgent {
+    #[cfg(test)]
+    pub fn new(id: String, forced_model: String) -> Self {
+        Self::from_spec(OpenCodeOverlaySpec {
+            id,
+            reported_kind: AgentKind::Custom,
+            binary: "opencode".to_string(),
+            extra_args: Vec::new(),
+            default_model: Some(forced_model),
+            interactive_input: true,
+            rate_limit_kind: AgentKind::OpenCode,
+            allow_external_directories: true,
+            probe_served_models: false,
+        })
+    }
+
     pub(crate) fn from_spec(spec: OpenCodeOverlaySpec) -> Self {
         Self {
             spec,

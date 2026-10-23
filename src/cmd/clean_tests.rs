@@ -111,9 +111,7 @@ use rusqlite::params;
         fs::write(temp.path().join("second"), vec![b'b'; 11]).unwrap();
         fs::write(temp.path().join("third"), vec![b'c'; 13]).unwrap();
 
-    let (bytes, entries) = crate::cmd::clean_size::SizeTracker::new()
-        .get_dir_size_bounded(temp.path(), 10_000, 2)
-        .unwrap();
+        let (bytes, entries) = crate::cmd::clean_size::get_dir_size_bounded(temp.path(), 10_000, 2).unwrap();
 
         assert_eq!(entries, 2);
         assert!(bytes >= 18);

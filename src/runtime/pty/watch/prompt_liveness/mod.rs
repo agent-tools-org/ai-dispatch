@@ -77,17 +77,7 @@ mod tests {
         let task = pty_task("t-buffered-prompt", TaskStatus::Running);
         store.insert_task(&task).expect("task");
         std::fs::create_dir_all(paths::task_dir(task.id.as_str())).expect("task dir");
-        (
-            temp,
-            home,
-            store,
-            task.id,
-            MonitorState::with_policy(
-                false,
-                None,
-                crate::config::timeout_policy::TimeoutPolicy::default(),
-            ),
-        )
+        (temp, home, store, task.id, MonitorState::new(false, None))
     }
 
     fn partial(state: &mut MonitorState, text: &str) {

@@ -44,7 +44,7 @@ async fn api_source_mismatch_kills_child_and_records_route_hold() {
     let mut child = command.spawn().unwrap();
     let result = tokio::time::timeout(
         Duration::from_secs(5),
-        watch_streaming_with_input(
+        watch_streaming(
             agent.as_ref(),
             &mut child,
             &id,
@@ -52,8 +52,6 @@ async fn api_source_mismatch_kills_child_and_records_route_hold() {
             &home.path().join("agent.log"),
             None,
             Duration::from_secs(60),
-            None,
-            None,
             None,
         ),
     )

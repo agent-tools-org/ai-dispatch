@@ -33,6 +33,11 @@ pub fn agent_has_fs_access(_kind: &AgentKind) -> bool {
     true // all supported agents have file system access
 }
 
+#[cfg(test)]
+pub fn shared_target_dir() -> Option<String> {
+    Some(target_layout(None)?.source.to_string_lossy().into_owned())
+}
+
 fn target_layout(project_dir: Option<&str>) -> Option<CargoTargetLayout> {
     let branch_root = std::env::var_os(CARGO_TARGET_DIR_ENV)
         .map(PathBuf::from)

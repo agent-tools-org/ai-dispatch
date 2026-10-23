@@ -113,6 +113,16 @@ pub fn mark_rate_limited_for_model(
     }
 }
 
+#[cfg(test)]
+pub fn mark_rate_limited_for_value(
+    agent: &AgentKind,
+    custom_name: Option<&str>,
+    evidence: &serde_json::Value,
+    message: &str,
+) {
+    mark_rate_limited_for_model_value(agent, custom_name, None, evidence, message);
+}
+
 /// Same attribution as `mark_rate_limited_for_model`, with a parsed refusal
 /// envelope available for providers that name the exhausted unit in structured
 /// fields. `quota_group_for_mark` owns the precedence; do not reorder it here.

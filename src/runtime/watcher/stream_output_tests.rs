@@ -20,7 +20,7 @@ async fn streaming_watch_populates_success_exit_code() {
         .spawn()
         .unwrap();
 
-    let info = watch_streaming_with_input(
+    let info = watch_streaming(
         &StubStreamingAgent,
         &mut child,
         &task_id,
@@ -28,8 +28,6 @@ async fn streaming_watch_populates_success_exit_code() {
         &log_path,
         None,
         crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT,
-        None,
-        None,
         None,
     )
     .await

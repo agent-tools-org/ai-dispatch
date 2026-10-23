@@ -88,6 +88,13 @@ pub struct App {
 }
 
 impl App {
+    #[cfg(test)]
+    pub fn new(store: Arc<Store>, options: super::RunOptions) -> Result<Self> {
+        let mut app = Self::empty(store, options);
+        app.reload_tasks()?;
+        Ok(app)
+    }
+
     pub(super) fn empty(store: Arc<Store>, options: super::RunOptions) -> Self {
         Self {
             tasks: Vec::new(),

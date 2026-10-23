@@ -9,21 +9,11 @@ use std::sync::Arc;
 #[test]
 fn detail_mode_keeps_selection_stable_and_resets_on_escape() {
     let store = Arc::new(Store::open_memory().unwrap());
-    store
-        .insert_task(&super::tests::make_task("t-1004", None))
-        .unwrap();
-    store
-        .insert_task(&super::tests::make_task("t-1005", None))
-        .unwrap();
-    let mut app = {
-        let mut app = App::empty(store, super::super::RunOptions::default());
-        app.reload_tasks().unwrap();
-        app
-    };
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-        .unwrap();
-    app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE))
-        .unwrap();
+    store.insert_task(&super::tests::make_task("t-1004", None)).unwrap();
+    store.insert_task(&super::tests::make_task("t-1005", None)).unwrap();
+    let mut app = App::new(store, super::super::RunOptions::default()).unwrap();
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).unwrap();
+    app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE)).unwrap();
     assert_eq!(app.selected, 0);
     assert_eq!(app.detail_scroll, 0);
     app.handle_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE)).unwrap();

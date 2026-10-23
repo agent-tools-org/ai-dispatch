@@ -32,11 +32,7 @@ fn tui_default_scope_keeps_every_project_and_unattributed_task() {
     let mut beta = task("t-project-beta"); beta.project_id = Some("project-beta".into());
     store.insert_task(&alpha).unwrap(); store.insert_task(&beta).unwrap();
     store.insert_task(&task("t-project-unattributed")).unwrap();
-    let app = {
-        let mut app = App::empty(store, super::super::RunOptions::default());
-        app.reload_tasks().unwrap();
-        app
-    };
+    let app = App::new(store, super::super::RunOptions::default()).unwrap();
     let mut ids: Vec<&str> = app.tasks.iter().map(|value| value.id.as_str()).collect();
     ids.sort_unstable();
     assert_eq!(ids, vec!["t-project-alpha", "t-project-beta", "t-project-unattributed"]);
@@ -45,19 +41,11 @@ fn tui_default_scope_keeps_every_project_and_unattributed_task() {
 #[test]
 fn grouped_navigation_keeps_jk_in_group_and_hl_between_groups() {
     let store = Arc::new(Store::open_memory().unwrap());
-    let mut alpha = task("t-nav-alpha");
-    alpha.project_id = Some("project-alpha".into());
-    let mut beta = task("t-nav-beta");
-    beta.project_id = Some("project-beta".into());
-    store.insert_task(&alpha).unwrap();
-    store.insert_task(&beta).unwrap();
-    let mut app = {
-        let mut app = App::empty(store, super::super::RunOptions::default());
-        app.reload_tasks().unwrap();
-        app
-    };
-    app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE))
-        .unwrap();
+    let mut alpha = task("t-nav-alpha"); alpha.project_id = Some("project-alpha".into());
+    let mut beta = task("t-nav-beta"); beta.project_id = Some("project-beta".into());
+    store.insert_task(&alpha).unwrap(); store.insert_task(&beta).unwrap();
+    let mut app = App::new(store, super::super::RunOptions::default()).unwrap();
+    app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE)).unwrap();
     let first = crate::ui::tui::tree_data::build_task_tree_with_state(
         &app.tasks, &app.wg_creators, &app.collapsed_projects,
     )[app.tree_selected].project_id.clone();
@@ -87,11 +75,7 @@ fn visible_navigation_reaches_every_node_across_collapsed_group() {
         value.created_at = Local::now() - Duration::seconds(age);
         store.insert_task(&value).unwrap();
     }
-    let mut app = {
-        let mut app = App::empty(store, super::super::RunOptions::default());
-        app.reload_tasks().unwrap();
-        app
-    };
+    let mut app = App::new(store, super::super::RunOptions::default()).unwrap();
     app.collapsed_projects.insert(Some("project-middle".into()));
     app.rebuild_nodes();
     app.tree_selected = 0;
@@ -119,13 +103,8 @@ fn slash_search_selects_a_matching_task_without_database_queries() {
     let store = Arc::new(Store::open_memory().unwrap());
     let mut matching = task("t-find-me"); matching.prompt = "find this exact task".into();
     store.insert_task(&matching).unwrap();
-    let mut app = {
-        let mut app = App::empty(store, super::super::RunOptions::default());
-        app.reload_tasks().unwrap();
-        app
-    };
-    app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE))
-        .unwrap();
+    let mut app = App::new(store, super::super::RunOptions::default()).unwrap();
+    app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE)).unwrap();
     for character in "exact task".chars() {
         app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE)).unwrap();
     }
@@ -141,11 +120,7 @@ fn search_mode_uses_n_and_n_for_next_previous_and_escape_cancels() {
     let second = task("t-find-second");
     store.insert_task(&first).unwrap();
     store.insert_task(&second).unwrap();
-    let mut app = {
-        let mut app = App::empty(store, super::super::RunOptions::default());
-        app.reload_tasks().unwrap();
-        app
-    };
+    let mut app = App::new(store, super::super::RunOptions::default()).unwrap();
     app.selected = app.tasks.iter().position(|value| value.id == first.id).unwrap();
 
     app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE)).unwrap();
@@ -166,20 +141,11 @@ fn animation_only_changes_a_real_reasoning_state() {
     let mut reasoning = task("t-thinking");
     reasoning.status = TaskStatus::Running;
     store.insert_task(&reasoning).unwrap();
-    store
-        .insert_event(&TaskEvent {
-            task_id: reasoning.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Reasoning,
-            detail: "checking".into(),
-            metadata: None,
-        })
-        .unwrap();
-    let mut app = {
-        let mut app = App::empty(store, super::super::RunOptions::default());
-        app.reload_tasks().unwrap();
-        app
-    };
+    store.insert_event(&TaskEvent {
+        task_id: reasoning.id.clone(), timestamp: Local::now(), event_kind: EventKind::Reasoning,
+        detail: "checking".into(), metadata: None,
+    }).unwrap();
+    let mut app = App::new(store, super::super::RunOptions::default()).unwrap();
     let first = app.task_activity(&reasoning);
     app.tick().unwrap();
     let second = app.task_activity(&reasoning);

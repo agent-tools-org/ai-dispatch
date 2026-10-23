@@ -20,7 +20,7 @@ fn loads_tool_from_toml_file() {
     )
     .unwrap();
 
-    let tools = resolve_toolbox(None, None);
+    let tools = list_tools();
     assert_eq!(tools.len(), 1);
     assert_eq!(tools[0].name, "lint");
     assert_eq!(tools[0].display_name, "Linter");
@@ -42,7 +42,7 @@ fn parses_tool_script_metadata() {
     )
     .unwrap();
 
-    let tools = resolve_toolbox(None, None);
+    let tools = list_tools();
     assert_eq!(tools.len(), 1);
     assert_eq!(tools[0].name, "check");
     assert_eq!(tools[0].description, "Run checks");
@@ -63,10 +63,7 @@ fn list_finds_toml_and_scripts() {
     .unwrap();
     fs::write(dir.join("scripts").join("beta.sh"), "#!/bin/bash\n").unwrap();
 
-    let names: Vec<_> = resolve_toolbox(None, None)
-        .iter()
-        .map(|t| t.name.clone())
-        .collect();
+    let names: Vec<_> = list_tools().iter().map(|t| t.name.clone()).collect();
     assert_eq!(names, vec!["alpha", "beta"]);
 }
 
@@ -143,7 +140,7 @@ fn tool_scope_labels() {
 fn empty_dir_returns_no_tools() {
     let temp = TempDir::new().unwrap();
     let _guard = paths::AidHomeGuard::set(temp.path());
-    assert!(resolve_toolbox(None, None).is_empty());
+    assert!(list_tools().is_empty());
 }
 
 #[test]
@@ -158,7 +155,7 @@ fn toml_defaults_when_optional_fields_omitted() {
     )
     .unwrap();
 
-    let tools = resolve_toolbox(None, None);
+    let tools = list_tools();
     assert_eq!(tools.len(), 1);
     assert_eq!(tools[0].display_name, "minimal");
     assert_eq!(tools[0].output_format, "text");

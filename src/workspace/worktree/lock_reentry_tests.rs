@@ -2,7 +2,9 @@
 // Covers descendant allow and unrelated refuse on the same lock.
 // Deps: worktree lock helpers, Store, tempfile.
 
-use super::{check_worktree_lock_with_store, try_acquire_worktree_lock_with_store};
+use super::{
+    check_worktree_lock, try_acquire_worktree_lock_with_store,
+};
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
@@ -22,10 +24,8 @@ fn make_task(id: &str, status: TaskStatus, parent: Option<&str>) -> Task {
         caller_kind: None,
         caller_session_id: None,
         agent_session_id: None,
-        repo_path: None,
-        project_id: None,
-        worktree_path: None,
-        effective_dir: None,
+        repo_path: None, project_id: None,
+        worktree_path: None, effective_dir: None,
         worktree_branch: None,
         final_head_sha: None,
         final_branch: None,
@@ -35,9 +35,7 @@ fn make_task(id: &str, status: TaskStatus, parent: Option<&str>) -> Task {
         tokens: None,
         prompt_tokens: None,
         duration_ms: None,
-        requested_model: None,
-        observed_model: None,
-        attribution_source: None,
+        requested_model: None, observed_model: None, attribution_source: None,
         cost_usd: None,
         exit_code: None,
         created_at: Local::now(),
@@ -67,12 +65,13 @@ fn descendant_reenters_ancestor_held_worktree_unrelated_is_refused() {
         .expect("unrelated");
 
     let dir = TempDir::new().expect("tempdir should be created");
-    try_acquire_worktree_lock_with_store(dir.path(), "t-ancestor", Some(&store)).expect("ancestor acquires");
+    try_acquire_worktree_lock_with_store(dir.path(), "t-ancestor", Some(&store))
+        .expect("ancestor acquires");
 
     try_acquire_worktree_lock_with_store(dir.path(), "t-child", Some(&store))
         .expect("descendant must re-enter ancestor lease");
     assert_eq!(
-        check_worktree_lock_with_store(dir.path(), None).as_deref(),
+        check_worktree_lock(dir.path()).as_deref(),
         Some("t-ancestor"),
         "re-entry must leave the ancestor lease in place"
     );

@@ -15,6 +15,11 @@ pub(crate) fn idle_timeout_secs_from_env(env: Option<&HashMap<String, String>>) 
         .and_then(|value| parse_idle_timeout_secs(value))
 }
 
+#[cfg(test)]
+pub(crate) fn idle_timeout_from_tokio_command(cmd: &tokio::process::Command) -> Duration {
+    crate::config::timeout_policy::TimeoutPolicy::from_tokio_command(cmd).idle
+}
+
 fn parse_idle_timeout_secs(value: &str) -> Option<u64> {
     value.parse().ok().filter(|secs| *secs > 0)
 }

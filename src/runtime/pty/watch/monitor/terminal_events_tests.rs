@@ -52,11 +52,7 @@ fn stop_wins_deadline_before_pty_failure_finalization() {
     let (_home, _guard, store, id) = setup();
     crate::cmd::stop::stop(&store, id.as_str()).expect("stop");
     let stopped = store.get_task(id.as_str()).expect("query").expect("task");
-    let mut state = MonitorState::with_policy(
-        true,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(true, None);
     state.absolute_deadline = Instant::now() - Duration::from_millis(1);
     assert!(deadline_elapsed(&mut state, &store, &id).expect("deadline"));
     super::super::finalize_output(
@@ -109,11 +105,7 @@ fn stop_wins_idle_failure_diagnostic() {
 #[test]
 fn buffered_pty_nonzero_exit_emits_error_instead_of_completion() {
     let (_home, _guard, store, id) = setup();
-    let mut state = MonitorState::with_policy(
-        false,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(false, None);
     super::super::finalize_output(
         &crate::runtime::watcher::idle_tests::FakeAgent,
         &id,

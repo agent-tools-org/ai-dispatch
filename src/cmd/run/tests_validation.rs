@@ -29,7 +29,7 @@ fn terminal_failure_preserves_committed_work_non_standard_branch() {
     assert_terminal_failure_preserved(
         &store,
         &task.id,
-        crate::cmd::run::run_post::read_quota_error_message(&task.id, &task.agent).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
     let checked = store.get_task("t-custom-branch").unwrap().unwrap();
     assert_eq!(checked.status, TaskStatus::Failed);
@@ -42,7 +42,7 @@ fn terminal_failure_preserves_committed_work_non_standard_branch() {
     assert_terminal_failure_preserved(
         &store,
         &task.id,
-        crate::cmd::run::run_post::read_quota_error_message(&task.id, &task.agent).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
     let rescued = store.get_task("t-custom-branch").unwrap().unwrap();
     assert_eq!(rescued.status, TaskStatus::Failed);
@@ -67,7 +67,7 @@ fn terminal_failure_survives_passing_verification() {
     assert_terminal_failure_preserved(
         &store,
         &task.id,
-        crate::cmd::run::run_post::read_quota_error_message(&task.id, &task.agent).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
     let task = store.get_task("t-rescue-pass").unwrap().unwrap();
     assert_eq!(task.status, TaskStatus::Failed);
@@ -89,7 +89,7 @@ fn terminal_failure_keeps_failed_verify_failed() {
     assert_terminal_failure_preserved(
         &store,
         &task.id,
-        crate::cmd::run::run_post::read_quota_error_message(&task.id, &task.agent).as_deref(),
+        read_quota_error_message(&task.id, &task.agent).as_deref(),
     );
     let task = store.get_task("t-rescue-fail").unwrap().unwrap();
     assert_eq!(task.status, TaskStatus::Failed);

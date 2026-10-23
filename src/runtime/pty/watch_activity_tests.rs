@@ -16,11 +16,7 @@ fn raw_unparseable_output_refreshes_progress_clock() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = pty_task("t-raw-progress", TaskStatus::Running);
     store.insert_task(&task).unwrap();
-    let mut state = MonitorState::with_policy(
-        true,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(true, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(10);
     let mut log = tempfile::NamedTempFile::new().unwrap();
 
@@ -45,11 +41,7 @@ fn raw_unparseable_output_refreshes_clock_for_non_streaming_agents() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = pty_task("t-raw-progress-buffered", TaskStatus::Running);
     store.insert_task(&task).unwrap();
-    let mut state = MonitorState::with_policy(
-        false,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(false, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(10);
     let mut log = tempfile::NamedTempFile::new().unwrap();
 
@@ -74,11 +66,7 @@ fn terminal_control_noise_does_not_refresh_progress_clock() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = pty_task("t-noise-progress", TaskStatus::Running);
     store.insert_task(&task).unwrap();
-    let mut state = MonitorState::with_policy(
-        true,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(true, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(10);
     let before = state.last_progress_time;
     let mut log = tempfile::NamedTempFile::new().unwrap();
@@ -104,11 +92,7 @@ fn terminal_control_noise_does_not_refresh_clock_for_non_streaming_agents() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = pty_task("t-noise-progress-buffered", TaskStatus::Running);
     store.insert_task(&task).unwrap();
-    let mut state = MonitorState::with_policy(
-        false,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(false, None);
     state.last_progress_time = Instant::now() - Duration::from_secs(10);
     let before = state.last_progress_time;
     let mut log = tempfile::NamedTempFile::new().unwrap();

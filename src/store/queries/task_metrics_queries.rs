@@ -53,6 +53,14 @@ impl Store {
         self.budget_usage_summary_for_agent(Some(agent), since)
     }
 
+    #[cfg(test)]
+    pub fn budget_usage_summary_all(
+        &self,
+        since: Option<DateTime<Local>>,
+    ) -> Result<(u32, i64, f64)> {
+        self.budget_usage_summary_for_agent(None, since)
+    }
+
     /// Attribute usage by the persisted project identity, not a checkout name.
     /// Legacy rows without an identity remain unattributed, as in project views.
     pub fn budget_usage_summary_for_project(

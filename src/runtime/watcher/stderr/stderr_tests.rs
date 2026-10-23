@@ -144,8 +144,7 @@ fn assert_stderr_cannot_hold_core(output: &str) {
     assert!(!marker.exists());
     std::fs::write(paths::log_path(id.as_str()), format!("{output}\n")).expect("stderr replay");
     assert_eq!(
-        crate::cmd::run::read_quota_error_message(&id, &crate::types::AgentKind::Droid),
-        None,
+        crate::cmd::run::read_quota_error_message(&id, &crate::types::AgentKind::Droid), None,
     );
 }
 
@@ -164,16 +163,9 @@ fn printed_core_json_stderr_does_not_hold_pool_fix_regression() {
 fn raw_core_stream_does_not_hold_pool_fix_regression() {
     let home = tempfile::tempdir().expect("home");
     let _guard = paths::AidHomeGuard::set(home.path());
-    assert!(
-        !crate::agent::stream_completion::record_quota_exhaustion_with_delivery(
-            CORE_FIXTURE,
-            crate::types::AgentKind::Droid,
-            None,
-            None,
-            false
-        )
-        .recorded()
-    );
+    assert!(!crate::agent::stream_completion::record_quota_exhaustion(
+        CORE_FIXTURE, crate::types::AgentKind::Droid, None, None,
+    ).recorded());
     let marker = crate::routing::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core");
     assert!(!marker.exists());
 }
@@ -186,16 +178,9 @@ fn assistant_and_tool_core_errors_do_not_hold_pool_fix_regression() {
         serde_json::json!({"type": "error", "tool_call": {}, "message": CORE_FIXTURE}),
         serde_json::json!({"type": "assistant", "error": CORE_FIXTURE}),
     ] {
-        assert!(
-            !crate::agent::stream_completion::record_quota_exhaustion_with_delivery(
-                &value.to_string(),
-                crate::types::AgentKind::Droid,
-                None,
-                None,
-                false
-            )
-            .recorded()
-        );
+        assert!(!crate::agent::stream_completion::record_quota_exhaustion(
+            &value.to_string(), crate::types::AgentKind::Droid, None, None,
+        ).recorded());
     }
     let marker = crate::routing::rate_limit::group_marker_path(&crate::types::AgentKind::Droid, None, "core");
     assert!(!marker.exists());

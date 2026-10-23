@@ -39,10 +39,7 @@ fn race_stopped_write(replace: bool) {
             .expect("busy callback");
         if replace {
             dispatch
-                .replace_waiting_task_with_origin(
-                    &make_task("t-stop-dispatch", TaskStatus::Pending),
-                    crate::types::DispatchOrigin::Automatic,
-                )
+                .replace_waiting_task(&make_task("t-stop-dispatch", TaskStatus::Pending))
                 .is_ok()
         } else {
             dispatch

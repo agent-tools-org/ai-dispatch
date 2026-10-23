@@ -145,5 +145,5 @@ fn std_and_tokio_command_pipelines_read_same_idle_value() {
         TimeoutPolicy::from_tokio_command(&tokio_cmd).first_token,
         policy.first_token
     );
-    assert_eq!(TimeoutPolicy::from_tokio_command(&tokio_cmd).idle, policy.idle);
+    assert_eq!(crate::config::idle_timeout::idle_timeout_from_tokio_command(&tokio_cmd), policy.idle);
 }

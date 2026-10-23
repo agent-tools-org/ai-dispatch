@@ -8,7 +8,7 @@ use std::process::Command;
 fn isolated_home() -> (tempfile::TempDir, crate::support::paths::AidHomeGuard, IsolatedHomeGuard) {
     let aid_home = tempfile::tempdir().unwrap();
     let aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
-    let home = IsolatedHomeGuard::create_with_remote_build(None, false).unwrap();
+    let home = IsolatedHomeGuard::create(None).unwrap();
     (aid_home, aid_guard, home)
 }
 
@@ -43,8 +43,7 @@ fn isolation_negative_control() {
     assert!(skill_marker.exists());
 
     // 2. Positive check with isolation:
-    let guard =
-        IsolatedHomeGuard::create_from_home_with_remote_build(Some(&mock_real_home), None, false).unwrap();
+    let guard = IsolatedHomeGuard::create_from_home(Some(&mock_real_home), None).unwrap();
 
     // The instruction file MUST be absent while .claude directory is present.
     assert!(!guard.path().join(".claude/CLAUDE.md").exists());
@@ -62,8 +61,7 @@ fn isolation_negative_control() {
 fn cargo_and_git_work_in_isolated_home() {
     let (_aid_home, _aid_guard) = test_aid_home();
     let real_home = tempfile::tempdir().unwrap();
-    let guard =
-        IsolatedHomeGuard::create_from_home_with_remote_build(Some(real_home.path()), None, false).unwrap();
+    let guard = IsolatedHomeGuard::create_from_home(Some(real_home.path()), None).unwrap();
 
     // cargo --version must succeed (exit code 0) inside isolated home.
     let cargo_output = Command::new("cargo")
@@ -135,7 +133,7 @@ fn claude_credential_reachability_and_instruction_masking_under_isolation() {
     fs::write(claude_dir.join("history.jsonl"), "{\"session\": \"123\"}").unwrap();
     fs::write(claude_dir.join("sessions").join("sess.json"), "{}").unwrap();
 
-    let guard = IsolatedHomeGuard::create_from_home_with_remote_build(Some(&mock_home), None, false).unwrap();
+    let guard = IsolatedHomeGuard::create_from_home(Some(&mock_home), None).unwrap();
     let iso_path = guard.path();
 
     // 1. .claude.json auth file MUST be present and reachable
@@ -170,7 +168,7 @@ fn aid_directory_reachability_under_isolation() {
     fs::create_dir_all(&aid_dir).unwrap();
     fs::write(aid_dir.join("credentials.toml"), "[auth]\ntoken = \"xyz\"\n").unwrap();
 
-    let guard = IsolatedHomeGuard::create_from_home_with_remote_build(Some(&mock_home), None, false).unwrap();
+    let guard = IsolatedHomeGuard::create_from_home(Some(&mock_home), None).unwrap();
     let iso_path = guard.path();
 
     // .aid MUST be reachable in isolated home
@@ -214,7 +212,7 @@ fn container_sandbox_home_interplay() {
 #[test]
 fn build_isolated_home_fails_without_real_home() {
     let (_aid_home, _aid_guard) = test_aid_home();
-    match IsolatedHomeGuard::create_from_home_with_remote_build(None, None, false) {
+    match IsolatedHomeGuard::create_from_home(None, None) {
         Ok(_) => panic!("expected error when real home is unknown"),
         Err(err) => assert!(
             err.to_string().contains("real home directory is unknown"),
@@ -229,7 +227,7 @@ fn build_isolated_home_fails_when_real_home_not_directory() {
     let temp = tempfile::tempdir().unwrap();
     let not_a_dir = temp.path().join("not-a-dir");
     fs::write(&not_a_dir, "file").unwrap();
-    match IsolatedHomeGuard::create_from_home_with_remote_build(Some(&not_a_dir), None, false) {
+    match IsolatedHomeGuard::create_from_home(Some(&not_a_dir), None) {
         Ok(_) => panic!("expected error when real home is not a directory"),
         Err(err) => assert!(
             err.to_string().contains("is not a directory"),
@@ -250,7 +248,7 @@ fn build_isolated_home_fails_when_real_home_unreadable() {
         let mut perms = fs::metadata(&real_home).unwrap().permissions();
         perms.set_mode(0o000);
         fs::set_permissions(&real_home, perms).unwrap();
-        match IsolatedHomeGuard::create_from_home_with_remote_build(Some(&real_home), None, false) {
+        match IsolatedHomeGuard::create_from_home(Some(&real_home), None) {
             Ok(_) => panic!("expected error when real home is unreadable"),
             Err(err) => assert!(
                 err.to_string().contains("cannot read real HOME"),

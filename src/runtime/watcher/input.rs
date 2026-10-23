@@ -2,6 +2,32 @@
 // Keeps the existing watcher API for transports without streaming stdin.
 use super::*;
 
+#[cfg(test)]
+pub async fn watch_streaming(
+    agent: &dyn Agent,
+    child: &mut Child,
+    task_id: &TaskId,
+    store: &Arc<Store>,
+    log_path: &std::path::Path,
+    workgroup_id: Option<&str>,
+    idle_timeout: Duration,
+    max_task_cost: Option<f64>,
+) -> Result<CompletionInfo> {
+    watch_streaming_with_input(
+        agent,
+        child,
+        task_id,
+        store,
+        log_path,
+        workgroup_id,
+        idle_timeout,
+        max_task_cost,
+        None,
+        None,
+    )
+    .await
+}
+
 pub(super) async fn next_line<R: tokio::io::AsyncBufRead + Unpin>(
     input: &mut Option<crate::runtime::claude_input::Session>,
     store: &Arc<Store>,

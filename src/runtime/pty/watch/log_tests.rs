@@ -13,11 +13,7 @@ fn handle_chunk_strips_terminal_escapes_before_log_write() {
     let store = Arc::new(Store::open_memory().unwrap());
     let task = pty_task("t-pty-clean-log");
     store.insert_task(&task).unwrap();
-    let mut state = MonitorState::with_policy(
-        true,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(true, None);
     let mut log = tempfile::NamedTempFile::new().unwrap();
 
     state
@@ -47,11 +43,7 @@ fn output_after_pty_write_never_acknowledges_input() {
         MessageSource::Reply).unwrap();
     let command = ["/bin/sh", "-c", "read line"].map(String::from).to_vec();
     let mut bridge = crate::runtime::pty::bridge::PtyBridge::spawn(&command, None, vec![]).unwrap();
-    let mut state = MonitorState::with_policy(
-        false,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(false, None);
     state.maybe_consume_reply(&mut bridge, &store, &task.id).unwrap();
     let mut log = tempfile::NamedTempFile::new().unwrap();
     state.handle_chunk(&crate::agent::cursor::CursorAgent, &task.id, &store,

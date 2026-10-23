@@ -22,6 +22,11 @@ struct LockRecord {
     worker_pid: Option<u32>,
 }
 
+#[cfg(test)]
+pub fn check_worktree_lock(wt_path: &Path) -> Option<String> {
+    check_worktree_lock_with_store(wt_path, None)
+}
+
 // Read-only check; stale removal is acquisition-only to avoid racing live leases.
 #[cfg(test)]
 pub fn check_worktree_lock_with_store(wt_path: &Path, store: Option<&Store>) -> Option<String> {
@@ -73,6 +78,11 @@ pub fn rekey_worktree_lock_to_worker(
     }
     record.worker_pid = Some(worker_pid);
     write_lock_record(&lock_path, &record).map_err(|err| err.to_string())
+}
+
+#[cfg(test)]
+pub fn try_acquire_worktree_lock(wt_path: &Path, task_id: &str) -> std::result::Result<(), String> {
+    try_acquire_worktree_lock_with_store(wt_path, task_id, None)
 }
 
 pub fn try_acquire_worktree_lock_with_store(

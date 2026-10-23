@@ -152,5 +152,32 @@ pub(crate) fn match_quota_signature_for_agent(
 }
 
 #[cfg(test)]
+/// Match a message against every provider signature. Returns the agent the
+/// signature belongs to and what ends the refusal, so a caller can both mark the
+/// right agent and avoid the 5-minute default that expires while the provider is
+/// still refusing work.
+pub(crate) fn match_quota_signature(message: &str) -> Option<(AgentKind, QuotaRecovery)> {
+    match_quota_signature_with_agent(message, None)
+}
+
+#[cfg(test)]
+/// Prefer `preferred` when several agents share the same needle (e.g. Zen overlays).
+pub(crate) fn match_quota_signature_with_agent(
+    message: &str,
+    preferred: Option<AgentKind>,
+) -> Option<(AgentKind, QuotaRecovery)> {
+    let lower = message.to_lowercase();
+    if let Some(agent) = preferred {
+        if let Some(recovery) = match_quota_signature_for_agent(message, agent) {
+            return Some((agent, recovery));
+        }
+    }
+    QUOTA_SIGNATURES
+        .iter()
+        .find(|signature| cursor::matches(&lower, signature.needle))
+        .map(|signature| (signature.agent, signature.recovery))
+}
+
+#[cfg(test)]
 #[path = "signatures_tests.rs"]
 mod tests;

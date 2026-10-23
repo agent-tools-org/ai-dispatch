@@ -17,6 +17,20 @@ pub struct TreeNode {
     pub project_id: Option<String>,
 }
 
+/// Build a flat list of TreeNodes with proper indentation.
+/// When multiple projects are present, groups by project_id (NULL → unattributed).
+/// Within a project, nests by parent_task_id.
+#[cfg(test)]
+pub fn build_task_tree(tasks: &[Task]) -> Vec<TreeNode> {
+    build_task_tree_with_creators(tasks, &HashMap::new())
+}
+
+/// Build tree with optional workgroup creator labels.
+#[cfg(test)]
+pub fn build_task_tree_with_creators(tasks: &[Task], creators: &HashMap<String, String>) -> Vec<TreeNode> {
+    build_task_tree_with_state(tasks, creators, &HashSet::new())
+}
+
 /// Build the grouped task rows used by the board and tree views.
 pub fn build_task_tree_with_state(
     tasks: &[Task],

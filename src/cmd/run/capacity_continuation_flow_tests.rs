@@ -125,7 +125,8 @@ impl Fixture {
             format!("printf partial > base.txt; {}", self.failure)
         };
         command.current_dir(&self.worktree).args(["-c", &body]);
-        let agent = crate::agent::registry::resolve_custom_agent("capacity-fixture").expect("agent");
+        let agent =
+            crate::agent::registry::resolve_custom_agent("capacity-fixture").expect("agent");
         crate::cmd::run::run_agent::run_agent_process_with_cost(
             agent.as_ref(),
             command,

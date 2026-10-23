@@ -20,21 +20,20 @@ fn setup() -> (tempfile::TempDir, paths::AidHomeGuard, Arc<Store>, TaskId) {
     store
         .insert_task(&make_task(id.as_str(), TaskStatus::Running))
         .expect("task");
-    store
-        .record_agent_completion(
-            TaskCompletionUpdate {
-                id: id.as_str(),
-                status: TaskStatus::Done,
-                tokens: Some(10),
-                duration_ms: 100,
-                observed_model: None,
-                attribution_source: None,
-                cost_usd: None,
-                exit_code: Some(0),
-            },
-            None,
-        )
-        .expect("agent exit");
+    crate::task::lifecycle::update_task_completion(
+        &store,
+        TaskCompletionUpdate {
+            id: id.as_str(),
+            status: TaskStatus::Done,
+            tokens: Some(10),
+            duration_ms: 100,
+            observed_model: None,
+            attribution_source: None,
+            cost_usd: None,
+            exit_code: Some(0),
+        },
+    )
+    .expect("agent exit");
     (home, guard, store, id)
 }
 

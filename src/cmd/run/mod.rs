@@ -55,8 +55,6 @@ mod run_foreground_watch;
 mod run_dispatch_execute;
 #[path = "dispatch.rs"]
 mod run_dispatch;
-#[cfg(test)]
-pub(crate) use run_post::read_quota_error_message;
 pub(crate) use self::run_agent::run_agent_process_with_cost;
 pub(crate) use self::run_dispatch::run;
 pub(crate) use self::run_iterate::iterate_config;
@@ -210,5 +208,15 @@ pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_i
     Ok(Some(retry_id))
 }
 
+
 #[cfg(test)]
 pub(crate) use run_dispatch_prepare::claim_test_dispatch;
+
+#[cfg(test)]
+use run_post::{
+    auto_save_task_output, maybe_run_post_done_audit, take_next_cascade_agent, worktree_is_empty_diff,
+};
+#[cfg(test)]
+pub(crate) use run_post::read_quota_error_message;
+#[cfg(test)]
+use run_dirty::final_dirty_assertion;

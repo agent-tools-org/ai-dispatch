@@ -19,7 +19,7 @@ fn no_shipped_signature_can_be_quoted_into_a_marker() {
         })
         .to_string();
         assert!(
-            !record_quota_exhaustion_with_delivery(&report, signature.agent, None, None, false).recorded(),
+            !record_quota_exhaustion(&report, signature.agent, None, None).recorded(),
             "needle {:?} was quoted into a marker for {:?}",
             signature.needle,
             signature.agent
@@ -46,7 +46,7 @@ fn copilots_real_session_error_envelope_is_recorded() {
     crate::routing::rate_limit::clear_all_rate_limits_for_agent(&copilot, None);
 
     let output = r#"{"type":"session.error","data":{"message":"{\"error\":{\"message\":\"You have exceeded your monthly quota\",\"code\":\"quota_exceeded\"}}","requestFingerprint":{"messageCount":2}}}"#;
-    assert!(record_quota_exhaustion_with_delivery(output, copilot, None, None, false).recorded());
+    assert!(record_quota_exhaustion(output, copilot, None, None).recorded());
     let info = crate::routing::rate_limit::get_rate_limit_info(&copilot, None).expect("marker");
     assert!(
         info.needs_human,
@@ -69,7 +69,7 @@ fn the_same_needle_in_a_cli_error_envelope_still_marks() {
     crate::routing::rate_limit::clear_all_rate_limits_for_agent(&cursor, None);
 
     let output = r#"{"type":"error","message":"quota exceeded for this workspace"}"#;
-    assert!(record_quota_exhaustion_with_delivery(output, cursor, None, None, false).recorded());
+    assert!(record_quota_exhaustion(output, cursor, None, None).recorded());
     assert!(crate::routing::rate_limit::is_rate_limited(&cursor, None));
 }
 
@@ -214,7 +214,7 @@ fn buffered_grok_prose_about_rate_limits_never_marks_it() {
         "=== AID TASK t-abc DONE (exit 0) ===",
     ] {
         assert!(
-            !record_quota_exhaustion_with_delivery(line, agent, None, None, false).recorded(),
+            !record_quota_exhaustion(line, agent, None, None).recorded(),
             "grok must not be marked from its own prose: {line}"
         );
     }
@@ -235,7 +235,7 @@ fn a_cursor_premium_refusal_with_no_recorded_model_marks_only_the_premium_pool()
                    usage. Switch to Auto, or ask your admin to increase your limit to continue.";
 
     let envelope = serde_json::json!({"type":"error", "message":refusal}).to_string();
-    assert!(record_quota_exhaustion_with_delivery(&envelope, cursor, None, None, false).should_fail());
+    assert!(record_quota_exhaustion(&envelope, cursor, None, None).should_fail());
     assert!(crate::routing::rate_limit::is_group_rate_limited(
         &cursor, None, "premium"
     ));

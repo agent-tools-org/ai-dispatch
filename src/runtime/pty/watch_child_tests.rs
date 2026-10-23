@@ -24,11 +24,7 @@ fn monitor(script: &str) -> TaskStatus {
             }
         }
     });
-    let mut state = MonitorState::with_policy(
-        true,
-        None,
-        crate::config::timeout_policy::TimeoutPolicy::default(),
-    );
+    let mut state = MonitorState::new(true, None);
     state.event_count = 2;
     state.received_raw_bytes = true;
     let mut log = tempfile::tempfile().expect("log");

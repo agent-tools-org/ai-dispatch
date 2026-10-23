@@ -126,12 +126,8 @@ fn nested_task_home_gets_its_own_real_shim_dir() {
     let parent = tempfile::tempdir().expect("parent home");
     std::fs::create_dir(parent.path().join(".aid-build-shims")).expect("parent shims");
     std::fs::create_dir(parent.path().join(".aid-tmp-abc")).expect("parent tmp");
-    let child = crate::agent::home_isolation::IsolatedHomeGuard::create_from_home_with_remote_build(
-        Some(parent.path()),
-        None,
-        false,
-    )
-    .expect("isolated home");
+    let child = crate::agent::home_isolation::IsolatedHomeGuard::create_from_home(Some(parent.path()), None)
+        .expect("isolated home");
     assert!(!child.path().join(".aid-tmp-abc").exists());
     configure(&mut Command::new("agent"), child.path(), "box").expect("configure");
     let shims = child.path().join(".aid-build-shims");

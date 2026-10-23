@@ -80,10 +80,9 @@ fn prepared(
 ) {
     let args = args(home);
     let agent = agent::registry::resolve_custom_agent(&args.agent_name).unwrap();
-    let isolated = agent::home_isolation::IsolatedHomeGuard::create_from_home_with_remote_build(
+    let isolated = agent::home_isolation::IsolatedHomeGuard::create_from_home(
         Some(home),
         Some("t-api-launch"),
-        false,
     )
     .unwrap();
     let (command, _) = prepare_launch(store, spec, &args, agent.as_ref(), &isolated).unwrap();

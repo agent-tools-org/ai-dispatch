@@ -24,8 +24,13 @@ pub(crate) use live_state::{
 };
 pub(crate) use lock::live_lock_holder_with_store;
 #[cfg(test)]
-pub(crate) use lock::{check_worktree_lock_with_store, simulate_stale_recovery_race, write_worktree_lock};
-pub use lock::{clear_worktree_lock, rekey_worktree_lock_to_worker, try_acquire_worktree_lock_with_store};
+pub(crate) use lock::{
+    check_worktree_lock, check_worktree_lock_with_store, simulate_stale_recovery_race,
+    try_acquire_worktree_lock, write_worktree_lock,
+};
+pub use lock::{
+    clear_worktree_lock, rekey_worktree_lock_to_worker, try_acquire_worktree_lock_with_store,
+};
 #[cfg(test)]
 pub use path::aid_worktree_root;
 #[cfg(test)]

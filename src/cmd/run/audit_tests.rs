@@ -2,7 +2,7 @@
 // Exports: test-only coverage for post-DONE AIC execution and config wiring.
 // Deps: super, crate::{batch, project, store, types}, tempfile.
 
-use super::{RunArgs, run_post::maybe_run_post_done_audit};
+use super::{RunArgs, maybe_run_post_done_audit};
 use crate::batch::parse_batch_file;
 use crate::config::project::{ProjectAuditConfig, ProjectConfig};
 use crate::store::Store;
@@ -82,14 +82,7 @@ fn audit_args(enabled: bool) -> RunArgs {
 }
 
 fn run_audit_for_task(store: &Store, task_id: &str, args: &RunArgs) {
-    crate::cmd::run::run_post::maybe_run_post_done_audit(
-        store,
-        &TaskId(task_id.to_string()),
-        args,
-        None,
-        None,
-    )
-    .unwrap();
+    maybe_run_post_done_audit(store, &TaskId(task_id.to_string()), args, None, None).unwrap();
 }
 
 #[test]

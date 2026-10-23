@@ -67,10 +67,8 @@ fn held_codex_provider_is_skipped_and_exhausted_cascade_names_its_clear_command(
         .expect("held route cannot construct a launch adapter");
     assert!(error.to_string().contains("clear-limit codex-provider:X"));
     assert_eq!(agent::codex::command_builds::count(), builds);
-    let error =
-        super::super::run_dispatch_prepare::prepare_dispatch_with(&store, &mut args("codex", &[]), |_| true)
-            .err()
-            .expect("held provider must refuse before task persistence");
+    let error = super::super::claim_test_dispatch(&store, &mut args("codex", &[]))
+        .expect_err("held provider must refuse before task persistence");
     assert!(error.to_string().contains("clear-limit codex-provider:X"));
     assert!(store.list_tasks(crate::types::TaskFilter::All).unwrap().is_empty());
     assert_eq!(agent::codex::command_builds::count(), builds);

@@ -72,8 +72,7 @@ mod tests {
             env: Some(std::collections::HashMap::from([("PATH".to_string(), "explicit".to_string())])),
             env_forward: Some(vec!["PATH".to_string()]),
         };
-        let guard =
-            crate::agent::home_isolation::IsolatedHomeGuard::create_with_remote_build(None, false).unwrap();
+        let guard = crate::agent::home_isolation::IsolatedHomeGuard::create(None).unwrap();
         let mut cmd = Command::new("true");
         crate::agent::apply_run_env(&mut cmd, &opts, &guard);
         assert_eq!(launched(&cmd, "PATH"), Some(std::env::var("PATH").ok()));
@@ -87,8 +86,7 @@ mod tests {
             read_only: false, sandbox: false, context_files: vec![], session_id: None,
             env, env_forward: None,
         };
-        let guard =
-            crate::agent::home_isolation::IsolatedHomeGuard::create_with_remote_build(None, false).unwrap();
+        let guard = crate::agent::home_isolation::IsolatedHomeGuard::create(None).unwrap();
         let mut cmd = Command::new("true");
         crate::agent::apply_run_env(&mut cmd, &opts, &guard);
         cmd

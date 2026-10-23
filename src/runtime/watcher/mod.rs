@@ -10,48 +10,51 @@ mod api_route;
 mod esc;
 mod extract;
 mod idle;
+#[cfg(test)]
+pub(crate) mod idle_tests;
+#[cfg(test)]
+mod opencode_usage_tests;
 mod progress;
 mod stderr;
 mod stream;
 #[cfg(test)]
-mod tests;
-#[cfg(test)]
-mod transcript_tests;
+mod streaming_completion_tests;
 #[cfg(test)]
 mod streaming_tests;
 #[cfg(test)]
-mod streaming_completion_tests;
+mod tests;
 #[cfg(test)]
-mod opencode_usage_tests;
-#[cfg(test)]
-pub(crate) mod idle_tests;
+mod transcript_tests;
 
-pub(crate) use buffered::watch_buffered;
-pub(crate) use esc::strip_terminal_escapes;
-use anyhow::Result;
-use chrono::Local;
-use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::Child;
-use tokio::time::Duration;
 use crate::agent::Agent;
-use crate::task::delivery_guard::{DeliveryEvidence, DeliveryOutcome};
+use crate::routing::rate_limit;
 use crate::runtime::process::group::force_kill_process_group;
 use crate::runtime::process::monitor;
-use crate::routing::rate_limit;
 use crate::store::Store;
+use crate::task::delivery_guard::{DeliveryEvidence, DeliveryOutcome};
 use crate::types::*;
-use extract::{is_standalone_milestone_line, is_thinking_delta};
+use anyhow::Result;
+pub(crate) use buffered::watch_buffered;
+use chrono::Local;
+pub(crate) use esc::strip_terminal_escapes;
 #[cfg(test)]
-use extract::{
-    extract_finding_detail, extract_milestone_detail, parse_milestone_event,
-};
-use stderr::{append_stderr_to_log, drain_stderr_capture, failure_stderr_note, spawn_stderr_capture};
-pub(crate) use stderr::read_capped_stderr;
+use extract::{extract_finding_detail, extract_milestone_detail, parse_milestone_event};
+use extract::{is_standalone_milestone_line, is_thinking_delta};
 pub(crate) use progress::SyntheticMilestoneTracker;
+use std::sync::Arc;
+pub(crate) use stderr::read_capped_stderr;
+use stderr::{
+    append_stderr_to_log, drain_stderr_capture, failure_stderr_note, spawn_stderr_capture,
+};
 pub(crate) use stream::{
     StreamLineContext, apply_codex_delivery_guard, handle_streaming_line_with_session,
 };
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::process::Child;
+use tokio::time::Duration;
+mod watch_streaming_with_input;
+use watch_streaming_with_input::WatchRun;
+
 /// Watch a child process, parse output, store events, return completion info
 pub(crate) async fn watch_streaming_with_input(
     agent: &dyn Agent,
@@ -65,219 +68,8 @@ pub(crate) async fn watch_streaming_with_input(
     prompt: Option<&str>,
     policy: Option<crate::config::timeout_policy::TimeoutPolicy>,
 ) -> Result<CompletionInfo> {
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow::anyhow!("No stdout on child process"))?;
-    let mut watchdog = policy.filter(|_| prompt.is_some()).map(
-        crate::runtime::pty::watch::piped::Watchdog::new,
-    );
-    let transcript = if watchdog.is_some() {
-        std::fs::create_dir_all(crate::support::paths::task_dir(task_id.as_str()))?;
-        Some(Arc::new(std::sync::Mutex::new(std::fs::File::create(
-            crate::support::paths::transcript_path(task_id.as_str()),
-        )?)))
-    } else { None };
-    let reader = BufReader::new(crate::runtime::pty::watch::piped::Reader::new(
-        stdout, watchdog.as_ref(), transcript.clone(), false,
-    ));
-    let mut lines = reader.lines();
-    let mut log_file = tokio::fs::File::create(log_path).await?;
-    let mut info = CompletionInfo {
-        tokens: None,
-        status: TaskStatus::Done,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    };
-    let mut event_count = 0u32;
-    let mut session_saved = false;
-    let mut saw_completion_event = false;
-    let mut api_route_failed = false;
-    let mut synthetic_tracker = SyntheticMilestoneTracker::new();
-    let mut delivery_evidence = DeliveryEvidence::default();
-    let mut last_event_detail: Option<String> = None;
-    let mut full_output = String::new();
-    let stderr_handle = spawn_stderr_capture(child, task_id, watchdog.as_ref(), transcript);
-    let mut input = crate::runtime::claude_input::Session::start(child, task_id, store, prompt).await?;
-    loop {
-        let line = match input::next_line(
-            &mut input, store, task_id, watchdog.as_mut(),
-            &mut lines, task_id.as_str(), child.id(), idle_timeout, last_event_detail.is_some(),
-        ).await {
-            Some(Ok(Some(line))) => line,
-            Some(Ok(None)) => break,
-            Some(Err(e)) => return Err(e.into()),
-            None => {
-                let _ = crate::runtime::process::group::terminate_child_group(child).await;
-                let _ = monitor::insert_hung_detected_events(
-                    store.as_ref(),
-                    task_id,
-                    watchdog.as_ref().map_or(idle_timeout, |watchdog| watchdog.timeout()).as_secs(),
-                    event_count,
-                    last_event_detail.as_deref(),
-                    watchdog.as_ref().is_some_and(|watchdog| watchdog.first_token()),
-                );
-                info.status = TaskStatus::Failed;
-                break;
-            }
-        };
-        if api_route::stop_if_misbilled(
-            agent, &line, child, store, task_id, &mut info,
-        ).await? {
-            api_route_failed = true;
-            break;
-        }
-        if let Some(input) = &mut input { input.observe(store, task_id, &line)?; }
-        if !line.trim().is_empty() { last_event_detail = Some(line.trim().to_string()); }
-        if agent.kind() == AgentKind::Codex {
-            delivery_evidence.observe_codex_jsonl(&line);
-        }
-
-        if !is_standalone_milestone_line(&line) && !is_thinking_delta(&line) {
-            log_file.write_all(line.as_bytes()).await?;
-            log_file.write_all(b"\n").await?;
-            full_output.push_str(&line);
-            full_output.push('\n');
-        }
-
-        if let Some(event_detail) = handle_streaming_line_with_session(
-            StreamLineContext {
-                agent,
-                task_id,
-                store,
-                workgroup_id,
-                synthetic_tracker: &mut synthetic_tracker,
-            },
-            &mut info,
-            &mut event_count,
-            &line,
-            &mut session_saved,
-        )? {
-            if event_detail.kind == EventKind::Completion {
-                saw_completion_event = true;
-            }
-            let detail = event_detail.detail;
-            last_event_detail = Some(detail.clone());
-            if exceeds_cost_ceiling(info.cost_usd, max_task_cost) {
-                let current_cost = info.cost_usd.unwrap_or_default();
-                let max_cost = max_task_cost.unwrap_or_default();
-                let _ = store.insert_agent_event(&TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: Local::now(),
-                    event_kind: EventKind::Error,
-                    detail: format!(
-                        "Task killed: cost ${:.2} exceeded ceiling ${:.2}",
-                        current_cost, max_cost
-                    ),
-                    metadata: None,
-                });
-                force_kill_process_group(child);
-                let _ = child.kill().await;
-                info.status = TaskStatus::Failed;
-                break;
-            }
-        }
-        if let Some(watchdog) = &mut watchdog {
-            watchdog.observe(&line, event_count);
-        }
-    }
-    log_file.flush().await?;
-    let exit_status = child.wait().await?;
-    if let Some(handle) = stderr_handle {
-        drain_stderr_capture(handle).await;
-    }
-    let mut status = if exit_status.success() && !api_route_failed && info.status != TaskStatus::Failed {
-        TaskStatus::Done
-    } else {
-        TaskStatus::Failed
-    };
-    info.exit_code = exit_status.code();
-    let task = store.get_task(task_id.as_str()).ok().flatten();
-    let delivery_outcome = delivery_evidence.validate();
-    let delivered = if agent.kind() == AgentKind::Codex {
-        matches!(&delivery_outcome, DeliveryOutcome::Delivered)
-    } else {
-        saw_completion_event
-    };
-    if agent.kind() == AgentKind::Codex {
-        status = apply_codex_delivery_guard(
-            store,
-            task_id,
-            status,
-            delivery_outcome,
-            exit_status.code(),
-        );
-    }
-
-    if status == TaskStatus::Done {
-        info.status = status;
-        let parsed = agent.parse_completion(&full_output);
-        crate::agent::stream_completion::merge_parsed_completion(&mut info, parsed);
-        status = info.status;
-    }
-
-    // Checked before the clear below: a quota refusal arrives as exit 0 text.
-    // agy and other plain-text CLIs never echo their model, so the group a
-    // quota belongs to is only knowable from what aid dispatched.
-    let dispatched_model = task.as_ref().and_then(|t| t.requested_model.as_deref());
-    let quota = crate::agent::stream_completion::record_quota_exhaustion_with_delivery(
-        &full_output,
-        agent.kind(),
-        agent.rate_limit_name(),
-        info.model.as_deref().or(dispatched_model),
-        delivered,
-    );
-    if quota.should_fail() {
-        status = TaskStatus::Failed;
-        info.status = status;
-    }
-
-    // A run that delivered *and* hit a refusal stays Done, so this clear would
-    // erase the marker written microseconds earlier and hand routing back a
-    // provider that is out.
-    if status == TaskStatus::Done && !quota.recorded() {
-        let model = info.model.as_deref().or(dispatched_model);
-        rate_limit::clear_rate_limit_for_model(&agent.kind(), agent.rate_limit_name(), model);
-    }
-    // A fast-fail whose only output was stderr (e.g. qwen's "No saved session
-    // found with ID ...") would otherwise leave a zero-byte log and discard the
-    // cause that was on screen. Preserve surviving stderr in the log so the
-    // reason is not lost. This is deliberately narrow: it fires only when the
-    // agent exited on its own (a non-zero exit code, not a signal) with no
-    // stdout events — a hung or cost-killed process is terminated by signal and
-    // its stderr is not replayed. Reads are capped so an oversized stderr is
-    // not copied unbounded into the log.
-    if status == TaskStatus::Failed
-        && full_output.trim().is_empty()
-        && exit_status.code().is_some()
-    {
-        append_stderr_to_log(&mut log_file, task_id).await?;
-    }
-    let stderr_note = failure_stderr_note(
-        status,
-        task_id,
-        agent,
-        dispatched_model.or(info.model.as_deref()),
-    );
-    let detail = format!(
-        "{} — {} events, exit code {}{}",
-        crate::routing::capacity::terminal_label(store, task_id, agent.kind(), status),
-        event_count,
-        exit_status.code().unwrap_or(-1),
-        stderr_note,
-    );
-    store.insert_agent_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: if status == TaskStatus::Done {
-            EventKind::Completion
-        } else {
-            EventKind::Error
-        },
-        detail,
-        metadata: None,
-    })?;
-    info.status = status;
-    Ok(info)
+    let mut run = WatchRun::setup(agent, child, task_id, store, log_path, prompt, policy).await?;
+    run.stream(prompt, workgroup_id, idle_timeout, max_task_cost)
+        .await?;
+    run.finish().await
 }

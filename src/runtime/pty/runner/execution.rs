@@ -13,19 +13,20 @@ pub(super) fn spawn_for_task(
     start: Instant,
     control: Option<&PtyRunControl>,
 ) -> Result<PtyBridge> {
-    let mut bridge = match store.with_running_task(task_id.as_str(), || {
-        let bridge = spawn_bridge(cmd, log_path)?;
-        if let Some(pid) = bridge.child_pid() {
-            let _ = crate::runtime::background::update_agent_pid(task_id.as_str(), pid);
-        }
-        Ok(bridge)
-    }) {
+    let spawn = spawn_bridge(cmd);
+    let mut bridge = match store.with_running_task(task_id.as_str(), spawn) {
         Ok(bridge) => bridge,
         Err(err) => {
+            super::command::log_spawn_error(log_path, &err);
             fail_task_on_spawn_error(store, task_id, start.elapsed().as_millis() as i64, &err.to_string());
             return Err(err);
         }
     };
+    if let Some(pid) = bridge.child_pid() {
+        store.publish_launch(task_id.as_str(), pid, || {
+            crate::runtime::background::update_agent_pid(task_id.as_str(), pid)
+        })?;
+    }
     if let Err(error) = crate::runtime::read_only_launch::record(store, task_id, cmd, "exec") {
         let _ = bridge.kill_group();
         return Err(error);

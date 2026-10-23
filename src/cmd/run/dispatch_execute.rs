@@ -108,23 +108,49 @@ fn background_dirty_baseline(
     Ok(pre_task_dirty_paths)
 }
 
+fn spawn_background_worker(store: &Store, spec: &BackgroundRunSpec) -> Result<u32> {
+    background::save_spec(spec)?;
+    #[cfg(not(test))]
+    let spawn = background::spawn_worker(spec.task_id.as_str())?;
+    let worker_pid = store.with_worker_launch(spec.task_id.as_str(), || {
+        #[cfg(test)]
+        {
+            tests::spawn_worker()
+        }
+        #[cfg(not(test))]
+        {
+            let (launcher, pid) = spawn()?;
+            Ok((launcher, pid))
+        }
+    })?;
+    #[cfg(not(test))]
+    let (mut launcher, worker_pid) = worker_pid;
+    let published = store.publish_launch(spec.task_id.as_str(), worker_pid, || {
+        background::update_worker_pid(spec.task_id.as_str(), worker_pid)
+    });
+    #[cfg(not(test))]
+    {
+        use std::io::Write;
+        let acknowledged = launcher.stdin.take().filter(|_| published.is_ok())
+            .map(|mut pipe| pipe.write_all(b"1"));
+        std::thread::spawn(move || {
+            let _ = launcher.wait();
+        });
+        if let Some(Err(error)) = acknowledged {
+            background::sigkill_process(worker_pid);
+            return Err(error.into());
+        }
+    }
+    published?;
+    Ok(worker_pid)
+}
+
 fn launch_background_worker(
     store: &Arc<Store>,
     prepared: &PreparedDispatch,
     spec: &BackgroundRunSpec,
 ) -> Result<()> {
-    let worker_pid = store.with_worker_launch(prepared.task_id.as_str(), || {
-        background::save_spec(spec)?;
-        #[cfg(test)]
-        let worker_pid = std::process::id();
-        #[cfg(not(test))]
-        let (_launcher, worker_pid) = background::spawn_worker(prepared.task_id.as_str())?;
-        if let Err(err) = background::update_worker_pid(prepared.task_id.as_str(), worker_pid) {
-            background::kill_process(worker_pid);
-            return Err(err);
-        }
-        Ok(worker_pid)
-    });
+    let worker_pid = spawn_background_worker(store, spec);
     let worker_pid = match worker_pid {
         Ok(pid) => pid,
         Err(err) => {
@@ -152,3 +178,7 @@ fn launch_background_worker(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "dispatch_execute_tests.rs"]
+mod tests;

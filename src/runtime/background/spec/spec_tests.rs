@@ -6,6 +6,23 @@ use super::load_spec_if_exists;
 use crate::support::paths;
 
 #[test]
+fn agent_preparation_creates_a_spec_and_preserves_existing_worker_fields() {
+    let temp = tempfile::tempdir().expect("home");
+    let _guard = paths::AidHomeGuard::set(temp.path());
+    super::BackgroundRunSpec::prepare_agent("t-agent").expect("prepare standalone agent");
+    let mut spec = load_spec_if_exists("t-agent").expect("read").expect("spec");
+    assert_eq!(spec.task_id, "t-agent");
+    assert_eq!(spec.worker_pid, None);
+    spec.worker_pid = Some(42);
+    spec.env = Some(std::collections::HashMap::from([("SYNTHETIC_TEST".into(), "value".into())]));
+    super::save_spec(&spec).expect("save worker fields");
+    super::BackgroundRunSpec::prepare_agent("t-agent").expect("prepare existing worker");
+    let saved = load_spec_if_exists("t-agent").expect("read").expect("spec");
+    assert_eq!(saved.worker_pid, Some(42));
+    assert_eq!(saved.env, spec.env);
+}
+
+#[test]
 fn pid_updates_publish_complete_specs_to_concurrent_readers() {
     let temp = tempfile::tempdir().unwrap();
     let _guard = paths::AidHomeGuard::set(temp.path());

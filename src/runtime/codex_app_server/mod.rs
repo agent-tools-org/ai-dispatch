@@ -158,17 +158,21 @@ fn prepare(args: &Run<'_>) -> Result<command::Launch> {
 }
 
 fn spawn(args: &Run<'_>, launch: &mut command::Launch) -> Result<io::Rpc> {
-    args.store.with_running_task(args.task.as_str(), || {
-        let rpc = io::Rpc::spawn(
-            &mut launch.command,
-            &crate::support::paths::stderr_path(args.task.as_str()),
-        )?;
-        let _ = crate::runtime::background::update_agent_pid(args.task.as_str(), rpc.pid());
-        if let Some(control) = args.control {
-            control.set_agent_pid(rpc.pid());
-        }
-        Ok(rpc)
-    })
+    io::Rpc::prepare(
+        &mut launch.command,
+        &crate::support::paths::stderr_path(args.task.as_str()),
+    )?;
+    let child = args.store.with_running_task(args.task.as_str(), || {
+        io::Rpc::spawn(&mut launch.command)
+    })?;
+    let rpc = io::Rpc::attach(child)?;
+    args.store.publish_launch(args.task.as_str(), rpc.pid(), || {
+        crate::runtime::background::update_agent_pid(args.task.as_str(), rpc.pid())
+    })?;
+    if let Some(control) = args.control {
+        control.set_agent_pid(rpc.pid());
+    }
+    Ok(rpc)
 }
 
 fn write_output(args: &Run<'_>) -> Result<()> {

@@ -3,24 +3,22 @@
 // Deps: libc, the aid binary, task-id validation, and std process I/O.
 
 use anyhow::{Context, Result};
-#[cfg(not(test))]
-use std::io::Read;
-#[cfg(not(test))]
+use std::io::{BufRead, Read};
 use std::process::{Child, Command, Stdio};
+use std::time::Duration;
+
+const HANDOFF_TIMEOUT: Duration = Duration::from_millis(500);
+#[cfg(unix)]
+const ACK_TIMEOUT_MS: i32 = 10_000;
 
 #[cfg(not(test))]
-use crate::support::sanitize;
-
-#[cfg(not(test))]
-pub(crate) fn spawn_worker(task_id: &str) -> Result<(Child, u32)> {
-    sanitize::validate_task_id(task_id)?;
+pub(crate) fn spawn_worker(task_id: &str) -> Result<impl FnOnce() -> Result<(Child, u32)>> {
+    crate::support::sanitize::validate_task_id(task_id)?;
     let exe = std::env::current_exe().context("Failed to resolve current aid binary")?;
-    let detached = cfg!(unix)
-        && !cfg!(test)
-        && std::env::var_os("AID_NO_DETACH").is_none();
+    let detached = cfg!(unix) && std::env::var_os("AID_NO_DETACH").is_none();
     let mut cmd = Command::new(exe);
     cmd.args(["__run-task", task_id])
-        .stdin(Stdio::null())
+        .stdin(if detached { Stdio::piped() } else { Stdio::null() })
         .stdout(if detached { Stdio::piped() } else { Stdio::null() })
         .stderr(worker_log(task_id)?);
     if let Ok(home) = std::env::var("AID_HOME") {
@@ -29,27 +27,48 @@ pub(crate) fn spawn_worker(task_id: &str) -> Result<(Child, u32)> {
     if detached {
         cmd.env("AID_DAEMONIZE_WORKER", "1");
     }
+    Ok(move || spawn_prepared(&mut cmd, detached))
+}
+
+fn spawn_prepared(cmd: &mut Command, detached: bool) -> Result<(Child, u32)> {
     let mut launcher = cmd.spawn().context("Failed to spawn detached background worker")?;
-    if detached {
-        let mut output = String::new();
-        launcher
-            .stdout
-            .take()
-            .context("Detached worker launcher did not expose its PID")?
-            .read_to_string(&mut output)
-            .context("Failed to read detached worker PID")?;
-        let status = launcher.wait().context("Failed to reap worker launcher")?;
-        if !status.success() {
-            anyhow::bail!("Detached worker launcher exited with {status}");
-        }
-        let pid = output
-            .trim()
-            .parse::<u32>()
-            .context("Detached worker launcher returned an invalid PID")?;
+    if !detached {
+        let pid = launcher.id();
         return Ok((launcher, pid));
     }
-    let pid = launcher.id();
-    Ok((launcher, pid))
+    let result = receive_worker_pid(&mut launcher);
+    match result {
+        Ok(pid) => Ok((launcher, pid)),
+        Err(error) => {
+            launcher.stdin.take();
+            let _ = launcher.kill();
+            std::thread::spawn(move || {
+                let _ = launcher.wait();
+            });
+            Err(error)
+        }
+    }
+}
+
+fn receive_worker_pid(launcher: &mut Child) -> Result<u32> {
+    let stdout = launcher.stdout.take().context("Worker launcher did not expose its PID")?;
+    let (sent, received) = std::sync::mpsc::sync_channel(1);
+    std::thread::spawn(move || {
+        let mut line = String::new();
+        let result = std::io::BufReader::new(stdout.take(12)).read_line(&mut line)
+            .context("Failed to read detached worker PID")
+            .and_then(|_| parse_worker_pid(&line));
+        let _ = sent.send(result);
+    });
+    let pid = received.recv_timeout(HANDOFF_TIMEOUT).context("Worker PID handoff timed out")??;
+    Ok(pid)
+}
+
+fn parse_worker_pid(line: &str) -> Result<u32> {
+    anyhow::ensure!(line.ends_with('\n'), "Incomplete detached worker PID");
+    let pid = line.trim().parse::<u32>().context("Invalid detached worker PID")?;
+    anyhow::ensure!(pid > 1 && pid <= i32::MAX as u32, "Invalid detached worker PID");
+    Ok(pid)
 }
 
 /// Convert the direct child into a reparented worker before the caller can kill its tree.
@@ -68,8 +87,6 @@ fn daemonize_worker() -> Result<bool> {
         anyhow::bail!("Failed to fork background worker launcher");
     }
     if first > 0 {
-        let mut status = 0;
-        unsafe { libc::waitpid(first, &mut status, 0) };
         return Ok(true);
     }
 
@@ -81,11 +98,24 @@ fn daemonize_worker() -> Result<bool> {
         write_worker_pid(worker as u32);
         unsafe { libc::_exit(0) };
     }
+    if !worker_acknowledged() {
+        unsafe { libc::_exit(1) };
+    }
     if unsafe { libc::setsid() } < 0 {
         unsafe { libc::_exit(1) };
     }
     redirect_worker_stdio()?;
     Ok(false)
+}
+
+#[cfg(unix)]
+fn worker_acknowledged() -> bool {
+    let mut fd = libc::pollfd { fd: 0, events: libc::POLLIN, revents: 0 };
+    if unsafe { libc::poll(&mut fd, 1, ACK_TIMEOUT_MS) } <= 0 {
+        return false;
+    }
+    let mut ack = [0u8];
+    unsafe { libc::read(0, ack.as_mut_ptr().cast(), 1) == 1 && ack[0] == b'1' }
 }
 
 #[cfg(unix)]

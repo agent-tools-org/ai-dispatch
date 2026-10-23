@@ -61,7 +61,12 @@ impl Store {
         id: &str,
         launch: impl FnOnce() -> Result<T>,
     ) -> Result<T> {
-        self.with_launch_guard(id, false, launch)
+        crate::runtime::background::BackgroundRunSpec::prepare_agent(id)?;
+        let result = self.with_launch_guard(id, false, launch);
+        if result.is_err() {
+            let _ = crate::runtime::background::clear_spec(id);
+        }
+        result
     }
 
     pub(crate) fn with_worker_launch<T>(
@@ -99,6 +104,27 @@ impl Store {
         let result = launch()?;
         tx.commit()?;
         Ok(result)
+    }
+
+    pub(crate) fn publish_launch(
+        &self,
+        id: &str,
+        pid: u32,
+        persist: impl FnOnce() -> Result<()>,
+    ) -> Result<()> {
+        let result = persist().and_then(|()| {
+            anyhow::ensure!(
+                self.current_task_status(id)? == Some(TaskStatus::Running),
+                "Task '{id}' stopped during launch"
+            );
+            Ok(())
+        });
+        if result.is_err() {
+            crate::runtime::background::sigkill_process(pid);
+            let _ = crate::runtime::background::clear_spec(id);
+            self.update_task_status(id, TaskStatus::Failed)?;
+        }
+        result
     }
 
     #[cfg(test)]
@@ -246,3 +272,7 @@ fn stop_unlaunched_child(tx: &rusqlite::Transaction<'_>, id: &str) -> Result<Opt
     )?;
     Ok(Some(parent))
 }
+
+#[cfg(test)]
+#[path = "status_mutations_tests.rs"]
+mod tests;

@@ -14,9 +14,6 @@ pub(super) fn spawn_agent(args: &mut RunProcessArgs<'_>) -> Result<(Child, Optio
     if prompt.is_some() { args.cmd.stdin(std::process::Stdio::piped()); }
     let mut child = match args.store.with_running_task(args.task_id.as_str(), || {
         let child = args.cmd.spawn()?;
-        if let Some(pid) = child.id() {
-            let _ = crate::runtime::background::update_agent_pid(args.task_id.as_str(), pid);
-        }
         Ok((child, prompt))
     }) {
         Ok(child) => child,
@@ -28,6 +25,11 @@ pub(super) fn spawn_agent(args: &mut RunProcessArgs<'_>) -> Result<(Child, Optio
             return Err(err);
         }
     };
+    if let Some(pid) = child.0.id() {
+        args.store.publish_launch(args.task_id.as_str(), pid, || {
+            crate::runtime::background::update_agent_pid(args.task_id.as_str(), pid)
+        })?;
+    }
     if let Err(error) = crate::runtime::read_only_launch::record(
         args.store, args.task_id, args.cmd.as_std(), "exec",
     ) {

@@ -40,6 +40,29 @@ pub struct BackgroundRunSpec {
 }
 
 impl BackgroundRunSpec {
+    pub(crate) fn prepare_agent(task_id: &str) -> Result<()> {
+        if load_spec_if_exists(task_id)?.is_some() {
+            return Ok(());
+        }
+        save_spec(&Self {
+            task_id: task_id.to_string(),
+            worker_pid: None,
+            dir: None,
+            budget: false,
+            max_duration_mins: None,
+            max_duration_secs: None,
+            idle_timeout_secs: None,
+            interactive: false,
+            on_done: None,
+            env: None,
+            agent_pid: None,
+            agent_started: None,
+            audit_report_mode: false,
+            pre_task_dirty_paths: None,
+            foreground: false,
+        })
+    }
+
     pub(crate) fn agent_pid_for_signal(&self) -> Option<u32> {
         let pid = self.agent_pid?;
         if crate::runtime::process::monitor::activity::root_matches(pid, self.agent_started.as_deref()) {
@@ -54,6 +77,12 @@ impl BackgroundRunSpec {
 }
 
 pub fn save_spec(spec: &BackgroundRunSpec) -> Result<()> {
+    #[cfg(test)]
+    SAVE_HOOK.with(|hook| {
+        if let Some(prepare) = hook.borrow_mut().take() {
+            prepare();
+        }
+    });
     sanitize::validate_task_id(&spec.task_id)?;
     let path = paths::job_path(&spec.task_id);
     if let Some(parent) = path.parent() {
@@ -139,3 +168,16 @@ mod tests;
 #[cfg(test)]
 #[path = "spec_tests.rs"]
 mod legacy_tests;
+
+#[cfg(test)]
+thread_local! {
+    static SAVE_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+impl BackgroundRunSpec {
+    pub(crate) fn on_next_save(hook: impl FnOnce() + 'static) {
+        SAVE_HOOK.with(|slot| *slot.borrow_mut() = Some(Box::new(hook)));
+    }
+}

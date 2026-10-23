@@ -92,11 +92,11 @@ fn drifted_merge_requires_force_then_merges_final_branch() {
     let task = task(repo.path(), "dispatch/branch", "agent/final");
     store.insert_task(&task).unwrap();
 
-    let blocked = merge_single(&store, task.id.as_str(), false, false, false, None);
+    let blocked = merge_single_with_output(&store, task.id.as_str(), false, false, false, None, true);
     assert!(blocked.is_err());
     assert!(!repo.path().join("final.txt").exists());
 
-    merge_single(&store, task.id.as_str(), false, false, true, None).unwrap();
+    merge_single_with_output(&store, task.id.as_str(), false, false, true, None, true).unwrap();
 
     assert!(repo.path().join("final.txt").exists());
     let loaded = store.get_task(task.id.as_str()).unwrap().unwrap();

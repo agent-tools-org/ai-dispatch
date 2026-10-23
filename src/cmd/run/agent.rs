@@ -15,27 +15,6 @@ use crate::types::TaskId;
 
 use super::run_prompt;
 
-#[cfg(test)]
-#[allow(clippy::too_many_arguments)]
-pub(crate) async fn run_agent_process(
-    agent: &dyn crate::agent::Agent,
-    cmd: Command,
-    task_id: &TaskId,
-    store: &Arc<Store>,
-    log_path: &Path,
-    output_path: Option<&str>,
-    model: Option<&str>,
-    streaming: bool,
-    workgroup_id: Option<&str>,
-    timeout_policy: crate::config::timeout_policy::TimeoutPolicy,
-) -> Result<()> {
-    run_agent_process_with_cost(
-        agent, cmd, task_id, store, log_path, output_path, model, streaming,
-        workgroup_id, timeout_policy, None,
-        std::time::Instant::now(),
-    ).await
-}
-
 pub(crate) async fn run_agent_process_with_cost(
     agent: &dyn crate::agent::Agent,
     cmd: Command,

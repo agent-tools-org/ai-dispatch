@@ -11,7 +11,7 @@ fn merge_single_rejects_non_done_task() {
     task.status = TaskStatus::Running;
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-running", false, false, false, None);
+    let result = merge_single_with_output(&store, "t-running", false, false, false, None, true);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("only DONE"));
 }
@@ -24,7 +24,7 @@ fn merge_single_rejects_failed_task_without_force() {
     task.status = TaskStatus::Failed;
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-failed", false, false, false, None);
+    let result = merge_single_with_output(&store, "t-failed", false, false, false, None, true);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("only DONE"));
 }
@@ -39,7 +39,7 @@ fn merge_single_force_merges_failed_task_with_committed_branch() {
     task.status = TaskStatus::Failed;
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-force-failed", false, false, true, None);
+    let result = merge_single_with_output(&store, "t-force-failed", false, false, true, None, true);
     assert!(result.is_ok(), "force merge failed: {result:?}");
 
     let loaded = store.get_task("t-force-failed").unwrap().unwrap();
@@ -88,7 +88,7 @@ fn merge_single_force_rejects_failed_task_without_commits() {
     task.status = TaskStatus::Failed;
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-force-empty", false, false, true, None);
+    let result = merge_single_with_output(&store, "t-force-empty", false, false, true, None, true);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(
@@ -159,7 +159,7 @@ fn merge_single_works_without_worktree_branch() {
     };
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-inplace", false, false, false, None);
+    let result = merge_single_with_output(&store, "t-inplace", false, false, false, None, true);
     assert!(result.is_ok());
     let loaded = store.get_task("t-inplace").unwrap().unwrap();
     assert_eq!(loaded.status, TaskStatus::Merged);
@@ -193,7 +193,7 @@ fn merge_single_preserves_worktree_on_conflict() {
     let task = make_task_with_worktree("t-conflict", repo.path(), wt.path(), &branch);
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-conflict", false, false, false, None);
+    let result = merge_single_with_output(&store, "t-conflict", false, false, false, None, true);
     assert!(result.is_err());
     // Worktree must be preserved for manual resolution
     assert!(wt.path().exists());
@@ -226,7 +226,7 @@ fn merge_single_without_repo_path_resolves_from_worktree() {
     task.repo_path = None;
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-no-repo", false, false, false, None);
+    let result = merge_single_with_output(&store, "t-no-repo", false, false, false, None, true);
     assert!(
         result.is_ok(),
         "merge should resolve repo from worktree: {result:?}"
@@ -245,7 +245,7 @@ fn merge_single_merges_into_target_branch() {
     let task = make_task_with_worktree("t-target", repo.path(), wt.path(), &branch);
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-target", false, false, false, Some(&target));
+    let result = merge_single_with_output(&store, "t-target", false, false, false, Some(&target), true);
     assert!(result.is_ok(), "merge_single failed: {result:?}");
 
     let current = Command::new("git")

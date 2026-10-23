@@ -31,7 +31,7 @@ fn merge_group_skips_empty_branches() {
     empty_task.workgroup_id = Some(group_id.to_string());
     store.insert_task(&empty_task).unwrap();
 
-    let result = merge_group(&store, group_id, false, false, None);
+    let result = merge_group_with_output(&store, group_id, false, false, false, None, true);
     assert!(result.is_ok(), "merge_group failed: {result:?}");
 
     let loaded_committed = store.get_task("t-merge-group").unwrap().unwrap();

@@ -11,16 +11,19 @@ fn a_later_silent_completion_does_not_erase_an_observation() {
 
     for observed in [Some("composer-2"), None] {
         store
-            .update_task_completion(TaskCompletionUpdate {
-                id: "t-attr2",
-                status: TaskStatus::Done,
-                tokens: Some(10),
-                duration_ms: 1000,
-                observed_model: observed,
-                attribution_source: observed.map(|_| AttributionSource::Echoed),
-                cost_usd: None,
-                exit_code: Some(0),
-            })
+            .record_agent_completion(
+                TaskCompletionUpdate {
+                    id: "t-attr2",
+                    status: TaskStatus::Done,
+                    tokens: Some(10),
+                    duration_ms: 1000,
+                    observed_model: observed,
+                    attribution_source: observed.map(|_| AttributionSource::Echoed),
+                    cost_usd: None,
+                    exit_code: Some(0),
+                },
+                None,
+            )
             .unwrap();
     }
 
@@ -34,17 +37,22 @@ fn update_completion() {
     let task = make_task("t-0002", AgentKind::Grok, TaskStatus::Running);
     store.insert_task(&task).unwrap();
     store
-        .update_task_completion(TaskCompletionUpdate {
-            id: "t-0002",
-            status: TaskStatus::Done,
-            tokens: Some(3000),
-            duration_ms: 47000,
-            observed_model: Some("gemini-2.5-flash"),
-            attribution_source: None,
-            cost_usd: Some(0.0038),
-            exit_code: None,
-        })
+        .record_agent_completion(
+            TaskCompletionUpdate {
+                id: "t-0002",
+                status: TaskStatus::Done,
+                tokens: Some(3000),
+                duration_ms: 47000,
+                observed_model: Some("gemini-2.5-flash"),
+                attribution_source: None,
+                cost_usd: Some(0.0038),
+                exit_code: None,
+            },
+            None,
+        )
         .unwrap();
+
+    assert!(store.update_task_status("t-0002", TaskStatus::Done).unwrap());
 
     let loaded = store.get_task("t-0002").unwrap().unwrap();
     assert_eq!(loaded.status, TaskStatus::Done);
@@ -66,16 +74,19 @@ fn update_completion_does_not_override_terminal_intent_statuses() {
         let task = make_task(id, AgentKind::Codex, status);
         store.insert_task(&task).unwrap();
         store
-            .update_task_completion(TaskCompletionUpdate {
-                id,
-                status: TaskStatus::Done,
-                tokens: Some(55),
-                duration_ms: 1234,
-                observed_model: Some("gpt-5.4"),
-                attribution_source: None,
-                cost_usd: Some(0.01),
-                exit_code: Some(0),
-            })
+            .record_agent_completion(
+                TaskCompletionUpdate {
+                    id,
+                    status: TaskStatus::Done,
+                    tokens: Some(55),
+                    duration_ms: 1234,
+                    observed_model: Some("gpt-5.4"),
+                    attribution_source: None,
+                    cost_usd: Some(0.01),
+                    exit_code: Some(0),
+                },
+                None,
+            )
             .unwrap();
 
         let loaded = store.get_task(id).unwrap().unwrap();

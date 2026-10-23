@@ -29,8 +29,6 @@ pub(crate) use symlinks::{
     apply_repairs, is_repairable, scan_doctor_symlinks, SymlinkRepair,
     SymlinkScan,
 };
-#[cfg(test)]
-pub(crate) use symlinks::find_doctor_symlinks;
 
 pub struct IsolatedHomeGuard {
     path: PathBuf,

@@ -3,17 +3,6 @@
 
 use super::*;
 
-#[cfg(test)]
-pub(super) fn merge_group(
-    store: &Store,
-    group_id: &str,
-    approve: bool,
-    check: bool,
-    target: Option<&str>,
-) -> Result<()> {
-    merge_group_with_output(store, group_id, approve, check, false, target, true)
-}
-
 pub(super) fn merge_group_with_output(
     store: &Store,
     group_id: &str,

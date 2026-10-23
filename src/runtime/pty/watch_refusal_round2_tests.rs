@@ -33,15 +33,11 @@ fn captured_auth(output: &str, exit: i32) -> bool {
         output,
         &exit.to_string(),
     ]);
-    crate::runtime::pty::runner::run_agent_process(
-        agent.as_ref(),
-        &command,
-        &task.id,
-        &store,
-        &paths::log_path(task.id.as_str()),
-        None,
-        None,
-        true,
+    crate::runtime::pty::runner::run_agent_process_with_control(
+        agent.as_ref(), &command, &task.id, &store,
+        &paths::log_path(task.id.as_str()), None, None, true,
+        crate::config::timeout_policy::TimeoutPolicy::from_command(&command),
+        None, None, std::time::Instant::now(),
     )
     .expect("PTY run");
     let marked = crate::routing::auth_marker::record_from_run(task.id.as_str(), AgentKind::OpenCode, &store);

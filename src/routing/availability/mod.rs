@@ -17,8 +17,6 @@ pub(crate) use policy::{
     classify_hold, format_hold_end_for, relevant_windows, snapshot_overrides,
     stored_hold, wall_of, Hold, StoredHold, MANUAL_HOLD,
 };
-#[cfg(test)]
-pub(crate) use policy::overrides_marker_at_in_cache;
 
 const DEGRADED_USED: f64 = 80.0;
 
@@ -64,7 +62,7 @@ pub fn availability_for_group(
     )
 }
 
-fn from_path(
+pub(crate) fn from_path(
     agent: &AgentKind,
     custom_name: Option<&str>,
     group: Option<&str>,

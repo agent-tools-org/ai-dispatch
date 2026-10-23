@@ -137,7 +137,7 @@ fn merge_single_refuses_an_already_merged_task() {
     task.status = TaskStatus::Merged;
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, task.id.as_str(), false, false, false, None);
+    let result = merge_single_with_output(&store, task.id.as_str(), false, false, false, None, true);
 
     assert!(
         result.is_err(),

@@ -3,8 +3,6 @@
 // Deps: rate_limit parse helpers, rate_limit_signatures, live_quota snapshots.
 
 use chrono::{DateTime, Utc};
-#[cfg(test)]
-use std::path::Path;
 use std::time::SystemTime;
 
 use crate::routing::quota::live as live_quota;
@@ -205,38 +203,6 @@ fn window_matches_group(window_group: Option<&str>, asked: &str) -> bool {
         Some("claude-gpt") if matches!(asked, "claude" | "gpt-oss") => true,
         _ => false,
     }
-}
-
-#[cfg(test)]
-pub(crate) fn overrides_marker_at_in_cache(
-    agent: &AgentKind,
-    marker_path: &Path,
-    cache_dir: &Path,
-) -> bool {
-    let Ok(content) = std::fs::read_to_string(marker_path) else {
-        return false;
-    };
-    let Ok(marker_mtime) = std::fs::metadata(marker_path).and_then(|meta| meta.modified()) else {
-        return false;
-    };
-    let Some(snapshot) = live_quota::snapshot_in_cache(agent, cache_dir) else {
-        return false;
-    };
-    let group = group_from_marker_path(marker_path);
-    let relevant = relevant_windows(&snapshot, agent, group.as_deref());
-    snapshot_overrides(
-        &stored_hold(&content, agent),
-        &snapshot,
-        marker_mtime,
-        &relevant,
-    )
-}
-
-#[cfg(test)]
-fn group_from_marker_path(path: &Path) -> Option<String> {
-    let name = path.file_name()?.to_str()?;
-    let rest = name.strip_prefix("rate-limit-")?;
-    rest.split_once("--").map(|(_, group)| group.to_string())
 }
 
 pub(crate) fn format_hold_end_for(

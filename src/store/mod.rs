@@ -2,16 +2,16 @@
 // Exports: Store.
 // Deps: rusqlite, anyhow.
 
-mod mutations;
-mod task_insert_mutations;
-mod status_mutations;
-mod task_metadata_mutations;
+mod artifact_custody;
 mod completion_mutations;
-mod usage_checkpoint;
 mod memory_mutations;
 #[cfg(test)]
 mod mutation_tests;
-mod artifact_custody;
+mod mutations;
+mod status_mutations;
+mod task_insert_mutations;
+mod task_metadata_mutations;
+mod usage_checkpoint;
 pub use artifact_custody::{AcceptanceDecision, AcceptanceRecord};
 pub use mutations::TaskCompletionUpdate;
 mod execution_mutations;
@@ -21,10 +21,10 @@ mod kg_schema;
 mod kg_types;
 mod migrations;
 mod queries;
+mod read_only_launch;
 mod schema;
 mod schema_rows;
 mod task_profile;
-mod read_only_launch;
 pub use kg_types::{KgStats, KgTriple};
 pub use queries::TaskStatsRow;
 
@@ -64,14 +64,16 @@ impl Store {
         }
         let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
             .with_context(|| format!("Failed to open database read-only at {}", path.display()))?;
-        Ok(Some(Self { conn: Mutex::new(conn) }))
+        Ok(Some(Self {
+            conn: Mutex::new(conn),
+        }))
     }
 
     pub fn open(path: &Path) -> Result<Self> {
         let conn = Connection::open(path)
             .with_context(|| format!("Failed to open database at {}", path.display()))?;
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
         optimize_for_concurrency(&conn)?;
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
         let store = Self {
             conn: Mutex::new(conn),
         };
@@ -82,8 +84,8 @@ impl Store {
     #[cfg(test)]
     pub fn open_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
-        conn.execute_batch("PRAGMA foreign_keys=ON;")?;
         optimize_for_concurrency(&conn)?;
+        conn.execute_batch("PRAGMA foreign_keys=ON;")?;
         let store = Self {
             conn: Mutex::new(conn),
         };
@@ -96,24 +98,20 @@ impl Store {
     }
 
     fn create_tables(&self) -> Result<()> {
-        schema::create_tables(self)?;
-        self.migrate()?;
-        usage_checkpoint::create_table(&self.db())?;
-        read_only_launch::create_table(self)?;
-        migrations::migrate_billing_index(&self.db())?;
-        Ok(())
+        self.migrate()
     }
 
-    /// Idempotent schema migrations for v0.2 columns
     fn migrate(&self) -> Result<()> {
-        schema::migrate(self)
+        schema::ensure_current(&self.db())
     }
 
     #[cfg(test)]
     pub fn db_stats(&self) -> Result<DbStats> {
         let conn = self.db();
         let db_path: String = conn.query_row("PRAGMA database_list", [], |row| row.get(2))?;
-        let size_bytes = std::fs::metadata(&db_path).map(|meta| meta.len()).unwrap_or(0);
+        let size_bytes = std::fs::metadata(&db_path)
+            .map(|meta| meta.len())
+            .unwrap_or(0);
         let page_count = conn.query_row("PRAGMA page_count", [], |row| row.get(0))?;
         let free_pages = conn.query_row("PRAGMA freelist_count", [], |row| row.get(0))?;
         Ok(DbStats {
@@ -124,7 +122,7 @@ impl Store {
     }
 }
 
-pub(crate) mod workgroups;
 pub(crate) mod state;
 #[cfg(test)]
 mod state_tests;
+pub(crate) mod workgroups;

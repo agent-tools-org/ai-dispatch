@@ -93,8 +93,8 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
 
     let spec = BackgroundRunSpec {
         task_id: "t-3010".to_string(),
-        worker_pid: Some(999999),
-        agent_pid: Some(888888),
+        worker_pid: Some(i32::MAX as u32 - 1),
+        agent_pid: Some(i32::MAX as u32 - 2),
         agent_started: None,
         agent_name: "codex".to_string(),
         prompt: "test".to_string(),
@@ -163,9 +163,17 @@ fn stop_loads_actual_pre_upgrade_spec_with_detached_field() {
     store
         .insert_task(&make_task("t-9ef43f87", TaskStatus::Running))
         .unwrap();
+    let mut legacy: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../testdata/legacy-background-spec.json"
+    ))
+    .unwrap();
+    // Keep the historical schema, but never signal a PID from the captured launch.
+    legacy["worker_pid"] = serde_json::json!(i32::MAX as u32 - 3);
+    legacy["agent_pid"] = serde_json::json!(i32::MAX as u32 - 4);
+    assert_eq!(legacy["detached"], true);
     std::fs::write(
         crate::support::paths::job_path("t-9ef43f87"),
-        include_str!("../../../testdata/legacy-background-spec.json"),
+        serde_json::to_vec(&legacy).unwrap(),
     )
     .unwrap();
 

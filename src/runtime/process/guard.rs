@@ -152,9 +152,18 @@ mod tests {
         cmd.args(["-c", "read hold"]);
         cmd.stdin(std::process::Stdio::piped());
         let mut guard = ProcessGuard::spawn(&mut cmd).unwrap();
-        let status = guard.wait_with_timeout(Duration::from_millis(100)).unwrap();
-        assert!(status.is_none());
+        // Child::wait closes its own stdin; retain the writer so read cannot see EOF.
+        let _input = guard.child_mut().stdin.take().unwrap();
         use std::os::unix::process::ExitStatusExt;
+        let started = std::time::Instant::now();
+        let status = guard.wait_with_timeout(Duration::from_millis(100)).unwrap();
+        assert!(
+            status.is_none(),
+            "timeout child returned {status:?}, code={:?}, signal={:?}, elapsed={:?}",
+            status.as_ref().and_then(|status| status.code()),
+            status.as_ref().and_then(|status| status.signal()),
+            started.elapsed(),
+        );
         assert_eq!(
             guard.child_mut().wait().unwrap().signal(),
             Some(libc::SIGKILL)

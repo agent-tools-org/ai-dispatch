@@ -5,29 +5,29 @@ use std::ops::ControlFlow;
 mod finish;
 mod streaming;
 
+// Fields drop in declaration order; mirror the original locals in reverse order.
 pub(super) struct WatchRun<'a> {
+    input: Option<crate::runtime::claude_input::Session>,
+    stderr_handle: Option<stderr::StderrCapture>,
+    full_output: String,
+    last_event_detail: Option<String>,
+    delivery_evidence: DeliveryEvidence,
+    synthetic_tracker: SyntheticMilestoneTracker,
+    api_route_failed: bool,
+    saw_completion_event: bool,
+    session_saved: bool,
+    event_count: u32,
+    info: CompletionInfo,
+    log_file: tokio::fs::File,
     lines: tokio::io::Lines<
         BufReader<crate::runtime::pty::watch::piped::Reader<tokio::process::ChildStdout>>,
     >,
-    watchdog: Option<crate::runtime::pty::watch::piped::Watchdog>,
     transcript: Option<Arc<std::sync::Mutex<std::fs::File>>>,
-    stderr_handle: Option<stderr::StderrCapture>,
-    input: Option<crate::runtime::claude_input::Session>,
-
-    agent: &'a dyn Agent,
-    child: &'a mut Child,
-    task_id: &'a TaskId,
+    watchdog: Option<crate::runtime::pty::watch::piped::Watchdog>,
     store: &'a Arc<Store>,
-    log_file: tokio::fs::File,
-    info: CompletionInfo,
-    event_count: u32,
-    saw_completion_event: bool,
-    api_route_failed: bool,
-    delivery_evidence: DeliveryEvidence,
-    full_output: String,
-    session_saved: bool,
-    synthetic_tracker: SyntheticMilestoneTracker,
-    last_event_detail: Option<String>,
+    task_id: &'a TaskId,
+    child: &'a mut Child,
+    agent: &'a dyn Agent,
 }
 
 impl<'a> WatchRun<'a> {

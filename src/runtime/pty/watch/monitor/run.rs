@@ -3,21 +3,22 @@
 use super::*;
 use std::ops::ControlFlow;
 
+// Fields drop in declaration order; mirror the original locals in reverse order.
 pub(super) struct MonitorRun<'a> {
-    pub(super) agent: &'a dyn Agent,
-    pub(super) task_id: &'a TaskId,
-    pub(super) store: &'a Arc<Store>,
-    pub(super) bridge: &'a mut PtyBridge,
-    pub(super) rx: &'a mpsc::Receiver<Vec<u8>>,
-    pub(super) log_file: &'a mut std::fs::File,
-    pub(super) state: &'a mut MonitorState,
-    pub(super) first_token_timeout: Option<Duration>,
-    pub(super) idle_timeout: Option<Duration>,
-    pub(super) max_task_cost: Option<f64>,
-    pub(super) reader_done: bool,
-    pub(super) child_exited_at: Option<Instant>,
-    pub(super) decoder: utf8::Utf8Chunks,
     pub(super) last_child_activity: std::time::SystemTime,
+    pub(super) decoder: utf8::Utf8Chunks,
+    pub(super) child_exited_at: Option<Instant>,
+    pub(super) reader_done: bool,
+    pub(super) max_task_cost: Option<f64>,
+    pub(super) idle_timeout: Option<Duration>,
+    pub(super) first_token_timeout: Option<Duration>,
+    pub(super) state: &'a mut MonitorState,
+    pub(super) log_file: &'a mut std::fs::File,
+    pub(super) rx: &'a mpsc::Receiver<Vec<u8>>,
+    pub(super) bridge: &'a mut PtyBridge,
+    pub(super) store: &'a Arc<Store>,
+    pub(super) task_id: &'a TaskId,
+    pub(super) agent: &'a dyn Agent,
 }
 impl MonitorRun<'_> {
     pub(super) fn monitor(&mut self) -> Result<()> {

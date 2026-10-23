@@ -6,6 +6,8 @@ use super::*;
 #[cfg(test)]
 mod terminal_events_tests;
 
+mod run;
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn monitor_bridge(
     agent: &dyn Agent,
@@ -19,48 +21,23 @@ pub(crate) fn monitor_bridge(
     idle_timeout: Option<Duration>,
     max_task_cost: Option<f64>,
 ) -> Result<()> {
-    let mut reader_done = false;
-    let mut child_exited_at: Option<Instant> = None;
-    let mut decoder = utf8::Utf8Chunks::default();
-    let mut last_child_activity = std::time::UNIX_EPOCH;
-    while !drained(bridge, reader_done, &mut child_exited_at) {
-        if deadline_elapsed(state, store, task_id)? {
-            break;
-        }
-        match rx.recv_timeout(INPUT_POLL_INTERVAL) {
-            Ok(bytes) => {
-                if let Err(error) =
-                    handle_bytes(state, agent, task_id, store, log_file, &mut decoder, bytes)
-                {
-                    let _ = bridge.kill_group();
-                    return Err(error);
-                }
-                if stop_after_output(state, agent, store, task_id, bridge, max_task_cost) {
-                    break;
-                }
-            }
-            Err(RecvTimeoutError::Timeout) => {
-                if handle_idle_timeout(
-                    state,
-                    agent,
-                    store,
-                    task_id,
-                    bridge,
-                    first_token_timeout,
-                    idle_timeout,
-                    &mut last_child_activity,
-                )? {
-                    break;
-                }
-            }
-            Err(RecvTimeoutError::Disconnected) => {
-                state.handle_chunk(agent, task_id, store, log_file, decoder.flush())?;
-                reader_done = true;
-            }
-        }
-        forward_input(state, agent, bridge, store, task_id)?;
-    }
-    state.flush_trailing_output(agent, task_id, store)
+    let mut run = run::MonitorRun {
+        agent,
+        task_id,
+        store,
+        bridge,
+        rx,
+        log_file,
+        state,
+        first_token_timeout,
+        idle_timeout,
+        max_task_cost,
+        reader_done: false,
+        child_exited_at: None,
+        decoder: utf8::Utf8Chunks::default(),
+        last_child_activity: std::time::UNIX_EPOCH,
+    };
+    run.monitor()
 }
 
 fn deadline_elapsed(state: &mut MonitorState, store: &Store, task_id: &TaskId) -> Result<bool> {
@@ -79,8 +56,13 @@ fn deadline_elapsed(state: &mut MonitorState, store: &Store, task_id: &TaskId) -
 }
 
 fn handle_bytes(
-    state: &mut MonitorState, agent: &dyn Agent, task_id: &TaskId, store: &Arc<Store>,
-    log_file: &mut std::fs::File, decoder: &mut utf8::Utf8Chunks, bytes: Vec<u8>,
+    state: &mut MonitorState,
+    agent: &dyn Agent,
+    task_id: &TaskId,
+    store: &Arc<Store>,
+    log_file: &mut std::fs::File,
+    decoder: &mut utf8::Utf8Chunks,
+    bytes: Vec<u8>,
 ) -> Result<()> {
     state.received_raw_bytes = true;
     state.last_raw_chunk_time = Instant::now();

@@ -355,8 +355,10 @@ Known limits:
 - Board and cost no longer fail on a malformed payload in a row they do not display.
 - Agent-only reports still scan `tasks`; failed-task provider output remains the bulk of a
   trimmed database.
-- `runtime::watcher::idle_tests` (CPU-using and remote-lock descendants within a 400 ms idle
-  window) can fail under build-box load; a rerun on the same commit passed.
+- Timing-bound tests can fail under build-box load and passed on rerun of the same commit:
+  `runtime::watcher::idle_tests` (descendants within a 400 ms idle window),
+  `runtime::codex_app_server::turn::watchdog::tests` (quiet CPU child, silence before first item)
+  and `runtime::process::group::async_tests::cancelled_grace_period_still_kills_verified_escaped_descendants`.
 
 ### Known limits of the current code
 

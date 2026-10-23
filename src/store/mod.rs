@@ -22,6 +22,7 @@ mod kg_types;
 mod migrations;
 mod queries;
 mod read_only_launch;
+mod route_launch;
 mod schema;
 mod schema_rows;
 mod task_profile;

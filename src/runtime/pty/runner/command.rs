@@ -9,11 +9,14 @@ use crate::runtime::pty::bridge::PtyBridge;
 
 pub(crate) fn spawn_bridge(cmd: &std::process::Command) -> impl FnOnce() -> Result<PtyBridge> {
     let (argv, dir, env) = command_parts(cmd);
-    move || PtyBridge::spawn(&argv, dir.as_deref(), env)
+    move || {
+        PtyBridge::spawn(&argv, dir.as_deref(), env)
+            .map_err(|err| anyhow::anyhow!("Failed to spawn agent process: {err}"))
+    }
 }
 
 pub(super) fn log_spawn_error(log_path: &Path, err: &dyn std::fmt::Display) {
-    let error_msg = format!("Failed to spawn agent process: {err}");
+    let error_msg = err.to_string();
     aid_error!("[aid] {error_msg}");
     write_spawn_error_log(log_path, &error_msg);
 }

@@ -54,14 +54,17 @@ fn receive_worker_pid(launcher: &mut Child) -> Result<u32> {
     let stdout = launcher.stdout.take().context("Worker launcher did not expose its PID")?;
     let (sent, received) = std::sync::mpsc::sync_channel(1);
     std::thread::spawn(move || {
+        let mut reader = std::io::BufReader::new(stdout.take(12));
         let mut line = String::new();
-        let result = std::io::BufReader::new(stdout.take(12)).read_line(&mut line)
+        let result = reader
+            .read_line(&mut line)
             .context("Failed to read detached worker PID")
             .and_then(|_| parse_worker_pid(&line));
-        let _ = sent.send(result);
+        let _ = sent.send((result, reader.into_inner().into_inner()));
     });
-    let pid = received.recv_timeout(HANDOFF_TIMEOUT).context("Worker PID handoff timed out")??;
-    Ok(pid)
+    let (pid, stdout) = received.recv_timeout(HANDOFF_TIMEOUT).context("Worker PID handoff timed out")?;
+    launcher.stdout = Some(stdout);
+    pid
 }
 
 fn parse_worker_pid(line: &str) -> Result<u32> {

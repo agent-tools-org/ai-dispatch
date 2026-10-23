@@ -10,9 +10,7 @@ impl DependencyRun<'_> {
             if self.active.is_empty() {
                 break;
             }
-            if self.poll_completed().await?.is_continue() {
-                continue;
-            }
+            self.poll_completed().await?;
         }
         Ok(())
     }
@@ -122,23 +120,21 @@ impl DependencyRun<'_> {
         }
         Ok(())
     }
-    async fn poll_completed(&mut self) -> Result<std::ops::ControlFlow<()>> {
+    async fn poll_completed(&mut self) -> Result<()> {
         let completed_tasks = reconcile_and_poll_completed_tasks(&self.store, &mut self.active)?;
         if completed_tasks.is_empty() {
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-            return Ok(std::ops::ControlFlow::Continue(()));
+            return Ok(());
         }
         for completed in completed_tasks {
-            if self.complete(completed).await?.is_continue() {
-                continue;
-            }
+            self.complete(completed).await?;
         }
-        Ok(std::ops::ControlFlow::Break(()))
+        Ok(())
     }
     async fn complete(
         &mut self,
         completed: super::super::super::batch_types::CompletedTask,
-    ) -> Result<std::ops::ControlFlow<()>> {
+    ) -> Result<()> {
         aid_progress!(
             "[batch] {} {}",
             completed.task_id,
@@ -159,7 +155,7 @@ impl DependencyRun<'_> {
         {
             self.task_ids.push(retry_task_id.clone());
             self.active.push((completed.index, retry_task_id));
-            return Ok(std::ops::ControlFlow::Continue(()));
+            return Ok(());
         }
         self.outcomes[completed.index] = Some(completed.outcome);
         trigger_conditional(
@@ -169,7 +165,7 @@ impl DependencyRun<'_> {
             &self.success_targets,
             &self.failure_targets,
         );
-        Ok(std::ops::ControlFlow::Break(()))
+        Ok(())
     }
     pub(super) fn finish(self) -> Result<BatchDispatchResult> {
         // Mark any remaining waiting tasks as skipped (deps never resolved)

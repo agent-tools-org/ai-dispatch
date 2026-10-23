@@ -31,7 +31,7 @@ pub(super) struct Rpc {
 }
 
 impl Rpc {
-    pub fn spawn(cmd: &mut Command, stderr: &std::path::Path) -> Result<Self> {
+    pub fn prepare(cmd: &mut Command, stderr: &std::path::Path) -> Result<()> {
         #[cfg(unix)]
         {
             use std::os::unix::process::CommandExt;
@@ -40,7 +40,14 @@ impl Rpc {
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::from(std::fs::File::create(stderr)?));
-        let mut child = cmd.spawn().context("Spawn Codex app-server")?;
+        Ok(())
+    }
+
+    pub fn spawn(cmd: &mut Command) -> Result<Child> {
+        cmd.spawn().context("Spawn Codex app-server")
+    }
+
+    pub fn attach(mut child: Child) -> Result<Self> {
         let stdout = child.stdout.take().context("Missing Codex stdout")?;
         let stdin = child.stdin.take().context("Missing Codex stdin")?;
         Ok(Self {

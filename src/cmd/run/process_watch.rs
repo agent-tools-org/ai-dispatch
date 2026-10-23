@@ -15,7 +15,7 @@ pub(super) fn spawn_agent(args: &mut RunProcessArgs<'_>) -> Result<(Child, Optio
     let mut child = match args.store.with_running_task(args.task_id.as_str(), || {
         let child = args.cmd.spawn()?;
         if let Some(pid) = child.id() {
-            let _ = crate::runtime::background::update_agent_pid(args.task_id.as_str(), pid);
+            crate::runtime::background::update_agent_pid(args.task_id.as_str(), pid)?;
         }
         Ok((child, prompt))
     }) {

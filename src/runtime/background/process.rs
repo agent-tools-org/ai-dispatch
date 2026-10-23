@@ -13,10 +13,16 @@ pub(crate) fn update_worker_pid(task_id: &str, worker_pid: u32) -> Result<()> {
 }
 
 pub fn update_agent_pid(task_id: &str, agent_pid: u32) -> Result<()> {
-    let mut spec = load_spec(task_id)?;
-    spec.agent_pid = Some(agent_pid);
-    spec.agent_started = crate::runtime::process::monitor::activity::root_started(agent_pid);
-    save_spec(&spec)
+    let result = (|| {
+        let mut spec = load_spec(task_id)?;
+        spec.agent_pid = Some(agent_pid);
+        spec.agent_started = crate::runtime::process::monitor::activity::root_started(agent_pid);
+        save_spec(&spec)
+    })();
+    if result.is_err() {
+        sigkill_process(agent_pid);
+    }
+    result
 }
 
 pub fn load_agent_pid(task_id: &str) -> Result<Option<u32>> {
@@ -123,4 +129,28 @@ fn is_process_not_zombie(pid: u32) -> bool {
 #[cfg(not(unix))]
 pub fn is_process_running(_pid: u32) -> bool {
     false
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::process::CommandExt;
+    use std::process::Stdio;
+
+    #[test]
+    fn agent_pid_persistence_failure_kills_spawned_group() {
+        let _permit = crate::support::test_subprocess::acquire();
+        let home = tempfile::tempdir().expect("home");
+        let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+        let mut child = Command::new("cat")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .process_group(0)
+            .spawn()
+            .expect("agent");
+        let pid = child.id();
+        assert!(update_agent_pid("t-missing-spec", pid).is_err());
+        assert!(!child.wait().expect("reap failed launch").success());
+        assert!(!is_process_running(pid));
+    }
 }

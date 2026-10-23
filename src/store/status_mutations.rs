@@ -61,7 +61,16 @@ impl Store {
         id: &str,
         launch: impl FnOnce() -> Result<T>,
     ) -> Result<T> {
-        self.with_launch_guard(id, false, launch)
+        crate::runtime::background::BackgroundRunSpec::prepare_agent(id)?;
+        let result = self.with_launch_guard(id, launch);
+        #[cfg(test)]
+        if result.is_ok() {
+            tests::agent_committed();
+        }
+        if result.is_err() {
+            let _ = crate::runtime::background::clear_spec(id);
+        }
+        result
     }
 
     pub(crate) fn with_worker_launch<T>(
@@ -69,28 +78,27 @@ impl Store {
         id: &str,
         launch: impl FnOnce() -> Result<T>,
     ) -> Result<T> {
-        self.with_launch_guard(id, true, launch)
+        self.with_launch_guard(id, launch)
     }
 
     fn with_launch_guard<T>(
         &self,
         id: &str,
-        check_parent: bool,
         launch: impl FnOnce() -> Result<T>,
     ) -> Result<T> {
         let conn = self.db();
         let tx = conn.unchecked_transaction()?;
         if tx.execute(
             "UPDATE tasks SET status = status WHERE id = ?1 AND status = 'running'
-             AND (?2 = 0 OR CASE WHEN json_valid(dispatch_args)
+             AND (CASE WHEN json_valid(dispatch_args)
                  THEN json_extract(dispatch_args, '$.origin') = 'explicit_retry' ELSE 0 END
                  OR NOT EXISTS (
                  SELECT 1 FROM tasks parent WHERE parent.id = tasks.parent_task_id
                  AND parent.status = 'stopped'))",
-            params![id, check_parent],
+            params![id],
         )? == 0
         {
-            if check_parent && let Some(parent) = stop_unlaunched_child(&tx, id)? {
+            if let Some(parent) = stop_unlaunched_child(&tx, id)? {
                 tx.commit()?;
                 anyhow::bail!("Parent task '{parent}' stopped; refusing child '{id}' launch");
             }
@@ -246,3 +254,7 @@ fn stop_unlaunched_child(tx: &rusqlite::Transaction<'_>, id: &str) -> Result<Opt
     )?;
     Ok(Some(parent))
 }
+
+#[cfg(test)]
+#[path = "status_mutations_tests.rs"]
+mod tests;

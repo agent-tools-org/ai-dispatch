@@ -9,9 +9,12 @@ aid clean --vacuum
 Run cleanup in dry-run mode first. `clean` retains task records, event detail,
 and custody evidence and does not replace `aid gc --task`. It replaces output
 copies of at least 4 KiB in old terminal tasks with an "output trimmed" marker.
-Only successful command output stored in `metadata.full` is eligible; commands,
-provider stdout, accounting, routing, quota, completion, and delivery evidence
-remain. Task logs, transcripts, and output files remain available.
+For successful tasks (`done` or `merged`), `metadata.full` and
+`metadata.provider_stdout` are eligible across all event types, regardless of
+command exit code. For `failed`, `stopped`, or `skipped` tasks, provider stdout
+remains; only successful command output in `full` is eligible. Accounting,
+routing, quota, completion, delivery, custody, and other structured evidence
+remain unchanged. Task logs, transcripts, and output files remain available.
 
 `aid clean --older-than 30` uses 30 days since task completion (default: 7).
 Trimming commits bounded batches and stops after about 10 seconds; repeat the

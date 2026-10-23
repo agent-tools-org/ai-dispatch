@@ -36,7 +36,7 @@ fn trims_only_allowlisted_old_terminal_output_and_is_idempotent() {
     let store = Store::open_memory().unwrap();
     let evidence = evidence();
     for (id, status, completed) in [
-        ("old", "done", "2020-01-01"),
+        ("old", "failed", "2020-01-01"),
         ("running", "running", "2020-01-01"),
         ("recent", "done", "2022-01-01"),
         ("unknown", "done", "invalid"),
@@ -230,13 +230,13 @@ fn preserves_inputs_and_nonterminal_tasks_and_trims_all_terminal_statuses() {
     }
     let mut input = output.clone();
     input["status"] = json!("in_progress");
-    event(&store, "done", "tool_call", &input);
+    event(&store, "failed", "tool_call", &input);
     input = output.clone();
     input["full"] = input["command"].clone();
-    event(&store, "done", "build", &input);
+    event(&store, "failed", "build", &input);
     input = output.clone();
     input.as_object_mut().unwrap().remove("exit_code");
-    event(&store, "done", "test", &input);
+    event(&store, "failed", "test", &input);
     assert_eq!(trim_all(&store, false).rows, 5);
     assert_eq!(trim_all(&store, false).rows, 0);
 }

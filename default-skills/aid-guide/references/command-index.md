@@ -73,7 +73,7 @@ current arguments.
 | `aid hook` | Install or invoke supported AID hooks; task hook payloads expose additive `outcome` and `verify_status` fields. |
 | `aid mcp` | Start AID's stdio MCP server; task payloads expose additive `outcome` and `verify_status` fields. The `classify` tool takes `state`, `state_json`, `questions`, and `model` and returns the same JSON as `aid classify`. |
 | `aid doctor` | Report repository/worktree hygiene, leaked operator symlinks, and NeedsHuman agent holds; `--apply` repairs only those symlinks without bypassing custody. |
-| `aid clean` | Trim historical tool-output copies after `--older-than` days (default 7); `--dry-run` reports rows and bytes; `--vacuum` explicitly compacts an idle database with sufficient temporary free space. Remove disposable logs and caches while retaining custody evidence; reclaims a task's fallback cargo target only once the directory it was keyed from is gone, and reports how many it held back. |
+| `aid clean` | Trim historical output copies after `--older-than` days (default 7); `--dry-run` reports rows and bytes; `--vacuum` explicitly compacts an idle database with sufficient temporary free space. Remove disposable logs and caches while retaining custody evidence; reclaims a task's fallback cargo target only once the directory it was keyed from is gone, and reports how many it held back. |
 | `aid web` | Serve the embedded dashboard and client API; `--port` selects the listening port (default 8080), `--host` selects the bind address and non-loopback binds require `--token`. |
 | `aid upgrade` | Upgrade AID after checking active-task safety. |
 | `aid changelog` | Read release notes. |

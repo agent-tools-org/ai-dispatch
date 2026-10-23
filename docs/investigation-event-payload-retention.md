@@ -52,36 +52,61 @@ smaller pairs are not material storage contributors. Max is bytes per value.
 
 ## Trim list and reader proof
 
-Only `full` is trimmed, and only when all of these conditions hold:
+Eligible tasks must be terminal with completed_at older than the cutoff. A string
+payload must contain at least 4,096 UTF-8 bytes; smaller values stay unchanged.
 
-- Event type is tool_call, build, test, file_read, file_write, lint, or format.
-- Metadata has a string command and integer exit_code=0; status is not in_progress.
-- The full value is a string containing at least 4,096 UTF-8 bytes and differs from command.
-- Task is done, merged, failed, skipped, or stopped, with completed_at older than the cutoff.
+| Task status | Trim keys | Additional conditions |
+| --- | --- | --- |
+| done, merged | full, provider_stdout | Any event type or command exit code |
+| failed, stopped, skipped | full | Prior successful-command rule below |
+| Any nonterminal, recent, or missing/invalid completion time | none | Preserved |
 
-Producer proof: `src/agent/codex/events/commands.rs:36` copies aggregated_output into full
-alongside command and exit_code. The start path instead records status=in_progress.
-Ambiguous full values without this output provenance are preserved.
+The conservative rule applies only to tool_call, build, test, file_read, file_write,
+lint, and format events: metadata must have a string command, integer exit_code=0,
+status other than in_progress, and a full value different from command. Producer
+proof: `src/agent/codex/events/commands.rs:36` copies aggregated_output into full
+alongside command and exit_code; the start path records status=in_progress.
+On successful tasks the full field is a display copy even when it copies a command;
+the separate command value is preserved.
 
-Reader search (production and tests):
+Reader searches:
 
 ```sh
 rg -n 'provider_stdout|\.full_detail\(|get\("full"\)|\["full"\]' src --glob '*.rs'
+rg -n 'capacity::read|capacity::terminal_label|record_unclassified' src
+rg -n 'salvage_failed_task\(|enforce_verify_status' src --glob '*.rs'
 ```
 
 `full` readers are `TaskEvent::full_detail` in `src/types/task.rs`, show events in
-`src/cmd/show/text.rs`, and export timelines in `src/cmd/export.rs`. Other matches are
-parser assertions or writes. New marker readers only change presentation: shared event
-helpers, CLI show, web event responses, and TUI event lines say "output trimmed".
-The original detail and every byte outside the replaced JSON string remain unchanged,
-including number spellings, whitespace, and escaped strings in protected values.
+`src/cmd/show/text.rs`, and export timelines in `src/cmd/export.rs`. Other matches
+are parser assertions or writes. There is no non-display reader of this key.
 
-`provider_stdout` is deliberately excluded: `src/routing/capacity.rs:58` reads it for
-provider capacity evidence; `src/task/lifecycle/failure.rs:28` reads it for diagnostic
-classification. Its large size does not make it safe to trim. Commands, file lists,
-reasoning, errors, completion, accounting/model/token/cost fields, input/delivery/liveness,
-backup, billing/routes, quota, and custody/acceptance evidence are preserved. Metadata
-containing malformed JSON or duplicate top-level full keys is skipped.
+The two raw provider_stdout readers remain `src/routing/capacity.rs:58` and
+`src/task/lifecycle/failure.rs:28`. CONFIRMED with a refinement: capacity::read is
+not reached only through terminal_label. Its production callers are:
+
+- capacity::terminal_label (`src/routing/capacity.rs:71`): guarded by status=Failed.
+- settle_capacity (`src/cmd/run/lifecycle/phases.rs:130`): guarded by status=Failed.
+- record_execution_failure (`src/cmd/run/process.rs:96`): current execution failure;
+  invoked after failed completion in record_completion, not historical successful tasks.
+- salvage_failed_task (`src/task/lifecycle.rs:122`): failure-transition side effects.
+  record_unclassified is called only here; mark_failed, failed settlement/reaper,
+  preparation failure, and failed verification of the current run lead here.
+  enforce_verify_status is called from run verification/settlement, not a history read.
+
+No reader was found that requires these raw values for an old task still in done or
+merged. Therefore those statuses can trim provider_stdout. Failed, stopped, and
+skipped retain it. The UPDATE rechecks the captured task status as well as the
+original metadata and cutoff, so a task changing from successful to failed between
+preparation and commit keeps its evidence.
+
+Both marker keys are recognized by shared event helpers used by show, export, web,
+and TUI. The original detail and every byte outside replaced JSON strings remain
+unchanged, including number spellings, whitespace, and escaped protected values.
+Commands, file lists, accounting/model/token/cost fields, input/delivery/liveness,
+backup, billing/routes, quota, completion/verification, and custody/acceptance fields
+are preserved. Non-string payload values and malformed JSON are preserved; duplicate
+top-level occurrences of a payload key prevent trimming that key.
 
 ## Implementation choices
 
@@ -90,7 +115,7 @@ containing malformed JSON or duplicate top-level full keys is skipped.
 - Scan by increasing event row ID, at most 200 rows per read. Prepare replacements
   outside write transactions. Commit at most 200 changed rows or about 512 KiB of
   original metadata per batch; one larger row is allowed. Eligibility and original
-  metadata are rechecked at the keyed UPDATE. Writer admission times out after 25 ms.
+  metadata and task status are rechecked at the keyed UPDATE. Writer admission times out after 25 ms.
 - Explicit clean has a 10-second budget. Daily automatic retention uses 7 days and
   about 2 seconds, after settlement and backup in post_run_lifecycle. Long individual
   row reads/parses/commits can overshoot the cooperative deadline.
@@ -107,27 +132,44 @@ containing malformed JSON or duplicate top-level full keys is skipped.
 
 ## Measurement
 
-Command: `python3 /private/tmp/measure-event-retention.py`.
-The script uses SQLite backup from a mode=ro connection and modifies only
-`/private/tmp/aid-retention-measure.db`. It preserves other metadata bytes, follows the
-same eligibility policy, and commits 50 updates per batch. It is a measurement harness,
-not execution of the Rust implementation or a regression test.
+Initial conservative baseline: 1,057 rows; 86,969,053 payload bytes;
+95,361,868 metadata bytes saved; 624,398,336-byte file after VACUUM.
 
-At cutoff 2026-10-16T05:54:12.857694+00:00:
+Revised command: `python3 /private/tmp/measure-event-retention-success.py`.
+The script uses SQLite backup from a mode=ro source connection into a fresh
+`/private/tmp/aid-retention-success-measure.db`; it refuses an existing destination.
+It preserves other metadata bytes, applies both status policies, and commits batches
+at 200 rows or about 512 KiB of original metadata, matching the Rust caps. It measures
+the full eligible history without a run deadline. It is a measurement harness, not
+execution of the Rust implementation or a regression test.
+
+At cutoff 2026-10-16T06:24:34.038553+00:00:
 
 | Metric | Result |
 | --- | ---: |
-| Trimmed rows | 1,057 |
-| Original payload UTF-8 bytes | 86,969,053 |
-| Metadata bytes saved, including JSON escaping | 95,361,868 |
+| Trimmed rows | 3,962 |
+| Original payload UTF-8 bytes | 127,648,630 |
+| Metadata bytes saved, including JSON escaping | 139,627,288 |
 | Database file before | 734,744,576 bytes |
-| Database file after VACUUM | 624,398,336 bytes |
-| File bytes reclaimed | 110,346,240 |
-| Measurement batches | 22 |
-| Slowest measured 50-row batch | 19.55 ms |
-| Trim plus VACUUM duration | 2.57 seconds |
+| Database file after VACUUM | 579,264,512 bytes |
+| File bytes reclaimed | 155,480,064 |
+| Measurement batches | 202 |
+| Slowest measured batch | 16.46 ms |
+| Trim plus VACUUM duration | 2.87 seconds |
+| Trimmed done / merged / failed rows | 3,839 / 17 / 106 |
+| Trimmed full / provider_stdout values | 2,744 / 1,599 |
 
-## Verification and limits
+## Guide correction
+
+CONFIRMED: --vacuum was already documented in the bundled command index. The
+reported generated-facts failure came from the stale --older-than entry in
+UNDOCUMENTED_FLAGS. That entry is removed; no gap is added. GUIDE_FILES now bundles
+maintenance.md, which configuration.md linked but the initial installer omitted.
+The existing init E2E asserts that this reference is installed. The maintenance
+reference now describes both status policies; command-index remains complete.
+No new prose-pinning assertion is introduced.
+
+## Initial verification and limits
 
 Base HEAD: f5aba0e165e8bf52a0269a8f5672801c4d29f73c. No remote tested HEAD exists.
 
@@ -157,3 +199,39 @@ integration checks remain required. No local compilation or replacement test env
 was used. No sub-tasks or independent cross-review ran, honoring the no-dispatch brief;
 cross-review remains outstanding. Startup-lock, launch, migration and unrelated reader
 optimizations from the investigation are out of scope and unchanged.
+
+## Revision verification
+
+KB consulted again: `~/Develop/knowledge/eng-knowledge-base/kb event metadata retention successful task`.
+The search returned rowid-retention guidance and unrelated matches; no successful-task
+payload-retention implementation was found.
+
+The operator reports a44e3a5d full `--bin aid`: 3,585 passed, 1 failed, at
+cmd::init::official_guide::tests::official_guide_covers_generated_facts. That result
+belongs to the prior commit; no captured remote log was supplied in this follow-up.
+The exact stale entry was independently reproduced with the guide tokenization rule.
+
+Revision commands:
+
+- `rbox status`: FAIL, `rbox: Tailscale API POST failed`.
+- `rbox ensure grok-bot-chief --lock-timeout 60`: BLOCKED, DNS probe:
+  `tailscale status returned no JSON (Expecting value at byte 0)`.
+- `aid build check -p ai-dispatch`: BLOCKED before compilation by the same probe.
+- `aid test --bin aid retention`: BLOCKED before execution by the same probe; 0 tests ran.
+- `aid test --bin aid cmd::init::official_guide`: BLOCKED by the same probe; 0 tests ran.
+- `python3 /private/tmp/check-event-retention.py`: PASS, 9 changed Rust files parsed,
+  0 static failures; this is not compilation.
+- `python3 /private/tmp/check-retention-guide.py`: PASS, 0 stale flag gaps; both clean
+  flags documented and maintenance reference bundled.
+- `python3 /private/tmp/measure-event-retention-success.py`: measurement results above.
+- `git diff --check`: PASS. `security-guard repo .`: PASS, 0 findings.
+  `security-guard staged --repo .` and the mandatory hooks run before commit.
+
+New regression tests cover done, merged, failed, stopped, and skipped separately;
+nonzero-exit full values, provider-only payloads, full without command provenance,
+command-copy full values, both threshold sides, exact protected metadata bytes,
+idempotence, and a successful-to-failed race. Existing tests retain conservative
+coverage using failed-task fixtures. Shared event helpers also test provider-only markers.
+No local compilation or sub-task dispatch occurred. Final-commit remote verification
+and cross-review remain pending. The auto-trim hook, cadence, budgets, schema, and
+VACUUM protocol are unchanged.

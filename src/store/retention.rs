@@ -37,6 +37,7 @@ struct Candidate {
     kind: String,
     metadata: Option<String>,
     eligible: bool,
+    status: String,
 }
 
 impl Store {
@@ -108,7 +109,7 @@ fn candidates(conn: &Connection, cursor: i64, cutoff: &str) -> Result<Vec<Candid
         "SELECT e.id, e.event_type, CASE WHEN t.status IN ({TERMINAL})
          AND julianday(t.completed_at) < julianday(?2) THEN e.metadata ELSE NULL END,
          coalesce(t.status IN ({TERMINAL}) AND t.completed_at IS NOT NULL
-         AND julianday(t.completed_at) < julianday(?2), 0)
+         AND julianday(t.completed_at) < julianday(?2), 0), t.status
          FROM events e JOIN tasks t ON t.id=e.task_id
          WHERE e.id > ?1 ORDER BY e.id LIMIT ?3"
     );
@@ -119,13 +120,14 @@ fn candidates(conn: &Connection, cursor: i64, cutoff: &str) -> Result<Vec<Candid
             kind: row.get(1)?,
             metadata: row.get(2)?,
             eligible: row.get(3)?,
+            status: row.get(4)?,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 fn replacement(row: &Candidate) -> Result<Option<(String, u64)>> {
-    if !row.eligible || !KINDS.contains(&row.kind.as_str()) {
+    if !row.eligible {
         return Ok(None);
     }
     let Some(raw) = &row.metadata else {
@@ -134,20 +136,38 @@ fn replacement(row: &Candidate) -> Result<Option<(String, u64)>> {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) else {
         return Ok(None);
     };
-    if value.get("exit_code").and_then(|v| v.as_i64()) != Some(0)
+    let mut updated = raw.clone();
+    let mut bytes = 0;
+    for key in keys_to_trim(row, &value) {
+        let Some(output) = value.get(*key).and_then(|v| v.as_str()) else {
+            continue;
+        };
+        if output.len() < 4096 {
+            continue;
+        }
+        let marker = serde_json::json!({"trimmed": true, "bytes": output.len()});
+        if let Some(replaced) = payload::replace_string(&updated, key, &marker.to_string()) {
+            updated = replaced;
+            bytes += output.len() as u64;
+        }
+    }
+    Ok((bytes > 0).then_some((updated, bytes)))
+}
+
+fn keys_to_trim(row: &Candidate, value: &serde_json::Value) -> &'static [&'static str] {
+    if matches!(row.status.as_str(), "done" | "merged") {
+        return &["full", "provider_stdout"];
+    }
+    if !KINDS.contains(&row.kind.as_str())
+        || value.get("exit_code").and_then(|v| v.as_i64()) != Some(0)
         || value.get("command").and_then(|v| v.as_str()).is_none()
         || value.get("status").and_then(|v| v.as_str()) == Some("in_progress")
+        || value.get("command").and_then(|v| v.as_str())
+            == value.get("full").and_then(|v| v.as_str())
     {
-        return Ok(None);
+        return &[];
     }
-    let Some(full) = value.get("full").and_then(|v| v.as_str()) else {
-        return Ok(None);
-    };
-    if full.len() < 4096 || value.get("command").and_then(|v| v.as_str()) == Some(full) {
-        return Ok(None);
-    }
-    let marker = serde_json::json!({"trimmed": true, "bytes": full.len()});
-    Ok(payload::replace_full(raw, &marker.to_string()).map(|updated| (updated, full.len() as u64)))
+    &["full"]
 }
 
 fn trim(
@@ -177,7 +197,13 @@ fn trim(
             }
             if let Some((marker, bytes)) = replacement(&row)? {
                 batch_bytes += row.metadata.as_ref().map_or(0, String::len);
-                updates.push((row.id, row.metadata.clone(), marker, bytes));
+                updates.push((
+                    row.id,
+                    row.metadata.clone(),
+                    marker,
+                    bytes,
+                    row.status.clone(),
+                ));
             }
             report.cursor = row.id;
             if batch_bytes >= BATCH_BYTES {
@@ -189,7 +215,7 @@ fn trim(
     Ok(report)
 }
 
-type Update = (i64, Option<String>, String, u64);
+type Update = (i64, Option<String>, String, u64, String);
 
 fn apply_batch(
     conn: &Connection,
@@ -202,7 +228,7 @@ fn apply_batch(
         return Ok(());
     }
     let tx = conn.unchecked_transaction()?;
-    for (id, original, marker, bytes) in updates {
+    for (id, original, marker, bytes, status) in updates {
         let changed = if dry_run {
             1
         } else {
@@ -210,10 +236,11 @@ fn apply_batch(
                 &format!(
                     "UPDATE events SET metadata=?1
                  WHERE id=?2 AND metadata=?3 AND EXISTS
-                 (SELECT 1 FROM tasks WHERE tasks.id=events.task_id AND status IN ({TERMINAL})
+                 (SELECT 1 FROM tasks WHERE tasks.id=events.task_id
+                  AND status=?5 AND status IN ({TERMINAL})
                   AND julianday(completed_at) < julianday(?4))"
                 ),
-                params![marker, id, original, cutoff],
+                params![marker, id, original, cutoff, status],
             )?
         };
         report.rows += changed as u64;
@@ -231,3 +258,7 @@ fn apply_batch(
 #[cfg(test)]
 #[path = "retention_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "retention_status_tests.rs"]
+mod status_tests;

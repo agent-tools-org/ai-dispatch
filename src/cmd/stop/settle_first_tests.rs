@@ -30,7 +30,7 @@ fn signal_observation(reap: bool) {
     store
         .insert_task(&make_task("t-stop-signal", TaskStatus::Running))
         .expect("insert");
-    let (mut worker, mut output) = waiting_worker();
+    let (mut worker, mut output) = waiting_worker("t-stop-signal");
     let mut line = String::new();
     save_worker("t-stop-signal", worker.id());
     let observer_store = Arc::clone(&store);
@@ -71,12 +71,13 @@ fn signal_observation(reap: bool) {
     assert_eq!(store.get_events("t-stop-signal").expect("events").len(), 1);
 }
 
-fn waiting_worker() -> (std::process::Child, BufReader<std::process::ChildStdout>) {
+fn waiting_worker(task_id: &str) -> (std::process::Child, BufReader<std::process::ChildStdout>) {
     let mut worker = Command::new("sh")
         .args([
             "-c",
             "trap 'echo signalled; exit 0' TERM; echo ready; while :; do sleep 0.1; done",
         ])
+        .args(["__run-task", task_id])
         .stdout(Stdio::piped())
         .spawn()
         .expect("worker");
@@ -135,7 +136,7 @@ fn settle_first_restop_signals_live_worker_without_duplicate_event() {
         .get_task("t-stop-interrupted")
         .expect("get")
         .expect("task");
-    let mut worker = Command::new("sleep").arg("30").spawn().expect("worker");
+    let (mut worker, _output) = waiting_worker("t-stop-interrupted");
     save_worker("t-stop-interrupted", worker.id());
     let result = stop(&store, "t-stop-interrupted");
     let live = crate::support::test_subprocess::is_live(worker.id() as i32);

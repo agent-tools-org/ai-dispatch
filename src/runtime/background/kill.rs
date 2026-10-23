@@ -34,7 +34,7 @@ thread_local! {
 fn signal_targets(worker_pid: Option<u32>, spec: &BackgroundRunSpec) {
     let agent_pid = spec.agent_pid_for_signal();
     let worker_pid = worker_pid.filter(|pid| {
-        Some(*pid) != spec.agent_pid && is_task_worker(*pid, &spec.task_id)
+        Some(*pid) != spec.agent_pid && BackgroundRunSpec::is_task_worker(*pid, &spec.task_id)
     });
     let mut pids = worker_pid.into_iter().collect::<Vec<_>>();
     #[cfg(unix)]
@@ -54,17 +54,21 @@ fn signal_targets(worker_pid: Option<u32>, spec: &BackgroundRunSpec) {
     }
 }
 
-#[cfg(unix)]
-fn is_task_worker(pid: u32, task_id: &str) -> bool {
-    std::process::Command::new("ps")
-        .args(["-o", "args=", "-p", &pid.to_string()])
-        .output()
-        .is_ok_and(|out| out.status.success() && names_worker(&String::from_utf8_lossy(&out.stdout), task_id))
-}
+impl BackgroundRunSpec {
+    #[cfg(unix)]
+    pub(crate) fn is_task_worker(pid: u32, task_id: &str) -> bool {
+        std::process::Command::new("ps")
+            .args(["-o", "args=", "-p", &pid.to_string()])
+            .output()
+            .is_ok_and(|out| {
+                out.status.success() && names_worker(&String::from_utf8_lossy(&out.stdout), task_id)
+            })
+    }
 
-#[cfg(not(unix))]
-fn is_task_worker(_pid: u32, _task_id: &str) -> bool {
-    false
+    #[cfg(not(unix))]
+    pub(crate) fn is_task_worker(_pid: u32, _task_id: &str) -> bool {
+        false
+    }
 }
 
 /// Whether a command line is `... __run-task <task_id> ...` (the spawn_worker argv).

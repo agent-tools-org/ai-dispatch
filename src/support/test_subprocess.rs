@@ -50,3 +50,16 @@ pub fn is_live(pid: i32) -> bool {
     stat.map(|out| !String::from_utf8_lossy(&out.stdout).trim_start().starts_with('Z'))
         .unwrap_or(true)
 }
+
+/// Signals are asynchronous: wait up to `timeout` for `pid` to stop being live.
+#[cfg(unix)]
+pub fn wait_dead(pid: i32, timeout: std::time::Duration) -> bool {
+    let deadline = std::time::Instant::now() + timeout;
+    while is_live(pid) {
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    true
+}

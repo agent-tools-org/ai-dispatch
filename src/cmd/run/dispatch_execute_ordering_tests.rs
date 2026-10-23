@@ -144,8 +144,9 @@ fn no_detach_publications_preserve_worker_and_agent_pids_and_force_stop_both() {
         Some(pid),
         "worker publication must not erase the agent PID"
     );
-    assert!(!crate::support::test_subprocess::is_live(worker_pid as i32));
-    assert!(!crate::support::test_subprocess::is_live(pid as i32));
+    let gone = std::time::Duration::from_secs(10);
+    assert!(crate::support::test_subprocess::wait_dead(worker_pid as i32, gone), "worker survived stop");
+    assert!(crate::support::test_subprocess::wait_dead(pid as i32, gone), "agent survived stop");
     assert_eq!(
         store.get_task("t-launch").unwrap().unwrap().status,
         TaskStatus::Stopped

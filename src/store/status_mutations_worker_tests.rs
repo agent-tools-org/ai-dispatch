@@ -95,7 +95,7 @@ pub(super) fn assert_stop_kills_worker_and_agent() {
         crate::cmd::stop::kill(&stop, "t-launch").expect("stop kills worker first");
         worker.stopped = true;
         assert!(
-            !crate::support::test_subprocess::is_live(worker.child.id() as i32),
+            crate::support::test_subprocess::wait_dead(worker.child.id() as i32, Duration::from_secs(10)),
             "worker survived stop"
         );
         assert_eq!(committed.read(&mut [0]).expect("worker barrier closed"), 0);
@@ -105,14 +105,8 @@ pub(super) fn assert_stop_kills_worker_and_agent() {
             Some(pid),
             "PID must be visible before worker can die"
         );
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while crate::support::test_subprocess::is_live(pid as i32)
-            && std::time::Instant::now() < deadline
-        {
-            std::thread::yield_now();
-        }
         assert!(
-            !crate::support::test_subprocess::is_live(pid as i32),
+            crate::support::test_subprocess::wait_dead(pid as i32, Duration::from_secs(10)),
             "agent survived worker"
         );
         assert_eq!(

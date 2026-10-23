@@ -50,8 +50,9 @@ pub(super) async fn run_post_lifecycle(
 }
 
 fn prompt_bundle(store: &Store, spec: &BackgroundRunSpec) -> Result<crate::cmd::run::PromptBundle> {
-    let prompt = store.get_task(&spec.task_id)?.and_then(|task| task.resolved_prompt)
-        .unwrap_or_else(|| spec.prompt.clone());
+    let prompt = store.get_task(&spec.task_id)?
+        .map(|task| task.resolved_prompt.unwrap_or(task.prompt))
+        .unwrap_or_default();
     Ok(crate::cmd::run::PromptBundle {
         effective_prompt: prompt,
         context_files: Vec::new(),

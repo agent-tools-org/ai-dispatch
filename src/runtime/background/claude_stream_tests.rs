@@ -183,7 +183,7 @@ async fn interactive_background_immediate_exit_preserves_status_and_output() {
 #[tokio::test]
 async fn interactive_background_api_refusal_still_fails_without_reading_stdin() {
     let _permit = crate::support::test_subprocess::acquire();
-    let (_home, _guard, store, mut spec, args) = setup();
+    let (_home, _guard, store, spec, args) = setup();
     let route = crate::agent::api_route::ApiRouteAgent(
         serde_json::from_value(json!({
             "id":"synthetic-route", "agent":"claude", "keychain_service":"synthetic",
@@ -191,7 +191,6 @@ async fn interactive_background_api_refusal_still_fails_without_reading_stdin() 
         }))
         .unwrap(),
     );
-    spec.agent_name = "synthetic-route".into();
     let mut command = std::process::Command::new("sh");
     command.args([
         "-c",

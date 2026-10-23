@@ -50,9 +50,9 @@ pub(super) fn run_background_task(
     store: &Arc<Store>,
     args: &RunArgs,
     prepared: &PreparedDispatch,
-    prompt_bundle: &run_prompt::PromptBundle,
+    _prompt_bundle: &run_prompt::PromptBundle,
 ) -> Result<()> {
-    let run = BackgroundRun::prepare(store, args, prepared, prompt_bundle)?;
+    let run = BackgroundRun::prepare(store, args, prepared)?;
     run.launch()?;
     run.announce();
     Ok(())

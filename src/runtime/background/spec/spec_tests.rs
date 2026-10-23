@@ -53,7 +53,9 @@ fn actual_pre_upgrade_spec_from_jobs_loads_without_detached_field() {
 
     let spec = load_spec_if_exists("t-9ef43f87").unwrap().unwrap();
     assert_eq!(spec.task_id, "t-9ef43f87");
-    assert_eq!(spec.agent_name, "grok");
+    let original: serde_json::Value = serde_json::from_str(content).unwrap();
+    assert_eq!(original["agent_name"], "grok");
+    assert_eq!(spec.worker_pid, Some(98211));
     assert!(spec.interactive);
 }
 

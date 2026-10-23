@@ -4,12 +4,12 @@
 use chrono::{Duration, Local};
 use std::fs;
 
-use super::{check_zombie_tasks_with, save_spec, BackgroundRunSpec};
+use super::{BackgroundRunSpec, check_zombie_tasks_with, save_spec};
 
 #[path = "background_wrap_up_tests.rs"]
 mod wrap_up;
-use crate::support::paths;
 use crate::store::Store;
+use crate::support::paths;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 
 fn task(id: &str, status: TaskStatus) -> Task {
@@ -57,52 +57,17 @@ fn spec(id: &str) -> BackgroundRunSpec {
     BackgroundRunSpec {
         task_id: id.to_string(),
         worker_pid: Some(77),
-        agent_name: "codex".to_string(),
-        prompt: "prompt".to_string(),
         dir: Some(".".to_string()),
-        output: None,
-        result_file: None,
-        result_file_required: None,
-        model: None,
         budget: false,
-        session_id: None,
-        verify: None,
-        setup: None,
-        iterate: None,
-        eval: None,
-        eval_feedback_template: None,
-        judge: None,
-        judge_retry: false,
         max_duration_mins: Some(60),
         max_duration_secs: None,
-        max_task_cost: None,
         idle_timeout_secs: Some(1),
-        retry: 0,
-        group: None,
-        skills: vec![],
-        checklist: vec![],
-        hooks: vec![],
-        template: None,
-        worktree: None,
-        base_branch: None,
-        peer_review: None,
-        audit: false,
-        audit_explicit: false,
-        no_audit: false,
-        scope: vec![],
         interactive: true,
         on_done: None,
-        cascade: vec![],
-        parent_task_id: None,
         env: None,
-        env_forward: None,
         agent_pid: Some(88),
         agent_started: None,
-        sandbox: false,
-        read_only: false,
         audit_report_mode: false,
-        container: None,
-        link_deps: true,
         pre_task_dirty_paths: None,
         foreground: false,
     }

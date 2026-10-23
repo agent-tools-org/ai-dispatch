@@ -33,9 +33,8 @@ thread_local! {
 #[cfg_attr(test, allow(dead_code))]
 fn signal_targets(worker_pid: Option<u32>, spec: &BackgroundRunSpec) {
     let agent_pid = spec.agent_pid_for_signal();
-    let worker_pid = worker_pid.filter(|pid| {
-        Some(*pid) != spec.agent_pid && is_task_worker(*pid, &spec.task_id)
-    });
+    let worker_pid =
+        worker_pid.filter(|pid| Some(*pid) != spec.agent_pid && is_task_worker(*pid, &spec.task_id));
     let mut pids = worker_pid.into_iter().collect::<Vec<_>>();
     #[cfg(unix)]
     if let Some(worker_pid) = worker_pid
@@ -102,52 +101,17 @@ mod tests {
         BackgroundRunSpec {
             task_id: "t-kill".to_string(),
             worker_pid: Some(11),
-            agent_name: "codex".to_string(),
-            prompt: "prompt".to_string(),
             dir: Some(".".to_string()),
-            output: None,
-            result_file: None,
-            result_file_required: None,
-            model: None,
             budget: false,
-            session_id: None,
-            verify: None,
-            setup: None,
-            iterate: None,
-            eval: None,
-            eval_feedback_template: None,
-            judge: None,
-            judge_retry: false,
             max_duration_mins: None,
             max_duration_secs: None,
-            max_task_cost: None,
             idle_timeout_secs: None,
-            retry: 0,
-            group: None,
-            skills: vec![],
-            checklist: vec![],
-            hooks: vec![],
-            template: None,
-            worktree: None,
-            base_branch: None,
-            peer_review: None,
-            audit: false,
-            audit_explicit: false,
-            no_audit: false,
-            scope: vec![],
             interactive: true,
             on_done: None,
-            cascade: vec![],
-            parent_task_id: None,
             env: None,
-            env_forward: None,
             agent_pid,
             agent_started: None,
-            sandbox: false,
-            read_only: false,
             audit_report_mode: false,
-            container: None,
-            link_deps: true,
             pre_task_dirty_paths: None,
             foreground: false,
         }

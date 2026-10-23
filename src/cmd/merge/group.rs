@@ -100,10 +100,10 @@ fn merge_group_branch(
     ahead: u32,
     skipped: &mut Vec<String>,
 ) -> Result<bool> {
-    match git_merge_branch(&repo_dir, branch) {
+    match git_merge_branch(repo_dir, branch) {
         MergeResult::Merged => {
             aid_info!("[aid] Merged branch {branch}");
-            run_post_merge_verify(&repo_dir, task.verify.as_deref());
+            run_post_merge_verify(repo_dir, task.verify.as_deref());
         }
         MergeResult::AlreadyUpToDate => {
             aid_warn!(
@@ -134,7 +134,7 @@ fn merge_group_branch(
 
 fn approve_group_merge(group_id: &str, tasks: &[Task], approve: bool) -> Result<bool> {
     if approve {
-        match ask_group_approval(group_id, &tasks)? {
+        match ask_group_approval(group_id, tasks)? {
             ApprovalDecision::Merge => {}
             ApprovalDecision::Skip => return Ok(false),
             ApprovalDecision::Retry => {

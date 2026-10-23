@@ -111,7 +111,7 @@ fn row_status(
     latest_milestones: &HashMap<String, String>,
     latest_errors: &HashMap<String, String>,
 ) -> String {
-    let status = if task.status == TaskStatus::AwaitingInput {
+    if task.status == TaskStatus::AwaitingInput {
         match awaiting_reasons.get(task.id.as_str()) {
             Some(r) => truncate(&format!("AWAIT — {r}"), 30),
             None => task.status.label().to_string(),
@@ -124,8 +124,7 @@ fn row_status(
             error,
         );
         format_with_outcome(task, base)
-    };
-    status
+    }
 }
 
 fn row_usage(task: &Task, store: &Store) -> (String, String, String) {

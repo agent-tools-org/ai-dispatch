@@ -228,7 +228,7 @@ mod tests {
 }
 
 fn batch_siblings(siblings: &[&batch::BatchTask]) -> Vec<(String, String, String)> {
-    let batch_siblings = siblings
+    siblings
         .iter()
         .map(|sibling| {
             (
@@ -241,12 +241,11 @@ fn batch_siblings(siblings: &[&batch::BatchTask]) -> Vec<(String, String, String
                 sibling.prompt.clone(),
             )
         })
-        .collect();
-    batch_siblings
+        .collect()
 }
 
 fn task_cascade(task: &batch::BatchTask) -> Vec<String> {
-    let cascade = task
+    task
         .fallback
         .as_deref()
         .map(|fallback| {
@@ -257,6 +256,5 @@ fn task_cascade(task: &batch::BatchTask) -> Vec<String> {
                 .map(ToString::to_string)
                 .collect()
         })
-        .unwrap_or_default();
-    cascade
+        .unwrap_or_default()
 }

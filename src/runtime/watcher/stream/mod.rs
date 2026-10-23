@@ -186,10 +186,10 @@ fn record_parsed_event(
         ..
     } = ctx;
     record_provider_stdout(event, line);
-    apply_completion_event(info, &event);
-    crate::cost::apply_completion_usage_cost(store, task_id, info, &event, agent.kind())?;
-    synthetic_tracker.observe(&event);
-    save_session_id(store, task_id, &event, session_saved)?;
+    apply_completion_event(info, event);
+    crate::cost::apply_completion_usage_cost(store, task_id, info, event, agent.kind())?;
+    synthetic_tracker.observe(event);
+    save_session_id(store, task_id, event, session_saved)?;
     // The raw line, never `event.detail`. An adapter's detail is a rendering
     // aid composed: cursor's is `completed: grep <the pattern the model
     // chose>`, and on 2026-08-07 one of those — an audit's own `grep
@@ -207,12 +207,12 @@ fn record_parsed_event(
         mark_stream_rate_limit(store, task_id, agent, line, &message);
     }
     if event.event_kind == EventKind::Completion {
-        store.insert_agent_event_with_usage(&event, info)?;
+        store.insert_agent_event_with_usage(event, info)?;
     } else {
-        store.insert_agent_event(&event)?;
+        store.insert_agent_event(event)?;
     }
     *event_count += 1;
-    if let Some(event) = synthetic_tracker.synthetic_event(task_id, &event) {
+    if let Some(event) = synthetic_tracker.synthetic_event(task_id, event) {
         store.insert_agent_event(&event)?;
         *event_count += 1;
     }

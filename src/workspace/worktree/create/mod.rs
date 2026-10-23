@@ -158,7 +158,7 @@ fn validate_reused_worktree(repo_dir: &Path, wt_path: &Path, branch: &str) -> Re
             wt_path.display()
         );
     }
-    let expected_path = canonical_worktree_path(&wt_path);
+    let expected_path = canonical_worktree_path(wt_path);
     if existing_worktree_path(repo_dir, branch)?
         .is_some_and(|path| canonical_worktree_path(&path) != expected_path)
     {

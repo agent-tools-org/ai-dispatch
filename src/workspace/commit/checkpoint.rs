@@ -99,26 +99,26 @@ impl Drop for ScratchIndex {
 mod tests;
 
 fn initialize_index(root: &Path, index: &Path) -> Result<Option<String>> {
-    let head = git(&root, &index, &["rev-parse", "--verify", "HEAD"]);
+    let head = git(root, index, &["rev-parse", "--verify", "HEAD"]);
     let parent = match head {
         Ok(head) => {
-            git(&root, &index, &["read-tree", &head])?;
+            git(root, index, &["read-tree", &head])?;
             Some(head)
         }
         Err(error) => {
             // Only an unborn branch permits an empty base. A corrupt existing
             // branch must not produce a misleading root recovery commit.
-            let branch = git(&root, &index, &["symbolic-ref", "HEAD"])?;
+            let branch = git(root, index, &["symbolic-ref", "HEAD"])?;
             let exists = Command::new("git")
                 .arg("-C")
-                .arg(&root)
+                .arg(root)
                 .args(["show-ref", "--verify", "--quiet", &branch])
                 .status()?;
             anyhow::ensure!(
                 exists.code() == Some(1),
                 "Cannot read shared checkout HEAD: {error}"
             );
-            git(&root, &index, &["read-tree", "--empty"])?;
+            git(root, index, &["read-tree", "--empty"])?;
             None
         }
     };
@@ -137,16 +137,16 @@ fn create_checkpoint(
         merge artifact."
     );
     let mut args = vec!["commit-tree", tree, "-m", message.as_str()];
-    if let Some(parent) = parent.as_deref() {
+    if let Some(parent) = parent {
         args.extend(["-p", parent]);
     }
-    let commit = git(&root, &index, &args)?;
+    let commit = git(root, index, &args)?;
     // Each attempt owns a new ref. Never replace an earlier recovery point,
     // including concurrent settlements/retries using the same task ID.
     let reference = format!(
         "refs/aid/recovery/{task_id}/{:032x}",
         rand::random::<u128>()
     );
-    git(&root, &index, &["update-ref", &reference, &commit, ""])?;
+    git(root, index, &["update-ref", &reference, &commit, ""])?;
     Ok(Some(CheckoutCheckpoint { reference, commit }))
 }

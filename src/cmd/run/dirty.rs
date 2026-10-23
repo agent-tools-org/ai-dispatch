@@ -208,7 +208,6 @@ fn worktree_status_lines(dir: &str) -> Result<Vec<String>> {
 
 /// Shared checkouts remain dirty for the principal to review and commit. A
 /// checkpoint is recovery evidence, not acceptance or an automatic retry request.
-
 #[path = "dirty/settlement.rs"]
 mod settlement;
 use settlement::{preserve_shared_checkout, rescue_dirty_worktree, settle_remaining_dirty_files};

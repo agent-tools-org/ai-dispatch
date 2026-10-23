@@ -44,7 +44,7 @@ pub(super) fn render_pane(pane: &PaneData, is_active: bool, area_height: u16) ->
 }
 
 fn pane_bottom_title(pane: &PaneData, is_done: bool, is_running: bool) -> String {
-    let bottom_title = {
+    {
         let mut parts = vec![];
         if !pane.workgroup.is_empty() {
             parts.push(pane.workgroup.clone());
@@ -69,8 +69,7 @@ fn pane_bottom_title(pane: &PaneData, is_done: bool, is_running: bool) -> String
             parts.push(elapsed);
         }
         format!(" {} ", parts.join(" | "))
-    };
-    bottom_title
+    }
 }
 
 fn append_pane_events(
@@ -139,7 +138,7 @@ fn pane_header_items(pane: &PaneData) -> Vec<ListItem<'static>> {
 
 fn pane_border_color(pane: &PaneData, is_active: bool, is_done: bool, is_running: bool) -> Color {
     let is_failed = pane.status == "failed";
-    let border_color = if is_active {
+    if is_active {
         Color::Cyan
     } else if is_running {
         Color::Yellow
@@ -149,12 +148,11 @@ fn pane_border_color(pane: &PaneData, is_active: bool, is_done: bool, is_running
         Color::Indexed(236)
     } else {
         Color::Indexed(240)
-    };
-    border_color
+    }
 }
 
 fn pane_status_color(pane: &PaneData) -> Color {
-    let status_color = match pane.status.as_str() {
+    match pane.status.as_str() {
         "done" | "merged" => Color::Green,
         "running" => Color::Yellow,
         "awaiting_input" => Color::Magenta,
@@ -162,15 +160,13 @@ fn pane_status_color(pane: &PaneData) -> Color {
         "pending" => Color::Indexed(250),
         "skipped" => Color::Blue,
         _ => Color::White,
-    };
-    status_color
+    }
 }
 
 fn pane_title_status(pane: &PaneData) -> String {
-    let title_status = match pane.status.as_str() {
+    match pane.status.as_str() {
         "done" | "merged" => format!("✓ {}", pane.status),
         "failed" => format!("✗ {}", pane.status),
         _ => pane.status.clone(),
-    };
-    title_status
+    }
 }

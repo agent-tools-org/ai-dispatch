@@ -20,7 +20,7 @@ pub(super) async fn preview_batch(
             .map(|(_, sibling)| sibling)
             .collect();
         let mut run_args =
-            batch_args::task_to_run_args(task, &siblings, false, &store, shared_dir_path);
+            batch_args::task_to_run_args(task, &siblings, false, store, shared_dir_path);
         run_args.repo_root = explicit_repo_path.clone();
         run_args.suppress_nested_repo_warning = true;
         run_args.dry_run = true;

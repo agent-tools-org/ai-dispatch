@@ -228,7 +228,7 @@ fn build_launch_command(
     let std_cmd = agent
         .build_command_with_context(
             launch_prompt,
-            &opts,
+            opts,
             agent::CommandContext {
                 durable_codex_home: uses_durable_codex_home,
                 writable_roots,

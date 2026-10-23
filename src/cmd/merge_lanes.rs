@@ -71,7 +71,7 @@ fn apply_group_lanes(
         {
             auto_commit_uncommitted(wt, branch);
         }
-        let ahead = commits_ahead(&repo_dir, branch);
+        let ahead = commits_ahead(repo_dir, branch);
         if ahead == 0 {
             aid_warn!(
                 "[aid] Warning: {} — branch {branch} has 0 commits, skipping",

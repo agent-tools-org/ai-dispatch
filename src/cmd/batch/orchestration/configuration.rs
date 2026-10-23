@@ -78,7 +78,7 @@ pub(super) fn assign_batch_groups(
             let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("batch");
             let workgroup_name = config.title.as_deref().unwrap_or(stem);
             let (wg_id, shared_path) = batch_helpers::ensure_batch_workgroup(
-                &store,
+                store,
                 workgroup_name,
                 config.defaults.group_id.as_deref(),
                 shared_dir_enabled,
@@ -117,7 +117,7 @@ pub(super) fn batch_shared_directory(
     config: &batch::BatchConfig,
     shared_dir_enabled: bool,
 ) -> Option<String> {
-    let shared_dir_path = if shared_dir_enabled {
+    if shared_dir_enabled {
         config
             .tasks
             .first()
@@ -126,8 +126,7 @@ pub(super) fn batch_shared_directory(
             .map(|path| path.display().to_string())
     } else {
         None
-    };
-    shared_dir_path
+    }
 }
 
 fn assign_explicit_batch_group(
@@ -165,7 +164,7 @@ pub(super) async fn wait_for_batch(
 ) -> Result<Option<anyhow::Error>> {
     let wait_error = if args.wait && args.parallel && !has_dependencies && !task_ids.is_empty() {
         Some(batch_wait_error(
-            crate::cmd::wait::wait_for_task_ids(&store, &task_ids, None, false, None).await?,
+            crate::cmd::wait::wait_for_task_ids(store, task_ids, None, false, None).await?,
         ))
     } else {
         None

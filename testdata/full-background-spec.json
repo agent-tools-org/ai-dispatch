@@ -1,0 +1,68 @@
+{
+  "task_id": "t-1234",
+  "worker_pid": 11,
+  "agent_name": "codex",
+  "prompt": "fix the bug",
+  "dir": "/tmp/project",
+  "output": "json",
+  "result_file": "result.md",
+  "result_file_required": true,
+  "model": "gpt-5.4",
+  "budget": true,
+  "session_id": "session-123",
+  "verify": "cargo check",
+  "setup": "cargo fetch",
+  "iterate": 3,
+  "eval": "cargo test",
+  "eval_feedback_template": "Iteration {iteration}/{max_iterations}",
+  "judge": "cursor",
+  "judge_retry": true,
+  "max_duration_mins": 15,
+  "max_duration_secs": 900,
+  "max_task_cost": 2.5,
+  "idle_timeout_secs": 60,
+  "retry": 2,
+  "group": "core",
+  "skills": [
+    "ai-coding"
+  ],
+  "checklist": [
+    "confirm retry path"
+  ],
+  "hooks": [
+    "on_fail:echo fail"
+  ],
+  "template": "default",
+  "worktree": "feature/retry",
+  "base_branch": "main",
+  "peer_review": "codex",
+  "audit": true,
+  "audit_explicit": true,
+  "no_audit": false,
+  "scope": [
+    "src"
+  ],
+  "interactive": true,
+  "on_done": "echo done",
+  "cascade": [
+    "notify"
+  ],
+  "parent_task_id": "t-parent",
+  "env": {
+    "KEY": "VALUE"
+  },
+  "env_forward": [
+    "HOME"
+  ],
+  "agent_pid": 22,
+  "agent_started": "launch-22",
+  "sandbox": true,
+  "read_only": true,
+  "audit_report_mode": true,
+  "container": "aid:test",
+  "link_deps": true,
+  "pre_task_dirty_paths": [
+    "?? pre-existing.rs"
+  ],
+  "foreground": true
+}

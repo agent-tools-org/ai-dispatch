@@ -114,11 +114,15 @@ fn already_terminal(store: &Store, task_id: &str) -> Result<()> {
 fn signal_task(task_id: &str, task: &Task, graceful: bool, preserve_label: &str) -> Result<()> {
     let spec = background::load_spec_if_exists(task_id)?;
     if let Some(pid) = spec.as_ref().and_then(|spec| {
-        spec.worker_pid.filter(|pid| Some(*pid) != spec.agent_pid)
+        spec.worker_pid.filter(|pid| {
+            Some(*pid) != spec.agent_pid && background::BackgroundRunSpec::is_task_worker(*pid, task_id)
+        })
     }) {
         if graceful {
             background::kill_process(pid);
-            if wait_for_exit(pid) { background::sigkill_process(pid); }
+            if wait_for_exit(pid) && background::BackgroundRunSpec::is_task_worker(pid, task_id) {
+                background::sigkill_process(pid);
+            }
         } else {
             background::sigkill_process(pid);
             let _ = wait_for_exit(pid);
@@ -195,3 +199,7 @@ mod settle_worker_tests;
 #[cfg(test)]
 #[path = "stop/terminal_events_tests.rs"]
 mod terminal_events_tests;
+
+#[cfg(all(test, unix))]
+#[path = "stop/worker_identity_tests.rs"]
+mod worker_identity_tests;

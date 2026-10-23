@@ -34,7 +34,7 @@ thread_local! {
 fn signal_targets(worker_pid: Option<u32>, spec: &BackgroundRunSpec) {
     let agent_pid = spec.agent_pid_for_signal();
     let worker_pid = worker_pid.filter(|pid| {
-        Some(*pid) != spec.agent_pid && is_task_worker(*pid, &spec.task_id)
+        Some(*pid) != spec.agent_pid && BackgroundRunSpec::is_task_worker(*pid, &spec.task_id)
     });
     let mut pids = worker_pid.into_iter().collect::<Vec<_>>();
     #[cfg(unix)]
@@ -54,17 +54,21 @@ fn signal_targets(worker_pid: Option<u32>, spec: &BackgroundRunSpec) {
     }
 }
 
-#[cfg(unix)]
-fn is_task_worker(pid: u32, task_id: &str) -> bool {
-    std::process::Command::new("ps")
-        .args(["-o", "args=", "-p", &pid.to_string()])
-        .output()
-        .is_ok_and(|out| out.status.success() && names_worker(&String::from_utf8_lossy(&out.stdout), task_id))
-}
+impl BackgroundRunSpec {
+    #[cfg(unix)]
+    pub(crate) fn is_task_worker(pid: u32, task_id: &str) -> bool {
+        std::process::Command::new("ps")
+            .args(["-o", "args=", "-p", &pid.to_string()])
+            .output()
+            .is_ok_and(|out| {
+                out.status.success() && names_worker(&String::from_utf8_lossy(&out.stdout), task_id)
+            })
+    }
 
-#[cfg(not(unix))]
-fn is_task_worker(_pid: u32, _task_id: &str) -> bool {
-    false
+    #[cfg(not(unix))]
+    pub(crate) fn is_task_worker(_pid: u32, _task_id: &str) -> bool {
+        false
+    }
 }
 
 /// Whether a command line is `... __run-task <task_id> ...` (the spawn_worker argv).
@@ -102,52 +106,17 @@ mod tests {
         BackgroundRunSpec {
             task_id: "t-kill".to_string(),
             worker_pid: Some(11),
-            agent_name: "codex".to_string(),
-            prompt: "prompt".to_string(),
             dir: Some(".".to_string()),
-            output: None,
-            result_file: None,
-            result_file_required: None,
-            model: None,
             budget: false,
-            session_id: None,
-            verify: None,
-            setup: None,
-            iterate: None,
-            eval: None,
-            eval_feedback_template: None,
-            judge: None,
-            judge_retry: false,
             max_duration_mins: None,
             max_duration_secs: None,
-            max_task_cost: None,
             idle_timeout_secs: None,
-            retry: 0,
-            group: None,
-            skills: vec![],
-            checklist: vec![],
-            hooks: vec![],
-            template: None,
-            worktree: None,
-            base_branch: None,
-            peer_review: None,
-            audit: false,
-            audit_explicit: false,
-            no_audit: false,
-            scope: vec![],
             interactive: true,
             on_done: None,
-            cascade: vec![],
-            parent_task_id: None,
             env: None,
-            env_forward: None,
             agent_pid,
             agent_started: None,
-            sandbox: false,
-            read_only: false,
             audit_report_mode: false,
-            container: None,
-            link_deps: true,
             pre_task_dirty_paths: None,
             foreground: false,
         }

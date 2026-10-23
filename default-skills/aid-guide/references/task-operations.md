@@ -253,6 +253,11 @@ worker. Foreground and background runs therefore share the same agent,
 timeout, session-resume, cost, verification, retry, audit, and delivery
 lifecycle.
 
+Job files hold worker runtime state, including process identities, resolved
+budget and directory, inline environment, completion hook, dirty baseline, and
+recovery timeout and audit policy. Workers rebuild run configuration from the
+task's saved dispatch arguments and read the resolved launch prompt from the task row.
+
 Persisted job specs may contain fields removed by a newer aid version; unknown
 fields are ignored so board, stop, and unstick remain usable during upgrades.
 The reaper warns and skips a spec it cannot read, allowing cleanup of other

@@ -8,73 +8,40 @@ fn serializes_spec_to_json() {
     let spec = BackgroundRunSpec {
         task_id: "t-5a0e".to_string(),
         worker_pid: Some(4242),
-        agent_name: "codex".to_string(),
-        prompt: "prompt".to_string(),
         dir: Some(".".to_string()),
-        output: None,
-        result_file: Some("result.md".to_string()),
-        result_file_required: None,
-        model: None,
         budget: false,
-        session_id: None,
-        verify: Some("auto".to_string()),
-        setup: None,
-        iterate: None,
-        eval: None,
-        eval_feedback_template: None,
-        judge: Some("gemini".to_string()),
-        judge_retry: false,
         max_duration_mins: Some(90),
         max_duration_secs: None,
-        max_task_cost: None,
         idle_timeout_secs: None,
-        retry: 2,
-        group: Some("wg-abcd".to_string()),
-        skills: vec![],
-        checklist: vec![],
-        hooks: vec![],
-        template: None,
-        worktree: None,
-        base_branch: None,
-        peer_review: None,
-        audit: false,
-        audit_explicit: false,
-        no_audit: false,
-        scope: vec![],
         interactive: true,
         on_done: None,
-        cascade: vec![],
-        parent_task_id: None,
         env: None,
-        env_forward: None,
         agent_pid: None,
         agent_started: None,
-        sandbox: false,
-        read_only: false,
         audit_report_mode: false,
-        container: None,
-        link_deps: true,
         pre_task_dirty_paths: None,
         foreground: false,
     };
 
     let content = serde_json::to_string_pretty(&spec).unwrap();
-    assert!(content.contains("\"agent_name\""));
-    assert!(content.contains("\"codex\""));
-    assert!(content.contains("\"result_file\""));
+    let value: serde_json::Value = serde_json::from_str(&content).unwrap();
+    assert_eq!(value.as_object().unwrap().len(), 15);
+    assert_eq!(value["task_id"], "t-5a0e");
+    assert_eq!(value["worker_pid"], 4242);
+    assert!(value.get("result_file").is_none());
 }
 
 #[test]
 fn serializes_cascade_field() {
-    let spec = BackgroundRunSpec {
-        cascade: vec!["opencode".to_string(), "cursor".to_string()],
-        ..make_spec("t-cascade")
+    let spec = crate::cmd::run::RunArgs {
+        cascade: vec!["opencode".into(), "cursor".into()],
+        ..Default::default()
     };
     let content = serde_json::to_string_pretty(&spec).unwrap();
     assert!(content.contains("\"cascade\""));
     assert!(content.contains("\"opencode\""));
     assert!(content.contains("\"cursor\""));
-    let parsed: BackgroundRunSpec = serde_json::from_str(&content).unwrap();
+    let parsed: crate::cmd::run::RunArgs = serde_json::from_str(&content).unwrap();
     assert_eq!(parsed.cascade, vec!["opencode", "cursor"]);
 }
 
@@ -132,19 +99,19 @@ fn build_on_done_command_routes_shell_operators_through_sh() {
 
 #[test]
 fn quota_cascade_skipped_for_batch_tasks() {
-    let batch_spec = BackgroundRunSpec {
-        group: Some("wg-test".to_string()),
-        ..make_spec("t-batch")
+    let batch_spec = crate::cmd::run::RunArgs {
+        group: Some("wg-test".into()),
+        ..Default::default()
     };
-    // Batch tasks have group set — cascade guard (spec.group.is_none()) blocks them
+    // Batch tasks have group set — cascade guard (args.group.is_none()) blocks them
     assert!(
         batch_spec.group.is_some(),
         "batch tasks have group set, cascade should be skipped"
     );
 
-    let solo_spec = BackgroundRunSpec {
+    let solo_spec = crate::cmd::run::RunArgs {
         group: None,
-        ..make_spec("t-solo")
+        ..Default::default()
     };
     // Non-batch tasks have no group — cascade is allowed
     assert!(solo_spec.group.is_none(), "solo tasks should allow cascade");
@@ -153,11 +120,11 @@ fn quota_cascade_skipped_for_batch_tasks() {
 #[test]
 fn explicit_cascade_takes_priority_over_quota_cascade() {
     // When spec.cascade is non-empty, the explicit cascade path should run
-    // (not the quota auto-cascade). Verify the spec structure supports this.
-    let spec = BackgroundRunSpec {
-        cascade: vec!["opencode".to_string(), "cursor".to_string()],
+    // (not the quota auto-cascade). Verify the saved args structure supports this.
+    let spec = crate::cmd::run::RunArgs {
+        cascade: vec!["opencode".into(), "cursor".into()],
         group: None,
-        ..make_spec("t-cascade-priority")
+        ..Default::default()
     };
     assert!(spec.group.is_none(), "solo task allows cascade");
     assert!(
@@ -198,4 +165,46 @@ fn agent_pid_backwards_compatible() {
 
     let spec = super::load_spec("t-c200").unwrap();
     assert!(spec.agent_pid.is_none());
+}
+
+#[test]
+fn full_old_format_job_can_be_waited_stopped_and_reaped() {
+    let temp = tempfile::tempdir().unwrap();
+    let _guard = paths::AidHomeGuard::set(temp.path());
+    paths::ensure_dirs().unwrap();
+    let store = std::sync::Arc::new(Store::open_memory().unwrap());
+    let mut legacy: serde_json::Value =
+        serde_json::from_str(include_str!("../../../testdata/full-background-spec.json")).unwrap();
+    assert_eq!(legacy.as_object().unwrap().len(), 50);
+    let worker_pid = i32::MAX as u32 - 3;
+    let agent_pid = i32::MAX as u32 - 4;
+    legacy["worker_pid"] = worker_pid.into();
+    legacy["agent_pid"] = agent_pid.into();
+    for id in ["t-old-stop", "t-old-reap"] {
+        store.insert_task(&make_task(id, TaskStatus::Running)).unwrap();
+        legacy["task_id"] = id.into();
+        std::fs::write(paths::job_path(id), serde_json::to_vec(&legacy).unwrap()).unwrap();
+        assert_eq!(super::load_worker_pid(id).unwrap(), Some(worker_pid));
+        assert_eq!(super::load_agent_pid(id).unwrap(), Some(agent_pid));
+    }
+    crate::cmd::stop::stop(&store, "t-old-stop").unwrap();
+    assert_eq!(
+        store.get_task("t-old-stop").unwrap().unwrap().status,
+        TaskStatus::Stopped
+    );
+    kill::RECORDED_KILLS.with(|kills| kills.borrow_mut().clear());
+    assert_eq!(
+        check_zombie_tasks_with(&store, |_| false).unwrap(),
+        ["t-old-reap"]
+    );
+    assert_eq!(
+        store.get_task("t-old-reap").unwrap().unwrap().status,
+        TaskStatus::Failed
+    );
+    let error = store.latest_error("t-old-reap").unwrap();
+    assert!(error.contains(ZOMBIE_FAILURE_DETAIL));
+    assert_eq!(
+        kill::RECORDED_KILLS.with(|kills| kills.borrow().clone()),
+        vec![vec![worker_pid, agent_pid]]
+    );
 }

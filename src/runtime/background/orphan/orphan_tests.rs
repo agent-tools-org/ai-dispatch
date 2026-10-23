@@ -3,12 +3,10 @@
 // Deps: orphan helpers, store, and background specs.
 
 use super::*;
-use crate::runtime::background::{save_spec, BackgroundRunSpec};
-use crate::support::paths;
+use crate::runtime::background::{BackgroundRunSpec, save_spec};
 use crate::store::Store;
-use crate::types::{
-    AgentKind, EventKind, Task, TaskEvent, TaskStatus, VerifyStatus,
-};
+use crate::support::paths;
+use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskStatus, VerifyStatus};
 
 #[path = "orphan_input_tests.rs"]
 mod input;
@@ -54,40 +52,25 @@ pub(super) fn make_task(task_id: &str) -> Task {
     }
 }
 
-pub(super) fn make_spec(task_id: &str, worker_pid: Option<u32>, idle_timeout_secs: Option<u64>) -> BackgroundRunSpec {
+pub(super) fn make_spec(
+    task_id: &str,
+    worker_pid: Option<u32>,
+    idle_timeout_secs: Option<u64>,
+) -> BackgroundRunSpec {
     BackgroundRunSpec {
         task_id: task_id.to_string(),
         worker_pid,
-        agent_name: "codex".to_string(),
-        prompt: "prompt".to_string(),
         dir: Some(".".to_string()),
-        output: None, result_file: None, result_file_required: None, model: None, budget: false, session_id: None,
-        verify: None, setup: None, iterate: None,
-        eval: None,
-        eval_feedback_template: None,
-        judge: None,
-        judge_retry: false,
-        max_duration_mins: None, max_duration_secs: None, max_task_cost: None,
+        budget: false,
+        max_duration_mins: None,
+        max_duration_secs: None,
         idle_timeout_secs,
-        retry: 0,
-        group: None,
-        skills: vec![],
-        checklist: vec![], hooks: vec![], template: None,
-        worktree: None, base_branch: None, peer_review: None,
-        audit: false, audit_explicit: false, no_audit: false, scope: vec![],
         interactive: true,
         on_done: None,
-        cascade: vec![],
-        parent_task_id: None,
         env: None,
-        env_forward: None,
         agent_pid: None,
         agent_started: None,
-        sandbox: false,
-        read_only: false,
         audit_report_mode: false,
-        container: None,
-        link_deps: true,
         pre_task_dirty_paths: None,
         foreground: false,
     }

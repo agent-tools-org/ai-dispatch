@@ -50,17 +50,7 @@ pub(super) fn print_task_transition(
 }
 
 pub(super) fn print_waiting_prompt(store: &Store, task_id: &str) -> Result<()> {
-    let events = store.get_events(task_id)?;
-    let prompt = events
-        .iter()
-        .rev()
-        .find_map(|e| {
-            e.metadata
-                .as_ref()
-                .and_then(|m| m.get("awaiting_prompt"))
-                .and_then(|v| v.as_str())
-        })
-        .unwrap_or("");
+    let prompt = store.latest_waiting_prompt(task_id)?.unwrap_or_default();
     println!("{} {}", task_id, prompt);
     println!("Use: aid respond {} \"your answer\"", task_id);
     Ok(())

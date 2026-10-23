@@ -69,18 +69,8 @@ fn append_infrastructure_diagnostics(
         .iter()
         .filter(|task| task.verify_status == VerifyStatus::InfrastructureFailure)
     {
-        if let Some(event) = store
-            .get_events(task.id.as_str())?
-            .iter()
-            .rev()
-            .find(|event| {
-                event
-                    .metadata
-                    .as_ref()
-                    .is_some_and(|meta| meta["verify_execution_error"] == true)
-            })
-        {
-            out.push_str(&format!("{} [VINFRA] {}\n", task.id, event.detail));
+        if let Some(detail) = store.latest_infrastructure_error(task.id.as_str())? {
+            out.push_str(&format!("{} [VINFRA] {}\n", task.id, detail));
         }
     }
     Ok(())

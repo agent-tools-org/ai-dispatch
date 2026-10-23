@@ -35,15 +35,7 @@ fn collect(
     agent: Option<&str>,
     now: DateTime<Local>,
 ) -> Result<StatsSnapshot> {
-    let tasks: Vec<Task> = store
-        .list_tasks(crate::types::TaskFilter::All)?
-        .into_iter()
-        .filter(|t| {
-            matches!(window.range(now), Some((s, e)) if t.created_at >= s && t.created_at <= e)
-                || matches!(window, UsageWindow::All)
-        })
-        .filter(|t| agent.is_none_or(|name| t.agent_display_name().eq_ignore_ascii_case(name)))
-        .collect();
+    let tasks = store.read_report_tasks(None, agent, window.range(now))?;
     let mut run = collection::StatsRun::new();
     run.aggregate(store, &tasks)?;
     run.finish()
@@ -134,3 +126,7 @@ fn task_cost(store: &Store, task: &Task) -> Result<Option<f64>> {
 #[cfg(test)]
 #[path = "stats_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "stats/read_tests.rs"]
+mod read_tests;

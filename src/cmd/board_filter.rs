@@ -1,38 +1,48 @@
 // Project-scope filtering for `aid board` and stream views.
-// Exports: apply_board_filters, active_project_filter.
+// Exports: load_board_tasks and project scope display.
 // Deps: project identity helpers, session, store Task list.
 
 use crate::runtime::session;
 use crate::types::Task;
 
-/// Apply mine/group/project filters in memory (no per-row DB queries).
-/// When `all_projects` is false, keeps only the current project identity
-/// (or the unattributed bucket when none resolves).
-pub(crate) fn apply_board_filters(
-    tasks: &mut Vec<Task>,
+pub(crate) type BoardSelection = (Vec<Task>, Option<Option<String>>, Option<super::TruncationNotice>);
+
+pub(crate) fn load_board_tasks(
+    store: &crate::store::Store,
+    running: bool,
+    today: bool,
     mine: bool,
     group: Option<&str>,
     all_projects: bool,
-) -> Option<Option<String>> {
-    if mine {
-        tasks.retain(session::matches_current);
-    }
-    if let Some(group_id) = group {
-        tasks.retain(|task| task.workgroup_id.as_deref() == Some(group_id));
-    }
-    if all_projects {
-        return None;
-    }
-    let current = crate::config::project::current_project_id();
-    crate::config::project::retain_project(tasks, current.as_deref());
-    Some(current)
+    limit: Option<usize>,
+) -> anyhow::Result<BoardSelection> {
+    let project = (!all_projects).then(crate::config::project::current_project_id);
+    let caller = session::current_caller();
+    let scope = crate::store::TaskReadFilter {
+        group,
+        project: project.as_ref().map(|value| value.as_deref()),
+        caller: mine.then_some(caller.as_ref()),
+    };
+    let limit = effective_limit(limit, running, today, mine, group);
+    let (tasks, total) = store.read_board_tasks(super::board_task_filter(running, today), &scope, limit)?;
+    let truncation = limit
+        .filter(|limit| total > *limit)
+        .map(|shown| super::TruncationNotice { shown, total });
+    Ok((tasks, project, truncation))
+}
+
+pub(super) fn effective_limit(
+    limit: Option<usize>,
+    running: bool,
+    today: bool,
+    mine: bool,
+    group: Option<&str>,
+) -> Option<usize> {
+    limit.or_else(|| (group.is_none() && !running && !today && !mine).then_some(super::DEFAULT_TASK_LIMIT))
 }
 
 /// Banner line for the active project filter (always shown on human board).
-pub(crate) fn project_scope_banner(
-    project_filter: Option<Option<&str>>,
-    all_projects: bool,
-) -> String {
+pub(crate) fn project_scope_banner(project_filter: Option<Option<&str>>, all_projects: bool) -> String {
     let filter = project_filter.unwrap_or(None);
     format!(
         "[aid] {}",

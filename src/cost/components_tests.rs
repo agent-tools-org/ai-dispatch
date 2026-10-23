@@ -232,3 +232,46 @@ fn cost_completion_reprices_stream_estimate_using_final_model() {
         None
     );
 }
+
+#[test]
+fn cost_ignores_non_completion_payloads_and_keeps_latest_usage_completion() {
+    let store = Store::open_memory().expect("store");
+    let task = task(AgentKind::Codex, 10, Some(99.0));
+    store.insert_task(&task).expect("task");
+    for i in 0..150 {
+        store
+            .db()
+            .execute(
+                "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
+             VALUES (?1, ?2, 'reasoning', X'ff', ?3)",
+                rusqlite::params![
+                    task.id.as_str(),
+                    task.created_at.to_rfc3339(),
+                    format!(r#"{{"unrelated":"{}-{i}"}}"#, "x".repeat(4096))
+                ],
+            )
+            .expect("noise");
+    }
+    for metadata in [
+        r#"{"tokens":10,"cost_usd":1}"#,
+        r#"{"tokens":10,"cost_usd":2}"#,
+        "{malformed",
+        "{}",
+    ] {
+        store
+            .db()
+            .execute(
+                "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
+             VALUES (?1, ?2, 'completion', 'complete', ?3)",
+                rusqlite::params![task.id.as_str(), task.created_at.to_rfc3339(), metadata],
+            )
+            .expect("completion");
+    }
+    assert!(store.get_events(task.id.as_str()).is_err());
+    assert_eq!(task_cost(&store, &task).expect("narrow cost"), Some(2.0));
+    let mismatched = Task {
+        tokens: Some(9),
+        ..task
+    };
+    assert_eq!(task_cost(&store, &mismatched).expect("fallback"), Some(99.0));
+}

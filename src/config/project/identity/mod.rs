@@ -54,6 +54,7 @@ pub fn project_display(project_id: Option<&str>) -> &str {
 
 /// Keep only tasks that belong to `filter`.
 /// `filter = None` means the unattributed bucket (SQL NULL), not "all projects".
+#[cfg(test)]
 pub fn retain_project(tasks: &mut Vec<crate::types::Task>, filter: Option<&str>) {
     match filter {
         Some(id) => tasks.retain(|task| task.project_id.as_deref() == Some(id)),

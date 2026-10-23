@@ -3,6 +3,8 @@
 // Deps: super::super::Store, rusqlite, chrono, crate::types.
 
 mod query_sql;
+mod read_queries;
+pub(crate) use read_queries::TaskReadFilter;
 
 use anyhow::Result;
 use chrono::Local;

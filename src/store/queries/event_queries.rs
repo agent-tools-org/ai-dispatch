@@ -11,6 +11,9 @@ use super::super::schema::row_to_event;
 use super::super::Store;
 use crate::types::TaskEvent;
 
+#[path = "event_reads.rs"]
+mod event_reads;
+
 impl Store {
     pub fn latest_error(&self, task_id: &str) -> Option<String> {
         let conn = self.db();

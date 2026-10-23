@@ -10,7 +10,7 @@ use super::spec::{load_spec_for_reaper, BackgroundRunSpec};
 use crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT_SECS;
 use crate::runtime::process::monitor;
 use crate::store::Store;
-use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
+use crate::types::{Task, TaskId, TaskStatus};
 
 const LIVE_WORKER_IDLE_MARGIN: u64 = 2;
 
@@ -59,12 +59,11 @@ where
 }
 
 pub(super) fn latest_activity(store: &Store, task: &Task) -> Result<TaskActivity> {
-    let events = store.get_events(task.id.as_str())?;
-    let progress_events = events.iter()
-        .filter(|event| event.event_kind.is_liveness() && !is_idle_bookkeeping_event(event))
-        .collect::<Vec<_>>();
-    let last_event = progress_events.last();
-    let mut timestamp = last_event.map(|event| event.timestamp).unwrap_or(task.created_at);
+    let (event_count, last_event) = store.liveness_summary(task.id.as_str())?;
+    let mut timestamp = last_event
+        .as_ref()
+        .map(|(timestamp, _)| *timestamp)
+        .unwrap_or(task.created_at);
     let has_agent_bytes = agent_has_produced_bytes(task.id.as_str(), task.created_at);
     if let Some(bytes_at) = agent_bytes_mtime(task.id.as_str())
         && bytes_at > timestamp
@@ -73,41 +72,14 @@ pub(super) fn latest_activity(store: &Store, task: &Task) -> Result<TaskActivity
     }
     Ok(TaskActivity {
         timestamp,
-        event_count: progress_events.len() as u32,
+        event_count,
         has_agent_bytes,
-        detail: last_event.map(|event| event.detail.clone()),
+        detail: last_event.map(|(_, detail)| detail),
     })
 }
 
 pub(super) fn is_stale(last_activity: DateTime<Local>, now: DateTime<Local>, idle_secs: u64) -> bool {
     (now - last_activity).num_seconds() >= idle_secs as i64
-}
-
-fn is_idle_bookkeeping_event(event: &TaskEvent) -> bool {
-    // Aid's own setup (cargo target seed, setup scripts) is not agent output.
-    // Keep excluding it: for buffered agents the first-token signal is bytes,
-    // and Setup must not masquerade as either events or progress.
-    if event.event_kind == EventKind::Setup {
-        return true;
-    }
-    // PTY echo of aid's auto-nudge is often stored as bare Reasoning with no metadata.
-    if event.event_kind == EventKind::Reasoning
-        && event.detail.trim() == crate::task::unstick::default_nudge_message()
-    {
-        return true;
-    }
-    let Some(metadata) = event.metadata.as_ref() else {
-        return false;
-    };
-    metadata.get("idle_warn").and_then(|value| value.as_bool()) == Some(true)
-        || metadata.get("auto_escalated").and_then(|value| value.as_bool()) == Some(true)
-        || metadata.get("acked_reply").and_then(|value| value.as_bool()) == Some(true)
-        || metadata.get("source").and_then(|value| value.as_str()) == Some("unstick-auto")
-        // Aid writing operator input (Steered:, Replied:, "… not delivered") is not
-        // agent progress: steering a silent agent must not postpone the backstop.
-        || metadata.get("steered").and_then(|value| value.as_bool()) == Some(true)
-        || metadata.get("input_delivery").is_some()
-        || metadata.get("message_id").is_some()
 }
 
 /// Buffered agents (grok/agy) emit no progress events until exit; watch_buffered

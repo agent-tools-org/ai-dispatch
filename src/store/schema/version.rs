@@ -7,7 +7,7 @@ pub(super) const CURRENT_VERSION: i64 = 2;
 
 pub(in crate::store) fn ensure_current(conn: &Connection) -> Result<()> {
     let version = schema_version(conn)?;
-    if version == CURRENT_VERSION {
+    if version == CURRENT_VERSION && has_private_launch_table(conn)? {
         return Ok(());
     }
     if version > CURRENT_VERSION {
@@ -20,17 +20,28 @@ pub(in crate::store) fn ensure_current(conn: &Connection) -> Result<()> {
         super::create_tables(&tx)?;
         super::migrate(&tx)?;
         crate::store::usage_checkpoint::create_table(&tx)?;
-        crate::store::read_only_launch::create_table(&tx)?;
         crate::store::migrations::migrate_billing_index(&tx)?;
         if version < 1 {
             crate::store::migrations::migrate_backup_url(&tx)?;
         }
+    }
+    if !has_private_launch_table(&tx)? {
+        crate::store::read_only_launch::create_table(&tx)?;
     }
     if version < CURRENT_VERSION {
         tx.pragma_update(None, "user_version", CURRENT_VERSION)?;
     }
     tx.commit()?;
     Ok(())
+}
+
+fn has_private_launch_table(conn: &Connection) -> Result<bool> {
+    Ok(conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_schema
+         WHERE type = 'table' AND name = 'task_read_only_launch')",
+        [],
+        |row| row.get(0),
+    )?)
 }
 
 fn schema_version(conn: &Connection) -> Result<i64> {

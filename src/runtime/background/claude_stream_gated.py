@@ -7,6 +7,9 @@ import sys
 
 mode, output = sys.argv[1:3]
 output = pathlib.Path(output)
+args = sys.argv[3:]
+assert args[:3] == ['-p', '--output-format', 'stream-json']
+assert '--input-format' in args and '--replay-user-messages' in args
 
 def emit(row):
     print(json.dumps(row), flush=True)

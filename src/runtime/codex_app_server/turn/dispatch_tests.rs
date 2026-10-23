@@ -207,6 +207,10 @@ fn piped_dispatch_uses_the_same_transport_and_completion_pipeline() {
 
 #[test]
 fn steer_timeout_never_marks_delivery_even_when_turn_finishes() {
+    assert_eq!(
+        super::super::control::STEER_WINDOW,
+        std::time::Duration::from_secs(30),
+    );
     let fixture = Fixture::new("silent-steer");
     let actor = fixture.actor(false);
     let mut policy = crate::config::timeout_policy::TimeoutPolicy::default();

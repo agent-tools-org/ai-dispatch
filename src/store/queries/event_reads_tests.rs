@@ -85,6 +85,7 @@ fn completion_lookup_searches_the_existing_task_kind_index() {
         "{plan}"
     );
     assert!(plan.contains("event_type=?"), "{plan}");
+    assert!(!plan.contains("TEMP B-TREE"), "{plan}");
 }
 
 fn seed_reports(store: &Store) {
@@ -209,4 +210,62 @@ fn is_progress(event: &crate::types::TaskEvent) -> bool {
         && m.get("source").and_then(Value::as_str) != Some("unstick-auto")
         && m.get("input_delivery").is_none()
         && m.get("message_id").is_none()
+}
+
+#[test]
+fn reaper_counts_activity_when_serde_rejects_sqlite_valid_metadata() {
+    let store = Store::open_memory().unwrap();
+    seed(&store);
+    insert(
+        &store,
+        "reasoning",
+        "live activity",
+        Some(r#"{"idle_warn":true,"x":1e400}"#),
+    );
+    let events = store.get_events("t-read").unwrap();
+    assert!(events.last().unwrap().metadata.is_none());
+    let expected = events.iter().filter(|event| is_progress(event)).count();
+    let (count, latest) = store.liveness_summary("t-read").unwrap();
+    assert_eq!(count as usize, expected);
+    assert_eq!(latest.unwrap().1, "live activity");
+}
+
+#[test]
+fn metadata_prefilter_preserves_serde_rejection_and_escaped_keys() {
+    let store = Store::open_memory().unwrap();
+    seed(&store);
+    insert(
+        &store,
+        "error",
+        "valid infra",
+        Some(r#"{"awaiting_prompt":"valid prompt","verify_execution_error":true}"#),
+    );
+    insert(
+        &store,
+        "error",
+        "invalid infra",
+        Some(r#"{"awaiting_prompt":"invalid prompt","verify_execution_error":true,"x":1e400}"#),
+    );
+    assert_eq!(
+        store.latest_waiting_prompt("t-read").unwrap().as_deref(),
+        Some("valid prompt")
+    );
+    assert_eq!(
+        store.latest_infrastructure_error("t-read").unwrap().as_deref(),
+        Some("valid infra")
+    );
+    insert(
+        &store,
+        "error",
+        "escaped infra",
+        Some(r#"{"awaiting_\u0070rompt":"escaped prompt","verify_execution_\u0065rror":true}"#),
+    );
+    assert_eq!(
+        store.latest_waiting_prompt("t-read").unwrap().as_deref(),
+        Some("escaped prompt")
+    );
+    assert_eq!(
+        store.latest_infrastructure_error("t-read").unwrap().as_deref(),
+        Some("escaped infra")
+    );
 }

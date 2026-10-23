@@ -186,3 +186,44 @@ fn report_sql_preserves_agent_aliases_custom_names_and_exact_time_boundaries() {
         );
     }
 }
+
+#[test]
+fn report_period_searches_the_created_at_index_and_preserves_offset_boundaries() {
+    let store = Store::open_memory().unwrap();
+    seed(&store);
+    let end = Local::now();
+    let start = end - chrono::Duration::days(7);
+    for (id, date) in [("t-4", start), ("t-5", end)] {
+        let offset = chrono::FixedOffset::east_opt(23 * 3600).unwrap();
+        store
+            .db()
+            .execute(
+                "UPDATE tasks SET created_at = ?1 WHERE id = ?2",
+                params![date.with_timezone(&offset).to_rfc3339(), id],
+            )
+            .unwrap();
+    }
+    let (sql, values) = report_query(None, Some("codex"), Some((start, end)));
+    let conn = store.db();
+    let mut stmt = conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
+    let plan = stmt
+        .query_map(rusqlite::params_from_iter(values), |row| row.get::<_, String>(3))
+        .unwrap()
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .unwrap()
+        .join("\n");
+    assert!(
+        plan.contains("SEARCH tasks USING INDEX idx_tasks_created_at"),
+        "{plan}"
+    );
+    drop(stmt);
+    drop(conn);
+    let actual = store.read_report_tasks(None, None, Some((start, end))).unwrap();
+    let expected = store
+        .list_tasks(TaskFilter::All)
+        .unwrap()
+        .into_iter()
+        .filter(|task| task.created_at >= start && task.created_at <= end)
+        .collect::<Vec<_>>();
+    assert_eq!(ids(&actual), ids(&expected));
+}

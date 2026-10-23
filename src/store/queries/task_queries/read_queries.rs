@@ -38,31 +38,7 @@ impl Store {
         agent: Option<&str>,
         range: Option<(DateTime<Local>, DateTime<Local>)>,
     ) -> Result<Vec<Task>> {
-        let scope = TaskReadFilter {
-            group,
-            ..Default::default()
-        };
-        let (mut sql, mut values) = board_query(TaskFilter::All, &scope);
-        sql = sql.replacen("agent, prompt,", "agent, '' AS prompt,", 1);
-        if let Some(agent) = agent {
-            values.push(agent.to_string());
-            let n = values.len();
-            sql.push_str(&format!(
-                " AND (agent = ?{n} COLLATE NOCASE OR custom_agent_name = ?{n} COLLATE NOCASE \
-                 OR agent GLOB '*[^ -~]*' OR (lower(agent) = 'antigravity' AND ?{n} = 'agy' COLLATE NOCASE))"
-            ));
-        }
-        if let Some((start, end)) = range {
-            values.extend([start.to_rfc3339(), end.to_rfc3339()]);
-            let n = values.len();
-            // SQLite rounds to milliseconds; retain exact chrono boundaries below.
-            sql.push_str(&format!(
-                " AND (julianday(created_at) IS NULL OR julianday(created_at) \
-                 BETWEEN julianday(?{}) - 0.00000002 AND julianday(?{n}) + 0.00000002)",
-                n - 1
-            ));
-        }
-        sql.push_str(" ORDER BY created_at DESC, rowid DESC");
+        let (sql, values) = report_query(group, agent, range);
         let conn = self.db();
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(rusqlite::params_from_iter(&values), row_to_task)?;
@@ -75,6 +51,49 @@ impl Store {
             })
             .collect())
     }
+}
+
+fn period_date_bounds(range: (DateTime<Local>, DateTime<Local>)) -> Option<(String, String)> {
+    let (start, end) = range;
+    // A one-day margin covers RFC3339 offsets; chrono applies the exact bounds after the read.
+    let lower = start
+        .with_timezone(&chrono::Utc)
+        .checked_sub_signed(chrono::Duration::days(1))?;
+    let upper = end
+        .with_timezone(&chrono::Utc)
+        .checked_add_signed(chrono::Duration::days(2))?;
+    Some((
+        lower.format("%Y-%m-%d").to_string(),
+        upper.format("%Y-%m-%d").to_string(),
+    ))
+}
+
+fn report_query(
+    group: Option<&str>,
+    agent: Option<&str>,
+    range: Option<(DateTime<Local>, DateTime<Local>)>,
+) -> (String, Vec<String>) {
+    let scope = TaskReadFilter {
+        group,
+        ..Default::default()
+    };
+    let (mut sql, mut values) = board_query(TaskFilter::All, &scope);
+    sql = sql.replacen("agent, prompt,", "agent, '' AS prompt,", 1);
+    if let Some(agent) = agent {
+        values.push(agent.to_string());
+        let n = values.len();
+        sql.push_str(&format!(
+            " AND (agent = ?{n} COLLATE NOCASE OR custom_agent_name = ?{n} COLLATE NOCASE \
+                 OR agent GLOB '*[^ -~]*' OR (lower(agent) = 'antigravity' AND ?{n} = 'agy' COLLATE NOCASE))"
+        ));
+    }
+    if let Some((lower, upper)) = range.and_then(period_date_bounds) {
+        values.extend([lower, upper]);
+        let n = values.len();
+        sql.push_str(&format!(" AND created_at >= ?{} AND created_at < ?{n}", n - 1));
+    }
+    sql.push_str(" ORDER BY created_at DESC, rowid DESC");
+    (sql, values)
 }
 
 fn board_query(filter: TaskFilter, scope: &TaskReadFilter<'_>) -> (String, Vec<String>) {

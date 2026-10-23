@@ -1,28 +1,11 @@
 // Narrow event reads for completion pricing, board diagnostics, waiting prompts, and liveness.
-// Exports Store event selectors; depends on existing event indexes and guarded JSON expressions.
+// Exports Store event selectors; depends on existing event indexes and serde metadata parsing.
 
 use super::*;
 use serde_json::Value;
 
 const COMPLETION_SQL: &str = "SELECT metadata FROM events INDEXED BY idx_events_task_kind
-    WHERE task_id = ?1 AND event_type = 'completion' ORDER BY timestamp DESC, id DESC";
-
-const ACTIVITY_WHERE: &str = "task_id = ?1 AND event_type NOT IN ('noop', 'setup')
-    AND NOT ((event_type = 'reasoning' OR event_type NOT IN (
-        'tool_call', 'milestone', 'build', 'test', 'commit', 'completion', 'error',
-        'file_write', 'file_read', 'web_search', 'lint', 'format')) AND trim(detail, ?2) = ?3)
-    AND NOT EXISTS (
-        SELECT 1 FROM (
-            SELECT key, type, value, ROW_NUMBER() OVER (PARTITION BY key ORDER BY id DESC) AS ordinal
-            FROM json_each(CASE WHEN json_valid(metadata) THEN metadata END)
-            WHERE key IN ('idle_warn', 'auto_escalated', 'acked_reply', 'steered',
-                          'source', 'input_delivery', 'message_id')
-        ) WHERE ordinal = 1 AND (
-            (key IN ('idle_warn', 'auto_escalated', 'acked_reply', 'steered') AND type = 'true')
-            OR (key = 'source' AND type = 'text' AND value = 'unstick-auto')
-            OR key IN ('input_delivery', 'message_id')
-        )
-    )";
+    WHERE task_id = ?1 AND event_type = 'completion' ORDER BY id DESC";
 
 impl Store {
     pub(crate) fn latest_usage_metadata(&self, task_id: &str) -> Result<Option<Value>> {
@@ -52,13 +35,14 @@ impl Store {
     fn latest_metadata_text(&self, task_id: &str, key: &str, kind: &str) -> Result<Option<String>> {
         let conn = self.db();
         let detail = if kind == "true" { "detail" } else { "NULL" };
+        // These ASCII keys can only be escaped with \u sequences in valid JSON.
         let sql = format!(
             "SELECT {detail}, metadata FROM events WHERE task_id = ?1
-             AND json_type(CASE WHEN json_valid(metadata) THEN metadata END, ?2) IS NOT NULL
+             AND metadata IS NOT NULL AND (instr(metadata, ?2) > 0 OR instr(metadata, char(92) || 'u') > 0)
              ORDER BY timestamp DESC, id DESC"
         );
         let mut stmt = conn.prepare(&sql)?;
-        let mut rows = stmt.query(params![task_id, format!("$.{key}")])?;
+        let mut rows = stmt.query(params![task_id, key])?;
         while let Some(row) = rows.next()? {
             let raw: String = row.get(1)?;
             let Some(metadata) = serde_json::from_str::<Value>(&raw).ok() else {
@@ -81,35 +65,45 @@ impl Store {
         &self,
         task_id: &str,
     ) -> Result<(u32, Option<(chrono::DateTime<chrono::Local>, String)>)> {
-        let whitespace: String = (0..=0x3000)
-            .filter_map(char::from_u32)
-            .filter(|c| c.is_whitespace())
-            .collect();
-        let nudge = crate::task::unstick::default_nudge_message();
         let conn = self.db();
-        let snapshot = conn.unchecked_transaction()?;
-        let count: u32 = snapshot.query_row(
-            &format!("SELECT COUNT(*) FROM events WHERE {ACTIVITY_WHERE}"),
-            params![task_id, whitespace, nudge],
-            |row| row.get(0),
+        let mut stmt = conn.prepare(
+            "SELECT task_id, timestamp, event_type, detail, metadata FROM events
+             WHERE task_id = ?1 AND event_type NOT IN ('noop', 'setup')
+             ORDER BY timestamp ASC, id ASC",
         )?;
-        let latest = snapshot
-            .query_row(
-                &format!(
-                    "SELECT timestamp, detail FROM events WHERE {ACTIVITY_WHERE}
-                      ORDER BY timestamp DESC, id DESC LIMIT 1"
-                ),
-                params![task_id, whitespace, nudge],
-                |row| {
-                    Ok((
-                        super::super::super::schema::parse_dt(&row.get::<_, String>(0)?),
-                        row.get(1)?,
-                    ))
-                },
-            )
-            .optional()?;
+        let mut rows = stmt.query(params![task_id])?;
+        let mut count = 0_u32;
+        let mut latest = None;
+        while let Some(row) = rows.next()? {
+            let event = row_to_event(row)?;
+            if is_progress_event(&event) {
+                count = count.wrapping_add(1);
+                latest = Some((event.timestamp, event.detail));
+            }
+        }
         Ok((count, latest))
     }
+}
+
+fn is_progress_event(event: &crate::types::TaskEvent) -> bool {
+    use crate::types::EventKind;
+    if !event.event_kind.is_liveness() || event.event_kind == EventKind::Setup {
+        return false;
+    }
+    if event.event_kind == EventKind::Reasoning
+        && event.detail.trim() == crate::task::unstick::default_nudge_message()
+    {
+        return false;
+    }
+    let Some(metadata) = event.metadata.as_ref() else {
+        return true;
+    };
+    !["idle_warn", "auto_escalated", "acked_reply", "steered"]
+        .iter()
+        .any(|key| metadata.get(key).and_then(Value::as_bool) == Some(true))
+        && metadata.get("source").and_then(Value::as_str) != Some("unstick-auto")
+        && metadata.get("input_delivery").is_none()
+        && metadata.get("message_id").is_none()
 }
 
 #[cfg(test)]

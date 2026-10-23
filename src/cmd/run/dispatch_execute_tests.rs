@@ -167,3 +167,7 @@ fn pid_persistence_failure_kills_child_and_marks_failed() {
         TaskStatus::Failed
     );
 }
+
+#[cfg(unix)]
+#[path = "dispatch_execute_ordering_tests.rs"]
+mod ordering;

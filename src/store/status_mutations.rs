@@ -109,21 +109,6 @@ impl Store {
         Ok(result)
     }
 
-    pub(crate) fn publish_launch(
-        &self,
-        id: &str,
-        pid: u32,
-        persist: impl FnOnce() -> Result<()>,
-    ) -> Result<()> {
-        let result = persist().and_then(|()| self.with_worker_launch(id, || Ok(())));
-        if result.is_err() {
-            crate::runtime::background::sigkill_process(pid);
-            let _ = crate::runtime::background::clear_spec(id);
-            self.update_task_status(id, TaskStatus::Failed)?;
-        }
-        result
-    }
-
     #[cfg(test)]
     /// Set status to Failed only if currently Running or Waiting.
     /// Prevents zombie cleanup from clobbering a real completion status.

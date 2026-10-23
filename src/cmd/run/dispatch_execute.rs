@@ -114,20 +114,26 @@ fn spawn_background_worker(store: &Store, spec: &BackgroundRunSpec) -> Result<u3
     let spawn = background::spawn_worker(spec.task_id.as_str())?;
     let worker_pid = store.with_worker_launch(spec.task_id.as_str(), || {
         #[cfg(test)]
+        let pid = tests::spawn_worker()?;
+        #[cfg(not(test))]
+        let (launcher, pid) = spawn()?;
+        let published = background::update_worker_pid(spec.task_id.as_str(), pid);
+        if published.is_err() {
+            background::sigkill_process(pid);
+        }
+        #[cfg(test)]
         {
-            tests::spawn_worker()
+            Ok((pid, published))
         }
         #[cfg(not(test))]
         {
-            let (launcher, pid) = spawn()?;
-            Ok((launcher, pid))
+            Ok((launcher, pid, published))
         }
     })?;
+    #[cfg(test)]
+    let (worker_pid, published) = worker_pid;
     #[cfg(not(test))]
-    let (mut launcher, worker_pid) = worker_pid;
-    let published = store.publish_launch(spec.task_id.as_str(), worker_pid, || {
-        background::update_worker_pid(spec.task_id.as_str(), worker_pid)
-    });
+    let (mut launcher, worker_pid, published) = worker_pid;
     #[cfg(not(test))]
     {
         use std::io::Write;

@@ -6,8 +6,8 @@ use super::Store;
 use anyhow::Result;
 use rusqlite::OptionalExtension;
 
-pub(super) fn create_table(store: &Store) -> Result<()> {
-    store.db().execute_batch(
+pub(super) fn create_table(conn: &rusqlite::Connection) -> Result<()> {
+    conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS task_read_only_launch (
             task_id TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
             recorded_at TEXT NOT NULL,

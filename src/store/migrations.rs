@@ -58,16 +58,16 @@ pub(super) fn migrate_task_messages(conn: &Connection) -> Result<()> {
 /// honest interpretation left; back-filling `observed_model` from them would
 /// launder guesses into observations.
 pub(super) fn migrate_observed_model(conn: &Connection) -> Result<()> {
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN observed_model TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN attribution_source TEXT;");
+    super::schema::version::add_column(conn, "tasks", "observed_model TEXT")?;
+    super::schema::version::add_column(conn, "tasks", "attribution_source TEXT")?;
     Ok(())
 }
 
 pub(super) fn migrate_declared_task_profile(conn: &Connection) -> Result<()> {
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN declared_difficulty TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN declared_budget TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN declared_urgency TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN declared_rigor TEXT;");
+    super::schema::version::add_column(conn, "tasks", "declared_difficulty TEXT")?;
+    super::schema::version::add_column(conn, "tasks", "declared_budget TEXT")?;
+    super::schema::version::add_column(conn, "tasks", "declared_urgency TEXT")?;
+    super::schema::version::add_column(conn, "tasks", "declared_rigor TEXT")?;
     Ok(())
 }
 
@@ -77,9 +77,8 @@ pub(super) fn migrate_declared_task_profile(conn: &Connection) -> Result<()> {
 /// recorded a project (or even a repo_path); inventing one would launder
 /// guesses into identity. NULL is the explicit unattributed bucket.
 pub(super) fn migrate_project_id(conn: &Connection) -> Result<()> {
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN project_id TEXT;");
-    let _ = conn
-        .execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);");
+    super::schema::version::add_column(conn, "tasks", "project_id TEXT")?;
+    conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);")?;
     Ok(())
 }
 
@@ -91,7 +90,7 @@ pub(super) fn migrate_project_id(conn: &Connection) -> Result<()> {
 /// path is copied; relative values would reintroduce CWD resolution. Rows with
 /// no usable dir stay NULL and report absence.
 pub(super) fn migrate_effective_dir(conn: &Connection) -> Result<()> {
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN effective_dir TEXT;");
+    super::schema::version::add_column(conn, "tasks", "effective_dir TEXT")?;
     backfill_effective_dir_from_dispatch_args(conn)
 }
 
@@ -107,7 +106,10 @@ fn backfill_effective_dir_from_dispatch_args(conn: &Connection) -> Result<()> {
          WHERE effective_dir IS NULL",
     )?;
     let rows = select.query_map([], |row| {
-        Ok((row.get::<_, Option<String>>(0)?, row.get::<_, Option<String>>(1)?))
+        Ok((
+            row.get::<_, Option<String>>(0)?,
+            row.get::<_, Option<String>>(1)?,
+        ))
     })?;
     let mut updates = Vec::new();
     for row in rows {
@@ -118,9 +120,8 @@ fn backfill_effective_dir_from_dispatch_args(conn: &Connection) -> Result<()> {
         }
     }
     drop(select);
-    let mut update = conn.prepare(
-        "UPDATE tasks SET effective_dir = ?1 WHERE id = ?2 AND effective_dir IS NULL",
-    )?;
+    let mut update = conn
+        .prepare("UPDATE tasks SET effective_dir = ?1 WHERE id = ?2 AND effective_dir IS NULL")?;
     for (id, dir) in updates {
         update.execute(rusqlite::params![dir, id])?;
     }
@@ -135,14 +136,8 @@ fn usable_recorded_dir(dir: Option<&str>) -> Option<String> {
 /// Off-machine backup location recorded after a terminal-state upload.
 /// Normalizes historical attempts once; events remain reporting evidence.
 pub(super) fn migrate_backup_url(conn: &Connection) -> Result<()> {
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN backup_url TEXT;");
-    let tx = rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)?;
-    let version: i64 = tx.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    if version == 0 {
-        tx.execute_batch(NORMALIZE_BACKUP_ATTEMPTS_SQL)?;
-        tx.execute_batch("PRAGMA user_version = 1;")?;
-    }
-    tx.commit()?;
+    super::schema::version::add_column(conn, "tasks", "backup_url TEXT")?;
+    conn.execute_batch(NORMALIZE_BACKUP_ATTEMPTS_SQL)?;
     Ok(())
 }
 
@@ -155,15 +150,26 @@ mod tests {
     fn backup_admission_searches_task_kind_index() {
         let store = Store::open_memory().unwrap();
         let conn = store.db();
-        let mut stmt = conn.prepare(&format!(
-            "EXPLAIN QUERY PLAN {NORMALIZE_BACKUP_ATTEMPTS_SQL}"
-        )).unwrap();
-        let plan: Vec<String> = stmt.query_map([], |row| row.get(3))
-            .unwrap().collect::<rusqlite::Result<_>>().unwrap();
-        assert!(plan.iter().any(|step| step.contains(
-            "SEARCH events USING INDEX idx_events_task_kind (task_id=? AND event_type=?)"
-        )), "{plan:?}");
-        assert!(!plan.iter().any(|step| step.contains("SCAN events")), "{plan:?}");
+        let mut stmt = conn
+            .prepare(&format!(
+                "EXPLAIN QUERY PLAN {NORMALIZE_BACKUP_ATTEMPTS_SQL}"
+            ))
+            .unwrap();
+        let plan: Vec<String> = stmt
+            .query_map([], |row| row.get(3))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert!(
+            plan.iter().any(|step| step.contains(
+                "SEARCH events USING INDEX idx_events_task_kind (task_id=? AND event_type=?)"
+            )),
+            "{plan:?}"
+        );
+        assert!(
+            !plan.iter().any(|step| step.contains("SCAN events")),
+            "{plan:?}"
+        );
     }
 
     #[test]
@@ -177,7 +183,12 @@ mod tests {
             ("t-uploaded", "milestone", r#"{"backup":"uploaded"}"#, true),
             ("t-null", "milestone", r#"{"backup":null}"#, true),
             ("t-invalid", "milestone", r#"{"backup":invalid}"#, false),
-            ("t-nested", "milestone", r#"{"nested":{"backup":"failed"}}"#, false),
+            (
+                "t-nested",
+                "milestone",
+                r#"{"nested":{"backup":"failed"}}"#,
+                false,
+            ),
             ("t-lookalike", "milestone", r#"{"backup_url":"url"}"#, false),
         ];
         for (id, event_kind, metadata, _) in cases {
@@ -185,14 +196,20 @@ mod tests {
                 "INSERT INTO tasks (id, agent, prompt, created_at) VALUES (?1, 'codex', '', 'now')",
                 [id],
             ).unwrap();
-            store.db().execute(
-                "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
+            store
+                .db()
+                .execute(
+                    "INSERT INTO events (task_id, timestamp, event_type, detail, metadata)
                  VALUES (?1, 'now', ?2, '', ?3)",
-                rusqlite::params![id, event_kind, metadata],
-            ).unwrap();
+                    rusqlite::params![id, event_kind, metadata],
+                )
+                .unwrap();
             assert!(store.backup_url(id).unwrap().is_none());
         }
-        store.db().execute_batch("PRAGMA user_version = 0;").unwrap();
+        store
+            .db()
+            .execute_batch("PRAGMA user_version = 0;")
+            .unwrap();
         drop(store);
         let store = Store::open(&path).unwrap();
         for (id, _, _, claimed) in cases {

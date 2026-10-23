@@ -1,48 +1,53 @@
 // Schema helpers and row mappers for the store.
 // Exports: create_tables, row_to_task, row_to_event.
 // Deps: rusqlite, chrono, crate::types.
+use super::kg_schema::CREATE_KG_SQL;
 pub(super) use super::schema_rows::{row_to_event, row_to_memory};
-use super::{Store, kg_schema::CREATE_KG_SQL};
+use rusqlite::Connection;
+pub(super) mod version;
+#[cfg(test)]
+mod version_tests;
 use crate::types::*;
 use anyhow::Result;
 use chrono::{DateTime, Local};
 use rusqlite::Row;
+pub(super) use version::ensure_current;
 mod sql;
 use sql::*;
 
-pub(super) fn create_tables(store: &Store) -> Result<()> {
-    store.db().execute_batch(CREATE_TABLES_SQL)?;
-    store.db().execute_batch(CREATE_KG_SQL)?;
+pub(super) fn create_tables(conn: &Connection) -> Result<()> {
+    conn.execute_batch(CREATE_TABLES_SQL)?;
+    conn.execute_batch(CREATE_KG_SQL)?;
     Ok(())
 }
 
 /// Idempotent schema migrations for v0.2 columns
-pub(super) fn migrate(store: &Store) -> Result<()> {
-    let conn = store.db();
-    migrate_initial_task_columns(&conn);
-    migrate_memory_columns(&conn);
-    migrate_delivery_columns(&conn);
-    migrate_finding_columns(&conn);
+pub(super) fn migrate(conn: &Connection) -> Result<()> {
+    migrate_initial_task_columns(conn)?;
+    migrate_memory_columns(conn)?;
+    migrate_delivery_columns(conn)?;
+    migrate_finding_columns(conn)?;
     // Performance indexes for hot query paths
-    let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);");
-    let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);");
-    let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_workgroup ON tasks(workgroup_id);");
-    let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_events_task_id ON events(task_id);");
+    conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);")?;
+    conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);")?;
+    conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_tasks_workgroup ON tasks(workgroup_id);")?;
+    conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_events_task_id ON events(task_id);")?;
     conn.execute_batch(
         "CREATE INDEX IF NOT EXISTS idx_events_task_timestamp_id ON events(task_id, timestamp DESC, \
             id DESC);",
     )?;
-    let _ = conn.execute_batch(
+    conn.execute_batch(
         "CREATE INDEX IF NOT EXISTS idx_events_task_kind ON events(task_id, \
             event_type);",
-    );
-    let _ = conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_events_task_id_id ON events(task_id, id);");
-    super::migrations::migrate_task_messages(&conn)?;
-    super::migrations::migrate_declared_task_profile(&conn)?;
-    super::migrations::migrate_observed_model(&conn)?;
-    super::migrations::migrate_project_id(&conn)?;
-    super::migrations::migrate_effective_dir(&conn)?;
-    super::migrations::migrate_backup_url(&conn)?;
+    )?;
+    conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_events_task_id_id ON events(task_id, id);")?;
+    super::migrations::migrate_task_messages(conn)?;
+    super::migrations::migrate_declared_task_profile(conn)?;
+    super::migrations::migrate_observed_model(conn)?;
+    super::migrations::migrate_project_id(conn)?;
+    super::migrations::migrate_effective_dir(conn)?;
+    version::add_column(conn, "tasks", "backup_url TEXT")?;
+
     Ok(())
 }
 
@@ -106,88 +111,94 @@ pub(super) fn parse_dt(s: &str) -> DateTime<Local> {
         .unwrap_or_else(|_| Local::now())
 }
 
-fn migrate_initial_task_columns(conn: &rusqlite::Connection) {
-    // Add columns if missing (ALTER TABLE ADD COLUMN is idempotent when wrapped in try)
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN model TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN cost_usd REAL;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN started_at TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN exit_code INTEGER;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN parent_task_id TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN workgroup_id TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN caller_kind TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN caller_session_id TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN agent_session_id TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN repo_path TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN resolved_prompt TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN start_sha TEXT;");
+fn migrate_initial_task_columns(conn: &rusqlite::Connection) -> Result<()> {
+    // Check column presence so unexpected ALTER failures propagate.
+    version::add_column(conn, "tasks", "model TEXT")?;
+    version::add_column(conn, "tasks", "cost_usd REAL")?;
+    version::add_column(conn, "tasks", "started_at TEXT")?;
+    version::add_column(conn, "tasks", "exit_code INTEGER")?;
+    version::add_column(conn, "tasks", "parent_task_id TEXT")?;
+    version::add_column(conn, "tasks", "workgroup_id TEXT")?;
+    version::add_column(conn, "tasks", "caller_kind TEXT")?;
+    version::add_column(conn, "tasks", "caller_session_id TEXT")?;
+    version::add_column(conn, "tasks", "agent_session_id TEXT")?;
+    version::add_column(conn, "tasks", "repo_path TEXT")?;
+    version::add_column(conn, "tasks", "resolved_prompt TEXT")?;
+    version::add_column(conn, "tasks", "start_sha TEXT")?;
+    Ok(())
 }
 
-fn migrate_memory_columns(conn: &rusqlite::Connection) {
-    let _ = conn.execute_batch(CREATE_WORKGROUPS_SQL);
-    let _ = conn.execute_batch(CREATE_MEMORIES_SQL);
-    let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN supersedes TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN version INTEGER NOT NULL DEFAULT 1;");
-    let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN inject_count INTEGER NOT NULL DEFAULT 0;");
-    let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN last_injected_at TEXT;");
-    let _ = conn.execute_batch(
-        "ALTER TABLE memories ADD COLUMN success_count INTEGER NOT NULL \
-            DEFAULT 0;",
-    );
-    let _ = conn.execute_batch("ALTER TABLE memories ADD COLUMN tier TEXT NOT NULL DEFAULT 'on_demand';");
-    let _ = conn.execute_batch("ALTER TABLE events ADD COLUMN metadata TEXT;");
+fn migrate_memory_columns(conn: &rusqlite::Connection) -> Result<()> {
+    conn.execute_batch(CREATE_WORKGROUPS_SQL)?;
+    conn.execute_batch(CREATE_MEMORIES_SQL)?;
+    version::add_column(conn, "memories", "supersedes TEXT")?;
+    version::add_column(conn, "memories", "version INTEGER NOT NULL DEFAULT 1")?;
+    version::add_column(conn, "memories", "inject_count INTEGER NOT NULL DEFAULT 0")?;
+    version::add_column(conn, "memories", "last_injected_at TEXT")?;
+    version::add_column(conn, "memories", "success_count INTEGER NOT NULL DEFAULT 0")?;
+    version::add_column(conn, "memories", "tier TEXT NOT NULL DEFAULT 'on_demand'")?;
+    version::add_column(conn, "events", "metadata TEXT")?;
+    Ok(())
 }
 
-fn migrate_delivery_columns(conn: &rusqlite::Connection) {
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN prompt_tokens INTEGER;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN verify TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN budget INTEGER NOT NULL DEFAULT 0;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN custom_agent_name TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN completion_summary TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN peer_review TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN category TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN pending_reason TEXT;");
-    let _ = conn.execute_batch(
-        "ALTER TABLE tasks ADD COLUMN verify_status TEXT NOT NULL DEFAULT \
-            'skipped';",
-    );
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN audit_verdict TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN audit_report_path TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN delivery_assessment TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN dispatch_args TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN final_head_sha TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN final_branch TEXT;");
-    let _ = conn.execute_batch(
+fn migrate_delivery_columns(conn: &rusqlite::Connection) -> Result<()> {
+    version::add_column(conn, "tasks", "prompt_tokens INTEGER")?;
+    version::add_column(conn, "tasks", "verify TEXT")?;
+    version::add_column(conn, "tasks", "read_only INTEGER NOT NULL DEFAULT 0")?;
+    version::add_column(conn, "tasks", "budget INTEGER NOT NULL DEFAULT 0")?;
+    version::add_column(conn, "tasks", "custom_agent_name TEXT")?;
+    version::add_column(conn, "tasks", "completion_summary TEXT")?;
+    version::add_column(conn, "tasks", "peer_review TEXT")?;
+    version::add_column(conn, "tasks", "category TEXT")?;
+    version::add_column(conn, "tasks", "pending_reason TEXT")?;
+    version::add_column(
+        conn,
+        "tasks",
+        "verify_status TEXT NOT NULL DEFAULT 'skipped'",
+    )?;
+    version::add_column(conn, "tasks", "audit_verdict TEXT")?;
+    version::add_column(conn, "tasks", "audit_report_path TEXT")?;
+    version::add_column(conn, "tasks", "delivery_assessment TEXT")?;
+    version::add_column(conn, "tasks", "dispatch_args TEXT")?;
+    version::add_column(conn, "tasks", "final_head_sha TEXT")?;
+    version::add_column(conn, "tasks", "final_branch TEXT")?;
+    conn.execute_batch(
         "UPDATE tasks
          SET delivery_assessment = verify_status
          WHERE verify_status IN ('empty_diff', 'hollow_output')
            AND delivery_assessment IS NULL;",
-    );
-    let _ = conn.execute_batch(
+    )?;
+    conn.execute_batch(
         "UPDATE tasks
          SET verify_status = 'skipped'
          WHERE verify_status IN ('empty_diff', 'hollow_output');",
-    );
+    )?;
+    Ok(())
 }
 
-fn migrate_finding_columns(conn: &rusqlite::Connection) {
-    let _ = conn.execute_batch("ALTER TABLE workgroups ADD COLUMN created_by TEXT;");
-    let _ = conn.execute_batch(CREATE_FINDINGS_SQL);
-    let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN severity TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN title TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN file TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN lines TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN category TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN confidence TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN verdict TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN score TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN note TEXT;");
-    let _ = conn.execute_batch("ALTER TABLE findings ADD COLUMN updated_at TEXT;");
-    let _ = conn.execute_batch(CREATE_KG_SQL);
-    let _ = conn.execute_batch("ALTER TABLE tasks ADD COLUMN principal_merge_override TEXT;");
+fn migrate_finding_columns(conn: &rusqlite::Connection) -> Result<()> {
+    version::add_column(conn, "workgroups", "created_by TEXT")?;
+    conn.execute_batch(CREATE_FINDINGS_SQL)?;
+    version::add_column(conn, "findings", "severity TEXT")?;
+    version::add_column(conn, "findings", "title TEXT")?;
+    version::add_column(conn, "findings", "file TEXT")?;
+    version::add_column(conn, "findings", "lines TEXT")?;
+    version::add_column(conn, "findings", "category TEXT")?;
+    version::add_column(conn, "findings", "confidence TEXT")?;
+    version::add_column(conn, "findings", "verdict TEXT")?;
+    version::add_column(conn, "findings", "score TEXT")?;
+    version::add_column(conn, "findings", "note TEXT")?;
+    version::add_column(conn, "findings", "updated_at TEXT")?;
+    conn.execute_batch(CREATE_KG_SQL)?;
+    version::add_column(conn, "tasks", "principal_merge_override TEXT")?;
+    Ok(())
 }
 
-fn custom_agent_name(row: &Row, parsed_agent: Option<AgentKind>, stored_agent: &str) -> Option<String> {
+fn custom_agent_name(
+    row: &Row,
+    parsed_agent: Option<AgentKind>,
+    stored_agent: &str,
+) -> Option<String> {
     // An agent name this binary cannot parse is not a custom agent — it is an
     // agent we do not recognise, and the difference is what the reader needs.
     // A task written by a newer aid (t-8e9194dc, agent `commandcode`) used to

@@ -14,11 +14,14 @@ For successful tasks (`done` or `merged`), `metadata.full` and
 command exit code. For `failed`, `stopped`, or `skipped` tasks, provider stdout
 remains; only successful command output in `full` is eligible. Accounting,
 routing, quota, completion, delivery, custody, and other structured evidence
-remain unchanged. Task logs, transcripts, and output files remain available.
+remain unchanged. Readers retain available full/detail text and identify which
+payload was trimmed. Task logs, transcripts, and output files remain available.
 
 `aid clean --older-than 30` uses 30 days since task completion (default: 7).
 Trimming commits bounded batches and stops after about 10 seconds; repeat the
-same command to continue. `--dry-run` reports eligible rows and payload bytes
+same command to continue. Connection admission is nonblocking; parsing releases
+the Store mutex. Large rows are read in chunks and processing checks the deadline;
+an unfinished row is retried next time rather than skipped. `--dry-run` reports eligible rows and payload bytes
 without writing. If its scan reaches the budget, the estimate is incomplete.
 After task settlement and backup, automatic trimming runs at most daily with a
 2-second budget and the default 7-day window. Cadence and cursors share the

@@ -1,32 +1,37 @@
 // Replace one top-level payload string without reserializing preserved JSON values.
 // Input is validated by retention; duplicate payload keys are conservatively skipped.
-pub(super) fn replace_string(raw: &str, key: &str, marker: &str) -> Option<String> {
+pub(super) fn replace_string(
+    raw: &str,
+    key: &str,
+    marker: &str,
+    deadline: &super::Deadline,
+) -> Option<String> {
     let bytes = raw.as_bytes();
     let mut depth = 0;
     let mut index = 0;
     let mut found = None;
     while index < bytes.len() {
+        if index % 4096 == 0 && deadline.expired() {
+            return None;
+        }
         match bytes[index] {
             b'{' | b'[' => depth += 1,
             b'}' | b']' => depth -= 1,
             b'"' => {
-                let end = string_end(bytes, index)?;
-                let colon = skip_space(bytes, end);
+                let end = string_end(bytes, index, deadline)?;
+                let colon = skip_space(bytes, end, deadline)?;
                 if depth == 1
                     && bytes.get(colon) == Some(&b':')
-                    && serde_json::from_str::<String>(&raw[index..end])
-                        .ok()?
-                        .as_str()
-                        == key
+                    && deadline.key(&raw[index..end])?.as_str() == key
                 {
                     if found.is_some() {
                         return None;
                     }
-                    let start = skip_space(bytes, colon + 1);
+                    let start = skip_space(bytes, colon + 1, deadline)?;
                     if bytes.get(start) != Some(&b'"') {
                         return None;
                     }
-                    found = Some((start, string_end(bytes, start)?));
+                    found = Some((start, string_end(bytes, start, deadline)?));
                 }
                 index = end;
                 continue;
@@ -36,12 +41,19 @@ pub(super) fn replace_string(raw: &str, key: &str, marker: &str) -> Option<Strin
         index += 1;
     }
     let (start, end) = found?;
-    Some(format!("{}{marker}{}", &raw[..start], &raw[end..]))
+    let mut output = String::new();
+    deadline.copy(&mut output, &raw[..start])?;
+    deadline.copy(&mut output, marker)?;
+    deadline.copy(&mut output, &raw[end..])?;
+    Some(output)
 }
 
-fn string_end(bytes: &[u8], start: usize) -> Option<usize> {
+fn string_end(bytes: &[u8], start: usize, deadline: &super::Deadline) -> Option<usize> {
     let mut index = start + 1;
     while index < bytes.len() {
+        if index % 4096 <= 1 && deadline.expired() {
+            return None;
+        }
         match bytes[index] {
             b'\\' => index += 2,
             b'"' => return Some(index + 1),
@@ -51,16 +63,26 @@ fn string_end(bytes: &[u8], start: usize) -> Option<usize> {
     None
 }
 
-fn skip_space(bytes: &[u8], mut index: usize) -> usize {
+fn skip_space(bytes: &[u8], mut index: usize, deadline: &super::Deadline) -> Option<usize> {
     while bytes.get(index).is_some_and(u8::is_ascii_whitespace) {
+        if index % 4096 == 0 && deadline.expired() {
+            return None;
+        }
         index += 1;
     }
-    index
+    Some(index)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    fn replace_string(raw: &str, key: &str, marker: &str) -> Option<String> {
+        super::replace_string(
+            raw,
+            key,
+            marker,
+            &super::super::Deadline::new(std::time::Duration::from_secs(10)),
+        )
+    }
 
     #[test]
     fn preserves_all_other_values_byte_for_byte() {

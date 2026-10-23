@@ -75,3 +75,41 @@ fn clean_then_show_export_and_repeat_explain_trimmed_output() {
     assert!(repeat.status.success(), "{repeat:?}");
     assert!(String::from_utf8_lossy(&repeat.stdout).contains("Trimmed 0 event rows"));
 }
+
+#[test]
+fn partial_trimming_preserves_text_in_full_show_and_exports() {
+    let home = seeded_home();
+    let conn = Connection::open(home.path().join("aid.db")).unwrap();
+    let marker = json!({"trimmed": true, "bytes": 5000});
+    for (metadata, retained, note) in [
+        (
+            json!({"full":"retained full text","provider_stdout":marker}),
+            "retained full text",
+            "provider_stdout output trimmed",
+        ),
+        (
+            json!({"provider_stdout":marker}),
+            "build output",
+            "provider_stdout output trimmed",
+        ),
+        (
+            json!({"full":marker,"provider_stdout":"retained raw envelope"}),
+            "build output",
+            "full output trimmed",
+        ),
+    ] {
+        conn.execute("UPDATE events SET metadata=?1", [metadata.to_string()])
+            .unwrap();
+        for args in [
+            vec!["show", "t-retention", "--events", "--full"],
+            vec!["export", "t-retention"],
+            vec!["export", "t-retention", "--format", "json"],
+        ] {
+            let output = aid_cmd_in(home.path()).args(args).output().unwrap();
+            assert!(output.status.success(), "{output:?}");
+            let text = String::from_utf8_lossy(&output.stdout);
+            assert!(text.contains(retained), "{text}");
+            assert!(text.contains(note), "{text}");
+        }
+    }
+}

@@ -144,7 +144,9 @@ fn success_payloads_remain_when_task_becomes_failed_before_commit() {
     let store = Store::open_memory().unwrap();
     seed(&store, "done");
     let row = candidates(&store.db(), 0, "2021-01-01").unwrap().remove(0);
-    let (updated, bytes) = replacement(&row).unwrap().unwrap();
+    let (updated, bytes) = replacement(&row, &Deadline::new(Duration::from_secs(10)))
+        .unwrap()
+        .unwrap();
     store
         .db()
         .execute("UPDATE tasks SET status='failed' WHERE id='old'", [])

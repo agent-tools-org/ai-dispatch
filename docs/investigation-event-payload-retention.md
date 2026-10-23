@@ -115,10 +115,11 @@ top-level occurrences of a payload key prevent trimming that key.
 - Scan by increasing event row ID, at most 200 rows per read. Prepare replacements
   outside write transactions. Commit at most 200 changed rows or about 512 KiB of
   original metadata per batch; one larger row is allowed. Eligibility and original
-  metadata and task status are rechecked at the keyed UPDATE. Writer admission times out after 25 ms.
+  metadata and task status are rechecked at the keyed UPDATE. Writer admission does not wait.
 - Explicit clean has a 10-second budget. Daily automatic retention uses 7 days and
-  about 2 seconds, after settlement and backup in post_run_lifecycle. Long individual
-  row reads/parses/commits can overshoot the cooperative deadline.
+  about 2 seconds, after settlement and backup in post_run_lifecycle. Its deadline
+  starts before connection admission; contended Store access yields immediately.
+  SQL instructions, chunked reads, JSON parsing and string copying check that deadline.
 - The existing update-check.json holds separate manual/daily cursors and daily time.
   A nonblocking flock serializes maintenance and version-cache updates. Atomic rename
   protects the state file; version refresh preserves maintenance fields. A completed
@@ -235,3 +236,56 @@ coverage using failed-task fixtures. Shared event helpers also test provider-onl
 No local compilation or sub-task dispatch occurred. Final-commit remote verification
 and cross-review remain pending. The auto-trim hook, cadence, budgets, schema, and
 VACUUM protocol are unchanged.
+
+## Audit fixes: mutex scope and retained output
+
+KB consulted: `~/Develop/knowledge/eng-knowledge-base/kb retention mutex deadline oversized payload`.
+The search returned cursor-retention and deadline-measurement guidance; no direct fix matched.
+The independent audit reported two P2 findings against af150463. Both premises were
+CONFIRMED in source: the Store guard spanned trim(), and full_detail returned only a
+marker if either payload key was trimmed.
+
+Changes:
+
+- trim_event_payloads starts a shared deadline before any lock acquisition. with_conn
+  uses try_lock: contention returns an incomplete report immediately. Each candidate
+  read or write transaction obtains and releases its own Store guard. JSON parsing,
+  replacement selection and copying run after release.
+- Candidate reads use octet_length to inspect large values without materializing them.
+  Metadata larger than 64 KiB is loaded through read-only incremental SQLite blob
+  reads, closing the handle and dropping the guard after each chunk. Interrupted
+  rows do not advance the cursor. Parsing, UTF-8 validation and copying check the
+  deadline in bounded chunks; SQLite's progress handler interrupts long statements.
+  Temporary busy timeout is zero and both it and the progress callback are restored
+  before the connection is released. No dependency feature or schema changes.
+- Write counts are published only after commit, so interrupted/rolled-back batches
+  cannot inflate reported rows or bytes. VACUUM code moved unchanged to a sibling
+  module to keep the retention file under 300 lines.
+- full_detail now returns retained full text, or the original detail when full is
+  absent/trimmed, plus a key-specific marker. provider_stdout trimming never replaces
+  retained full/detail content. Markers distinguish full, provider_stdout, or both.
+  Show, timeline export and backup export share this renderer. Compact show uses
+  the same key-specific notice. The guide describes these behaviors.
+
+Regression coverage adds held-mutex admission, event writes during JSON parsing,
+oversized-row interruption/resumption, SQL deadline interruption and timeout
+restoration, deadline checks during scans/copies/UTF-8 validation, partial-marker
+rendering combinations, and real CLI full-show/Markdown/JSON export preservation.
+
+The wall-clock deadline includes connection admission and computation; there is no
+unbounded mutex or SQLite busy wait. Deadline checks are cooperative at bounded
+chunks/SQLite instruction intervals. OS scheduling and an individual filesystem
+operation cannot be preempted by an application deadline.
+
+The earlier copy measurement and key inventory remain valid: payload eligibility
+is unchanged. No new copy measurement was required for these two fixes. The same
+post-settlement daily hook remains; no task-directory file was touched. No sub-task
+was dispatched. Remote verification is expected to run after this commit.
+
+Audit-fix verification (no remote tested HEAD): `aid build check -p ai-dispatch`
+and `aid test --bin aid retention` both stopped before compilation/execution:
+`rbox: wake grok-bot-chief failed: network error; continuing`, then
+`rbox: dns ... tailscale status returned no JSON (Expecting value at byte 0)`.
+No tests ran. `python3 /private/tmp/check-event-retention.py` passed for 12 changed
+Rust files (0 static failures); `python3 /private/tmp/check-retention-guide.py`
+passed. `git diff --check` passed. Staged credential scanning runs before commit.

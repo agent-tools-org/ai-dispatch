@@ -1,9 +1,19 @@
 // Bounded event-payload retention and explicit database compaction.
 // Extends Store without changing schemas; preserves provider and lifecycle evidence.
 use super::super::Store;
-use anyhow::{Result, bail};
+use anyhow::Result;
 use rusqlite::{Connection, params};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+#[path = "retention_budget.rs"]
+mod budget;
+#[path = "retention_io.rs"]
+mod io;
+#[path = "retention_vacuum.rs"]
+mod vacuum;
+use budget::{Deadline, with_conn};
+#[cfg(test)]
+use vacuum::require_space;
 
 #[path = "retention_payload.rs"]
 mod payload;
@@ -38,6 +48,7 @@ struct Candidate {
     metadata: Option<String>,
     eligible: bool,
     status: String,
+    metadata_bytes: usize,
 }
 
 impl Store {
@@ -48,70 +59,21 @@ impl Store {
         dry_run: bool,
         budget: Duration,
     ) -> Result<TrimReport> {
-        let conn = self.db();
-        let timeout: u64 = conn.query_row("PRAGMA busy_timeout", [], |row| row.get(0))?;
-        conn.busy_timeout(Duration::from_millis(25))?;
-        let result = trim(&conn, cutoff, cursor, dry_run, budget);
-        let restored = conn.busy_timeout(Duration::from_millis(timeout));
-        restored?;
-        result
+        trim(self, cutoff, cursor, dry_run, &Deadline::new(budget))
     }
-
-    pub(crate) fn vacuum_events(&self) -> Result<(u64, u64)> {
-        let conn = self.db();
-        let path: String = conn.query_row("PRAGMA database_list", [], |row| row.get(2))?;
-        let before = std::fs::metadata(&path)?.len();
-        let available = crate::support::system_resources::available_disk_mb(&path)
-            .ok_or_else(|| anyhow::anyhow!("Cannot determine free disk space for VACUUM"))?;
-        require_space(before, available)?;
-        conn.execute_batch("PRAGMA locking_mode=EXCLUSIVE;")?;
-        let result = conn
-            .execute_batch("BEGIN EXCLUSIVE;")
-            .map_err(anyhow::Error::from)
-            .and_then(|()| vacuum_idle(&conn));
-        if !conn.is_autocommit() {
-            conn.execute_batch("ROLLBACK;")?;
-        }
-        conn.execute_batch(
-            "PRAGMA locking_mode=NORMAL; BEGIN; SELECT count(*) FROM sqlite_schema; COMMIT;",
-        )?;
-        result?;
-        Ok((before, std::fs::metadata(path)?.len()))
-    }
-}
-
-fn require_space(size: u64, available_mb: u64) -> Result<()> {
-    let required = size.saturating_mul(2).div_ceil(1024 * 1024);
-    if available_mb < required {
-        bail!(
-            "VACUUM needs temporary free disk space up to twice the database size: \
-               {required} MB required, {available_mb} MB available"
-        );
-    }
-    Ok(())
-}
-
-fn vacuum_idle(conn: &Connection) -> Result<()> {
-    let active: i64 = conn.query_row(
-        &format!("SELECT count(*) FROM tasks WHERE status NOT IN ({TERMINAL})"),
-        [],
-        |row| row.get(0),
-    )?;
-    if active > 0 {
-        bail!("VACUUM refused: {active} tasks are running, waiting, or otherwise active");
-    }
-    conn.execute_batch("COMMIT; VACUUM; PRAGMA wal_checkpoint(TRUNCATE);")?;
-    Ok(())
 }
 
 fn candidates(conn: &Connection, cursor: i64, cutoff: &str) -> Result<Vec<Candidate>> {
     let sql = format!(
         "SELECT e.id, e.event_type, CASE WHEN t.status IN ({TERMINAL})
-         AND julianday(t.completed_at) < julianday(?2) THEN e.metadata ELSE NULL END,
+         AND julianday(t.completed_at) < julianday(?2)
+         AND octet_length(e.metadata) <= {chunk} THEN e.metadata ELSE NULL END,
          coalesce(t.status IN ({TERMINAL}) AND t.completed_at IS NOT NULL
-         AND julianday(t.completed_at) < julianday(?2), 0), t.status
+         AND julianday(t.completed_at) < julianday(?2), 0), t.status,
+         coalesce(octet_length(e.metadata), 0)
          FROM events e JOIN tasks t ON t.id=e.task_id
-         WHERE e.id > ?1 ORDER BY e.id LIMIT ?3"
+         WHERE e.id > ?1 ORDER BY e.id LIMIT ?3",
+        chunk = io::CHUNK_BYTES
     );
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(params![cursor, cutoff, BATCH_ROWS as i64], |row| {
@@ -121,22 +83,26 @@ fn candidates(conn: &Connection, cursor: i64, cutoff: &str) -> Result<Vec<Candid
             metadata: row.get(2)?,
             eligible: row.get(3)?,
             status: row.get(4)?,
+            metadata_bytes: row.get(5)?,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
-fn replacement(row: &Candidate) -> Result<Option<(String, u64)>> {
+fn replacement(row: &Candidate, deadline: &Deadline) -> Result<Option<(String, u64)>> {
     if !row.eligible {
         return Ok(None);
     }
     let Some(raw) = &row.metadata else {
         return Ok(None);
     };
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) else {
+    let Some(value) = deadline.parse(raw) else {
         return Ok(None);
     };
-    let mut updated = raw.clone();
+    let mut updated = String::new();
+    if deadline.copy(&mut updated, raw).is_none() {
+        return Ok(None);
+    }
     let mut bytes = 0;
     for key in keys_to_trim(row, &value) {
         let Some(output) = value.get(*key).and_then(|v| v.as_str()) else {
@@ -146,7 +112,9 @@ fn replacement(row: &Candidate) -> Result<Option<(String, u64)>> {
             continue;
         }
         let marker = serde_json::json!({"trimmed": true, "bytes": output.len()});
-        if let Some(replaced) = payload::replace_string(&updated, key, &marker.to_string()) {
+        if let Some(replaced) =
+            payload::replace_string(&updated, key, &marker.to_string(), deadline)
+        {
             updated = replaced;
             bytes += output.len() as u64;
         }
@@ -171,48 +139,69 @@ fn keys_to_trim(row: &Candidate, value: &serde_json::Value) -> &'static [&'stati
 }
 
 fn trim(
-    conn: &Connection,
+    store: &Store,
     cutoff: &str,
     cursor: i64,
     dry_run: bool,
-    budget: Duration,
+    deadline: &Deadline,
 ) -> Result<TrimReport> {
-    let started = Instant::now();
     let mut report = TrimReport {
         cursor,
         ..Default::default()
     };
-    while started.elapsed() < budget {
-        let rows = candidates(conn, report.cursor, cutoff)?;
+    while !deadline.expired() {
+        let Some(rows) = with_conn(store, deadline, |conn| {
+            candidates(conn, report.cursor, cutoff)
+        })?
+        else {
+            break;
+        };
         if rows.is_empty() {
             report.complete = true;
             report.cursor = 0;
             break;
         }
-        let mut updates = Vec::new();
-        let mut batch_bytes = 0;
-        for row in rows {
-            if started.elapsed() >= budget {
-                break;
-            }
-            if let Some((marker, bytes)) = replacement(&row)? {
-                batch_bytes += row.metadata.as_ref().map_or(0, String::len);
-                updates.push((
-                    row.id,
-                    row.metadata.clone(),
-                    marker,
-                    bytes,
-                    row.status.clone(),
-                ));
-            }
-            report.cursor = row.id;
-            if batch_bytes >= BATCH_BYTES {
-                break;
-            }
+        let (updates, cursor) = prepare(store, rows, report.cursor, deadline)?;
+        if deadline.expired() {
+            break;
         }
-        apply_batch(conn, cutoff, &updates, dry_run, &mut report)?;
+        let applied = with_conn(store, deadline, |conn| {
+            apply_batch(conn, cutoff, &updates, dry_run, &mut report)
+        })?;
+        if applied.is_none() {
+            break;
+        }
+        report.cursor = cursor;
     }
     Ok(report)
+}
+
+fn prepare(
+    store: &Store,
+    rows: Vec<Candidate>,
+    mut cursor: i64,
+    deadline: &Deadline,
+) -> Result<(Vec<Update>, i64)> {
+    let mut updates = Vec::new();
+    let mut batch_bytes = 0;
+    for mut row in rows {
+        if !io::load(store, &mut row, deadline)? {
+            break;
+        }
+        let replacement = replacement(&row, deadline)?;
+        if deadline.expired() {
+            break;
+        }
+        if let Some((metadata, bytes)) = replacement {
+            batch_bytes += row.metadata_bytes;
+            updates.push((row.id, row.metadata.take(), metadata, bytes, row.status));
+        }
+        cursor = row.id;
+        if batch_bytes >= BATCH_BYTES {
+            break;
+        }
+    }
+    Ok((updates, cursor))
 }
 
 type Update = (i64, Option<String>, String, u64, String);
@@ -228,6 +217,8 @@ fn apply_batch(
         return Ok(());
     }
     let tx = conn.unchecked_transaction()?;
+    let mut changed_rows = 0;
+    let mut changed_bytes = 0;
     for (id, original, marker, bytes, status) in updates {
         let changed = if dry_run {
             1
@@ -243,10 +234,12 @@ fn apply_batch(
                 params![marker, id, original, cutoff, status],
             )?
         };
-        report.rows += changed as u64;
-        report.bytes += bytes * changed as u64;
+        changed_rows += changed as u64;
+        changed_bytes += bytes * changed as u64;
     }
     tx.commit()?;
+    report.rows += changed_rows;
+    report.bytes += changed_bytes;
     report.batches += 1;
     #[cfg(test)]
     {
@@ -262,3 +255,7 @@ mod tests;
 #[cfg(test)]
 #[path = "retention_status_tests.rs"]
 mod status_tests;
+
+#[cfg(test)]
+#[path = "retention_budget_tests.rs"]
+mod budget_tests;

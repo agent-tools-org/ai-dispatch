@@ -2,16 +2,30 @@
 // Real piped/PTY runners use socket barriers across separate worker and agent groups.
 
 use super::*;
-use crate::runtime::process::guard::ProcessGuard;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::fd::AsRawFd;
 use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::process::CommandExt;
 use std::path::Path;
 
 const HELPER: &str = "store::status_mutations::tests::worker_death::worker_helper";
 const AGENT: &str = "store::status_mutations::tests::worker_death::agent_helper";
 
 struct AgentCleanup(u32);
+
+struct Worker {
+    child: Child,
+    stopped: bool,
+}
+
+impl Drop for Worker {
+    fn drop(&mut self) {
+        if !self.stopped {
+            background::sigkill_process(self.child.id());
+            let _ = self.child.wait();
+        }
+    }
+}
 
 impl Drop for AgentCleanup {
     fn drop(&mut self) {
@@ -40,15 +54,19 @@ fn line(stream: &mut UnixStream) -> String {
     line.trim().to_string()
 }
 
-fn worker(home: &Path, mode: &str) -> ProcessGuard {
+fn worker(home: &Path, mode: &str) -> Worker {
     let mut cmd = Command::new("sh");
     cmd.args(["-c", "shift; \"$@\" & wait \"$!\"", "__run-task", "t-launch"])
         .arg(std::env::current_exe().expect("test binary"))
         .args(["--exact", HELPER, "--ignored", "--nocapture"])
         .env("AID_LAUNCH_TEST_HOME", home)
         .env("AID_LAUNCH_TEST_MODE", mode)
-        .stdout(Stdio::null());
-    ProcessGuard::spawn(&mut cmd).expect("worker")
+        .stdout(Stdio::null())
+        .process_group(0);
+    Worker {
+        child: cmd.spawn().expect("worker"),
+        stopped: false,
+    }
 }
 
 pub(super) fn assert_stop_kills_worker_and_agent() {
@@ -64,9 +82,13 @@ pub(super) fn assert_stop_kills_worker_and_agent() {
         let mut committed = accept(&workers);
         assert_eq!(line(&mut committed), "committed");
         let spec = background::load_spec_if_exists("t-launch").unwrap().unwrap();
-        assert_eq!(spec.worker_pid, Some(worker.id()));
+        assert_eq!(spec.worker_pid, Some(worker.child.id()));
         crate::cmd::stop::kill(&stop, "t-launch").expect("stop kills worker first");
-        assert!(!worker.wait().expect("reap worker").success());
+        worker.stopped = true;
+        assert!(
+            !crate::support::test_subprocess::is_live(worker.child.id() as i32),
+            "worker survived stop"
+        );
         assert_eq!(committed.read(&mut [0]).expect("worker barrier closed"), 0);
         assert_eq!(agent.read(&mut [0]).expect("agent barrier closed"), 0);
         assert_eq!(

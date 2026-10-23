@@ -122,10 +122,7 @@ fn board_limit_selects_row_ids_before_task_payloads() {
     assert!(plan.contains("idx_tasks_created_at"), "{plan}");
 }
 
-#[test]
-fn report_sql_preserves_agent_aliases_custom_names_and_exact_time_boundaries() {
-    let store = Store::open_memory().unwrap();
-    seed(&store);
+fn seed_report_boundaries(store: &Store, start: DateTime<Local>, end: DateTime<Local>) {
     for (id, agent, custom) in [
         ("t-0", "antigravity", None),
         ("t-1", "new-agent", None),
@@ -140,8 +137,6 @@ fn report_sql_preserves_agent_aliases_custom_names_and_exact_time_boundaries() {
             )
             .unwrap();
     }
-    let end = Local::now();
-    let start = end - chrono::Duration::days(7);
     for (id, date) in [
         ("t-4", start),
         ("t-5", end),
@@ -155,6 +150,15 @@ fn report_sql_preserves_agent_aliases_custom_names_and_exact_time_boundaries() {
             )
             .unwrap();
     }
+}
+
+#[test]
+fn report_sql_preserves_agent_aliases_custom_names_and_exact_time_boundaries() {
+    let store = Store::open_memory().unwrap();
+    seed(&store);
+    let end = Local::now();
+    let start = end - chrono::Duration::days(7);
+    seed_report_boundaries(&store, start, end);
     for agent in [
         None,
         Some("AGY"),

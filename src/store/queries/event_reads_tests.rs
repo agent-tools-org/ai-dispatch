@@ -87,10 +87,7 @@ fn completion_lookup_searches_the_existing_task_kind_index() {
     assert!(plan.contains("event_type=?"), "{plan}");
 }
 
-#[test]
-fn wait_and_infrastructure_reads_match_reverse_history_with_malformed_metadata() {
-    let store = Store::open_memory().unwrap();
-    seed(&store);
+fn seed_reports(store: &Store) {
     for (detail, metadata) in [
         (
             "infra-old",
@@ -111,8 +108,15 @@ fn wait_and_infrastructure_reads_match_reverse_history_with_malformed_metadata()
         ),
         ("malformed", "{broken"),
     ] {
-        insert(&store, "error", detail, Some(metadata));
+        insert(store, "error", detail, Some(metadata));
     }
+}
+
+#[test]
+fn wait_and_infrastructure_reads_match_reverse_history_with_malformed_metadata() {
+    let store = Store::open_memory().unwrap();
+    seed(&store);
+    seed_reports(&store);
     let events = store.get_events("t-read").unwrap();
     let prompt = events
         .iter()
@@ -174,25 +178,7 @@ fn liveness_summary_matches_full_history_and_ignores_only_bookkeeping() {
     let events = store.get_events("t-read").unwrap();
     let progress = events
         .iter()
-        .filter(|event| {
-            if !event.event_kind.is_liveness() || event.event_kind == EventKind::Setup {
-                return false;
-            }
-            if event.event_kind == EventKind::Reasoning
-                && event.detail.trim() == crate::task::unstick::default_nudge_message()
-            {
-                return false;
-            }
-            let Some(m) = &event.metadata else {
-                return true;
-            };
-            !["idle_warn", "auto_escalated", "acked_reply", "steered"]
-                .iter()
-                .any(|key| m.get(key).and_then(Value::as_bool) == Some(true))
-                && m.get("source").and_then(Value::as_str) != Some("unstick-auto")
-                && m.get("input_delivery").is_none()
-                && m.get("message_id").is_none()
-        })
+        .filter(|event| is_progress(event))
         .collect::<Vec<_>>();
     let (count, last) = store.liveness_summary("t-read").unwrap();
     assert_eq!(count as usize, progress.len());
@@ -203,4 +189,24 @@ fn liveness_summary_matches_full_history_and_ignores_only_bookkeeping() {
             .map(|event| (event.timestamp, event.detail.clone()))
     );
     assert_eq!(store.liveness_summary("missing").unwrap(), (0, None));
+}
+
+fn is_progress(event: &crate::types::TaskEvent) -> bool {
+    if !event.event_kind.is_liveness() || event.event_kind == EventKind::Setup {
+        return false;
+    }
+    if event.event_kind == EventKind::Reasoning
+        && event.detail.trim() == crate::task::unstick::default_nudge_message()
+    {
+        return false;
+    }
+    let Some(m) = &event.metadata else {
+        return true;
+    };
+    !["idle_warn", "auto_escalated", "acked_reply", "steered"]
+        .iter()
+        .any(|key| m.get(key).and_then(Value::as_bool) == Some(true))
+        && m.get("source").and_then(Value::as_str) != Some("unstick-auto")
+        && m.get("input_delivery").is_none()
+        && m.get("message_id").is_none()
 }

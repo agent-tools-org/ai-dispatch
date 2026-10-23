@@ -1,3 +1,10 @@
+## v11.6.1 (2026-10-23)
+- `aid stop` signals a background worker only while its pid still runs `__run-task <task_id>`, checked before the first signal and again before SIGKILL escalation, so a pid reused after the worker exited is never signalled
+- `ProcessGuard::wait_with_timeout` joins its timer before reading the outcome, so a timeout is no longer reported as a normal exit, and a failed `wait` no longer sends SIGKILL to the process group
+- Background job files under `~/.aid/jobs` hold runtime state only (15 fields instead of 50); workers read every other setting from the task's saved dispatch arguments and the launch prompt from the task row. Job files written by earlier versions still load, so workers started before an upgrade can be waited on, stopped and reaped
+- Internal code-quality work with no change to commands or flags: no crate-wide `dead_code` allowance, no source file over 300 lines, shared display and Git helpers, long orchestrators split into run-state phases, and tests that call production entry points instead of test-only shims; Git failure messages from the worktree live-state reader are trimmed like the other readers, and worktree GC passes a non-UTF-8 repository path to Git unchanged
+
+
 ## v11.6.0 (2026-10-22)
 - Codex custom provider as a route: a task launched with a user-selected Codex custom provider records it as its own route (`codex-provider:<id>`); quota holds, advice and retry address that route instead of the ChatGPT plan, and a launch, retry or resume is refused when `config.toml` now selects a different route
 - Bare `--verify` uses the project's declared verify command (auto-detection only when none is declared); every verify run persists started and finished events with command, directory, local HEAD, exit code and an output excerpt; NoOp is read only from the agent's final message

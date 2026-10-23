@@ -47,7 +47,6 @@ const UNDOCUMENTED_FLAGS: &[&str] = &[
     "--no-audit",
     "--no-link-deps",
     "--note",
-    "--older-than",
     "--on-done",
     "--package",
     "--parent",

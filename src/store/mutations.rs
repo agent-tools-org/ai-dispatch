@@ -2,6 +2,9 @@
 // Exports: Store mutation methods.
 // Deps: rusqlite, chrono, crate::types.
 
+#[path = "retention.rs"]
+mod retention;
+
 use anyhow::Result;
 use chrono::Local;
 use rusqlite::params;

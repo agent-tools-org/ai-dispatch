@@ -11,6 +11,9 @@ use super::super::schema::row_to_event;
 use super::super::Store;
 use crate::types::TaskEvent;
 
+#[path = "event_reads.rs"]
+mod event_reads;
+
 impl Store {
     pub fn latest_error(&self, task_id: &str) -> Option<String> {
         let conn = self.db();
@@ -268,15 +271,8 @@ impl Store {
     }
 
     /// Task IDs with an `api_route_launch` event naming this route.
+    /// The sole writer is `runtime::background::launch::finalize_command_env`, using Setup events.
     pub fn route_launch_task_ids(&self, route: &str) -> Result<Vec<String>> {
-        let conn = self.db();
-        let mut stmt = conn.prepare(
-            "SELECT DISTINCT task_id FROM events
-             WHERE metadata LIKE '%api_route_launch%'
-               AND json_extract(CASE WHEN json_valid(metadata) THEN metadata END,
-                                '$.api_route_launch') = ?1",
-        )?;
-        let rows = stmt.query_map(params![route], |row| row.get(0))?;
-        rows.map(|row| Ok(row?)).collect()
+        super::super::route_launch::lookup(self, route)
     }
 }

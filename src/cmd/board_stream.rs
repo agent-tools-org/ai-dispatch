@@ -11,7 +11,7 @@ use std::time::Duration;
 use crate::runtime::background;
 use crate::cmd::eta;
 use crate::store::Store;
-use crate::types::{Task, TaskFilter, TaskOutcome, TaskStatus};
+use crate::types::{Task, TaskOutcome, TaskStatus};
 use crate::ui::format::format_duration_ms;
 use crate::ui::format::truncate;
 
@@ -184,10 +184,9 @@ fn list_filtered_tasks(
     store: &Store, running: bool, today: bool, mine: bool, group: Option<&str>,
     all_projects: bool, limit: Option<usize>,
 ) -> Result<FilteredTasks> {
-    let filter = if running { TaskFilter::Running } else if today { TaskFilter::Today } else { TaskFilter::All };
-    let mut tasks = store.list_tasks(filter)?;
-    let _ = crate::cmd::board::board_filter::apply_board_filters(&mut tasks, mine, group, all_projects);
-    let truncation = crate::cmd::board::apply_limit(&mut tasks, limit, running, today, mine, group);
+    let (tasks, _, truncation) = crate::cmd::board::board_filter::load_board_tasks(
+        store, running, today, mine, group, all_projects, limit,
+    )?;
     Ok(FilteredTasks { tasks, truncation })
 }
 

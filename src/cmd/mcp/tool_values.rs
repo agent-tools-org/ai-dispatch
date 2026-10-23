@@ -95,10 +95,6 @@ pub(super) fn mode_name(mode: ShowMode) -> &'static str {
     }
 }
 
-pub(super) fn matches_group(task: &Task, group: Option<&str>) -> bool {
-    group.is_none_or(|group_id| task.workgroup_id.as_deref() == Some(group_id))
-}
-
 pub(super) fn tool_result(payload: Value) -> Value {
     let is_error = payload.get("error").is_some();
     let mut result = json!({ "content": [{ "type": "text", "text": render_payload(payload) }] });

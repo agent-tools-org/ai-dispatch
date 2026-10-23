@@ -18,6 +18,7 @@ mod status;
 mod status_sets;
 mod verify_status;
 mod task;
+mod event_retention;
 mod task_profile;
 mod memory;
 pub(crate) mod outcome;

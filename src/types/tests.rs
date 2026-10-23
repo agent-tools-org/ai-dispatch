@@ -257,3 +257,27 @@ fn task_event_full_detail_prefers_metadata_full() {
     event.metadata = None;
     assert_eq!(event.full_detail(), "truncated...");
 }
+
+#[test]
+fn trimmed_event_readers_explain_missing_output() {
+    let event = TaskEvent {
+        task_id: TaskId("t-trimmed".into()), timestamp: Local::now(),
+        event_kind: EventKind::Build, detail: "build output".into(),
+        metadata: Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})),
+    };
+    assert!(event.trimmed_note().is_some());
+    assert_eq!(event.full_detail(), "build output [full output trimmed]");
+    assert_eq!(event.display_detail(), "build output [full output trimmed]");
+}
+
+#[test]
+fn provider_only_marker_is_visible_to_event_readers() {
+    let event = TaskEvent {
+        task_id: TaskId("t-provider-trimmed".into()), timestamp: Local::now(),
+        event_kind: EventKind::Error, detail: "provider output".into(),
+        metadata: Some(serde_json::json!({"provider_stdout": {"trimmed": true, "bytes": 5000}})),
+    };
+    assert!(event.trimmed_note().is_some());
+    assert_eq!(event.full_detail(), "provider output [provider_stdout output trimmed]");
+    assert!(event.display_detail().contains("output trimmed"));
+}

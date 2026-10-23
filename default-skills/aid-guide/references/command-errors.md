@@ -39,6 +39,14 @@ task logs, backfill historical refusals, capture external shell failures, or
 record every unsuccessful task outcome. It is append-only; no automatic retention
 or rotation is currently applied.
 
+## Known read-command behavior
+
+`aid board` reads task payloads only for rows within its filters and display limit.
+`aid cost` reads task and completion payloads only for the selected report.
+A corrupt stored payload outside those reads no longer makes the command fail.
+Corrupt payloads that the command reads can still produce an error. These commands
+leave stored data unchanged; this behavior does not repair corrupt rows.
+
 ## Correcting an audit dispatch
 
 `audit` is not a task kind. For a bug investigation, use:

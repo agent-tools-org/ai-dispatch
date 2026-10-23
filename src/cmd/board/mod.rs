@@ -40,12 +40,9 @@ pub fn run(
     force: bool,
     json: bool,
 ) -> Result<()> {
-    let filter = board_task_filter(running, today);
-
     background::check_zombie_tasks(store)?;
-    let mut tasks = store.list_tasks(filter)?;
-    let project_filter = board_filter::apply_board_filters(&mut tasks, mine, group, all_projects);
-    let truncation = apply_limit(&mut tasks, limit, running, today, mine, group);
+    let (tasks, project_filter, truncation) =
+        board_filter::load_board_tasks(store, running, today, mine, group, all_projects, limit)?;
 
     let fingerprint = task_fingerprint(&tasks);
     let marker_path = crate::support::paths::aid_dir().join("board-last.txt");
@@ -167,6 +164,7 @@ fn format_group_header(workgroup: &Workgroup) -> String {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn apply_limit(
     tasks: &mut Vec<Task>,
     limit: Option<usize>,
@@ -175,11 +173,7 @@ pub(crate) fn apply_limit(
     mine: bool,
     group: Option<&str>,
 ) -> Option<TruncationNotice> {
-    let effective_limit = match limit {
-        Some(n) => Some(n),
-        None if group.is_none() && !running && !today && !mine => Some(DEFAULT_TASK_LIMIT),
-        None => None,
-    }?;
+    let effective_limit = board_filter::effective_limit(limit, running, today, mine, group)?;
     if tasks.len() <= effective_limit {
         return None;
     }
@@ -287,3 +281,7 @@ fn write_board_warnings<W: Write>(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "../board_read_tests.rs"]
+mod read_tests;

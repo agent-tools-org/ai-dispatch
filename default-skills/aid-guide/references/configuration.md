@@ -493,5 +493,6 @@ aid upgrade
 
 `doctor` is diagnostic. It lists NeedsHuman agent holds with the stored first
 line and unlock command, and must not prune unaccepted artifacts. Run cleanup in
-dry-run mode first. `clean` retains task records and events as custody evidence
-and does not replace `aid gc --task`.
+dry-run mode first. `clean` retains task records, event detail, and custody evidence
+and does not replace `aid gc --task`. See [maintenance.md](maintenance.md) for
+historical output retention, daily trimming, and explicit `aid clean --vacuum`.

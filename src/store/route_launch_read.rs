@@ -118,7 +118,11 @@ pub(super) fn scan(
         } else {
             rusqlite::types::ValueRef::Text(&payload)
         };
-        let route: Option<Vec<u8>> = extract.query_row([value], |row| row.get(0)).optional()?;
+        let route: Option<Vec<u8>> = extract
+            .query_row([rusqlite::types::ToSqlOutput::Borrowed(value)], |row| {
+                row.get(0)
+            })
+            .optional()?;
         if let Some(route) = route.and_then(|bytes| String::from_utf8(bytes).ok()) {
             batch.launches.push((id, task, route));
         }
@@ -131,6 +135,51 @@ pub(super) fn scan(
 mod tests {
     use super::super::tests::{assert_fallback, fixture};
     use super::*;
+    #[test]
+    fn scan_binds_blob_and_raw_text_metadata_with_legacy_results() {
+        let store = fixture();
+        {
+            let conn = store.db();
+            conn.execute(
+                "INSERT INTO events(task_id,timestamp,event_type,detail,metadata)
+                 VALUES ('c','now','setup','',?1)",
+                [br#"{"api_route_launch":"two"}"#.as_slice()],
+            )
+            .expect("blob metadata");
+            let mut raw = br#"{"api_route_launch":"one","padding":""#.to_vec();
+            raw.push(0xff);
+            raw.extend_from_slice(br#""}"#);
+            conn.execute(
+                "INSERT INTO events(task_id,timestamp,event_type,detail,metadata)
+                 VALUES ('c','now','setup','',CAST(?1 AS TEXT))",
+                [raw],
+            )
+            .expect("raw text metadata");
+        }
+        crate::store::schema::ensure_current(&store.db()).expect("migrate");
+        let expected = stamp(&store.db()).expect("stamp");
+        let batch = scan(&store, None, BATCH_SIZE, expected)
+            .expect("scan")
+            .expect("stable");
+        for route in ["one", "two"] {
+            let actual = batch
+                .launches
+                .iter()
+                .filter(|(_, _, value)| value == route)
+                .map(|(_, task, _)| task.clone())
+                .collect::<BTreeSet<_>>();
+            let expected = store
+                .db()
+                .prepare(LEGACY)
+                .expect("prepare")
+                .query_map([route], |row| row.get::<_, String>(0))
+                .expect("query")
+                .collect::<rusqlite::Result<BTreeSet<_>>>()
+                .expect("legacy results");
+            assert_eq!(actual, expected, "{route}");
+        }
+    }
+
     #[test]
     fn oversized_metadata_uses_single_row_ranges_and_bounded_blob_reads() {
         let store = fixture();

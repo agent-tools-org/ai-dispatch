@@ -3,7 +3,7 @@
 use super::*;
 use crate::store::Store;
 
-fn fixture() -> Store {
+pub(super) fn fixture() -> Store {
     let store = Store::open_memory().expect("store");
     let conn = store.db();
     for id in ["a", "b", "c"] {
@@ -40,6 +40,8 @@ fn fixture() -> Store {
 fn store_v2(conn: &Connection) {
     conn.execute_batch(
         "DROP TRIGGER record_api_route_launch;
+         DROP TRIGGER update_api_route_launch;
+         DROP TRIGGER delete_api_route_launch;
          DROP TABLE api_route_launches;
          DROP TABLE api_route_launch_backfill;
          CREATE INDEX IF NOT EXISTS idx_events_task_id_id ON events(task_id,id);
@@ -93,30 +95,16 @@ fn v2_migration_is_ddl_only_and_drops_duplicate_index() {
 #[test]
 fn bounded_backfill_resumes_and_preserves_lookup_equivalence() {
     let store = fixture();
-    let mut conn = store.db();
-    crate::store::schema::ensure_current(&conn).expect("migrate");
-    assert_fallback(&mut conn);
-    assert!(!backfill_batch(&mut conn, 3).expect("first batch"));
-    let cursor: i64 = conn
-        .query_row("SELECT cursor FROM api_route_launch_backfill", [], |r| {
-            r.get(0)
-        })
-        .expect("cursor");
-    assert_eq!(cursor, 3);
-    assert_fallback(&mut conn);
-    drop(conn);
-    let mut conn = store.db();
-    assert!(!backfill_batch(&mut conn, 3).expect("resume"));
-    let resumed: i64 = conn
-        .query_row("SELECT cursor FROM api_route_launch_backfill", [], |r| {
-            r.get(0)
-        })
-        .expect("resumed cursor");
-    assert_eq!(resumed, 6);
-    while !backfill_batch(&mut conn, 3).expect("finish") {}
-    assert!(complete(&conn).expect("complete"));
-    equivalent(&conn, LOOKUP);
-    drop(conn);
+    crate::store::schema::ensure_current(&store.db()).expect("migrate");
+    assert_fallback(&store);
+    assert!(!backfill_batch(&store, 3).expect("first batch"));
+    assert_eq!(cursor(&store.db()).expect("cursor"), Some(3));
+    assert_fallback(&store);
+    assert!(!backfill_batch(&store, 3).expect("resume"));
+    assert_eq!(cursor(&store.db()).expect("resumed cursor"), Some(6));
+    while !backfill_batch(&store, 3).expect("finish") {}
+    assert!(complete(&store.db()).expect("complete"));
+    equivalent(&store.db(), LOOKUP);
     assert_eq!(
         store.route_launch_task_ids("one").expect("public lookup"),
         ["a", "b"]
@@ -126,9 +114,9 @@ fn bounded_backfill_resumes_and_preserves_lookup_equivalence() {
 #[test]
 fn completed_lookup_uses_route_index_without_events_scan() {
     let store = fixture();
-    let mut conn = store.db();
-    crate::store::schema::ensure_current(&conn).expect("migrate");
-    while !backfill_batch(&mut conn, 3).expect("batch") {}
+    crate::store::schema::ensure_current(&store.db()).expect("migrate");
+    while !backfill_batch(&store, 3).expect("batch") {}
+    let conn = store.db();
     let plans = conn
         .prepare(&format!("EXPLAIN QUERY PLAN {LOOKUP}"))
         .expect("plan")
@@ -159,11 +147,11 @@ fn new_evidence_is_atomic_with_event_insertion() {
     assert!(ids(&conn, LEGACY, "new").is_empty());
 }
 
-fn assert_fallback(conn: &mut Connection) {
+pub(super) fn assert_fallback(store: &Store) {
     for route in ["one", "two", "missing", "12", "escaped", r#"{"x":1}"#] {
-        let mut actual = lookup_with_budget(conn, route, Duration::ZERO).expect("fallback");
+        let mut actual = lookup_with_budget(store, route, Duration::ZERO).expect("fallback");
         actual.sort();
-        assert_eq!(actual, ids(conn, LEGACY, route));
+        assert_eq!(actual, ids(&store.db(), LEGACY, route));
     }
 }
 
@@ -178,17 +166,48 @@ fn backfill_cursor_survives_database_reopen() {
             .expect("copy");
     }
     let store = Store::open(&path).expect("migrate file");
-    assert!(!backfill_batch(&mut store.db(), 3).expect("batch"));
+    assert!(!backfill_batch(&store, 3).expect("batch"));
     drop(store);
     let store = Store::open(&path).expect("reopen");
-    let mut conn = store.db();
-    let cursor: i64 = conn
-        .query_row("SELECT cursor FROM api_route_launch_backfill", [], |r| {
-            r.get(0)
-        })
-        .expect("cursor");
-    assert_eq!(cursor, 3);
-    assert_fallback(&mut conn);
-    while !backfill_batch(&mut conn, 3).expect("finish") {}
-    equivalent(&conn, LOOKUP);
+    assert_eq!(cursor(&store.db()).expect("cursor"), Some(3));
+    assert_fallback(&store);
+    while !backfill_batch(&store, 3).expect("finish") {}
+    equivalent(&store.db(), LOOKUP);
+}
+
+#[test]
+fn delete_and_metadata_updates_keep_projection_equivalent() {
+    let store = fixture();
+    crate::store::schema::ensure_current(&store.db()).expect("migrate");
+    while !backfill_batch(&store, 3).expect("finish") {}
+    let conn = store.db();
+    for sql in [
+        "DELETE FROM events WHERE id = 1",
+        "DELETE FROM events WHERE id = 2",
+        "UPDATE events SET metadata = '{\"api_route_launch\":\"two\"}' WHERE id = 4",
+        "UPDATE events SET metadata = '{\"other\":\"api_route_launch\"}' WHERE id = 3",
+        "UPDATE events SET metadata = 'malformed api_route_launch' WHERE id = 4",
+        "UPDATE events SET metadata = '{\"api_route_launch\":\"one\"}' WHERE id = 5",
+        "UPDATE events SET task_id = 'c', id = 50 WHERE id = 5",
+    ] {
+        conn.execute(sql, []).expect("mutate");
+        equivalent(&conn, LOOKUP);
+    }
+}
+
+#[test]
+fn stale_scan_is_rejected_after_event_metadata_changes() {
+    let store = fixture();
+    crate::store::schema::ensure_current(&store.db()).expect("migrate");
+    let expected = read::stamp(&store.db()).expect("stamp");
+    store
+        .db()
+        .execute("UPDATE events SET metadata = NULL WHERE id = 1", [])
+        .expect("update");
+    assert!(
+        read::scan(&store, None, 3, expected)
+            .expect("scan")
+            .is_none()
+    );
+    assert_fallback(&store);
 }

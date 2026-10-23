@@ -269,6 +269,6 @@ impl Store {
 
     /// Task IDs with an `api_route_launch` event naming this route.
     pub fn route_launch_task_ids(&self, route: &str) -> Result<Vec<String>> {
-        super::super::route_launch::lookup(&mut self.db(), route)
+        super::super::route_launch::lookup(self, route)
     }
 }

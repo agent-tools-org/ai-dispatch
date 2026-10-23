@@ -168,3 +168,34 @@ async fn board_tool_reports_outcome_and_verification_status() {
     assert_eq!(payload["tasks"][0]["outcome"], "unverified");
     assert_eq!(payload["tasks"][0]["verify_status"], "timed_out");
 }
+
+#[test]
+fn board_group_sql_preserves_mcp_rows_on_many_tied_tasks() {
+    let home = tempfile::tempdir().unwrap();
+    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let store = Arc::new(Store::open_memory().unwrap());
+    for i in 0..150 {
+        store
+            .db()
+            .execute(
+                "INSERT INTO tasks (id, agent, prompt, resolved_prompt, status, created_at,
+             duration_ms, workgroup_id)
+             VALUES (?1, 'cursor', ?2, ?2, 'done', '2026-10-01T00:00:00Z', 1000, ?3)",
+                rusqlite::params![
+                    format!("t-{i}"),
+                    "prompt".repeat(1000),
+                    if i % 3 == 0 { "selected" } else { "other" }
+                ],
+            )
+            .unwrap();
+    }
+    let expected = store
+        .list_tasks(crate::types::TaskFilter::All)
+        .unwrap()
+        .into_iter()
+        .filter(|task| task.workgroup_id.as_deref() == Some("selected"))
+        .map(super::render_board_task)
+        .collect::<Vec<_>>();
+    let actual = super::board_tool(store, json!({"group": "selected"})).unwrap();
+    assert_eq!(actual, json!({"tasks": expected}));
+}

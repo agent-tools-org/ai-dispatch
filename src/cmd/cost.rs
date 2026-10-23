@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::cost;
 use crate::store::Store;
-use crate::types::{Task, TaskFilter};
+use crate::types::Task;
 use crate::cost::usage::UsageWindow;
 
 type Totals = (usize, i64, Option<f64>);
@@ -32,11 +32,13 @@ pub fn run(
     if mode_count != 1 {
         bail!("Select exactly one of --group, --summary, or --agent");
     }
-    let mut tasks = store.list_tasks(TaskFilter::All)?;
+    let window = UsageWindow::parse(&period)?;
+    let now = Local::now();
+    let range = if group.is_some() { None } else { window.range(now) };
+    let mut tasks = store.read_report_tasks(group.as_deref(), agent.as_deref(), range)?;
     for task in &mut tasks {
         task.cost_usd = cost::task_cost(store, task)?;
     }
-    let window = UsageWindow::parse(&period)?;
     let output = match (group, agent) {
         (Some(group_id), None) => render_task_report(
             &format!("Workgroup cost for {group_id}"),
@@ -44,9 +46,9 @@ pub fn run(
         ),
         (None, Some(agent_name)) => render_task_report(
             &format!("Agent cost for {agent_name} ({})", window.description()),
-            &agent_tasks(&tasks, &agent_name, window, Local::now()),
+            &agent_tasks(&tasks, &agent_name, window, now),
         ),
-        (None, None) if summary => render_daily_report(&daily_summary_rows(&tasks, window, Local::now())),
+        (None, None) if summary => render_daily_report(&daily_summary_rows(&tasks, window, now)),
         _ => unreachable!(),
     };
     print!("{output}");
@@ -185,3 +187,7 @@ fn task_cost(task: &Task) -> Option<f64> {
     task.cost_usd
         .or_else(|| cost::estimate_cost(task.tokens.unwrap_or(0), task.costing_model(), task.agent))
 }
+
+#[cfg(test)]
+#[path = "cost_read_tests.rs"]
+mod read_tests;

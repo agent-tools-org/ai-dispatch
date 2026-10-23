@@ -168,9 +168,16 @@ fn board_tool(store: Arc<Store>, arguments: Value) -> Result<Value> {
     background::check_zombie_tasks(store.as_ref())?;
     let filter = parse_filter(args.filter.as_deref())?;
     let tasks = store
-        .list_tasks(filter)?
+        .read_board_tasks(
+            filter,
+            &crate::store::TaskReadFilter {
+                group: args.group.as_deref(),
+                ..Default::default()
+            },
+            None,
+        )?
+        .0
         .into_iter()
-        .filter(|task| matches_group(task, args.group.as_deref()))
         .map(render_board_task)
         .collect::<Vec<_>>();
     Ok(json!({ "tasks": tasks }))

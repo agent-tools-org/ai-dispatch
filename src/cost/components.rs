@@ -88,26 +88,17 @@ fn recorded_component_cost(
     if !matches!(agent, AgentKind::Codex | AgentKind::Claude) {
         return Ok(None);
     }
-    let events = store.get_events(task_id.as_str())?;
-    let metadata = events
-        .iter()
-        .rev()
-        .filter(|event| event.event_kind == EventKind::Completion)
-        .find_map(|event| {
-            event.metadata.as_ref().filter(|metadata| {
-                metadata.get("tokens").is_some() || metadata.get("cost_usd").is_some()
-            })
-        });
+    let metadata = store.latest_usage_metadata(task_id.as_str())?;
     let Some(metadata) = metadata else {
         return Ok(None);
     };
-    if tokens.is_none() || token_count(metadata, "tokens") != tokens {
+    if tokens.is_none() || token_count(&metadata, "tokens") != tokens {
         return Ok(None);
     }
     if let Some(cost) = metadata.get("cost_usd").and_then(Value::as_f64) {
         return Ok(Some(Some(cost)));
     }
-    Ok(usage_from_metadata(metadata, agent).map(|usage| estimate_usage_cost(usage, model, agent)))
+    Ok(usage_from_metadata(&metadata, agent).map(|usage| estimate_usage_cost(usage, model, agent)))
 }
 
 pub(crate) fn completion_cost(

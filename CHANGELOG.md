@@ -1,3 +1,11 @@
+## v11.7.0 (2026-10-23)
+- Opening the store takes no write lock when the schema is current: the schema version is kept in `PRAGMA user_version` (now 3) and a current database runs no DDL, migration or UPDATE on open, so read commands such as `aid board` and `aid show` no longer wait behind a writer or fail with "database is locked"; an older database migrates once under an immediate transaction and unexpected migration errors are reported instead of ignored
+- Launch transactions hold the database only for the status and parent check, the spawn, and the PID publication of the launched process; spec writing, directories, logs and command preparation happen before it, and a stopped task or a task whose parent was stopped never keeps a live worker or agent
+- `aid clean` trims `full` and `provider_stdout` values over 4 KB from terminal tasks older than its retention window in short bounded batches (failed, stopped and skipped tasks keep provider output), and the same trimming runs at most once a day after a task settles; `aid clean --vacuum` compacts the database explicitly and refuses while tasks are active or free disk space is short. Trimmed events render with an "output trimmed" note; task-directory logs are not touched
+- `aid board` applies its limit in SQL, `aid cost` and `aid stats` read only the completion events they need, and the API-route launch check reads only setup events through an index; a duplicate events index is dropped. `aid board` and `aid cost` no longer fail on a malformed payload in a row they do not display
+- `cargo clippy -- -D warnings` passes again
+
+
 ## v11.6.1 (2026-10-23)
 - `aid stop` signals a background worker only while its pid still runs `__run-task <task_id>`, checked before the first signal and again before SIGKILL escalation, so a pid reused after the worker exited is never signalled
 - `ProcessGuard::wait_with_timeout` joins its timer before reading the outcome, so a timeout is no longer reported as a normal exit, and a failed `wait` no longer sends SIGKILL to the process group

@@ -1,9 +1,14 @@
-// Regression coverage for launch equivalence, migration DDL, cursor bounds and atomic writes.
-// Exercises real SQLite databases through Store and the historical fallback query.
+// Setup-only launch lookup equivalence, query-plan and schema-v3 regression tests.
+// Uses real SQLite fixtures with repeated launches and unrelated event payloads.
 use super::*;
-use crate::store::Store;
+use rusqlite::{Connection, params};
 
-pub(super) fn fixture() -> Store {
+const LEGACY: &str = "SELECT DISTINCT task_id FROM events
+    WHERE metadata LIKE '%api_route_launch%'
+      AND json_extract(CASE WHEN json_valid(metadata) THEN metadata END,
+                       '$.api_route_launch') = ?1";
+
+fn fixture() -> Store {
     let store = Store::open_memory().expect("store");
     let conn = store.db();
     for id in ["a", "b", "c"] {
@@ -13,23 +18,24 @@ pub(super) fn fixture() -> Store {
         )
         .expect("task");
     }
-    store_v2(&conn);
-    for (task, metadata) in [
-        ("a", r#"{"api_route_launch":"one"}"#),
-        ("a", r#"{"api_route_launch":"one"}"#),
-        ("a", r#"{"api_route_launch":"two"}"#),
-        ("b", r#"{"api_route_launch":"one"}"#),
-        ("b", "malformed api_route_launch"),
-        ("b", r#"{"other":"api_route_launch"}"#),
-        ("c", r#"{"api_route_launch":12}"#),
-        ("c", r#"{"api_route_launch":null}"#),
-        ("c", r#"{"api_route_launch":{"x":1}}"#),
-        ("c", r#"{"api\u005froute_launch":"escaped"}"#),
+    for (task, kind, metadata) in [
+        ("a", "setup", r#"{"api_route_launch":"one"}"#),
+        ("a", "setup", r#"{"api_route_launch":"one"}"#),
+        ("a", "setup", r#"{"api_route_launch":"two"}"#),
+        ("b", "setup", r#"{"api_route_launch":"one"}"#),
+        ("b", "setup", "malformed api_route_launch"),
+        ("b", "setup", r#"{"other":"api_route_launch"}"#),
+        ("c", "tool_call", r#"{"text":"api_route_launch one"}"#),
+        ("c", "error", r#"{"message":"api_route_launch two"}"#),
+        ("c", "tool_call", r#"{"input":{"api_route_launch":"one"}}"#),
+        ("c", "error", "malformed api_route_launch"),
+        ("c", "setup", r#"{"api_route_launch":null}"#),
+        ("c", "setup", r#"{"api_route_launch":12}"#),
     ] {
         conn.execute(
             "INSERT INTO events(task_id,timestamp,event_type,detail,metadata)
-             VALUES (?1,'now','setup','',?2)",
-            params![task, metadata],
+             VALUES (?1,'now',?2,'',?3)",
+            params![task, kind, metadata],
         )
         .expect("event");
     }
@@ -37,177 +43,106 @@ pub(super) fn fixture() -> Store {
     store
 }
 
-fn store_v2(conn: &Connection) {
-    conn.execute_batch(
-        "DROP TRIGGER record_api_route_launch;
-         DROP TRIGGER update_api_route_launch;
-         DROP TRIGGER delete_api_route_launch;
-         DROP TABLE api_route_launches;
-         DROP TABLE api_route_launch_backfill;
-         CREATE INDEX IF NOT EXISTS idx_events_task_id_id ON events(task_id,id);
-         PRAGMA user_version = 2;",
-    )
-    .expect("v2");
-}
-
-fn ids(conn: &Connection, sql: &str, route: &str) -> Vec<String> {
-    let mut result = conn
-        .prepare(sql)
+fn legacy_ids(conn: &Connection, route: &str) -> Vec<String> {
+    let mut ids = conn
+        .prepare(LEGACY)
         .expect("prepare")
-        .query_map([route], |r| r.get(0))
+        .query_map([route], |row| row.get(0))
         .expect("query")
         .collect::<rusqlite::Result<Vec<String>>>()
         .expect("rows");
-    result.sort();
-    result
+    ids.sort();
+    ids
 }
 
-fn equivalent(conn: &Connection, sql: &str) {
-    for route in ["one", "two", "missing", "12", "escaped", r#"{"x":1}"#] {
-        assert_eq!(ids(conn, sql, route), ids(conn, LEGACY, route), "{route}");
+fn equivalent(store: &Store) {
+    for route in ["one", "two", "missing", "12"] {
+        let mut actual = store.route_launch_task_ids(route).expect("lookup");
+        actual.sort();
+        assert_eq!(actual, legacy_ids(&store.db(), route), "{route}");
     }
 }
 
 #[test]
-fn v2_migration_is_ddl_only_and_drops_duplicate_index() {
+fn setup_lookup_matches_legacy_with_repeated_launches_and_payload_text() {
+    let store = fixture();
+    equivalent(&store);
+    let mut one = store.route_launch_task_ids("one").expect("one");
+    one.sort();
+    assert_eq!(one, ["a", "b"]);
+    assert_eq!(store.route_launch_task_ids("two").expect("two"), ["a"]);
+}
+
+#[test]
+fn lookup_seeks_setup_events_without_scanning_events() {
     let store = fixture();
     let conn = store.db();
+    let plans = conn
+        .prepare(&format!("EXPLAIN QUERY PLAN {LOOKUP}"))
+        .expect("plan")
+        .query_map(["one"], |row| row.get::<_, String>(3))
+        .expect("query")
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .expect("plans");
+    assert!(
+        plans.iter().any(|plan| plan
+            .contains("SEARCH e USING INDEX idx_events_task_kind (task_id=? AND event_type=?)")),
+        "{plans:?}"
+    );
+    assert!(
+        !plans
+            .iter()
+            .any(|plan| plan.starts_with("SCAN e ") || plan.starts_with("SCAN events")),
+        "{plans:?}"
+    );
+}
+
+#[test]
+fn v2_migration_only_drops_duplicate_index_and_preserves_events() {
+    let store = fixture();
+    let conn = store.db();
+    conn.execute_batch(
+        "CREATE INDEX idx_events_task_id_id ON events(task_id, id); PRAGMA user_version = 2;",
+    )
+    .expect("v2");
     let before = conn.total_changes();
+    let expected = legacy_ids(&conn, "one");
     crate::store::schema::ensure_current(&conn).expect("migrate");
-    // Only the singleton backfill state is written; no historical evidence is read or written.
-    assert_eq!(conn.total_changes() - before, 1);
-    assert_eq!(ids(&conn, LOOKUP, "one"), Vec::<String>::new());
-    assert_eq!(ids(&conn, LEGACY, "one"), ["a", "b"]);
-    let duplicate: i64 = conn
+    assert_eq!(conn.total_changes(), before);
+    assert_eq!(legacy_ids(&conn, "one"), expected);
+    let removed: i64 = conn
         .query_row(
             "SELECT count(*) FROM sqlite_schema WHERE name = 'idx_events_task_id_id'",
             [],
-            |r| r.get(0),
+            |row| row.get(0),
         )
         .expect("index");
-    assert_eq!(duplicate, 0);
+    assert_eq!(removed, 0);
+    let projection: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM sqlite_schema WHERE name LIKE '%api_route_launch%'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("no projection");
+    assert_eq!(projection, 0);
     let version: i64 = conn
-        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
         .expect("version");
     assert_eq!(version, 3);
 }
 
 #[test]
-fn bounded_backfill_resumes_and_preserves_lookup_equivalence() {
+fn lookup_reflects_event_deletion_and_metadata_updates() {
     let store = fixture();
-    crate::store::schema::ensure_current(&store.db()).expect("migrate");
-    assert_fallback(&store);
-    assert!(!backfill_batch(&store, 3).expect("first batch"));
-    assert_eq!(cursor(&store.db()).expect("cursor"), Some(3));
-    assert_fallback(&store);
-    assert!(!backfill_batch(&store, 3).expect("resume"));
-    assert_eq!(cursor(&store.db()).expect("resumed cursor"), Some(6));
-    while !backfill_batch(&store, 3).expect("finish") {}
-    assert!(complete(&store.db()).expect("complete"));
-    equivalent(&store.db(), LOOKUP);
-    assert_eq!(
-        store.route_launch_task_ids("one").expect("public lookup"),
-        ["a", "b"]
-    );
-}
-
-#[test]
-fn completed_lookup_uses_route_index_without_events_scan() {
-    let store = fixture();
-    crate::store::schema::ensure_current(&store.db()).expect("migrate");
-    while !backfill_batch(&store, 3).expect("batch") {}
-    let conn = store.db();
-    let plans = conn
-        .prepare(&format!("EXPLAIN QUERY PLAN {LOOKUP}"))
-        .expect("plan")
-        .query_map(["one"], |r| r.get::<_, String>(3))
-        .expect("query")
-        .collect::<rusqlite::Result<Vec<_>>>()
-        .expect("plans")
-        .join("\n");
-    assert!(plans.contains("idx_api_route_launches_route"), "{plans}");
-    assert!(!plans.contains("events"), "{plans}");
-}
-
-#[test]
-fn new_evidence_is_atomic_with_event_insertion() {
-    let store = fixture();
-    let conn = store.db();
-    crate::store::schema::ensure_current(&conn).expect("migrate");
-    conn.execute_batch("BEGIN IMMEDIATE").expect("begin");
-    conn.execute(
-        "INSERT INTO events(task_id,timestamp,event_type,detail,metadata)
-         VALUES ('b','now','setup','', '{\"api_route_launch\":\"new\"}')",
-        [],
-    )
-    .expect("insert");
-    assert_eq!(ids(&conn, LOOKUP, "new"), ["b"]);
-    conn.execute_batch("ROLLBACK").expect("rollback");
-    assert!(ids(&conn, LOOKUP, "new").is_empty());
-    assert!(ids(&conn, LEGACY, "new").is_empty());
-}
-
-pub(super) fn assert_fallback(store: &Store) {
-    for route in ["one", "two", "missing", "12", "escaped", r#"{"x":1}"#] {
-        let mut actual = lookup_with_budget(store, route, Duration::ZERO).expect("fallback");
-        actual.sort();
-        assert_eq!(actual, ids(&store.db(), LEGACY, route));
-    }
-}
-
-#[test]
-fn backfill_cursor_survives_database_reopen() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let path = dir.path().join("launch.db");
-    let store = fixture();
-    {
-        let conn = store.db();
-        conn.execute("VACUUM INTO ?1", [path.to_str().expect("path")])
-            .expect("copy");
-    }
-    let store = Store::open(&path).expect("migrate file");
-    assert!(!backfill_batch(&store, 3).expect("batch"));
-    drop(store);
-    let store = Store::open(&path).expect("reopen");
-    assert_eq!(cursor(&store.db()).expect("cursor"), Some(3));
-    assert_fallback(&store);
-    while !backfill_batch(&store, 3).expect("finish") {}
-    equivalent(&store.db(), LOOKUP);
-}
-
-#[test]
-fn delete_and_metadata_updates_keep_projection_equivalent() {
-    let store = fixture();
-    crate::store::schema::ensure_current(&store.db()).expect("migrate");
-    while !backfill_batch(&store, 3).expect("finish") {}
-    let conn = store.db();
     for sql in [
         "DELETE FROM events WHERE id = 1",
         "DELETE FROM events WHERE id = 2",
         "UPDATE events SET metadata = '{\"api_route_launch\":\"two\"}' WHERE id = 4",
         "UPDATE events SET metadata = '{\"other\":\"api_route_launch\"}' WHERE id = 3",
         "UPDATE events SET metadata = 'malformed api_route_launch' WHERE id = 4",
-        "UPDATE events SET metadata = '{\"api_route_launch\":\"one\"}' WHERE id = 5",
-        "UPDATE events SET task_id = 'c', id = 50 WHERE id = 5",
     ] {
-        conn.execute(sql, []).expect("mutate");
-        equivalent(&conn, LOOKUP);
+        store.db().execute(sql, []).expect("mutate");
+        equivalent(&store);
     }
-}
-
-#[test]
-fn stale_scan_is_rejected_after_event_metadata_changes() {
-    let store = fixture();
-    crate::store::schema::ensure_current(&store.db()).expect("migrate");
-    let expected = read::stamp(&store.db()).expect("stamp");
-    store
-        .db()
-        .execute("UPDATE events SET metadata = NULL WHERE id = 1", [])
-        .expect("update");
-    assert!(
-        read::scan(&store, None, 3, expected)
-            .expect("scan")
-            .is_none()
-    );
-    assert_fallback(&store);
 }

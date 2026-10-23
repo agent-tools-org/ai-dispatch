@@ -111,6 +111,32 @@ fn launch_removes_explicit_env_key_after_shared_environment_setup() {
     );
 }
 
+#[test]
+fn launch_records_api_route_as_setup_event() {
+    let (home, _guard, store) = fixture();
+    let (_, _, _command, _isolated) = prepared(home.path(), &store, &spec(false));
+    let events = store.get_events("t-api-launch").unwrap();
+    let launches: Vec<_> = events
+        .iter()
+        .filter(|event| {
+            event
+                .metadata
+                .as_ref()
+                .is_some_and(|value| value.get("api_route_launch").is_some())
+        })
+        .collect();
+    assert_eq!(launches.len(), 1);
+    assert_eq!(launches[0].event_kind, crate::types::EventKind::Setup);
+    assert_eq!(
+        launches[0].metadata,
+        Some(serde_json::json!({"api_route_launch": "claude-api-ming"}))
+    );
+    assert_eq!(
+        store.route_launch_task_ids("claude-api-ming").unwrap(),
+        ["t-api-launch"]
+    );
+}
+
 #[tokio::test]
 async fn piped_worker_launch_uses_route_helper_and_no_env_key() {
     let _permit = crate::support::test_subprocess::acquire();

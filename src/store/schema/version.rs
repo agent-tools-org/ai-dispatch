@@ -26,7 +26,6 @@ pub(in crate::store) fn ensure_current(conn: &Connection) -> Result<()> {
         }
     }
     if version < 3 {
-        crate::store::route_launch::create_tables(&tx)?;
         tx.execute_batch("DROP INDEX IF EXISTS idx_events_task_id_id;")?;
     }
     if !has_private_launch_table(&tx)? {

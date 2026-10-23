@@ -260,7 +260,7 @@ fn task_remains_pending(
     failed: &mut Vec<String>,
 ) -> bool {
     let outcome = task.outcome();
-    if verification_is_in_flight(&task) {
+    if verification_is_in_flight(task) {
         let started_at = pending_since
             .entry(task_id.to_string())
             .or_insert_with(Instant::now);

@@ -82,7 +82,7 @@ pub(super) fn resolve_healthy_model(
     custom_agent_name: &Option<String>,
     effective_model: Option<String>,
 ) -> Option<String> {
-    let effective_model = if args.model_source == agent::model_validation::ModelSource::Advised {
+    if args.model_source == agent::model_validation::ModelSource::Advised {
         effective_model
     } else {
         match agent::model_group::healthy_model_for(
@@ -104,8 +104,7 @@ pub(super) fn resolve_healthy_model(
             }
             None => effective_model,
         }
-    };
-    effective_model
+    }
 }
 
 fn resolve_agent_instance(

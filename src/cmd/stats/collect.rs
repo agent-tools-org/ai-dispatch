@@ -187,7 +187,7 @@ impl<'a> StatsRun<'a> {
         model_rows
     }
     fn declared_rows(&mut self) -> Vec<DeclaredRow> {
-        let declared_rows = std::mem::take(&mut self.declared)
+        std::mem::take(&mut self.declared)
             .into_iter()
             .map(
                 |(difficulty, (tasks, duration, count, failures))| DeclaredRow {
@@ -197,8 +197,7 @@ impl<'a> StatsRun<'a> {
                     failures,
                 },
             )
-            .collect();
-        declared_rows
+            .collect()
     }
     pub(super) fn finish(mut self) -> Result<StatsSnapshot> {
         let agent_rows = self.agent_rows();

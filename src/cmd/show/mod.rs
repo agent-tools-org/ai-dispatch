@@ -190,21 +190,21 @@ fn selected_mode(args: &ShowArgs) -> ShowMode {
 
 fn render_selected_mode(store: &Arc<Store>, args: &ShowArgs, mode: ShowMode) -> Result<String> {
     Ok(if matches!(mode, ShowMode::Events) {
-        events_text(&store, &args.task_id, args.full)?
+        events_text(store, &args.task_id, args.full)?
     } else if matches!(mode, ShowMode::Output) {
-        render_output_text(&store, &args.task_id, args.full, args.brief)?
+        render_output_text(store, &args.task_id, args.full, args.brief)?
     } else if matches!(mode, ShowMode::Log) {
         render_log_text(&args.task_id, args.full)?
     } else if matches!(mode, ShowMode::Diff) {
         if let Some(file) = args.file.as_deref() {
-            diff_text_file(&store, &args.task_id, file, args.branch)?
+            diff_text_file(store, &args.task_id, file, args.branch)?
         } else if args.branch {
-            diff_text_branch(&store, &args.task_id)?
+            diff_text_branch(store, &args.task_id)?
         } else {
-            diff_text(&store, &args.task_id)?
+            diff_text(store, &args.task_id)?
         }
     } else {
-        render_mode_text(&store, &args.task_id, mode)?
+        render_mode_text(store, &args.task_id, mode)?
     })
 }
 
@@ -261,18 +261,18 @@ fn append_audit_details(
     if let Some(url) = store.backup_url(task_id)? {
         out.push_str(&format!("Backup: {url}\n"));
     }
-    if let Some(notice) = terminal_missing_result_notice(&task) {
+    if let Some(notice) = terminal_missing_result_notice(task) {
         out.push('\n');
         out.push_str(&notice);
     }
 
-    if let Some(checklist) = cmd::show_checklist::render_checklist_status(store, &task) {
+    if let Some(checklist) = cmd::show_checklist::render_checklist_status(store, task) {
         out.push('\n');
         out.push_str(&checklist);
     }
 
     if task.status == TaskStatus::Failed
-        && let Some(details) = failure_details(&events)
+        && let Some(details) = failure_details(events)
     {
         out.push_str("\nFailure details:\n");
         out.push_str(&details);

@@ -148,7 +148,7 @@ fn finish_buffered(
     let diagnostics =
         std::fs::read_to_string(paths::agent_log_path(task_id.as_str())).unwrap_or_default();
     let mut info = if exit_status.success() {
-        agent.parse_completion(&buffer)
+        agent.parse_completion(buffer)
     } else {
         CompletionInfo {
             tokens: None,
@@ -197,9 +197,9 @@ fn record_buffered_quota(
 ) {
     let task = store.get_task(task_id.as_str()).ok().flatten();
     let dispatched_model = task.as_ref().and_then(|t| t.requested_model.as_deref());
-    let delivered = buffered_delivery_confirmed(agent.kind(), &buffer);
+    let delivered = buffered_delivery_confirmed(agent.kind(), buffer);
     let quota = crate::agent::stream_completion::record_quota_exhaustion_with_delivery(
-        &buffer,
+        buffer,
         agent.kind(),
         agent.rate_limit_name(),
         info.model.as_deref().or(dispatched_model),
@@ -208,7 +208,7 @@ fn record_buffered_quota(
     let diagnostic_quota = if diagnostic_failure {
         record_diagnostic_quota(
             agent,
-            &diagnostics,
+            diagnostics,
             info.model.as_deref().or(dispatched_model),
         )
     } else {

@@ -272,7 +272,7 @@ fn task_identity_line(task: &Task) -> Line<'static> {
     // Detail has room for the full triple; attribution rides on the model segment.
     // No separate Model line — Route already carries model + grade.
     let route = task.display_route();
-    let line1 = Line::from(vec![
+    Line::from(vec![
         Span::styled(
             task.id.as_str().to_string(),
             Style::default()
@@ -288,6 +288,5 @@ fn task_identity_line(task: &Task) -> Line<'static> {
                 .fg(status_color)
                 .add_modifier(Modifier::BOLD),
         ),
-    ]);
-    line1
+    ])
 }

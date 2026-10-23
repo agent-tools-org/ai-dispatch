@@ -239,7 +239,7 @@ fn category_history(samples: &[HistorySample]) -> HashMap<String, CategoryHistor
             entry.3 += 1;
         }
     }
-    let by_category = categories
+    categories
         .into_iter()
         .filter(|(_, (count, _, _, _))| *count >= 5)
         .map(|(category, (count, successes, duration_ms, duration_count))| {
@@ -253,6 +253,5 @@ fn category_history(samples: &[HistorySample]) -> HashMap<String, CategoryHistor
                 },
             )
         })
-        .collect();
-    by_category
+        .collect()
 }

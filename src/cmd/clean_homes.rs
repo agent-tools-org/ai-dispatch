@@ -71,7 +71,7 @@ fn resolve_cleanup_home(
     resolve_home: impl FnOnce() -> Result<PathBuf>,
     warn: &mut impl FnMut(String),
 ) -> Option<PathBuf> {
-    let real_home = if dry_run {
+    if dry_run {
         None
     } else {
         match resolve_home() {
@@ -83,8 +83,7 @@ fn resolve_cleanup_home(
                 None
             }
         }
-    };
-    real_home
+    }
 }
 
 fn print_home_cleanup_summary(removed: usize, dry_run: bool, bytes: u64) {

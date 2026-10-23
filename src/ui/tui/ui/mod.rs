@@ -264,7 +264,7 @@ fn render_board_table(frame: &mut ratatui::Frame<'_>, app: &App, area: ratatui::
 }
 
 fn board_table<'a>(rows: impl Iterator<Item = Row<'a>>, header: Row<'a>) -> Table<'a> {
-    let table = Table::new(
+    Table::new(
         rows,
         [
             Constraint::Length(10),
@@ -288,6 +288,5 @@ fn board_table<'a>(rows: impl Iterator<Item = Row<'a>>, header: Row<'a>) -> Tabl
         Style::default()
             .bg(Color::Indexed(237))
             .add_modifier(Modifier::BOLD),
-    );
-    table
+    )
 }

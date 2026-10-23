@@ -36,7 +36,7 @@ pub(super) fn prepare_dispatch_task(
         .filter(|(idx, _)| *idx != task_idx)
         .map(|(_, task)| task)
         .collect();
-    let mut run_args = task_to_run_args(&tasks[task_idx], &siblings, true, &store, shared_dir_path);
+    let mut run_args = task_to_run_args(&tasks[task_idx], &siblings, true, store, shared_dir_path);
     run_args.repo_root = repo_root.map(str::to_string);
     run_args.suppress_nested_repo_warning = true;
     run_args.existing_task_id = Some(crate::types::TaskId(waiting_ids[task_idx].clone()));

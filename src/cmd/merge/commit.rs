@@ -38,7 +38,7 @@ pub(crate) fn auto_commit_uncommitted(wt_path: &str, branch: &str) -> bool {
 
 fn commit_worktree_changes(wt_path: &str, message: &str) -> bool {
     let out = Command::new("git")
-        .args(["-C", wt_path, "commit", "-m", &message])
+        .args(["-C", wt_path, "commit", "-m", message])
         .output();
     match out {
         Ok(o) if o.status.success() => {

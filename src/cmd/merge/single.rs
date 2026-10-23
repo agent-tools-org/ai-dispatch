@@ -64,15 +64,15 @@ fn merge_task_branch(
     target: Option<&str>,
 ) -> Result<()> {
     let original_status = task.status;
-    ensure_branch_drift_confirmed(&task, force)?;
+    ensure_branch_drift_confirmed(task, force)?;
     if !force
         && let Some(wt) = task.worktree_path.as_deref()
         && std::path::Path::new(wt).exists()
     {
         auto_commit_uncommitted(wt, branch);
-        sync_cargo_lock_before_merge(&repo_dir, wt, branch);
+        sync_cargo_lock_before_merge(repo_dir, wt, branch);
     }
-    let ahead = commits_ahead(&repo_dir, branch);
+    let ahead = commits_ahead(repo_dir, branch);
     if ahead == 0 {
         aid_error!("[aid] Error: branch {branch} has 0 commits ahead — nothing to merge");
         aid_hint!("[aid] The agent may not have committed its changes.");
@@ -85,7 +85,7 @@ fn merge_task_branch(
     }
     aid_info!("[aid] Branch {branch} has {ahead} commit(s) ahead");
     if let Some(target_branch) = target {
-        checkout_branch(&repo_dir, target_branch)?;
+        checkout_branch(repo_dir, target_branch)?;
     }
     merge_branch_result(
         store,
@@ -109,7 +109,7 @@ fn merge_branch_result(
     branch: &str,
     ahead: u32,
 ) -> Result<()> {
-    match git_merge_branch(&repo_dir, branch) {
+    match git_merge_branch(repo_dir, branch) {
         MergeResult::Merged => {
             aid_info!("[aid] Merged branch {branch} into current branch");
         }
@@ -149,7 +149,7 @@ fn report_inplace_merge(repo_dir: &str, force: bool) -> Result<()> {
         return Err(anyhow!("Force merge requires a committed worktree branch"));
     }
     let has_changes = Command::new("git")
-        .args(["-C", &repo_dir, "status", "--porcelain"])
+        .args(["-C", repo_dir, "status", "--porcelain"])
         .output()
         .ok()
         .map(|o| o.status.success() && !o.stdout.is_empty())

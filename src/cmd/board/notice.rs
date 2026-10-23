@@ -16,9 +16,9 @@ pub(super) fn board_poll_notice(
     let mut poll_notice = None;
     let mut poll_failed = false;
     if !json {
-        let anti_poll = anti_poll_status(&marker_path, &fingerprint, now, force);
+        let anti_poll = anti_poll_status(marker_path, fingerprint, now, force);
         force_state = anti_poll.1;
-        let watch_hint = watch_instead_of_polling_hint(&tasks);
+        let watch_hint = watch_instead_of_polling_hint(tasks);
         repeat_count = match anti_poll.0 {
             AntiPollStatus::Allowed(repeat_count) => repeat_count,
             AntiPollStatus::Cooldown(elapsed) => {
@@ -54,8 +54,8 @@ pub(super) fn record_board_poll(
 ) {
     if !json {
         write_board_marker(
-            &marker_path,
-            &fingerprint,
+            marker_path,
+            fingerprint,
             now,
             repeat_count,
             force_state.count,

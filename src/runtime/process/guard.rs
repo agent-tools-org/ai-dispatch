@@ -55,7 +55,7 @@ impl ProcessGuard {
         let pid = self.child.id();
         let (done, completed) = std::sync::mpsc::channel();
         let timer = std::thread::spawn(move || {
-            if completed.recv_timeout(timeout).is_ok() {
+            if !timeout_expired(completed.recv_timeout(timeout)) {
                 return false;
             }
             #[cfg(unix)]
@@ -65,11 +65,15 @@ impl ProcessGuard {
             true
         });
 
-        let status = self.child.wait().context("failed to wait for subprocess")?;
-        let _ = done.send(());
+        let status = self.child.wait().context("failed to wait for subprocess");
+        if status.is_ok() {
+            let _ = done.send(());
+        }
+        drop(done);
         let fired = timer
             .join()
             .map_err(|_| anyhow::anyhow!("timeout worker panicked"))?;
+        let status = status?;
         self.sigterm_group(); // clean up orphaned grandchildren
         self.killed = true;
 
@@ -119,9 +123,21 @@ impl Drop for ProcessGuard {
     }
 }
 
+fn timeout_expired(result: std::result::Result<(), std::sync::mpsc::RecvTimeoutError>) -> bool {
+    matches!(result, Err(std::sync::mpsc::RecvTimeoutError::Timeout))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn timer_signals_only_on_expiry() {
+        use std::sync::mpsc::RecvTimeoutError;
+        assert!(timeout_expired(Err(RecvTimeoutError::Timeout)));
+        assert!(!timeout_expired(Ok(())));
+        assert!(!timeout_expired(Err(RecvTimeoutError::Disconnected)));
+    }
 
     #[test]
     fn spawn_and_wait() {

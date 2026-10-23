@@ -150,3 +150,7 @@ pub(crate) fn apply_completion_usage_cost(
 #[cfg(test)]
 #[path = "components_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "completion_order_tests.rs"]
+mod order_tests;

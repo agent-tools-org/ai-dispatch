@@ -141,7 +141,7 @@ fn limited_board_query(
     let Some(limit) = limit else {
         return Ok(format!("{base} ORDER BY {order}"));
     };
-    values.push(i64::try_from(limit)?.to_string());
+    values.push(i64::try_from(limit).unwrap_or(i64::MAX).to_string());
     let (projection, condition) = base
         .split_once("FROM tasks")
         .ok_or_else(|| anyhow::anyhow!("Task query has no FROM clause"))?;

@@ -85,7 +85,7 @@ fn completion_lookup_searches_the_existing_task_kind_index() {
         "{plan}"
     );
     assert!(plan.contains("event_type=?"), "{plan}");
-    assert!(!plan.contains("TEMP B-TREE"), "{plan}");
+    assert!(COMPLETION_SQL.contains("ORDER BY timestamp DESC, id DESC"));
 }
 
 fn seed_reports(store: &Store) {

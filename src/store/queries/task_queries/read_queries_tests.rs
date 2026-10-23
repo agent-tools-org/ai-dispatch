@@ -227,3 +227,21 @@ fn report_period_searches_the_created_at_index_and_preserves_offset_boundaries()
         .collect::<Vec<_>>();
     assert_eq!(ids(&actual), ids(&expected));
 }
+
+#[test]
+fn board_limit_larger_than_sqlite_integer_shows_every_task() {
+    let store = Store::open_memory().unwrap();
+    seed(&store);
+    let expected = store.list_tasks(TaskFilter::All).unwrap();
+    let (actual, total) = store
+        .read_board_tasks(TaskFilter::All, &TaskReadFilter::default(), Some(usize::MAX))
+        .unwrap();
+    assert_eq!(total, expected.len());
+    assert_eq!(ids(&actual), ids(&expected));
+    let (base, mut values) = board_query(TaskFilter::All, &TaskReadFilter::default());
+    limited_board_query(base, TaskFilter::All, &mut values, Some(usize::MAX)).unwrap();
+    assert_eq!(
+        values.last().unwrap(),
+        &i64::try_from(usize::MAX).unwrap_or(i64::MAX).to_string()
+    );
+}

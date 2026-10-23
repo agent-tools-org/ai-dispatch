@@ -307,23 +307,26 @@ Behaviour-preserving; no command, flag or output changed.
 | Dead code | `#![allow(dead_code)]` removed from `main.rs` and two agent modules; 116 compiler-reported items deleted, moved under `#[cfg(test)]`, or kept with an item-level allow naming the serde/TOML schema that reads them; web-only store queries and task actions gated by `feature = "web"` |
 | Helpers | `ui::format` owns byte/char truncation, token counts and millisecond durations; `workspace::git` owns checked `git -C` output |
 | Size | Source files over 300 lines: 28 → 0; production functions over 50 lines: about 100 → 10 |
+| Orchestrators | `watch_streaming_with_input`, `run_lifecycle_phases`, `dispatch_with_dependencies`, `run_background_task`, `stats::collect` and `monitor_bridge` each hold their shared locals in one private run-state struct with phase methods; signatures unchanged. Field order mirrors the original locals in reverse, because fields drop in declaration order |
+| Test seams | 17 test-only forwarding shims and parallel paths removed (for example `merge_single`, `merge_group`, `Store::update_task_completion`, `watch_streaming`, the PTY `run_agent_process`); their tests call the production entry points |
+| Timing tests | Seven load-sensitive stream, steer and guard tests wait on fixture events instead of wall-clock sleeps; stop tests use fake pids above any `pid_max` instead of pids a live process can hold |
 
 Two deliberate output differences: Git failure messages from the worktree live-state reader now
 trim stderr like the other readers, and the GC reader passes a non-UTF-8 repository path to Git
 unchanged instead of lossily converting it.
 
+`ProcessGuard::wait_with_timeout` joins its timer before reading whether it fired, so a timeout
+can no longer be reported as a normal exit, and a failed `wait` no longer triggers the SIGKILL.
+
 Open:
 
-- `watch_streaming_with_input`, `run_lifecycle_phases` and `dispatch_with_dependencies` (200+
-  lines each) cannot be split further without a state struct; that is a design slice, not a move.
-- Remaining functions over 50 lines: `cli::dispatch` (one arm per command), `RunArgs::default`,
-  `task_to_run_args`, `insert_skipped_task` (struct literals), `run_background_task`,
-  `stats::collect`, `monitor_bridge`.
-- About 50 items now exist only under `#[cfg(test)]` (for example `merge_single`, `merge_group`,
-  `Store::update_task_completion`); tests that exercise these wrappers do not exercise the
-  production entry points.
-- Timing-bound tests in `runtime::background::claude_stream_tests`, `codex_app_server` and
-  `process::guard` fail intermittently on a loaded build box; one failed on the unchanged base.
+- Remaining functions over 50 lines are dispatch tables or struct literals: `cli::dispatch`,
+  `RunArgs::default`, `task_to_run_args`, `insert_skipped_task`, the background run spec.
+- About 105 items remain under `#[cfg(test)]`; they are fixtures, isolation guards and
+  constructors. A test-only constructor stays a fixture rather than being inlined at each call.
+- `cmd stop` polls and escalates on a numeric worker pid after a concurrent observer may have
+  reaped it, and `ProcessGuard` signals its process group after reaping the leader; both can reach
+  a reused pid.
 - Directories over ten files are unchanged (see M3).
 
 ### Known limits of the current code

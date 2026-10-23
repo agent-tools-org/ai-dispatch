@@ -122,7 +122,7 @@ fn cascading_to_another_agent_drops_the_parents_model() {
         ..Default::default()
     };
     let (next, remaining) =
-        super::take_next_cascade_agent(&args).expect("cascade must yield the next agent");
+        super::run_post::take_next_cascade_agent(&args).expect("cascade must yield the next agent");
     assert_eq!(next, "agy");
     assert_eq!(remaining, vec!["cursor".to_string()]);
 
@@ -144,7 +144,7 @@ fn cascading_to_the_same_agent_keeps_the_model() {
         cascade: vec!["codex".to_string()],
         ..Default::default()
     };
-    let (next, _) = super::take_next_cascade_agent(&args).expect("cascade must yield an agent");
+    let (next, _) = super::run_post::take_next_cascade_agent(&args).expect("cascade must yield an agent");
     if args.agent_name != next {
         args.model = None;
     }

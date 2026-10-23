@@ -3,7 +3,8 @@
 // Deps: run_lifecycle helpers, Store, git CLI, tempfile.
 
 use super::{
-    RunArgs, final_dirty_assertion,
+    RunArgs,
+    run_dirty::final_dirty_assertion,
     run_dirty::{DirtyWorktreeAction, post_agent_dirty_worktree_cleanup},
     run_lifecycle::{merge_hint_for_task, LifecycleMode, post_run_lifecycle},
     run_prompt::PromptBundle,
@@ -90,7 +91,14 @@ fn final_assertion_fails_task_when_worktree_still_dirty() {
     store.insert_task(&task(task_id.as_str(), TaskStatus::Done)).unwrap();
     write_path(dir.path(), "src/lib.rs", "pub fn value() -> u8 { 1 }\n");
 
-    let failed = final_dirty_assertion(&store, &task_id, dir.path().to_str().unwrap(), false, None).unwrap();
+    let failed = crate::cmd::run::run_dirty::final_dirty_assertion(
+        &store,
+        &task_id,
+        dir.path().to_str().unwrap(),
+        false,
+        None,
+    )
+    .unwrap();
 
     assert!(failed);
     assert_eq!(store.get_task(task_id.as_str()).unwrap().unwrap().status, TaskStatus::Failed);
@@ -123,7 +131,14 @@ fn final_assertion_skipped_for_read_only() {
     store.insert_task(&task(task_id.as_str(), TaskStatus::Done)).unwrap();
     write_path(dir.path(), "result-t-readonly.md", "audit output\n");
 
-    let failed = final_dirty_assertion(&store, &task_id, dir.path().to_str().unwrap(), true, None).unwrap();
+    let failed = crate::cmd::run::run_dirty::final_dirty_assertion(
+        &store,
+        &task_id,
+        dir.path().to_str().unwrap(),
+        true,
+        None,
+    )
+    .unwrap();
 
     assert!(!failed);
     assert_eq!(store.get_task(task_id.as_str()).unwrap().unwrap().status, TaskStatus::Done);
@@ -141,7 +156,7 @@ fn final_assertion_ignores_dirty_files_in_baseline() {
     write_path(dir.path(), "src/user.rs", "pub fn user() {}\n");
     let baseline = vec!["?? src/user.rs".to_string()];
 
-    let failed = final_dirty_assertion(
+    let failed = crate::cmd::run::run_dirty::final_dirty_assertion(
         &store,
         &task_id,
         dir.path().to_str().unwrap(),
@@ -165,7 +180,7 @@ fn final_assertion_fails_for_dirty_files_outside_baseline() {
     write_path(dir.path(), "src/agent.rs", "pub fn agent() {}\n");
     let baseline = vec!["?? src/user.rs".to_string()];
 
-    let failed = final_dirty_assertion(
+    let failed = crate::cmd::run::run_dirty::final_dirty_assertion(
         &store,
         &task_id,
         dir.path().to_str().unwrap(),
@@ -260,41 +275,10 @@ async fn background_lifecycle_runs_verify_and_checklist_scan() {
     assert!(events.iter().any(|event| event.detail.contains("Checklist:")));
 }
 
-#[tokio::test]
-async fn background_lifecycle_runs_on_fail_hook() {
-    let _permit = test_subprocess::acquire();
-    let dir = tempfile::tempdir().unwrap();
-    let store = Arc::new(Store::open_memory().unwrap());
-    let task_id = TaskId("t-bg-lifecycle-fail".to_string());
-    store.insert_task(&task(task_id.as_str(), TaskStatus::Failed)).unwrap();
-    let hook_path = dir.path().join("hook.txt");
-    let hook = Hook::new_trusted(
-        "on_fail".to_string(),
-        format!("printf failed > '{}'", hook_path.display()),
-        None,
-    );
 
-    post_run_lifecycle(
-        LifecycleMode::Background,
-        &store,
-        &task_id,
-        &RunArgs::default(),
-        AgentKind::Codex,
-        "codex",
-        None,
-        None,
-        None,
-        None,
-        &[hook],
-        &prompt_bundle(),
-        TaskStatus::Failed,
-        None,
-    )
-    .await
-    .unwrap();
-
-    assert_eq!(std::fs::read_to_string(hook_path).unwrap(), "failed");
-}
 
 #[path = "shared_checkout_tests.rs"]
 mod shared_checkout_tests;
+
+#[path = "lifecycle_tests_entry_tests.rs"]
+mod production_entries;

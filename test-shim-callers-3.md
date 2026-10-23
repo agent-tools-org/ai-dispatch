@@ -1,0 +1,15 @@
+# Retargeted caller catalog (continued)
+
+C46 — F63:84 try_acquire_worktree_lock
+src/cmd/stop/final_state_tests.rs
+  stop_and_kill_release_worktree_locks
+src/workspace/worktree/lock_tests.rs
+  try_acquire_worktree_lock_rejects_existing_and_recovers_stale_lock
+  storeless_check_treats_dead_owner_without_worker_as_held
+  write_worktree_lock_rekeys_owner_to_new_task_id
+  rekey_worktree_lock_to_worker_refuses_wrong_task
+  try_acquire_worktree_lock_recovers_empty_legacy_lock
+  try_acquire_worktree_lock_malformed_cleanup_allows_one_winner
+  stale_lock_recovery_does_not_clobber_concurrent_fresh_lock
+  stale_lock_recovery_loses_when_competitor_recovers_before_rename
+  clear_worktree_lock_refuses_wrong_task_id

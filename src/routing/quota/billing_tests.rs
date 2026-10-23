@@ -141,8 +141,10 @@ fn malformed_billing_preserves_probe_and_marker_release() {
         let probe = live::snapshot(&AgentKind::Codex).expect("probe survives malformed billing");
         assert_eq!(probe.windows[0].used_percent, 12.5);
         assert!(live::billing(&AgentKind::Codex).is_none());
-        assert!(crate::routing::availability::overrides_marker_at_in_cache(
-            &AgentKind::Codex, &marker, temp.path(),
-        ));
+        assert!({
+            let _cache = crate::routing::quota::live::CacheDirGuard::set(temp.path());
+            crate::routing::availability::from_path(&AgentKind::Codex, None, None, &marker).status
+                == crate::routing::availability::RouteStatus::Dispatchable
+        });
     }
 }

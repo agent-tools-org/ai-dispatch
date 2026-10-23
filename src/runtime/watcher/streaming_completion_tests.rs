@@ -15,7 +15,7 @@ use crate::store::Store;
 use crate::types::TaskStatus;
 
 use super::streaming_tests::insert_running_task;
-use super::watch_streaming;
+use super::watch_streaming_with_input;
 
 fn fixture(name: &str) -> String {
     let path = format!(
@@ -47,7 +47,7 @@ async fn watch_exit0(agent: &dyn Agent, output: &str, task_id: &str) -> TaskStat
         let mut stdin = child.stdin.take().expect("stdin");
         stdin.write_all(output.as_bytes()).await.unwrap();
     }
-    let info = watch_streaming(
+    let info = watch_streaming_with_input(
         agent,
         &mut child,
         &task_id,
@@ -55,6 +55,8 @@ async fn watch_exit0(agent: &dyn Agent, output: &str, task_id: &str) -> TaskStat
         &log_path,
         None,
         crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT,
+        None,
+        None,
         None,
     )
     .await
@@ -146,7 +148,7 @@ pub(super) async fn watch_usage(
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    let info = watch_streaming(
+    let info = watch_streaming_with_input(
         agent,
         &mut child,
         &task_id,
@@ -155,6 +157,8 @@ pub(super) async fn watch_usage(
         None,
         std::time::Duration::from_secs(5),
         max_cost,
+        None,
+        None,
     )
     .await
     .unwrap();

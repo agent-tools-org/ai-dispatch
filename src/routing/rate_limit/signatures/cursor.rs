@@ -29,7 +29,7 @@ pub(super) fn cycle_end(lower: &str) -> Option<NaiveDateTime> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::stream_completion::{record_quota_exhaustion, QuotaOutcome};
+    use crate::agent::stream_completion::{QuotaOutcome, record_quota_exhaustion_with_delivery};
     use crate::routing::rate_limit;
     use crate::types::{AgentKind, TaskId};
 
@@ -70,13 +70,24 @@ mod tests {
         let mut child = tokio::process::Command::new("sh")
             .args(["-c", "cat \"$1\" >&2; exit 1", "replay"])
             .arg(fixture)
-            .stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped())
-            .spawn().expect("replay process");
-        let info = crate::runtime::watcher::watch_streaming(
-            &crate::agent::cursor::CursorAgent, &mut child, &task.id, &store,
-            &crate::support::paths::log_path(task.id.as_str()), None,
-            crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT, None,
-        ).await.expect("finished watcher");
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("replay process");
+        let info = crate::runtime::watcher::watch_streaming_with_input(
+            &crate::agent::cursor::CursorAgent,
+            &mut child,
+            &task.id,
+            &store,
+            &crate::support::paths::log_path(task.id.as_str()),
+            None,
+            crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("finished watcher");
         assert_eq!(info.status, crate::types::TaskStatus::Failed);
         assert_eq!(info.exit_code, Some(1));
         let content = std::fs::read_to_string(rate_limit::group_marker_path(&AgentKind::Cursor, None, "auto"))
@@ -101,7 +112,13 @@ mod tests {
             .expect("finished task must classify as a quota failure");
         assert_eq!(refusal, CAPTURE.trim());
         assert_eq!(
-            record_quota_exhaustion(&provider_error(&refusal), AgentKind::Cursor, None, Some("Auto")),
+            record_quota_exhaustion_with_delivery(
+                &provider_error(&refusal),
+                AgentKind::Cursor,
+                None,
+                Some("Auto"),
+                false
+            ),
             QuotaOutcome::RecordedFailed,
         );
         let marker = rate_limit::group_marker_path(&AgentKind::Cursor, None, "auto");
@@ -125,7 +142,13 @@ mod tests {
         let refusal = CAPTURE.replace("9/23/2026", "9/23/2099");
         for (model, group, other) in [("Auto", "auto", "composer-2.5"), ("composer-2.5", "premium", "auto")] {
             assert_eq!(
-                record_quota_exhaustion(&provider_error(&refusal), AgentKind::Cursor, None, Some(model)),
+                record_quota_exhaustion_with_delivery(
+                    &provider_error(&refusal),
+                    AgentKind::Cursor,
+                    None,
+                    Some(model),
+                    false
+                ),
                 QuotaOutcome::RecordedFailed,
             );
             assert!(rate_limit::is_group_rate_limited(&AgentKind::Cursor, None, group));
@@ -144,7 +167,13 @@ mod tests {
         for date in ["", "not-a-date", "2/30/2099", "13/1/2099", "9/23/26"] {
             let refusal = CAPTURE.replace("9/23/2026", date);
             assert_eq!(
-                record_quota_exhaustion(&provider_error(&refusal), AgentKind::Cursor, None, Some("auto")),
+                record_quota_exhaustion_with_delivery(
+                    &provider_error(&refusal),
+                    AgentKind::Cursor,
+                    None,
+                    Some("auto"),
+                    false
+                ),
                 QuotaOutcome::RecordedFailed,
             );
             let content = std::fs::read_to_string(rate_limit::group_marker_path(&AgentKind::Cursor, None, "auto")).expect("marker");
@@ -168,10 +197,26 @@ mod tests {
             serde_json::json!({"type":"tool_result", "is_error":true,"content":CAPTURE}).to_string(),
             serde_json::json!({"type":"result", "result":CAPTURE}).to_string(),
         ] {
-            assert_eq!(record_quota_exhaustion(&prose, AgentKind::Cursor, None, Some("auto")), QuotaOutcome::None, "{prose}");
+            assert_eq!(
+                record_quota_exhaustion_with_delivery(&prose, AgentKind::Cursor, None, Some("auto"), false),
+                QuotaOutcome::None,
+                "{prose}"
+            );
         }
         assert!(!rate_limit::group_marker_path(&AgentKind::Cursor, None, "auto").exists());
-        assert_eq!(crate::routing::rate_limit::signatures::match_quota_signature(CAPTURE), Some((AgentKind::Cursor, crate::routing::rate_limit::signatures::QuotaRecovery::After(43_200))));
+        assert_eq!(
+            crate::types::AgentKind::ALL
+                .iter()
+                .chain([&crate::types::AgentKind::Claude])
+                .find_map(|agent| {
+                    crate::routing::rate_limit::signatures::match_quota_signature_for_agent(CAPTURE, *agent)
+                        .map(|recovery| (*agent, recovery))
+                }),
+            Some((
+                AgentKind::Cursor,
+                crate::routing::rate_limit::signatures::QuotaRecovery::After(43_200)
+            ))
+        );
     }
 
     #[test]

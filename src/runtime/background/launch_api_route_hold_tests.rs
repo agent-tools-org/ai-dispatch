@@ -24,9 +24,10 @@ fn next_launch(home: &std::path::Path, store: &Arc<Store>) -> anyhow::Result<()>
     let args = args(home);
     let agent = agent::registry::resolve_custom_agent(&args.agent_name)
         .ok_or_else(|| anyhow::anyhow!("route agent did not resolve"))?;
-    let isolated = agent::home_isolation::IsolatedHomeGuard::create_from_home(
+    let isolated = agent::home_isolation::IsolatedHomeGuard::create_from_home_with_remote_build(
         Some(home),
         Some(&next.task_id),
+        false,
     )?;
     prepare_launch(store, &next, &args, agent.as_ref(), &isolated)?;
     Ok(())

@@ -12,7 +12,17 @@ const MULTI_STEP: &str =
     include_str!("../../../tests/fixtures/streaming_completion/opencode-multi-step.jsonl");
 
 fn custom_opencode_agent() -> OpenCodeOverlayAgent {
-    OpenCodeOverlayAgent::new("custom".into(), "provider/model".into())
+    OpenCodeOverlayAgent::from_spec(crate::agent::opencode_overlay::OpenCodeOverlaySpec {
+        id: "custom".into(),
+        reported_kind: crate::types::AgentKind::Custom,
+        binary: "opencode".to_string(),
+        extra_args: Vec::new(),
+        default_model: Some("provider/model".into()),
+        interactive_input: true,
+        rate_limit_kind: crate::types::AgentKind::OpenCode,
+        allow_external_directories: true,
+        probe_served_models: false,
+    })
 }
 
 async fn assert_multi_step_sum(agent: &dyn Agent) {

@@ -39,17 +39,27 @@ impl Fixture {
         } else {
             assert!(
                 store
-                    .update_task_completion(TaskCompletionUpdate {
-                        id: task.id.as_str(),
-                        status,
-                        tokens: None,
-                        duration_ms: 77,
-                        observed_model: None,
-                        attribution_source: None,
-                        cost_usd: None,
-                        exit_code: Some(0),
-                    })
+                    .record_agent_completion(
+                        TaskCompletionUpdate {
+                            id: task.id.as_str(),
+                            status,
+                            tokens: None,
+                            duration_ms: 77,
+                            observed_model: None,
+                            attribution_source: None,
+                            cost_usd: None,
+                            exit_code: Some(0),
+                        },
+                        None
+                    )
                     .expect("settlement")
+            );
+        }
+        if status == TaskStatus::Done {
+            assert!(
+                store
+                    .update_task_status(task.id.as_str(), status)
+                    .expect("settle success")
             );
         }
         let winner = store

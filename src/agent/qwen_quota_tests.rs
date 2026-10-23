@@ -21,11 +21,12 @@ fn google_only_refusals_do_not_hold_qwen() {
         assert_eq!(parsed.event_kind, EventKind::Error);
         assert!(!rate_limit::marker_path(&AgentKind::Qwen, None).exists());
         assert!(
-            !super::super::stream_completion::record_quota_exhaustion(
+            !super::super::stream_completion::record_quota_exhaustion_with_delivery(
                 &event,
                 AgentKind::Qwen,
                 None,
                 None,
+                false
             )
             .recorded()
         );
@@ -63,11 +64,12 @@ fn qwen_terminal_refusal_remains_an_untrusted_excerpt() {
     let _home = AidHomeGuard::set(home.path());
     let event = serde_json::json!({"type":"result", "is_error":false,
         "result":"Quota exhausted: Your token-plan 1-week quota has been exhausted. The quota will reset at 12-31 10:12:00 UTC."}).to_string();
-    let outcome = super::super::stream_completion::record_quota_exhaustion(
+    let outcome = super::super::stream_completion::record_quota_exhaustion_with_delivery(
         &event,
         AgentKind::Qwen,
         None,
         None,
+        false,
     );
     assert!(outcome.recorded());
     assert!(!outcome.should_fail());

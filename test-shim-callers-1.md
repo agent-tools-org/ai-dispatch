@@ -1,0 +1,279 @@
+# Retargeted caller catalog
+
+Names include test functions and fixture helpers that directly called the removed item.
+All test names survive; sibling modules may change their fully qualified test paths.
+
+C01 — F04:37 shared_target_dir
+src/agent/tests.rs
+  reports_shared_target_dir_for_subprocess
+  target_dir_for_worktree_isolates_branches
+
+C02 — F05:104 create
+src/agent/env_redirects.rs
+  run_env_forward_overrides_explicit_value_at_launch
+  launch_env
+src/agent/env_tests.rs
+  apply_run_env_sets_host_toolchain_paths
+src/agent/home_isolation_tests.rs
+  isolated_home
+src/agent/tests.rs
+  apply_run_env_sets_explicit_vars_on_command
+  apply_run_env_sets_aid_home_on_command
+  reports_forwarded_env_for_subprocess
+
+C03 — F05:114 create_from_home
+src/agent/home_isolation_cargo_tests.rs
+  remote_home_materializes_cargo_and_plain_home_keeps_symlink
+src/agent/home_isolation_symlink_tests.rs
+  drop_rewrites_passthrough_installer_symlink_and_preserves_negative_controls
+src/agent/home_isolation_tests.rs
+  isolation_negative_control
+  cargo_and_git_work_in_isolated_home
+  claude_credential_reachability_and_instruction_masking_under_isolation
+  aid_directory_reachability_under_isolation
+  build_isolated_home_fails_without_real_home
+  build_isolated_home_fails_when_real_home_not_directory
+  build_isolated_home_fails_when_real_home_unreadable
+src/runtime/background/launch_api_route_hold_tests.rs
+  next_launch
+src/runtime/background/launch_api_route_tests.rs
+  prepared
+src/runtime/background/launch_tests.rs
+  worker_launch_preservation_uses_resolved_prompt_with_raw_lifecycle_args
+src/runtime/background_provider_tests.rs
+  switched_provider_refuses_worker_and_retry_before_building_y_argv
+src/runtime/remote_build/tests.rs
+  nested_task_home_gets_its_own_real_shim_dir
+
+C04 — F06:34 find_doctor_symlinks
+src/agent/home_isolation_symlink_tests.rs
+  doctor_ignores_tmp_home_paths_without_home_component
+  doctor_rejects_dot_isolated_names_and_empty_home_rests
+  doctor_rejects_parent_dir_in_rewritten_rest
+src/cmd/doctor.rs
+  doctor_repairs_deleted_task_and_tmp_home_symlink_targets
+
+C05 — F08:33 new
+src/agent/opencode_overlay_tests.rs
+  overlay_kind_and_model_resolution
+  overlay_served_models_probe_behavior
+  argv_parity_base_opts_across_all_variants
+  argv_parity_complex_opts_across_all_variants
+src/cmd/run/dispatch_model_info.rs
+  self_heal_retry_reports_known_delegate_default
+src/runtime/watcher/opencode_usage_tests.rs
+  custom_opencode_agent
+
+C06 — F09:102 record_quota_exhaustion
+src/agent/grok_scope_tests.rs
+  grok_only_classifies_the_typed_error_message
+src/agent/qwen_quota_tests.rs
+  google_only_refusals_do_not_hold_qwen
+  qwen_terminal_refusal_remains_an_untrusted_excerpt
+src/agent/stream_completion_quota_tests.rs
+  no_shipped_signature_can_be_quoted_into_a_marker
+  copilots_real_session_error_envelope_is_recorded
+  the_same_needle_in_a_cli_error_envelope_still_marks
+  buffered_grok_prose_about_rate_limits_never_marks_it
+  a_cursor_premium_refusal_with_no_recorded_model_marks_only_the_premium_pool
+src/agent/stream_completion_scope_tests.rs
+  pty_needs_human_excerpt_never_fails_a_successful_run
+  unsplit_monthly_refusal_gets_only_a_transient_hold
+  typed_non_quota_codex_error_overrules_quoted_quota_text
+  unwrapped_claude_reset_preserves_an_excerpt_without_a_long_hold
+  unsplit_codex_refusal_records_without_failing
+src/agent/stream_completion_tests.rs
+  record_quota_exhaustion_ignores_agent_prose_about_rate_limits
+  record_quota_exhaustion_detects_provider_refusal_templates
+  markdown_shape_does_not_turn_a_refusal_into_delivery
+  unobserved_providers_are_not_guessed_from_generic_prose
+  a_report_quoting_this_repos_own_fixture_never_marks_the_agent
+src/routing/rate_limit/claude/claude_tests.rs
+  claude_seven_day_hold_lasts_until_structured_reset_refusal_regression
+  expired_claude_seven_day_reset_releases_hold_refusal_regression
+  unwrapped_claude_prose_can_only_preserve_a_transient_excerpt
+  rejected_claude_event_uses_its_nearby_unix_reset
+  far_future_claude_reset_falls_back_to_signature_window
+src/routing/rate_limit/credibility_tests.rs
+  opencode_model_refusal_holds_only_the_nvidia_provider
+src/routing/rate_limit/signatures/cursor.rs
+  captured_cursor_refusal_classifies_finished_output_and_writes_cycle_hold
+  cursor_monthly_hold_blocks_only_the_dispatched_model_group
+  cursor_missing_or_invalid_cycle_date_holds_for_thirty_days
+  cursor_refusal_requires_error_line_and_rejects_agent_authored_envelopes
+src/routing/rate_limit/signatures/signatures_tests.rs
+  claude_allowed_event_with_rejected_overage_does_not_hold
+  claude_rejected_status_uses_the_structured_reset
+src/runtime/watcher/stderr/stderr_tests.rs
+  raw_core_stream_does_not_hold_pool_fix_regression
+  assistant_and_tool_core_errors_do_not_hold_pool_fix_regression
+
+C07 — F12:129 get_dir_size_bounded
+src/cmd/clean_tests.rs
+  bounded_dir_size_stops_at_entry_limit
+
+C08 — F13:46 find_stash_for_test
+src/cmd/merge/stash_tests.rs
+  stash_identity_lookup_uses_token_when_banner_text_is_unusable
+
+C09 — F16:7 merge_group
+src/cmd/merge/group_tests.rs
+  merge_group_skips_empty_branches
+
+C10 — F17:7 merge_single
+src/cmd/merge/final_branch_tests.rs
+  drifted_merge_requires_force_then_merges_final_branch
+src/cmd/merge/force_tests.rs
+  merge_single_rejects_non_done_task
+  merge_single_rejects_failed_task_without_force
+  merge_single_force_merges_failed_task_with_committed_branch
+  merge_single_force_rejects_failed_task_without_commits
+  merge_single_works_without_worktree_branch
+  merge_single_preserves_worktree_on_conflict
+  merge_single_without_repo_path_resolves_from_worktree
+  merge_single_merges_into_target_branch
+src/cmd/merge/lock_tests.rs
+  merge_single_refuses_an_already_merged_task
+src/cmd/merge/single_tests.rs
+  merge_single_succeeds_with_committed_worktree
+  merge_single_refuses_required_verification_without_force
+  merge_single_auto_commits_then_merges
+  merge_single_fails_when_no_commits_and_no_changes
+
+C11 — F18:20 run_agent_process
+src/cmd/run/capacity_continuation_flow_tests.rs
+  fail_initial_agent
+src/cmd/run/capacity_scope_cut_tests.rs
+  provider_capacity_scope_cut_decoded_failure_records_model_reason_and_hold
+  provider_capacity_scope_cut_pty_merged_stderr_records_capacity_without_child
+src/cmd/stop/settle_launch_tests.rs
+  settle_first_stopped_task_never_spawns_pty_agent
+
+C12 — F20:141 take_next_cascade_agent
+src/cmd/run/cascade_tests.rs
+  cascading_to_another_agent_drops_the_parents_model
+  cascading_to_the_same_agent_keeps_the_model
+  terminal_failure_preserves_failed_status_for_cascade
+src/cmd/run/tests_quota.rs
+  take_next_cascade_agent_consumes_first_entry
+  take_next_cascade_agent_returns_none_when_empty
+
+C13 — F20:144 auto_save_task_output
+src/cmd/run/tests_lifecycle.rs
+  auto_save_creates_output_for_research_task
+src/cmd/run/transcript_tests.rs
+  auto_save_prefers_transcript_over_log
+  auto_save_persists_plain_text_transcript
+
+C14 — F20:146 read_quota_error_message
+src/cmd/run/post.rs
+  record_failed_quota
+src/cmd/run/tests_quota.rs
+  failed_pty_quota_excerpt_allows_continuation_without_promoting_its_hold
+  read_quota_error_message_uses_stderr
+  read_quota_error_message_falls_back_to_log
+  read_quota_error_message_extracts_rate_limit_line_only
+  read_quota_error_message_detects_402_payment_errors
+  read_quota_error_message_ignores_agent_grep_in_log
+  terminal_failure_refuses_empty_worktree_rescue
+  terminal_failure_preserves_worktree_with_modified_code
+  terminal_failure_preserves_untracked_source_files
+src/cmd/run/tests_validation.rs
+  terminal_failure_preserves_committed_work_non_standard_branch
+  terminal_failure_survives_passing_verification
+  terminal_failure_keeps_failed_verify_failed
+src/routing/rate_limit/signatures/cursor.rs
+  captured_cursor_refusal_classifies_finished_output_and_writes_cycle_hold
+src/runtime/watcher/stderr/stderr_tests.rs
+  assert_stderr_cannot_hold_core
+
+C15 — F20:148 worktree_is_empty_diff
+src/cmd/run/tests_quota.rs
+  empty_diff_detection_respects_worktree_state
+
+C16 — F20:150 maybe_run_post_done_audit
+src/cmd/run/audit_tests.rs
+  run_audit_for_task
+
+C17 — F20:160 final_dirty_assertion
+src/cmd/run/lifecycle_tests.rs
+  final_assertion_fails_task_when_worktree_still_dirty
+  final_assertion_skipped_for_read_only
+  final_assertion_ignores_dirty_files_in_baseline
+  final_assertion_fails_for_dirty_files_outside_baseline
+
+C18 — F21:116 worktree_is_empty_diff
+src/cmd/run/mod.rs
+  worktree_is_empty_diff
+src/cmd/run/tests_quota.rs
+  empty_diff_detection_respects_worktree_state
+
+C19 — F23:19 idle_timeout_from_tokio_command
+src/config/timeout_policy_tests.rs
+  std_and_tokio_command_pipelines_read_same_idle_value
+
+C20 — F25:166 list_tools
+src/config/toolbox/toolbox_tests.rs
+  loads_tool_from_toml_file
+  parses_tool_script_metadata
+  list_finds_toml_and_scripts
+  empty_dir_returns_no_tools
+  toml_defaults_when_optional_fields_omitted
+
+C21 — F28:211 overrides_marker_at_in_cache
+src/routing/quota/billing_tests.rs
+  malformed_billing_preserves_probe_and_marker_release
+src/routing/quota/live_tests.rs
+  newer_successful_aidbar_cache_record_overrides_marker_from_disk
+  newer_opencode_headroom_does_not_release_a_needs_human_marker
+
+C22 — F28:236 group_from_marker_path
+src/routing/availability/policy.rs
+  overrides_marker_at_in_cache
+
+C23 — F31:18 is_rate_limit_error
+src/agent/stream_completion_tests.rs
+  prose_rate_limit_tokens_are_not_quota_failures
+src/routing/rate_limit/rate_limit_tests.rs
+  test_is_rate_limit_error
+  prose_mentions_rate_limit_is_not_quota_failure
+src/routing/rate_limit/signatures/signatures_tests.rs
+  a_balance_failure_reads_as_a_rate_limit_error
+
+C24 — F31:23 is_rate_limit_error_with_evidence
+src/routing/rate_limit/detection/mod.rs
+  is_rate_limit_error
+src/routing/rate_limit/rate_limit_tests.rs
+  generic_quota_signals_apply_on_non_agent_channels
+
+C25 — F32:117 mark_rate_limited_for_value
+src/routing/rate_limit/credibility_tests.rs
+  opencode_error_for_one_provider_does_not_hold_another_model_route
+  opencode_error_still_blocks_the_provider_that_refused
+  opencode_provider_key_beats_provider_text_in_error_message
+  opencode_missing_provider_key_stays_agent_wide
+
+C26 — F33:159 match_quota_signature
+src/routing/rate_limit/detection/mod.rs
+  is_rate_limit_error_with_evidence
+src/routing/rate_limit/signatures/cursor.rs
+  cursor_refusal_requires_error_line_and_rejects_agent_authored_envelopes
+src/routing/rate_limit/signatures/signatures_tests.rs
+  droid_weekly_limit_is_recognized_with_a_day_long_cooldown
+  codex_usage_limit_is_recognized
+  ordinary_output_does_not_match_any_signature
+  oz_quota_limit_reached_is_recognized
+  oz_invalid_credentials_is_recognized
+  prose_that_merely_mentions_quota_is_not_a_quota_failure
+  droid_weekly_core_and_standard_needles_do_not_shadow_each_other
+  droid_reload_tokens_is_recognized
+  cursor_workspace_quota_is_recognized
+  opencode_insufficient_balance_is_recognized
+  grok_usage_balance_exhausted_is_windowed
+  cursor_out_of_usage_is_windowed
+
+C27 — F33:165 match_quota_signature_with_agent
+src/routing/rate_limit/signatures/mod.rs
+  match_quota_signature
+src/routing/rate_limit/signatures/signatures_tests.rs
+  insufficient_balance_prefers_dispatched_overlay_agent

@@ -128,15 +128,19 @@ fn refresh_project_state_writes_state_after_completion_update() {
     task.cost_usd = None;
     store.insert_task(&task).unwrap();
     store
-        .update_task_completion(TaskCompletionUpdate {
-            id: task.id.as_str(),
-            status: TaskStatus::Done,
-            tokens: Some(42),
-            duration_ms: 12_000,
-            observed_model: Some("gpt-5.4"), attribution_source: None,
-            cost_usd: Some(0.5),
-            exit_code: Some(0),
-        })
+        .record_agent_completion(
+            TaskCompletionUpdate {
+                id: task.id.as_str(),
+                status: TaskStatus::Done,
+                tokens: Some(42),
+                duration_ms: 12_000,
+                observed_model: Some("gpt-5.4"),
+                attribution_source: None,
+                cost_usd: Some(0.5),
+                exit_code: Some(0),
+            },
+            None,
+        )
         .unwrap();
 
     refresh_project_state_in(&store, &task.id, dir.path());

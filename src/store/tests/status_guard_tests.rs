@@ -22,7 +22,9 @@ fn replace_waiting_task_moves_waiting_row_to_dispatch_status() {
 
     let mut task = make_task("t-rw1", AgentKind::OpenCode, TaskStatus::Running);
     task.prompt = "dispatched prompt".to_string();
-    store.replace_waiting_task(&task).unwrap();
+    store
+        .replace_waiting_task_with_origin(&task, crate::types::DispatchOrigin::Automatic)
+        .unwrap();
 
     let stored = store.get_task("t-rw1").unwrap().expect("task row");
     assert_eq!(stored.status, TaskStatus::Running);
@@ -40,7 +42,9 @@ fn replace_waiting_task_rejects_non_waiting_row() {
 
     let mut task = make_task("t-rw2", AgentKind::OpenCode, TaskStatus::Running);
     task.prompt = "must not land".to_string();
-    let err = store.replace_waiting_task(&task).unwrap_err();
+    let err = store
+        .replace_waiting_task_with_origin(&task, crate::types::DispatchOrigin::Automatic)
+        .unwrap_err();
     assert!(err.to_string().contains("not waiting"), "{err}");
 
     let stored = store.get_task("t-rw2").unwrap().expect("task row");

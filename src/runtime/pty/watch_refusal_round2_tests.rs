@@ -33,7 +33,7 @@ fn captured_auth(output: &str, exit: i32) -> bool {
         output,
         &exit.to_string(),
     ]);
-    crate::runtime::pty::runner::run_agent_process(
+    crate::runtime::pty::runner::run_agent_process_with_control(
         agent.as_ref(),
         &command,
         &task.id,
@@ -42,6 +42,10 @@ fn captured_auth(output: &str, exit: i32) -> bool {
         None,
         None,
         true,
+        crate::config::timeout_policy::TimeoutPolicy::from_command(&command),
+        None,
+        None,
+        std::time::Instant::now(),
     )
     .expect("PTY run");
     let marked = crate::routing::auth_marker::record_from_run(task.id.as_str(), AgentKind::OpenCode, &store);
@@ -113,7 +117,11 @@ fn wrap_fixture() -> (
 }
 
 fn consume_twice(store: &Arc<Store>, id: &crate::types::TaskId, bridge: &mut PtyBridge) {
-    let mut state = MonitorState::new(true, None);
+    let mut state = MonitorState::with_policy(
+        true,
+        None,
+        crate::config::timeout_policy::TimeoutPolicy::default(),
+    );
     state
         .maybe_consume_reply(bridge, store, id)
         .expect("pending delivery");
@@ -141,7 +149,11 @@ fn consume_twice(store: &Arc<Store>, id: &crate::types::TaskId, bridge: &mut Pty
 fn monitor_races_wrap_up_producer_delivers_once_round2_regression() {
     let _permit = crate::support::test_subprocess::acquire();
     let (_home, _guard, store, id, mut bridge) = wrap_fixture();
-    let mut state = MonitorState::new(true, None);
+    let mut state = MonitorState::with_policy(
+        true,
+        None,
+        crate::config::timeout_policy::TimeoutPolicy::default(),
+    );
     state
         .maybe_forward_steer(&mut bridge, &store, &id)
         .expect("empty signal poll");
@@ -235,11 +247,6 @@ fn operator_steer_remains_allowed_for_read_only_round2_regression() {
     assert!(
         crate::cmd::steer::wrap_up_before_timeout(&store, id.as_str(), 540, 600).expect("auto")
     );
-    crate::cmd::steer::run(&store, id.as_str(), "operator guidance").expect("operator steer");
-    MonitorState::new(true, None)
-        .maybe_forward_steer(&mut bridge, &store, &id)
-        .expect("operator signal");
-    let mut state = MonitorState::new(true, None);
     for _ in 0..2 {
         state.maybe_consume_reply(&mut bridge, &store, &id).expect("pending delivery");
     }

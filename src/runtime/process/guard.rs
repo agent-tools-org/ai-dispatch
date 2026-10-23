@@ -29,12 +29,6 @@ impl ProcessGuard {
         })
     }
 
-    #[cfg(test)]
-    /// Get the child's PID.
-    pub fn id(&self) -> u32 {
-        self.child.id()
-    }
-
     /// Get a mutable reference to the underlying Child.
     pub fn child_mut(&mut self) -> &mut Child {
         &mut self.child
@@ -170,8 +164,8 @@ mod tests {
         let _permit = crate::support::test_subprocess::acquire();
         let mut cmd = Command::new("sleep");
         cmd.arg("60");
-        let guard = ProcessGuard::spawn(&mut cmd).unwrap();
-        let pid = guard.id() as i32;
+        let mut guard = ProcessGuard::spawn(&mut cmd).unwrap();
+        let pid = guard.child_mut().id() as i32;
         drop(guard);
         // Process should be dead after drop
         std::thread::sleep(Duration::from_millis(100));

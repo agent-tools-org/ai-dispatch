@@ -61,14 +61,17 @@ fn loaded_task_route_exposes_provider_and_attribution() {
     task.attribution_source = Some(AttributionSource::Echoed);
     store.insert_task(&task).unwrap();
 
-    let app = App::new(
-        store,
-        super::super::RunOptions {
-            task_id: None,
-            group: None,
-        },
-    )
-    .unwrap();
+    let app = {
+        let mut app = App::empty(
+            store,
+            super::super::RunOptions {
+                task_id: None,
+                group: None,
+            },
+        );
+        app.reload_tasks().unwrap();
+        app
+    };
     let loaded = app.tasks.iter().find(|t| t.id.as_str() == "t-route-1").unwrap();
     assert_eq!(loaded.route().provider.as_str(), "openai-chatgpt-plan");
     assert_eq!(loaded.display_route(), "codex/openai-chatgpt-plan/gpt-5.6");
@@ -85,14 +88,17 @@ fn filters_today_view_by_group() {
         .insert_task(&make_task("t-1001", Some("wg-b")))
         .unwrap();
 
-    let app = App::new(
-        store,
-        super::super::RunOptions {
-            task_id: None,
-            group: Some("wg-a".to_string()),
-        },
-    )
-    .unwrap();
+    let app = {
+        let mut app = App::empty(
+            store,
+            super::super::RunOptions {
+                task_id: None,
+                group: Some("wg-a".to_string()),
+            },
+        );
+        app.reload_tasks().unwrap();
+        app
+    };
 
     assert_eq!(app.tasks.len(), 1);
     assert_eq!(app.tasks[0].id.as_str(), "t-1000");
@@ -113,14 +119,17 @@ fn keeps_ungrouped_tasks_visible_with_group_filter() {
         .unwrap();
     store.insert_task(&make_task("t-2002", None)).unwrap();
 
-    let app = App::new(
-        store,
-        super::super::RunOptions {
-            task_id: None,
-            group: Some("wg-test".to_string()),
-        },
-    )
-    .unwrap();
+    let app = {
+        let mut app = App::empty(
+            store,
+            super::super::RunOptions {
+                task_id: None,
+                group: Some("wg-test".to_string()),
+            },
+        );
+        app.reload_tasks().unwrap();
+        app
+    };
 
     let mut task_ids: Vec<&str> = app.tasks.iter().map(|task| task.id.as_str()).collect();
     task_ids.sort();
@@ -142,14 +151,17 @@ fn default_scope_includes_active_tasks_from_previous_days() {
 
     store.insert_task(&make_task("t-2502", None)).unwrap();
 
-    let app = App::new(
-        store,
-        super::super::RunOptions {
-            task_id: None,
-            group: None,
-        },
-    )
-    .unwrap();
+    let app = {
+        let mut app = App::empty(
+            store,
+            super::super::RunOptions {
+                task_id: None,
+                group: None,
+            },
+        );
+        app.reload_tasks().unwrap();
+        app
+    };
 
     let task_ids: Vec<&str> = app.tasks.iter().map(|task| task.id.as_str()).collect();
     assert!(task_ids.contains(&"t-2500"));
@@ -167,14 +179,17 @@ fn multipane_tasks_includes_pending_and_waiting_tasks() {
     waiting.status = TaskStatus::Waiting;
     store.insert_task(&waiting).unwrap();
 
-    let app = App::new(
-        store,
-        super::super::RunOptions {
-            task_id: None,
-            group: None,
-        },
-    )
-    .unwrap();
+    let app = {
+        let mut app = App::empty(
+            store,
+            super::super::RunOptions {
+                task_id: None,
+                group: None,
+            },
+        );
+        app.reload_tasks().unwrap();
+        app
+    };
 
     let task_ids: Vec<&str> = app
         .multipane_tasks()
@@ -195,14 +210,17 @@ fn filters_specific_task_scope() {
         .insert_task(&make_task("t-1001", Some("wg-b")))
         .unwrap();
 
-    let app = App::new(
-        store,
-        super::super::RunOptions {
-            task_id: Some("t-1001".to_string()),
-            group: Some("wg-b".to_string()),
-        },
-    )
-    .unwrap();
+    let app = {
+        let mut app = App::empty(
+            store,
+            super::super::RunOptions {
+                task_id: Some("t-1001".to_string()),
+                group: Some("wg-b".to_string()),
+            },
+        );
+        app.reload_tasks().unwrap();
+        app
+    };
 
     assert_eq!(app.tasks.len(), 1);
     assert_eq!(app.tasks[0].id.as_str(), "t-1001");
@@ -242,53 +260,21 @@ fn loads_running_task_milestone() {
         .unwrap();
     let completed_task_id = completed_task.id.clone();
 
-    let app = App::new(
-        store,
-        super::super::RunOptions {
-            task_id: None,
-            group: Some("wg-a".to_string()),
-        },
-    )
-    .unwrap();
+    let app = {
+        let mut app = App::empty(
+            store,
+            super::super::RunOptions {
+                task_id: None,
+                group: Some("wg-a".to_string()),
+            },
+        );
+        app.reload_tasks().unwrap();
+        app
+    };
 
     assert_eq!(app.get_milestone("t-1002"), Some("types defined"));
     assert_eq!(app.get_milestone(completed_task_id.as_str()), Some("finished milestone"));
 }
 
-#[test]
-fn detail_mode_cycles_tabs_and_resets_scroll() {
-    let store = Arc::new(Store::open_memory().unwrap());
-    let mut task = make_task("t-1003", None);
-    // Multi-line prompt so j can advance scroll past 0 under clamp.
-    task.prompt = (0..20).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n");
-    store.insert_task(&task).unwrap();
-    let mut app = App::new(
-        store,
-        super::super::RunOptions {
-            task_id: None,
-            group: None,
-        },
-    )
-    .unwrap();
-
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-        .unwrap();
-    assert!(app.detail_mode);
-    assert!(app.detail_tab == DetailTab::Events);
-
-    app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE))
-        .unwrap();
-    app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE))
-        .unwrap();
-    assert!(app.detail_tab == DetailTab::Prompt);
-    assert_eq!(app.detail_scroll, 1);
-
-    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))
-        .unwrap();
-    assert!(app.detail_tab == DetailTab::Output);
-    assert_eq!(app.detail_scroll, 0);
-
-    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT))
-        .unwrap();
-    assert!(app.detail_tab == DetailTab::Prompt);
-}
+#[path = "app_tests_entry_tests.rs"]
+mod production_entries;

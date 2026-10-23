@@ -87,7 +87,7 @@ fn detail_output_prefers_output_file() {
     let mut task = make_task();
     task.output_path = Some(output_file.path().display().to_string());
 
-    assert_eq!(read_task_output_for_tui(&task), "stdout\n");
+    assert_eq!(crate::task::view::read_output(&task), "stdout\n");
 }
 
 #[test]
@@ -164,5 +164,5 @@ fn detail_output_parses_log_jsonl_content() {
     let mut task = make_task();
     task.log_path = Some(log_file.path().display().to_string());
 
-    assert_eq!(read_task_output_for_tui(&task), "hello\n---\n world");
+    assert_eq!(crate::task::view::read_output(&task), "hello\n---\n world");
 }

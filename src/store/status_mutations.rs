@@ -101,14 +101,6 @@ impl Store {
         Ok(result)
     }
 
-    #[cfg(test)]
-    /// Set status to Failed only if currently Running or Waiting.
-    /// Prevents zombie cleanup from clobbering a real completion status.
-    pub fn fail_if_running(&self, id: &str) -> Result<bool> {
-        self.settle_task_status(id, TaskStatus::Failed,
-            Some(&[TaskStatus::Running, TaskStatus::Waiting]), None, None)
-    }
-
     pub fn fail_waiting_with_reason(&self, id: &str, detail: &str) -> Result<bool> {
         let event = TaskEvent {
             task_id: TaskId(id.to_string()),

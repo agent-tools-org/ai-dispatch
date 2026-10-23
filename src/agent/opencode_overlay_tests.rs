@@ -28,7 +28,17 @@ fn command_args(cmd: &Command) -> Vec<String> {
 
 #[test]
 fn overlay_kind_and_model_resolution() {
-    let agent = OpenCodeOverlayAgent::new("mimo".into(), "mimo/mimo-v2.5-pro".into());
+    let agent = OpenCodeOverlayAgent::from_spec(crate::agent::opencode_overlay::OpenCodeOverlaySpec {
+        id: "mimo".into(),
+        reported_kind: crate::types::AgentKind::Custom,
+        binary: "opencode".to_string(),
+        extra_args: Vec::new(),
+        default_model: Some("mimo/mimo-v2.5-pro".into()),
+        interactive_input: true,
+        rate_limit_kind: crate::types::AgentKind::OpenCode,
+        allow_external_directories: true,
+        probe_served_models: false,
+    });
     assert_eq!(agent.kind(), AgentKind::Custom);
 
     let cmd_default = agent.build_command("hi", &base_opts()).unwrap();
@@ -117,7 +127,17 @@ fn overlay_served_models_probe_behavior() {
         for kind in [AgentKind::Kilo, AgentKind::MiMoCode] {
             assert_eq!(crate::agent::get_agent(kind).served_models().unwrap(), None);
         }
-        let custom = OpenCodeOverlayAgent::new("custom".into(), "provider/model".into());
+        let custom = OpenCodeOverlayAgent::from_spec(crate::agent::opencode_overlay::OpenCodeOverlaySpec {
+            id: "custom".into(),
+            reported_kind: crate::types::AgentKind::Custom,
+            binary: "opencode".to_string(),
+            extra_args: Vec::new(),
+            default_model: Some("provider/model".into()),
+            interactive_input: true,
+            rate_limit_kind: crate::types::AgentKind::OpenCode,
+            allow_external_directories: true,
+            probe_served_models: false,
+        });
         assert_eq!(custom.served_models().unwrap(), None);
         assert_eq!(std::fs::read_to_string(std::path::Path::new(&home).join("calls")).unwrap(), "models\n");
         return;
@@ -162,7 +182,17 @@ fn argv_parity_base_opts_across_all_variants() {
     );
 
     // Custom Delegate
-    let custom = OpenCodeOverlayAgent::new("custom-del".into(), "provider/model-x".into());
+    let custom = OpenCodeOverlayAgent::from_spec(crate::agent::opencode_overlay::OpenCodeOverlaySpec {
+        id: "custom-del".into(),
+        reported_kind: crate::types::AgentKind::Custom,
+        binary: "opencode".to_string(),
+        extra_args: Vec::new(),
+        default_model: Some("provider/model-x".into()),
+        interactive_input: true,
+        rate_limit_kind: crate::types::AgentKind::OpenCode,
+        allow_external_directories: true,
+        probe_served_models: false,
+    });
     let custom_cmd = custom.build_command(prompt, &opts).unwrap();
     assert_eq!(custom_cmd.get_program().to_string_lossy(), "opencode");
     assert_eq!(
@@ -226,7 +256,17 @@ fn argv_parity_complex_opts_across_all_variants() {
     assert_eq!(command_args(&mimo_cmd), expected_mimo);
 
     // Custom Delegate
-    let custom = OpenCodeOverlayAgent::new("custom-del".into(), "provider/default-model".into());
+    let custom = OpenCodeOverlayAgent::from_spec(crate::agent::opencode_overlay::OpenCodeOverlaySpec {
+        id: "custom-del".into(),
+        reported_kind: crate::types::AgentKind::Custom,
+        binary: "opencode".to_string(),
+        extra_args: Vec::new(),
+        default_model: Some("provider/default-model".into()),
+        interactive_input: true,
+        rate_limit_kind: crate::types::AgentKind::OpenCode,
+        allow_external_directories: true,
+        probe_served_models: false,
+    });
     let custom_cmd = custom.build_command(prompt, &opts).unwrap();
     assert_eq!(custom_cmd.get_program().to_string_lossy(), "opencode");
     let mut expected_custom = vec!["run"];
@@ -234,48 +274,5 @@ fn argv_parity_complex_opts_across_all_variants() {
     assert_eq!(command_args(&custom_cmd), expected_custom);
 }
 
-#[test]
-fn recorded_stream_event_parsing_parity() {
-    let task_id = TaskId("t-stream-proof".into());
-    let stream_lines = [
-        (r#"{"type":"step_start"}"#, None),
-        (
-            r#"{"type":"message","content":"Analyzing files...","sessionID":"ses_proof_1"}"#,
-            Some(EventKind::Reasoning),
-        ),
-        (
-            r#"{"type":"tool_call","name":"bash","arguments":"cargo test"}"#,
-            Some(EventKind::Test),
-        ),
-        (
-            r#"{"type":"tool_call","name":"read","arguments":"src/lib.rs"}"#,
-            Some(EventKind::ToolCall),
-        ),
-        (
-            r#"{"type":"auto_compact","message":"compacted turns"}"#,
-            Some(EventKind::Milestone),
-        ),
-        (
-            r#"{"type":"step_finish","part":{"tokens":{"total":500,"input":400,"output":100},"cost":0.002}}"#,
-            Some(EventKind::Completion),
-        ),
-        (
-            r#"{"type":"completion","tokens":500}"#,
-            Some(EventKind::Completion),
-        ),
-        (
-            "Compiling test-crate v0.1.0",
-            Some(EventKind::Build),
-        ),
-    ];
-
-    let oc = super::super::get_agent(AgentKind::OpenCode);
-    for (line, expected_kind) in stream_lines {
-        let event = oc.parse_event(&task_id, line);
-        assert_eq!(event.as_ref().map(|e| e.event_kind), expected_kind, "line: {line}");
-        if let Some(ev) = event {
-            assert_eq!(ev.task_id, task_id);
-            assert!(!ev.detail.is_empty());
-        }
-    }
-}
+#[path = "opencode_overlay_tests_entry_tests.rs"]
+mod production_entries;

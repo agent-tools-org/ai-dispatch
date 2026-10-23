@@ -11,7 +11,7 @@ use crate::runtime::background;
 use crate::types::{Task, TaskFilter, TaskStatus};
 
 impl App {
-    pub(super) fn reload_tasks(&mut self) -> Result<()> {
+    pub(in crate::ui::tui) fn reload_tasks(&mut self) -> Result<()> {
         let tree_nodes = &self.nodes;
         let tree_anchor = tree_nodes
             .get(self.tree_selected)

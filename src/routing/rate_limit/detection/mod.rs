@@ -14,19 +14,6 @@ pub enum QuotaEvidence {
     AgentProse,
 }
 
-#[cfg(test)]
-pub fn is_rate_limit_error(message: &str) -> bool {
-    is_rate_limit_error_with_evidence(message, QuotaEvidence::AgentProse)
-}
-
-#[cfg(test)]
-pub fn is_rate_limit_error_with_evidence(message: &str, evidence: QuotaEvidence) -> bool {
-    if crate::routing::rate_limit::signatures::match_quota_signature(message).is_some() {
-        return true;
-    }
-    evidence == QuotaEvidence::NonAgentChannel && generic_quota_signal(message)
-}
-
 pub fn is_rate_limit_error_for_agent(message: &str, agent: &AgentKind) -> bool {
     is_rate_limit_error_for_agent_with_evidence(message, agent, QuotaEvidence::NonAgentChannel)
 }

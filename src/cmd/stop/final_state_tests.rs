@@ -108,12 +108,12 @@ fn stop_and_kill_release_worktree_locks() {
         let mut task = running_task(task_id, repo.path(), &info.path, branch);
         task.status = status;
         store.insert_task(&task).unwrap();
-        crate::workspace::worktree::try_acquire_worktree_lock(&info.path, task_id).unwrap();
+        crate::workspace::worktree::try_acquire_worktree_lock_with_store(&info.path, task_id, None).unwrap();
 
         action(&store, task_id).unwrap();
 
         assert!(!info.path.join(".aid-lock").exists());
-        assert!(crate::workspace::worktree::check_worktree_lock(&info.path).is_none());
+        assert!(crate::workspace::worktree::check_worktree_lock_with_store(&info.path, None).is_none());
     }
 }
 
@@ -137,8 +137,8 @@ fn detached_stop_and_force_kill_reject_unverified_agent_identity() {
                 include_str!("../../../testdata/legacy-background-spec.json"),
             ).expect("spec");
             spec.task_id = task.id.to_string();
-            spec.worker_pid = Some(root.id());
-            spec.agent_pid = Some(root.id());
+            spec.worker_pid = Some(root.child_mut().id());
+            spec.agent_pid = Some(root.child_mut().id());
             spec.agent_started = started;
             crate::runtime::background::save_spec(&spec).expect("save spec");
             action(&store, task.id.as_str()).expect("stop");
@@ -170,8 +170,8 @@ fn detached_stop_and_force_kill_signal_matching_agent_identity() {
         ).expect("spec");
         spec.task_id = task.id.to_string();
         spec.worker_pid = None;
-        spec.agent_pid = Some(root.id());
-        spec.agent_started = crate::runtime::process::monitor::activity::root_started(root.id());
+        spec.agent_pid = Some(root.child_mut().id());
+        spec.agent_started = crate::runtime::process::monitor::activity::root_started(root.child_mut().id());
         assert!(spec.agent_started.is_some());
         crate::runtime::background::save_spec(&spec).expect("save spec");
         action(&store, task.id.as_str()).expect("stop");

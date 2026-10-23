@@ -79,7 +79,7 @@ fn auto_save_creates_output_for_research_task() {
     task.exit_code = None;
     task.log_path = Some(log_path.display().to_string());
     store.insert_task(&task).unwrap();
-    auto_save_task_output(&store, &task).unwrap();
+    crate::cmd::run::run_post::auto_save_task_output(&store, &task).unwrap();
     let output_path = crate::support::paths::task_dir(task.id.as_str()).join("output.md");
     assert_eq!(std::fs::read_to_string(&output_path).unwrap(), "saved output");
     assert_eq!(store.get_task(task.id.as_str()).unwrap().unwrap().output_path, Some(output_path.display().to_string()));

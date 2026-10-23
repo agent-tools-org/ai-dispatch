@@ -54,7 +54,7 @@ async fn watch_silent_child(script: &str) -> (CompletionInfo, Vec<TaskEvent>) {
         .stderr(Stdio::piped())
         .spawn()
         .expect("fake agent");
-    let info = super::watch_streaming(
+    let info = super::watch_streaming_with_input(
         &FakeAgent,
         &mut child,
         &task_id,
@@ -62,6 +62,8 @@ async fn watch_silent_child(script: &str) -> (CompletionInfo, Vec<TaskEvent>) {
         &temp.path().join("agent.log"),
         None,
         Duration::from_millis(400),
+        None,
+        None,
         None,
     )
     .await

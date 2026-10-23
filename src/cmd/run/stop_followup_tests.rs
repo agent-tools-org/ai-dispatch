@@ -86,7 +86,11 @@ async fn stop_followup_verify_failure_after_parent_stop_creates_nothing() {
     let (_home, _guard, store, parent, mut args) = setup();
     args.verify = Some("false".to_string());
     args.retry = 1;
-    assert!(crate::task::lifecycle::mark_stopped(&store, parent.id.as_str()).unwrap());
+    assert!(
+        (&store)
+            .update_task_status(parent.id.as_str(), crate::types::TaskStatus::Stopped)
+            .unwrap()
+    );
     maybe_verify(&store, &parent.id, Some("false"), args.dir.as_deref(), None);
     assert_eq!(
         store
@@ -110,10 +114,7 @@ async fn stop_followup_judge_retry_after_parent_stop_creates_nothing() {
     let stop_store = store.clone();
     JUDGE_HOOK.with(|hook| {
         *hook.borrow_mut() = Some(Box::new(move || {
-            assert!(crate::task::lifecycle::mark_stopped(
-                &stop_store,
-                "t-parent"
-            )?);
+            assert!((&stop_store).update_task_status("t-parent", crate::types::TaskStatus::Stopped)?);
             Ok(judge::JudgeResult {
                 passed: false,
                 feedback: "add tests".to_string(),
@@ -135,7 +136,11 @@ async fn stop_followup_iteration_after_parent_stop_creates_nothing() {
     let stop_store = store.clone();
     let stopper = std::thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
-        assert!(crate::task::lifecycle::mark_stopped(&stop_store, "t-parent").unwrap());
+        assert!(
+            (&stop_store)
+                .update_task_status("t-parent", crate::types::TaskStatus::Stopped)
+                .unwrap()
+        );
         stream.write_all(b"x").unwrap();
     });
     let config = IterateConfig {
@@ -161,7 +166,11 @@ fn stop_followup_child_insert_after_stop_is_refused() {
     let (_home, _guard, store, parent, _) = setup();
     let mut child = fixture::task("t-child", TaskStatus::Pending, None, None);
     child.parent_task_id = Some(parent.id.to_string());
-    assert!(crate::task::lifecycle::mark_stopped(&store, parent.id.as_str()).unwrap());
+    assert!(
+        (&store)
+            .update_task_status(parent.id.as_str(), crate::types::TaskStatus::Stopped)
+            .unwrap()
+    );
 
     let error = store
         .insert_task(&child)
@@ -178,9 +187,17 @@ fn stop_followup_waiting_replacement_after_stop_is_refused() {
     store.insert_task(&child).unwrap();
     child.status = TaskStatus::Pending;
     child.parent_task_id = Some(parent.id.to_string());
-    assert!(crate::task::lifecycle::mark_stopped(&store, parent.id.as_str()).unwrap());
+    assert!(
+        (&store)
+            .update_task_status(parent.id.as_str(), crate::types::TaskStatus::Stopped)
+            .unwrap()
+    );
 
-    assert!(store.replace_waiting_task(&child).is_err());
+    assert!(
+        store
+            .replace_waiting_task_with_origin(&child, crate::types::DispatchOrigin::Automatic)
+            .is_err()
+    );
 
     assert_eq!(
         store.get_task(child.id.as_str()).unwrap().unwrap().status,
@@ -195,7 +212,11 @@ fn stop_followup_parent_stop_between_insert_and_launch_prevents_worker() {
     child.parent_task_id = Some(parent.id.to_string());
     store.insert_task(&child).unwrap();
     assert!(crate::task::lifecycle::mark_running(&store, &child.id).unwrap());
-    assert!(crate::task::lifecycle::mark_stopped(&store, parent.id.as_str()).unwrap());
+    assert!(
+        (&store)
+            .update_task_status(parent.id.as_str(), crate::types::TaskStatus::Stopped)
+            .unwrap()
+    );
     let mut launched = false;
 
     let result = store.with_worker_launch(child.id.as_str(), || {
@@ -226,7 +247,11 @@ fn stop_followup_background_dispatch_after_parent_stop_writes_no_spec() {
     let prepared =
         run_dispatch_prepare::prepare_dispatch_with(&store, &mut args, |_| true).unwrap();
     assert!(crate::task::lifecycle::mark_running(&store, &prepared.task_id).unwrap());
-    assert!(crate::task::lifecycle::mark_stopped(&store, parent.id.as_str()).unwrap());
+    assert!(
+        (&store)
+            .update_task_status(parent.id.as_str(), crate::types::TaskStatus::Stopped)
+            .unwrap()
+    );
     let prompt = PromptBundle {
         effective_prompt: args.prompt.clone(),
         context_files: Vec::new(),
@@ -249,29 +274,5 @@ fn stop_followup_background_dispatch_after_parent_stop_writes_no_spec() {
     );
 }
 
-#[test]
-fn stop_followup_child_launched_before_parent_stop_is_unaffected() {
-    let (_home, _guard, store, parent, _) = setup();
-    let mut child = fixture::task("t-child", TaskStatus::Running, None, None);
-    child.parent_task_id = Some(parent.id.to_string());
-    store.insert_task(&child).unwrap();
-    let mut launched = false;
-    store
-        .with_worker_launch(child.id.as_str(), || {
-            launched = true;
-            Ok(())
-        })
-        .unwrap();
-
-    assert!(crate::task::lifecycle::mark_stopped(&store, parent.id.as_str()).unwrap());
-
-    assert!(launched);
-    store
-        .with_running_task(child.id.as_str(), || Ok(()))
-        .unwrap();
-    assert_eq!(
-        store.get_task(child.id.as_str()).unwrap().unwrap().status,
-        TaskStatus::Running
-    );
-    assert!(crate::task::lifecycle::mark_stopped(&store, child.id.as_str()).unwrap());
-}
+#[path = "stop_followup_tests_entry_tests.rs"]
+mod production_entries;

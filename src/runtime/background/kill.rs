@@ -194,11 +194,11 @@ mod tests {
         let mut command = std::process::Command::new("sleep");
         command.arg("60");
         let mut root = crate::runtime::process::guard::ProcessGuard::spawn(&mut command).expect("agent");
-        let mut spec = spec(Some(root.id()));
-        spec.agent_started = crate::runtime::process::monitor::activity::root_started(root.id());
+        let mut spec = spec(Some(root.child_mut().id()));
+        spec.agent_started = crate::runtime::process::monitor::activity::root_started(root.child_mut().id());
         assert!(spec.agent_started.is_some());
         let targets = kill_targets(None, &spec);
-        assert_eq!(targets.pids(), vec![root.id()]);
+        assert_eq!(targets.pids(), vec![root.child_mut().id()]);
         signal_targets(targets.worker_pid, &spec);
         assert!(!root.child_mut().wait().expect("wait").success(), "owned agent must be killed");
     }
@@ -210,8 +210,8 @@ mod tests {
         let mut command = std::process::Command::new("sleep");
         command.arg("60");
         let mut root = crate::runtime::process::guard::ProcessGuard::spawn(&mut command).expect("agent");
-        let mut spec = spec(Some(root.id()));
-        spec.agent_started = crate::runtime::process::monitor::activity::root_started(root.id());
+        let mut spec = spec(Some(root.child_mut().id()));
+        spec.agent_started = crate::runtime::process::monitor::activity::root_started(root.child_mut().id());
         assert!(spec.agent_started.is_some());
         let targets = kill_targets(None, &spec);
         spec.agent_started = Some("previous-launch".to_string());

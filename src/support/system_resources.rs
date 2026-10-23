@@ -24,11 +24,6 @@ pub fn available_disk_mb(path: &str) -> Option<u64> {
         .find_map(parse_available_mb)
 }
 
-#[cfg(test)]
-pub fn check_disk_space(path: &str, min_mb: u64) -> bool {
-    available_disk_mb(path).is_some_and(|available| available >= min_mb)
-}
-
 fn parse_available_mb(line: &str) -> Option<u64> {
     line.split_whitespace().nth(3)?.parse().ok()
 }
@@ -57,7 +52,8 @@ mod tests {
     #[test]
     fn check_disk_space_handles_zero_threshold() {
         let _permit = test_subprocess::acquire();
-        assert!(check_disk_space("/tmp", 0));
+        let min_mb = std::hint::black_box(0);
+        assert!(available_disk_mb("/tmp").is_some_and(|available| available >= min_mb));
     }
 
     #[test]

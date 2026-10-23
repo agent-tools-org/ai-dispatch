@@ -92,7 +92,11 @@ fn age_log(id: &str, age: Duration) {
 
 #[test]
 fn idle_hang_fires_for_streaming_when_progress_stale() {
-    let mut state = MonitorState::new(true, None);
+    let mut state = MonitorState::with_policy(
+        true,
+        None,
+        crate::config::timeout_policy::TimeoutPolicy::default(),
+    );
     state.last_progress_time = Instant::now() - Duration::from_secs(601);
     assert!(state.idle_hang_elapsed(true, Duration::from_secs(600), "t-stream-idle"));
 }
@@ -123,7 +127,11 @@ fn grok_pty_default_ladder_preserves_three_five_six_hundred_boundaries() {
     );
 
     let now = Instant::now();
-    let mut state = MonitorState::new(true, None);
+    let mut state = MonitorState::with_policy(
+        true,
+        None,
+        crate::config::timeout_policy::TimeoutPolicy::default(),
+    );
     // Pin `now` so the 600s boundary does not race wall-clock load. With
     // `elapsed <= idle` meaning still alive: 599/600 stay below/at threshold,
     // 601 is the first second that hangs.
@@ -137,7 +145,11 @@ fn grok_pty_default_ladder_preserves_three_five_six_hundred_boundaries() {
 
 #[test]
 fn idle_hang_is_inert_for_streaming_with_fresh_progress() {
-    let mut state = MonitorState::new(true, None);
+    let mut state = MonitorState::with_policy(
+        true,
+        None,
+        crate::config::timeout_policy::TimeoutPolicy::default(),
+    );
     state.last_progress_time = Instant::now() - Duration::from_secs(10);
     assert!(!state.idle_hang_elapsed(true, Duration::from_secs(600), "t-stream-fresh"));
 }
@@ -146,7 +158,11 @@ fn idle_hang_is_inert_for_streaming_with_fresh_progress() {
 fn idle_hang_fires_for_buffered_without_log_growth() {
     // t-54c4560a shape: PTY silent, progress stale, no recent agent.log → reap.
     let (_temp, _home) = aid_home();
-    let mut state = MonitorState::new(false, None);
+    let mut state = MonitorState::with_policy(
+        false,
+        None,
+        crate::config::timeout_policy::TimeoutPolicy::default(),
+    );
     state.last_progress_time = Instant::now() - Duration::from_secs(601);
     assert!(
         state.idle_hang_elapsed(false, Duration::from_secs(600), "t-buf-idle-dead"),
@@ -158,7 +174,11 @@ fn idle_hang_fires_for_buffered_without_log_growth() {
 fn idle_hang_is_inert_for_buffered_with_log_growth_in_window() {
     let (_temp, _home) = aid_home();
     write_agent_log("t-buf-idle-live", "tool call in flight...\n");
-    let mut state = MonitorState::new(false, None);
+    let mut state = MonitorState::with_policy(
+        false,
+        None,
+        crate::config::timeout_policy::TimeoutPolicy::default(),
+    );
     state.last_progress_time = Instant::now() - Duration::from_secs(601);
     assert!(
         !state.idle_hang_elapsed(false, Duration::from_secs(600), "t-buf-idle-live"),
@@ -171,7 +191,11 @@ fn idle_hang_fires_for_buffered_when_log_is_stale() {
     let (_temp, _home) = aid_home();
     write_agent_log("t-buf-idle-stale", "wrote once then hung\n");
     age_log("t-buf-idle-stale", Duration::from_secs(700));
-    let mut state = MonitorState::new(false, None);
+    let mut state = MonitorState::with_policy(
+        false,
+        None,
+        crate::config::timeout_policy::TimeoutPolicy::default(),
+    );
     state.last_progress_time = Instant::now() - Duration::from_secs(601);
     assert!(
         state.idle_hang_elapsed(false, Duration::from_secs(600), "t-buf-idle-stale"),
@@ -183,7 +207,11 @@ fn idle_hang_fires_for_buffered_when_log_is_stale() {
 fn idle_hang_streaming_ignores_agent_log() {
     let (_temp, _home) = aid_home();
     write_agent_log("t-stream-log", "unrelated log growth\n");
-    let mut state = MonitorState::new(true, None);
+    let mut state = MonitorState::with_policy(
+        true,
+        None,
+        crate::config::timeout_policy::TimeoutPolicy::default(),
+    );
     state.last_progress_time = Instant::now() - Duration::from_secs(601);
     assert!(
         state.idle_hang_elapsed(true, Duration::from_secs(600), "t-stream-log"),
@@ -241,57 +269,5 @@ fn repeated_ladder_ticks_with_log_growth_still_reap_after_idle() {
     );
 }
 
-#[test]
-fn maybe_handle_idle_warns_when_buffered_log_is_stale() {
-    let (_temp, _home) = aid_home();
-    write_agent_log("t-buf-ladder-stale", "wrote once then hung\n");
-    age_log("t-buf-ladder-stale", Duration::from_secs(60));
-    let store = Arc::new(Store::open_memory().expect("store"));
-    let task_id = running_task(&store, "t-buf-ladder-stale", AgentKind::Antigravity);
-    let mut state = MonitorState::with_policy(false, None, short_ladder_policy());
-    state.last_progress_time = Instant::now() - Duration::from_secs(15);
-    state.maybe_handle_idle(&store, &task_id, true).expect("idle ladder");
-    assert!(state.idle_warned, "stale buffered log must still warn");
-    let events = store.get_events(task_id.as_str()).expect("events");
-    assert!(
-        events.iter().any(|e| e.detail == "idle warn"),
-        "expected idle warn event: {events:?}"
-    );
-}
-
-#[test]
-fn maybe_handle_idle_streaming_ignores_agent_log() {
-    let (_temp, _home) = aid_home();
-    write_agent_log("t-stream-ladder", "unrelated log growth\n");
-    let store = Arc::new(Store::open_memory().expect("store"));
-    let task_id = running_task(&store, "t-stream-ladder", AgentKind::Antigravity);
-    let mut state = MonitorState::with_policy(true, None, short_ladder_policy());
-    state.last_progress_time = Instant::now() - Duration::from_secs(15);
-    state.maybe_handle_idle(&store, &task_id, true).expect("idle ladder");
-    assert!(
-        state.idle_warned,
-        "streaming ladder must stay on the progress clock even if a log grows"
-    );
-}
-
-#[test]
-fn idle_ladder_never_queues_for_noninteractive_agent() {
-    let (_temp, _home) = aid_home();
-    let store = Arc::new(Store::open_memory().expect("store"));
-    let task_id = running_task(&store, "t-nudge-noninteractive", AgentKind::Antigravity);
-    let agent = crate::agent::get_agent(AgentKind::Antigravity);
-    let mut state = MonitorState::with_policy(false, None, short_ladder_policy());
-    state.last_progress_time = Instant::now() - Duration::from_secs(25);
-
-    assert!(!agent.accepts_interactive_input());
-    state
-        .maybe_handle_idle(
-            &store,
-            &task_id,
-            agent.accepts_interactive_input() && agent.accepts_idle_nudge(),
-        )
-        .expect("idle ladder");
-
-    assert!(store.list_messages_for_task(task_id.as_str()).expect("messages").is_empty());
-    assert!(!state.idle_nudged);
-}
+#[path = "idle_hang_tests_entry_tests.rs"]
+mod production_entries;

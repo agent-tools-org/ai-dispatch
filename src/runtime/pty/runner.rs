@@ -22,34 +22,6 @@ use command::spawn_bridge;
 mod execution;
 pub(crate) mod completion;
 
-#[cfg(test)]
-#[allow(clippy::too_many_arguments)]
-pub fn run_agent_process(
-    agent: &dyn Agent,
-    cmd: &std::process::Command,
-    task_id: &TaskId,
-    store: &Arc<Store>,
-    log_path: &Path,
-    output_path: Option<&str>,
-    model: Option<&str>,
-    streaming: bool,
-) -> Result<()> {
-    run_agent_process_with_control(
-        agent,
-        cmd,
-        task_id,
-        store,
-        log_path,
-        output_path,
-        model,
-        streaming,
-        crate::config::timeout_policy::TimeoutPolicy::from_command(cmd),
-        None,
-        None,
-        std::time::Instant::now(),
-    )
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_agent_process_with_control(
     agent: &dyn Agent,

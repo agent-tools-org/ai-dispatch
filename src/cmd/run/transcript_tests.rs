@@ -1,7 +1,8 @@
 // Transcript-focused `aid run` tests split from run_tests.rs.
 // Covers transcript path wiring and transcript-first autosave behavior.
 // Deps: parent run test helpers, paths, Store, tempfile.
-use super::{auto_save_task_output, make_failed_task, paths};
+use super::{make_failed_task, paths};
+use crate::cmd::run::run_post::auto_save_task_output;
 use crate::store::Store;
 use crate::types::TaskStatus;
 use tempfile::TempDir;
@@ -37,7 +38,7 @@ fn auto_save_prefers_transcript_over_log() {
     task.log_path = Some(log_path.display().to_string());
     store.insert_task(&task).unwrap();
 
-    auto_save_task_output(&store, &task).unwrap();
+    crate::cmd::run::run_post::auto_save_task_output(&store, &task).unwrap();
 
     let output_path = paths::task_dir(task.id.as_str()).join("output.md");
     assert_eq!(
@@ -62,7 +63,7 @@ fn auto_save_persists_plain_text_transcript() {
     task.status = TaskStatus::Done;
     store.insert_task(&task).unwrap();
 
-    auto_save_task_output(&store, &task).unwrap();
+    crate::cmd::run::run_post::auto_save_task_output(&store, &task).unwrap();
 
     let output_path = paths::task_dir(task.id.as_str()).join("output.md");
     assert_eq!(

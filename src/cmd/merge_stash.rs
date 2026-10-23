@@ -8,9 +8,11 @@ use std::process::Command;
 
 #[path = "merge_stash_identity.rs"]
 mod identity;
-use identity::{
-    apply_stash, find_stash, push_stash, unique_stash_message,
-};
+#[cfg(test)]
+pub(crate) use identity::find_stash;
+#[cfg(not(test))]
+use identity::find_stash;
+use identity::{apply_stash, push_stash, unique_stash_message};
 
 pub(crate) struct LocalChanges {
     stash_ref: String,
@@ -40,11 +42,6 @@ where
     F: FnOnce(&str),
 {
     capture_local_changes(repo_dir, before_identify, || {})
-}
-
-#[cfg(test)]
-pub(crate) fn find_stash_for_test(repo_dir: &str, token: &str) -> Result<String, String> {
-    find_stash(repo_dir, token)
 }
 
 fn capture_local_changes<F, G>(

@@ -76,15 +76,6 @@ pub(crate) struct MonitorState {
 }
 
 impl MonitorState {
-    #[cfg(test)]
-    pub(crate) fn new(streaming: bool, workgroup_id: Option<String>) -> Self {
-        Self::with_policy(
-            streaming,
-            workgroup_id,
-            crate::config::timeout_policy::TimeoutPolicy::default(),
-        )
-    }
-
     pub(crate) fn with_policy(
         streaming: bool,
         workgroup_id: Option<String>,

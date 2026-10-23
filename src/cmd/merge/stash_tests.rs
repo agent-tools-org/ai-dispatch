@@ -83,7 +83,7 @@ fn stash_identity_lookup_uses_token_when_banner_text_is_unusable() {
             &message,
         ],
     );
-    let found = find_stash_for_test(&repo.path().to_string_lossy(), &token).unwrap();
+    let found = find_stash(&repo.path().to_string_lossy(), &token).unwrap();
     let expected = Command::new("git")
         .args([
             "-C",

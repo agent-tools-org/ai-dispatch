@@ -1,5 +1,5 @@
 // Tests for streaming completion status and quota exhaustion on the success path.
-// Deps: super::{record_quota_exhaustion, quota_line, ...}, serde_json::Value.
+// Deps: super::{record_quota_exhaustion_with_delivery, quota_line, ...}, serde_json::Value.
 
 use super::*;
 use serde_json::Value;
@@ -54,9 +54,14 @@ fn record_quota_exhaustion_ignores_agent_prose_about_rate_limits() {
         "Conclusion: {}\n",
         "The RPC provider throttles us; we saw a 429 and burned Alchemy credits"
     );
-    assert!(!record_quota_exhaustion(&report, crate::types::AgentKind::Cursor, None, None,)
-    .recorded());
-    assert!(!crate::routing::rate_limit::is_rate_limited(&crate::types::AgentKind::Cursor, None));
+    assert!(
+        !record_quota_exhaustion_with_delivery(&report, crate::types::AgentKind::Cursor, None, None, false)
+            .recorded()
+    );
+    assert!(!crate::routing::rate_limit::is_rate_limited(
+        &crate::types::AgentKind::Cursor,
+        None
+    ));
 }
 
 #[test]
@@ -68,9 +73,15 @@ fn record_quota_exhaustion_detects_provider_refusal_templates() {
     let codex_out = test_codex_error_envelope(
         "You have hit your usage limit.",
     );
-    assert!(record_quota_exhaustion(&codex_out, crate::types::AgentKind::Codex, None, None,)
-    .should_fail());
-    assert!(crate::routing::rate_limit::is_rate_limited(&crate::types::AgentKind::Codex, None));
+    assert!(
+        record_quota_exhaustion_with_delivery(
+            &codex_out, crate::types::AgentKind::Codex, None, None, false,
+        ).should_fail()
+    );
+    assert!(crate::routing::rate_limit::is_rate_limited(
+        &crate::types::AgentKind::Codex,
+        None
+    ));
     crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
 
     crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
@@ -79,22 +90,54 @@ fn record_quota_exhaustion_detects_provider_refusal_templates() {
         crate::routing::rate_limit::test_future_recovery_time()
     );
     let codex_out = test_codex_error_envelope(&codex_message);
-    assert!(record_quota_exhaustion(&codex_out, crate::types::AgentKind::Codex, None, None,)
-    .should_fail());
-    assert!(crate::routing::rate_limit::is_rate_limited(&crate::types::AgentKind::Codex, None));
+    assert!(
+        record_quota_exhaustion_with_delivery(&codex_out, crate::types::AgentKind::Codex, None, None, false)
+            .should_fail()
+    );
+    assert!(crate::routing::rate_limit::is_rate_limited(
+        &crate::types::AgentKind::Codex,
+        None
+    ));
 }
 
 #[test]
 fn prose_rate_limit_tokens_are_not_quota_failures() {
-    assert!(!crate::routing::rate_limit::is_rate_limit_error(
-        "rate_limit_kind now returns AgentKind::Custom for custom agents"
-    ));
-    assert!(!crate::routing::rate_limit::is_rate_limit_error(
-        "We must respect the rate limit on the Base sequencer feed"
-    ));
-    assert!(!crate::routing::rate_limit::is_rate_limit_error(
-        "The parser handles nested arrays correctly"
-    ));
+    assert!(
+        !crate::types::AgentKind::ALL
+            .iter()
+            .chain([&crate::types::AgentKind::Claude])
+            .any(|agent| {
+                crate::routing::rate_limit::is_rate_limit_error_for_agent_with_evidence(
+                    "rate_limit_kind now returns AgentKind::Custom for custom agents",
+                    agent,
+                    crate::routing::rate_limit::QuotaEvidence::AgentProse,
+                )
+            })
+    );
+    assert!(
+        !crate::types::AgentKind::ALL
+            .iter()
+            .chain([&crate::types::AgentKind::Claude])
+            .any(|agent| {
+                crate::routing::rate_limit::is_rate_limit_error_for_agent_with_evidence(
+                    "We must respect the rate limit on the Base sequencer feed",
+                    agent,
+                    crate::routing::rate_limit::QuotaEvidence::AgentProse,
+                )
+            })
+    );
+    assert!(
+        !crate::types::AgentKind::ALL
+            .iter()
+            .chain([&crate::types::AgentKind::Claude])
+            .any(|agent| {
+                crate::routing::rate_limit::is_rate_limit_error_for_agent_with_evidence(
+                    "The parser handles nested arrays correctly",
+                    agent,
+                    crate::routing::rate_limit::QuotaEvidence::AgentProse,
+                )
+            })
+    );
 }
 
 #[test]
@@ -125,9 +168,14 @@ fn markdown_shape_does_not_turn_a_refusal_into_delivery() {
     crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
 
     let output = &test_codex_error_envelope("# Error\nYou have hit your usage limit.");
-    assert!(record_quota_exhaustion(output, crate::types::AgentKind::Codex, None, None,)
-    .should_fail());
-    assert!(crate::routing::rate_limit::is_rate_limited(&crate::types::AgentKind::Codex, None));
+    assert!(
+        record_quota_exhaustion_with_delivery(output, crate::types::AgentKind::Codex, None, None, false)
+            .should_fail()
+    );
+    assert!(crate::routing::rate_limit::is_rate_limited(
+        &crate::types::AgentKind::Codex,
+        None
+    ));
 }
 
 /// A provider whose refusal wording nobody has captured is undetectable on the
@@ -141,14 +189,20 @@ fn unobserved_providers_are_not_guessed_from_generic_prose() {
 
     for agent in [crate::types::AgentKind::Claude, crate::types::AgentKind::Grok] {
         crate::routing::rate_limit::clear_rate_limit(&agent, None);
-        assert!(!record_quota_exhaustion("429 Too Many Requests", agent, None, None).recorded());
+        assert!(
+            !record_quota_exhaustion_with_delivery("429 Too Many Requests", agent, None, None, false)
+                .recorded()
+        );
         assert!(!crate::routing::rate_limit::is_rate_limited(&agent, None));
     }
 
     // The same shape an agent writes in a report must not mark either.
     crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Cursor, None);
     for line in ["429", "## Rate Limit", "Task 429", "Rate Limit"] {
-        assert!(!record_quota_exhaustion(line, crate::types::AgentKind::Cursor, None, None).recorded());
+        assert!(
+            !record_quota_exhaustion_with_delivery(line, crate::types::AgentKind::Cursor, None, None, false)
+                .recorded()
+        );
     }
     assert!(!crate::routing::rate_limit::is_rate_limited(&crate::types::AgentKind::Cursor, None));
 }
@@ -212,38 +266,13 @@ fn quota_line_keeps_a_reset_time_embedded_in_json() {
     assert!(!line.contains('\\'), "JSON escapes must not survive: {line}");
 }
 
-/// The live false positive of 2026-08-07, end to end.
-///
-/// A cursor audit task read `src/agent/cursor_tests.rs:142` and quoted it into
-/// its report. aid wrote `~/.aid/rate-limit-cursor`, held cursor until the next
-/// day and recorded the task FAILED with exit code 0, while cursor served the
-/// whole time. The report reaches the watcher as assistant envelopes, which is
-/// where the split now drops it.
-#[test]
-fn a_report_quoting_this_repos_own_fixture_never_marks_the_agent() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
-    let cursor = crate::types::AgentKind::Cursor;
-    crate::routing::rate_limit::clear_all_rate_limits_for_agent(&cursor, None);
 
-    let quoted = "assert_rate_limit(r#\"{\"type\":\"error\",\"message\":\"quota exceeded for \
-                  this workspace\"}\"#, true);\n====\ncommit 7881e2d";
-    let output = format!(
-        "{}\n{}\n",
-        serde_json::json!({"type": "system", "subtype": "init", "model": "composer-2.5"}),
-        serde_json::json!({
-            "type": "assistant",
-            "message": {"content": [{"type": "text", "text": quoted}]}
-        })
-    );
-
-    assert!(!record_quota_exhaustion(&output, cursor, None, None).recorded());
-    assert!(!crate::routing::rate_limit::is_rate_limited(&cursor, None));
-    assert!(!crate::routing::rate_limit::is_group_rate_limited(&cursor, None, "premium"));
-}
 
 /// The same guarantee over every signature we ship, so a needle added later
 /// inherits it: nothing an agent can write into its own message becomes a hold.
 
 #[path = "stream_completion_quota_tests.rs"]
 mod quota;
+
+#[path = "stream_completion_tests_entry_tests.rs"]
+mod production_entries;

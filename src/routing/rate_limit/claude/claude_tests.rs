@@ -2,7 +2,7 @@
 // Deps: super, quota_channel, agent::stream_completion, rate_limit.
 
 use super::*;
-use crate::agent::stream_completion::record_quota_exhaustion;
+use crate::agent::stream_completion::record_quota_exhaustion_with_delivery;
 use crate::routing::quota::channel::Channel;
 use crate::routing::rate_limit::{self, get_rate_limit_info, mark_rate_limited, refusal_on_channel};
 use crate::types::AgentKind;
@@ -73,7 +73,7 @@ fn claude_seven_day_hold_lasts_until_structured_reset_refusal_regression() {
         "rate_limit_info": {"status": "rejected", "rateLimitType": "seven_day", "resetsAt": reset}
     })
     .to_string();
-    assert!(record_quota_exhaustion(&event, AgentKind::Claude, None, None).recorded());
+    assert!(record_quota_exhaustion_with_delivery(&event, AgentKind::Claude, None, None, false).recorded());
     let info = get_rate_limit_info(&AgentKind::Claude, None).expect("hold");
     let expected = format_recovery(
         DateTime::from_timestamp(reset, 0)
@@ -104,7 +104,7 @@ fn expired_claude_seven_day_reset_releases_hold_refusal_regression() {
             "resetsAt": Utc::now().timestamp() - 60}
     })
     .to_string();
-    assert!(record_quota_exhaustion(&event, AgentKind::Claude, None, None).recorded());
+    assert!(record_quota_exhaustion_with_delivery(&event, AgentKind::Claude, None, None, false).recorded());
     assert!(!rate_limit::is_rate_limited(&AgentKind::Claude, None));
 }
 
@@ -138,7 +138,7 @@ fn unwrapped_claude_prose_can_only_preserve_a_transient_excerpt() {
             None,
             "{line}"
         );
-        let outcome = record_quota_exhaustion(line, AgentKind::Claude, None, None);
+        let outcome = record_quota_exhaustion_with_delivery(line, AgentKind::Claude, None, None, false);
         assert!(!outcome.should_fail());
         assert_eq!(outcome.recorded(), line.contains("You've hit your limit"));
     }
@@ -160,7 +160,7 @@ fn rejected_claude_event_uses_its_nearby_unix_reset() {
         "type": "rate_limit_event",
         "rate_limit_info": {"status": "rejected", "resetsAt": reset}
     }).to_string();
-    assert!(record_quota_exhaustion(&event, AgentKind::Claude, None, None).recorded());
+    assert!(record_quota_exhaustion_with_delivery(&event, AgentKind::Claude, None, None, false).recorded());
     let info = get_rate_limit_info(&AgentKind::Claude, None).expect("marker");
     let expected = format_recovery(
         DateTime::from_timestamp(reset, 0).expect("timestamp").with_timezone(&Local).naive_local()
@@ -178,7 +178,7 @@ fn far_future_claude_reset_falls_back_to_signature_window() {
         "type": "rate_limit_event",
         "rate_limit_info": {"status": "rejected", "resetsAt": reset}
     }).to_string();
-    assert!(record_quota_exhaustion(&event, AgentKind::Claude, None, None).recorded());
+    assert!(record_quota_exhaustion_with_delivery(&event, AgentKind::Claude, None, None, false).recorded());
     let info = get_rate_limit_info(&AgentKind::Claude, None).expect("marker");
     let at = rate_limit::parse_recovery_datetime(
         info.recovery_at.as_deref().expect("bounded fallback")

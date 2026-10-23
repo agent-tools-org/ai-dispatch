@@ -11,22 +11,6 @@ use crate::types::*;
 use super::TaskCompletionUpdate;
 
 impl Store {
-    #[cfg(test)]
-    pub fn update_task_completion(&self, payload: TaskCompletionUpdate<'_>) -> Result<bool> {
-        self.write_completion(payload, None, true)
-    }
-
-    #[cfg(test)]
-    /// Atomically update task completion AND insert the completion event.
-    /// Prevents inconsistent state if process crashes between the two writes.
-    pub fn complete_task_atomic(
-        &self,
-        payload: TaskCompletionUpdate<'_>,
-        event: &TaskEvent,
-    ) -> Result<bool> {
-        self.write_completion(payload, Some(event), true)
-    }
-
     pub(crate) fn record_agent_completion(
         &self, payload: TaskCompletionUpdate<'_>, event: Option<&TaskEvent>,
     ) -> Result<bool> {

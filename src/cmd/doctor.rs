@@ -235,8 +235,7 @@ mod tests {
         std::os::unix::fs::symlink(&missing_target, &missing_link).expect("missing link");
         let missing_target_before = std::fs::read_link(&missing_link).expect("missing target");
 
-        let repairs = crate::agent::home_isolation::find_doctor_symlinks(&real_home, &aid_dir)
-            .expect("scan");
+        let repairs = crate::agent::home_isolation::scan_doctor_symlinks(&real_home, &aid_dir).repairs;
         assert_eq!(repairs.len(), 3);
         let rendered = format_symlink_report(&repairs);
         assert!(rendered.contains(&task_link.display().to_string()));

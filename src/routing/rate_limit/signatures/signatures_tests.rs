@@ -8,7 +8,14 @@ use chrono::Local;
 #[test]
 fn droid_weekly_limit_is_recognized_with_a_day_long_cooldown() {
     let msg = "402 You've reached your weekly standard usage limit (resets in 1 day).\nSwitch to Droid Core or enable Extra Usage to continue.";
-    let (agent, recovery) = match_quota_signature(msg).expect("droid quota message must match");
+    let (agent, recovery) = crate::types::AgentKind::ALL
+        .iter()
+        .chain([&crate::types::AgentKind::Claude])
+        .find_map(|agent| {
+            crate::routing::rate_limit::signatures::match_quota_signature_for_agent(msg, *agent)
+                .map(|recovery| (*agent, recovery))
+        })
+        .expect("droid quota message must match");
     assert_eq!(agent, AgentKind::Droid);
     assert_eq!(recovery, QuotaRecovery::After(1440));
 }
@@ -16,14 +23,45 @@ fn droid_weekly_limit_is_recognized_with_a_day_long_cooldown() {
 #[test]
 fn codex_usage_limit_is_recognized() {
     let msg = "You have hit your usage limit. Upgrade to Pro or try again at Mar 19th, 2026 2:27 PM.";
-    let (agent, _) = match_quota_signature(msg).expect("codex quota message must match");
+    let (agent, _) = crate::types::AgentKind::ALL
+        .iter()
+        .chain([&crate::types::AgentKind::Claude])
+        .find_map(|agent| {
+            crate::routing::rate_limit::signatures::match_quota_signature_for_agent(msg, *agent)
+                .map(|recovery| (*agent, recovery))
+        })
+        .expect("codex quota message must match");
     assert_eq!(agent, AgentKind::Codex);
 }
 
 #[test]
 fn ordinary_output_does_not_match_any_signature() {
-    assert!(match_quota_signature("compiling ai-dispatch v10.0.0").is_none());
-    assert!(match_quota_signature("network timeout after 30s").is_none());
+    assert!(
+        crate::types::AgentKind::ALL
+            .iter()
+            .chain([&crate::types::AgentKind::Claude])
+            .find_map(
+                |agent| crate::routing::rate_limit::signatures::match_quota_signature_for_agent(
+                    "compiling ai-dispatch v10.0.0",
+                    *agent
+                )
+                .map(|recovery| (*agent, recovery))
+            )
+            .is_none()
+    );
+    assert!(
+        crate::types::AgentKind::ALL
+            .iter()
+            .chain([&crate::types::AgentKind::Claude])
+            .find_map(
+                |agent| crate::routing::rate_limit::signatures::match_quota_signature_for_agent(
+                    "network timeout after 30s",
+                    *agent
+                )
+                .map(|recovery| (*agent, recovery))
+            )
+            .is_none()
+    );
 }
 
 #[test]
@@ -57,7 +95,16 @@ fn oz_quota_limit_reached_is_recognized() {
     // Verbatim from `oz agent run`, exit code 1. Note it matches none of the
     // other four providers' wordings — "quota exceeded", "usage limit",
     // "quota has been exhausted" and "individual quota reached" all miss it.
-    let (agent, recovery) = match_quota_signature("Error: Quota limit reached.")
+    let (agent, recovery) = crate::types::AgentKind::ALL
+        .iter()
+        .chain([&crate::types::AgentKind::Claude])
+        .find_map(|agent| {
+            crate::routing::rate_limit::signatures::match_quota_signature_for_agent(
+                "Error: Quota limit reached.",
+                *agent,
+            )
+            .map(|recovery| (*agent, recovery))
+        })
         .expect("oz quota message must match");
     assert_eq!(agent, AgentKind::Oz);
     assert_eq!(recovery, QuotaRecovery::After(60));
@@ -68,7 +115,14 @@ fn oz_invalid_credentials_is_recognized() {
     // Verbatim oz CLI stderr when logged out. Same channel as the quota line
     // above — do not treat agent-authored prose that quotes this as a hold.
     let msg = "Error: Your credentials are invalid. Please log in again with `oz login`.";
-    let (agent, recovery) = match_quota_signature(msg).expect("oz credentials message must match");
+    let (agent, recovery) = crate::types::AgentKind::ALL
+        .iter()
+        .chain([&crate::types::AgentKind::Claude])
+        .find_map(|agent| {
+            crate::routing::rate_limit::signatures::match_quota_signature_for_agent(msg, *agent)
+                .map(|recovery| (*agent, recovery))
+        })
+        .expect("oz credentials message must match");
     assert_eq!(agent, AgentKind::Oz);
     assert_eq!(recovery, QuotaRecovery::NeedsHuman);
     assert_eq!(
@@ -85,7 +139,14 @@ fn prose_that_merely_mentions_quota_is_not_a_quota_failure() {
     let doc = "be exercised (no credentials, exhausted quota), say so explicitly \
                — an honest gap is worth more than an assumed pass.";
     assert!(
-        match_quota_signature(doc).is_none(),
+        crate::types::AgentKind::ALL
+            .iter()
+            .chain([&crate::types::AgentKind::Claude])
+            .find_map(
+                |agent| crate::routing::rate_limit::signatures::match_quota_signature_for_agent(doc, *agent)
+                    .map(|recovery| (*agent, recovery))
+            )
+            .is_none(),
         "documentation prose must not match a provider quota signature"
     );
 }
@@ -95,11 +156,25 @@ fn droid_weekly_core_and_standard_needles_do_not_shadow_each_other() {
     let core = r#"402 {"detail":"You've reached your weekly Droid Core usage limit (resets in 2 days).\nReload Extra Usage credits or wait for your limits to reset.","status":402,"title":"Payment Required","displayToUser":true}"#;
     let standard = "402 You've reached your weekly standard usage limit (resets in 1 day).\nSwitch to Droid Core or enable Extra Usage to continue.";
 
-    let (agent, recovery) = match_quota_signature(core).expect("core quota message must match");
+    let (agent, recovery) = crate::types::AgentKind::ALL
+        .iter()
+        .chain([&crate::types::AgentKind::Claude])
+        .find_map(|agent| {
+            crate::routing::rate_limit::signatures::match_quota_signature_for_agent(core, *agent)
+                .map(|recovery| (*agent, recovery))
+        })
+        .expect("core quota message must match");
     assert_eq!(agent, AgentKind::Droid);
     assert_eq!(recovery, QuotaRecovery::After(2880));
 
-    let (agent, recovery) = match_quota_signature(standard).expect("standard quota message must match");
+    let (agent, recovery) = crate::types::AgentKind::ALL
+        .iter()
+        .chain([&crate::types::AgentKind::Claude])
+        .find_map(|agent| {
+            crate::routing::rate_limit::signatures::match_quota_signature_for_agent(standard, *agent)
+                .map(|recovery| (*agent, recovery))
+        })
+        .expect("standard quota message must match");
     assert_eq!(agent, AgentKind::Droid);
     assert_eq!(recovery, QuotaRecovery::After(1440));
 
@@ -113,7 +188,16 @@ fn droid_weekly_core_and_standard_needles_do_not_shadow_each_other() {
 
 #[test]
 fn droid_reload_tokens_is_recognized() {
-    let (agent, recovery) = match_quota_signature("402 payment required: reload your tokens")
+    let (agent, recovery) = crate::types::AgentKind::ALL
+        .iter()
+        .chain([&crate::types::AgentKind::Claude])
+        .find_map(|agent| {
+            crate::routing::rate_limit::signatures::match_quota_signature_for_agent(
+                "402 payment required: reload your tokens",
+                *agent,
+            )
+            .map(|recovery| (*agent, recovery))
+        })
         .expect("droid reload-tokens message must match");
     assert_eq!(agent, AgentKind::Droid);
     // Reloading tokens is a purchase, not a window elapsing.
@@ -122,7 +206,16 @@ fn droid_reload_tokens_is_recognized() {
 
 #[test]
 fn cursor_workspace_quota_is_recognized() {
-    let (agent, _) = match_quota_signature("quota exceeded for this workspace")
+    let (agent, _) = crate::types::AgentKind::ALL
+        .iter()
+        .chain([&crate::types::AgentKind::Claude])
+        .find_map(|agent| {
+            crate::routing::rate_limit::signatures::match_quota_signature_for_agent(
+                "quota exceeded for this workspace",
+                *agent,
+            )
+            .map(|recovery| (*agent, recovery))
+        })
         .expect("cursor workspace quota must match");
     assert_eq!(agent, AgentKind::Cursor);
 }
@@ -147,7 +240,14 @@ fn opencode_insufficient_balance_is_recognized() {
     // generic phrase matching would miss it. aid reported opencode as OK and
     // kept dispatching to an account that could not pay.
     let body = r#"{"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here: https://opencode.ai/workspace/wrk_01/billing","statusCode":401}}}"#;
-    let (agent, recovery) = match_quota_signature(body).expect("opencode balance message must match");
+    let (agent, recovery) = crate::types::AgentKind::ALL
+        .iter()
+        .chain([&crate::types::AgentKind::Claude])
+        .find_map(|agent| {
+            crate::routing::rate_limit::signatures::match_quota_signature_for_agent(body, *agent)
+                .map(|recovery| (*agent, recovery))
+        })
+        .expect("opencode balance message must match");
     assert_eq!(agent, AgentKind::OpenCode);
     // A balance ends when the account is topped up, never on a clock.
     assert_eq!(recovery, QuotaRecovery::NeedsHuman);
@@ -155,20 +255,29 @@ fn opencode_insufficient_balance_is_recognized() {
 
 #[test]
 fn a_balance_failure_reads_as_a_rate_limit_error() {
-    assert!(crate::routing::rate_limit::is_rate_limit_error(
-        "APIError: Insufficient balance. Manage your billing here: https://opencode.ai/"
-    ));
+    assert!(
+        crate::types::AgentKind::ALL
+            .iter()
+            .chain([&crate::types::AgentKind::Claude])
+            .any(|agent| {
+                crate::routing::rate_limit::is_rate_limit_error_for_agent_with_evidence(
+                    "APIError: Insufficient balance. Manage your billing here: https://opencode.ai/",
+                    agent,
+                    crate::routing::rate_limit::QuotaEvidence::AgentProse,
+                )
+            })
+    );
 }
 
 #[test]
 fn insufficient_balance_prefers_dispatched_overlay_agent() {
     let body = "APIError: Insufficient balance. Manage your billing here";
-    let (agent, _) = match_quota_signature_with_agent(body, Some(AgentKind::MiMoCode))
+    let recovery = match_quota_signature_for_agent(body, AgentKind::MiMoCode)
         .expect("mimocode balance message must match");
-    assert_eq!(agent, AgentKind::MiMoCode);
-    let (agent, _) = match_quota_signature_with_agent(body, Some(AgentKind::Kilo))
-        .expect("kilo balance message must match");
-    assert_eq!(agent, AgentKind::Kilo);
+    assert_eq!(recovery, QuotaRecovery::NeedsHuman);
+    let recovery =
+        match_quota_signature_for_agent(body, AgentKind::Kilo).expect("kilo balance message must match");
+    assert_eq!(recovery, QuotaRecovery::NeedsHuman);
 }
 
 #[test]
@@ -177,107 +286,5 @@ fn copilot_premium_request_limit_is_recognized() {
     assert!(match_quota_signature_for_agent(msg, AgentKind::Copilot).is_some());
 }
 
-#[test]
-fn grok_usage_balance_exhausted_is_windowed() {
-    let msg = "API error (status 402 Payment Required): Grok Build usage balance exhausted";
-    let (agent, recovery) = match_quota_signature(msg).expect("grok 402 must match");
-    assert_eq!(agent, AgentKind::Grok);
-    assert_eq!(recovery, QuotaRecovery::Windowed);
-}
-
-#[test]
-fn cursor_out_of_usage_is_windowed() {
-    let msg = "ActionRequiredError: Increase limits for faster responses You're out of usage. \
-               Switch to Auto, or ask your admin to increase your limit to continue.";
-    let (agent, recovery) = match_quota_signature(msg).expect("cursor premium must match");
-    assert_eq!(agent, AgentKind::Cursor);
-    assert_eq!(recovery, QuotaRecovery::Windowed);
-}
-
-#[test]
-fn claude_limit_wording_has_a_clock_ended_signature() {
-    for message in ["You've hit your limit", "Claude AI usage limit reached|1893456000"] {
-        assert_eq!(
-            match_quota_signature_for_agent(message, AgentKind::Claude),
-            Some(QuotaRecovery::After(300)),
-            "{message}"
-        );
-    }
-}
-
-#[test]
-fn claude_allowed_event_with_rejected_overage_does_not_hold() {
-    // Captured Claude stream-json line; overageStatus is not the limit status.
-    let allowed = r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1790750400,"rateLimitType":"five_hour","overageStatus":"rejected","overageDisabledReason":"org_level_disabled_until","isUsingOverage":false,"unifiedWindows":{"five_hour":{"utilization":0.76,"resetsAt":1790750400},"seven_day":{"utilization":0.7,"resetsAt":1790748000}}},"uuid":"0433b702-fa48-4e68-ae32-414ffeee1b33","session_id":"3eaf9e7b-31e3-482c-bb96-66e14f3bf04a"}"#;
-    let temp = tempfile::tempdir().expect("temp dir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
-    assert_eq!(
-        crate::routing::rate_limit::refusal_on_channel(
-            allowed,
-            AgentKind::Claude,
-            crate::routing::quota::channel::Channel::CliStream,
-        ),
-        None
-    );
-    assert!(!crate::agent::stream_completion::record_quota_exhaustion(
-        allowed, AgentKind::Claude, None, None
-    ).recorded());
-    assert!(crate::routing::rate_limit::get_rate_limit_info(&AgentKind::Claude, None).is_none());
-}
-
-#[test]
-fn claude_rejected_status_uses_the_structured_reset() {
-    let allowed = r#"{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1790750400,"rateLimitType":"five_hour","overageStatus":"rejected","overageDisabledReason":"org_level_disabled_until","isUsingOverage":false,"unifiedWindows":{"five_hour":{"utilization":0.76,"resetsAt":1790750400},"seven_day":{"utilization":0.7,"resetsAt":1790748000}}},"uuid":"0433b702-fa48-4e68-ae32-414ffeee1b33","session_id":"3eaf9e7b-31e3-482c-bb96-66e14f3bf04a"}"#;
-    let mut event: serde_json::Value = serde_json::from_str(allowed).expect("captured JSON");
-    event["rate_limit_info"]["status"] = serde_json::json!("rejected");
-    let reset = chrono::Utc::now().timestamp() + 7200;
-    event["rate_limit_info"]["resetsAt"] = serde_json::json!(reset);
-    let temp = tempfile::tempdir().expect("temp dir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
-    assert!(crate::routing::rate_limit::refusal_on_channel(&event.to_string(), AgentKind::Claude, crate::routing::quota::channel::Channel::CliStream).is_some());
-    let outcome = crate::agent::stream_completion::record_quota_exhaustion(
-        &event.to_string(), AgentKind::Claude, None, None
-    );
-    assert!(outcome.should_fail(), "rejected event must take quota continuation");
-    let info = crate::routing::rate_limit::get_rate_limit_info(&AgentKind::Claude, None).expect("marker");
-    let at = crate::routing::rate_limit::parse_recovery_datetime(
-        info.recovery_at.as_deref().expect("stated reset")
-    ).expect("parse marker");
-    assert!((at - chrono::Local::now().naive_local()).num_minutes() >= 119);
-    assert!(crate::routing::rate_limit::is_rate_limited(&AgentKind::Claude, None));
-}
-#[test]
-fn claude_error_result_is_a_refusal_but_assistant_prose_is_not() {
-    use crate::routing::quota::channel::Channel;
-    let result = r#"{"type":"result","is_error":true,"result":"You've hit your limit"}"#;
-    assert_eq!(
-        crate::routing::rate_limit::refusal_on_channel(result, AgentKind::Claude, Channel::CliStream),
-        Some("You've hit your limit".to_string())
-    );
-    let prose = serde_json::json!({
-        "type": "assistant",
-        "message": {"content": [{"type": "text", "text": "You've hit your limit"}]}
-    }).to_string();
-    assert_eq!(
-        crate::routing::rate_limit::refusal_on_channel(&prose, AgentKind::Claude, Channel::CliStream),
-        None
-    );
-}
-
-#[test]
-fn claude_reset_order_prefers_unix_then_zoned_clock_then_fallback() {
-    let reset = chrono::Utc::now().timestamp() + 7200;
-    let unix = crate::routing::rate_limit::parse_recovery_time(
-        &format!("Claude AI usage limit reached|{reset}")
-    ).expect("unix reset");
-    assert_eq!(unix, crate::routing::rate_limit::format_recovery(
-        chrono::DateTime::from_timestamp(reset, 0)
-            .expect("timestamp").with_timezone(&Local).naive_local()
-    ));
-    assert_eq!(crate::routing::rate_limit::parse_recovery_time(&format!("You've hit your limit · resets 5pm (Asia/Shanghai)|{reset}")), Some(unix));
-    let clock = parse_relative_recovery("You've hit your limit · resets 5pm (Asia/Shanghai)")
-        .expect("zoned reset");
-    let delta = clock - Local::now().naive_local();
-    assert!(delta.num_hours() >= 0 && delta.num_hours() <= 24);
-    assert_eq!(parse_relative_recovery("You've hit your limit"), None);
-}
+#[path = "signatures_tests_entry_tests.rs"]
+mod production_entries;

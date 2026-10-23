@@ -53,12 +53,22 @@ async fn provider_capacity_round2_replayed_stderr_never_creates_hold_or_retry() 
             serde_json::json!({"type": "error", "message": CAPACITY}))])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn().expect("child");
-    let info = crate::runtime::watcher::watch_streaming(
-        &crate::agent::codex::CodexAgent, &mut child, &row.id, &store,
-        &paths::log_path(row.id.as_str()), None,
-        crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT, None,
-    ).await.expect("watch");
+        .spawn()
+        .expect("child");
+    let info = crate::runtime::watcher::watch_streaming_with_input(
+        &crate::agent::codex::CodexAgent,
+        &mut child,
+        &row.id,
+        &store,
+        &paths::log_path(row.id.as_str()),
+        None,
+        crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT,
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect("watch");
     assert_eq!(info.status, TaskStatus::Failed);
     assert!(std::fs::read_to_string(paths::log_path(row.id.as_str())).expect("log")
         .contains(CAPACITY), "stderr must still be replayed");

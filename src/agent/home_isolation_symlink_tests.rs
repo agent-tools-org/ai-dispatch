@@ -3,8 +3,7 @@
 // Deps: home isolation API, tempfile, and std::fs.
 
 use super::super::home_isolation::{
-    apply_repairs, find_doctor_symlinks, reconcile_leaked_symlinks, IsolatedHomeGuard,
-    SymlinkRepair,
+    IsolatedHomeGuard, SymlinkRepair, apply_repairs, reconcile_leaked_symlinks, scan_doctor_symlinks,
 };
 use std::fs;
 use std::path::Path;
@@ -21,7 +20,8 @@ fn drop_rewrites_passthrough_installer_symlink_and_preserves_negative_controls()
     fs::write(&tool, "tool payload").expect("tool payload");
 
     let (iso_path, unrelated_link, missing_link) = {
-        let guard = IsolatedHomeGuard::create_from_home(Some(&real_home), None).expect("guard");
+        let guard = IsolatedHomeGuard::create_from_home_with_remote_build(Some(&real_home), None, false)
+            .expect("guard");
         let iso_path = guard.path().to_path_buf();
         let bin = iso_path.join(".local/bin");
         fs::create_dir_all(&bin).expect("isolated bin");
@@ -112,7 +112,7 @@ fn doctor_ignores_tmp_home_paths_without_home_component() {
     let old_target = aid_dir.join("tmp_home/iso-123/not-home/tool");
     std::os::unix::fs::symlink(&old_target, &link).expect("link");
 
-    let repairs = find_doctor_symlinks(&real_home, &aid_dir).expect("scan");
+    let repairs = scan_doctor_symlinks(&real_home, &aid_dir).repairs;
 
     assert!(repairs.is_empty());
     assert_eq!(fs::read_link(&link).expect("link survives"), old_target);
@@ -142,7 +142,7 @@ fn doctor_rejects_dot_isolated_names_and_empty_home_rests() {
         })
         .collect();
 
-    let repairs = find_doctor_symlinks(&real_home, &aid_dir).expect("scan");
+    let repairs = scan_doctor_symlinks(&real_home, &aid_dir).repairs;
 
     assert!(repairs.is_empty());
     for (link, target) in links {
@@ -180,7 +180,7 @@ fn doctor_rejects_parent_dir_in_rewritten_rest() {
     let old_target = aid_dir.join("tasks/t-abc/home/../../outside/tool");
     std::os::unix::fs::symlink(&old_target, &link).expect("link");
 
-    let repairs = find_doctor_symlinks(&real_home, &aid_dir).expect("scan");
+    let repairs = scan_doctor_symlinks(&real_home, &aid_dir).repairs;
 
     assert!(repairs.is_empty());
     assert_eq!(fs::read_link(&link).expect("link survives"), old_target);

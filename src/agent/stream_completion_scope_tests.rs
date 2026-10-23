@@ -22,10 +22,12 @@ fn pty_needs_human_excerpt_never_fails_a_successful_run() {
         crate::routing::availability::StoredHold::Transient
     );
     let trusted = serde_json::json!({"type":"error", "message":text}).to_string();
-    assert!(record_quota_exhaustion(&trusted, AgentKind::OpenCode, None, None).should_fail());
+    assert!(
+        record_quota_exhaustion_with_delivery(&trusted, AgentKind::OpenCode, None, None, false).should_fail()
+    );
     let info = rate_limit::get_rate_limit_info(&AgentKind::OpenCode, None).expect("trusted hold");
     assert!(info.needs_human);
-    record_quota_exhaustion(text, AgentKind::OpenCode, None, None);
+    record_quota_exhaustion_with_delivery(text, AgentKind::OpenCode, None, None, false);
     assert!(
         rate_limit::get_rate_limit_info(&AgentKind::OpenCode, None)
             .expect("kept hold")
@@ -38,7 +40,7 @@ fn unsplit_monthly_refusal_gets_only_a_transient_hold() {
     let home = tempfile::tempdir().expect("home");
     let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     let text = include_str!("../../tests/fixtures/cursor-usage-limit-refusal.txt");
-    let outcome = record_quota_exhaustion(text, AgentKind::Cursor, None, Some("auto"));
+    let outcome = record_quota_exhaustion_with_delivery(text, AgentKind::Cursor, None, Some("auto"), false);
     assert!(outcome.recorded());
     assert!(!outcome.should_fail());
     let marker = std::fs::read_to_string(rate_limit::group_marker_path(
@@ -57,7 +59,10 @@ fn typed_non_quota_codex_error_overrules_quoted_quota_text() {
     let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     let event = serde_json::json!({"type":"error", "error":{
         "codexErrorInfo":"contextWindowExceeded", "message":"hit your usage limit"}});
-    assert!(!record_quota_exhaustion(&event.to_string(), AgentKind::Codex, None, None).recorded());
+    assert!(
+        !record_quota_exhaustion_with_delivery(&event.to_string(), AgentKind::Codex, None, None, false)
+            .recorded()
+    );
 }
 
 #[test]
@@ -66,7 +71,7 @@ fn unwrapped_claude_reset_preserves_an_excerpt_without_a_long_hold() {
     let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     let reset = chrono::Utc::now().timestamp() + 7 * 24 * 3600;
     let message = format!("You've hit your limit|{reset}");
-    let outcome = record_quota_exhaustion(&message, AgentKind::Claude, None, None);
+    let outcome = record_quota_exhaustion_with_delivery(&message, AgentKind::Claude, None, None, false);
     assert!(outcome.recorded());
     assert!(!outcome.should_fail());
     let info = rate_limit::get_rate_limit_info(&AgentKind::Claude, None).expect("excerpt");
@@ -79,8 +84,12 @@ fn unwrapped_claude_reset_preserves_an_excerpt_without_a_long_hold() {
 fn unsplit_codex_refusal_records_without_failing() {
     let home = tempfile::tempdir().expect("home");
     let _guard = crate::support::paths::AidHomeGuard::set(home.path());
-    let outcome = record_quota_exhaustion(
-        "You have hit your usage limit.", AgentKind::Codex, None, None,
+    let outcome = record_quota_exhaustion_with_delivery(
+        "You have hit your usage limit.",
+        AgentKind::Codex,
+        None,
+        None,
+        false,
     );
     assert!(outcome.recorded());
     assert!(!outcome.should_fail());

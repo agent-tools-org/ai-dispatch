@@ -1,7 +1,7 @@
 // Streaming watcher integration tests.
 // Covers process completion fields that must be returned to task persistence
 // and OSC-prefixed line handling through the stream path (droid under PTY).
-// Deps: watcher::watch_streaming, Store, Tokio process, stub and droid agents.
+// Deps: watcher::watch_streaming_with_input, Store, Tokio process, stub and droid agents.
 
 use std::process::{Command, Stdio};
 use std::sync::Arc;
@@ -14,7 +14,7 @@ use crate::types::{
 };
 use chrono::Local;
 
-use super::watch_streaming;
+use super::watch_streaming_with_input;
 
 struct StubStreamingAgent;
 
@@ -119,7 +119,7 @@ async fn droid_osc_prefixed_completion_line_yields_completion_event() {
         .spawn()
         .unwrap();
 
-    let info = watch_streaming(
+    let info = watch_streaming_with_input(
         &crate::agent::droid::DroidAgent,
         &mut child,
         &task_id,
@@ -127,6 +127,8 @@ async fn droid_osc_prefixed_completion_line_yields_completion_event() {
         &log_path,
         None,
         crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT,
+        None,
+        None,
         None,
     )
     .await
@@ -162,9 +164,17 @@ async fn streaming_watch_logs_report_containing_milestone_and_emits_event() {
         .spawn()
         .unwrap();
 
-    let info = watch_streaming(
-        &StubStreamingAgent, &mut child, &task_id, &store, &log_path, None,
-        crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT, None,
+    let info = watch_streaming_with_input(
+        &StubStreamingAgent,
+        &mut child,
+        &task_id,
+        &store,
+        &log_path,
+        None,
+        crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT,
+        None,
+        None,
+        None,
     )
     .await
     .unwrap();

@@ -105,7 +105,7 @@ async fn provider_capacity_scope_cut_decoded_failure_records_model_reason_and_ho
         store.insert_task(&row).expect("parent");
         let mut cmd = tokio::process::Command::new("/bin/sh");
         cmd.args(["-c", &format!("echo '{envelope}'; exit 1")]);
-        crate::cmd::run::run_agent::run_agent_process(
+        crate::cmd::run::run_agent::run_agent_process_with_cost(
             &crate::agent::codex::CodexAgent,
             cmd,
             &row.id,
@@ -116,6 +116,8 @@ async fn provider_capacity_scope_cut_decoded_failure_records_model_reason_and_ho
             true,
             None,
             Default::default(),
+            None,
+            std::time::Instant::now(),
         )
         .await
         .expect("process failure");
@@ -201,7 +203,7 @@ fn provider_capacity_scope_cut_pty_merged_stderr_records_capacity_without_child(
     let envelope = serde_json::json!({"type": "error", "message": CAPACITY});
     let mut cmd = std::process::Command::new("/bin/sh");
     cmd.args(["-c", &format!("echo '{envelope}' >&2; exit 1")]);
-    crate::runtime::pty::runner::run_agent_process(
+    crate::runtime::pty::runner::run_agent_process_with_control(
         &crate::agent::codex::CodexAgent,
         &cmd,
         &row.id,
@@ -210,6 +212,10 @@ fn provider_capacity_scope_cut_pty_merged_stderr_records_capacity_without_child(
         None,
         row.requested_model.as_deref(),
         true,
+        crate::config::timeout_policy::TimeoutPolicy::from_command(&cmd),
+        None,
+        None,
+        std::time::Instant::now(),
     )
     .expect("PTY failure");
     assert_capacity_failure(&store, &row);

@@ -81,14 +81,6 @@ impl Store {
         Ok(())
     }
 
-    #[cfg(test)]
-    /// Replace a waiting task's row with full task data (called when dispatch begins).
-    /// The only legal move is the waiting row -> the dispatch status; anything else
-    /// is rejected by the status guard and aborts the dispatch.
-    pub fn replace_waiting_task(&self, task: &Task) -> Result<()> {
-        self.replace_waiting_task_with_origin(task, DispatchOrigin::Automatic)
-    }
-
     pub(crate) fn replace_waiting_task_with_origin(
         &self, task: &Task, origin: DispatchOrigin,
     ) -> Result<()> {

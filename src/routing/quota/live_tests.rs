@@ -48,11 +48,11 @@ fn newer_successful_aidbar_cache_record_overrides_marker_from_disk() {
     )
     .expect("cache record");
 
-    assert!(crate::routing::availability::overrides_marker_at_in_cache(
-        &AgentKind::Codex,
-        &marker,
-        &cache_dir,
-    ));
+    assert!({
+        let _cache = crate::routing::quota::live::CacheDirGuard::set(&cache_dir);
+        crate::routing::availability::from_path(&AgentKind::Codex, None, None, &marker).status
+            == crate::routing::availability::RouteStatus::Dispatchable
+    });
 }
 
 #[test]
@@ -72,11 +72,11 @@ fn newer_opencode_headroom_does_not_release_a_needs_human_marker() {
         "recovery_at: \nmessage: Insufficient balance. Manage your billing here\n",
     ] {
         std::fs::write(&marker, marker_content).expect("marker");
-        assert!(!crate::routing::availability::overrides_marker_at_in_cache(
-            &AgentKind::OpenCode,
-            &marker,
-            &cache_dir,
-        ));
+        assert!(!{
+            let _cache = crate::routing::quota::live::CacheDirGuard::set(&cache_dir);
+            crate::routing::availability::from_path(&AgentKind::OpenCode, None, None, &marker).status
+                == crate::routing::availability::RouteStatus::Dispatchable
+        });
     }
 }
 

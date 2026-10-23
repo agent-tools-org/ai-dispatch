@@ -51,7 +51,11 @@ fn finalize_streaming_persists_transcript() {
         delivery_assessment: None,
     };
     store.insert_task(&task).unwrap();
-    let mut state = MonitorState::new(true, None);
+    let mut state = MonitorState::with_policy(
+        true,
+        None,
+        crate::config::timeout_policy::TimeoutPolicy::default(),
+    );
     state.full_output.push_str("complete transcript");
 
     finalize_streaming(

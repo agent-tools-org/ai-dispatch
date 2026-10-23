@@ -17,11 +17,12 @@ fn opencode_model_refusal_holds_only_the_nvidia_provider() {
     let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
     let agent = AgentKind::OpenCode;
 
-    crate::agent::stream_completion::record_quota_exhaustion(
+    crate::agent::stream_completion::record_quota_exhaustion_with_delivery(
         r#"{"type":"error","message":"Insufficient balance. Manage your billing here."}"#,
         agent,
         None,
         Some("nvidia/llama-4-maverick"),
+        false,
     );
 
     assert!(is_group_rate_limited(&agent, None, "nvidia"));
@@ -105,8 +106,9 @@ fn opencode_error_for_one_provider_does_not_hold_another_model_route() {
         "error": {"data": {"message": "Insufficient balance. Manage your billing here"}}
     });
 
-    mark_rate_limited_for_value(
+    mark_rate_limited_for_model_value(
         &agent,
+        None,
         None,
         &error,
         "Insufficient balance. Manage your billing here",
@@ -128,8 +130,9 @@ fn opencode_error_still_blocks_the_provider_that_refused() {
         "error": {"data": {"message": "Insufficient balance. Manage your billing here"}}
     });
 
-    mark_rate_limited_for_value(
+    mark_rate_limited_for_model_value(
         &agent,
+        None,
         None,
         &error,
         "Insufficient balance. Manage your billing here",
@@ -151,8 +154,9 @@ fn opencode_provider_key_beats_provider_text_in_error_message() {
         "providerID": "opencode"
     });
 
-    mark_rate_limited_for_value(
+    mark_rate_limited_for_model_value(
         &agent,
+        None,
         None,
         &error,
         "Insufficient balance. Manage your billing here",
@@ -173,8 +177,9 @@ fn opencode_missing_provider_key_stays_agent_wide() {
         "error": {"data": {"message": "provider opencode-go/deepseek-v4-pro refused the request: Insufficient balance"}}
     });
 
-    mark_rate_limited_for_value(
+    mark_rate_limited_for_model_value(
         &agent,
+        None,
         None,
         &error,
         "Insufficient balance. Manage your billing here",

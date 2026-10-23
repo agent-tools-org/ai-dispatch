@@ -69,13 +69,24 @@ fn assert_writer_timing(store: &Store, index: usize, status: TaskStatus) {
     let changed = match index {
         0 => store.update_task_status(&id, TaskStatus::Failed),
         1 => store.update_task_status(&id, TaskStatus::Stopped),
-        2 => store.fail_if_running(&id),
-        3 => store.settle_task_status(&id, TaskStatus::Failed, Some(&[TaskStatus::Pending]),
-            Some(PendingReason::Unknown), None),
+        2 => store.settle_task_status(
+            &id,
+            TaskStatus::Failed,
+            Some(&[TaskStatus::Running, TaskStatus::Waiting]),
+            None,
+            None,
+        ),
+        3 => store.settle_task_status(
+            &id,
+            TaskStatus::Failed,
+            Some(&[TaskStatus::Pending]),
+            Some(PendingReason::Unknown),
+            None,
+        ),
         4 => store.fail_waiting_with_reason(&id, "timeout"),
         5 => store.fail_active_execution(&id),
-        6 => store.update_task_completion(payload(&id, TaskStatus::Failed)),
-        7 => store.complete_task_atomic(payload(&id, TaskStatus::Stopped), &event(&id)),
+        6 => store.record_agent_completion(payload(&id, TaskStatus::Failed), None),
+        7 => store.record_agent_completion(payload(&id, TaskStatus::Stopped), Some(&event(&id))),
         _ => store.fail_completed_verify_gate(&id),
     }
     .expect("write");
@@ -108,9 +119,9 @@ fn settle_first_worker_failure_after_stop_leaves_row_and_events_unchanged() {
     assert!(!crate::task::lifecycle::mark_failed(&store, &before.id).expect("late failure"));
     assert!(
         !store
-            .complete_task_atomic(
+            .record_agent_completion(
                 payload("t-stop-worker", TaskStatus::Failed),
-                &event("t-stop-worker")
+                Some(&event("t-stop-worker"))
             )
             .expect("late completion")
     );
@@ -146,7 +157,7 @@ fn settle_first_terminal_writers_do_not_replace_any_terminal_row() {
         assert!(!store.fail_completed_verify_gate(&id).expect("verify"));
         assert!(
             !store
-                .complete_task_atomic(payload(&id, TaskStatus::Failed), &event(&id))
+                .record_agent_completion(payload(&id, TaskStatus::Failed), Some(&event(&id)))
                 .expect("completion")
         );
         let after = store.get_task(&id).expect("get").expect("task");

@@ -17,10 +17,10 @@ fn reaped(script: &str, saw_output: bool) -> bool {
     store.insert_task(&task).expect("task");
     let mut command = Command::new("sh");
     command.args(["-c", script]).stdout(Stdio::null()).stderr(Stdio::null());
-    let guard = crate::runtime::process::guard::ProcessGuard::spawn(&mut command).expect("spawn");
-    let mut spec = make_spec(task.id.as_str(), Some(guard.id()), Some(1));
-    spec.agent_pid = Some(guard.id());
-    spec.agent_started = monitor::activity::root_started(guard.id());
+    let mut guard = crate::runtime::process::guard::ProcessGuard::spawn(&mut command).expect("spawn");
+    let mut spec = make_spec(task.id.as_str(), Some(guard.child_mut().id()), Some(1));
+    spec.agent_pid = Some(guard.child_mut().id());
+    spec.agent_started = monitor::activity::root_started(guard.child_mut().id());
     spec.env = Some(std::collections::HashMap::from([("AID_FIRST_TOKEN_TIMEOUT_SECS".into(), "1".into())]));
     if saw_output {
         insert_event(&store, task.id.as_str(), 10, EventKind::Reasoning);
@@ -30,7 +30,7 @@ fn reaped(script: &str, saw_output: bool) -> bool {
     let mut activity_with_child = activity;
     include_child_activity(task.id.as_str(), Some(&spec), 1, &mut activity_with_child);
     std::thread::sleep(Duration::from_millis(2200));
-    cleanup_wedged_live_worker(&store, &task, &spec, guard.id()).expect("reap")
+    cleanup_wedged_live_worker(&store, &task, &spec, guard.child_mut().id()).expect("reap")
 }
 
 #[test]
@@ -55,19 +55,27 @@ fn detached_reused_root_cannot_refresh_liveness_even_with_cached_activity() {
     let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     crate::support::paths::ensure_dirs().expect("dirs");
     let mut command = Command::new("sh");
-    command.args(["-c", "sleep 10 & wait"]).stdout(Stdio::null()).stderr(Stdio::null());
-    let root = crate::runtime::process::guard::ProcessGuard::spawn(&mut command).expect("replacement root");
+    command
+        .args(["-c", "sleep 10 & wait"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    let mut root =
+        crate::runtime::process::guard::ProcessGuard::spawn(&mut command).expect("replacement root");
     let store = Store::open_memory().expect("store");
     let task = make_task("t-reused-root");
     store.insert_task(&task).expect("task");
     insert_event(&store, task.id.as_str(), 10, EventKind::Reasoning);
-    let mut spec = make_spec(task.id.as_str(), Some(root.id()), Some(1));
-    spec.agent_pid = Some(root.id());
+    let mut spec = make_spec(task.id.as_str(), Some(root.child_mut().id()), Some(1));
+    spec.agent_pid = Some(root.child_mut().id());
     let mut json = serde_json::to_value(&spec).expect("spec");
     json["agent_started"] = serde_json::json!("original-root-launch-identity");
     let spec = serde_json::from_value(json).expect("stale spec");
     std::thread::sleep(Duration::from_millis(100));
-    let _ = monitor::activity::latest(task.id.as_str(), Some(root.id()), Duration::from_secs(60));
+    let _ = monitor::activity::latest(
+        task.id.as_str(),
+        Some(root.child_mut().id()),
+        Duration::from_secs(60),
+    );
     let mut activity = latest_activity(&store, &task).expect("activity");
     let original = activity.timestamp;
     include_child_activity(task.id.as_str(), Some(&spec), 60, &mut activity);
@@ -81,15 +89,22 @@ fn detached_launch_persists_root_start_identity_with_pid() {
     let _home = crate::support::paths::AidHomeGuard::set(temp.path());
     let mut command = Command::new("sleep");
     command.arg("10");
-    let root = crate::runtime::process::guard::ProcessGuard::spawn(&mut command).expect("root");
+    let mut root = crate::runtime::process::guard::ProcessGuard::spawn(&mut command).expect("root");
     let spec = make_spec("t-root-identity", None, Some(1));
     super::super::spec::save_spec(&spec).expect("spec");
-    super::super::process::update_agent_pid(&spec.task_id, root.id()).expect("launch");
+    super::super::process::update_agent_pid(&spec.task_id, root.child_mut().id()).expect("launch");
     let json: serde_json::Value = serde_json::from_slice(
         &std::fs::read(crate::support::paths::job_path(&spec.task_id)).expect("persisted spec"),
     )
     .expect("json");
-    assert_eq!(json["agent_pid"].as_u64(), Some(u64::from(root.id())));
-    assert_eq!(json["agent_started"].as_str(), monitor::activity::root_started(root.id()).as_deref());
-    assert!(json["agent_started"].as_str().is_some_and(|value| !value.is_empty()));
+    assert_eq!(json["agent_pid"].as_u64(), Some(u64::from(root.child_mut().id())));
+    assert_eq!(
+        json["agent_started"].as_str(),
+        monitor::activity::root_started(root.child_mut().id()).as_deref()
+    );
+    assert!(
+        json["agent_started"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty())
+    );
 }

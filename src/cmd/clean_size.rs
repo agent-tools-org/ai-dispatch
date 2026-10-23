@@ -124,12 +124,3 @@ fn allocated_file_size(metadata: &fs::Metadata) -> u64 {
 pub(crate) fn get_dir_size(path: &Path) -> Result<u64> {
     SizeTracker::new().get_dir_size(path)
 }
-
-#[cfg(test)]
-pub(crate) fn get_dir_size_bounded(
-    path: &Path,
-    byte_limit: u64,
-    entry_limit: usize,
-) -> Result<(u64, usize)> {
-    SizeTracker::new().get_dir_size_bounded(path, byte_limit, entry_limit)
-}

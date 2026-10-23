@@ -245,14 +245,14 @@ fn worktree_changed_files_reports_committed_files() {
 #[test]
 fn worktree_lock_write_and_read() {
     let dir = TempDir::new().unwrap();
-    assert!(check_worktree_lock(dir.path()).is_none());
+    assert!(check_worktree_lock_with_store(dir.path(), None).is_none());
 
     write_worktree_lock(dir.path(), "t-1234");
-    let holder = check_worktree_lock(dir.path());
+    let holder = check_worktree_lock_with_store(dir.path(), None);
     assert_eq!(holder.as_deref(), Some("t-1234"));
 
     clear_worktree_lock(dir.path(), "t-1234").unwrap();
-    assert!(check_worktree_lock(dir.path()).is_none());
+    assert!(check_worktree_lock_with_store(dir.path(), None).is_none());
 }
 
 #[test]
@@ -264,6 +264,9 @@ fn worktree_lock_dead_owner_without_worker_is_held_and_untouched() {
     // the lock as held and never delete it (checks are side-effect-free).
     std::fs::write(&lock_path, "version=1\ntask_id=t-stale\nowner_pid=999999999\n").unwrap();
 
-    assert_eq!(check_worktree_lock(dir.path()).as_deref(), Some("t-stale"));
+    assert_eq!(
+        check_worktree_lock_with_store(dir.path(), None).as_deref(),
+        Some("t-stale")
+    );
     assert!(lock_path.exists());
 }

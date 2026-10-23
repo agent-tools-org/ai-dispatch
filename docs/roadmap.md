@@ -267,7 +267,7 @@ no new layer. Behaviour-preserving moves and semantic fixes land separately.
 | 1 (complete locally) | Route: best-of races advise's launchable candidates | No uninstalled or held route races; each racer's resolved model equals the advised model; plan cycling kept |
 | 2 (complete locally) | Route: cascade fallback from advise | Fallback is the first launchable advise candidate other than the exhausted agent; Claude and superseded Gemini never selected; a peer below the capability floor is not selected |
 | 3 (complete locally) | Pricing: budget scoring uses the price function | Subscription and unknown prices are not "paid"; overrides apply both ways |
-| 4 | Run configuration: job file holds runtime state only | Nine runtime fields; old job files still load so running workers can be waited on, stopped and reaped |
+| 4 (complete) | Run configuration: job file holds runtime state only | Fifteen runtime fields (process identities, resolved dir and budget, inline env, worker hook, dirty baseline, recovery timeouts and audit policy); old 50-field job files still load so running workers can be waited on, stopped and reaped |
 | 5 | Read-only snapshot scope | Snapshot from the repository top level; the run repository's HEAD and refs compared; repositories without commits and special files recorded instead of failing |
 | 6 | Read-only report location | Auto audit reports written under the task directory for host launches; explicit `--result-file` unchanged |
 | 7 | Worktree observation | One capture per settlement step; comparisons computed only where read; per-consumer filters unchanged |
@@ -288,7 +288,8 @@ budget scoring uses resolved prices and exact overrides, with production Rust
 reduced by 2 lines. The final pricing source passes 3,102 default and 3,134 Web
 tests, zero failed and 14 existing ignored per suite, strict default/Web lint,
 guide validation and independent SHIP. [Pricing validation](validation-resolved-price-scoring-2026-10-03.md)
-records the exact source and jobs. Slice 4, runtime-only job state, remains open.
+records the exact source and jobs. Slice 4 is complete as of 2026-10-23: the worker reads its
+launch prompt from the task row and every other setting from the saved dispatch args.
 
 Read-only report preservation (`wi-562b`) and the remote verifier's absolute
 launch/wait deadline (`wi-8b23`) also pass their before/after regressions and
@@ -324,9 +325,10 @@ Open:
   `RunArgs::default`, `task_to_run_args`, `insert_skipped_task`, the background run spec.
 - About 105 items remain under `#[cfg(test)]`; they are fixtures, isolation guards and
   constructors. A test-only constructor stays a fixture rather than being inlined at each call.
-- `cmd stop` polls and escalates on a numeric worker pid after a concurrent observer may have
-  reaped it, and `ProcessGuard` signals its process group after reaping the leader; both can reach
-  a reused pid.
+- `aid stop` signals the worker pid only while its command line is still `__run-task <task_id>`,
+  checked before the first signal and again before SIGKILL escalation; a reuse between that check
+  and the signal is still possible. `ProcessGuard` signals its process group after reaping the
+  leader; that group id can be reused only once no member of the group remains.
 - Directories over ten files are unchanged (see M3).
 
 ### Known limits of the current code

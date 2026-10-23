@@ -71,16 +71,19 @@ fn assert_result(store: &Store, id: &TaskId, started: Instant, pty: bool) {
     }
     assert!(
         !store
-            .update_task_completion(TaskCompletionUpdate {
-                id: id.as_str(),
-                status: TaskStatus::Done,
-                tokens: None,
-                duration_ms: 9_999,
-                observed_model: None,
-                attribution_source: None,
-                cost_usd: None,
-                exit_code: Some(0),
-            })
+            .record_agent_completion(
+                TaskCompletionUpdate {
+                    id: id.as_str(),
+                    status: TaskStatus::Done,
+                    tokens: None,
+                    duration_ms: 9_999,
+                    observed_model: None,
+                    attribution_source: None,
+                    cost_usd: None,
+                    exit_code: Some(0),
+                },
+                None
+            )
             .expect("late completion")
     );
     let later = store.get_task(id.as_str()).expect("query").expect("task");

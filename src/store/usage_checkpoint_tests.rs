@@ -68,16 +68,19 @@ fn complete(
 ) {
     assert!(
         store
-            .update_task_completion(TaskCompletionUpdate {
-                id: id.as_str(),
-                status,
-                tokens,
-                duration_ms: 100,
-                observed_model: None,
-                attribution_source: None,
-                cost_usd: cost,
-                exit_code: None,
-            })
+            .record_agent_completion(
+                TaskCompletionUpdate {
+                    id: id.as_str(),
+                    status,
+                    tokens,
+                    duration_ms: 100,
+                    observed_model: None,
+                    attribution_source: None,
+                    cost_usd: cost,
+                    exit_code: None,
+                },
+                None
+            )
             .expect("complete")
     );
 }

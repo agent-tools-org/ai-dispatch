@@ -2,6 +2,7 @@
 // Exercises route labels, output loading, and failure reasons.
 
 use super::*;
+use crate::task::view::read_output;
 use crate::types::{AgentKind, TaskId, VerifyStatus};
 use chrono::Local;
 use tempfile::NamedTempFile;
@@ -87,7 +88,7 @@ fn detail_output_prefers_output_file() {
     let mut task = make_task();
     task.output_path = Some(output_file.path().display().to_string());
 
-    assert_eq!(read_task_output_for_tui(&task), "stdout\n");
+    assert_eq!(read_output(&task), "stdout\n");
 }
 
 #[test]
@@ -164,5 +165,5 @@ fn detail_output_parses_log_jsonl_content() {
     let mut task = make_task();
     task.log_path = Some(log_file.path().display().to_string());
 
-    assert_eq!(read_task_output_for_tui(&task), "hello\n---\n world");
+    assert_eq!(read_output(&task), "hello\n---\n world");
 }

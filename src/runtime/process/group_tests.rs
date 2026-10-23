@@ -68,6 +68,26 @@ fn descendants_follow_ppid_chain_and_skip_unrelated_and_init() {
     );
 }
 
+#[test]
+fn descendant_walk_excludes_siblings_with_identical_start_times() {
+    let table = parse_table(
+        &[
+            "100 1 Sat Oct 3 00:00:01 2026",
+            "101 100 Sat Oct 3 00:00:01 2026",
+            "102 100 Sat Oct 3 00:00:01 2026",
+            "103 101 Sat Oct 3 00:00:01 2026",
+            "104 102 Sat Oct 3 00:00:01 2026",
+        ]
+        .join("\n"),
+    );
+    let found = descendants_in_table(101, &table);
+    assert_eq!(
+        found.iter().map(|entry| entry.pid).collect::<Vec<_>>(),
+        vec![103]
+    );
+    assert_eq!(unchanged_pids(&found, &table), vec![103]);
+}
+
 /// A descendant that exited during the grace period and whose pid now belongs to a
 /// newer process (different start time), or that `ps` no longer lists, is not SIGKILLed.
 #[test]

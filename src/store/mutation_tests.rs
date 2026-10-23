@@ -30,7 +30,7 @@ fn complete_task_atomic_writes_both_task_and_event() {
         metadata: None,
     };
     store
-        .complete_task_atomic(
+        .record_agent_completion(
             TaskCompletionUpdate {
                 id: "t-atomic",
                 status: TaskStatus::Done,
@@ -41,7 +41,7 @@ fn complete_task_atomic_writes_both_task_and_event() {
                 cost_usd: Some(0.05),
                 exit_code: Some(0),
             },
-            &event,
+            Some(&event),
         )
         .unwrap();
 
@@ -69,7 +69,7 @@ fn complete_task_atomic_does_not_override_failed_status() {
         metadata: None,
     };
     store
-        .complete_task_atomic(
+        .record_agent_completion(
             TaskCompletionUpdate {
                 id: "t-atomic-failed",
                 status: TaskStatus::Done,
@@ -80,7 +80,7 @@ fn complete_task_atomic_does_not_override_failed_status() {
                 cost_usd: Some(0.05),
                 exit_code: Some(0),
             },
-            &event,
+            Some(&event),
         )
         .unwrap();
 
@@ -130,7 +130,7 @@ fn complete_task_atomic_leaves_terminal_row_without_rejection_event() {
     };
 
     let changed = store
-        .complete_task_atomic(
+        .record_agent_completion(
             TaskCompletionUpdate {
                 id: "t-atomic-merged",
                 status: TaskStatus::Failed,
@@ -141,7 +141,7 @@ fn complete_task_atomic_leaves_terminal_row_without_rejection_event() {
                 cost_usd: None,
                 exit_code: Some(1),
             },
-            &event,
+            Some(&event),
         )
         .unwrap();
 

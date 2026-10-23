@@ -43,7 +43,7 @@ fn assert_refused(store: &Store, id: &TaskId, marker: &std::path::Path, result: 
 fn settle_first_stopped_task_never_spawns_pty_agent() {
     let (home, _guard, store, id) = setup();
     let marker = home.path().join("launched");
-    let result = crate::runtime::pty::runner::run_agent_process(
+    let result = crate::runtime::pty::runner::run_agent_process_with_control(
         agent::get_agent(AgentKind::Codex).as_ref(),
         &command(&marker),
         &id,
@@ -52,6 +52,10 @@ fn settle_first_stopped_task_never_spawns_pty_agent() {
         None,
         None,
         true,
+        crate::config::timeout_policy::TimeoutPolicy::from_command(&command(&marker)),
+        None,
+        None,
+        std::time::Instant::now(),
     );
     assert_refused(&store, &id, &marker, result);
 }

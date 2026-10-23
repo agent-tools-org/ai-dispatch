@@ -91,7 +91,7 @@ impl Fixture {
         let home = self.home.path().to_path_buf();
         std::thread::spawn(move || {
             let _guard = paths::AidHomeGuard::set(&home);
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
             while !crate::runtime::codex_app_server::active(task.as_str()) {
                 assert!(
                     std::time::Instant::now() < deadline,

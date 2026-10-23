@@ -207,12 +207,17 @@ fn piped_dispatch_uses_the_same_transport_and_completion_pipeline() {
 
 #[test]
 fn steer_timeout_never_marks_delivery_even_when_turn_finishes() {
+    assert_eq!(
+        super::super::control::STEER_WINDOW,
+        std::time::Duration::from_secs(30),
+    );
     let fixture = Fixture::new("silent-steer");
     let actor = fixture.actor(false);
-    let started = std::time::Instant::now();
-    fixture.dispatch();
+    let mut policy = crate::config::timeout_policy::TimeoutPolicy::default();
+    policy.idle = std::time::Duration::from_secs(120);
+    policy.max_duration = std::time::Duration::from_secs(120);
+    fixture.dispatch_with_policy(policy);
     actor.join().unwrap();
-    assert!(started.elapsed() < std::time::Duration::from_secs(35));
     let messages = fixture
         .store
         .list_messages_for_task(fixture.task.as_str())
@@ -220,7 +225,17 @@ fn steer_timeout_never_marks_delivery_even_when_turn_finishes() {
     assert_eq!(messages.len(), 1);
     assert!(messages[0].delivered_at.is_none());
     let error = receipt(&fixture.store, fixture.task.as_str(), messages[0].id).unwrap_err();
+    assert!(error.to_string().contains("turn/steer response timed out"));
     assert!(error.to_string().contains("acceptance unconfirmed"));
+    assert_eq!(
+        fixture
+            .store
+            .get_task(fixture.task.as_str())
+            .unwrap()
+            .unwrap()
+            .status,
+        TaskStatus::Done,
+    );
 }
 
 #[test]

@@ -239,15 +239,19 @@ fn completion_without_a_reported_model_leaves_the_request_alone() {
     store.insert_task(&task).unwrap();
 
     store
-        .update_task_completion(TaskCompletionUpdate {
-            id: "t-attr1",
-            status: TaskStatus::Done,
-            tokens: Some(10),
-            duration_ms: 1000,
-            observed_model: None, attribution_source: None,
-            cost_usd: None,
-            exit_code: Some(0),
-        })
+        .record_agent_completion(
+            TaskCompletionUpdate {
+                id: "t-attr1",
+                status: TaskStatus::Done,
+                tokens: Some(10),
+                duration_ms: 1000,
+                observed_model: None,
+                attribution_source: None,
+                cost_usd: None,
+                exit_code: Some(0),
+            },
+            None,
+        )
         .unwrap();
 
     let loaded = store.get_task("t-attr1").unwrap().unwrap();

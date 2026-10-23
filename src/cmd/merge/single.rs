@@ -3,18 +3,6 @@
 
 use super::*;
 
-#[cfg(test)]
-pub(super) fn merge_single(
-    store: &Store,
-    task_id: &str,
-    approve: bool,
-    check: bool,
-    force: bool,
-    target: Option<&str>,
-) -> Result<()> {
-    merge_single_with_output(store, task_id, approve, check, force, target, true)
-}
-
 pub(super) fn merge_single_with_output(
     store: &Store,
     task_id: &str,

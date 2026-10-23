@@ -120,7 +120,7 @@ fn merge_single_succeeds_with_committed_worktree() {
     let task = make_task_with_worktree("t-merge-ok", repo.path(), wt.path(), &branch);
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-merge-ok", false, false, false, None);
+    let result = merge_single_with_output(&store, "t-merge-ok", false, false, false, None, true);
     assert!(result.is_ok(), "merge_single failed: {result:?}");
 
     let loaded = store.get_task("t-merge-ok").unwrap().unwrap();
@@ -138,7 +138,7 @@ fn merge_single_refuses_required_verification_without_force() {
     task.verify = Some("cargo test".to_string());
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, task.id.as_str(), false, false, false, None);
+    let result = merge_single_with_output(&store, task.id.as_str(), false, false, false, None, true);
 
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("--force"));
@@ -171,7 +171,7 @@ fn merge_single_auto_commits_then_merges() {
     let task = make_task_with_worktree("t-autocommit", repo.path(), wt.path(), &branch);
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-autocommit", false, false, false, None);
+    let result = merge_single_with_output(&store, "t-autocommit", false, false, false, None, true);
     assert!(
         result.is_ok(),
         "merge_single should auto-commit and merge: {result:?}"
@@ -256,7 +256,7 @@ fn merge_single_fails_when_no_commits_and_no_changes() {
     let task = make_task_with_worktree("t-empty", repo.path(), wt.path(), &branch);
     store.insert_task(&task).unwrap();
 
-    let result = merge_single(&store, "t-empty", false, false, false, None);
+    let result = merge_single_with_output(&store, "t-empty", false, false, false, None, true);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
     assert!(

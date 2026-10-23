@@ -137,36 +137,7 @@ impl Drop for WorkspaceSymlinkGuard {
 pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, retry_args: &mut RunArgs) { run_prompt::inherit_retry_base_branch_impl(repo_dir, task, retry_args); }
 pub(crate) fn retry_target(task: &Task) -> Result<(Option<String>, Option<String>)> { run_prompt::retry_target(task) }
 pub(crate) fn apply_retry_target(task: &Task, retry_args: &mut RunArgs) -> Result<()> { run_prompt::apply_retry_target(task, retry_args) }
-#[cfg(test)]
-fn take_next_cascade_agent(args: &RunArgs) -> Option<(String, Vec<String>)> { run_post::take_next_cascade_agent(args) }
 pub(crate) fn switch_agent(args: &mut RunArgs, next_agent: String) { run_post::switch_agent(args, next_agent) }
-#[cfg(test)]
-fn auto_save_task_output(store: &Store, task: &Task) -> Result<()> { run_post::auto_save_task_output(store, task) }
-#[cfg(test)]
-pub(crate) fn read_quota_error_message(task_id: &TaskId, agent: &crate::types::AgentKind) -> Option<String> { run_post::read_quota_error_message(task_id, agent) }
-#[cfg(test)]
-fn worktree_is_empty_diff(worktree_dir: &Path) -> Option<bool> { run_post::worktree_is_empty_diff(worktree_dir) }
-#[cfg(test)]
-fn maybe_run_post_done_audit(
-    store: &Store,
-    task_id: &TaskId,
-    args: &RunArgs,
-    effective_dir: Option<&str>,
-    repo_path: Option<&str>,
-) -> Result<()> {
-    run_post::maybe_run_post_done_audit(store, task_id, args, effective_dir, repo_path)
-}
-#[cfg(test)]
-fn final_dirty_assertion(
-    store: &Store,
-    task_id: &TaskId,
-    dir: &str,
-    read_only: bool,
-    baseline: Option<&[String]>,
-) -> Result<bool> {
-    run_dirty::final_dirty_assertion(store, task_id, dir, read_only, baseline)
-}
-
 pub(crate) fn maybe_verify(
     store: &Store,
     task_id: &TaskId,
@@ -240,3 +211,12 @@ pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_i
 
 #[cfg(test)]
 pub(crate) use run_dispatch_prepare::claim_test_dispatch;
+
+#[cfg(test)]
+use run_post::{
+    auto_save_task_output, maybe_run_post_done_audit, take_next_cascade_agent, worktree_is_empty_diff,
+};
+#[cfg(test)]
+pub(crate) use run_post::read_quota_error_message;
+#[cfg(test)]
+use run_dirty::final_dirty_assertion;

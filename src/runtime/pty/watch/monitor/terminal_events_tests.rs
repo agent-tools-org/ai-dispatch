@@ -68,7 +68,7 @@ fn stop_wins_deadline_before_pty_failure_finalization() {
     .expect("finalize");
     assert!(
         !store
-            .complete_task_atomic(
+            .record_agent_completion(
                 TaskCompletionUpdate {
                     id: id.as_str(),
                     status: TaskStatus::Failed,
@@ -79,13 +79,13 @@ fn stop_wins_deadline_before_pty_failure_finalization() {
                     cost_usd: None,
                     exit_code: Some(1),
                 },
-                &TaskEvent {
+                Some(&TaskEvent {
                     task_id: id.clone(),
                     timestamp: Local::now(),
                     event_kind: EventKind::Error,
                     detail: "losing deadline".into(),
                     metadata: None,
-                }
+                })
             )
             .expect("late settlement")
     );

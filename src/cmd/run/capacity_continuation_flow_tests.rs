@@ -127,7 +127,7 @@ impl Fixture {
         command.current_dir(&self.worktree).args(["-c", &body]);
         let agent =
             crate::agent::registry::resolve_custom_agent("capacity-fixture").expect("agent");
-        crate::cmd::run::run_agent::run_agent_process(
+        crate::cmd::run::run_agent::run_agent_process_with_cost(
             agent.as_ref(),
             command,
             &self.row.id,
@@ -138,6 +138,8 @@ impl Fixture {
             agent.streaming(),
             None,
             Default::default(),
+            None,
+            std::time::Instant::now(),
         )
         .await
         .expect("initial failing agent");

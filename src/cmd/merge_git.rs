@@ -12,7 +12,7 @@ pub(crate) use merge_verify::{run_post_merge_verify, run_verify_in_worktree};
 #[path = "merge_stash.rs"]
 mod merge_stash;
 #[cfg(test)]
-pub(crate) use merge_stash::find_stash_for_test;
+pub(crate) use merge_stash::find_stash;
 pub(crate) use merge_stash::restore_local_changes;
 pub(crate) use merge_stash::stash_local_changes;
 #[cfg(test)]

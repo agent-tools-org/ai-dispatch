@@ -123,7 +123,7 @@ fn replay_stream(agent: &dyn crate::agent::Agent, output: &str) -> (Task, Vec<Ta
     std::fs::write(&input, output).expect("fixture");
     let mut command = std::process::Command::new("/bin/cat");
     command.arg(input);
-    super::run_agent_process(
+    super::run_agent_process_with_control(
         agent,
         &command,
         &task.id,
@@ -132,6 +132,10 @@ fn replay_stream(agent: &dyn crate::agent::Agent, output: &str) -> (Task, Vec<Ta
         None,
         task.requested_model.as_deref(),
         true,
+        crate::config::timeout_policy::TimeoutPolicy::from_command(&command),
+        None,
+        None,
+        std::time::Instant::now(),
     )
     .expect("replay through PTY runner");
     let stored = store.get_task(task.id.as_str()).expect("query").expect("stored task");

@@ -22,7 +22,7 @@ use self::audit::ProjectFile;
 pub use self::edit::{upsert_gitbutler_mode, upsert_gitbutler_prompt_suppressed};
 pub use self::identity::{
     current_project_id, project_display,
-    project_filter_banner, resolve_project_id, retain_project,
+    project_filter_banner, resolve_project_id,
     UNATTRIBUTED,
 };
 use self::profile::apply_profile;

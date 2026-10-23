@@ -4,6 +4,7 @@
 
 use super::tests::{insert_event, make_spec, make_task};
 use super::*;
+use crate::types::EventKind;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 

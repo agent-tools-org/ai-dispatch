@@ -50,22 +50,31 @@ impl Store {
     }
 
     fn latest_metadata_text(&self, task_id: &str, key: &str, kind: &str) -> Result<Option<String>> {
-        let projection = if key == "awaiting_prompt" {
-            "(SELECT value FROM json_each(CASE WHEN json_valid(metadata) THEN metadata END)
-              WHERE key = ?2 ORDER BY id DESC LIMIT 1)"
-        } else {
-            "detail"
-        };
         let conn = self.db();
+        let detail = if kind == "true" { "detail" } else { "NULL" };
         let sql = format!(
-            "SELECT {projection} FROM events WHERE task_id = ?1
-             AND (SELECT type FROM json_each(CASE WHEN json_valid(metadata) THEN metadata END)
-                  WHERE key = ?2 ORDER BY id DESC LIMIT 1) = ?3
-             ORDER BY timestamp DESC, id DESC LIMIT 1"
+            "SELECT {detail}, metadata FROM events WHERE task_id = ?1
+             AND json_type(CASE WHEN json_valid(metadata) THEN metadata END, ?2) IS NOT NULL
+             ORDER BY timestamp DESC, id DESC"
         );
-        conn.query_row(&sql, params![task_id, key, kind], |row| row.get(0))
-            .optional()
-            .map_err(Into::into)
+        let mut stmt = conn.prepare(&sql)?;
+        let mut rows = stmt.query(params![task_id, format!("$.{key}")])?;
+        while let Some(row) = rows.next()? {
+            let raw: String = row.get(1)?;
+            let Some(metadata) = serde_json::from_str::<Value>(&raw).ok() else {
+                continue;
+            };
+            let value = metadata.get(key);
+            if kind == "true" && value.and_then(Value::as_bool) == Some(true) {
+                return Ok(Some(row.get(0)?));
+            }
+            if kind == "text"
+                && let Some(value) = value.and_then(Value::as_str)
+            {
+                return Ok(Some(value.to_string()));
+            }
+        }
+        Ok(None)
     }
 
     pub(crate) fn liveness_summary(

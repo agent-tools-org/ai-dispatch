@@ -162,13 +162,19 @@ fn spawn(args: &Run<'_>, launch: &mut command::Launch) -> Result<io::Rpc> {
         &mut launch.command,
         &crate::support::paths::stderr_path(args.task.as_str()),
     )?;
+    let mut publication_failed = false;
     let child = args.store.with_running_task(args.task.as_str(), || {
-        io::Rpc::spawn(&mut launch.command)
-    })?;
-    let rpc = io::Rpc::attach(child)?;
-    args.store.publish_launch(args.task.as_str(), rpc.pid(), || {
-        crate::runtime::background::update_agent_pid(args.task.as_str(), rpc.pid())
-    })?;
+        let child = io::Rpc::spawn(&mut launch.command)?;
+        if let Err(error) = crate::runtime::background::update_agent_pid(args.task.as_str(), child.id()) {
+            publication_failed = true;
+            return Err(error);
+        }
+        Ok(child)
+    });
+    if publication_failed {
+        args.store.update_task_status(args.task.as_str(), TaskStatus::Failed)?;
+    }
+    let rpc = io::Rpc::attach(child?)?;
     if let Some(control) = args.control {
         control.set_agent_pid(rpc.pid());
     }

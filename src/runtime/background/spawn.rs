@@ -158,5 +158,18 @@ fn worker_log(task_id: &str) -> Result<std::fs::File> {
 }
 
 #[cfg(test)]
+impl super::spec::BackgroundRunSpec {
+    pub(crate) fn test_worker_handoff(
+        cmd: &mut Command,
+        inside: impl FnOnce(),
+    ) -> Result<(Result<u32>, Child)> {
+        let mut launcher = cmd.spawn()?;
+        inside();
+        let result = receive_worker_pid(&mut launcher);
+        Ok((result, launcher))
+    }
+}
+
+#[cfg(test)]
 #[path = "spawn_tests.rs"]
 mod tests;

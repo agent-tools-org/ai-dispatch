@@ -53,32 +53,27 @@ impl ProcessGuard {
     /// On normal exit, SIGTERMs the process group. On timeout, SIGKILLs it.
     pub fn wait_with_timeout(&mut self, timeout: Duration) -> Result<Option<ExitStatus>> {
         let pid = self.child.id();
-        let fired = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let fired2 = fired.clone();
-        let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let done2 = done.clone();
-
-        std::thread::spawn(move || {
-            std::thread::sleep(timeout);
-            if !done2.load(std::sync::atomic::Ordering::SeqCst) {
-                #[cfg(unix)]
-                unsafe {
-                    libc::kill(-(pid as i32), libc::SIGKILL);
-                }
-                fired2.store(true, std::sync::atomic::Ordering::SeqCst);
+        let (done, completed) = std::sync::mpsc::channel();
+        let timer = std::thread::spawn(move || {
+            if completed.recv_timeout(timeout).is_ok() {
+                return false;
             }
+            #[cfg(unix)]
+            unsafe {
+                libc::kill(-(pid as i32), libc::SIGKILL);
+            }
+            true
         });
 
         let status = self.child.wait().context("failed to wait for subprocess")?;
-        done.store(true, std::sync::atomic::Ordering::SeqCst);
+        let _ = done.send(());
+        let fired = timer
+            .join()
+            .map_err(|_| anyhow::anyhow!("timeout worker panicked"))?;
         self.sigterm_group(); // clean up orphaned grandchildren
         self.killed = true;
 
-        if fired.load(std::sync::atomic::Ordering::SeqCst) {
-            Ok(None)
-        } else {
-            Ok(Some(status))
-        }
+        if fired { Ok(None) } else { Ok(Some(status)) }
     }
 
     /// SIGTERM the process group (clean up orphaned grandchildren).
@@ -144,9 +139,7 @@ mod tests {
         let mut cmd = Command::new("echo");
         cmd.arg("hello");
         let mut guard = ProcessGuard::spawn(&mut cmd).unwrap();
-        let status = guard
-            .wait_with_timeout(Duration::from_secs(5))
-            .unwrap();
+        let status = guard.wait_with_timeout(Duration::from_secs(5)).unwrap();
         assert!(status.is_some());
         assert!(status.unwrap().success());
     }
@@ -155,13 +148,17 @@ mod tests {
     #[test]
     fn wait_with_timeout_kills_on_expiry() {
         let _permit = crate::support::test_subprocess::acquire();
-        let mut cmd = Command::new("sleep");
-        cmd.arg("60");
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "read hold"]);
+        cmd.stdin(std::process::Stdio::piped());
         let mut guard = ProcessGuard::spawn(&mut cmd).unwrap();
-        let status = guard
-            .wait_with_timeout(Duration::from_millis(100))
-            .unwrap();
+        let status = guard.wait_with_timeout(Duration::from_millis(100)).unwrap();
         assert!(status.is_none());
+        use std::os::unix::process::ExitStatusExt;
+        assert_eq!(
+            guard.child_mut().wait().unwrap().signal(),
+            Some(libc::SIGKILL)
+        );
     }
 
     #[cfg(unix)]

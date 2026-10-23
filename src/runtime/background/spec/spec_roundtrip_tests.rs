@@ -31,6 +31,8 @@ fn background_run_spec_round_trips_read_only() {
     assert!(decoded.read_only);
     assert!(decoded.audit_report_mode);
     let runtime: BackgroundRunSpec = serde_json::from_value(job).unwrap();
+    assert!(runtime.audit_report_mode);
+    assert!(runtime.budget);
     assert_eq!(decoded.result_file.as_deref(), Some("result.md"));
     assert_eq!(decoded.result_file_required, Some(true));
     assert_eq!(decoded.eval.as_deref(), Some("cargo test"));
@@ -58,6 +60,8 @@ fn background_run_spec_defaults_read_only_to_false_when_missing() {
     value.as_object_mut().unwrap().remove("hooks");
     value.as_object_mut().unwrap().remove("audit");
 
+    let runtime: BackgroundRunSpec = serde_json::from_value(value.clone()).unwrap();
+    assert!(!runtime.audit_report_mode);
     let decoded: RunArgs = serde_json::from_value(value).unwrap();
     assert!(!decoded.read_only);
     assert!(!decoded.audit_report_mode);

@@ -2,16 +2,16 @@
 // Covers post-run fallback effects after run_task_inner returns an operational error.
 // Deps: background error handler, Store, local webhook listener, task fixtures.
 
-use super::{handle_run_task_inner_error, BackgroundRunSpec};
+use super::{BackgroundRunSpec, handle_run_task_inner_error};
 use crate::cmd::run::RunArgs;
-use crate::support::paths;
 use crate::store::Store;
+use crate::support::paths;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::sync::mpsc;
 use std::sync::Arc;
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 #[tokio::test]
@@ -174,52 +174,17 @@ fn spec(task_id: &str) -> BackgroundRunSpec {
     BackgroundRunSpec {
         task_id: task_id.to_string(),
         worker_pid: Some(123),
-        agent_name: "codex".to_string(),
-        prompt: "prompt".to_string(),
         dir: None,
-        output: None,
-        result_file: None,
-        result_file_required: None,
-        model: None,
         budget: false,
-        session_id: None,
-        verify: None,
-        setup: None,
-        iterate: None,
-        eval: None,
-        eval_feedback_template: None,
-        judge: None,
-        judge_retry: false,
         max_duration_mins: None,
         max_duration_secs: None,
-        max_task_cost: None,
         idle_timeout_secs: None,
-        retry: 0,
-        group: None,
-        skills: vec![],
-        checklist: vec![],
-        hooks: vec![],
-        template: None,
-        worktree: None,
-        base_branch: None,
-        peer_review: None,
-        audit: false,
-        audit_explicit: false,
-        no_audit: false,
-        scope: vec![],
         interactive: true,
         on_done: None,
-        cascade: vec![],
-        parent_task_id: None,
         env: None,
-        env_forward: None,
         agent_pid: None,
         agent_started: None,
-        sandbox: false,
-        read_only: false,
         audit_report_mode: false,
-        container: None,
-        link_deps: true,
         pre_task_dirty_paths: None,
         foreground: false,
     }

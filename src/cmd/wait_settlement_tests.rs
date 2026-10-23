@@ -78,3 +78,31 @@ async fn live_worker_does_not_block_exit_on_await() {
     assert_eq!(wait_for_task_ids(&store, &["t-awaiting".into()], None, true,
         Some(Duration::from_millis(30))).await.unwrap(), WaitOutcome::Completed);
 }
+
+#[tokio::test]
+async fn wait_accepts_full_old_format_job_only_after_worker_settles() {
+    let home = tempfile::tempdir().unwrap();
+    let _guard = paths::AidHomeGuard::set(home.path());
+    paths::ensure_dirs().unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let id = "t-old-wait";
+    store.insert_task(&make_task(id, TaskStatus::Done)).unwrap();
+    let mut legacy: serde_json::Value =
+        serde_json::from_str(include_str!("../../testdata/full-background-spec.json")).unwrap();
+    assert_eq!(legacy.as_object().unwrap().len(), 50);
+    legacy["task_id"] = id.into();
+    legacy["worker_pid"] = std::process::id().into();
+    std::fs::write(paths::job_path(id), serde_json::to_vec(&legacy).unwrap()).unwrap();
+
+    let ids = [id.to_string()];
+    let outcome = wait_for_task_ids(&store, &ids, None, false, Some(Duration::from_millis(30)))
+        .await
+        .unwrap();
+    assert_eq!(outcome, WaitOutcome::TimedOut(ids.to_vec()));
+    assert!(paths::job_path(id).exists());
+
+    background::clear_spec(id).unwrap();
+    let outcome = wait_for_task_ids(&store, &ids, None, false, None).await.unwrap();
+    assert_eq!(outcome, WaitOutcome::Completed);
+    run(&store, &ids, None, false, None).await.unwrap();
+}

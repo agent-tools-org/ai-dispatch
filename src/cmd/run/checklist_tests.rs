@@ -3,7 +3,6 @@
 // Deps: cmd::checklist helpers, run_prompt bundle builder, background spec serde.
 
 use super::*;
-use crate::runtime::background::BackgroundRunSpec;
 use crate::cmd::checklist::merge_checklist_items;
 use crate::store::Store;
 
@@ -13,61 +12,6 @@ fn prompt_args(checklist: Vec<String>) -> RunArgs {
         prompt: "Write the requested content".to_string(),
         checklist,
         ..Default::default()
-    }
-}
-
-fn background_spec(checklist: Vec<String>) -> BackgroundRunSpec {
-    BackgroundRunSpec {
-        task_id: "t-check".to_string(),
-        worker_pid: Some(1),
-        agent_name: "codex".to_string(),
-        prompt: "prompt".to_string(),
-        dir: None,
-        output: None,
-        result_file: None,
-        result_file_required: None,
-        model: None,
-        budget: false,
-        session_id: None,
-        verify: None,
-        setup: None,
-        iterate: None,
-        eval: None,
-        eval_feedback_template: None,
-        judge: None,
-        judge_retry: false,
-        max_duration_mins: None,
-        max_duration_secs: None,
-        max_task_cost: None,
-        idle_timeout_secs: None,
-        retry: 0,
-        group: None,
-        skills: vec![],
-        checklist,
-        hooks: vec![],
-        template: None,
-        worktree: None,
-        base_branch: None,
-        peer_review: None,
-        audit: false,
-        audit_explicit: false,
-        no_audit: false,
-        scope: vec![],
-        interactive: true,
-        on_done: None,
-        cascade: vec![],
-        parent_task_id: None,
-        env: None,
-        env_forward: None,
-        agent_pid: None,
-        agent_started: None,
-        sandbox: false,
-        read_only: false,
-        audit_report_mode: false,
-        container: None,
-        link_deps: true,
-        pre_task_dirty_paths: None,
-        foreground: false,
     }
 }
 
@@ -128,12 +72,12 @@ fn checklist_file_loading_skips_comments_and_blank_lines() {
 
 #[test]
 fn background_run_spec_round_trips_checklist_via_serde() {
-    let value = serde_json::to_value(background_spec(vec![
+    let value = serde_json::to_value(prompt_args(vec![
         "confirm branch state".to_string(),
         "verify retry wiring".to_string(),
     ]))
     .unwrap();
-    let decoded: BackgroundRunSpec = serde_json::from_value(value).unwrap();
+    let decoded: RunArgs = serde_json::from_value(value).unwrap();
 
     assert_eq!(
         decoded.checklist,

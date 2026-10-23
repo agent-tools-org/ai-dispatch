@@ -18,7 +18,7 @@ pub(super) fn prepare_launch(
     let launch_prompt = task
         .as_ref()
         .and_then(|task| task.resolved_prompt.as_deref())
-        .unwrap_or(&spec.prompt);
+        .unwrap_or(&args.prompt);
     let worktree_branch = task.as_ref().and_then(|task| task.worktree_branch.clone());
     let mut cargo_target_dir =
         agent::rust_build_cache_target_dir(args.dir.as_deref(), worktree_branch.as_deref());

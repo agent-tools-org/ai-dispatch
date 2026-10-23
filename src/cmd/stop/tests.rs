@@ -3,8 +3,8 @@
 // Deps: stop command internals, Store, background run specs.
 
 use super::*;
-use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
+use crate::support::paths::AidHomeGuard;
 use crate::types::EventKind;
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -80,7 +80,7 @@ fn kill_waiting_task_sets_stopped() {
 
 #[test]
 fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
-    use crate::runtime::background::{save_spec, BackgroundRunSpec};
+    use crate::runtime::background::{BackgroundRunSpec, save_spec};
     use tempfile::TempDir;
 
     let temp = TempDir::new().unwrap();
@@ -96,50 +96,15 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
         worker_pid: Some(i32::MAX as u32 - 1),
         agent_pid: Some(i32::MAX as u32 - 2),
         agent_started: None,
-        agent_name: "codex".to_string(),
-        prompt: "test".to_string(),
         dir: None,
-        output: None,
-        result_file: None,
-        result_file_required: None,
-        model: None,
         budget: false,
-        session_id: None,
-        verify: None,
-        setup: None,
-        iterate: None,
-        eval: None,
-        eval_feedback_template: None,
-        judge: None,
-        judge_retry: false,
         max_duration_mins: None,
         max_duration_secs: None,
-        max_task_cost: None,
         idle_timeout_secs: None,
-        retry: 0,
-        group: None,
-        skills: vec![],
-        checklist: vec![],
-        hooks: vec![],
-        template: None,
-        worktree: None,
-        base_branch: None,
-        peer_review: None,
-        audit: false,
-        audit_explicit: false,
-        no_audit: false,
-        scope: vec![],
         interactive: false,
         on_done: None,
-        cascade: vec![],
-        parent_task_id: None,
         env: None,
-        env_forward: None,
-        sandbox: false,
-        read_only: false,
         audit_report_mode: false,
-        container: None,
-        link_deps: true,
         pre_task_dirty_paths: None,
         foreground: false,
     };

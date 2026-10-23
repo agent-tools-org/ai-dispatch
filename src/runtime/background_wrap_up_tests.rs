@@ -21,7 +21,6 @@ fn poll_at(age: i64, cap: u64, agent: AgentKind) -> (Store, Task) {
         })
         .expect("progress");
     let mut spec = spec(task.id.as_str());
-    spec.agent_name = agent.as_str().into();
     spec.max_duration_secs = Some(cap);
     spec.idle_timeout_secs = Some(10_000);
     save_spec(&spec).expect("spec");
@@ -107,7 +106,6 @@ fn read_only_reaper_queues_report_only_wrap_up() {
     task.created_at = Local::now() - Duration::seconds(540);
     store.insert_task(&task).expect("task");
     let mut spec = spec(task.id.as_str());
-    spec.read_only = true;
     spec.max_duration_secs = Some(600);
     spec.idle_timeout_secs = Some(10_000);
     save_spec(&spec).expect("spec");

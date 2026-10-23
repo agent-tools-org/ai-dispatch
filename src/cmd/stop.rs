@@ -201,5 +201,5 @@ mod settle_worker_tests;
 mod terminal_events_tests;
 
 #[cfg(all(test, unix))]
-#[path = "stop_worker_identity_tests.rs"]
+#[path = "stop/worker_identity_tests.rs"]
 mod worker_identity_tests;

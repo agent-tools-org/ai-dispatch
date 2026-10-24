@@ -104,8 +104,8 @@ All additive to `/api/`, with no parallel API. Each lands with a Rust test.
 
 ## 6. Screens (native direction)
 
-The visual direction is pending review (native macOS or the existing fleet console). This
-section describes the native option; the data rules and server changes above apply to either.
+Visual direction: native macOS conventions (decided 2026-10-24), replacing the fleet-console
+look. The data rules and server changes above are independent of it.
 
 One window, `NavigationSplitView` with three columns:
 
@@ -152,7 +152,7 @@ opens the task), user notifications on transitions into Needs you and on complet
 
 Kept: `SSEClient`, `KeychainTokenStore`, connection settings, the live source and decoder
 (reworked for S1–S2), the xcodegen project, the test targets.
-Dropped with the native direction: rank and XP, radar, payload rarity, reactor load, hangar
+Dropped: rank and XP, radar, payload rarity, reactor load, hangar
 bays, unit catalog and levels, the demo tick engine at runtime, the theme system, and the
 game vocabulary. The iPad target is dropped for the first release; SwiftUI keeps the
 option to restore it later.
@@ -168,8 +168,7 @@ option to restore it later.
 
 ## 10. Open questions for review
 
-1. Visual direction: native macOS (section 6) or the existing fleet console.
-2. Include `web` in release binaries (pending the size measurement).
-3. Drop the iPad target for the first release.
-4. Keep remote (LAN) server access in P1, or loopback only.
-5. Signing: which Apple developer account signs and notarizes.
+1. Include `web` in release binaries (pending the size measurement).
+2. Drop the iPad target for the first release.
+3. Keep remote (LAN) server access in P1, or loopback only.
+4. Signing: which Apple developer account signs and notarizes.

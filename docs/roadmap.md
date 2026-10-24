@@ -70,12 +70,12 @@ Starting point, measured 2026-10-24:
 | Design | `docs/design/macos-gui.md` names the users and their jobs, the data path, distribution, screens and actions, and what is kept or dropped from AID Command; it is reviewed before code |
 | Prototype | Only after the design is accepted; scope set by the design |
 
+Visual direction is decided: standard macOS conventions replace the fleet-console look.
 Open questions the design must settle:
 
 - Data path: the `aid web` HTTP API and SSE, a read-only SQLite reader, or `aid … --json`.
 - Distribution: whether release binaries include `web` (M2) and how the app is signed,
   notarized and installed.
-- Visual direction: keep the fleet-console look or follow standard macOS conventions.
 - Scope: macOS only, or macOS and iPadOS from one source tree as today.
 
 ## Provider routes, verify and failure listing (v11.6.0, v11.6.1)

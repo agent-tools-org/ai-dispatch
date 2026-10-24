@@ -1,6 +1,6 @@
 # aid Roadmap
 
-Updated 2026-10-20 after v11.3.0 (`ec25a4f5`).
+Updated 2026-10-24 after v11.7.0 (`50e2ad59`).
 This document owns execution order and acceptance gates; [CHANGELOG](../CHANGELOG.md)
 owns release history. The [takeover inventory](project-status-2026-09-22.md) records
 source evidence and verification limits. Release validation is recorded separately from historical audit results.
@@ -11,7 +11,15 @@ does not assert board closure. New slices need board IDs before implementation.
 
 ## Current baseline
 
-- The current release is **v11.5.0** (2026-10-20): Codex keeps the user's provider,
+- The current release is **v11.7.0** (2026-10-23): database lock and growth fixes; see
+  "Database lock and growth" below. The release gate passed the full workspace suite on the
+  build box, and the integrated head passed clippy `-D warnings` plus the default (3,875
+  passed) and web (3,913 passed) suites with 0 failures. CI is green again; it had failed on
+  clippy since v11.6.1.
+- v11.6.1 (2026-10-23): `aid stop` checks the worker's identity before each signal, background
+  job files hold runtime state only, and the code-quality round. v11.6.0 (2026-10-22): the
+  slices in "Provider routes, verify and failure listing" below.
+- v11.5.0 (2026-10-20): Codex keeps the user's provider,
   agent-scoped failure classification, and removal of the Gemini CLI agent; see that section
   below. v11.4.0 (2026-10-20): truthful outcomes under concurrency and long runs. v11.3.0 (2026-10-16): Claude API account routes. v11.2.0
   (2026-10-16) moved Codex to `codex app-server` with mid-run steering; v11.1.0
@@ -37,15 +45,47 @@ does not assert board closure. New slices need board IDs before implementation.
   re-run for this release.
 - Earlier baseline notes (v10.47.x custody and budget work) remain below for reconciliation.
 
-## Next release (in progress)
+## Next release: macOS GUI (design first)
+
+The next release researches a native macOS GUI for aid. It starts with a reviewed design;
+no implementation begins before the design is accepted. Design document:
+[macOS GUI design](design/macos-gui.md).
+
+Starting point, measured 2026-10-24:
+
+- `client/` holds AID Command, a SwiftUI app for macOS 14+ and iPadOS 17+ with a
+  game-styled "fleet console" look ([spec](../client/DESIGN.md), last changed 2026-09-24).
+  Its macOS scheme builds and its tests pass locally with Xcode 27.1 (42 tests, 1 skipped,
+  2 compiler warnings). It has demo and live data sources; live data comes from `aid web`.
+- `aid web` (Cargo feature `web`, not in release binaries) serves the
+  [client API](design/client-api.md): `/api/fleet`, `/api/agents`, task detail, events,
+  output, diff and result, the actions stop, retry, merge, steer, respond, accept and reject,
+  and an SSE stream (`/api/events`), with bearer-token auth for non-loopback binds.
+- Since v11.7.0, opening the store at the current schema takes no write lock, so a
+  long-lived reader such as a GUI does not block or wait for `aid` writers.
+
+| Step | Acceptance |
+| --- | --- |
+| Inventory | Contract drift between the Swift decoder and the server, data shown only from demo sources, and CLI capabilities the API does not expose, each with file:line evidence |
+| Design | `docs/design/macos-gui.md` names the users and their jobs, the data path, distribution, screens and actions, and what is kept or dropped from AID Command; it is reviewed before code |
+| Prototype | Only after the design is accepted; scope set by the design |
+
+Open questions the design must settle:
+
+- Data path: the `aid web` HTTP API and SSE, a read-only SQLite reader, or `aid … --json`.
+- Distribution: whether release binaries include `web` (M2) and how the app is signed,
+  notarized and installed.
+- Visual direction: keep the fleet-console look or follow standard macOS conventions.
+- Scope: macOS only, or macOS and iPadOS from one source tree as today.
+
+## Provider routes, verify and failure listing (v11.6.0, v11.6.1)
 
 | Slice | Board | Acceptance contract |
 | --- | --- | --- |
 | Codex custom provider as a route (P2) — done | wi-3856 | A task launched with a user-selected custom provider records it as its own route identity; quota holds, advice and retry address that route, not `codex/openai`; read-only provenance still proves the restrictive profile |
 | Typed pre-command results from rbox — done | wi-1ad2 | A remote verify that never started its command is classified from rbox's typed result, not from log text |
 | Listing of unrecognised failures — done (reduced) | wi-1ad2 | `aid agent failures` lists recorded `unclassified_failure` markers, grouped and masked by a fail-closed allowlist; it dispatches no agent and never sets or clears a hold. Advice comes from piping `--json` to the tool-free `aid classify` |
-
-| Code-quality round — done (local) | — | No crate-wide `dead_code` allowance; zero compiler warnings in default/web check and test builds (chrono deprecations excepted); no source file over 300 lines; duplicated display/Git helpers have one owner; output strings unchanged |
+| Code-quality round — done (v11.6.1) | — | No crate-wide `dead_code` allowance; zero compiler warnings in default/web check and test builds (chrono deprecations excepted); no source file over 300 lines; duplicated display/Git helpers have one owner; output strings unchanged |
 | Bare `--verify` honours the project verifier — done | — | `--verify` without a value uses the project's declared verify command (auto-detection only when none is declared); every verify run persists a started/finished event with command, directory, local HEAD, exit code and output excerpt; NoOp is read only from the agent's final message, never tool output |
 
 P2 records only the route name (`codex-provider:<id>`) and refuses a launch, retry or resume when
@@ -333,7 +373,7 @@ Open:
 
 ### Database lock and growth — 2026-10-23
 
-Source: [SQLite lock and growth investigation](investigation-db-lock-2026-10.md).
+Released in v11.7.0. Source: [SQLite lock and growth investigation](investigation-db-lock-2026-10.md).
 
 | Area | Result |
 | --- | --- |
@@ -432,6 +472,8 @@ records both attempts. Next budget work is slice 3: project configuration/sync p
 and cap removal. Concurrent spend reservation is outside the completed slice.
 
 ## M2 — Make client/server delivery routine (P1)
+
+The macOS GUI work above depends on this milestone; its design settles the first bullet.
 
 - Decide and document whether release binaries include `web` or ship a separate variant;
   current release builds use default features. Document the matching client setup path.

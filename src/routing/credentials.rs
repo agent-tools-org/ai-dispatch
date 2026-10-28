@@ -94,7 +94,7 @@ pub(crate) fn credential_is_set(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{Strategy, load_pool, load_pool_from_path};
-    use crate::support::paths::AidHomeGuard;
+
     use std::fs;
     use tempfile::TempDir;
 
@@ -131,8 +131,7 @@ keys = [
 
     #[test]
     fn missing_file_returns_none() {
-        let dir = TempDir::new().unwrap();
-        let _guard = AidHomeGuard::set(dir.path());
+        let _dir = crate::support::test_env::TestHome::new();
 
         assert!(load_pool().is_none());
     }

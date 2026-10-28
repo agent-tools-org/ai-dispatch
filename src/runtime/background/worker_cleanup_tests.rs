@@ -5,9 +5,7 @@ use super::*;
 
 #[test]
 fn marks_running_background_tasks_failed_when_worker_is_missing() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
 
     let store = Store::open_memory().unwrap();
     store
@@ -50,9 +48,7 @@ fn marks_running_background_tasks_failed_when_worker_is_missing() {
 
 #[test]
 fn reaps_alive_worker_when_events_are_stale_beyond_idle_margin() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
 
     let store = Store::open_memory().unwrap();
     let task = make_task("t-wedged", TaskStatus::Running);
@@ -87,9 +83,7 @@ fn reaps_alive_worker_when_events_are_stale_beyond_idle_margin() {
 
 #[test]
 fn keeps_alive_worker_when_events_are_recent_within_idle_margin() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
 
     let store = Store::open_memory().unwrap();
     let task = make_task("t-healthy", TaskStatus::Running);
@@ -115,9 +109,7 @@ fn keeps_alive_worker_when_events_are_recent_within_idle_margin() {
 #[cfg(unix)]
 fn skips_awaiting_input_live_worker_even_when_events_are_stale() {
     let _permit = test_subprocess::acquire();
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
 
     let store = Store::open_memory().unwrap();
     let task = make_task("t-awaiting", TaskStatus::AwaitingInput);
@@ -151,9 +143,7 @@ fn skips_awaiting_input_live_worker_even_when_events_are_stale() {
 
 #[test]
 fn reaps_running_task_kept_alive_only_by_idle_bookkeeping_events() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
 
     let store = Store::open_memory().unwrap();
     let task = make_task("t-idle-bookkeeping", TaskStatus::Running);
@@ -182,9 +172,7 @@ fn reaps_running_task_kept_alive_only_by_idle_bookkeeping_events() {
 
 #[test]
 fn reaps_running_task_kept_alive_only_by_acked_reply_bookkeeping() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
 
     let store = Store::open_memory().unwrap();
     let task = make_task("t-acked-bookkeeping", TaskStatus::Running);
@@ -221,9 +209,7 @@ fn reaps_running_task_kept_alive_only_by_acked_reply_bookkeeping() {
 
 #[test]
 fn reaps_running_task_kept_alive_only_by_nudge_echo_reasoning() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
 
     let store = Store::open_memory().unwrap();
     let task = make_task("t-nudge-echo-reaper", TaskStatus::Running);

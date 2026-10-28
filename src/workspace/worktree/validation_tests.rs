@@ -12,15 +12,7 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
 
-fn git(repo_dir: &Path, args: &[&str]) {
-    let repo_dir = repo_dir.to_string_lossy().to_string();
-    assert!(Command::new("git")
-        .args(["-C", repo_dir.as_str()])
-        .args(args)
-        .status()
-        .unwrap()
-        .success());
-}
+use crate::support::test_env::git;
 
 fn init_repo() -> TempDir {
     let repo = TempDir::new().unwrap();

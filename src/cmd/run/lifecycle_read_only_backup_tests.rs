@@ -246,8 +246,7 @@ impl Fixture {
 #[tokio::test]
 async fn read_only_stop_preserves_declared_report_in_single_backup() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let f = Fixture::new(home.path(), true, true, false);
     f.settle().await;
     f.assert_failed_and_reviewable(home.path());
@@ -262,8 +261,7 @@ async fn read_only_stop_preserves_declared_report_in_single_backup() {
 #[tokio::test]
 async fn read_only_stop_upload_failure_is_warning_only_and_not_retried() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let f = Fixture::new(home.path(), true, true, true);
     f.settle().await;
     f.assert_failed_and_reviewable(home.path());
@@ -281,8 +279,7 @@ async fn read_only_stop_upload_failure_is_warning_only_and_not_retried() {
 #[tokio::test]
 async fn read_only_stop_missing_optional_report_without_backup_stays_failed() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let f = Fixture::new(home.path(), false, false, false);
     f.settle().await;
     f.assert_failed_and_reviewable(home.path());

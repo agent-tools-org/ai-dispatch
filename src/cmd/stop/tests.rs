@@ -4,18 +4,17 @@
 
 use super::*;
 use crate::store::Store;
-use crate::support::paths::AidHomeGuard;
+
 use crate::types::EventKind;
 use std::sync::Arc;
-use tempfile::TempDir;
+
 
 #[path = "fixture.rs"]
 mod fixture;
 pub(super) use fixture::make_task;
 
 fn with_store<T>(f: impl FnOnce(Arc<Store>) -> T) -> T {
-    let temp = TempDir::new().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     f(store)
 }
@@ -81,11 +80,9 @@ fn kill_waiting_task_sets_stopped() {
 #[test]
 fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
     use crate::runtime::background::{BackgroundRunSpec, save_spec};
-    use tempfile::TempDir;
 
-    let temp = TempDir::new().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
+
+    let _temp = crate::support::test_env::TestHome::with_dirs();
 
     let store = Arc::new(Store::open_memory().unwrap());
     let task = make_task("t-3010", TaskStatus::Running);
@@ -121,9 +118,7 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
 
 #[test]
 fn stop_loads_actual_pre_upgrade_spec_with_detached_field() {
-    let temp = TempDir::new().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
     let store = Arc::new(Store::open_memory().unwrap());
     store
         .insert_task(&make_task("t-9ef43f87", TaskStatus::Running))

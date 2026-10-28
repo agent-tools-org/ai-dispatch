@@ -56,8 +56,8 @@ fn char_len(s: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{AgentKind, AttributionSource, TaskId, TaskStatus, VerifyStatus};
-    use chrono::Local;
+    use crate::types::{AgentKind, AttributionSource, TaskId, TaskStatus};
+
 
     fn task_with(
         agent: AgentKind,
@@ -67,44 +67,13 @@ mod tests {
         source: Option<AttributionSource>,
     ) -> Task {
         Task {
-            id: TaskId("t-route".to_string()),
             agent,
             custom_agent_name: custom.map(str::to_string),
-            prompt: "p".to_string(),
-            resolved_prompt: None,
-            category: None,
-            status: TaskStatus::Done,
-            parent_task_id: None,
-            workgroup_id: None,
-            caller_kind: None,
-            caller_session_id: None,
-            agent_session_id: None,
-            repo_path: None, project_id: crate::config::project::current_project_id(),
-            worktree_path: None, effective_dir: None,
-            worktree_branch: None,
-            final_head_sha: None,
-            final_branch: None,
-            start_sha: None,
-            log_path: None,
-            output_path: None,
-            tokens: None,
-            prompt_tokens: None,
-            duration_ms: None,
+            prompt: "p".to_string(), project_id: crate::config::project::current_project_id(),
             requested_model: requested.map(str::to_string),
             observed_model: observed.map(str::to_string),
             attribution_source: source,
-            cost_usd: None,
-            exit_code: None,
-            created_at: Local::now(),
-            completed_at: None,
-            verify: None,
-            verify_status: VerifyStatus::Skipped,
-            pending_reason: None,
-            read_only: false,
-            budget: false,
-            audit_verdict: None,
-            audit_report_path: None,
-            delivery_assessment: None,
+            ..crate::types::Task::test_fixture(TaskId("t-route".to_string()), TaskStatus::Done)
         }
     }
 

@@ -6,10 +6,10 @@ use super::{reset_dirty_worktree, save_partial_work, supersede_live_holder};
 use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
 use crate::support::test_subprocess;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{Task, TaskId, TaskStatus};
 use chrono::Local;
 use std::path::Path;
-use std::process::Command;
+
 use std::sync::Arc;
 use tempfile::TempDir;
 
@@ -23,46 +23,7 @@ fn isolated_store() -> (Arc<Store>, AidHomeGuard) {
 }
 
 fn make_task(id: &str, status: TaskStatus) -> Task {
-    Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
-    }
+    crate::types::Task::test_fixture(TaskId(id.to_string()), status)
 }
 
 // A lock whose owner_pid is our own (alive) process: the lease is live but no
@@ -247,23 +208,6 @@ fn head_message(path: &Path) -> String {
     git_stdout(path, &["log", "-1", "--pretty=%s"]).trim().to_string()
 }
 
-fn git_stdout(path: &Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(path)
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    String::from_utf8(output.stdout).unwrap()
-}
+use crate::support::test_env::git_stdout;
 
-fn git(path: &Path, args: &[&str]) {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(path)
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-}
+use crate::support::test_env::git;

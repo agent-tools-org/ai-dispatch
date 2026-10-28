@@ -2,23 +2,13 @@
 
 use super::super::Agent;
 use super::*;
-use crate::{support::paths, routing::rate_limit};
+use crate::{routing::rate_limit};
 use crate::agent::RunOpts;
 use crate::types::{EventKind, TaskId};
 
 fn base_opts() -> RunOpts {
     RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     }
 }
 
@@ -111,8 +101,7 @@ fn build_command_read_only_without_result_file_keeps_strict_prefix() {
 
 #[test]
 fn parse_event_marks_mimocode_rate_limits() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     rate_limit::clear_rate_limit(&AgentKind::MiMoCode, None);
     rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
     let event = agent()

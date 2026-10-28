@@ -36,8 +36,7 @@ fn sql_selects_only_completed_route_tasks_in_the_utc_month() {
 
 #[test]
 fn unknown_completed_cost_is_visible_and_reported_cost_is_authoritative() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     crate::cost::clear_feed_for_tests();
     let now = Utc::now();
     let mut unpriced = task("unpriced", now, 0.0);
@@ -88,8 +87,7 @@ fn expiration_bonus_is_strictly_within_seven_days_and_below_eighty_percent_pace(
 
 #[test]
 fn launch_checks_completed_budget_without_installing_a_hold_or_changing_task_outcome() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().unwrap();
     store
         .insert_task(&task("finished-over", Utc::now(), 250.0))
@@ -112,8 +110,7 @@ fn launch_checks_completed_budget_without_installing_a_hold_or_changing_task_out
 
 #[test]
 fn completed_unreported_real_claude_id_uses_feed_price_even_with_opus_request() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let feed: crate::cost::price_feed::Feed = serde_json::from_value(serde_json::json!({
         "built_at": Utc::now().to_rfc3339(), "stale":false, "age_seconds":0,
         "models":[{"id":"anthropic/claude-opus-5.5", "aliases":["opus"],

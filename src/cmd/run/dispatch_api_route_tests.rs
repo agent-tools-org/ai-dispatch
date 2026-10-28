@@ -1,12 +1,11 @@
 // Dispatch and cascade identity regressions for API accounts.
 // Uses a temporary config and the real resolver with an in-memory store.
 use super::*;
-use crate::support::paths::{self, AidHomeGuard};
+use crate::support::paths::{self};
 
 #[test]
 fn named_route_resolves_and_cascade_preserves_its_identity() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     std::fs::write(
         paths::config_path(),
         concat!(
@@ -35,8 +34,7 @@ fn named_route_resolves_and_cascade_preserves_its_identity() {
 
 #[test]
 fn api_container_is_rejected_before_launch_without_holding_route() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     std::fs::write(
         paths::config_path(),
         concat!(
@@ -61,8 +59,7 @@ fn api_container_is_rejected_before_launch_without_holding_route() {
 
 #[test]
 fn ordinary_dispatch_survives_invalid_unrelated_api_route() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     std::fs::write(
         paths::config_path(),
         concat!(

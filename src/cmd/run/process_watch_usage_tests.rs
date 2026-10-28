@@ -7,8 +7,7 @@ use std::time::Duration;
 #[tokio::test]
 async fn worker_timeout_recovers_ingested_claude_usage() {
     let _permit = crate::support::test_subprocess::acquire();
-    let dir = tempfile::tempdir().expect("dir");
-    let _home = crate::support::paths::AidHomeGuard::set(dir.path());
+    let dir = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let id = TaskId("t-usage-timeout".into());

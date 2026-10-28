@@ -25,16 +25,8 @@ fn build_command_adds_effective_target_without_granting_parent() {
     let roots = vec![metadata.clone(), common.clone(), cargo_target.canonicalize().unwrap()];
     let opts = RunOpts {
         dir: Some(worktree.to_string_lossy().into_owned()),
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
         sandbox: true,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = CodexAgent
         .build_command_with_context(

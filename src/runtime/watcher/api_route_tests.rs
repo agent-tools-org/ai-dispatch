@@ -1,14 +1,12 @@
 // Process-level proof that an API source mismatch stops before later agent work.
 // Uses a shell stream fixture and temporary route state; no real credentials.
 use super::super::*;
-use crate::support::paths::{self, AidHomeGuard};
+use crate::support::paths::{self};
 use std::process::Stdio;
 
 #[tokio::test]
 async fn api_source_mismatch_kills_child_and_records_route_hold() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
-    paths::ensure_dirs().unwrap();
+    let home = crate::support::test_env::TestHome::with_dirs();
     std::fs::write(
         paths::config_path(),
         concat!(

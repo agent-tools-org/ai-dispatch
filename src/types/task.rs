@@ -92,18 +92,6 @@ impl Task {
         self.observed_model.as_deref()
     }
 
-    #[cfg(test)]
-    /// The model, but only when the CLI itself said so. Capability scoring and
-    /// an agent's learned default model read this rather than
-    /// `attributed_model`, because a model inferred from a run merely not
-    /// failing is not evidence that model performed well — or even that a
-    /// substitution did not happen behind a successful exit.
-    pub fn conclusive_model(&self) -> Option<&str> {
-        self.attribution_source
-            .filter(|source| source.is_conclusive())
-            .and(self.observed_model.as_deref())
-    }
-
     /// The model to price against, and the model a derived dispatch should ask
     /// for again: the observation when there is one, otherwise the original
     /// request. The fallback is legitimate here only because both values are

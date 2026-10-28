@@ -10,7 +10,7 @@ use crate::agent::commandcode::CommandCodeAgent;
 use crate::agent::cursor::CursorAgent;
 use crate::types::AgentKind;
 use crate::agent::Agent;
-use crate::support::paths;
+
 use crate::store::Store;
 use crate::types::TaskStatus;
 
@@ -27,8 +27,7 @@ fn fixture(name: &str) -> String {
 }
 
 async fn watch_exit0(agent: &dyn Agent, output: &str, task_id: &str) -> TaskStatus {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = crate::types::TaskId(task_id.to_string());
     insert_running_task(store.as_ref(), &task_id);
@@ -126,8 +125,7 @@ pub(super) async fn watch_usage(
     max_cost: Option<f64>,
 ) -> (crate::types::CompletionInfo, Vec<crate::types::TaskEvent>) {
     use std::os::unix::process::CommandExt;
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = crate::types::TaskId("t-opencode-usage".to_string());
     insert_running_task(store.as_ref(), &task_id);

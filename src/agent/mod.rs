@@ -10,6 +10,7 @@ pub mod copilot;
 pub mod cursor;
 pub mod droid;
 pub(crate) mod antigravity_response;
+mod stream_text;
 pub(crate) mod completion_event;
 pub(crate) mod removed;
 pub mod grok;
@@ -170,6 +171,7 @@ pub fn agent_log_from_opts(opts: &RunOpts) -> Option<&str> {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(test, derive(Default))]
 pub struct RunOpts {
     pub dir: Option<String>,
     pub output: Option<String>,

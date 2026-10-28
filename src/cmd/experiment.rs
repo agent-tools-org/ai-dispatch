@@ -135,17 +135,7 @@ mod tests {
     use crate::support::test_subprocess;
     use std::process::Command;
 
-    fn git(dir: &std::path::Path, args: &[&str]) {
-        assert!(
-            Command::new("git")
-                .arg("-C")
-                .arg(dir)
-                .args(args)
-                .status()
-                .unwrap()
-                .success()
-        );
-    }
+    use crate::support::test_env::git;
 
     fn git_stdout(dir: &std::path::Path, args: &[&str]) -> String {
         String::from_utf8(

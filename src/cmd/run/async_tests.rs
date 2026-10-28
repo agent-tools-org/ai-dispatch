@@ -1,17 +1,15 @@
 // Async `aid run` tests split from run_tests.rs to keep files small.
 // Covers dry-run dispatch and rate-limit cascade behavior.
 // Deps: parent run test imports, Store, paths, tokio.
-use super::{NO_SKILL_SENTINEL, RunArgs, paths, run};
+use super::{NO_SKILL_SENTINEL, RunArgs, run};
 use crate::store::Store;
 use crate::types::{AgentKind, TaskStatus, TaskUrgency};
 use std::sync::Arc;
-use tempfile::TempDir;
+
 
 #[tokio::test]
 async fn dry_run_returns_without_starting_task() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = run(store.clone(), RunArgs {
         agent_name: "codex".to_string(),
@@ -30,9 +28,7 @@ async fn dry_run_returns_without_starting_task() {
 
 #[tokio::test]
 async fn rate_limited_agent_without_cascade_fails_early() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
     // No installed peers → category-aware fallback correctly returns None.
     let _agents = crate::agent::DetectAgentsGuard::set(vec![AgentKind::MiMoCode]);
     let reset = chrono::Local::now().naive_local() + chrono::Duration::days(1);
@@ -52,9 +48,7 @@ async fn rate_limited_agent_without_cascade_fails_early() {
 
 #[tokio::test]
 async fn rate_limited_agent_with_cascade_proceeds() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
     let store = Arc::new(Store::open_memory().unwrap());
     crate::routing::rate_limit::mark_rate_limited_until(
         &AgentKind::Kilo, None,
@@ -76,9 +70,7 @@ async fn rate_limited_agent_with_cascade_proceeds() {
 
 #[tokio::test]
 async fn background_urgency_does_not_invoke_needs_human_child() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let temp = crate::support::test_env::TestHome::with_dirs();
     let _agents = crate::agent::DetectAgentsGuard::set(vec![]);
     let sentinel = temp.path().join("spawned");
     let script = temp.path().join("spy.sh");
@@ -116,9 +108,7 @@ async fn background_urgency_does_not_invoke_needs_human_child() {
 
 #[tokio::test]
 async fn background_urgency_keeps_clock_hold() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
     let _agents = crate::agent::DetectAgentsGuard::set(vec![AgentKind::MiMoCode]);
     crate::routing::rate_limit::mark_rate_limited_until(
         &AgentKind::MiMoCode, None,
@@ -142,9 +132,7 @@ async fn background_urgency_keeps_clock_hold() {
 
 #[tokio::test]
 async fn background_urgency_blocks_oz_needs_human_hold() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
     let _agents = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Oz]);
     crate::routing::rate_limit::mark_rate_limited(
         &AgentKind::Oz,

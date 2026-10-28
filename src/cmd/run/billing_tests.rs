@@ -3,58 +3,16 @@
 
 use super::*;
 use crate::routing::quota::live::CacheDirGuard;
-use crate::support::paths::AidHomeGuard;
-use crate::types::{Task, TaskStatus, VerifyStatus};
+
+use crate::types::{Task, TaskStatus};
 
 fn task() -> Task {
-    Task {
-        id: TaskId("t-billing".into()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".into(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Running,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None,
-        project_id: None,
-        worktree_path: None,
-        effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: chrono::Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
-    }
+    crate::types::Task::test_fixture(TaskId("t-billing".into()), TaskStatus::Running)
 }
 
 #[test]
 fn dispatch_records_overage_once_and_does_not_block_exhausted() {
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let _cache = CacheDirGuard::set(temp.path());
     let store = Store::open_memory().expect("store");
     let task = task();
@@ -85,8 +43,7 @@ fn dispatch_records_overage_once_and_does_not_block_exhausted() {
 
 #[test]
 fn billing_insert_failure_does_not_abort_dispatch_after_running_transition() {
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let _cache = CacheDirGuard::set(temp.path());
     let store = std::sync::Arc::new(Store::open_memory().expect("store"));
     let mut task = task();
@@ -134,8 +91,7 @@ impl Drop for CodexHomeReset {
 
 #[test]
 fn healthy_plan_cannot_release_provider_hold_or_add_plan_billing_or_advice() {
-    let temp = tempfile::tempdir().unwrap();
-    let _home = AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let _cache = CacheDirGuard::set(temp.path());
     std::fs::write(temp.path().join("config.toml"), "model_provider='X'").unwrap();
     crate::agent::codex::cli_config::set_test_codex_home(Some(temp.path().to_path_buf()));

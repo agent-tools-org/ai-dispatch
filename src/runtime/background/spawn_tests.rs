@@ -6,8 +6,7 @@ use super::*;
 #[cfg(unix)]
 fn worker_panic_survives_stdio_detachment_and_log_reopen() {
     let _permit = crate::support::test_subprocess::acquire();
-    let temp = tempfile::tempdir().expect("home");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let id = "t-worker-panic";
     use std::io::Write;
     writeln!(worker_log(id).expect("log"), "earlier diagnostic").expect("write");

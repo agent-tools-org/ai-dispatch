@@ -14,16 +14,9 @@ fn command(repo: &Path, scratch: &Path, resume: bool) -> Command {
             "audit",
             &RunOpts {
                 dir: Some(repo.display().to_string()),
-                output: None,
-                result_file: None,
-                model: None,
-                budget: false,
                 read_only: true,
-                sandbox: false,
-                context_files: vec![],
                 session_id: resume.then(|| "session".into()),
-                env: None,
-                env_forward: None,
+                ..Default::default()
             },
             CommandContext {
                 durable_codex_home: false,

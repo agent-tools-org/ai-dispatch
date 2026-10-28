@@ -5,29 +5,16 @@
 use super::*;
 use crate::store::Store;
 use crate::support::test_subprocess;
-use crate::types::{AgentKind, Task, TaskStatus};
-use chrono::Local;
+use crate::types::{Task, TaskStatus};
+
 use std::fs;
 use std::io::Error;
 use std::thread;
 use tempfile::TempDir;
 
 fn make_task(id: &str, status: TaskStatus, verify_status: VerifyStatus) -> Task {
-    Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None, prompt: "test prompt".to_string(), resolved_prompt: None, status,
-        category: None,
-        parent_task_id: None, workgroup_id: None, caller_kind: None, caller_session_id: None,
-        agent_session_id: None, repo_path: None, project_id: None, worktree_path: None, effective_dir: None, worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None, output_path: None, tokens: None, prompt_tokens: None, duration_ms: None,
-        requested_model: None, cost_usd: None, exit_code: None, observed_model: None, attribution_source: None,
-        created_at: Local::now(),
-        completed_at: None, verify: None, verify_status, pending_reason: None, read_only: false, budget: false,
-        audit_verdict: None, audit_report_path: None, delivery_assessment: None,
+    Task { prompt: "test prompt".to_string(), verify_status,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), status)
     }
 }
 

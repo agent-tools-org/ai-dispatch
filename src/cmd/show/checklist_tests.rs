@@ -2,8 +2,8 @@
 
 use crate::cmd::show_checklist::{extract_checklist_from_prompt, render_checklist_status};
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-use chrono::Local;
+use crate::types::{Task, TaskId, TaskStatus};
+
 
 fn sample_block(items: &[&str]) -> String {
     let mut lines = vec![
@@ -38,42 +38,9 @@ fn render_all_confirmed_shows_checkmarks() {
     )
     .unwrap();
     let task = Task {
-        id: TaskId("t-cl-ok".to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
         prompt: sample_block(&["First item", "Second item"]),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
         output_path: Some(out.path().display().to_string()),
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId("t-cl-ok".to_string()), TaskStatus::Done)
     };
     store.insert_task(&task).unwrap();
     let text = render_checklist_status(&store, &task).expect("expected checklist");
@@ -88,42 +55,9 @@ fn render_missing_item_shows_x() {
     let out = tempfile::NamedTempFile::new().unwrap();
     std::fs::write(out.path(), "CHECKLIST 1: CONFIRMED — evidence\n").unwrap();
     let task = Task {
-        id: TaskId("t-cl-miss".to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
         prompt: sample_block(&["First item", "Second item"]),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
         output_path: Some(out.path().display().to_string()),
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId("t-cl-miss".to_string()), TaskStatus::Done)
     };
     store.insert_task(&task).unwrap();
     let text = render_checklist_status(&store, &task).expect("expected checklist");
@@ -135,42 +69,8 @@ fn render_missing_item_shows_x() {
 fn render_without_checklist_returns_none() {
     let store = Store::open_memory().unwrap();
     let task = Task {
-        id: TaskId("t-cl-none".to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
         prompt: "no checklist here".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId("t-cl-none".to_string()), TaskStatus::Done)
     };
     store.insert_task(&task).unwrap();
     assert!(render_checklist_status(&store, &task).is_none());

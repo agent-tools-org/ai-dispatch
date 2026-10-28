@@ -15,8 +15,7 @@ fn request_result_file(store: &Store, task_id: &str) {
 
 #[test]
 fn writable_task_with_audit_words_and_no_result_request_has_no_banner() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = task_fixture(
         "t-writable",
@@ -36,8 +35,7 @@ fn writable_task_with_audit_words_and_no_result_request_has_no_banner() {
 
 #[test]
 fn audit_text_with_missing_result_md_shows_banner() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = task_fixture(
         "t-audit-missing",
@@ -58,8 +56,7 @@ fn audit_text_with_missing_result_md_shows_banner() {
 
 #[test]
 fn result_text_for_audit_without_result_md_uses_banner() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = task_fixture(
         "t-audit-result-missing",
@@ -81,8 +78,7 @@ fn result_text_for_audit_without_result_md_uses_banner() {
 /// tool narration aid rescued, not the audit the caller asked for.
 #[test]
 fn result_text_for_audit_warns_when_result_md_is_a_salvaged_log() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = task_fixture(
         "t-audit-salvaged",

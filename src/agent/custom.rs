@@ -52,27 +52,20 @@ pub struct CustomAgentConfig {
     pub trust_tier: String,
     /// OpenAI-compatible endpoint for this agent, when known. A loopback host
     /// is the only evidence that admits `--egress local`.
-    #[serde(default)]
     pub base_url: Option<String>,
     /// Declared metering entity for this route. Never inferred from the host.
-    #[serde(default)]
     pub provider: Option<String>,
     /// Declared metering shape (`none`, `account_pool`, ...). Stays unknown when unset.
-    #[serde(default)]
     pub metering: Option<String>,
     #[serde(default)]
     pub strengths: Vec<String>,
     /// When set (currently only "opencode"), the registry returns a
     /// declarative overlay around the named engine instead of CustomAgent.
-    #[serde(default)]
     pub delegate_to: Option<String>,
-    #[serde(default)]
     pub forced_model: Option<String>,
-    #[serde(default)]
     pub binary: Option<String>,
     #[serde(default)]
     pub extra_args: Vec<String>,
-    #[serde(default)]
     pub rate_limit_kind: Option<String>,
 }
 

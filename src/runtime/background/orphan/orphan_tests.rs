@@ -6,50 +6,13 @@ use super::*;
 use crate::runtime::background::{BackgroundRunSpec, save_spec};
 use crate::store::Store;
 use crate::support::paths;
-use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskStatus, VerifyStatus};
+use crate::types::{EventKind, Task, TaskEvent, TaskStatus};
 
 #[path = "orphan_input_tests.rs"]
 mod input;
 
 pub(super) fn make_task(task_id: &str) -> Task {
-    Task {
-        id: TaskId(task_id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Running,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-    final_head_sha: None,
-    final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
-    }
+    crate::types::Task::test_fixture(TaskId(task_id.to_string()), TaskStatus::Running)
 }
 
 pub(super) fn make_spec(
@@ -90,8 +53,7 @@ pub(super) fn insert_event(store: &Store, task_id: &str, age_secs: i64, event_ki
 
 #[test]
 fn orphan_reaper_fails_stale_task_when_worker_is_dead() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("ensure dirs");
     let store = Store::open_memory().expect("store");
     let task = make_task("t-orph1");
@@ -113,8 +75,7 @@ fn orphan_reaper_fails_stale_task_when_worker_is_dead() {
 
 #[test]
 fn orphan_reaper_keeps_stale_task_when_worker_is_alive() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("ensure dirs");
     let store = Store::open_memory().expect("store");
     let task = make_task("t-live1");
@@ -133,8 +94,7 @@ fn orphan_reaper_keeps_stale_task_when_worker_is_alive() {
 
 #[test]
 fn orphan_reaper_treats_reasoning_as_activity_before_idle_timeout() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("ensure dirs");
     let store = Store::open_memory().expect("store");
     let task = make_task("t-idle1");
@@ -185,8 +145,7 @@ fn latest_activity_ignores_setup_as_agent_output() {
 
 #[test]
 fn latest_activity_counts_transcript_bytes_as_progress() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("ensure dirs");
     let store = Store::open_memory().expect("store");
     let mut task = make_task("t-bytes-act");
@@ -225,8 +184,7 @@ fn latest_activity_counts_transcript_bytes_as_progress() {
 /// at 13:41:56 — 150s, inside the 180s budget. Watching that log keeps it alive.
 #[test]
 fn latest_activity_counts_the_agent_s_own_log_as_progress() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("ensure dirs");
     let store = Store::open_memory().expect("store");
     let mut task = make_task("t-agy-log");
@@ -256,8 +214,7 @@ fn latest_activity_counts_the_agent_s_own_log_as_progress() {
 /// about it.
 #[test]
 fn latest_activity_ignores_agent_log_left_by_an_earlier_run() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("ensure dirs");
     let store = Store::open_memory().expect("store");
     let mut task = make_task("t-stale-log");

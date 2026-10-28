@@ -5,8 +5,7 @@ use super::*;
 
 #[test]
 fn generic_grok_429_cannot_borrow_another_providers_long_hold() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let event = json!({"type":"error", "message":
         "HTTP 429; premium request limit; trace 2099-01-02T03:04:05Z"});
     assert_eq!(
@@ -23,8 +22,7 @@ fn generic_grok_429_cannot_borrow_another_providers_long_hold() {
 
 #[test]
 fn grok_only_classifies_the_typed_error_message() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     assert!(
         !crate::agent::stream_completion::record_quota_exhaustion(
             "usage balance exhausted",

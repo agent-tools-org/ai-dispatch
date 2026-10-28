@@ -4,25 +4,13 @@
 use super::*;
 use crate::support::test_subprocess;
 use crate::types::*;
-use chrono::Local;
+
 use std::env;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
 
-fn git(repo: &Path, args: &[&str]) {
-    let s = Command::new("git")
-        .args(["-C", &repo.to_string_lossy()])
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(
-        s.status.success(),
-        "git {:?} failed: {}",
-        args,
-        String::from_utf8_lossy(&s.stderr)
-    );
-}
+use crate::support::test_env::git;
 
 fn unique(prefix: &str) -> String {
     format!(
@@ -122,46 +110,11 @@ fn head_message(repo: &Path) -> String {
 
 fn make_task_with_worktree(id: &str, repo: &Path, wt: &Path, branch: &str) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
         prompt: "test".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
         repo_path: Some(repo.to_string_lossy().to_string()),
-        project_id: None,
         worktree_path: Some(wt.to_string_lossy().to_string()),
-        effective_dir: None,
         worktree_branch: Some(branch.to_string()),
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
 }
 

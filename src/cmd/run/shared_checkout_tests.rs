@@ -84,8 +84,7 @@ async fn read_only_shared_checkout_never_creates_a_recovery_ref() {
 #[tokio::test]
 async fn shared_checkpoint_does_not_skip_failed_verification() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _home_guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let dir = init_repo();
     write_path(dir.path(), "result.txt", "task output");
     let store = Arc::new(Store::open_memory().unwrap());

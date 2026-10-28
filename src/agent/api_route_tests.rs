@@ -32,19 +32,11 @@ fn adapter() -> ApiRouteAgent {
 fn opts() -> RunOpts {
     RunOpts {
         dir: Some(paths::aid_dir().display().to_string()),
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
         env: Some(std::collections::HashMap::from([(
             "HOME".into(),
             paths::aid_dir().display().to_string(),
         )])),
-        env_forward: None,
+        ..Default::default()
     }
 }
 

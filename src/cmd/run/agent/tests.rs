@@ -4,7 +4,7 @@
 
 use super::{spawn_child_with_log, write_streaming_output};
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{Task, TaskId, TaskStatus};
 use chrono::Local;
 use serde_json::{Value, json};
 use std::path::Path;
@@ -165,50 +165,15 @@ async fn spawn_child_with_log_writes_error_event_when_spawn_fails() {
 
 fn task_fixture(id: &str, status: TaskStatus, worktree_path: Option<&str>) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: worktree_path.map(str::to_string), effective_dir: None,
+        worktree_path: worktree_path.map(str::to_string),
         worktree_branch: worktree_path.map(|_| "aid-test".to_string()),
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), status)
     }
 }
 
 #[test]
 fn record_execution_failure_stores_phase_event_and_snapshot() {
-    let aid_home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let _aid_home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().unwrap();
     let worktree_path = crate::workspace::worktree::aid_worktree_path(Path::new(env!("CARGO_MANIFEST_DIR")), "feat/fast-fail");
     let worktree_path = worktree_path.to_string_lossy().to_string();

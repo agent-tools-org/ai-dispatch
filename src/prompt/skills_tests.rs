@@ -12,8 +12,7 @@ fn write_skill_script(skill_dir: &std::path::Path, name: &str, content: &str) ->
 
 #[test]
 fn loads_folder_skill_from_skill_md() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = skills_dir().join("implementer");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("SKILL.md"), "# Implementer").unwrap();
@@ -23,8 +22,7 @@ fn loads_folder_skill_from_skill_md() {
 
 #[test]
 fn loads_flat_skill_for_backward_compatibility() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = skills_dir();
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("test-writer.md"), "# Test Writer").unwrap();
@@ -34,8 +32,7 @@ fn loads_flat_skill_for_backward_compatibility() {
 
 #[test]
 fn lists_flat_and_folder_skills() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = skills_dir();
     std::fs::create_dir_all(dir.join("implementer")).unwrap();
     std::fs::write(dir.join("implementer").join("SKILL.md"), "# Implementer").unwrap();
@@ -52,8 +49,7 @@ fn load_skill_rejects_invalid_name() {
 
 #[test]
 fn loads_general_and_agent_specific_gotchas() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = skills_dir().join("implementer");
     std::fs::create_dir_all(dir.join("gotchas")).unwrap();
     std::fs::write(dir.join("SKILL.md"), "# Implementer").unwrap();
@@ -68,8 +64,7 @@ fn loads_general_and_agent_specific_gotchas() {
 
 #[test]
 fn lists_scripts_and_references_for_folder_skill() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = skills_dir().join("implementer");
     std::fs::create_dir_all(dir.join("scripts")).unwrap();
     std::fs::create_dir_all(dir.join("references")).unwrap();
@@ -123,8 +118,7 @@ fn parse_script_metadata_uses_default_description() {
 
 #[test]
 fn load_skill_scripts_returns_sorted_metadata() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = skills_dir().join("implementer");
     std::fs::create_dir_all(dir.join("scripts")).unwrap();
     std::fs::write(dir.join("SKILL.md"), "# Implementer").unwrap();
@@ -164,8 +158,7 @@ fn format_script_instructions_renders_tool_list() {
 
 #[test]
 fn handles_skill_folder_without_optional_content() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = skills_dir().join("implementer");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("SKILL.md"), "# Implementer").unwrap();
@@ -178,8 +171,7 @@ fn handles_skill_folder_without_optional_content() {
 
 #[test]
 fn measure_skill_tokens_includes_gotchas_and_script_listing() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = skills_dir().join("implementer");
     std::fs::create_dir_all(dir.join("scripts")).unwrap();
     std::fs::write(dir.join("SKILL.md"), "abcd").unwrap();

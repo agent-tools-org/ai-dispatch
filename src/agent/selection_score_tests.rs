@@ -99,8 +99,7 @@ fn hint_breakdown(
 
 #[test]
 fn breakdown_is_bit_identical_to_pre_decomposition_value() {
-    let temp = TempDir::new().expect("temp dir");
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let profile = TaskProfile {
         category: TaskCategory::ComplexImpl,
     };
@@ -128,8 +127,7 @@ fn breakdown_is_bit_identical_to_pre_decomposition_value() {
 }
 #[test]
 fn discovered_agy_model_keeps_base_score_when_capability_is_unknown() {
-    let temp = TempDir::new().expect("temp dir");
-    let _home = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("aid dirs");
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

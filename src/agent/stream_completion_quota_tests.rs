@@ -5,8 +5,7 @@ use super::*;
 
 #[test]
 fn no_shipped_signature_can_be_quoted_into_a_marker() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
 
     for signature in crate::routing::rate_limit::signatures::QUOTA_SIGNATURES {
         crate::routing::rate_limit::clear_all_rate_limits_for_agent(&signature.agent, None);
@@ -40,8 +39,7 @@ fn no_shipped_signature_can_be_quoted_into_a_marker() {
 /// branch exists — was being dropped whole.
 #[test]
 fn copilots_real_session_error_envelope_is_recorded() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let copilot = crate::types::AgentKind::Copilot;
     crate::routing::rate_limit::clear_all_rate_limits_for_agent(&copilot, None);
 
@@ -63,8 +61,7 @@ fn copilots_real_session_error_envelope_is_recorded() {
 /// can open, must still be recorded.
 #[test]
 fn the_same_needle_in_a_cli_error_envelope_still_marks() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let cursor = crate::types::AgentKind::Cursor;
     crate::routing::rate_limit::clear_all_rate_limits_for_agent(&cursor, None);
 
@@ -79,8 +76,7 @@ fn the_same_needle_in_a_cli_error_envelope_still_marks() {
 /// outage microseconds after recording it and handed routing back a dead provider.
 #[test]
 fn a_delivered_run_that_hit_a_refusal_keeps_its_marker() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
 
     let mut report = String::from("## Findings\n\n");
@@ -202,8 +198,7 @@ fn buffered_grok_prose_about_rate_limits_never_marks_it() {
     // it. This is the invariant that makes wiring record_quota_exhaustion into
     // the buffered watcher safe for grok, whose buffer also carries aid's own
     // terminal sentinel and echoed idle nudges.
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let agent = crate::types::AgentKind::Grok;
     crate::routing::rate_limit::clear_rate_limit(&agent, None);
 
@@ -226,8 +221,7 @@ fn buffered_grok_prose_about_rate_limits_never_marks_it() {
 /// rather than the whole agent, so `auto` stays dispatchable.
 #[test]
 fn a_cursor_premium_refusal_with_no_recorded_model_marks_only_the_premium_pool() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
 
     let cursor = crate::types::AgentKind::Cursor;
     crate::routing::rate_limit::clear_all_rate_limits_for_agent(&cursor, None);

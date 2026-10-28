@@ -76,8 +76,7 @@ fn test_agent_list_json_serialization_roundtrip() {
 
 #[test]
 fn agent_list_marks_discovered_agy_metadata_unknown() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("aid dirs");
     crate::agent::model_validation::clear_served_models_cache();
     let now = std::time::SystemTime::now()

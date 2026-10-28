@@ -31,17 +31,9 @@ mod tests {
 
     fn opts(read_only: bool, result_file: Option<&str>) -> RunOpts {
         RunOpts {
-            dir: None,
-            output: None,
             result_file: result_file.map(str::to_string),
-            model: None,
-            budget: false,
             read_only,
-            sandbox: false,
-            context_files: vec![],
-            session_id: None,
-            env: None,
-            env_forward: None,
+            ..Default::default()
         }
     }
 

@@ -9,46 +9,10 @@ pub(in crate::cmd::show) fn task_fixture(
     repo_path: Option<String>,
 ) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
         prompt: prompt.to_string(),
         resolved_prompt: resolved_prompt.map(String::from),
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
         repo_path,
-        project_id: None,
-        worktree_path: None,
-        effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
 }
 
@@ -77,8 +41,7 @@ fn context_text_prefers_stored_resolved_prompt() {
 // Saved skill names cannot recreate missing dispatch context.
 #[test]
 fn context_text_reports_missing_resolved_prompt_without_loading_skills() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = crate::support::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
@@ -103,8 +66,7 @@ fn context_text_reports_missing_resolved_prompt_without_loading_skills() {
 /// invented for it from the agent kind.
 #[test]
 fn context_text_reports_no_skills_when_none_were_dispatched() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = crate::support::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();

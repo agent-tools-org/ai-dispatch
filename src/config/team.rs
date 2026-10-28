@@ -45,21 +45,13 @@ pub struct TeamToolbox {
 
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct CapabilityOverrides {
-    #[serde(default)]
     pub research: Option<i32>,
-    #[serde(default)]
     pub simple_edit: Option<i32>,
-    #[serde(default)]
     pub complex_impl: Option<i32>,
-    #[serde(default)]
     pub frontend: Option<i32>,
-    #[serde(default)]
     pub debugging: Option<i32>,
-    #[serde(default)]
     pub testing: Option<i32>,
-    #[serde(default)]
     pub refactoring: Option<i32>,
-    #[serde(default)]
     pub documentation: Option<i32>,
 }
 

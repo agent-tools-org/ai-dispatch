@@ -6,8 +6,7 @@ use crate::support::paths;
 
 #[test]
 fn unknown_failures_record_one_provider_excerpt_without_changing_status() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("directories");
     let store = Store::open_memory().expect("store");
     let id = TaskId("t-unknown-provider".into());
@@ -45,8 +44,7 @@ fn unknown_failures_record_one_provider_excerpt_without_changing_status() {
 
 #[test]
 fn recognised_failures_do_not_receive_unknown_markers() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("directories");
     let store = Store::open_memory().expect("store");
     let id = TaskId("t-known-provider".into());
@@ -70,49 +68,11 @@ fn recognised_failures_do_not_receive_unknown_markers() {
 }
 
 fn insert_task(store: &Store, id: &TaskId) {
-    use crate::types::{Task, TaskStatus, VerifyStatus};
+    use crate::types::{Task, TaskStatus};
     store
         .insert_task(&Task {
-            id: id.clone(),
-            agent: AgentKind::Codex,
-            custom_agent_name: None,
             prompt: "failure classification".into(),
-            resolved_prompt: None,
-            category: None,
-            status: TaskStatus::Running,
-            parent_task_id: None,
-            workgroup_id: None,
-            caller_kind: None,
-            caller_session_id: None,
-            agent_session_id: None,
-            repo_path: None,
-            project_id: None,
-            worktree_path: None,
-            effective_dir: None,
-            worktree_branch: None,
-            final_head_sha: None,
-            final_branch: None,
-            start_sha: None,
-            log_path: None,
-            output_path: None,
-            tokens: None,
-            prompt_tokens: None,
-            duration_ms: None,
-            requested_model: None,
-            observed_model: None,
-            attribution_source: None,
-            cost_usd: None,
-            exit_code: None,
-            created_at: chrono::Local::now(),
-            completed_at: None,
-            verify: None,
-            verify_status: VerifyStatus::Skipped,
-            pending_reason: None,
-            read_only: false,
-            budget: false,
-            audit_verdict: None,
-            audit_report_path: None,
-            delivery_assessment: None,
+            ..crate::types::Task::test_fixture(id.clone(), TaskStatus::Running)
         })
         .expect("insert task");
 }
@@ -144,8 +104,7 @@ fn assert_unknown_marker(store: &Store, id: &TaskId) {
 
 #[test]
 fn failures_without_provider_output_do_not_record_an_empty_unknown_marker() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("directories");
     let store = Store::open_memory().expect("store");
     let id = TaskId("t-no-provider-output".into());

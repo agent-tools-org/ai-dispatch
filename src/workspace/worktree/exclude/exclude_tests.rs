@@ -3,12 +3,7 @@
 use super::*;
 use std::process::Command;
 
-fn git(dir: &Path, args: &[&str]) {
-    assert!(
-        Command::new("git").arg("-C").arg(dir).args(args).status().unwrap().success(),
-        "git {args:?} failed"
-    );
-}
+use crate::support::test_env::git;
 
 fn repo() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();

@@ -4,8 +4,8 @@
 
 use super::*;
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-use chrono::Local;
+use crate::types::{AgentKind, Task, TaskId, TaskStatus};
+
 
 #[test]
 fn maybe_auto_retry_transient_plan_allows_zero_cli_retry() {
@@ -98,41 +98,7 @@ fn failed_task(agent: AgentKind) -> Task {
 
 fn failed_task_with_id(task_id: &str, parent_task_id: Option<&str>) -> Task {
     Task {
-        id: TaskId(task_id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Failed,
         parent_task_id: parent_task_id.map(str::to_string),
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(task_id.to_string()), TaskStatus::Failed)
     }
 }

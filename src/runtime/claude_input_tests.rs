@@ -2,7 +2,7 @@
 // Uses an unpaid fake CLI with the published SDK replay schema.
 use super::*;
 use crate::agent::{Agent, RunOpts, claude::ClaudeAgent};
-use crate::support::paths::{self, AidHomeGuard};
+
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -57,12 +57,7 @@ fn launch_preserves_prompt_options_environment_and_workspace() {
         read_only: true,
         result_file: Some("result.md".into()),
         context_files: vec![context.to_string_lossy().into()],
-        output: None,
-        budget: false,
-        sandbox: false,
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let mut command: tokio::process::Command =
         ClaudeAgent.build_command("inspect", &opts).unwrap().into();
@@ -107,9 +102,7 @@ fn launch_preserves_prompt_options_environment_and_workspace() {
 #[tokio::test]
 async fn multiple_results_drain_and_stdin_closes_after_queued_steer_replay() {
     let _permit = crate::support::test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
-    paths::ensure_dirs().unwrap();
+    let home = crate::support::test_env::TestHome::with_dirs();
     let store = Arc::new(Store::open_memory().unwrap());
     let task = task(&store);
     let id = queue(&store, &task);
@@ -166,9 +159,7 @@ async fn multiple_results_drain_and_stdin_closes_after_queued_steer_replay() {
 #[tokio::test]
 async fn writes_wrong_replays_and_eof_leave_acceptance_unconfirmed_without_resend() {
     let _permit = crate::support::test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
-    paths::ensure_dirs().unwrap();
+    let home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().unwrap();
     let task = task(&store);
     let id = queue(&store, &task);

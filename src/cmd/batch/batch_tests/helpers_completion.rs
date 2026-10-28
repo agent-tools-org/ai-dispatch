@@ -4,7 +4,7 @@
 use super::shared::{make_task, seed_task};
 use crate::runtime::background::{BackgroundRunSpec, save_spec};
 use crate::store::Store;
-use crate::support::paths::AidHomeGuard;
+
 use crate::types::{AgentKind, TaskStatus};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -14,9 +14,7 @@ use super::super::batch_types::BatchTaskOutcome;
 
 #[test]
 fn reconcile_and_poll_completed_tasks_marks_zombies_failed() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
     let store = Arc::new(Store::open_memory().unwrap());
     store
         .insert_task(&super::shared::make_stored_task(

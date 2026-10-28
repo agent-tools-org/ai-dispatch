@@ -7,17 +7,7 @@ use super::{
 use crate::support::test_subprocess;
 use std::{path::Path, process::Command};
 
-fn git(dir: &Path, args: &[&str]) {
-    assert!(
-        Command::new("git")
-            .arg("-C")
-            .arg(dir)
-            .args(args)
-            .status()
-            .unwrap()
-            .success()
-    );
-}
+use crate::support::test_env::git;
 
 fn git_stdout(dir: &Path, args: &[&str]) -> String {
     String::from_utf8(

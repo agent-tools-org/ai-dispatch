@@ -4,24 +4,14 @@
 
 use super::DroidAgent;
 use crate::agent::{Agent, RunOpts};
-use crate::support::paths;
+
 use crate::routing::rate_limit;
 use crate::types::{AgentKind, EventKind, TaskId};
 
 #[test]
 fn build_command_uses_droid_exec() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = DroidAgent.build_command("test prompt", &opts).unwrap();
     assert_eq!(cmd.get_program().to_str().unwrap(), "droid");
@@ -34,17 +24,8 @@ fn build_command_uses_droid_exec() {
 #[test]
 fn build_command_read_only_uses_use_spec() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
         read_only: true,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = DroidAgent.build_command("test", &opts).unwrap();
     let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
@@ -59,17 +40,9 @@ fn build_command_read_only_uses_use_spec() {
 #[test]
 fn build_command_read_only_with_result_file_skips_use_spec() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
         result_file: Some("result.md".to_string()),
-        model: None,
-        budget: false,
         read_only: true,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = DroidAgent.build_command("audit", &opts).unwrap();
     let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
@@ -81,17 +54,8 @@ fn build_command_read_only_with_result_file_skips_use_spec() {
 #[test]
 fn build_command_adds_context_files_via_append_system_prompt_file() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
         context_files: vec!["docs/spec.md".to_string(), "notes/todo.txt".to_string()],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = DroidAgent.build_command("test", &opts).unwrap();
     let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
@@ -108,17 +72,8 @@ fn build_command_adds_context_files_via_append_system_prompt_file() {
 #[test]
 fn build_command_wires_session_id() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
         session_id: Some("sess_abc123".to_string()),
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = DroidAgent.build_command("continue work", &opts).unwrap();
     let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
@@ -128,17 +83,7 @@ fn build_command_wires_session_id() {
 #[test]
 fn build_command_default_uses_skip_permissions_unsafe() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = DroidAgent.build_command("test", &opts).unwrap();
     let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
@@ -235,8 +180,7 @@ fn parses_session_forked_events_as_milestones() {
 
 #[test]
 fn marks_droid_rate_limits_from_status_and_error_type() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     rate_limit::clear_rate_limit(&AgentKind::Droid, None);
     let agent = DroidAgent;
     let line = r#"{"type":"error","status":429,"error_type":"rate_limit_exceeded"}"#;
@@ -276,16 +220,7 @@ fn marks_droid_rate_limits_from_status_and_error_type() {
 fn build_command_with_dir_sets_cwd() {
     let opts = RunOpts {
         dir: Some("/tmp/test".to_string()),
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = DroidAgent.build_command("test", &opts).unwrap();
     let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();

@@ -8,7 +8,7 @@ use super::{
     set_feed_for_tests,
 };
 use crate::support::paths::AidHomeGuard;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 
 pub(crate) const CODEX_USAGE: &str = concat!(
     r#"{"type":"turn.completed","usage":{"input_tokens":232452,"cached_input_tokens":211968,"#,
@@ -46,46 +46,11 @@ pub(crate) fn seed_prices(cached: Option<f64>) -> (tempfile::TempDir, AidHomeGua
 
 pub(crate) fn task(agent: AgentKind, tokens: i64, stored_cost: Option<f64>) -> Task {
     Task {
-        id: TaskId("t-components".to_string()),
         agent,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None,
-        project_id: None,
-        worktree_path: None,
-        effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
         tokens: Some(tokens),
-        prompt_tokens: None,
-        duration_ms: None,
         requested_model: Some("component-test-model".to_string()),
-        observed_model: None,
-        attribution_source: None,
         cost_usd: stored_cost,
-        exit_code: None,
-        created_at: chrono::Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId("t-components".to_string()), TaskStatus::Done)
     }
 }
 

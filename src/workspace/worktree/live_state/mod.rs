@@ -107,13 +107,10 @@ fn push_stat_block(out: &mut String, label: &str, stat: &str) {
 mod tests {
     use super::capture_live_worktree_state;
     use crate::support::test_subprocess;
-    use std::path::Path;
-    use std::process::Command;
 
-    fn git(dir: &Path, args: &[&str]) {
-        let status = Command::new("git").arg("-C").arg(dir).args(args).status().expect("git");
-        assert!(status.success());
-    }
+
+
+    use crate::support::test_env::git;
 
     fn repo() -> tempfile::TempDir {
         let _permit = test_subprocess::acquire();

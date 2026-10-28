@@ -3,60 +3,24 @@
 
 use std::time::Duration;
 
-use chrono::Local;
+
 
 use super::{InputCommand, ReplyOutcome, run, run_with_hook, run_with_hook_and_sleep};
-use crate::support::paths::AidHomeGuard;
+
 use crate::store::Store;
-use crate::types::{AgentKind, MessageSource, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{AgentKind, MessageSource, Task, TaskId, TaskStatus};
 
 fn make_task(id: &str, status: TaskStatus) -> Task {
     Task {
-        id: TaskId(id.to_string()),
         agent: AgentKind::Cursor,
-        custom_agent_name: None,
         prompt: "test".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), status)
     }
 }
 
 #[test]
 fn reply_async_returns_immediately() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().unwrap();
     store.insert_task(&make_task("t-reply-async", TaskStatus::Running)).unwrap();
 
@@ -71,8 +35,7 @@ fn reply_async_returns_immediately() {
 
 #[test]
 fn reply_polls_until_written() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().unwrap();
     store.insert_task(&make_task("t-reply-ack", TaskStatus::AwaitingInput)).unwrap();
 
@@ -102,8 +65,7 @@ fn reply_polls_until_written() {
 
 #[test]
 fn reply_times_out_cleanly() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().unwrap();
     store.insert_task(&make_task("t-reply-timeout", TaskStatus::Stalled)).unwrap();
 

@@ -87,17 +87,8 @@ fn retry_preservation_keeps_long_feedback_first_and_whole_on_codex_resume() {
 fn codex_resume_prompt(prompt: &str, retry: &RunArgs) -> String {
     use crate::agent::{Agent, CommandContext, RunOpts};
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
         session_id: retry.session_id.clone(),
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let command = crate::agent::codex::CodexAgent
         .build_command_with_context(

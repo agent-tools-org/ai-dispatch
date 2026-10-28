@@ -2,7 +2,7 @@
 // Deterministic closed-pipe tests cover initial input and an uncertain queued delivery.
 use super::*;
 use crate::agent::claude::ClaudeAgent;
-use crate::support::paths::{self, AidHomeGuard};
+
 use std::process::Stdio;
 use std::sync::Arc;
 
@@ -39,9 +39,7 @@ async fn exited_child(code: i32) -> tokio::process::Child {
 #[tokio::test]
 async fn immediate_exit_without_reading_stdin_preserves_output_and_exit_status() {
     let _permit = crate::support::test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
-    paths::ensure_dirs().unwrap();
+    let home = crate::support::test_env::TestHome::with_dirs();
     let store = Arc::new(Store::open_memory().unwrap());
     for (code, status) in [(0, TaskStatus::Done), (7, TaskStatus::Failed)] {
         let mut child = exited_child(code).await;
@@ -76,9 +74,7 @@ async fn immediate_exit_without_reading_stdin_preserves_output_and_exit_status()
 #[tokio::test]
 async fn broken_pipe_while_sending_steer_stays_unconfirmed() {
     let _permit = crate::support::test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
-    paths::ensure_dirs().unwrap();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().unwrap();
     let task = TaskId("t-exit-steer".into());
     insert_task(&store, &task);
@@ -117,8 +113,7 @@ async fn broken_pipe_while_sending_steer_stays_unconfirmed() {
 
 #[test]
 fn legacy_claude_refuses_reply_and_steer_before_queuing() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().unwrap();
     let task = TaskId("t-legacy-claude".into());
     insert_task(&store, &task);

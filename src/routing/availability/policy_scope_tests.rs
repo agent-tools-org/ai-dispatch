@@ -61,8 +61,7 @@ fn untrusted_marker_cannot_be_promoted_when_read() {
 #[test]
 fn generic_stderr_reset_prefix_cannot_create_a_dated_hold() {
     use crate::routing::{quota::channel::Channel, rate_limit};
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let text = "Try again at 2027-06-01T00:00:00Z (429 Too Many Requests)";
     for agent in [
         AgentKind::Grok,

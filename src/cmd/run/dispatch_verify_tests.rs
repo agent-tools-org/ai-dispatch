@@ -8,8 +8,7 @@ use std::sync::Arc;
 
 #[test]
 fn configured_verification_is_pending_when_dispatch_inserts_task() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut args = RunArgs {
         agent_name: "codex".to_string(),

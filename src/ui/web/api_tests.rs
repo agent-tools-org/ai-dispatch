@@ -18,49 +18,23 @@ use super::api::{
 use super::api::types::{ActionResponse, MessageRequest, TaskEnrichment};
 use super::fleet::{FleetParams, ServerInfo, get_fleet};
 use crate::store::Store;
-use crate::types::{
-    AgentKind, DeliveryAssessment, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus,
-};
+use crate::types::{DeliveryAssessment, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 
 pub(super) fn make_task(id: &str) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
         resolved_prompt: Some("resolved".to_string()),
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
         workgroup_id: Some("wg-1".to_string()),
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
         tokens: Some(42),
         prompt_tokens: Some(11),
         duration_ms: Some(5000),
         requested_model: Some("gpt".to_string()),
-        observed_model: None, attribution_source: None,
         cost_usd: Some(0.5),
         exit_code: Some(0),
         created_at: Local::now(),
         completed_at: Some(Local::now()),
         verify: Some("cargo check".to_string()),
         verify_status: VerifyStatus::Passed,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
 }
 
@@ -172,8 +146,7 @@ async fn task_response_reports_started_at_after_running_transition() {
 
 #[tokio::test]
 async fn fleet_returns_redacted_tasks_and_summary_in_one_snapshot() {
-    let home = tempfile::tempdir().unwrap();
-    let _home = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = make_task("t-fleet");
     task.project_id = Some("client-api".to_string());
@@ -239,8 +212,7 @@ async fn get_task_output_reads_output_file_before_log_file() {
 
 #[tokio::test]
 async fn get_task_result_reads_persisted_report() {
-    let home = tempfile::tempdir().unwrap();
-    let _home = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     store.insert_task(&make_task("t-result")).unwrap();
     let result_path = crate::support::paths::task_dir("t-result").join("result.md");

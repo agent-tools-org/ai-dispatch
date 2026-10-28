@@ -216,21 +216,10 @@ fn apply_codex_home_env_uses_resolved_codex_home() {
 
 #[test]
 fn apply_run_env_sets_host_toolchain_paths() {
-    let aid_home = tempfile::tempdir().unwrap();
-    let _aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
+    let _aid_home = crate::support::test_env::TestHome::new();
     let mut cmd = Command::new("echo");
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
 
     let guard = crate::agent::home_isolation::IsolatedHomeGuard::create(None).unwrap();

@@ -58,9 +58,9 @@ fn render_credential_list(pool: &credential_pool::CredentialPool) -> String {
 mod tests {
     use super::{CredentialAction, render_credential_list, run_credential_command};
     use crate::routing::credentials::{load_pool, mark_exhausted, set_test_env};
-    use crate::support::paths::AidHomeGuard;
+
     use std::fs;
-    use tempfile::TempDir;
+
 
     const SAMPLE: &str = r#"
 [codex]
@@ -72,8 +72,7 @@ keys = [
 
     #[test]
     fn run_credential_command_list_handles_missing_file() {
-        let dir = TempDir::new().unwrap();
-        let _guard = AidHomeGuard::set(dir.path());
+        let _dir = crate::support::test_env::TestHome::new();
 
         run_credential_command(CredentialAction::List).unwrap();
     }
@@ -92,8 +91,7 @@ keys = [
 
     #[test]
     fn render_credential_list_shows_provider_status() {
-        let dir = TempDir::new().unwrap();
-        let _guard = AidHomeGuard::set(dir.path());
+        let dir = crate::support::test_env::TestHome::new();
         fs::write(dir.path().join("credentials.toml"), SAMPLE).unwrap();
         set_test_env(Some(std::collections::HashMap::from([(
             "OPENAI_API_KEY".to_string(),
@@ -111,8 +109,7 @@ keys = [
 
     #[test]
     fn render_credential_list_shows_cooldown_status() {
-        let dir = TempDir::new().unwrap();
-        let _guard = AidHomeGuard::set(dir.path());
+        let dir = crate::support::test_env::TestHome::new();
         fs::write(dir.path().join("credentials.toml"), SAMPLE).unwrap();
         let mut pool = load_pool().unwrap();
 

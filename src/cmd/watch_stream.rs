@@ -163,7 +163,7 @@ mod tests {
     use super::*;
     use chrono::Local;
     use crate::store::Store;
-    use crate::types::{AgentKind, TaskId, VerifyStatus};
+    use crate::types::{TaskId, VerifyStatus};
 
     #[test]
     fn failed_task_event_includes_reason_and_progress() {
@@ -209,43 +209,6 @@ mod tests {
     }
 
     fn task(id: &str, status: TaskStatus) -> Task {
-        Task {
-            id: TaskId(id.to_string()),
-            agent: AgentKind::Codex,
-            custom_agent_name: None,
-            prompt: "prompt".to_string(),
-            resolved_prompt: None,
-            category: None,
-            status,
-            parent_task_id: None,
-            workgroup_id: None,
-            caller_kind: None,
-            caller_session_id: None,
-            agent_session_id: None,
-            repo_path: None, project_id: None,
-            worktree_path: None, effective_dir: None,
-            worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-            start_sha: None,
-            log_path: None,
-            output_path: None,
-            tokens: None,
-            prompt_tokens: None,
-            duration_ms: None,
-            requested_model: None, observed_model: None, attribution_source: None,
-            cost_usd: None,
-            exit_code: None,
-            created_at: Local::now(),
-            completed_at: None,
-            verify: None,
-            verify_status: VerifyStatus::Skipped,
-            pending_reason: None,
-            read_only: false,
-            budget: false,
-            audit_verdict: None,
-            audit_report_path: None,
-            delivery_assessment: None,
-        }
+        crate::types::Task::test_fixture(TaskId(id.to_string()), status)
     }
 }

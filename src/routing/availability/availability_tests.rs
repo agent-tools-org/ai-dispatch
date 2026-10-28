@@ -2,7 +2,7 @@
 // Frozen stored_hold order: Windowed before hold: manual; unmatched manual stays NeedsHuman.
 
 use super::*;
-use crate::support::paths::AidHomeGuard;
+
 use crate::routing::rate_limit::{self, dispatch_blocking_hold, format_hold_end, mark_rate_limited};
 use crate::types::AgentKind;
 use chrono::{DateTime, Duration as ChronoDuration, Local, Utc};
@@ -92,8 +92,7 @@ fn clock_hold_at_one_hundred_percent_stays_held() {
 
 #[test]
 fn clock_hold_twenty_minute_snapshot_still_releases_dispatch() {
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(temp.path().join(".aid")).expect("aid dir");
     let aidbar = temp.path().join("aidbar");
     std::fs::create_dir_all(&aidbar).expect("cache");
@@ -258,8 +257,7 @@ fn snapshot_overrides_rejects_equal_older_or_mixed_windows() {
 
 #[test]
 fn format_hold_end_classifies_the_full_grok_fixture() {
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(temp.path().join(".aid")).expect("aid dir");
 
     let content = std::fs::read_to_string(

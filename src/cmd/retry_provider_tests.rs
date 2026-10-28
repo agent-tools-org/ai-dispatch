@@ -12,8 +12,7 @@ impl Drop for ConfigReset {
 
 #[test]
 fn retry_agent_override_escapes_drift_but_codex_still_refuses() {
-    let home = tempfile::tempdir().unwrap();
-    let _home = crate::support::paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     std::fs::write(home.path().join("config.toml"), "model_provider='Y'").unwrap();
     cli_config::set_test_codex_home(Some(home.path().to_path_buf()));
     let _reset = ConfigReset;

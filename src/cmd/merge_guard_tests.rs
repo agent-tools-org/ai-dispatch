@@ -4,18 +4,11 @@
 
 use super::*;
 use crate::support::test_subprocess;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::path::Path;
 
-fn git(repo: &Path, args: &[&str]) {
-    let status = Command::new("git")
-        .args(["-C", &repo.to_string_lossy()])
-        .args(args)
-        .status()
-        .unwrap();
-    assert!(status.success());
-}
+use crate::support::test_env::git;
 
 fn init_repo() -> tempfile::TempDir {
     let repo = tempfile::tempdir().unwrap();
@@ -30,42 +23,12 @@ fn init_repo() -> tempfile::TempDir {
 
 fn grouped_task(id: &str, group: &str, repo: &Path) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
         prompt: "test".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
         workgroup_id: Some(group.to_string()),
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: Some(repo.to_string_lossy().to_string()), project_id: None,
-        worktree_path: Some(repo.to_string_lossy().to_string()), effective_dir: None,
+        repo_path: Some(repo.to_string_lossy().to_string()),
+        worktree_path: Some(repo.to_string_lossy().to_string()),
         worktree_branch: Some("main".to_string()),
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
 }
 
@@ -117,7 +80,7 @@ fn merge_group_lanes_refuses_first_poisoned_task_before_gitbutler_setup() {
 
     assert!(err.to_string().contains("recorded worktree path"));
     assert!(!setup_log.exists(), "GitButler setup ran before worktree validation");
-    
+
     crate::workspace::gitbutler::set_test_but_available(None);
     crate::workspace::gitbutler::set_test_project_present(None);
     crate::workspace::gitbutler::set_test_but_command(None);
@@ -133,7 +96,7 @@ fn merge_group_lanes_refuses_failed_verification_without_force() {
     task.repo_path = None;
     task.verify_status = VerifyStatus::Failed;
     store.insert_task(&task).unwrap();
-    
+
     // Test that validation fails on vfail without force.
     // Use thread_local to ensure we don't bail out prematurely on AID_GITBUTLER=0 check if we reach it.
     crate::workspace::gitbutler::set_test_but_available(Some(true));
@@ -161,7 +124,7 @@ fn merge_group_lanes_skips_an_already_merged_task() {
     .unwrap();
     let temp = tempfile::tempdir().unwrap();
     let apply_log = temp.path().join("apply.log");
-    
+
     // Instead of PathGuard, EnvGuard, CurrentDirGuard which mutate process-wide state,
     // we use thread-local overrides injected into gitbutler logic.
     crate::workspace::gitbutler::set_test_but_available(Some(true));

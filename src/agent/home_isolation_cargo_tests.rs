@@ -30,8 +30,7 @@ fn fixture_home(root: &Path) -> PathBuf {
 
 #[test]
 fn remote_home_materializes_cargo_and_plain_home_keeps_symlink() {
-    let temp = tempfile::tempdir().expect("temp");
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let real = fixture_home(temp.path());
     let guard = IsolatedHomeGuard::create_from_home_with_remote_build(Some(&real), None, true).expect("home");
     let cargo = guard.path().join(".cargo");
@@ -66,8 +65,7 @@ fn shell_command(guard: &IsolatedHomeGuard, real: &Path, shell: &str, script: &s
 }
 
 fn assert_login_shell_keeps_shim(shell: &str) {
-    let temp = tempfile::tempdir().expect("temp");
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let real = fixture_home(temp.path());
     let guard = IsolatedHomeGuard::create_from_home_with_remote_build(Some(&real), None, true).expect("home");
     let output = shell_command(&guard, &real, shell, "command -v cargo").output().expect("login shell");
@@ -93,8 +91,7 @@ fn zsh_login_shell_resolves_private_cargo_shim_when_available() {
 
 #[test]
 fn both_cargo_shims_preserve_local_passthrough_without_recursion() {
-    let temp = tempfile::tempdir().expect("temp");
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let real = fixture_home(temp.path());
     let guard = IsolatedHomeGuard::create_from_home_with_remote_build(Some(&real), None, true).expect("home");
     let output = shell_command(&guard, &real, "/bin/bash",
@@ -106,8 +103,7 @@ fn both_cargo_shims_preserve_local_passthrough_without_recursion() {
 
 #[test]
 fn remote_constructor_keeps_host_toolchain_environment() {
-    let temp = tempfile::tempdir().expect("temp");
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let real = resolve_real_home().expect("real home");
     let guard = IsolatedHomeGuard::create_with_remote_build(None, true).expect("remote home");
     let mut command = Command::new("cargo");
@@ -120,8 +116,7 @@ fn remote_constructor_keeps_host_toolchain_environment() {
 
 #[test]
 fn remote_home_keeps_symlinked_operator_cargo_untouched() {
-    let temp = tempfile::tempdir().expect("temp");
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let real = fixture_home(temp.path());
     let shared = temp.path().join("shared-cargo");
     fs::rename(real.join(".cargo"), &shared).expect("shared cache");

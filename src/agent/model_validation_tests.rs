@@ -148,8 +148,7 @@ Available models:
 #[test]
 fn served_models_disk_caching_and_clearing() {
     let _lock = lock_test();
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     clear_served_models_cache();
 
     let mock = MockQueryableAgent::new(AgentKind::Antigravity, Some(vec!["gemini-3.7-flash-high".to_string()]));
@@ -174,8 +173,7 @@ fn served_models_disk_caching_and_clearing() {
 #[test]
 fn validate_slow_cli_probe_success_asserts_no_cannot_query_warning() {
     let _lock = lock_test();
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     clear_served_models_cache();
 
     let mock = MockQueryableAgent::new(AgentKind::Antigravity, Some(vec!["gemini-3.7-flash-high".to_string()]));
@@ -190,8 +188,7 @@ fn validate_slow_cli_probe_success_asserts_no_cannot_query_warning() {
 #[test]
 fn stale_disk_cache_entry_reprobes() {
     let _lock = lock_test();
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     clear_served_models_cache();
 
     let cache_file = cache_file_path();
@@ -215,8 +212,7 @@ fn stale_disk_cache_entry_reprobes() {
 #[test]
 fn fresh_disk_cache_entry_serves_cache() {
     let _lock = lock_test();
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     clear_served_models_cache();
 
     let cache_file = cache_file_path();
@@ -240,8 +236,7 @@ fn fresh_disk_cache_entry_serves_cache() {
 #[test]
 fn validate_model_refreshes_cache_on_missing_model() {
     let _lock = lock_test();
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     clear_served_models_cache();
 
     save_to_disk_cache(AgentKind::Antigravity, &["gemini-3.7-flash-high".to_string()], None);
@@ -258,8 +253,7 @@ fn validate_model_refreshes_cache_on_missing_model() {
 #[test]
 fn cold_cache_probes_only_once_on_unserved_model() {
     let _lock = lock_test();
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     clear_served_models_cache();
 
     struct CountingAgent {

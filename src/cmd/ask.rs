@@ -135,12 +135,11 @@ fn read_answer(task_id: &TaskId, capture_path: &Path) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::support::paths::AidHomeGuard;
+
 
     #[test]
     fn prepare_request_defaults_to_agy() {
-        let dir = tempfile::tempdir().expect("home");
-        let _guard = AidHomeGuard::set(dir.path());
+        let _dir = crate::support::test_env::TestHome::new();
         let request = prepare_request("Explain this".into(), None, None, vec![], None)
             .expect("default request");
         assert_eq!(request.agent_name, "agy");
@@ -148,8 +147,7 @@ mod tests {
 
     #[test]
     fn prepare_request_rejects_disabled_default_agent() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let _guard = AidHomeGuard::set(dir.path());
+        let _dir = crate::support::test_env::TestHome::new();
         agent_config::save_agent_disabled("agy", true).expect("disable agent");
 
         let err = match prepare_request(

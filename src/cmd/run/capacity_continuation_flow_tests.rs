@@ -4,27 +4,9 @@
 use super::*;
 use crate::cmd::run::run_lifecycle::{LifecycleMode, post_run_lifecycle};
 use crate::cmd::run::run_prompt::PromptBundle;
-use std::{
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::{path::{PathBuf}};
 
-fn git(dir: &Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .expect("git");
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout)
-        .expect("utf8")
-        .trim()
-        .into()
-}
+use crate::support::test_env::git_output as git;
 
 fn repository() -> (tempfile::TempDir, PathBuf, String) {
     let repo = tempfile::tempdir().expect("repo");

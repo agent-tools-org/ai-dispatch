@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::routing::quota::live::CacheDirGuard;
-use crate::support::paths::AidHomeGuard;
+
 
 fn insert(store: &Store, id: &str, created_at: &str, kind: &str, metadata: &str) {
     store
@@ -25,8 +25,7 @@ fn insert(store: &Store, id: &str, created_at: &str, kind: &str, metadata: &str)
 
 #[test]
 fn overage_lookup_filters_kind_and_period_and_deduplicates_tasks() {
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let _cache = CacheDirGuard::set(temp.path());
     let store = Store::open_memory().expect("store");
     let now = Local::now();
@@ -54,8 +53,7 @@ fn overage_lookup_filters_kind_and_period_and_deduplicates_tasks() {
 
 #[test]
 fn empty_overage_lookup_work_does_not_grow_with_unrelated_history() {
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let _cache = CacheDirGuard::set(temp.path());
     let store = Store::open_memory().expect("store");
     let before = query_steps(&store);

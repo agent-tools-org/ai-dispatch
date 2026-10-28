@@ -4,19 +4,12 @@
 
 use super::{run_lifecycle::inherit_cascade_target, RunArgs};
 use crate::support::test_subprocess;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-use chrono::Local;
-use std::path::Path;
-use std::process::Command;
+use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
 
-fn git(repo_dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .status()
-        .unwrap()
-        .success());
-}
+
+
+
+use crate::support::test_env::git;
 
 fn init_repo() -> tempfile::TempDir {
     let repo = tempfile::tempdir().unwrap();
@@ -31,18 +24,8 @@ fn init_repo() -> tempfile::TempDir {
 
 fn failed_task(path: &str) -> Task {
     Task {
-        id: TaskId("t-cascade".to_string()), agent: AgentKind::Codex, custom_agent_name: None,
-        prompt: "prompt".to_string(), resolved_prompt: None, category: None,
-        status: TaskStatus::Failed, parent_task_id: None, workgroup_id: None,
-        caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, project_id: None,
-        worktree_path: Some(path.to_string()), effective_dir: None, worktree_branch: Some("feat/cascade".to_string()),
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None, log_path: None, output_path: None, tokens: None, prompt_tokens: None,
-        duration_ms: None, requested_model: None, observed_model: None, attribution_source: None, cost_usd: None, exit_code: None,
-        created_at: Local::now(), completed_at: None, verify: None,
-        verify_status: VerifyStatus::Skipped, pending_reason: None, read_only: false,
-        budget: false, audit_verdict: None, audit_report_path: None, delivery_assessment: None,
+        worktree_path: Some(path.to_string()), worktree_branch: Some("feat/cascade".to_string()),
+        ..crate::types::Task::test_fixture(TaskId("t-cascade".to_string()), TaskStatus::Failed)
     }
 }
 
@@ -158,8 +141,7 @@ fn terminal_failure_preserves_failed_status_for_cascade() {
     let linked = linked_root.path().join("linked");
     git(repo.path(), &["worktree", "add", "-b", "feat/cascade-refuse", &linked.to_string_lossy()]);
 
-    let home_dir = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home_dir.path());
+    let _home_dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(crate::support::paths::logs_dir()).unwrap();
     std::fs::write(
         crate::support::paths::stderr_path("t-empty-cascade"),

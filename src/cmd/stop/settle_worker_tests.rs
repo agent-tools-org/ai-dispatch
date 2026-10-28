@@ -42,8 +42,7 @@ impl Agent for StopAtFailure {
 #[tokio::test]
 async fn settle_worker_failure_after_stop_records_no_failure_event() {
     let _permit = crate::support::test_subprocess::acquire();
-    let home = tempfile::tempdir().expect("home");
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let id = TaskId("t-stop-worker-writer".into());

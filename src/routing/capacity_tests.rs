@@ -29,8 +29,7 @@ fn provider_capacity_regression_rejects_provider_shaped_tool_events() {
 fn provider_capacity_regression_rejects_provider_shaped_tool_stderr() {
     let error = serde_json::json!({"type": "error", "message": CAPACITY});
     assert!(classify(&error.to_string(), AgentKind::Codex, Channel::CliStderr).is_none());
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("dirs");
     let store = crate::store::Store::open_memory().expect("store");
     let id = TaskId("t-capacity-tool-stderr".into());
@@ -50,8 +49,7 @@ fn provider_capacity_regression_rejects_raw_quotes_on_both_channels() {
             );
         }
     }
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("dirs");
     let store = crate::store::Store::open_memory().expect("store");
     let id = TaskId("t-capacity-raw-reconnect".into());
@@ -192,8 +190,7 @@ fn provider_capacity_classifies_exhausted_json_reconnect_tail() {
 
 #[test]
 fn provider_capacity_expiry_and_success_release_model_hold() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let agent = AgentKind::Codex;
     let model = Some("gpt-6.1-sol");
     rate_limit::mark_rate_limited_for_model(&agent, None, model, CAPACITY);

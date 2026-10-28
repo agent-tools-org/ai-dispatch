@@ -84,8 +84,7 @@ fn task_command_overrides_ambient_box_and_installs_shim() {
 #[test]
 fn verify_receives_stored_box() {
     let (store, id, _) = stored_task();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     write_executable(&temp.path().join("verify"), "#!/bin/bash\nprintf '%s' \"$AID_BUILD_BOX\"\n");
     let result = verify(&store, id.as_str(), temp.path(), Some("./verify"), None, None).expect("verify");
     assert!(result.success);
@@ -121,8 +120,7 @@ fn shim_installation_never_follows_operator_aid_symlink() {
 /// parent's shim directory and scratch dirs. They must not leak in as symlinks.
 #[test]
 fn nested_task_home_gets_its_own_real_shim_dir() {
-    let aid_home = tempfile::tempdir().expect("aid home");
-    let _aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
+    let _aid_home = crate::support::test_env::TestHome::new();
     let parent = tempfile::tempdir().expect("parent home");
     std::fs::create_dir(parent.path().join(".aid-build-shims")).expect("parent shims");
     std::fs::create_dir(parent.path().join(".aid-tmp-abc")).expect("parent tmp");
@@ -185,8 +183,7 @@ pub(super) fn refusing_verify(dir: &Path, refusing: &str) {
 #[test]
 fn refused_verify_repicks_once_persists_box_and_reruns() {
     let (store, id, _) = stored_task();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     refusing_verify(temp.path(), "chosen-box");
     let rbox = temp.path().join("rbox");
     let argv = temp.path().join("argv");
@@ -206,8 +203,7 @@ fn refused_verify_repicks_once_persists_box_and_reruns() {
 #[test]
 fn second_refusal_or_failed_repick_is_infrastructure_failure_naming_the_box() {
     let (store, id, _) = stored_task();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     refusing_verify(temp.path(), "chosen-box|second-box");
     let rbox = temp.path().join("rbox");
     write_executable(&rbox, "#!/bin/bash\necho second-box\n");
@@ -216,7 +212,7 @@ fn second_refusal_or_failed_repick_is_infrastructure_failure_naming_the_box() {
     assert!(result.infrastructure_failure);
     assert!(result.output.contains("rbox: second-box 9.9 GiB free; requires 10 GiB"));
     assert_eq!(saved_box(&store, id.as_str()).expect("saved").as_deref(), Some("second-box"));
-    
+
     let (store2, id2, _) = stored_task();
     write_executable(&rbox, "#!/bin/bash\necho 'none free: all rust builders busy' >&2\nexit 1\n");
     let error = verify_with(&store2, id2.as_str(), temp.path(), Some("./verify"), None, None, &mut Command::new(&rbox)).expect_err("re-pick failed");
@@ -224,7 +220,7 @@ fn second_refusal_or_failed_repick_is_infrastructure_failure_naming_the_box() {
         "Remote build box chosen-box: rbox: chosen-box 9.9 GiB free; requires 10 GiB; ",
         "re-pick failed: Remote build box selection failed: none free: all rust builders busy"
     ));
-    
+
 }
 
 #[test]

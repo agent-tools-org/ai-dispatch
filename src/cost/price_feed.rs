@@ -115,7 +115,7 @@ pub fn maybe_refresh() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::support::paths::AidHomeGuard;
+
 
     fn sample_feed() -> Feed {
         Feed {
@@ -182,8 +182,7 @@ mod tests {
 
     #[test]
     fn cache_round_trip_under_aid_home() {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
         std::fs::create_dir_all(crate::support::paths::aid_dir()).unwrap();
         let feed = sample_feed();
         fs::write(cache_path(), serde_json::to_vec(&feed).unwrap()).unwrap();
@@ -193,16 +192,14 @@ mod tests {
 
     #[test]
     fn missing_cache_loads_none() {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
         assert!(load_cache().is_none());
     }
 
     #[test]
     #[ignore = "live network probe"]
     fn live_refresh_writes_cache() {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
         maybe_refresh();
         std::thread::sleep(std::time::Duration::from_secs(20));
         maybe_refresh();
@@ -212,8 +209,7 @@ mod tests {
 
     #[test]
     fn ready_refresh_preserves_cache_on_invalid_empty_or_server_stale_feed() {
-        let temp = tempfile::tempdir().expect("home");
-        let _guard = AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
         let old = sample_feed();
         let bytes = serde_json::to_vec(&old).expect("old");
         fs::write(cache_path(), &bytes).expect("cache");
@@ -239,8 +235,7 @@ mod tests {
 
     #[test]
     fn valid_ready_replaces_even_fresh_price_cache() {
-        let temp = tempfile::tempdir().expect("home");
-        let _guard = AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
         let mut feed = sample_feed();
         fs::write(cache_path(), serde_json::to_vec(&feed).expect("feed")).expect("cache");
         feed.models[0].input_per_mtok = 9.0;

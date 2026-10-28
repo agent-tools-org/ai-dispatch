@@ -6,9 +6,7 @@ use crate::agent::{Agent, RunOpts};
 
 pub(super) fn test_opts() -> RunOpts {
     RunOpts {
-        dir: None, output: None, result_file: None, model: None, budget: false,
-        read_only: false, sandbox: false, context_files: vec![], session_id: None,
-        env: None, env_forward: None,
+        ..Default::default()
     }
 }
 
@@ -40,17 +38,7 @@ fn fix_round_one_write_policy_is_explicit_for_fresh_and_resume() {
 #[test]
 fn build_command_includes_skip_git_repo_check() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
     let args: Vec<String> = cmd
@@ -64,17 +52,8 @@ fn build_command_includes_skip_git_repo_check() {
 #[test]
 fn build_command_read_only_selects_native_sandbox_without_write_approval() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
         read_only: true,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = CodexAgent.build_command("analyze this code", &opts).unwrap();
     let args: Vec<String> = cmd
@@ -93,17 +72,9 @@ fn build_command_read_only_selects_native_sandbox_without_write_approval() {
 #[test]
 fn build_command_read_only_prepends_readonly_prefix() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
         result_file: Some("result.md".to_string()),
-        model: None,
-        budget: false,
         read_only: true,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = CodexAgent.build_command("analyze this code", &opts).unwrap();
     let args: Vec<String> = cmd
@@ -121,17 +92,8 @@ fn build_command_read_only_prepends_readonly_prefix() {
 #[test]
 fn build_command_read_only_without_result_file_keeps_strict_prefix() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
         read_only: true,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = CodexAgent.build_command("analyze this code", &opts).unwrap();
     let args: Vec<String> = cmd
@@ -146,17 +108,8 @@ fn build_command_read_only_without_result_file_keeps_strict_prefix() {
 #[test]
 fn build_command_includes_context_files_in_prompt() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
         context_files: vec!["Cargo.toml".to_string()],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
     let args: Vec<String> = cmd
@@ -171,17 +124,8 @@ fn build_command_includes_context_files_in_prompt() {
 #[test]
 fn build_command_starts_fresh_when_saved_rollout_is_missing() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
         session_id: Some("019e3e49-6b83-7563-a3d8-b51a3a716dd1".to_string()),
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = CodexAgent.build_command("write the final report", &opts).unwrap();
     let args: Vec<String> = cmd

@@ -23,8 +23,7 @@ fn seed(store: &Store) {
 
 #[test]
 fn clean_dry_run_changes_neither_events_nor_state_even_with_vacuum() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().unwrap();
     seed(&store);
     let changes = store.db().total_changes();

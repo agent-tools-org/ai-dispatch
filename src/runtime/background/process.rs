@@ -140,8 +140,7 @@ mod tests {
     #[test]
     fn agent_pid_persistence_failure_kills_spawned_group() {
         let _permit = crate::support::test_subprocess::acquire();
-        let home = tempfile::tempdir().expect("home");
-        let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+        let _home = crate::support::test_env::TestHome::new();
         let mut child = Command::new("cat")
             .stdin(Stdio::piped())
             .stdout(Stdio::null())

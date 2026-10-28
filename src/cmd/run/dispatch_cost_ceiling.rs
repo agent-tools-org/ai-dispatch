@@ -50,8 +50,7 @@ mod tests {
 
     /// `price` writes an operator pricing override for exactly this route first.
     fn dispatch_with_override(agent: &str, model: &str, max_task_cost: Option<f64>, price: Option<f64>) -> Vec<String> {
-        let home = tempfile::tempdir().expect("temporary aid home");
-        let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+        let _home = crate::support::test_env::TestHome::new();
         if let Some(price) = price {
             crate::support::paths::ensure_dirs().expect("aid dirs");
             let row = serde_json::json!({"agent": agent, "model": model, "input_per_m": price,

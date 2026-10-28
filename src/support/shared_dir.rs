@@ -30,8 +30,7 @@ mod tests {
 
     #[test]
     fn create_shared_dir_creates_directory() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
 
         let path = create_shared_dir("wg-shared").expect("create shared dir");
 
@@ -41,8 +40,7 @@ mod tests {
 
     #[test]
     fn cleanup_shared_dir_removes_directory() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
         let path = create_shared_dir("wg-shared").expect("create shared dir");
 
         cleanup_shared_dir("wg-shared");
@@ -52,8 +50,7 @@ mod tests {
 
     #[test]
     fn shared_dir_path_returns_none_when_missing() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
 
         assert_eq!(shared_dir_path("wg-missing"), None);
     }

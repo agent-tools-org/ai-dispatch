@@ -2,13 +2,12 @@
 // Verifies two customs do not share a hold, and built-in paths stay unchanged.
 
 use super::*;
-use crate::support::paths::{self, AidHomeGuard};
+use crate::support::paths::{self};
 use crate::types::AgentKind;
 
 #[test]
 fn two_custom_agents_do_not_share_a_hold() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::aid_dir()).unwrap();
 
     let reset = chrono::Local::now().naive_local() + chrono::Duration::days(1);

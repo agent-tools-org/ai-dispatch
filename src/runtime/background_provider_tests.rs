@@ -11,9 +11,7 @@ impl Drop for ConfigReset {
 
 #[test]
 fn switched_provider_refuses_worker_and_retry_before_building_y_argv() {
-    let home = tempfile::tempdir().unwrap();
-    let _aid = paths::AidHomeGuard::set(home.path());
-    paths::ensure_dirs().unwrap();
+    let home = crate::support::test_env::TestHome::with_dirs();
     let config = home.path().join("config.toml");
     std::fs::write(&config, "model_provider='X'").unwrap();
     agent::codex::cli_config::set_test_codex_home(Some(home.path().to_path_buf()));
@@ -53,17 +51,7 @@ fn switched_provider_refuses_worker_and_retry_before_building_y_argv() {
 
 fn assert_matching_command(adapter: &dyn agent::Agent) -> agent::RunOpts {
     let opts = agent::RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let before = agent::codex::command_builds::count();
     let command = adapter.build_command("prompt", &opts).unwrap();

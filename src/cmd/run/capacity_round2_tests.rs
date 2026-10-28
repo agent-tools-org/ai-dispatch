@@ -6,8 +6,7 @@ use std::process::Stdio;
 
 #[tokio::test]
 async fn provider_capacity_explicit_waiting_retry_tree_stop_rejects_replacement() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("dirs");
     install_agent(home.path(), "capacity-round2", "echo should-not-launch");
     let store = Arc::new(Store::open_memory().expect("store"));
@@ -41,8 +40,7 @@ async fn provider_capacity_explicit_waiting_retry_tree_stop_rejects_replacement(
 
 #[tokio::test]
 async fn provider_capacity_round2_replayed_stderr_never_creates_hold_or_retry() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut row = task("t-round2-stderr", home.path());
@@ -72,8 +70,7 @@ async fn provider_capacity_round2_replayed_stderr_never_creates_hold_or_retry() 
 
 #[tokio::test]
 async fn provider_capacity_ordinary_retry_refreshed_hold_never_substitutes_or_clears_session() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid]);
     crate::config::agent::save_agent_default_model("droid", Some("gpt-5.3-codex"))
@@ -109,8 +106,7 @@ async fn provider_capacity_ordinary_retry_refreshed_hold_never_substitutes_or_cl
 
 #[test]
 fn provider_capacity_round2_pins_resolved_model_when_served_cache_changes() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let _served = crate::agent::model_validation::MockServedModelsGuard::set(
         AgentKind::Codex, Some(vec!["other-model".into()]),
     );
@@ -142,8 +138,7 @@ fn provider_capacity_round2_classifies_decoded_turn_failure_and_reconnect_sequen
         (vec![refusal], true), (vec![reconnect.clone(), failure.clone()], true),
         (vec![reconnect, completed, failure], false),
     ] {
-        let home = tempfile::tempdir().expect("home");
-        let _home = paths::AidHomeGuard::set(home.path());
+        let home = crate::support::test_env::TestHome::new();
         let store = Arc::new(Store::open_memory().expect("store"));
         let mut row = task("t-round2-decoded", home.path());
         row.status = TaskStatus::Running;
@@ -164,8 +159,7 @@ fn provider_capacity_round2_classifies_decoded_turn_failure_and_reconnect_sequen
 
 #[tokio::test]
 async fn provider_capacity_round2_ordinary_cascade_preserves_prompt_and_completion_hook() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("dirs");
     install_agent(home.path(), "ordinary-cascade", "echo completed");
     let store = Arc::new(Store::open_memory().expect("store"));

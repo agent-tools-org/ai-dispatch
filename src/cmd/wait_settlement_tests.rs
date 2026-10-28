@@ -13,8 +13,7 @@ fn pending_worker(id: &str, pid: u32) {
 
 #[tokio::test]
 async fn wait_does_not_accept_done_before_worker_settles() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     store.insert_task(&make_task("t-settling", TaskStatus::Done)).unwrap();
     pending_worker("t-settling", std::process::id());
@@ -30,8 +29,7 @@ async fn wait_does_not_accept_done_before_worker_settles() {
 
 #[tokio::test]
 async fn wait_accepts_success_only_after_worker_settles() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     store.insert_task(&make_task("t-settled", TaskStatus::Done)).unwrap();
     pending_worker("t-settled", std::process::id());
@@ -45,8 +43,7 @@ async fn wait_accepts_success_only_after_worker_settles() {
 
 #[test]
 fn discovery_includes_terminal_tasks_still_settling() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = make_task("t-group-settling", TaskStatus::Done);
     task.workgroup_id = Some("wg-settling".into());
@@ -59,8 +56,7 @@ fn discovery_includes_terminal_tasks_still_settling() {
 
 #[tokio::test]
 async fn interrupted_settlement_cannot_report_success() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     store.insert_task(&make_task("t-interrupted", TaskStatus::Done)).unwrap();
     pending_worker("t-interrupted", u32::MAX);
@@ -70,8 +66,7 @@ async fn interrupted_settlement_cannot_report_success() {
 
 #[tokio::test]
 async fn live_worker_does_not_block_exit_on_await() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     store.insert_task(&make_task("t-awaiting", TaskStatus::AwaitingInput)).unwrap();
     pending_worker("t-awaiting", std::process::id());
@@ -81,9 +76,7 @@ async fn live_worker_does_not_block_exit_on_await() {
 
 #[tokio::test]
 async fn wait_accepts_full_old_format_job_only_after_worker_settles() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
-    paths::ensure_dirs().unwrap();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let store = Arc::new(Store::open_memory().unwrap());
     let id = "t-old-wait";
     store.insert_task(&make_task(id, TaskStatus::Done)).unwrap();

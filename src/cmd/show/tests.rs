@@ -4,7 +4,7 @@
 use super::show_json::task_json;
 use super::*;
 use crate::cmd::summary::CompletionSummary;
-use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 use chrono::Local;
 use std::path::Path;
 use std::process::Command;
@@ -93,8 +93,7 @@ fn audit_text_shows_pending_reason() {
 
 #[test]
 fn audit_text_shows_done_status_when_result_file_is_missing() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let task = task_fixture("t-done-no-result", "investigate issue", None, None);
     store.insert_task(&task).unwrap();
@@ -137,8 +136,7 @@ fn task_hook_payload_adds_outcome_and_verification_status() {
 
 #[test]
 fn audit_text_shows_failed_status_when_result_file_is_missing() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = task_fixture("t-failed-no-result", "investigate issue", None, None);
     task.status = TaskStatus::Failed;
@@ -222,8 +220,7 @@ fn task_json_does_not_report_unobserved_as_success() {
 
 #[test]
 fn result_text_reads_task_result_file() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let path = crate::support::paths::task_dir("t-result").join("result.md");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -236,8 +233,7 @@ fn result_text_reads_task_result_file() {
 
 #[test]
 fn render_mode_text_reads_transcript() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let task = task_fixture("t-show-transcript", "raw prompt", None, None);
     store.insert_task(&task).unwrap();

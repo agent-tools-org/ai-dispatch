@@ -4,8 +4,7 @@ use super::*;
 
 #[test]
 fn terminal_failure_preserves_committed_work_non_standard_branch() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
 
     let wt_dir = quota_worktree(dir.path(), Some("feature-custom"));
@@ -51,8 +50,7 @@ fn terminal_failure_preserves_committed_work_non_standard_branch() {
 
 #[test]
 fn terminal_failure_survives_passing_verification() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
     std::fs::write(
         paths::stderr_path("t-rescue-pass"),
@@ -75,8 +73,7 @@ fn terminal_failure_survives_passing_verification() {
 
 #[test]
 fn terminal_failure_keeps_failed_verify_failed() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
     std::fs::write(
         paths::stderr_path("t-rescue-fail"),
@@ -157,9 +154,7 @@ fn sandboxed_agents_identified() {
 
 #[test]
 fn build_prompt_bundle_uses_relative_workspace_for_sandboxed_agents() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().unwrap();
     let group = store.create_workgroup("batch", "desc", Some("seed"), None).unwrap();
     let workspace = crate::support::paths::workspace_dir(group.id.as_str()).unwrap();
@@ -187,9 +182,7 @@ fn build_prompt_bundle_uses_relative_workspace_for_sandboxed_agents() {
 
 #[test]
 fn build_prompt_bundle_keeps_absolute_workspace_for_non_sandboxed_agents() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().unwrap();
     let group = store.create_workgroup("batch", "desc", Some("seed"), None).unwrap();
     let workspace = crate::support::paths::workspace_dir(group.id.as_str()).unwrap();

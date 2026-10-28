@@ -4,29 +4,14 @@
 
 use super::*;
 use crate::support::test_subprocess;
-use std::path::Path;
-use std::process::Command;
+
+
 use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
 
-fn git(repo_dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .status()
-        .unwrap()
-        .success());
-}
+use crate::support::test_env::git;
 
-fn git_output(repo_dir: &Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    String::from_utf8(output.stdout).unwrap().trim().to_string()
-}
+use crate::support::test_env::git_output;
 
 fn unique_branch(prefix: &str) -> String {
     format!(

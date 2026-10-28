@@ -6,8 +6,7 @@ use crate::types::DeliveryAssessment;
 
 #[tokio::test]
 async fn round2_preservation_recovery_keeps_brief_feedback_and_missing_rollout() {
-    let temp = TempDir::new().unwrap();
-    let _home = paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let task = recovery_task(temp.path());
     store.insert_task(&task).unwrap();
@@ -64,16 +63,7 @@ fn recovery_task(root: &std::path::Path) -> Task {
 fn assert_fresh_command(child: &Task, session_id: &str) {
     let opts = RunOpts {
         session_id: Some(session_id.into()),
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let command = crate::agent::codex::CodexAgent
         .build_command(child.resolved_prompt.as_deref().unwrap(), &opts)

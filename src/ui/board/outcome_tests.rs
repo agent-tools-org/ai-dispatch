@@ -4,59 +4,24 @@
 
 use super::render_board;
 use chrono::Local;
-use tempfile::TempDir;
 
-use crate::support::paths::AidHomeGuard;
+
+
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
 
 fn timed_out_task() -> Task {
     Task {
-        id: TaskId("t-timeout".to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "test prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: crate::config::project::current_project_id(),
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
+        prompt: "test prompt".to_string(), project_id: crate::config::project::current_project_id(),
         verify: Some("cargo test".to_string()),
         verify_status: VerifyStatus::TimedOut,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId("t-timeout".to_string()), TaskStatus::Done)
     }
 }
 
 #[test]
 fn board_marks_timed_out_verification_without_counting_success() {
-    let temp = TempDir::new().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().unwrap();
 
     let output = render_board(&[timed_out_task()], &store).unwrap();
@@ -67,8 +32,7 @@ fn board_marks_timed_out_verification_without_counting_success() {
 
 #[test]
 fn infrastructure_verification_renders_its_own_tag() {
-    let temp = TempDir::new().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().unwrap();
     let mut task = timed_out_task();
     task.verify_status = VerifyStatus::InfrastructureFailure;
@@ -89,8 +53,7 @@ fn infrastructure_verification_renders_its_own_tag() {
 
 #[test]
 fn board_omits_verification_tags_when_no_verification_result_exists() {
-    let temp = TempDir::new().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().unwrap();
     let mut failed = timed_out_task();
     failed.id = TaskId("t-failed".to_string());
@@ -111,8 +74,7 @@ fn board_omits_verification_tags_when_no_verification_result_exists() {
 
 #[test]
 fn board_counts_only_active_lifecycle_statuses_as_running() {
-    let temp = TempDir::new().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().unwrap();
     let mut waiting = timed_out_task();
     waiting.id = TaskId("t-waiting".to_string());
@@ -133,8 +95,7 @@ fn board_counts_only_active_lifecycle_statuses_as_running() {
 
 #[test]
 fn board_marks_unobserved_detach_without_counting_success() {
-    let temp = TempDir::new().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().unwrap();
     let mut task = timed_out_task();
     task.id = TaskId("t-unobserved".to_string());
@@ -149,8 +110,7 @@ fn board_marks_unobserved_detach_without_counting_success() {
 
 #[test]
 fn board_does_not_count_stopped_tasks_as_failed() {
-    let temp = TempDir::new().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().unwrap();
     let mut stopped = timed_out_task();
     stopped.status = TaskStatus::Stopped;
@@ -164,8 +124,7 @@ fn board_does_not_count_stopped_tasks_as_failed() {
 
 #[test]
 fn board_total_names_unknown_costs_instead_of_hiding_them() {
-    let temp = TempDir::new().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().unwrap();
     let mut unknown = timed_out_task();
     unknown.tokens = Some(5_000);

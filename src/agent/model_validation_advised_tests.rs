@@ -6,8 +6,7 @@ use super::*;
 #[test]
 fn advised_pin_allows_unknown_refresh_and_refuses_definitive_mismatch() {
     let _lock = lock_test();
-    let home = tempfile::tempdir().expect("home");
-    let _home = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     for fresh in [None, Some(Vec::new()), Some(vec!["different-model".into()])] {
         clear_served_models_cache();
         let kind = AgentKind::Kilo;

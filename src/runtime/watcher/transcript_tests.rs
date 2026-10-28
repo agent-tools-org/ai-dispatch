@@ -7,9 +7,8 @@ use crate::support::paths;
 use crate::routing::rate_limit;
 use crate::store::Store;
 use crate::types::{
-    AgentKind, CompletionInfo, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus,
-};
-use chrono::Local;
+    AgentKind, CompletionInfo, Task, TaskEvent, TaskId, TaskStatus, };
+
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 
@@ -28,47 +27,11 @@ impl Agent for BufferedTestAgent {
 
 #[tokio::test]
 async fn watch_buffered_persists_transcript() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let temp = crate::support::test_env::TestHome::with_dirs();
     let store = Arc::new(Store::open_memory().unwrap());
     let task = Task {
-        id: TaskId("t-watch-buffered".to_string()),
         agent: AgentKind::Antigravity,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Running,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId("t-watch-buffered".to_string()), TaskStatus::Running)
     };
     store.insert_task(&task).unwrap();
     let mut child = tokio::process::Command::new("sh")
@@ -100,47 +63,14 @@ async fn watch_buffered_persists_transcript() {
 
 #[tokio::test]
 async fn watch_buffered_clears_rate_limit_on_success() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let temp = crate::support::test_env::TestHome::with_dirs();
     let store = Arc::new(Store::open_memory().unwrap());
     let task = Task {
-        id: TaskId("t-watch-clear-rate-limit".to_string()),
         agent: AgentKind::Antigravity,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Running,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(
+            TaskId("t-watch-clear-rate-limit".to_string()),
+            TaskStatus::Running,
+        )
     };
     store.insert_task(&task).unwrap();
     rate_limit::mark_rate_limited(
@@ -206,49 +136,12 @@ impl Agent for BufferedAgyTestAgent {
 
 #[tokio::test]
 async fn watch_buffered_records_quota_refusal_and_fails_task() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let temp = crate::support::test_env::TestHome::with_dirs();
     let store = Arc::new(Store::open_memory().unwrap());
     let task = Task {
-        id: TaskId("t-watch-buffered-quota".to_string()),
         agent: AgentKind::Antigravity,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Running,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
         requested_model: Some("gemini-3.6-flash".to_string()),
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId("t-watch-buffered-quota".to_string()), TaskStatus::Running)
     };
     store.insert_task(&task).unwrap();
 

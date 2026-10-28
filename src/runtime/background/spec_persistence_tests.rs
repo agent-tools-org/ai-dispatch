@@ -47,8 +47,7 @@ fn serializes_cascade_field() {
 
 #[test]
 fn completion_notifications_are_written_as_jsonl() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let mut task = make_task("t-4d4d", TaskStatus::Done);
     task.duration_ms = Some(1_500);
     task.cost_usd = Some(0.25);
@@ -137,9 +136,7 @@ fn explicit_cascade_takes_priority_over_quota_cascade() {
 
 #[test]
 fn agent_pid_stored_and_loaded_correctly() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
 
     save_spec(&make_spec("t-a100")).unwrap();
 
@@ -157,9 +154,7 @@ fn agent_pid_stored_and_loaded_correctly() {
 
 #[test]
 fn agent_pid_backwards_compatible() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
 
     save_spec(&make_spec("t-c200")).unwrap();
 
@@ -169,9 +164,7 @@ fn agent_pid_backwards_compatible() {
 
 #[test]
 fn full_old_format_job_can_be_waited_stopped_and_reaped() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
     let store = std::sync::Arc::new(Store::open_memory().unwrap());
     let mut legacy: serde_json::Value =
         serde_json::from_str(include_str!("../../../testdata/full-background-spec.json")).unwrap();

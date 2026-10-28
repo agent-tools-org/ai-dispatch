@@ -41,25 +41,20 @@ mod tests {
 
     fn running_cursor_task() -> crate::types::Task {
         crate::types::Task {
-            id: TaskId("t-cursor-monthly-replay".to_string()), agent: AgentKind::Cursor,
-            custom_agent_name: None, prompt: "captured refusal replay".to_string(),
-            resolved_prompt: None, category: None, status: crate::types::TaskStatus::Running,
-            parent_task_id: None, workgroup_id: None, caller_kind: None, caller_session_id: None,
-            agent_session_id: None, repo_path: None, project_id: None, worktree_path: None,
-            effective_dir: None, worktree_branch: None, final_head_sha: None, final_branch: None,
-            start_sha: None, log_path: None, output_path: None, tokens: None, prompt_tokens: None,
-            duration_ms: None, requested_model: Some("Auto".to_string()), observed_model: None,
-            attribution_source: None, cost_usd: None, exit_code: None, created_at: Local::now(),
-            completed_at: None, verify: None, verify_status: crate::types::VerifyStatus::Skipped,
-            pending_reason: None, read_only: false, budget: false, audit_verdict: None,
-            audit_report_path: None, delivery_assessment: None,
+            agent: AgentKind::Cursor,
+            prompt: "captured refusal replay".to_string(),
+            requested_model: Some("Auto".to_string()),
+            verify_status: crate::types::VerifyStatus::Skipped,
+            ..crate::types::Task::test_fixture(
+                TaskId("t-cursor-monthly-replay".to_string()),
+                crate::types::TaskStatus::Running,
+            )
         }
     }
 
     #[tokio::test]
     async fn captured_cursor_stderr_replay_through_watcher_writes_auto_hold() {
-        let temp = tempfile::tempdir().expect("temp home");
-        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+        let temp = crate::support::test_env::TestHome::new();
         let _cache = crate::routing::quota::live::CacheDirGuard::set(temp.path());
         crate::support::paths::ensure_dirs().expect("aid directories");
         let store = std::sync::Arc::new(crate::store::Store::open_memory().expect("store"));
@@ -91,8 +86,7 @@ mod tests {
 
     #[test]
     fn captured_cursor_refusal_classifies_finished_output_and_writes_cycle_hold() {
-        let temp = tempfile::tempdir().expect("temp home");
-        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+        let temp = crate::support::test_env::TestHome::new();
         let _cache = crate::routing::quota::live::CacheDirGuard::set(temp.path());
         crate::support::paths::ensure_dirs().expect("aid directories");
         let task = TaskId("t-cursor-monthly-capture".to_string());
@@ -119,8 +113,7 @@ mod tests {
 
     #[test]
     fn cursor_monthly_hold_blocks_only_the_dispatched_model_group() {
-        let temp = tempfile::tempdir().expect("temp home");
-        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+        let temp = crate::support::test_env::TestHome::new();
         let _cache = crate::routing::quota::live::CacheDirGuard::set(temp.path());
         let refusal = CAPTURE.replace("9/23/2026", "9/23/2099");
         for (model, group, other) in [("Auto", "auto", "composer-2.5"), ("composer-2.5", "premium", "auto")] {
@@ -138,8 +131,7 @@ mod tests {
 
     #[test]
     fn cursor_missing_or_invalid_cycle_date_holds_for_thirty_days() {
-        let temp = tempfile::tempdir().expect("temp home");
-        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+        let temp = crate::support::test_env::TestHome::new();
         let _cache = crate::routing::quota::live::CacheDirGuard::set(temp.path());
         for date in ["", "not-a-date", "2/30/2099", "13/1/2099", "9/23/26"] {
             let refusal = CAPTURE.replace("9/23/2026", date);
@@ -158,8 +150,7 @@ mod tests {
 
     #[test]
     fn cursor_refusal_requires_error_line_and_rejects_agent_authored_envelopes() {
-        let temp = tempfile::tempdir().expect("temp home");
-        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
         for prose in [
             CAPTURE.replace("ActionRequiredError: ", ""),
             format!("The CLI reported: {CAPTURE}"),

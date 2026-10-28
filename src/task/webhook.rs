@@ -100,50 +100,15 @@ fn webhook_payload(task: &Task, status: &str) -> serde_json::Value {
 mod tests {
     use super::{should_fire_webhook, webhook_payload, webhook_status};
     use crate::config::WebhookConfig;
-    use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-    use chrono::Local;
+    use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
+
 
     #[test]
     fn webhook_payload_adds_outcome_and_verification_status() {
         let task = Task {
-            id: TaskId("t-webhook".to_string()),
-            agent: AgentKind::Codex,
-            custom_agent_name: None,
-            prompt: "prompt".to_string(),
-            resolved_prompt: None,
-            category: None,
-            status: TaskStatus::Done,
-            parent_task_id: None,
-            workgroup_id: None,
-            caller_kind: None,
-            caller_session_id: None,
-            agent_session_id: None,
-            repo_path: None, project_id: None,
-            worktree_path: None, effective_dir: None,
-            worktree_branch: None,
-            final_head_sha: None,
-            final_branch: None,
-            start_sha: None,
-            log_path: None,
-            output_path: None,
-            tokens: None,
-            prompt_tokens: None,
-            duration_ms: None,
-            requested_model: None,
-            observed_model: None,
-            attribution_source: None,
-            cost_usd: None,
-            exit_code: None,
-            created_at: Local::now(),
-            completed_at: None,
             verify: Some("cargo test".to_string()),
             verify_status: VerifyStatus::TimedOut,
-            pending_reason: None,
-            read_only: false,
-            budget: false,
-            audit_verdict: None,
-            audit_report_path: None,
-            delivery_assessment: None,
+            ..crate::types::Task::test_fixture(TaskId("t-webhook".to_string()), TaskStatus::Done)
         };
 
         let payload = webhook_payload(&task, "done");

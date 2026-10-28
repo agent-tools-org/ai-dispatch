@@ -74,8 +74,7 @@ fn cost_ceiling_only_triggers_above_limit() {
 /// diagnostic event is the CLI talking, and the model cannot author one.
 #[test]
 fn only_a_diagnostic_event_can_mark_a_route_rate_limited() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = std::sync::Arc::new(crate::store::Store::open_memory().unwrap());
     let task = running_task("t-cursor-quote", AgentKind::Cursor);
     store.insert_task(&task).unwrap();

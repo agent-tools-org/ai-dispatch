@@ -9,14 +9,7 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-fn git(repo_dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .status()
-        .unwrap()
-        .success());
-}
+use crate::support::test_env::git;
 
 fn init_repo(repo_dir: &Path) {
     git(repo_dir, &["init", "-b", "main"]);

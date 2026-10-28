@@ -13,8 +13,7 @@ use std::path::Path;
 #[test]
 fn drop_rewrites_passthrough_installer_symlink_and_preserves_negative_controls() {
     let fixture = tempfile::tempdir().expect("fixture");
-    let aid_home = tempfile::tempdir().expect("aid home");
-    let _aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
+    let _aid_home = crate::support::test_env::TestHome::new();
     let real_home = fixture.path().join("real-home");
     let tool = real_home.join(".local/share/tool/v1/tool");
     fs::create_dir_all(tool.parent().expect("tool parent")).expect("tool dirs");

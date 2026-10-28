@@ -6,7 +6,7 @@ use super::super::truncate::EVENT_DETAIL_MAX;
 use super::OzAgent;
 use crate::agent::{Agent, RunOpts};
 use crate::types::{AgentKind, EventKind, TaskId};
-use crate::{support::paths, routing::rate_limit};
+use crate::{routing::rate_limit};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -40,17 +40,7 @@ fn write_temp_context_file(contents: &str) -> String {
 #[test]
 fn build_command_uses_oz() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = OzAgent.build_command("test prompt", &opts).unwrap();
     assert_eq!(cmd.get_program().to_str().unwrap(), "oz");
@@ -67,17 +57,8 @@ fn build_command_uses_oz() {
 fn build_command_embeds_context_files_into_prompt() {
     let context_file = write_temp_context_file("fn helper() {}\n");
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
         context_files: vec![context_file.clone()],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
 
     let cmd = OzAgent.build_command("review this", &opts).expect("command should build");
@@ -94,17 +75,10 @@ fn build_command_embeds_context_files_into_prompt() {
 fn build_command_wraps_read_only_prompt() {
     let context_file = write_temp_context_file("const ANSWER: u32 = 42;\n");
     let opts = RunOpts {
-        dir: None,
-        output: None,
         result_file: Some("result.md".to_string()),
-        model: None,
-        budget: false,
         read_only: true,
-        sandbox: false,
         context_files: vec![context_file.clone()],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
 
     let cmd = OzAgent.build_command("inspect only", &opts).expect("command should build");
@@ -123,16 +97,7 @@ fn build_command_wraps_read_only_prompt() {
 fn build_command_with_dir() {
     let opts = RunOpts {
         dir: Some("/tmp/test".to_string()),
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = OzAgent.build_command("test", &opts).unwrap();
     let args: Vec<String> = cmd
@@ -198,8 +163,7 @@ fn parses_agent_reasoning_event() {
 
 #[test]
 fn parses_rate_limit_error_and_marks_agent() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let _ = rate_limit::clear_rate_limit(&AgentKind::Oz, None);
     let agent = OzAgent;
     let line = r#"{"type":"error","message":"Error: Quota limit reached."}"#;

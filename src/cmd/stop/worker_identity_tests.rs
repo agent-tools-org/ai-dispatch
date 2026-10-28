@@ -11,8 +11,7 @@ use std::sync::Arc;
 
 fn with_task(f: impl FnOnce(&Arc<Store>, &str)) {
     let _permit = crate::support::test_subprocess::acquire();
-    let home = tempfile::tempdir().expect("home");
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let id = "t-stop-identity";

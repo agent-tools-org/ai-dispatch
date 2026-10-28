@@ -4,18 +4,11 @@
 
 use super::*;
 use crate::support::test_subprocess;
-use std::path::Path;
+
 use std::process::Command;
 use tempfile::TempDir;
 
-fn git(repo_dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .status()
-        .unwrap()
-        .success());
-}
+use crate::support::test_env::git;
 
 fn init_repo() -> TempDir {
     let repo = TempDir::new().unwrap();

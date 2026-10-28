@@ -152,7 +152,7 @@ fn extract_session_id(value: &serde_json::Value) -> Option<&str> {
 }
 
 fn extract_assistant_text(value: &serde_json::Value) -> Option<String> {
-    support::extract_text_payload(
+    crate::agent::stream_text::extract_text_payload(
         value
             .get("message")
             .and_then(|message| message.get("content"))
@@ -202,7 +202,7 @@ fn content_event(
             if v.get("role").and_then(|r| r.as_str()) != Some("assistant") {
                 return None;
             }
-            let content = support::extract_text_payload(v.get("content"))?;
+            let content = crate::agent::stream_text::extract_text_payload(v.get("content"))?;
             (EventKind::Reasoning, content, None)
         }
         _ => return None,

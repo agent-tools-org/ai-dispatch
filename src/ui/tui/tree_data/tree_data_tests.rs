@@ -2,8 +2,8 @@
 // Depends on tree_data and task fixtures.
 
     use super::*;
-    use crate::types::{AgentKind, TaskId, TaskStatus, VerifyStatus};
-    use chrono::Local;
+    use crate::types::{TaskId, TaskStatus};
+
 
     fn mk(id: &str, parent: Option<&str>) -> Task {
         mk_group(id, parent, None)
@@ -11,25 +11,10 @@
 
     fn mk_group(id: &str, parent: Option<&str>, group: Option<&str>) -> Task {
         Task {
-            id: TaskId(id.to_string()),
-            agent: AgentKind::Codex,
             prompt: "test".into(),
-            status: TaskStatus::Done,
             parent_task_id: parent.map(str::to_string),
-            workgroup_id: group.map(str::to_string),
-            created_at: Local::now(),
-            verify_status: VerifyStatus::Skipped,
-            custom_agent_name: None, resolved_prompt: None,
-            caller_kind: None, caller_session_id: None, agent_session_id: None,
-            repo_path: None, project_id: crate::config::project::current_project_id(), worktree_path: None, effective_dir: None, worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-            start_sha: None,
-            log_path: None, output_path: None, tokens: None, prompt_tokens: None,
-            duration_ms: None, requested_model: None, observed_model: None, attribution_source: None, cost_usd: None, exit_code: None,
-            completed_at: None, verify: None, pending_reason: None, read_only: false, budget: false,
-            audit_verdict: None, audit_report_path: None, delivery_assessment: None,
-            category: None,
+            workgroup_id: group.map(str::to_string), project_id: crate::config::project::current_project_id(),
+            ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
         }
     }
 

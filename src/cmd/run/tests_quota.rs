@@ -5,8 +5,7 @@ use crate::routing::rate_limit;
 
 #[test]
 fn failed_pty_quota_excerpt_allows_continuation_without_promoting_its_hold() {
-    let home = TempDir::new().expect("home");
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("directories");
     let mut task = make_failed_task("t-oz-pty-quota");
     task.agent = AgentKind::Oz;
@@ -81,8 +80,7 @@ fn take_next_cascade_agent_returns_none_when_empty() {
 
 #[test]
 fn read_quota_error_message_uses_stderr() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
     std::fs::write(
         paths::stderr_path("t-quota-stderr"),
@@ -95,8 +93,7 @@ fn read_quota_error_message_uses_stderr() {
 
 #[test]
 fn read_quota_error_message_falls_back_to_log() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
     std::fs::write(
         paths::log_path("t-quota-log"),
@@ -111,8 +108,7 @@ fn read_quota_error_message_falls_back_to_log() {
 
 #[test]
 fn read_quota_error_message_extracts_rate_limit_line_only() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
     std::fs::write(
         paths::stderr_path("t-quota-mixed"),
@@ -125,8 +121,7 @@ fn read_quota_error_message_extracts_rate_limit_line_only() {
 
 #[test]
 fn read_quota_error_message_detects_402_payment_errors() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
     std::fs::write(
         paths::log_path("t-quota-402"),
@@ -139,8 +134,7 @@ fn read_quota_error_message_detects_402_payment_errors() {
 
 #[test]
 fn read_quota_error_message_ignores_agent_grep_in_log() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
     crate::routing::rate_limit::clear_rate_limit(&AgentKind::Cursor, None);
     let grep_line = "completed: grep clear_rate_limit_if_stale|marker_path";
@@ -160,8 +154,7 @@ fn read_quota_error_message_ignores_agent_grep_in_log() {
 
 #[test]
 fn terminal_failure_refuses_empty_worktree_rescue() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
 
     let wt_dir = quota_worktree(dir.path(), None);
@@ -190,8 +183,7 @@ fn terminal_failure_refuses_empty_worktree_rescue() {
 
 #[test]
 fn terminal_failure_preserves_worktree_with_modified_code() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
 
     let wt_dir = quota_worktree(dir.path(), None);
@@ -232,8 +224,7 @@ fn terminal_failure_preserves_worktree_with_modified_code() {
 
 #[test]
 fn terminal_failure_preserves_untracked_source_files() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
 
     let wt_dir = quota_worktree(dir.path(), None);

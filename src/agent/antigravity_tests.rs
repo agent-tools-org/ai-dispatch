@@ -9,17 +9,9 @@ use tempfile::tempdir;
 
 fn opts(read_only: bool, context_files: Vec<String>) -> RunOpts {
     RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
         read_only,
-        sandbox: false,
         context_files,
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     }
 }
 
@@ -267,8 +259,7 @@ fn build_command_omits_the_log_flag_when_no_task_is_known() {
 /// see `env_with_agent_log` and its callers.
 #[test]
 fn build_command_passes_only_the_log_it_was_handed() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("ensure dirs");
 
     let none = crate::agent::env_with_agent_log(None, "t-abcd1234", false);

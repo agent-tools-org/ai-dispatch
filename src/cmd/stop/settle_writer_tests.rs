@@ -97,8 +97,7 @@ fn assert_writer_timing(store: &Store, index: usize, status: TaskStatus) {
 
 #[test]
 fn settle_first_worker_failure_after_stop_leaves_row_and_events_unchanged() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     store
         .insert_task(&make_task("t-stop-worker", TaskStatus::Running))
@@ -159,8 +158,7 @@ fn settle_first_terminal_writers_do_not_replace_any_terminal_row() {
 
 #[test]
 fn settle_first_stop_refusal_reports_winning_terminal_reason_without_event() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     store
         .insert_task(&make_task("t-stop-lost", TaskStatus::Running))

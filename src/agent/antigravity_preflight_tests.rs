@@ -60,17 +60,8 @@ fn unsuccessful_help_soft_skips_requested_model_check() {
 #[test]
 fn fallback_command_drops_model_when_flags_are_unavailable() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
         model: Some("gemini-3-pro".into()),
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: Vec::new(),
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let command = AntigravityAgent.build_command("Inspect the module", &opts).unwrap();
     let args: Vec<_> = command.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();

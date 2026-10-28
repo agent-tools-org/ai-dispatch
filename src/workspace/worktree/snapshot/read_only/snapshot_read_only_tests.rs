@@ -3,12 +3,9 @@
 // Deps: parent capture helper, std filesystem/process, tempfile.
 
 use super::capture;
-use std::{fs, path::Path, process::Command};
+use std::{fs, process::Command};
 
-fn git(dir: &Path, args: &[&str]) {
-    let out = Command::new("git").current_dir(dir).args(args).output().unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-}
+use crate::support::test_env::git;
 
 fn repo() -> tempfile::TempDir {
     let temp = tempfile::tempdir().unwrap();

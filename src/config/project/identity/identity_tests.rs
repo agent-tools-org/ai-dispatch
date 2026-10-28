@@ -4,19 +4,10 @@
 
 use super::*;
 use std::fs;
-use std::process::Command;
+
 use tempfile::TempDir;
 
-fn git(repo: &Path, args: &[&str]) {
-    assert!(
-        Command::new("git")
-            .args(["-C", &repo.to_string_lossy()])
-            .args(args)
-            .status()
-            .unwrap()
-            .success()
-    );
-}
+use crate::support::test_env::git;
 
 fn init_repo(repo: &Path) {
     git(repo, &["init", "-b", "main"]);
@@ -96,50 +87,14 @@ fn git_without_toml_uses_path_based_id_shared_by_worktree() {
 
 #[test]
 fn retain_project_keeps_unattributed_bucket_explicit() {
-    use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-    use chrono::Local;
+    use crate::types::{Task, TaskId, TaskStatus};
+
 
     fn task(id: &str, project_id: Option<&str>) -> Task {
         Task {
-            id: TaskId(id.to_string()),
-            agent: AgentKind::Codex,
-            custom_agent_name: None,
             prompt: "p".into(),
-            resolved_prompt: None,
-            category: None,
-            status: TaskStatus::Done,
-            parent_task_id: None,
-            workgroup_id: None,
-            caller_kind: None,
-            caller_session_id: None,
-            agent_session_id: None,
-            repo_path: None,
             project_id: project_id.map(str::to_string),
-            worktree_path: None, effective_dir: None,
-            worktree_branch: None,
-            final_head_sha: None,
-            final_branch: None,
-            start_sha: None,
-            log_path: None,
-            output_path: None,
-            tokens: None,
-            prompt_tokens: None,
-            duration_ms: None,
-            requested_model: None,
-            observed_model: None,
-            attribution_source: None,
-            cost_usd: None,
-            exit_code: None,
-            created_at: Local::now(),
-            completed_at: None,
-            verify: None,
-            verify_status: VerifyStatus::Skipped,
-            pending_reason: None,
-            read_only: false,
-            budget: false,
-            audit_verdict: None,
-            audit_report_path: None,
-            delivery_assessment: None,
+            ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
         }
     }
 

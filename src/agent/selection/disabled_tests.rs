@@ -3,13 +3,12 @@
 // Deps: selection helpers, agent_config, Store, AidHomeGuard.
 
 use crate::config::agent as agent_config;
-use crate::support::paths::AidHomeGuard;
+
 use crate::types::AgentKind;
 
 #[test]
 fn fallback_chain_skips_disabled_agent() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     let _agents = crate::agent::DetectAgentsGuard::set(vec![
         AgentKind::Grok,
         AgentKind::Kilo,

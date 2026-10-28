@@ -5,55 +5,18 @@ use super::*;
 use chrono::{Duration, Local};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::types::{AgentKind, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{TaskId, TaskStatus};
 
 fn make_task(id: &str) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: format!("prompt for {id}"),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: crate::config::project::current_project_id(),
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        prompt: format!("prompt for {id}"), project_id: crate::config::project::current_project_id(),
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
 }
 
 #[test]
 fn selection_follows_task_identity_when_newer_task_appears() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
 
     let mut older = make_task("t-sel-old");
@@ -103,8 +66,7 @@ fn selection_follows_task_identity_when_newer_task_appears() {
 
 #[test]
 fn detail_scroll_clamps_to_content() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     store.insert_task(&make_task("t-scroll-1")).unwrap();
     let mut app = App::new(

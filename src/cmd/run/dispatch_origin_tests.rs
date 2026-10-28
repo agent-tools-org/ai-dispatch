@@ -7,9 +7,7 @@ mod fixture;
 
 #[test]
 fn explicit_retry_claim_saves_complete_configuration_before_worktree_setup() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
-    paths::ensure_dirs().unwrap();
+    let home = crate::support::test_env::TestHome::with_dirs();
     let store = Arc::new(Store::open_memory().unwrap());
     let parent = fixture::task("t-claim-parent", TaskStatus::Stopped, None, None);
     store.insert_task(&parent).unwrap();

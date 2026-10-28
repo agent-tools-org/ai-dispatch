@@ -5,51 +5,14 @@ use super::{run, wrap_up_before_timeout};
 use crate::runtime::input_signal;
 use crate::store::Store;
 use crate::support::paths::AidHomeGuard;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 use chrono::Local;
 
 fn make_task(id: &str, status: TaskStatus) -> Task {
     Task {
-        id: TaskId(id.to_string()),
         agent: AgentKind::Cursor,
-        custom_agent_name: None,
         prompt: "test".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None,
-        project_id: None,
-        worktree_path: None,
-        effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), status)
     }
 }
 
@@ -85,8 +48,7 @@ fn concurrent_wrap_up_pollers_queue_only_one_steer() {
 
 #[test]
 fn legacy_wrap_up_marker_prevents_another_nudge() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let path = home.path().join("aid.db");
     let store = Store::open(&path).expect("store");
     store
@@ -123,8 +85,7 @@ fn legacy_wrap_up_marker_prevents_another_nudge() {
 
 #[test]
 fn wrap_up_preserves_pending_operator_steer_and_skips_expired_cap() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().expect("store");
     store
         .insert_task(&make_task("t-pending", TaskStatus::Running))
@@ -166,8 +127,7 @@ fn steer_non_running_task_errors() {
 
 #[test]
 fn steer_rejects_one_shot_agents_without_queuing() {
-    let temp_home = tempfile::tempdir().unwrap();
-    let _aid_home = AidHomeGuard::set(temp_home.path());
+    let _temp_home = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().unwrap();
 
     for (task_id, agent) in [
@@ -194,8 +154,7 @@ fn steer_rejects_one_shot_agents_without_queuing() {
 
 #[test]
 fn steer_refuses_codex_without_queuing() {
-    let temp_home = tempfile::tempdir().unwrap();
-    let _aid_home = AidHomeGuard::set(temp_home.path());
+    let _temp_home = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().unwrap();
     let mut task = make_task("t-steer-codex", TaskStatus::Running);
     task.agent = AgentKind::Codex;
@@ -213,8 +172,7 @@ fn steer_refuses_codex_without_queuing() {
 
 #[test]
 fn steer_explains_how_to_recover_deleted_custom_agent() {
-    let temp_home = tempfile::tempdir().unwrap();
-    let _aid_home = AidHomeGuard::set(temp_home.path());
+    let _temp_home = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().unwrap();
     let mut task = make_task("t-steer-missing-custom", TaskStatus::Running);
     task.agent = AgentKind::Custom;
@@ -230,8 +188,7 @@ fn steer_explains_how_to_recover_deleted_custom_agent() {
 
 #[test]
 fn no_op_wrap_up_reads_while_another_connection_holds_writer_lock() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let path = home.path().join("aid.db");
     let store = Store::open(&path).expect("store");
     store

@@ -1,12 +1,11 @@
 // Marker readback distinguishes provider evidence from the default plan cooldown.
 // Uses real marker entry points and isolated state without an operator Codex home.
 use super::*;
-use crate::support::paths::AidHomeGuard;
+
 
 #[test]
 fn dateless_provider_refusal_writes_manual_hold_while_default_keeps_its_clock() {
-    let home = tempfile::tempdir().unwrap();
-    let _home = AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
     let route = Some("codex-provider:X");
     let message = "You have hit your usage limit";
@@ -34,8 +33,7 @@ fn dateless_provider_refusal_writes_manual_hold_while_default_keeps_its_clock() 
 
 #[test]
 fn provider_stated_reset_and_capacity_keep_clocks_and_generic_refusals_stay_transient() {
-    let home = tempfile::tempdir().unwrap();
-    let _home = AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
     let route = Some("codex-provider:X");
     let default_marker = marker_path(&AgentKind::Codex, None);

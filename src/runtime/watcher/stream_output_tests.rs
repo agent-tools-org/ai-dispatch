@@ -5,8 +5,7 @@ use super::*;
 
 #[tokio::test]
 async fn streaming_watch_populates_success_exit_code() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = TaskId("t-exit-code".to_string());
     insert_running_task(store.as_ref(), &task_id);
@@ -39,8 +38,7 @@ async fn streaming_watch_populates_success_exit_code() {
 
 #[tokio::test]
 async fn streaming_read_error_skips_finish_and_preserves_cleanup_order() {
-    let temp = tempfile::tempdir().expect("home");
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     let task_id = TaskId("t-stream-read-error".into());
     insert_running_task(&store, &task_id);

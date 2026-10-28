@@ -116,4 +116,7 @@ impl fmt::Display for WorkgroupId {
 mod tests;
 
 #[cfg(test)]
+mod task_fixture;
+
+#[cfg(test)]
 mod status_transition_tests;

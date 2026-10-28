@@ -132,8 +132,7 @@ fn agents_status_line_reads_markers_for_installed_fleet() {
 
 #[test]
 fn agents_status_line_shows_oz_credentials_hold() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(crate::support::paths::aid_dir()).expect("create aid dir");
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![
         crate::types::AgentKind::Oz,

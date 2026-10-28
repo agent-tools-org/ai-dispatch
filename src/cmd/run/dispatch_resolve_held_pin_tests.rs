@@ -11,8 +11,7 @@ use super::*;
 /// to the spent family. Substitution must pin the fallback to a healthy group.
 #[test]
 fn substituted_fallback_is_pinned_to_a_group_that_can_serve() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     // opencode is held on its own provider group — the substitution trigger.
     crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::OpenCode,
@@ -58,8 +57,7 @@ fn substituted_fallback_is_pinned_to_a_group_that_can_serve() {
 /// substitution path, not by calling the validator directly.
 #[test]
 fn substituted_aid_resolved_pin_survives_served_list_miss() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::OpenCode,
         None,
@@ -119,8 +117,7 @@ fn substituted_aid_resolved_pin_survives_served_list_miss() {
 /// substituted.
 #[test]
 fn substituted_route_keeps_agent_config_model_despite_served_list_miss() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     // grok is agent-level held — the agent-level substitution trigger.
     crate::routing::rate_limit::mark_rate_limited_until(
         &AgentKind::Grok,

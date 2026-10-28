@@ -32,8 +32,7 @@ fn format_batch_siblings_truncates_and_limits_output() {
 /// tokens on a persona nobody asked for.
 #[test]
 fn effective_skills_default_to_none_when_nothing_is_declared() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = crate::support::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
@@ -78,8 +77,7 @@ fn read_only_run_skips_project_default_skill_but_keeps_declared_one() {
 
 #[test]
 fn a_declared_skill_is_used_verbatim() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     assert_eq!(
         effective_skills(&run_args(vec!["reviewer".to_string()]), None),
         vec!["reviewer"]
@@ -88,8 +86,7 @@ fn a_declared_skill_is_used_verbatim() {
 
 #[test]
 fn effective_skills_respect_no_skill_sentinel() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = crate::support::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();

@@ -3,29 +3,14 @@
 // Deps: retry_logic builder, Store, git CLI, worktree helpers.
 
 use super::*;
-use chrono::Local;
-use crate::types::{AgentKind, VerifyStatus};
-use std::path::Path;
-use std::process::Command;
 
-fn git(repo_dir: &Path, args: &[&str]) {
-    let status = Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .status()
-        .unwrap();
-    assert!(status.success());
-}
 
-fn git_output(repo_dir: &Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    String::from_utf8(output.stdout).unwrap().trim().to_string()
-}
+
+
+
+use crate::support::test_env::git;
+
+use crate::support::test_env::git_output;
 
 fn init_repo() -> tempfile::TempDir {
     let repo = tempfile::tempdir().unwrap();
@@ -39,16 +24,7 @@ fn init_repo() -> tempfile::TempDir {
 }
 
 fn failed_task(id: &str) -> Task {
-    Task {
-        id: TaskId(id.to_string()), agent: AgentKind::Codex, prompt: "prompt".to_string(),
-        custom_agent_name: None,
-        resolved_prompt: None, category: None, status: TaskStatus::Failed, parent_task_id: None, workgroup_id: None,
-        caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, project_id: None, worktree_path: None, effective_dir: None,
-        worktree_branch: None, final_head_sha: None, final_branch: None, start_sha: None, log_path: None, output_path: None, tokens: None, prompt_tokens: None,
-        duration_ms: None, requested_model: None, observed_model: None, attribution_source: None, cost_usd: None, exit_code: None, created_at: Local::now(),
-        completed_at: None, verify: None, verify_status: VerifyStatus::Skipped, pending_reason: None, read_only: false, budget: false,
-        audit_verdict: None, audit_report_path: None, delivery_assessment: None,
-    }
+    crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Failed)
 }
 
 fn retry_args_for(store: &Store, task: &Task) -> Result<RunArgs> {

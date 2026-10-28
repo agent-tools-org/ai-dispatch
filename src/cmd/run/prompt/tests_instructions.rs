@@ -89,9 +89,7 @@ fn extract_raw_text_from_log_ignores_aid_sentinel_lines() {
 
 #[test]
 fn build_prompt_bundle_appends_batch_siblings_after_system_context() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().unwrap();
     let group = store
         .create_workgroup("batch", "desc", Some("seed"), Some("wg-batch"))
@@ -128,9 +126,7 @@ fn build_prompt_bundle_appends_batch_siblings_after_system_context() {
 #[tokio::test]
 async fn run_auto_retries_after_verify_failure() {
     let _permit = test_subprocess::acquire();
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let temp = crate::support::test_env::TestHome::with_dirs();
 
     let bin_dir = temp.path().join("bin");
     std::fs::create_dir_all(&bin_dir).unwrap();

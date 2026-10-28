@@ -5,8 +5,7 @@ use super::*;
 
 #[test]
 fn provider_capacity_explicit_waiting_stop_preserves_completed_child() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     let row = task("t-capacity-parent", home.path());
     let mut child = task("t-capacity-existing-child", home.path());
@@ -41,8 +40,7 @@ fn provider_capacity_explicit_waiting_stop_preserves_completed_child() {
 
 #[test]
 fn provider_capacity_stop_rejects_terminal_parent_without_recovery() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     let row = task("t-capacity-ended", home.path());
     store.insert_task(&row).expect("task");
@@ -60,8 +58,7 @@ fn provider_capacity_stop_rejects_terminal_parent_without_recovery() {
 }
 
 async fn cancel_waiting(mode: u8) {
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("dirs");
     install_agent(home.path(), "capacity-cancel", "echo should-not-launch");
     let store = Arc::new(Store::open_memory().expect("store"));

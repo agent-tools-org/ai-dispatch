@@ -144,17 +144,7 @@ forced_model = "mimo/mimo-v2.5-pro"
     // additionally verify that build_command produces an `opencode` invocation
     // with -m flag rather than a `bash -lc ...` wrapper.
     let opts = super::super::RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: Vec::new(),
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = agent.build_command("hello", &opts).unwrap();
     let program = cmd.get_program().to_string_lossy().into_owned();
@@ -179,17 +169,7 @@ rate_limit_kind = "mimocode"
     let config = parse_config(toml_data).unwrap();
     let agent = build_agent(&config);
     let opts = super::super::RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: Vec::new(),
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = agent.build_command("hello", &opts).unwrap();
     assert_eq!(cmd.get_program().to_string_lossy(), "mimo");
@@ -212,17 +192,7 @@ delegate_to = "opencode"
     let config = parse_config(toml_data).unwrap();
     let agent = build_agent(&config);
     let opts = super::super::RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: Vec::new(),
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = agent.build_command("hi", &opts).unwrap();
     // Falls back to plain CustomAgent → command is "bash"
@@ -231,8 +201,7 @@ delegate_to = "opencode"
 
 #[test]
 fn ordinary_claude_delegate_custom_agent_still_resolves() {
-    let home = TempDir::new().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let dir = agents_dir();
     fs::create_dir_all(&dir).unwrap();
     write_agent(

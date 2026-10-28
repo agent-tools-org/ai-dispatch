@@ -2,7 +2,7 @@
 // Deps: parent module and isolated test fixtures.
 
 use super::*;
-use crate::support::paths;
+
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
@@ -110,8 +110,7 @@ fn list_returns_sorted() {
 
 #[test]
 fn read_knowledge_entries_parses_markdown() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     let team_id = "alpha";
     let base = knowledge_dir_for(team_id);
     fs::create_dir_all(base.join("knowledge")).unwrap();

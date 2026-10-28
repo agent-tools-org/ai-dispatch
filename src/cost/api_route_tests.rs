@@ -4,8 +4,7 @@ use super::*;
 
 #[test]
 fn opus_55_numeric_id_and_alias_use_the_feed_not_static_opus() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     super::super::clear_feed_for_tests();
     super::super::set_feed_for_tests(price_feed::Feed {
         built_at: chrono::Utc::now().to_rfc3339(),

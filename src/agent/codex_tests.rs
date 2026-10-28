@@ -100,17 +100,9 @@ fn finds_only_full_session_id_rollout_matches_in_nested_sessions_dir() {
 #[test]
 fn sandboxed_resume_skips_host_rollout_precheck() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
         sandbox: true,
-        context_files: vec![],
         session_id: Some("not-a-uuid-session".to_string()),
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = CodexAgent
         .build_command_with_context(

@@ -3,22 +3,12 @@
 
 use super::*;
 use crate::agent::read_only::read_only_prompt;
-use crate::{support::paths, routing::rate_limit};
+use crate::{routing::rate_limit};
 use std::process::Command;
 
 fn base_opts() -> RunOpts {
     RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: Vec::new(),
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     }
 }
 
@@ -46,8 +36,7 @@ fn overlay_kind_and_model_resolution() {
 
 #[test]
 fn overlay_spec_uses_binary_args_kind_and_rate_limit_kind() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     rate_limit::clear_rate_limit(&AgentKind::MiMoCode, None);
     rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
     let agent = OpenCodeOverlayAgent::from_spec(OpenCodeOverlaySpec {
@@ -82,8 +71,7 @@ fn overlay_spec_uses_binary_args_kind_and_rate_limit_kind() {
 
 #[test]
 fn custom_overlay_marks_its_own_id_not_opencode() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let agent = OpenCodeOverlayAgent::from_spec(OpenCodeOverlaySpec {
         id: "auditor".into(),
         reported_kind: AgentKind::Custom,
@@ -176,16 +164,13 @@ fn argv_parity_complex_opts_across_all_variants() {
     let prompt = "complex test prompt";
     let opts = RunOpts {
         dir: Some("/tmp/workdir".into()),
-        output: None,
         result_file: Some("report.md".into()),
         model: Some("vendor/override-model".into()),
         budget: true,
         read_only: true,
-        sandbox: false,
         context_files: vec!["a.rs".into(), "b.rs".into()],
         session_id: Some("sess-999".into()),
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let expected_prompt = read_only_prompt(prompt, &opts);
     let expected_suffix = vec![

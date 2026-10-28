@@ -38,8 +38,7 @@ fn budget_model_agrees_with_task_budget_cheap() {
 
 #[test]
 fn models_for_agent_merges_cached_agy_model_as_unknown() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("aid dirs");
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -66,8 +65,7 @@ fn models_for_agent_merges_cached_agy_model_as_unknown() {
 
 #[test]
 fn models_for_agent_merges_cached_opencode_model_as_unknown() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("aid dirs");
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -95,8 +93,7 @@ fn models_for_agent_merges_cached_opencode_model_as_unknown() {
 
 #[test]
 fn agent_list_json_marks_discovered_opencode_metadata_unknown() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("aid dirs");
     crate::agent::model_validation::clear_served_models_cache();
     let now = std::time::SystemTime::now()
@@ -240,8 +237,7 @@ fn budget_cheap_picks_lowest_price_across_preferred_tiers() {
 
 #[test]
 fn premium_budget_prefers_the_rated_row_over_unrated_premium_rows() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     crate::routing::scores::test_support::seed_live();
     // Live capture: openai/gpt-5.6-sol has Epoch ECI 161.66; gpt-5.6-terra, gpt-5.5 and
     // gpt-5.4 are not in the trimmed capture, so they are unrated and never preferred.

@@ -6,8 +6,8 @@ use super::{BackgroundRunSpec, handle_run_task_inner_error};
 use crate::cmd::run::RunArgs;
 use crate::store::Store;
 use crate::support::paths;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-use chrono::Local;
+use crate::types::{AgentKind, Task, TaskId, TaskStatus};
+
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::sync::Arc;
@@ -16,9 +16,7 @@ use std::time::{Duration, Instant};
 
 #[tokio::test]
 async fn worker_keeps_spec_until_error_lifecycle_finishes() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let temp = crate::support::test_env::TestHome::with_dirs();
     let store = Arc::new(Store::open_memory().unwrap());
     let id = "t-bg-barrier";
     // The agent resolves for the lifecycle but its binary is missing, so the
@@ -47,9 +45,7 @@ async fn worker_keeps_spec_until_error_lifecycle_finishes() {
 
 #[tokio::test]
 async fn inner_error_runs_post_lifecycle_once_without_duplicate_callbacks() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let temp = crate::support::test_env::TestHome::with_dirs();
     let store = Arc::new(Store::open_memory().unwrap());
     store
         .insert_task(&task("t-bg-error", TaskStatus::Running))
@@ -76,9 +72,7 @@ async fn inner_error_runs_post_lifecycle_once_without_duplicate_callbacks() {
 
 #[tokio::test]
 async fn inner_error_appends_completion_exactly_once() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
     let store = Arc::new(Store::open_memory().unwrap());
     store
         .insert_task(&task("t-bg-completion", TaskStatus::Running))
@@ -99,9 +93,7 @@ async fn inner_error_appends_completion_exactly_once() {
 
 #[tokio::test]
 async fn worker_without_saved_args_fails_the_task_and_notifies_once() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let temp = crate::support::test_env::TestHome::with_dirs();
     let store = Arc::new(Store::open_memory().unwrap());
     let id = "t-bg-unsaved";
     store.insert_task(&task(id, TaskStatus::Running)).unwrap();
@@ -191,42 +183,5 @@ fn spec(task_id: &str) -> BackgroundRunSpec {
 }
 
 fn task(task_id: &str, status: TaskStatus) -> Task {
-    Task {
-        id: TaskId(task_id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
-    }
+    crate::types::Task::test_fixture(TaskId(task_id.to_string()), status)
 }

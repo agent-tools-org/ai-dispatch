@@ -3,13 +3,9 @@
 // Deps: checkpoint helper, tempfile, Git CLI.
 
 use super::preserve_shared_checkout;
-use std::{path::Path, process::Command};
 
-fn git(repo: &Path, args: &[&str]) -> String {
-    let output = Command::new("git").arg("-C").arg(repo).args(args).output().unwrap();
-    assert!(output.status.success(), "{args:?}: {}", String::from_utf8_lossy(&output.stderr));
-    String::from_utf8(output.stdout).unwrap().trim().to_string()
-}
+
+use crate::support::test_env::git_output as git;
 
 fn repo(commit: bool) -> tempfile::TempDir {
     let repo = tempfile::tempdir().unwrap();

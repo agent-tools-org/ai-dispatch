@@ -7,8 +7,7 @@ use std::time::{Duration, Instant};
 
 async fn assert_deadline(pty: bool, streaming: bool, script: &str, default_max: bool) {
     let _permit = crate::support::test_subprocess::acquire();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let id = TaskId("t-detached-deadline".into());

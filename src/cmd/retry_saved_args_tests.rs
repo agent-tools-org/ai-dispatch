@@ -5,20 +5,13 @@
 use super::{retry_task_to_run_args, RetryArgs};
 use crate::cmd::run::RunArgs;
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-use chrono::Local;
+use crate::types::{AgentKind, Task, TaskId, TaskStatus};
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
-fn git(repo_dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .status()
-        .unwrap()
-        .success());
-}
+
+use crate::support::test_env::git;
 
 fn linked_worktree(branch: &str) -> (tempfile::TempDir, tempfile::TempDir, PathBuf) {
     let repo = tempfile::tempdir().unwrap();
@@ -36,16 +29,10 @@ fn linked_worktree(branch: &str) -> (tempfile::TempDir, tempfile::TempDir, PathB
 
 fn failed_task(id: &str) -> Task {
     Task {
-        id: TaskId(id.to_string()), agent: AgentKind::Codex, custom_agent_name: None,
-        prompt: "original prompt".to_string(), resolved_prompt: None, category: None,
-        status: TaskStatus::Failed, parent_task_id: None, workgroup_id: Some("wg-old".to_string()),
-        caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: Some(std::env::temp_dir().to_string_lossy().to_string()), worktree_branch: None, final_head_sha: None, final_branch: None, start_sha: None, log_path: None,
-        output_path: None, tokens: None, prompt_tokens: None, duration_ms: None, requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None, exit_code: None, created_at: Local::now(), completed_at: None,
-        verify: None, verify_status: VerifyStatus::Skipped, pending_reason: None,
-        read_only: false, budget: false, audit_verdict: None, audit_report_path: None,
-        delivery_assessment: None,
+        prompt: "original prompt".to_string(),
+        workgroup_id: Some("wg-old".to_string()),
+        effective_dir: Some(std::env::temp_dir().to_string_lossy().to_string()),
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Failed)
     }
 }
 

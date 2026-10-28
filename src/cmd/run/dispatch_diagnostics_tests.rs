@@ -4,8 +4,7 @@ use super::*;
 
 #[tokio::test]
 async fn prompt_failure_records_preparation_error_without_launch() {
-    let temp = tempfile::tempdir().expect("home");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     let id = TaskId("t-prompt-preparation".into());
     let args = RunArgs {
@@ -42,8 +41,7 @@ async fn prompt_failure_records_preparation_error_without_launch() {
 
 #[test]
 fn worktree_failure_records_preparation_error_after_claim() {
-    let temp = tempfile::tempdir().expect("home");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     let id = TaskId("t-worktree-preparation".into());
     let mut args = RunArgs {
@@ -76,8 +74,7 @@ fn worktree_failure_records_preparation_error_after_claim() {
 
 #[test]
 fn error_immediately_after_insertion_is_settled_and_preserved() {
-    let temp = tempfile::tempdir().expect("home");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     store
         .db()
@@ -167,8 +164,7 @@ fn record_agent_exit(store: &Store, id: &TaskId) {
 
 #[test]
 fn launched_failure_preserves_exit_error_in_board_and_batch_summary() {
-    let temp = tempfile::tempdir().expect("home");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     let id = TaskId("t-launched-failure".into());
     let pending = prepare_pending_dispatch(&store, temp.path(), &id);
@@ -190,8 +186,7 @@ fn launched_failure_preserves_exit_error_in_board_and_batch_summary() {
 
 #[test]
 fn pending_dispatch_without_recorded_reason_uses_reaper_inference() {
-    let temp = tempfile::tempdir().expect("home");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     let id = TaskId("t-pending-inference".into());
     let row = prepare_pending_dispatch(&store, temp.path(), &id);

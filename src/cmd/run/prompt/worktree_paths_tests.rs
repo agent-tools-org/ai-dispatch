@@ -5,26 +5,11 @@
 use super::*;
 use crate::support::test_subprocess;
 use std::path::Path;
-use std::process::Command;
 
-fn git(dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .status()
-        .unwrap()
-        .success());
-}
 
-fn git_output(dir: &Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    String::from_utf8(output.stdout).unwrap().trim().to_string()
-}
+use crate::support::test_env::git;
+
+use crate::support::test_env::git_output;
 
 fn init_git_repo_with_commit(dir: &Path) {
     git(dir, &["init", "-b", "main"]);

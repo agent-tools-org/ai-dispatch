@@ -27,22 +27,12 @@ pub(crate) fn spec() -> OpenCodeOverlaySpec {
 mod tests {
     use super::super::{Agent, RunOpts};
     use super::*;
-    use crate::{support::paths, routing::rate_limit};
+    use crate::{routing::rate_limit};
     use crate::types::{EventKind, TaskId};
 
     fn base_opts() -> RunOpts {
         RunOpts {
-            dir: None,
-            output: None,
-            result_file: None,
-            model: None,
-            budget: false,
-            read_only: false,
-            sandbox: false,
-            context_files: vec![],
-            session_id: None,
-            env: None,
-            env_forward: None,
+            ..Default::default()
         }
     }
 
@@ -102,8 +92,7 @@ mod tests {
 
     #[test]
     fn parse_event_marks_kilo_rate_limits() {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = paths::AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
         rate_limit::clear_rate_limit(&AgentKind::Kilo, None);
         rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
         let event = agent()

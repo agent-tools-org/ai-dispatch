@@ -112,8 +112,7 @@ mod tests {
 
     #[test]
     fn advice_payload_round_trips_through_json() {
-        let home = tempfile::tempdir().expect("temp aid home");
-        let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+        let _home = crate::support::test_env::TestHome::new();
         let args = AdviseArgs {
             prompt: "Refactor src/main.rs".to_string(),
             difficulty: crate::types::TaskDifficulty::Complex,
@@ -148,8 +147,7 @@ mod tests {
     /// empty AID_HOME gives every agent its unlimited default.
     #[test]
     fn complex_critical_surfaces_alternatives_with_shortfall_reasons() {
-        let home = tempfile::tempdir().expect("temp aid home");
-        let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+        let _home = crate::support::test_env::TestHome::new();
         // Eligibility now requires an installed binary; pin the fleet.
         use crate::types::AgentKind;
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![

@@ -3,7 +3,7 @@
 
 use super::super::{RunOpts, get_agent};
 use super::*;
-use crate::{support::paths, routing::rate_limit};
+use crate::{routing::rate_limit};
 
 #[test]
 fn parses_new_milestone_events() {
@@ -29,16 +29,9 @@ fn parses_new_milestone_events() {
 fn build_command_includes_file_flags_for_context_files() {
     let opts = RunOpts {
         dir: Some("/project".to_string()),
-        output: None,
-        result_file: None,
         model: Some("test-model".to_string()),
-        budget: false,
-        read_only: false,
-        sandbox: false,
         context_files: vec!["src/types.rs".to_string(), "src/lib.rs".to_string()],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = get_agent(AgentKind::OpenCode)
         .build_command("test prompt", &opts)
@@ -90,17 +83,8 @@ fn extracts_session_id_from_json_event() {
 #[test]
 fn session_flags_appear_in_command() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
         session_id: Some("ses_test123".to_string()),
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = get_agent(AgentKind::OpenCode)
         .build_command("test prompt", &opts)
@@ -119,17 +103,8 @@ fn session_flags_appear_in_command() {
 #[test]
 fn budget_mode_sets_minimal_variant() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
         budget: true,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = get_agent(AgentKind::OpenCode)
         .build_command("test prompt", &opts)
@@ -145,17 +120,7 @@ fn budget_mode_sets_minimal_variant() {
 #[test]
 fn no_session_flags_when_session_id_absent() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = get_agent(AgentKind::OpenCode)
         .build_command("test prompt", &opts)
@@ -174,17 +139,9 @@ fn no_session_flags_when_session_id_absent() {
 #[test]
 fn build_command_read_only_prepends_readonly_prefix() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
         result_file: Some("result.md".to_string()),
-        model: None,
-        budget: false,
         read_only: true,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = get_agent(AgentKind::OpenCode)
         .build_command("analyze this code", &opts)
@@ -204,17 +161,8 @@ fn build_command_read_only_prepends_readonly_prefix() {
 #[test]
 fn build_command_read_only_without_result_file_keeps_strict_prefix() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
         read_only: true,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = get_agent(AgentKind::OpenCode)
         .build_command("analyze this code", &opts)
@@ -233,8 +181,7 @@ fn build_command_read_only_without_result_file_keeps_strict_prefix() {
 /// Built-in OpenCode marks on the watcher. Live wording must still be a refusal.
 #[test]
 fn live_insufficient_balance_envelope_is_a_stream_refusal() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
     let line = r#"{"type":"error","error":{"name":"APIError","data":{"message":"Insufficient balance. Manage your billing here: https://x"}}}"#;
     let _ = get_agent(AgentKind::OpenCode).parse_event(&TaskId("t-oc".to_string()), line);

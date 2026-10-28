@@ -4,7 +4,7 @@
 use super::CursorAgent;
 use crate::agent::{Agent, RunOpts};
 use crate::types::{AgentKind, EventKind, TaskId};
-use crate::{support::paths, routing::rate_limit};
+use crate::{routing::rate_limit};
 use std::fs;
 use std::sync::{Mutex, OnceLock};
 
@@ -152,8 +152,7 @@ fn read_only_with_result_file_uses_force_not_plan() {
 /// says.
 #[test]
 fn parse_event_classifies_but_never_marks() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let _guard = rate_limit_lock().lock().unwrap();
     let _ = rate_limit::clear_rate_limit(&AgentKind::Cursor, None);
 
@@ -185,8 +184,7 @@ fn parse_event_classifies_but_never_marks() {
 /// stays dispatchable.
 #[test]
 fn cursors_error_envelope_is_read_on_the_stream_channel() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let _guard = rate_limit_lock().lock().unwrap();
     let _ = rate_limit::clear_rate_limit(&AgentKind::Cursor, None);
 
@@ -229,9 +227,7 @@ fn rate_limit_lock() -> &'static Mutex<()> {
 
 fn run_opts() -> RunOpts {
     RunOpts {
-        dir: None, output: None, result_file: None, model: None, budget: false,
-        read_only: false, sandbox: false, context_files: vec![], session_id: None,
-        env: None, env_forward: None,
+        ..Default::default()
     }
 }
 

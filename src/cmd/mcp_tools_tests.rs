@@ -4,8 +4,8 @@
 
 use super::call_tool;
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-use chrono::Local;
+use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
+
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -118,44 +118,9 @@ fn run_tool_report_adds_outcome_and_verification_status() {
 async fn board_tool_reports_outcome_and_verification_status() {
     let store = Arc::new(Store::open_memory().expect("memory store"));
     let task = Task {
-        id: TaskId("t-mcp-timeout".to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
         verify: Some("cargo test".to_string()),
         verify_status: VerifyStatus::TimedOut,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId("t-mcp-timeout".to_string()), TaskStatus::Done)
     };
     store.insert_task(&task).expect("insert task");
 
@@ -171,8 +136,7 @@ async fn board_tool_reports_outcome_and_verification_status() {
 
 #[test]
 fn board_group_sql_preserves_mcp_rows_on_many_tied_tasks() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     for i in 0..150 {
         store

@@ -4,25 +4,12 @@
 
 use crate::support::paths::{self, AidHomeGuard};
 use crate::store::{Store, TaskCompletionUpdate};
-use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
 use chrono::Local;
 use std::path::Path;
 use std::process::Command;
 
-fn git(dir: &Path, args: &[&str]) {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .output()
-        .expect("git command");
-    assert!(
-        output.status.success(),
-        "git {:?} failed: {}",
-        args,
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
+use crate::support::test_env::git;
 
 fn git_stdout(dir: &Path, args: &[&str]) -> String {
     String::from_utf8(
@@ -52,42 +39,10 @@ fn init_repo() -> tempfile::TempDir {
 
 fn task(id: &str, worktree_path: Option<String>) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Failed,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: worktree_path.clone(), effective_dir: None, project_id: None,
+        repo_path: worktree_path.clone(),
         worktree_path,
         worktree_branch: Some("feat/salvage".to_string()),
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Failed)
     }
 }
 

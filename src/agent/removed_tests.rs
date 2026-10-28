@@ -25,8 +25,7 @@ fn removed_names_are_not_builtin_agents() {
 
 #[test]
 fn run_rejects_removed_primary_review_and_cascade_routes() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     for name in ["gemini"] {
         for args in [
             RunArgs {
@@ -61,8 +60,7 @@ fn run_rejects_removed_primary_review_and_cascade_routes() {
 
 #[test]
 fn removed_agent_config_is_rejected_on_write_but_ignored_on_dispatch() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = crate::support::paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     for name in ["gemini"] {
         assert!(crate::config::agent::save_agent_disabled(name, true).is_err());
         assert!(crate::config::agent::save_agent_default_model(name, Some("model")).is_err());
@@ -81,8 +79,7 @@ fn removed_agent_config_is_rejected_on_write_but_ignored_on_dispatch() {
 
 #[test]
 fn team_and_batch_reject_removed_routes() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = crate::support::paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     for name in ["gemini"] {
         let team =
             format!("[team]\nid = 'test'\ndisplay_name = 'Test'\npreferred_agents = ['{name}']\n");
@@ -113,8 +110,7 @@ fn team_and_batch_reject_removed_routes() {
 
 #[test]
 fn removed_routes_in_unused_defaults_and_team_overrides_are_rejected() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = crate::support::paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     for name in ["gemini"] {
         for setting in [
             format!("default_agent = '{name}'"),
@@ -145,8 +141,7 @@ fn removed_routes_in_unused_defaults_and_team_overrides_are_rejected() {
 
 #[test]
 fn dispatch_does_not_silently_ignore_a_team_with_removed_preferences() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = crate::support::paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     std::fs::create_dir(home.path().join("teams")).expect("teams");
     for name in ["gemini"] {
         std::fs::write(

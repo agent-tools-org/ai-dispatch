@@ -2,7 +2,7 @@
 // Covers one-shot retry gating and fallback agent resolution from stored tasks.
 // Deps: crate::cmd::batch, crate::store::Store, crate::types.
 
-use chrono::Local;
+
 use tempfile::TempDir;
 
 use super::batch::{
@@ -11,46 +11,12 @@ use super::batch::{
 use crate::support::paths::AidHomeGuard;
 use crate::routing::rate_limit::{clear_rate_limit, mark_rate_limited};
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 
 fn stored_task(id: &str, agent: AgentKind) -> Task {
     Task {
-        id: TaskId(id.to_string()),
         agent,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Failed,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Failed)
     }
 }
 
@@ -166,58 +132,10 @@ fn write_custom_agent(name: &str) {
 
 fn batch_task_with_fallback(fallback: &str) -> crate::batch::BatchTask {
     crate::batch::BatchTask {
-        id: None,
-        name: None,
         agent: String::new(),
-        team: None,
         prompt: String::new(),
-        prompt_file: None,
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        worktree: None,
-        group: None,
-        container: None, remote_build: None,
-        verify: None,
-        setup: None,
-        iterate: None,
-        eval: None,
-        eval_feedback_template: None,
-        judge: None,
-        peer_review: None,
-        best_of: None,
-        max_duration_mins: None,
-        max_wait_mins: None,
-        retry: None,
-        idle_timeout: None,
-        metric: None,
-        context: None,
-        checklist: None,
-        skills: None,
-        on_done: None,
-        hooks: None,
-        depends_on: None,
-        parent: None,
-        context_from: None,
         fallback: Some(fallback.to_string()),
-        scope: None,
-        read_only: false,
-        sandbox: false,
-        no_skill: false,
-        difficulty: None,
-        budget: None,
-        urgency: None,
-        rigor: None,
-        egress: None,
-        kind: None,
-        audit: None,
-        env: None,
-        env_forward: None,
-        worktree_link_deps: None,
-        on_success: None,
-        on_fail: None,
-        conditional: false,
+        ..Default::default()
     }
 }
 

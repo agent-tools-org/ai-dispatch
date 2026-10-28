@@ -121,14 +121,7 @@ fn options(repository: &std::path::Path, read_only: bool) -> crate::agent::RunOp
     crate::agent::RunOpts {
         dir: Some(repository.display().to_string()),
         model: Some("requested-model".into()),
-        output: None,
-        result_file: None,
-        budget: false,
         read_only,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     }
 }

@@ -5,8 +5,7 @@ use super::*;
 
 #[test]
 fn advise_surfaces_newer_unrated_served_codex_model() {
-    let home = tempfile::tempdir().expect("temp aid home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("aid dirs");
     let codex_home = home.path().join("codex");
     std::fs::create_dir_all(&codex_home).expect("codex home");

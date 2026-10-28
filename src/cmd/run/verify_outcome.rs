@@ -20,7 +20,7 @@ pub(super) fn nothing_to_verify_reason(task: Option<&Task>) -> Option<&'static s
 }
 
 pub(super) fn record_verify_timed_out(store: &Store, task_id: &TaskId, result: &VerifyResult) {
-    let detail = match output_excerpt(&result.output) {
+    let detail = match super::verify_output_excerpt(&result.output) {
         Some(output) => format!(
             "Verification did not finish: {}\nOutput: {output}",
             result.command
@@ -37,26 +37,6 @@ pub(super) fn record_verify_timed_out(store: &Store, task_id: &TaskId, result: &
     aid_warn!(
         "[aid] Verification timed out for {task_id}; task not failed (inconclusive)"
     );
-}
-
-fn output_excerpt(output: &str) -> Option<String> {
-    let lines: Vec<&str> = output
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .collect();
-    if lines.is_empty() {
-        return None;
-    }
-    let start = lines.len().saturating_sub(8);
-    let excerpt = lines[start..].join(" | ");
-    Some(if excerpt.chars().count() > 400 {
-        let mut truncated: String = excerpt.chars().take(400).collect();
-        truncated.push_str("...");
-        truncated
-    } else {
-        excerpt
-    })
 }
 
 // Keep result classification shared by foreground and background verification.

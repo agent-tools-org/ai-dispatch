@@ -15,25 +15,17 @@ pub struct BackgroundRunSpec {
     pub dir: Option<String>,
     #[serde(default)]
     pub budget: bool,
-    #[serde(default)]
     pub max_duration_mins: Option<i64>,
-    #[serde(default)]
     pub max_duration_secs: Option<u64>,
-    #[serde(default)]
     pub idle_timeout_secs: Option<u64>,
     #[serde(default)]
     pub interactive: bool,
-    #[serde(default)]
     pub on_done: Option<String>,
-    #[serde(default)]
     pub env: Option<HashMap<String, String>>,
-    #[serde(default)]
     pub agent_pid: Option<u32>,
-    #[serde(default)]
     pub agent_started: Option<String>,
     #[serde(default)]
     pub audit_report_mode: bool,
-    #[serde(default)]
     pub pre_task_dirty_paths: Option<Vec<String>>,
     #[serde(default)]
     pub foreground: bool,

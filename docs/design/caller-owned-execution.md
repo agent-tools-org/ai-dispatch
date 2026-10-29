@@ -24,7 +24,8 @@ Read-only: opens no task, writes nothing. Exit 0. Output:
     "caller-owned": {
       "version": 1,
       "requires": ["id", "model"],
-      "refused_flags": ["retry", "cascade", "best_of", "iterate", "judge", "peer_review", "audit", "budget"],
+      "refused_flags": ["retry", "cascade", "best_of", "iterate", "judge", "peer_review", "audit", "budget",
+                        "dry_run"],
       "disabled": ["retry", "cascade", "model_substitution", "route_substitution", "model_self_heal",
                    "hang_retry", "delivery_recovery", "dirty_rescue", "quota_continuation",
                    "verify_retry", "checklist_retry", "iterate", "best_of", "judge", "peer_review",
@@ -47,9 +48,11 @@ Refused before any row is written or changed, exit 3, nothing launched:
 
 - `--policy` names an unknown policy (`policy_unsupported`).
 - `--id` missing or invalid (`id_required`), `--model` missing (`model_required`).
-- The model is not served by the agent (`model_not_served`).
+- The model is known not to be served by the agent (`model_not_served`). An agent without a known
+  served-model list, such as a custom agent, receives the model unchanged.
 - Any refused flag is given explicitly: `--retry N` with N > 0, `--cascade`, `--best-of`, `--iterate`,
-  `--judge`, `--peer-review`, `--audit`, `--budget` (`flag_refused`, `detail` names the flag).
+  `--judge`, `--peer-review`, `--audit`, `--budget`, `--dry-run` (`flag_refused`, `detail` names the
+  flag with underscores, as in `refused_flags`).
 
 Project and team defaults that would enable a refused flag are ignored under this policy.
 `--verify`, `--checklist`, `--worktree`, `--dir`, `--timeout`, `--bg`, `--context`, `--skill`,
@@ -62,7 +65,7 @@ Exit 0 with a receipt (section 3) plus `"submission": "launched"`.
 
 ### Same ID again
 
-- Existing row with the same agent, model and policy: nothing is launched, exit 0, the current
+- Existing row with the same agent (after alias and case normalisation), model and policy: nothing is launched, exit 0, the current
   receipt with `"submission": "existing"`. This covers lost responses and concurrent duplicates: of two
   racing identical submits exactly one launches.
 - Existing row with a different agent, model or policy (including a default-mode row): exit 4,

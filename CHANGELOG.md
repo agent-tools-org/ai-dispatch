@@ -1,3 +1,11 @@
+## v11.8.0 (2026-10-29)
+- Add caller-owned execution (`aid run --policy caller-owned --id ID --model M --json`, protocol `aid.execution/1`): exactly one execution of the given agent and model, with retries, cascades, model or route substitution, recovery children, judge, peer review, best-of, audit, hooks and nested dispatch refused or disabled.
+- Add `aid capabilities --json` for machine-readable protocol version, capabilities and accepted policy; unsupported policies and flags are refused before launch.
+- Add JSON settlement receipts to `aid wait --json`, `aid stop --json` and `aid show --json`, reporting task status and worker settlement separately with a persisted monotonic revision; `stop --json` also stops a terminal but unsettled worker or reports `unconfirmed` (exit 5).
+- Repeated submission of the same task ID returns the existing task without relaunching; a different agent or model for that ID is refused with `id_conflict`.
+- Pin `ps` start-time reads to UTC and the C locale so process identity checks match outside UTC on macOS.
+
+
 ## v11.7.2 (2026-10-29)
 - Use shorthand Qwen completion fields so default and web builds pass strict Clippy checks.
 

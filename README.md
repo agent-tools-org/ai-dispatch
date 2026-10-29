@@ -1,6 +1,6 @@
 # aid
 
-![Version](https://img.shields.io/badge/version-11.7.2-blue)
+![Version](https://img.shields.io/badge/version-11.8.0-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 `aid` delegates execution to other agent contexts so a human or primary agent can

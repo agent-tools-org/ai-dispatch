@@ -50,7 +50,7 @@ pub(crate) fn abort_agent_publication(
         if !crate::runtime::process::monitor::activity::root_matches(pid, started.as_deref()) {
             return false;
         }
-        sigkill_process(pid);
+        unsafe { libc::kill(-(pid as i32), libc::SIGKILL); }
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while crate::cmd::execution_receipt::group_gone(pid).is_err()
             && std::time::Instant::now() < deadline

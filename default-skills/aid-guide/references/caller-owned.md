@@ -1,5 +1,8 @@
 # Caller-owned execution (`aid.execution/1`)
 
+`aid run --json` requires an explicit `--policy`. JSON wait/stop against an older schema
+return `policy_unsupported` with `schema_upgrade_required`; open a normal command to migrate first.
+
 Discover support with `aid capabilities --json`; require protocol `aid.execution/1` and
 `policies.caller-owned.version` equal to 1 before submitting:
 

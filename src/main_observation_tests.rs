@@ -66,3 +66,32 @@ fn default_json_admission_refuses_before_startup_reaping_or_store_writes() {
     assert_eq!(store.execution_snapshot(id).expect("snapshot"), before);
     assert_eq!(store.get_task(id).expect("task").expect("row").status, types::TaskStatus::Running);
 }
+
+#[test]
+fn legacy_json_admission_returns_a_protocol_body_without_migrating() {
+    let _home = crate::support::test_env::TestHome::with_dirs();
+    let connection = rusqlite::Connection::open(support::paths::db_path()).expect("legacy store");
+    connection.execute_batch("CREATE TABLE tasks (id TEXT PRIMARY KEY); PRAGMA user_version=3;")
+        .expect("schema 3");
+    for command in ["wait", "stop"] {
+        let cli = Cli::try_parse_from(["aid", command, "t-legacy", "--json"]).expect("parse");
+        let error = check_execution_policy(&cli.command).expect_err("protocol refusal");
+        let refusal = error.downcast_ref::<execution::Refusal>().expect("structured error");
+        assert_eq!(refusal.exit, 3);
+        assert_eq!(refusal.body()["error"]["code"], "policy_unsupported");
+        assert_eq!(refusal.body()["error"]["detail"], "schema_upgrade_required");
+    }
+    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))
+        .expect("version");
+    assert_eq!(version, 3);
+}
+
+#[test]
+fn run_json_requires_an_explicit_policy() {
+    let error = Cli::try_parse_from(["aid", "run", "codex", "prompt", "--json"])
+        .expect_err("policy required");
+    assert_eq!(error.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+    assert!(Cli::try_parse_from(["aid", "run", "codex", "prompt"]).is_ok());
+    assert!(Cli::try_parse_from(["aid", "run", "codex", "prompt", "--json",
+        "--policy", "caller-owned", "--id", "t-cli", "--model", "gpt-5.5"]).is_ok());
+}

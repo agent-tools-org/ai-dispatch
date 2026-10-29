@@ -16,6 +16,10 @@ pub(crate) const NO_HINT_FLAG: &str = "no-hint";
 
 Hint: If passing file paths, use --context <path> not positional args"#)]
 pub struct RunArgs {
+    #[arg(long)]
+    pub policy: Option<String>,
+    #[arg(long)]
+    pub json: bool,
     pub agent: String,
     pub prompt: Option<String>,
     #[arg(long, value_name = "PATH")]

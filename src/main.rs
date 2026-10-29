@@ -19,6 +19,7 @@
 #[macro_use]
 pub mod ui;
 mod agent;
+mod execution;
 mod batch;
 mod cmd;
 mod config;
@@ -41,6 +42,10 @@ use std::sync::Arc;
 fn main() -> Result<()> {
     let result = run_cli(cli::diagnostics::parse());
     if let Err(error) = &result {
+        if let Some(refusal) = error.downcast_ref::<execution::Refusal>() {
+            println!("{}", refusal.body());
+            std::process::exit(refusal.exit);
+        }
         cli::diagnostics::record_error(error);
     }
     result
@@ -78,11 +83,21 @@ async fn async_main(cli: Cli) -> Result<()> {
             cmd::advise::run(store.as_ref(), args)?;
             return Ok(());
         }
+        Some(Commands::Capabilities { .. }) => {
+            println!("{}", execution::capabilities());
+            return Ok(());
+        }
         // Needs no store, dirs, or update check; exit codes are part of its contract.
         Some(Commands::Classify(args)) => std::process::exit(cmd::classify::run(args)),
         other => other,
     };
 
+    if let Some(Commands::Run(args)) = command.as_ref() {
+        execution::validate_cli(args)?;
+        if args.json {
+            ui::output::set_quiet(true);
+        }
+    }
     support::paths::ensure_dirs()?;
     let config = config::load_config().unwrap_or_default();
     if config.updates.check {
@@ -92,7 +107,9 @@ async fn async_main(cli: Cli) -> Result<()> {
     // a cold or stale cache cannot delay or fail a run.
     cost::maybe_refresh_prices();
     let store = Arc::new(store::Store::open(&support::paths::db_path())?);
-    let _ = runtime::background::check_zombie_tasks(&store);
+    if !matches!(command.as_ref(), Some(Commands::Run(args)) if args.policy.is_some()) {
+        let _ = runtime::background::check_zombie_tasks(&store);
+    }
 
     let outcome = match command {
         Some(command) => cli::dispatch::dispatch(store.clone(), command).await?,

@@ -108,6 +108,8 @@ pub struct WatchArgs {
   aid wait --group wg-a --timeout 60
   aid wait --exit-on-await t-1234"#)]
 pub struct WaitArgs {
+    #[arg(long, conflicts_with_all = ["group", "exit_on_await"])]
+    pub json: bool,
     pub task_ids: Vec<String>,
     #[arg(long)]
     pub group: Option<String>,

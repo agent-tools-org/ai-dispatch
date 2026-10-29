@@ -53,6 +53,9 @@ pub(super) fn rescue_dirty_worktree(
     pre_task_dirty_paths: Option<&[String]>,
     start_sha: Option<&str>,
 ) {
+    if store.is_caller_owned(task_id.as_str()).unwrap_or(true) {
+        return;
+    }
     match crate::workspace::commit::rescue_dirty_worktree_with_baseline(
         dir,
         task_id.as_str(),
@@ -114,4 +117,22 @@ pub(super) async fn settle_remaining_dirty_files(
         Some(task_id) => DirtyWorktreeAction::Retry(task_id),
         None => DirtyWorktreeAction::Continue,
     })
+}
+
+#[cfg(test)]
+mod caller_owned_tests {
+    use super::*;
+
+    #[test]
+    fn caller_owned_gates_dirty_rescue_without_staging_files() {
+        let (store, id, _) = crate::cmd::run::caller_owned_tests::setup();
+        let dir = tempfile::tempdir().expect("checkout");
+        assert!(std::process::Command::new("git").args(["init", "-q"])
+            .current_dir(dir.path()).status().expect("git init").success());
+        std::fs::write(dir.path().join("main.rs"), "fn main() {}\n").expect("source");
+        rescue_dirty_worktree(&store, &id, dir.path().to_str().expect("path"), None, None);
+        let status = std::process::Command::new("git").args(["status", "--porcelain"])
+            .current_dir(dir.path()).output().expect("git status");
+        assert_eq!(String::from_utf8_lossy(&status.stdout), "?? main.rs\n");
+    }
 }

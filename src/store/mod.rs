@@ -15,6 +15,7 @@ mod usage_checkpoint;
 pub use artifact_custody::{AcceptanceDecision, AcceptanceRecord};
 pub use mutations::TaskCompletionUpdate;
 mod execution_mutations;
+pub(crate) mod execution_protocol;
 mod kg_mutations;
 mod kg_queries;
 mod kg_schema;

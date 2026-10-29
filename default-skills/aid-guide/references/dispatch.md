@@ -1,5 +1,45 @@
 # Dispatch and Execution
 
+## Caller-owned execution (`aid.execution/1`)
+
+Discover support with `aid capabilities --json`; require protocol `aid.execution/1` and
+`policies.caller-owned.version` equal to 1 before submitting:
+
+```bash
+aid run codex "Implement the change" --policy caller-owned --id t-my-task --model gpt-5.5 --json --bg
+aid wait t-my-task --json --timeout 60
+aid stop t-my-task --json --force
+aid show t-my-task --json
+```
+
+The policy pins the exact agent and explicit model. It disables retry, cascade, route/model
+substitution, self-heal, hang retry, delivery recovery, dirty-worktree rescue, quota continuation,
+verify/checklist retries, iterate, best-of, judge, peer review, audit, nested delegation,
+transport fallback, and explicit `aid retry`. The store refuses every child of a caller-owned task.
+Project/team defaults cannot enable these features. Verify and checklist still run without retries.
+Other execution flags, including worktrees, sandbox/container and remote builds, retain their behavior.
+
+Admission requires valid `--id` and nonempty `--model`. Unknown policies, unavailable models, and
+explicit positive `--retry`, `--cascade`, `--best-of`, `--iterate`, `--judge`, `--peer-review`,
+`--audit` or `--budget` are refused before task insertion (exit 3, structured JSON error).
+A same-ID submission with the same agent, model and policy returns `submission: existing`,
+launches nothing and exits 0; a different tuple returns `id_conflict` (exit 4). Concurrent identical
+submissions claim the ID once. Caller-owned IDs never receive an automatic suffix.
+
+Receipts carry persisted monotonic `revision`, `policy`, `task` and `worker` fields. Task terminal
+status and worker settlement are separate: a terminal task can still have a live worker.
+`worker.state` is `pending`, `running`, `settled`, or `unconfirmed`; only `settled` makes
+`settled: true`. Settlement outcomes are `completed`, `stopped`, `lost`, or `launch_failed`.
+`policy` is null for default-mode tasks. Keep the receipt with the highest revision.
+
+`aid wait --json` accepts exactly one ID and uses the worker barrier. It exits 0 for settlement,
+124 for an unsettled timeout (still printing the receipt), and 1 for unknown IDs or read errors.
+`--timeout 0` observes once. `aid stop --json` targets exactly that worker, including one behind
+a terminal row; it exits 0 for `stopped`/`already_settled` and 5 for `unconfirmed`.
+Stop confirms process exit before recording settlement; unverifiable identity or a live process
+never counts as a successful stop. This worker-stop behavior applies in default mode too.
+
+
 ## Tools and skills are the caller's choice
 
 aid does not choose either on the caller's behalf.

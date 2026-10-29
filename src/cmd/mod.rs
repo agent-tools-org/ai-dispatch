@@ -92,3 +92,5 @@ mod batch_auto_fallback_tests;
 mod cost_tests;
 #[cfg(test)]
 mod show_result_tests;
+
+pub(crate) mod execution_receipt;

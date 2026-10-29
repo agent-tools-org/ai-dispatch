@@ -36,11 +36,11 @@ pub(crate) fn apply_project_defaults(args: &mut RunArgs, detected_project: Optio
             args.container = Some(container.clone());
             defaults_applied = true;
         }
-        if !args.budget && project.budget.prefer_budget {
+        if args.policy.is_none() && !args.budget && project.budget.prefer_budget {
             args.budget = true;
             defaults_applied = true;
         }
-        if args.no_audit {
+        if args.no_audit || args.policy.is_some() {
             args.audit = false;
         } else if !args.audit_explicit && project.audit_auto() {
             args.audit = true;

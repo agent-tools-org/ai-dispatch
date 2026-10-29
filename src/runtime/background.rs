@@ -73,6 +73,7 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
         Ok(()) => Ok(()),
         Err(err) => handle_run_task_inner_error(&store, &spec, args.as_ref().ok(), err).await,
     };
+    store.settle_worker(task_id, "completed", None)?;
     let _ = remove_spec(task_id);
     let _ = crate::runtime::input_signal::clear_response(task_id);
     let _ = crate::runtime::input_signal::clear_steer(task_id);

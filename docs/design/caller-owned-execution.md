@@ -113,8 +113,9 @@ default mode.
   confirmed the worker gone), `lost` (worker confirmed dead before finishing), `launch_failed`.
 - `settled` is true exactly when `worker.state == "settled"`. Settled means the worker closed its
   lifecycle and, under caller-owned policy, no further execution can be created for this task.
-- `revision` is persisted with the task row, starts at 1, and strictly increases on every change of
-  status, worker settlement or policy record. It survives restarts and never decreases. Equal revision
+- `revision` is persisted with the task row and strictly increases on every change of status, agent,
+  worker settlement or policy record. It is drawn from a store-wide sequence, so it survives restarts and
+  is never reused, even if a row is deleted and the ID submitted again. Equal revision
   means equal lifecycle state; a consumer keeps the receipt with the highest revision.
 - Model and usage fields come from this task's own row only, never from another task.
 
@@ -125,7 +126,8 @@ aid wait <ID> --json [--timeout SECS]
 ```
 
 Exactly one task ID with `--json`. Uses the existing worker barrier: it returns when the worker is
-settled (or unconfirmed with no live process), not when the status turns terminal. `--timeout 0` is a
+settled, not when the status turns terminal. An `unconfirmed` worker keeps the wait open until the
+timeout; `aid stop` resolves it. `--timeout 0` is a
 single observation. Exit 0 when the printed receipt has `settled: true`; 124 when the timeout passed
 first (the receipt is still printed, `settled: false`); 1 for `not_found` or a read error.
 
@@ -135,8 +137,9 @@ first (the receipt is still printed, `settled: false`); 1 for `not_found` or a r
 aid stop <ID> --json [--force]
 ```
 
-Targets the worker of exactly that ID, in any task status. A terminal row whose worker is alive is a
-valid target: aid signals the verified worker and agent processes, waits for exit, then persists
+Targets the worker of exactly that ID, in any task status, for caller-owned tasks and for any task
+with `--json`. Text mode on a default-mode task keeps the earlier behaviour. A terminal row whose worker
+is alive is a valid target: aid signals the verified worker and agent processes, waits for exit, then persists
 settlement `stopped`. A row with no live process for it is settled as `stopped` (or keeps its existing
 settlement). Output is the receipt plus:
 
@@ -155,6 +158,12 @@ observes the same ID afterwards.
 - No task row may be created with a caller-owned task as parent, for any origin (retry, cascade,
   self-heal, nested `aid run` from the agent, `aid retry`). This store-level guard backs the per-path
   gates.
+- Settlement is written by one writer, as the last step of the worker, stop, the reaper or an
+  observation, and only when every recorded process for the task (worker, agent process group, tool
+  sessions, sandbox container) is confirmed gone; a process with a mismatched recorded identity counts as
+  gone, one with no readable identity does not.
+- aid's own preservation of the agent's changes (failure salvage, auto-commit) is not an execution and
+  still applies.
 - The Codex app-server to `codex exec` transport fallback is disabled; an app-server failure is the
   attempt's failure.
 - Model unavailability ends the attempt as `failed` with its error event. Choosing another model is a

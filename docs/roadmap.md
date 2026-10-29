@@ -60,6 +60,10 @@ Known limits and follow-ups:
   descendants when observed, nor children of a crashed worker; JSON wait and stop apply to
   caller-owned tasks only.
 - A worker crash between agent spawn and evidence commit leaves the task `unconfirmed`.
+- Two `aid` processes creating a new store at the same moment can fail one of them with
+  `database is locked` (SQLITE_BUSY without the busy timeout) before admission, on any command; the
+  failed call executes nothing and returns no receipt. Once the store exists, concurrent identical
+  submissions return `launched` and `existing`.
 - Tasks started by a binary before the pinned-environment start-time change record a local-time
   start string; text `aid stop` treats their agent identity as mismatched until they finish.
 - On the build box environment used for this work, 34 unit tests and 3 end-to-end tests also fail

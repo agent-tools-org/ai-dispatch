@@ -137,6 +137,7 @@ fn cleanup_dead_worker(
     worker_pid: Option<u32>,
     cleaned: &mut Vec<String>,
 ) -> Result<()> {
+    if worker_pid.is_some() { store.settle_worker(task_id, "lost", None)?; }
     preserve_zombie_changes(store, task_id, spec)?;
     terminate_task_processes(worker_pid, spec);
     let detail = format!("{ZOMBIE_FAILURE_DETAIL}; worker log: {}",

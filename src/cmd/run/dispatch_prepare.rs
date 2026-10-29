@@ -144,7 +144,11 @@ where
         context.agent_setup.effective_model.as_deref(),
         which,
     )?;
-    insert_task_claiming_id(store, &mut task, &mut task_id, &mut log_path, explicit_id, args.origin)?;
+    if args.policy.is_some() {
+        super::caller_owned::claim(store, &task, args)?;
+    } else {
+        insert_task_claiming_id(store, &mut task, &mut task_id, &mut log_path, explicit_id, args.origin)?;
+    }
     preparation::finish_claim(store, args, context, &task_id)?;
     Ok(ClaimedDispatch { task_id, task, workgroup, explicit_repo_path })
 }

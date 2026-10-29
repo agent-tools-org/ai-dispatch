@@ -30,6 +30,15 @@ pub(crate) async fn post_agent_dirty_worktree_cleanup(
     if args.read_only {
         return read_only::settle(store, task_id, args, dir, pre_task_dirty_paths);
     }
+    if store.is_caller_owned(task_id.as_str())? {
+        return Ok(
+            if final_dirty_assertion(store, task_id, dir, false, pre_task_dirty_paths)? {
+                DirtyWorktreeAction::Failed
+            } else {
+                DirtyWorktreeAction::Continue
+            },
+        );
+    }
     if args.audit_report_mode {
         return Ok(DirtyWorktreeAction::Continue);
     }
@@ -110,6 +119,9 @@ async fn maybe_retry_uncommitted(
     args: &RunArgs,
     dir: &str,
 ) -> Result<Option<TaskId>> {
+    if store.is_caller_owned(task_id.as_str())? {
+        return Ok(None);
+    }
     if args.retry == 0
         && args.parent_task_id.is_some()
         && args
@@ -211,3 +223,19 @@ fn worktree_status_lines(dir: &str) -> Result<Vec<String>> {
 #[path = "dirty/settlement.rs"]
 mod settlement;
 use settlement::{preserve_shared_checkout, rescue_dirty_worktree, settle_remaining_dirty_files};
+
+#[cfg(test)]
+mod caller_owned_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn caller_owned_gates_dirty_retry() {
+        let (store, id, args) = crate::cmd::run::caller_owned_tests::setup();
+        assert!(
+            maybe_retry_uncommitted(&store, &id, &args, ".")
+                .await
+                .expect("gated before task decoding")
+                .is_none()
+        );
+    }
+}

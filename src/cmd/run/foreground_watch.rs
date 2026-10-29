@@ -32,7 +32,7 @@ pub(super) async fn wait_for_task(store: &Arc<Store>, task_id: &TaskId) -> Resul
         report_progress(&task, &mut reported_status);
         if task_is_complete(&task) {
             if !reported_terminal {
-                print_completion(store, &task);
+                if !store.is_caller_owned(task.id.as_str())? { print_completion(store, &task); }
                 reported_terminal = true;
             }
             if let Some(retry) = latest_retry(store, current_id.as_str())? {

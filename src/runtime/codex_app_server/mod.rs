@@ -3,13 +3,13 @@
 
 pub(crate) mod command;
 mod control;
+#[cfg(test)]
+#[path = "turn/fixture.rs"]
+mod fixture;
 mod home;
 mod io;
 mod resume;
 mod turn;
-#[cfg(test)]
-#[path = "turn/fixture.rs"]
-mod fixture;
 pub(crate) use command::available;
 pub(crate) use control::{active, receipt, wait_for_interrupt};
 pub(crate) use resume::exec_fallback;
@@ -40,7 +40,8 @@ pub(crate) fn run(args: Run<'_>) -> Result<Option<CompletionInfo>> {
     let info = match run_inner(&args) {
         Ok(info) => info,
         Err(error) => {
-            if started.elapsed() >= args.policy.max_duration.min(args.policy.hard_cap)
+            if args.store.is_caller_owned(args.task.as_str())?
+                || started.elapsed() >= args.policy.max_duration.min(args.policy.hard_cap)
                 || args
                     .store
                     .get_task(args.task.as_str())?
@@ -211,3 +212,7 @@ mod tests;
 #[cfg(test)]
 #[path = "read_only_transport_tests.rs"]
 mod read_only_transport_tests;
+
+#[cfg(test)]
+#[path = "caller_owned_tests.rs"]
+mod caller_owned_tests;

@@ -52,8 +52,20 @@ pub(super) fn run_background_task(
     prepared: &PreparedDispatch,
     _prompt_bundle: &run_prompt::PromptBundle,
 ) -> Result<()> {
-    let run = BackgroundRun::prepare(store, args, prepared)?;
-    run.launch()?;
+    let run = BackgroundRun::prepare(store, args, prepared).inspect_err(|error| {
+        let _ = store.settle_worker(
+            prepared.task_id.as_str(),
+            "launch_failed",
+            Some(&error.to_string()),
+        );
+    })?;
+    run.launch().inspect_err(|error| {
+        let _ = store.settle_worker(
+            prepared.task_id.as_str(),
+            "launch_failed",
+            Some(&error.to_string()),
+        );
+    })?;
     run.announce();
     Ok(())
 }
@@ -148,6 +160,7 @@ fn spawn_background_worker(store: &Store, spec: &BackgroundRunSpec) -> Result<u3
         }
     }
     published?;
+    store.observe_worker_state(spec.task_id.as_str(), "running", Some(worker_pid), None)?;
     Ok(worker_pid)
 }
 

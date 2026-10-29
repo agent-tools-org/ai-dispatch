@@ -18,6 +18,7 @@ mod run_prompt;
 #[path = "agent.rs"]
 mod run_agent;
 pub(crate) mod advice_route;
+pub(crate) mod caller_owned;
 #[path = "bestof.rs"]
 mod run_bestof;
 #[path = "lifecycle.rs"]
@@ -159,6 +160,7 @@ pub(crate) async fn maybe_auto_retry_after_checklist_miss(
     run_prompt::maybe_auto_retry_after_checklist_miss_impl(store, task_id, args, checklist_result).await
 }
 pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_id: &TaskId) -> Result<Option<TaskId>> {
+    if store.is_caller_owned(task_id.as_str())? { return Ok(None); }
     if args.judge_retry {
         return Ok(None);
     }
@@ -220,3 +222,7 @@ use run_post::{
 pub(crate) use run_post::read_quota_error_message;
 #[cfg(test)]
 use run_dirty::final_dirty_assertion;
+
+#[cfg(test)]
+#[path = "caller_owned_tests.rs"]
+mod caller_owned_tests;

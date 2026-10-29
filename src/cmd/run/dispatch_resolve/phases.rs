@@ -107,7 +107,7 @@ pub(super) fn resolve_healthy_model(
     }
 }
 
-fn resolve_agent_instance(
+pub(super) fn resolve_agent_instance(
     args: &RunArgs,
     agent_kind: AgentKind,
     custom_agent_name: &Option<String>,

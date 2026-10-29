@@ -20,12 +20,13 @@ pub(super) async fn run(
     let no_hint = cli_args.no_hint;
     let checklist_file = cli_args.checklist_file.clone();
     let mut args = run_args(cli_args);
+    crate::execution::validate(&args)?;
     validate_task_profile(
         args.declared_difficulty, args.declared_budget, args.declared_urgency, args.declared_rigor,
     )?;
     let config = config::load_config().unwrap_or_default();
-    args.budget = args.declared_budget.is_some_and(TaskBudget::uses_budget_mode)
-        || config.selection.budget_mode;
+    args.budget = args.policy.is_none()
+        && (args.declared_budget.is_some_and(TaskBudget::uses_budget_mode) || config.selection.budget_mode);
     let selection_prompt = match (&args.prompt, args.prompt_file.as_deref()) {
         (prompt, _) if !prompt.is_empty() => prompt.clone(),
         (_, Some(file)) => std::fs::read_to_string(file)
@@ -43,7 +44,7 @@ pub(super) async fn run(
 
 fn run_args(cli: run_args::RunArgs) -> cmd::run::RunArgs {
     let run_args::RunArgs {
-        agent, prompt, prompt_file, repo, repo_root, dir, output, result_file, model,
+        policy, json, agent, prompt, prompt_file, repo, repo_root, dir, output, result_file, model,
         difficulty, budget, urgency, rigor, egress, kind, no_hint: _, worktree, team,
         group, verify, iterate, eval, eval_feedback_template, judge, peer_review, retry,
         context, checklist, checklist_file: _, scope, run_extras, no_skill, bg, dry_run,
@@ -64,6 +65,7 @@ fn run_args(cli: run_args::RunArgs) -> cmd::run::RunArgs {
         ModelSource::AidResolved
     };
     cmd::run::RunArgs {
+        policy, execution_json: json,
         agent_name: agent, prompt: prompt.unwrap_or_default(), prompt_file, repo, repo_root,
         dir, output, result_file, model, model_source,
         declared_difficulty: difficulty, declared_budget: budget,
@@ -71,7 +73,7 @@ fn run_args(cli: run_args::RunArgs) -> cmd::run::RunArgs {
         worktree, group: super::resolve_group(group), verify, iterate, eval,
         eval_feedback_template, judge, peer_review, retry, context, checklist, scope, skills,
         remote_build, backup, no_backup, hooks: hook, template,
-        background: bg, dry_run, announce: true, on_done, cascade, read_only, sandbox, container,
+        background: bg, dry_run, announce: !json, on_done, cascade, read_only, sandbox, container,
         best_of, metric, team, context_from, parent_task_id: parent,
         idle_timeout_secs: idle_timeout, existing_task_id: id.map(TaskId), timeout,
         audit, audit_explicit: audit, no_audit, link_deps: !no_link_deps,

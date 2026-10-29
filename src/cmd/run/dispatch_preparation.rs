@@ -3,6 +3,7 @@
 use super::*;
 
 pub(crate) fn record_error(store: &Store, task_id: &TaskId, err: &anyhow::Error) -> Result<()> {
+    store.settle_worker(task_id.as_str(), "launch_failed", Some(&err.to_string()))?;
     let event = TaskEvent {
         task_id: task_id.clone(),
         timestamp: Local::now(),

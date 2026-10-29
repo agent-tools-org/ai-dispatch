@@ -12,6 +12,7 @@ use anyhow::Result;
 use chrono::{DateTime, Local};
 use rusqlite::Row;
 pub(super) use version::ensure_current;
+mod execution;
 mod sql;
 use sql::*;
 

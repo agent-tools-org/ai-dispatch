@@ -73,23 +73,23 @@ fn terminate(
     print_label: Option<&'static str>,
 ) -> Result<()> {
     let task = store.get_task(task_id)?.ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
-    let recover_signal = task.status == TaskStatus::Stopped
-        && background::load_worker_pid(task_id)?.is_some_and(background::is_process_running);
-    if !recover_signal {
+    let spec = background::load_spec_if_exists(task_id)?;
+    validate_live_identity(task_id, spec.as_ref())?;
+    let terminal = task.status.is_terminal()
+        && !(task.status == TaskStatus::Done && task.completed_at.is_none());
+    if !terminal {
         let event = TaskEvent {
             task_id: task.id.clone(), timestamp: Local::now(), event_kind: EventKind::Completion,
             detail: detail.to_string(), metadata: None,
         };
-        if task.status.is_terminal() && !(task.status == TaskStatus::Done && task.completed_at.is_none())
-            || !store.settle_task_status(task_id, TaskStatus::Stopped, None, None, Some(&event))?
-        {
-            return already_terminal(store, task_id);
-        }
+        store.settle_task_status(task_id, TaskStatus::Stopped, None, None, Some(&event))?;
     }
     if graceful && task.agent == crate::types::AgentKind::Codex {
         crate::runtime::codex_app_server::wait_for_interrupt(task_id);
     }
     signal_task(task_id, &task, graceful, preserve_label)?;
+    confirm_exit(task_id, spec.as_ref())?;
+    store.settle_worker(task_id, "stopped", None)?;
     capture_final_worktree_state(store.as_ref(), &TaskId(task_id.to_string()))?;
     if let Some(ref path) = task.worktree_path
         && let Err(err) = crate::workspace::worktree::clear_worktree_lock(Path::new(path), task_id)
@@ -103,13 +103,9 @@ fn terminate(
     Ok(())
 }
 
-fn already_terminal(store: &Store, task_id: &str) -> Result<()> {
-    let task = store.get_task(task_id)?.ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
-    let reason = store.get_events(task_id)?.into_iter().rev()
-        .find(|event| matches!(event.event_kind, EventKind::Completion | EventKind::Error))
-        .map(|event| event.detail).unwrap_or_else(|| "no terminal reason recorded".to_string());
-    bail!("task already {}: {}", task.status.as_str(), reason)
-}
+#[path = "stop_worker.rs"]
+mod worker;
+use worker::{validate_live_identity, confirm_exit};
 
 fn signal_task(task_id: &str, task: &Task, graceful: bool, preserve_label: &str) -> Result<()> {
     let spec = background::load_spec_if_exists(task_id)?;
@@ -203,3 +199,46 @@ mod terminal_events_tests;
 #[cfg(all(test, unix))]
 #[path = "stop/worker_identity_tests.rs"]
 mod worker_identity_tests;
+
+pub(crate) fn stop_json(store: &Arc<Store>, id: &str, force: bool) -> Result<i32> {
+    let before = crate::cmd::execution_receipt::receipt(store, id)?;
+    let was_settled = before["settled"] == true;
+    let result = terminate(store, id, !force, "Task stopped by user", "stopped", None);
+    let mut receipt = crate::cmd::execution_receipt::receipt(store, id)?;
+    let (outcome, detail, code) = match result {
+        Ok(()) => (
+            if was_settled {
+                "already_settled"
+            } else {
+                "stopped"
+            },
+            None,
+            0,
+        ),
+        Err(error) => ("unconfirmed", Some(error.to_string()), 5),
+    };
+    receipt["stop"] = serde_json::json!({"result": outcome, "detail": detail});
+    println!("{receipt}");
+    Ok(code)
+}
+
+#[cfg(test)]
+mod protocol_tests {
+    use super::*;
+
+    #[test]
+    fn caller_owned_stop_json_is_idempotent_and_preserves_existing_settlement() {
+        let home = tempfile::tempdir().expect("home");
+        let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+        let store = Arc::new(Store::open_memory().expect("store"));
+        let mut task = tests::make_task("t-stop-json", TaskStatus::Done);
+        task.completed_at = Some(chrono::Local::now());
+        store.insert_task(&task).expect("task");
+        assert_eq!(stop_json(&store, task.id.as_str(), false).expect("stop"), 0);
+        let before = store.execution_snapshot(task.id.as_str()).expect("snapshot");
+        assert_eq!(stop_json(&store, task.id.as_str(), true).expect("already settled"), 0);
+        assert_eq!(store.execution_snapshot(task.id.as_str()).expect("snapshot"), before);
+        assert_eq!(store.execution_facts(task.id.as_str()).expect("facts").expect("row")
+            .settlement.expect("worker").outcome.as_deref(), Some("stopped"));
+    }
+}

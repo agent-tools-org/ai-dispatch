@@ -71,7 +71,8 @@ fn assert_writer_timing(store: &Store, index: usize, status: TaskStatus) {
         1 => store.update_task_status(&id, TaskStatus::Stopped),
         2 => store.fail_if_running(&id),
         3 => store.settle_task_status(&id, TaskStatus::Failed, Some(&[TaskStatus::Pending]),
-            Some(PendingReason::Unknown), None),
+            Some(PendingReason::Unknown), None,
+        ),
         4 => store.fail_waiting_with_reason(&id, "timeout"),
         5 => store.fail_active_execution(&id),
         6 => store.record_agent_completion(payload(&id, TaskStatus::Failed), None),
@@ -158,7 +159,7 @@ fn settle_first_terminal_writers_do_not_replace_any_terminal_row() {
 }
 
 #[test]
-fn settle_first_stop_refusal_reports_winning_terminal_reason_without_event() {
+fn settle_first_stop_preserves_winning_terminal_reason_without_event() {
     let home = tempfile::tempdir().expect("home");
     let _guard = crate::support::paths::AidHomeGuard::set(home.path());
     let store = Arc::new(Store::open_memory().expect("store"));
@@ -169,10 +170,20 @@ fn settle_first_stop_refusal_reports_winning_terminal_reason_without_event() {
     crate::runtime::background::record_failure(&store, "t-stop-lost", "worker died", "worker died")
         .expect("reaper wins");
     let before = store.get_events("t-stop-lost").expect("events");
-    let err = stop(&store, "t-stop-lost").expect_err("terminal refusal");
+    stop(&store, "t-stop-lost").expect("terminal stop settles worker");
+    assert_eq!(
+        store
+            .get_task("t-stop-lost")
+            .expect("task")
+            .expect("row")
+            .status,
+        TaskStatus::Failed
+    );
     assert!(
-        err.to_string().contains("task already failed: worker died"),
-        "{err}"
+        store
+            .get_events("t-stop-lost")
+            .expect("events")
+            .iter().any(|event| event.detail == "worker died")
     );
     assert_eq!(
         store.get_events("t-stop-lost").expect("events").len(),

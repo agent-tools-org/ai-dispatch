@@ -69,6 +69,11 @@ pub struct Cli {
 #[allow(clippy::large_enum_variant)]
 pub enum Commands {
     Run(run_args::RunArgs),
+    /// Discover execution protocol capabilities without opening the store.
+    Capabilities {
+        #[arg(long)]
+        json: bool,
+    },
     /// Inspect recent CLI errors, including requests rejected before task creation
     Errors(crate::cli::diagnostics::ErrorsArgs),
     /// Show agent routing advice without dispatching

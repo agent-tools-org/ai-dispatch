@@ -20,7 +20,7 @@ pub(crate) fn maybe_run_post_done_audit(
     effective_dir: Option<&str>,
     repo_path: Option<&str>,
 ) -> Result<()> {
-    if !args.audit {
+    if store.is_caller_owned(task_id.as_str())? || !args.audit {
         return Ok(());
     }
     let Some(task) = store.get_task(task_id.as_str())? else {

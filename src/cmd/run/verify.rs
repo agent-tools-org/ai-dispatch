@@ -176,6 +176,7 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_verify_failure_impl(
     args: &RunArgs,
     pre_verify_status: TaskStatus,
 ) -> Result<Option<TaskId>> {
+    if store.is_caller_owned(task_id.as_str())? { return Ok(None); }
     if args.verify.is_none() || args.retry == 0 || pre_verify_status != TaskStatus::Done {
         return Ok(None);
     }
@@ -214,6 +215,7 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_checklist_miss_impl(
     args: &super::RunArgs,
     checklist_result: Option<&checklist_scan::ChecklistResult>,
 ) -> Result<Option<TaskId>> {
+    if store.is_caller_owned(task_id.as_str())? { return Ok(None); }
     if args.checklist.is_empty() || args.retry == 0 {
         return Ok(None);
     }

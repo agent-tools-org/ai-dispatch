@@ -35,6 +35,7 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let output = output_text_for_task(store.as_ref(), task_id, true).ok();
     let checklist_status = cmd::show_checklist::render_checklist_status(store.as_ref(), &task);
     let mut payload = task_metadata_json(&task, &declared);
+    payload["execution"] = crate::cmd::execution_receipt::receipt(store, task_id)?;
     payload["output"] = json!(output);
     payload["checklist_status"] = json!(checklist_status);
     payload["events"] = json!(event_list);

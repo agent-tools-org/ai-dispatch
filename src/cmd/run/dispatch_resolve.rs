@@ -60,6 +60,9 @@ pub(super) fn resolve_agent_setup(
     project_id: Option<&str>,
 ) -> Result<AgentSetup> {
     agent::removed::validate_run(args)?;
+    if args.policy.is_some() {
+        return caller_owned::caller_owned_setup(args);
+    }
     let cfg = config::load_dispatch_config()?;
     let (agent_kind, custom_agent_name, resolved_agent_name) = resolve_enabled_agent(args)?;
     set_git_working_directory(args, agent_kind);
@@ -117,3 +120,10 @@ use resolution_phases::{
     finish_agent_setup, resolve_auto_budget, resolve_enabled_agent, resolve_healthy_model,
     resolve_held_route, resolve_model_hold, set_git_working_directory,
 };
+
+#[path = "dispatch_resolve/caller_owned.rs"]
+mod caller_owned;
+
+#[cfg(test)]
+#[path = "dispatch_resolve/caller_owned_tests.rs"]
+mod caller_owned_tests;

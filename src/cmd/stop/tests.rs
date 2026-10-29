@@ -28,13 +28,22 @@ fn stop_missing_task_returns_error() {
 }
 
 #[test]
-fn stop_done_task_returns_error() {
+fn stop_done_task_settles_worker_without_changing_terminal_status() {
     with_store(|store| {
         let mut task = make_task("t-done", TaskStatus::Done);
         task.completed_at = Some(chrono::Local::now());
         store.insert_task(&task).unwrap();
-        let err = stop(&store, "t-done").unwrap_err();
-        assert!(err.to_string().contains("task already done: no terminal reason recorded"));
+        stop(&store, "t-done").expect("terminal row is a valid stop target");
+        assert_eq!(
+            store
+                .execution_facts("t-done")
+                .expect("facts")
+                .expect("row")
+                .settlement
+                .expect("worker")
+                .outcome
+                .as_deref(),
+            Some("stopped"));
         let reloaded = store.get_task("t-done").unwrap().unwrap();
         assert_eq!(reloaded.status, TaskStatus::Done);
     });

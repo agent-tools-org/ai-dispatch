@@ -25,6 +25,9 @@ fn identical_resubmit_after_lost_response_returns_existing_without_launching() {
 fn racing_identical_submits_launch_exactly_one_agent() {
     let h = Harness::new(SUCCESS);
     let id = "t-concurrent";
+    // Create the store first: two processes creating a new store at once can fail with
+    // SQLITE_BUSY before admission, which is a store-creation race, not this contract.
+    json(h.aid().args(["board", "--json"]), 0);
     let first = spawn(&mut h.run(id, &[]));
     let second = spawn(&mut h.run(id, &[]));
     let mut submissions = Vec::new();

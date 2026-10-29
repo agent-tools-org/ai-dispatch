@@ -25,7 +25,7 @@ Read-only: opens no task, writes nothing. Exit 0. Output:
       "version": 1,
       "requires": ["id", "model"],
       "refused_flags": ["retry", "cascade", "best_of", "iterate", "judge", "peer_review", "audit", "budget",
-                        "dry_run", "container"],
+                        "dry_run", "container", "on_done", "hook"],
       "disabled": ["retry", "cascade", "model_substitution", "route_substitution", "model_self_heal",
                    "hang_retry", "delivery_recovery", "dirty_rescue", "quota_continuation",
                    "verify_retry", "checklist_retry", "iterate", "best_of", "judge", "peer_review",
@@ -52,10 +52,12 @@ Refused before any row is written or changed, exit 3, nothing launched:
   served-model list, such as a custom agent, receives the model unchanged.
 - Any refused flag is given explicitly: `--retry N` with N > 0, `--cascade`, `--best-of`, `--iterate`,
   `--judge`, `--peer-review`, `--audit`, `--budget`, `--dry-run`, `--container` (a shared project
-  container cannot be attributed to one task) (`flag_refused`, `detail` names the
+  container cannot be attributed to one task), `--on-done` and `--hook` (they run after the worker
+  barrier) (`flag_refused`, `detail` names the
   flag with underscores, as in `refused_flags`).
 
-Project and team defaults that would enable a refused flag are ignored under this policy.
+Project and team defaults that would enable a refused flag, including default hooks, are ignored under
+this policy.
 `--verify`, `--checklist`, `--worktree`, `--dir`, `--timeout`, `--bg`, `--context`, `--skill`,
 `--sandbox` and `--remote-build` keep their behaviour; they never start another agent.
 
@@ -85,7 +87,8 @@ Codes: `policy_unsupported`, `id_required`, `model_required`, `model_not_served`
 ## 3. Execution receipt
 
 Printed by `aid run --json` (caller-owned), `aid wait <ID> --json`, `aid stop <ID> --json`, and
-embedded as `"execution"` in `aid show <ID> --json`. Every task has a receipt; `policy` is `null` in
+embedded as `"execution"` in `aid show <ID> --json`. `aid show` derives the receipt without writing; the
+other three persist a newly derived settlement. Every task has a receipt; `policy` is `null` in
 default mode.
 
 ```json
@@ -163,8 +166,11 @@ observes the same ID afterwards.
   confirmed dead) and the agent's recorded process group is confirmed gone. A recorded identity that does
   not match counts as gone; a missing process group or identity leaves the worker `unconfirmed`. The
   first derived settlement is persisted and kept.
-- Settlement covers the worker and the agent's process group. A process that leaves that group (for
-  example a `setsid` daemon started by the agent) is outside it.
+- Settlement covers the worker and the agent's process group; the group is always probed, whatever the
+  identity check says. Stop also signals the descendants of the worker and agent, including tool
+  commands an agent runs in their own sessions (Codex does this for each command). A process outside the
+  group that is no longer a descendant when it is observed, such as a tool command orphaned by an agent
+  that exited, is outside settlement.
 - aid's own preservation of the agent's changes (failure salvage, auto-commit) is not an execution and
   still applies.
 - The Codex app-server to `codex exec` transport fallback is disabled; an app-server failure is the

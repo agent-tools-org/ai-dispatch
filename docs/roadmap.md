@@ -45,6 +45,32 @@ does not assert board closure. New slices need board IDs before implementation.
   re-run for this release.
 - Earlier baseline notes (v10.47.x custody and budget work) remain below for reconciliation.
 
+## Caller-owned execution (`aid.execution/1`, unreleased)
+
+`aid run --policy caller-owned --id ID --model M` runs exactly one execution of the given agent and
+model: retries, cascades, model or route substitution, recovery children, judge, peer review, best-of,
+audit, hooks and nested `aid run` are refused or disabled, with a store trigger refusing any child row.
+`aid capabilities --json`, `aid wait --json`, `aid stop --json` and the `execution` receipt in
+`aid show --json` report task status and worker settlement separately with a store-wide revision.
+Settlement is derived from the worker barrier plus the agent's recorded process group. The frozen
+contract is [caller-owned-execution.md](design/caller-owned-execution.md).
+
+Known limits and follow-ups:
+- Settlement does not cover processes that leave the agent's process group and are no longer
+  descendants when observed, nor children of a crashed worker; JSON wait and stop apply to
+  caller-owned tasks only.
+- A worker crash between agent spawn and evidence commit leaves the task `unconfirmed`.
+- Tasks started by a binary before the pinned-environment start-time change record a local-time
+  start string; text `aid stop` treats their agent identity as mismatched until they finish.
+- On the build box environment used for this work, 34 unit tests and 3 end-to-end tests also fail
+  on main (`retry_timeout_dispatch`, `run_dispatch_prepare`, `run_dispatch_cost_ceiling`,
+  `args_retry_worker`, `codex_delivery_e2e`, `read_only_non_git_directory_warns_and_proceeds`); they
+  depend on Git discovery or tools present in the host environment.
+- The `--remote-build` Cargo shim always passes `--untracked`, which a low-trust box refuses.
+- `aid retry -F` does not carry `--context` files from the original dispatch.
+- A project default verify runs on tasks that change only `tests/`, and its environment failures mark
+  a delivered task failed.
+
 ## Next release: macOS GUI (design first)
 
 The next release researches a native macOS GUI for aid. It starts with a reviewed design;

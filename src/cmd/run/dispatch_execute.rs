@@ -16,8 +16,8 @@ use anyhow::Result;
 use std::path::Path;
 use std::sync::Arc;
 
-pub(super) fn load_runtime_hooks(store: &Store, id: &TaskId, args: &RunArgs) -> Result<Vec<hooks::Hook>> {
-    if store.is_caller_owned(id.as_str())? { return Ok(Vec::new()); }
+pub(super) fn load_runtime_hooks(args: &RunArgs) -> Result<Vec<hooks::Hook>> {
+    if args.policy.is_some() { return Ok(Vec::new()); }
     let mut runtime_hooks = hooks::load_hooks()?;
     runtime_hooks.extend(hooks::parse_cli_hooks(&args.hooks)?);
     Ok(runtime_hooks)
@@ -77,7 +77,8 @@ pub(super) async fn run_foreground_task(
     worker_args.announce = false;
     worker_args.foreground = true;
     run_background_task(store, &worker_args, prepared, prompt_bundle)?;
-    let final_task_id = run_foreground_watch::wait_for_task(store, &prepared.task_id).await?;
+    let final_task_id =
+        run_foreground_watch::wait_for_task(store, &prepared.task_id, args.policy.is_some()).await?;
     if final_task_id != prepared.task_id {
         return Ok(Some(final_task_id));
     }
@@ -122,9 +123,9 @@ fn launch_background_worker(
     store: &Arc<Store>,
     prepared: &PreparedDispatch,
     spec: &BackgroundRunSpec,
+    caller_owned: bool,
 ) -> Result<()> {
-    let caller_owned = store.is_caller_owned(prepared.task_id.as_str())?;
-    let worker_pid = spawn_background_worker(store, spec);
+    let worker_pid = spawn_background_worker(store, spec, caller_owned);
     let worker_pid = match worker_pid {
         Ok(pid) => pid,
         Err(err) if caller_owned && worker_was_spawned(&err) => return Err(err),
@@ -144,9 +145,10 @@ fn launch_background_worker(
     {
         background::kill_process(worker_pid);
         if !caller_owned { let _ = background::clear_spec(prepared.task_id.as_str()); }
-        let err = WorkerSpawned(anyhow::anyhow!(
+        let err = anyhow::anyhow!(
             "Worktree {wt_path} lock is owned by task {holder}; background dispatch aborted"
-        )).into();
+        );
+        let err = if caller_owned { WorkerSpawned(err).into() } else { err };
         if !caller_owned {
             super::run_dispatch_prepare::record_error(store, &prepared.task_id, &err)?;
             run_prompt::notify_task_completion(store, &prepared.task_id)?;
@@ -164,7 +166,7 @@ mod tests;
 #[test]
 fn caller_owned_dispatch_ignores_default_hooks_using_the_persisted_policy() {
     let _home=crate::support::test_env::TestHome::with_dirs();
-    let (store,id,args)=crate::cmd::run::caller_owned_tests::setup();
+    let (_store,_id,args)=crate::cmd::run::caller_owned_tests::setup();
     std::fs::write(crate::support::paths::aid_dir().join("hooks.toml"),"invalid default hooks").expect("hooks");
-    assert!(load_runtime_hooks(&store,&id,&args).expect("ignored defaults").is_empty());
+    assert!(load_runtime_hooks(&args).expect("ignored defaults").is_empty());
 }

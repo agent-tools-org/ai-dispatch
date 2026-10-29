@@ -192,7 +192,7 @@ fn task_diff_json(task: &Task) -> (Vec<serde_json::Value>, usize, u64, u64) {
 
 #[cfg(test)]
 #[test]
-fn caller_owned_show_json_derives_execution_without_writing_the_store() {
+fn caller_owned_show_json_embeds_the_persisted_execution_without_probing() {
     let (_home,store)=crate::support::test_env::TestHome::with_dirs().shared_store();
     let task=crate::types::Task::test_fixture(crate::types::TaskId("t-show-no-write".into()),crate::types::TaskStatus::Done);
     store.insert_task(&task).expect("task");
@@ -200,7 +200,8 @@ fn caller_owned_show_json_derives_execution_without_writing_the_store() {
     let before=store.execution_snapshot(task.id.as_str()).expect("before");
     let changes=store.db().total_changes();
     let shown:serde_json::Value=serde_json::from_str(&task_json(&store,task.id.as_str()).expect("show")).expect("json");
-    assert_eq!(shown["execution"]["settled"],true);
+    assert_eq!(shown["execution"]["settled"],false);
+    assert_eq!(shown["execution"]["worker"],before.as_ref().expect("row")["worker"]);
     assert_eq!(store.execution_snapshot(task.id.as_str()).expect("after"),before);
     assert_eq!(store.db().total_changes(),changes);
 }

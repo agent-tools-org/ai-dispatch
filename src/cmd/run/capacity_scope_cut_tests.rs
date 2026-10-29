@@ -103,7 +103,7 @@ async fn provider_capacity_scope_cut_decoded_failure_records_model_reason_and_ho
         let mut cmd = tokio::process::Command::new("/bin/sh");
         cmd.args(["-c", &format!("echo '{envelope}'; exit 1")]);
         crate::cmd::run::run_agent::run_agent_process_with_cost(
-            &crate::agent::codex::CodexAgent,
+            false, &crate::agent::codex::CodexAgent,
             cmd,
             &row.id,
             &store,
@@ -200,7 +200,7 @@ fn provider_capacity_scope_cut_pty_merged_stderr_records_capacity_without_child(
     let mut cmd = std::process::Command::new("/bin/sh");
     cmd.args(["-c", &format!("echo '{envelope}' >&2; exit 1")]);
     crate::runtime::pty::runner::run_agent_process_with_control(
-        &crate::agent::codex::CodexAgent,
+        false, &crate::agent::codex::CodexAgent,
         &cmd,
         &row.id,
         &store,

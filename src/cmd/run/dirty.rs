@@ -104,7 +104,7 @@ async fn maybe_retry_uncommitted(
     args: &RunArgs,
     dir: &str,
 ) -> Result<Option<TaskId>> {
-    if store.is_caller_owned(task_id.as_str())? {
+    if args.policy.is_some() {
         return Ok(None);
     }
     if args.retry == 0

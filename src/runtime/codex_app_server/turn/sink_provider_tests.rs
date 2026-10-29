@@ -6,6 +6,7 @@ const ROUTE: Option<&str> = Some("codex-provider:X");
 
 fn run<'a>(fixture: &'a fixture::Fixture, agent: &'a dyn crate::agent::Agent) -> Run<'a> {
     Run {
+        caller_owned: false,
         start: std::time::Instant::now(),
         agent,
         command: &fixture.command,

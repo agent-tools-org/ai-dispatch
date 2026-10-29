@@ -46,6 +46,7 @@ fn typed_other_error_does_not_match_quoted_refusal_text() {
 
 fn run(fixture: &fixture::Fixture) -> Run<'_> {
     Run {
+        caller_owned: false,
         start: std::time::Instant::now(),
         agent: &crate::agent::codex::CodexAgent,
         command: &fixture.command,

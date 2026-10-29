@@ -2,9 +2,14 @@
 // The transient marker classifies errors only; receipts continue to read persisted execution facts.
 use super::*;
 
-pub(super) fn spawn_background_worker(store: &Store, spec: &BackgroundRunSpec) -> Result<u32> {
+pub(super) fn spawn_background_worker(
+    store: &Store, spec: &BackgroundRunSpec, caller_owned: bool,
+) -> Result<u32> {
     let spawned = std::cell::Cell::new(false);
-    spawn_inner(store, spec, &spawned).map_err(|error| {
+    spawn_inner(store, spec, &spawned, caller_owned).map_err(|error| {
+        if !caller_owned {
+            return error.downcast::<WorkerSpawned>().map_or_else(|error| error, |spawned| spawned.0);
+        }
         if spawned.get() || error.is::<WorkerSpawned>() {
             if let Err(persist) = store.mark_worker_spawned(&spec.task_id) {
                 aid_warn!("[aid] Could not record worker spawn {}: {persist}", spec.task_id);
@@ -16,11 +21,13 @@ pub(super) fn spawn_background_worker(store: &Store, spec: &BackgroundRunSpec) -
     })
 }
 
-fn spawn_inner(store: &Store, spec: &BackgroundRunSpec, spawned: &std::cell::Cell<bool>) -> Result<u32> {
+fn spawn_inner(
+    store: &Store, spec: &BackgroundRunSpec, spawned: &std::cell::Cell<bool>, caller_owned: bool,
+) -> Result<u32> {
     background::save_spec(spec)?;
     #[cfg(not(test))]
     let spawn = background::spawn_worker(spec.task_id.as_str())?;
-    let worker_pid = store.with_worker_launch(spec.task_id.as_str(), || {
+    let worker_pid = store.with_worker_launch(caller_owned, spec.task_id.as_str(), || {
         #[cfg(test)]
         let pid = tests::spawn_worker()?;
         #[cfg(not(test))]
@@ -46,7 +53,9 @@ fn spawn_inner(store: &Store, spec: &BackgroundRunSpec, spawned: &std::cell::Cel
     #[cfg(not(test))]
     acknowledge(launcher, worker_pid, published.is_ok())?;
     published?;
-    if let Err(error) = store.observe_worker_state(spec.task_id.as_str(), "running", Some(worker_pid), None) {
+    if caller_owned
+        && let Err(error) = store.observe_worker_state(spec.task_id.as_str(), "running", Some(worker_pid), None)
+    {
         aid_warn!("[aid] Could not persist running worker {}: {error}", spec.task_id);
     }
     Ok(worker_pid)

@@ -53,7 +53,7 @@ pub(crate) fn alive(_pid: u32) -> Result<bool> {
 pub(crate) fn field(pid: u32, column: &str) -> Result<String> {
     #[cfg(target_os = "linux")]
     if column == "args" {
-        let bytes = std::fs::read(format!("/proc/{pid}/cmdline")).context("Process identity unreadable")?;
+        let bytes = read_cmdline(pid)?;
         let args = String::from_utf8(bytes)?.split('\0').filter(|arg| !arg.is_empty())
             .collect::<Vec<_>>().join(" ");
         anyhow::ensure!(!args.is_empty(), "Process identity unreadable for pid {pid}");
@@ -76,14 +76,30 @@ pub(crate) fn field(pid: u32, column: &str) -> Result<String> {
     Ok(value.to_owned())
 }
 
+#[cfg(target_os = "linux")]
+fn read_cmdline(pid: u32) -> Result<Vec<u8>> {
+    for _ in 0..5 {
+        let bytes = std::fs::read(format!("/proc/{pid}/cmdline"))
+            .context("Process identity unreadable")?;
+        if !bytes.is_empty() { return Ok(bytes); }
+        if !alive(pid)? { break; }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    bail!("Process identity unreadable for pid {pid}")
+}
+
 #[cfg(all(test, target_os = "linux"))]
 #[test]
 fn caller_owned_linux_probe_reads_live_proc_identity_and_never_reaps_an_exited_child() {
     let _permit=crate::support::test_subprocess::acquire();
     let mut command=std::process::Command::new("sh");
-    command.args(["-c","read line; exit 7","__run-task","t-linux-probe"])
-        .stdin(std::process::Stdio::piped());
+    command.args(["-c","echo ready; read line; exit 7","__run-task","t-linux-probe"])
+        .stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped());
     let mut child=command.spawn().expect("child");
+    use std::io::BufRead;
+    let mut ready = String::new();
+    std::io::BufReader::new(child.stdout.take().expect("stdout")).read_line(&mut ready).expect("ready");
+    assert_eq!(ready.trim(), "ready");
     assert!(alive(child.id()).expect("proc state"));
     assert!(field(child.id(),"args").expect("proc cmdline").contains("__run-task t-linux-probe"));
     drop(child.stdin.take());

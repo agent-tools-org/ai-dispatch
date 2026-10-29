@@ -22,6 +22,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 pub(crate) struct Run<'a> {
+    pub caller_owned: bool,
     pub start: std::time::Instant,
     pub agent: &'a dyn Agent,
     pub command: &'a std::process::Command,
@@ -40,7 +41,7 @@ pub(crate) fn run(args: Run<'_>) -> Result<Option<CompletionInfo>> {
     let info = match run_inner(&args) {
         Ok(info) => info,
         Err(error) => {
-            if args.store.is_caller_owned(args.task.as_str())?
+            if args.caller_owned
                 || started.elapsed() >= args.policy.max_duration.min(args.policy.hard_cap)
                 || args
                     .store
@@ -151,9 +152,14 @@ fn spawn(args: &Run<'_>, launch: &mut command::Launch) -> Result<io::Rpc> {
         &crate::support::paths::stderr_path(args.task.as_str()),
     )?;
     let mut publication_failed = false;
-    let child = args.store.with_running_task(args.task.as_str(), || {
-        let child = io::Rpc::spawn(&mut launch.command)?;
-        if let Err(error) = crate::runtime::background::update_agent_pid(args.task.as_str(), child.id()) {
+    let child = args.store.with_running_task(args.caller_owned, args.task.as_str(), || {
+        let child = io::Rpc::spawn(&mut launch.command).map_err(|error| {
+            if args.caller_owned { crate::runtime::background::AgentSpawnFailure(error).into() }
+            else { error }
+        })?;
+        if let Err(error) = crate::runtime::background::publish_agent_pid(
+            args.caller_owned, args.task.as_str(), child.id(),
+        ) {
             publication_failed = true;
             return Err(error);
         }

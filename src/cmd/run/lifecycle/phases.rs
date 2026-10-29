@@ -127,7 +127,7 @@ impl<'a> LifecycleRun<'a> {
         let repo_path = self.repo_path;
         run_teardown_phase(task_id, args, wt_path);
         run_escape_checks_phase(args, effective_dir, repo_path, wt_path);
-        if store.is_caller_owned(task_id.as_str())? {
+        if args.policy.is_some() {
             return Ok(ControlFlow::Continue(()));
         }
         if let Some(task) = store.get_task(task_id.as_str())?
@@ -258,7 +258,7 @@ pub(in crate::cmd::run) async fn retry_or_cascade(
     args: &RunArgs,
     task_id: &TaskId,
 ) -> Result<Option<TaskId>> {
-    if store.is_caller_owned(task_id.as_str())? {
+    if args.policy.is_some() {
         return Ok(None);
     }
     if let Some(mut retry_args) = retry_logic::prepare_retry(store.clone(), task_id, args).await? {

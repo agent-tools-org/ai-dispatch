@@ -23,6 +23,7 @@ pub(crate) mod completion;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_agent_process_with_control(
+    caller_owned: bool,
     agent: &dyn Agent,
     cmd: &std::process::Command,
     task_id: &TaskId,
@@ -44,7 +45,7 @@ pub(crate) fn run_agent_process_with_control(
     {
         let group = store.get_task(task_id.as_str())?.and_then(|task| task.workgroup_id);
         if let Some(info) = crate::runtime::codex_app_server::run(crate::runtime::codex_app_server::Run {
-            agent, command:cmd, task:task_id, store, log:log_path, output:output_path,
+            caller_owned, agent, command:cmd, task:task_id, store, log:log_path, output:output_path,
             group:group.as_deref(), policy:timeout_policy, max_cost:max_task_cost,
             control:control.as_ref(), start,
         })? {
@@ -53,7 +54,9 @@ pub(crate) fn run_agent_process_with_control(
         fallback = crate::runtime::codex_app_server::exec_fallback(cmd, store, task_id)?;
         exec_cmd = &fallback;
     }
-    let mut bridge = execution::spawn_for_task(exec_cmd, log_path, store, task_id, start, control.as_ref())?;
+    let mut bridge = execution::spawn_for_task(
+        caller_owned, exec_cmd, log_path, store, task_id, start, control.as_ref(),
+    )?;
     let mut state = execution::monitor_process(
         agent, task_id, store, &mut bridge, log_path, streaming, timeout_policy, max_task_cost, start,
     )?;

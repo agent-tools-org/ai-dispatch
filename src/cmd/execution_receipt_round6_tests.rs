@@ -25,20 +25,21 @@ fn caller_owned_normal_completion_race_rechecks_the_spec_before_labeling_lost() 
 }
 
 #[test]
-fn caller_owned_read_only_receipt_derives_without_any_store_or_spec_write() {
+fn caller_owned_show_receipt_keeps_persisted_state_without_any_probe_or_write() {
     let (_home, store, id) = fixture();
     store.mark_worker_spawned(id.as_str()).expect("spawn");
     let before = store.execution_snapshot(id.as_str()).expect("snapshot");
     let changes = store.db().total_changes();
-    let shown = read_only_receipt(&store, id.as_str()).expect("show");
-    assert_eq!(shown["settled"], true);
-    assert_eq!(shown["worker"]["outcome"], "completed");
+    std::fs::write(crate::support::paths::job_path(id.as_str()), "unreadable job spec").expect("spec");
+    let shown = read_only_receipt(&store, id.as_str()).expect("show does not inspect the spec");
+    assert_eq!(shown["settled"], false);
+    assert!(shown["worker"]["outcome"].is_null());
     assert_eq!(store.execution_snapshot(id.as_str()).expect("snapshot"), before);
     assert_eq!(store.db().total_changes(), changes);
 }
 
 #[test]
-fn caller_owned_read_only_receipt_reports_running_without_publishing_worker_state() {
+fn caller_owned_show_receipt_does_not_observe_a_running_worker() {
     let _permit = crate::support::test_subprocess::acquire();
     let (_home, store, id) = fixture();
     let mut command = std::process::Command::new("sh");
@@ -52,13 +53,13 @@ fn caller_owned_read_only_receipt_reports_running_without_publishing_worker_stat
     let before = store.execution_snapshot(id.as_str()).expect("snapshot");
     assert_eq!(
         read_only_receipt(&store, id.as_str()).expect("read only")["worker"]["state"],
-        "running"
+        "pending"
     );
     assert_eq!(store.execution_snapshot(id.as_str()).expect("snapshot"), before);
 }
 
 #[test]
-fn caller_owned_reaper_observation_preserves_the_live_orphan_agent_and_its_group_identity() {
+fn caller_owned_reaper_marks_a_crashed_worker_failed_like_default_mode() {
     let _permit = crate::support::test_subprocess::acquire();
     let (_home, store, id) = fixture();
     let mut agent = live_agent();
@@ -70,8 +71,9 @@ fn caller_owned_reaper_observation_preserves_the_live_orphan_agent_and_its_group
     assert!(
         background::check_zombie_tasks_with(&store, |_| false)
             .expect("startup reaper")
-            .is_empty()
+            .contains(&id.to_string())
     );
+    assert_eq!(store.get_task(id.as_str()).expect("task").expect("row").status, TaskStatus::Failed);
     let running = receipt(&store, id.as_str()).expect("observe");
     assert_eq!(running["settled"], false);
     assert_eq!(running["agent_process"]["pid"], agent.id());

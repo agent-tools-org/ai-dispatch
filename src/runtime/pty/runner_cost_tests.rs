@@ -123,7 +123,7 @@ fn replay_stream(agent: &dyn crate::agent::Agent, output: &str) -> (Task, Vec<Ta
     let mut command = std::process::Command::new("/bin/cat");
     command.arg(input);
     super::run_agent_process_with_control(
-        agent,
+        false, agent,
         &command,
         &task.id,
         &store,

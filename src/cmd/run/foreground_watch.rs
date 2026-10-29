@@ -16,7 +16,9 @@ use tokio::signal::unix::{signal, Signal, SignalKind};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
-pub(super) async fn wait_for_task(store: &Arc<Store>, task_id: &TaskId) -> Result<TaskId> {
+pub(super) async fn wait_for_task(
+    store: &Arc<Store>, task_id: &TaskId, caller_owned: bool,
+) -> Result<TaskId> {
     let mut signals = SignalWaiter::new().await?;
     let mut current_id = task_id.clone();
     let mut reported_status = None;
@@ -32,7 +34,7 @@ pub(super) async fn wait_for_task(store: &Arc<Store>, task_id: &TaskId) -> Resul
         report_progress(&task, &mut reported_status);
         if task_is_complete(&task) {
             if !reported_terminal {
-                if !store.is_caller_owned(task.id.as_str())? { print_completion(store, &task); }
+                if !caller_owned { print_completion(store, &task); }
                 reported_terminal = true;
             }
             if let Some(retry) = latest_retry(store, current_id.as_str())? {

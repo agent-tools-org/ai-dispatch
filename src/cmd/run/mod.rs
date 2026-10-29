@@ -144,7 +144,7 @@ pub(crate) fn apply_retry_target(task: &Task, retry_args: &mut RunArgs) -> Resul
 pub(crate) fn switch_agent(args: &mut RunArgs, next_agent: String) { run_post::switch_agent(args, next_agent) }
 
 pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_id: &TaskId) -> Result<Option<TaskId>> {
-    if store.is_caller_owned(task_id.as_str())? { return Ok(None); }
+    if args.policy.is_some() { return Ok(None); }
     if args.judge_retry {
         return Ok(None);
     }
@@ -207,3 +207,7 @@ use run_dirty::final_dirty_assertion;
 #[cfg(test)]
 #[path = "caller_owned_tests.rs"]
 mod caller_owned_tests;
+
+#[cfg(test)]
+#[path = "default_launch_round7_tests.rs"]
+mod default_launch_round7_tests;

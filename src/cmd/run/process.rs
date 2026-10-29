@@ -27,6 +27,7 @@ const STDERR_EXCERPT_LINES: usize = 8;
 const STDERR_EXCERPT_CHARS: usize = 400;
 
 pub(crate) struct RunProcessArgs<'a> {
+    pub caller_owned: bool,
     pub agent: &'a dyn crate::agent::Agent, pub cmd: Command, pub task_id: &'a TaskId,
     pub store: &'a Arc<Store>, pub log_path: &'a std::path::Path,
     pub output_path: Option<&'a str>, pub model: Option<&'a str>, pub streaming: bool,
@@ -130,7 +131,8 @@ pub(crate) async fn run_agent_process_impl(mut args: RunProcessArgs<'_>) -> Resu
         && crate::runtime::codex_app_server::available(args.cmd.as_std())
     {
         if let Some(mut info) = crate::runtime::codex_app_server::run(crate::runtime::codex_app_server::Run {
-            agent:args.agent,command:args.cmd.as_std(),task:args.task_id,store:args.store,
+            caller_owned:args.caller_owned, agent:args.agent,command:args.cmd.as_std(),
+            task:args.task_id,store:args.store,
             log:args.log_path,output:args.output_path,group:args.workgroup_id,
             policy:args.timeout_policy,max_cost:args.max_task_cost,control:None,start,
         })? {

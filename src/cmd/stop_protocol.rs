@@ -6,6 +6,19 @@ use crate::store::execution_protocol::AgentProcess;
 use crate::runtime::execution_probe as probe;
 
 pub(super) fn action(store: &Arc<Store>, id: &str, graceful: bool, detail: &str, label: &str) -> Result<()> {
+    store.record_execution_stop(id)?;
+    #[cfg(test)]
+    STOP_HOOK.with(|hook| {
+        if let Some(hook) = hook.borrow_mut().take() { hook(store, id); }
+    });
+    let result = stop_action(store, id, graceful, detail, label);
+    if result.is_err() {
+        store.clear_execution_stop(id)?;
+    }
+    result
+}
+
+fn stop_action(store: &Arc<Store>, id: &str, graceful: bool, detail: &str, label: &str) -> Result<()> {
     let task = store
         .get_task(id)?
         .ok_or_else(|| crate::execution::refuse("not_found", Some(id), 1))?;
@@ -90,7 +103,6 @@ fn finish_stop(store: &Store, id: &str, task: &Task, label: &str, signalled: boo
     }
     // Never remove a live worker's barrier or replace it after a failed close.
     background::clear_spec(id)?;
-    store.record_execution_stop(id)?;
     Ok(())
 }
 
@@ -182,4 +194,24 @@ pub(super) fn text(
         println!("{label} {id}");
     }
     Ok(())
+}
+
+#[cfg(test)]
+thread_local! {
+    static STOP_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce(&Store, &str)>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+#[test]
+fn caller_owned_stop_marker_precedes_a_racing_settlement_observation() {
+    let (_home, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
+    let id = "t-stop-observation-race";
+    store.insert_task(&Task::test_fixture(TaskId(id.into()), TaskStatus::Done)).expect("task");
+    STOP_HOOK.with(|hook| *hook.borrow_mut() = Some(Box::new(|store, id| {
+        let receipt = execution_receipt::receipt(store, id).expect("racing receipt");
+        assert_eq!(receipt["worker"]["outcome"], "stopped");
+    })));
+    action(&store, id, false, "stopped", "stopped").expect("confirmed stop");
+    assert_eq!(execution_receipt::receipt(&store, id).expect("receipt")["worker"]["outcome"], "stopped");
 }

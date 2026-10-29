@@ -110,7 +110,7 @@ impl Fixture {
         let agent =
             crate::agent::registry::resolve_custom_agent("capacity-fixture").expect("agent");
         crate::cmd::run::run_agent::run_agent_process_with_cost(
-            agent.as_ref(),
+            false, agent.as_ref(),
             command,
             &self.row.id,
             &self.store,
@@ -136,6 +136,10 @@ impl Fixture {
             );
         }
         assert!(git(&self.worktree, &["status", "--porcelain"]).is_empty());
+        self.expire_hold();
+    }
+
+    fn expire_hold(&self) {
         // Expire the hold so the ordinary retry can run with its five-second backoff.
         let past = chrono::Local::now().naive_local() - chrono::Duration::minutes(1);
         std::fs::write(

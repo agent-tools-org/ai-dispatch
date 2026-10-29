@@ -12,6 +12,7 @@ use crate::types::TaskId;
 use super::run_prompt;
 
 pub(crate) async fn run_agent_process_with_cost(
+    caller_owned: bool,
     agent: &dyn crate::agent::Agent,
     cmd: Command,
     task_id: &TaskId,
@@ -26,6 +27,7 @@ pub(crate) async fn run_agent_process_with_cost(
     start: std::time::Instant,
 ) -> Result<()> {
     run_prompt::run_agent_process_impl(run_prompt::RunProcessArgs {
+        caller_owned,
         agent,
         cmd,
         task_id,

@@ -22,7 +22,7 @@ pub(super) async fn run_post_lifecycle(
         .get_task(&spec.task_id)?
         .map(|task| task.status)
         .unwrap_or(TaskStatus::Done);
-    let runtime_hooks = load_background_runtime_hooks(store, &spec.task_id, lifecycle_args)?;
+    let runtime_hooks = load_background_runtime_hooks(lifecycle_args)?;
     let prompt_bundle = prompt_bundle(store, spec)?;
     let (repo_path, wt_path) = task_lifecycle_paths(store, &task_id)?;
     crate::cmd::run::post_run_lifecycle(
@@ -61,8 +61,8 @@ fn prompt_bundle(store: &Store, spec: &BackgroundRunSpec) -> Result<crate::cmd::
     })
 }
 
-fn load_background_runtime_hooks(store: &Store, id: &str, args: &crate::cmd::run::RunArgs) -> Result<Vec<crate::config::hooks::Hook>> {
-    if store.is_caller_owned(id)? { return Ok(Vec::new()); }
+fn load_background_runtime_hooks(args: &crate::cmd::run::RunArgs) -> Result<Vec<crate::config::hooks::Hook>> {
+    if args.policy.is_some() { return Ok(Vec::new()); }
     let mut runtime_hooks = crate::config::hooks::load_hooks()?;
     runtime_hooks.extend(crate::config::hooks::parse_cli_hooks(&args.hooks)?);
     Ok(runtime_hooks)
@@ -106,7 +106,7 @@ fn caller_owned_background_ignores_default_hooks_using_the_persisted_policy() {
     store.insert_task(&crate::types::Task::test_fixture(id.clone(),TaskStatus::Running)).expect("task");
     store.db().execute("UPDATE tasks SET execution_policy=?2 WHERE id=?1",rusqlite::params![id.as_str(),
         serde_json::json!({"name":"caller-owned","version":1,"agent":"codex","model":"test","accepted_at":"now"}).to_string()]).expect("policy");
-    let args=crate::cmd::run::RunArgs::default();
+    let args=crate::cmd::run::RunArgs { policy: Some("caller-owned".into()), ..Default::default() };
     std::fs::write(crate::support::paths::aid_dir().join("hooks.toml"),"invalid default hooks").expect("hooks");
-    assert!(load_background_runtime_hooks(&store,id.as_str(),&args).expect("ignored defaults").is_empty());
+    assert!(load_background_runtime_hooks(&args).expect("ignored defaults").is_empty());
 }

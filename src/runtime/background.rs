@@ -38,7 +38,9 @@ pub(crate) use self::spawn::{daemonize_worker_if_requested, WorkerSpawned};
 #[cfg(not(test))]
 pub(crate) use self::spawn::spawn_worker;
 pub use self::spec::{load_spec_if_exists, load_worker_pid, save_spec, BackgroundRunSpec};
-pub(crate) use self::process::{update_worker_pid, AgentPublicationFailure};
+pub(crate) use self::process::{
+    update_worker_pid, publish_agent_pid, AgentPublicationFailure, AgentSpawnFailure,
+};
 pub(crate) use self::reaper::{check_zombie_tasks_with, record_failure};
 #[cfg(test)]
 pub(crate) use self::reaper::cleanup_stale_pending_tasks;
@@ -78,7 +80,7 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
     let _ = crate::runtime::input_signal::clear_response(task_id);
     let _ = crate::runtime::input_signal::clear_steer(task_id);
     result?;
-    if !store.is_caller_owned(task_id).unwrap_or(true) && let Some(cmd) = spec.on_done.as_ref() {
+    if args.as_ref().is_ok_and(|args| args.policy.is_none()) && let Some(cmd) = spec.on_done.as_ref() {
         let _ = spawn_on_done_command(cmd, task_id, "done");
     }
     Ok(())
@@ -104,7 +106,7 @@ async fn handle_run_task_inner_error(
         // Without saved args there is no lifecycle to notify on our behalf.
         crate::task::notify::notify_completion(&task);
     }
-    if !store.is_caller_owned(&spec.task_id).unwrap_or(true) && let Some(ref cmd) = spec.on_done {
+    if args.is_none_or(|args| args.policy.is_none()) && let Some(ref cmd) = spec.on_done {
         let _ = spawn_on_done_command(cmd, &spec.task_id, "failed");
     }
     Err(err)
@@ -183,7 +185,7 @@ async fn run_process(
     let _wrap_up = wrap_up::Timer::start(store.clone(), &spec.task_id, start, timeout_policy)?;
     if spec.interactive && !crate::runtime::claude_input::supports(agent) {
         crate::runtime::pty::runner::run_agent_process_with_control(
-            agent, &std_cmd, &task_id, store, &log_path,
+            args.policy.is_some(), agent, &std_cmd, &task_id, store, &log_path,
             args.output.as_deref(), args.model.as_deref(), agent.streaming(),
             timeout_policy, args.max_task_cost, None, start,
         )?;
@@ -193,7 +195,7 @@ async fn run_process(
     tokio_cmd.stdout(Stdio::piped());
     tokio_cmd.stderr(Stdio::piped());
     crate::cmd::run::run_agent_process_with_cost(
-        agent, tokio_cmd, &task_id, store, &log_path,
+        args.policy.is_some(), agent, tokio_cmd, &task_id, store, &log_path,
         args.output.as_deref(), args.model.as_deref(), agent.streaming(),
         args.group.as_deref(), timeout_policy, args.max_task_cost,
         start,

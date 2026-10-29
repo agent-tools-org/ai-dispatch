@@ -32,7 +32,7 @@ fn caller_owned_running_state_write_failure_does_not_settle_a_spawned_worker() {
         )
         .expect("inject post-spawn observation failure");
     SPAWN.with(|slot| *slot.borrow_mut() = Some(Box::new(|| Ok(std::process::id()))));
-    launch_background_worker(&store, &prepared, &spec).expect("worker launch remains accepted");
+    launch_background_worker(&store, &prepared, &spec, true).expect("worker launch remains accepted");
     let row = store.get_task("t-launch").expect("task").expect("row");
     assert_eq!(row.status, TaskStatus::Running);
     assert!(
@@ -60,7 +60,8 @@ fn caller_owned_post_spawn_failure_keeps_worker_barrier_and_never_claims_launch_
             Ok(u32::MAX)
         }))
     });
-    let error = launch_background_worker(&store, &prepared, &spec).expect_err("PID publication failure");
+    let error = launch_background_worker(&store, &prepared, &spec, true)
+        .expect_err("PID publication failure");
     assert!(worker_was_spawned(&error));
     assert!(store.execution_process("t-launch").expect("spawn evidence").1);
     assert!(
@@ -90,9 +91,10 @@ fn default_post_spawn_failure_does_not_claim_launch_failed_and_retains_cleanup()
             Ok(u32::MAX)
         }))
     });
-    let error = launch_background_worker(&store, &prepared, &spec).expect_err("PID publication failure");
-    assert!(worker_was_spawned(&error));
-    assert!(store.execution_process("t-launch").expect("spawn evidence").1);
+    let error = launch_background_worker(&store, &prepared, &spec, false)
+        .expect_err("PID publication failure");
+    assert!(!worker_was_spawned(&error), "default errors keep their original type");
+    assert!(!store.execution_process("t-launch").expect("no default evidence").1);
     assert!(!crate::support::paths::job_path("t-launch").exists());
     assert_eq!(
         store.get_task("t-launch").expect("task").expect("row").status,

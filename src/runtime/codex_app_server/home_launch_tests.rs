@@ -34,7 +34,7 @@ async fn dispatch(fixture: &Fixture, foreground: bool) {
     }
     let _permit = crate::support::test_subprocess::acquire();
     crate::cmd::run::run_agent_process_with_cost(
-        &crate::agent::codex::CodexAgent,
+        false, &crate::agent::codex::CodexAgent,
         foreground_command(&fixture.command),
         &fixture.task,
         &fixture.store,

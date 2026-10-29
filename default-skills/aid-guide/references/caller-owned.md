@@ -36,11 +36,15 @@ Keep the receipt with the highest revision. Settlement is derived only by observ
 spec is absent (or its verified worker is dead) and the recorded agent process group is gone.
 Caller-owned tasks refuse a second agent spawn at the common launch transaction. The agent PID, group and launch identity are persisted in the task row before monitoring starts,
 so evidence survives spec deletion. Missing group/identity evidence remains `unconfirmed`.
+A worker crash between spawning the agent and committing its evidence remains unconfirmed.
+Lifecycle gates use the worker's saved dispatch policy; default launches add no evidence writes.
 The group is always probed, even when the root launch identity differs. A mismatch never authorizes a signal. Processes that leave the agent group are outside
 settlement; stop also signals captured descendants, including tools in separate sessions.
-`aid show --json` derives without writing; run/wait/stop JSON observations persist the first settlement.
+`aid show --json` embeds the last persisted receipt without probing processes. Its normal startup
+still opens and migrates the store and reaps crashed workers, like other commands.
+Run/wait/stop JSON observations persist the first settlement.
 Transient wait observation errors are retried until timeout; the last valid receipt is retained.
-Only confirmed stops are recorded. The first derived settlement wins: `stopped` for a recorded stop, `launch_failed` for a failed
+A stop marker is recorded before signalling and cleared if stop cannot confirm completion. The first derived settlement wins: `stopped` for a recorded stop, `launch_failed` for a failed
 submission that never spawned a worker or agent, `lost` for a dead worker's remaining spec,
 otherwise `completed`. Worker, stop and reaper cleanup never write settlement directly.
 `--container` is refused because its shared project container cannot be attributed to one task.

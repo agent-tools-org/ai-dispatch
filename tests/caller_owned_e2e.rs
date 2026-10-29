@@ -36,9 +36,15 @@ fn capabilities_are_read_only_and_advertise_the_frozen_policy() {
             "peer_review",
             "audit",
             "budget",
-            "dry_run"
+            "dry_run",
+            "container"
         ])
     );
+    assert_disabled_recoveries(policy);
+    h.assert_empty("t-discovery");
+}
+
+fn assert_disabled_recoveries(policy: &serde_json::Value) {
     assert_eq!(
         policy["disabled"],
         serde_json::json!([
@@ -63,7 +69,6 @@ fn capabilities_are_read_only_and_advertise_the_frozen_policy() {
             "explicit_retry"
         ])
     );
-    h.assert_empty("t-discovery");
 }
 
 fn refused(extra: &[&str], code: &str, detail: Option<&str>, id: bool, model: bool) {
@@ -124,3 +129,4 @@ refusal!(audit_is_refused, "audit", "--audit");
 refusal!(budget_is_refused, "budget", "--budget", "standard");
 
 refusal!(dry_run_is_refused, "dry_run", "--dry-run");
+refusal!(container_is_refused, "container", "--container", "fixture-image");

@@ -4,7 +4,7 @@
 `aid run <agent> <prompt> --policy caller-owned --id <ID> --model <MODEL> --json`
 submits exactly one execution. `aid wait <ID> --json [--timeout SECS]` and
 `aid stop <ID> --json [--force]` print settlement receipts; `aid show <ID> --json`
-embeds the receipt as `execution`. See [dispatch.md](dispatch.md) for admission and exit codes.
+embeds the receipt as `execution`. See [caller-owned execution](caller-owned.md) for admission and exit codes.
 
 Use this index to select a command. Run `aid <command> --help` for its complete
 current arguments.

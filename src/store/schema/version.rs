@@ -3,7 +3,7 @@
 use anyhow::{Result, bail};
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
-pub(super) const CURRENT_VERSION: i64 = 5;
+pub(in crate::store) const CURRENT_VERSION: i64 = 5;
 
 pub(in crate::store) fn ensure_current(conn: &Connection) -> Result<()> {
     let version = schema_version(conn)?;

@@ -1,3 +1,9 @@
+## v11.7.1 (2026-10-29)
+- Reduce duplicate code and simplify test setup.
+- Share task event and completion construction, adapter text and metadata parsing, and enum string mappings.
+- Remove obsolete test-only implementations and consolidate repeated regression cases while preserving their inputs and assertions.
+
+
 ## v11.7.0 (2026-10-23)
 - Opening the store takes no write lock when the schema is current: the schema version is kept in `PRAGMA user_version` (now 3) and a current database runs no DDL, migration or UPDATE on open, so read commands such as `aid board` and `aid show` no longer wait behind a writer or fail with "database is locked"; an older database migrates once under an immediate transaction and unexpected migration errors are reported instead of ignored
 - Launch transactions hold the database only for the status and parent check, the spawn, and the PID publication of the launched process; spec writing, directories, logs and command preparation happen before it, and a stopped task or a task whose parent was stopped never keeps a live worker or agent

@@ -115,13 +115,7 @@ pub trait Agent: Send + Sync {
     /// Parse full agent output into completion info.
     /// Called by buffered finalize always, and by streaming finalize when exit code is 0.
     fn parse_completion(&self, _output: &str) -> CompletionInfo {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
+        CompletionInfo::new(TaskStatus::Done)
     }
 
     /// Whether the agent's private diagnostic log proves terminal failure.

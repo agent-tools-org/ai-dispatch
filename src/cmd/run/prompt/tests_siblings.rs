@@ -4,8 +4,7 @@ use super::*;
 
 #[test]
 fn build_prompt_bundle_skips_sibling_context_for_opencode() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let group = store
         .create_workgroup("batch", "desc", Some("seed"), Some("wg-opencode-test"))
         .unwrap();
@@ -54,8 +53,7 @@ fn build_prompt_bundle_skips_sibling_context_for_opencode() {
 
 #[test]
 fn build_prompt_bundle_skips_sibling_context_for_kilo() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let group = store
         .create_workgroup("batch", "desc", Some("seed"), Some("wg-kilo-test"))
         .unwrap();
@@ -107,8 +105,7 @@ fn build_prompt_bundle_skips_sibling_context_for_kilo() {
 
 #[test]
 fn build_prompt_bundle_includes_sibling_context_for_codex() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let group = store
         .create_workgroup("batch", "desc", Some("seed"), Some("wg-codex-test"))
         .unwrap();

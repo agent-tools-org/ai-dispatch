@@ -10,14 +10,8 @@ use std::sync::Arc;
 
 fn payload(id: &str, status: TaskStatus) -> TaskCompletionUpdate<'_> {
     TaskCompletionUpdate {
-        id,
-        status,
-        tokens: None,
-        duration_ms: 1234,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
         exit_code: Some(1),
+        ..TaskCompletionUpdate::new(id, status, 1234)
     }
 }
 

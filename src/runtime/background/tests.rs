@@ -18,18 +18,8 @@ fn make_spec(task_id: &str) -> BackgroundRunSpec {
         task_id: task_id.to_string(),
         worker_pid: Some(if task_id == "t-1a1a" { 101 } else { 202 }),
         dir: Some(".".to_string()),
-        budget: false,
-        max_duration_mins: None,
-        max_duration_secs: None,
-        idle_timeout_secs: None,
         interactive: true,
-        on_done: None,
-        env: None,
-        agent_pid: None,
-        agent_started: None,
-        audit_report_mode: false,
-        pre_task_dirty_paths: None,
-        foreground: false,
+        ..Default::default()
     }
 }
 
@@ -39,25 +29,23 @@ fn make_task(task_id: &str, status: TaskStatus) -> Task {
 
 fn insert_event(store: &Store, task_id: &str, age_secs: i64) {
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId(task_id.to_string()),
-            timestamp: Local::now() - Duration::seconds(age_secs),
-            event_kind: EventKind::Milestone,
-            detail: "last progress".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::at(
+            TaskId(task_id.to_string()),
+            EventKind::Milestone,
+            "last progress".to_string(),
+            Local::now() - Duration::seconds(age_secs),
+        ))
         .unwrap();
 }
 
 fn insert_idle_escalation_event(store: &Store, task_id: &str, age_secs: i64) {
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId(task_id.to_string()),
-            timestamp: Local::now() - Duration::seconds(age_secs),
-            event_kind: EventKind::Milestone,
-            detail: "Auto-escalated: task stalled".to_string(),
-            metadata: Some(serde_json::json!({ "auto_escalated": true })),
-        })
+        .insert_event(&TaskEvent::at(
+            TaskId(task_id.to_string()),
+            EventKind::Milestone,
+            "Auto-escalated: task stalled".to_string(),
+            Local::now() - Duration::seconds(age_secs),
+        ).with_metadata(Some(serde_json::json!({ "auto_escalated": true }))))
         .unwrap();
 }
 

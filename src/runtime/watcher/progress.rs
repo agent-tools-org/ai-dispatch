@@ -50,13 +50,12 @@ impl SyntheticMilestoneTracker {
     pub(crate) fn synthetic_event(&mut self, task_id: &TaskId, event: &TaskEvent) -> Option<TaskEvent> {
         if event.event_kind == EventKind::Completion {
             let detail = event.metadata.as_ref()?.get("final_noop_reason")?.as_str()?;
-            return Some(TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: event.timestamp,
-                event_kind: EventKind::NoOp,
-                detail: detail.to_string(),
-                metadata: None,
-            });
+            return Some(TaskEvent::at(
+                task_id.clone(),
+                EventKind::NoOp,
+                detail.to_string(),
+                event.timestamp,
+            ));
         }
         if event.event_kind != EventKind::ToolCall || self.synthetic_disabled {
             return None;

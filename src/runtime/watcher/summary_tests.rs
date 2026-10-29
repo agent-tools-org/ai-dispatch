@@ -6,13 +6,7 @@ use serde_json::json;
 
 #[test]
 fn completion_metadata_updates_summary_fields() {
-    let mut info = CompletionInfo {
-        tokens: None,
-        status: TaskStatus::Done,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    };
+    let mut info = CompletionInfo::new(TaskStatus::Done);
     let event = TaskEvent::new(
         TaskId("t-usage".to_string()),
         EventKind::Completion,

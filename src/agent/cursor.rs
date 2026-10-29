@@ -161,13 +161,7 @@ impl super::Agent for CursorAgent {
         let (kind, detail) = classify_line(trimmed);
         kind.map(|k| {
             let (detail, metadata) = capped_detail(detail);
-            TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: k,
-                detail,
-                metadata,
-            }
+            TaskEvent::at(task_id.clone(), k, detail, now).with_metadata(metadata)
         })
     }
 

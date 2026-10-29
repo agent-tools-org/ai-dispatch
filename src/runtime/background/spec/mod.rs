@@ -9,6 +9,7 @@ use crate::support::paths;
 use crate::support::sanitize;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Default))]
 pub struct BackgroundRunSpec {
     pub task_id: String,
     pub worker_pid: Option<u32>,

@@ -15,8 +15,7 @@ fn request_result_file(store: &Store, task_id: &str) {
 
 #[test]
 fn writable_task_with_audit_words_and_no_result_request_has_no_banner() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut task = task_fixture(
         "t-writable",
         "Build the eval for cross-audit detection; report findings with severity.",
@@ -35,8 +34,7 @@ fn writable_task_with_audit_words_and_no_result_request_has_no_banner() {
 
 #[test]
 fn audit_text_with_missing_result_md_shows_banner() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut task = task_fixture(
         "t-audit-missing",
         "Cross-audit the parser changes and produce findings.",
@@ -56,8 +54,7 @@ fn audit_text_with_missing_result_md_shows_banner() {
 
 #[test]
 fn result_text_for_audit_without_result_md_uses_banner() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut task = task_fixture(
         "t-audit-result-missing",
         "Review the implementation and list findings with severity.",
@@ -78,8 +75,7 @@ fn result_text_for_audit_without_result_md_uses_banner() {
 /// tool narration aid rescued, not the audit the caller asked for.
 #[test]
 fn result_text_for_audit_warns_when_result_md_is_a_salvaged_log() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut task = task_fixture(
         "t-audit-salvaged",
         "Review the implementation and list findings with severity.",

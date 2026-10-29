@@ -77,14 +77,9 @@ fn salvage_writes_partial_work_and_commits_dirty_worktree() {
     insert_activity(&store, &task.id);
 
     crate::task::lifecycle::update_task_completion(&store, TaskCompletionUpdate {
-            id: task.id.as_str(),
-            status: TaskStatus::Failed,
-            tokens: None,
-            duration_ms: 10,
-            observed_model: None, attribution_source: None,
-            cost_usd: None,
-            exit_code: Some(1),
-        })
+        exit_code: Some(1),
+        ..TaskCompletionUpdate::new(task.id.as_str(), TaskStatus::Failed, 10)
+    })
         .expect("fail");
 
     let partial = std::fs::read_to_string(paths::task_dir(task.id.as_str()).join("partial-work.md"))

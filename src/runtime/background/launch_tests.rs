@@ -5,8 +5,7 @@ use super::*;
 
 #[test]
 fn worker_launch_preservation_uses_resolved_prompt_with_raw_lifecycle_args() {
-    let home = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (home, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let id = "t-launch-preservation";
     let resolved = "Resolved launch context\nCaller brief";
     store

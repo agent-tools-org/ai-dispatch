@@ -66,8 +66,7 @@ fn folder_templates_expand_task_fields() {
 
 #[test]
 fn bundle_packs_export_diff_and_transcript() {
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     let task = task("t-bundle");
     store.insert_task(&task).unwrap();
     let log = crate::support::paths::log_path("t-bundle");
@@ -89,8 +88,7 @@ fn bundle_packs_export_diff_and_transcript() {
 
 #[test]
 fn bundle_without_any_artifact_is_an_error() {
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     let task = task("t-empty");
     store.insert_task(&task).unwrap();
 
@@ -133,8 +131,7 @@ fn settings() -> BackupSettings {
 
 #[test]
 fn successful_backup_records_url_and_milestone() {
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     store.insert_task(&task("t-ok")).unwrap();
     let target = FakeTarget { dests: RefCell::new(Vec::new()), fail: false };
 
@@ -152,8 +149,7 @@ fn successful_backup_records_url_and_milestone() {
 
 #[test]
 fn failed_backup_warns_and_leaves_task_untouched() {
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     store.insert_task(&task("t-bad")).unwrap();
     let target = FakeTarget { dests: RefCell::new(Vec::new()), fail: true };
 
@@ -220,8 +216,7 @@ fn settled_task_honors_no_backup_and_ignores_unconfigured_tasks() {
 
 #[test]
 fn cli_backup_flag_enables_backup_without_project_config() {
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     store.insert_task(&task("t-cli")).unwrap();
     let args = crate::cmd::run::RunArgs { backup: Some("nope:x".into()), ..Default::default() };
     store.update_task_dispatch_args("t-cli", &args.dispatch_args_json().unwrap()).unwrap();

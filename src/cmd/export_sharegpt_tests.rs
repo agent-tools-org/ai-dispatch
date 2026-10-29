@@ -39,8 +39,7 @@ fn prompt_preservation_matches_show_and_sharegpt_stored_context() {
 
 #[test]
 fn export_sharegpt_writes_system_human_gpt_messages() {
-    let temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (temp, store) = crate::support::test_env::TestHome::new().store();
     let task = done_task("t-sharegpt", Some("resolved system prompt"));
     store.insert_task(&task).unwrap();
     write_transcript(task.id.as_str(), "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"agent reply\"}\n");
@@ -60,8 +59,7 @@ fn export_sharegpt_writes_system_human_gpt_messages() {
 
 #[test]
 fn export_sharegpt_formats_tool_calls_and_results() {
-    let temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (temp, store) = crate::support::test_env::TestHome::new().store();
     let task = done_task("t-sharegpt-tools", Some("resolved system prompt"));
     store.insert_task(&task).unwrap();
     write_transcript(
@@ -82,8 +80,7 @@ fn export_sharegpt_formats_tool_calls_and_results() {
 
 #[test]
 fn export_sharegpt_handles_empty_transcript() {
-    let temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (temp, store) = crate::support::test_env::TestHome::new().store();
     let task = done_task("t-sharegpt-empty", Some("resolved system prompt"));
     store.insert_task(&task).unwrap();
 
@@ -98,8 +95,7 @@ fn export_sharegpt_handles_empty_transcript() {
 
 #[test]
 fn export_sharegpt_fallback_includes_file_writes() {
-    let temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (temp, store) = crate::support::test_env::TestHome::new().store();
     let task = done_task("t-sharegpt-file-write", Some("resolved system prompt"));
     store.insert_task(&task).unwrap();
     store
@@ -122,8 +118,7 @@ fn export_sharegpt_fallback_includes_file_writes() {
 
 #[test]
 fn export_sharegpt_fallback_includes_file_reads() {
-    let temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (temp, store) = crate::support::test_env::TestHome::new().store();
     let task = done_task("t-sharegpt-file-read", Some("resolved system prompt"));
     store.insert_task(&task).unwrap();
     store
@@ -146,8 +141,7 @@ fn export_sharegpt_fallback_includes_file_reads() {
 
 #[test]
 fn export_sharegpt_rejects_failed_tasks() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let mut task = done_task("t-sharegpt-failed", Some("resolved system prompt"));
     task.status = TaskStatus::Failed;
     store.insert_task(&task).unwrap();
@@ -159,8 +153,7 @@ fn export_sharegpt_rejects_failed_tasks() {
 
 #[test]
 fn export_sharegpt_rejects_hollow_delivery_done_tasks() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let mut task = done_task("t-sharegpt-hollow", Some("resolved system prompt"));
     task.delivery_assessment = Some(crate::types::DeliveryAssessment::HollowOutput);
     store.insert_task(&task).unwrap();

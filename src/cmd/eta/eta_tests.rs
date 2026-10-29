@@ -97,66 +97,43 @@ fn estimate_eta_returns_remaining_time() {
 }
 
 #[test]
-fn test_estimate_progress_returns_percentage() {
-    let (_temp, _guard, store) = isolated_store();
-    let now = Local::now();
-    for (id, minutes_ago, duration_ms) in [
-        ("t-done-1", 10, 120_000),
-        ("t-done-2", 20, 180_000),
-        ("t-done-3", 30, 240_000),
+fn progress_reports_percentage_and_caps_at_99() {
+    for (case, elapsed_seconds, expected) in [
+        ("test_estimate_progress_returns_percentage", 90, 50),
+        ("test_estimate_progress_caps_at_99", 240, 99),
     ] {
-        store
-            .insert_task(&make_task(
-                id,
-                AgentKind::Codex,
-                TaskStatus::Done,
-                now - Duration::minutes(minutes_ago),
-                Some(duration_ms),
-            ))
-            .unwrap();
+        eprintln!("case: {case}");
+        let (_temp, _guard, store) = isolated_store();
+        let now = Local::now();
+        for (id, minutes_ago, duration_ms) in [
+            ("t-done-1", 10, 120_000),
+            ("t-done-2", 20, 180_000),
+            ("t-done-3", 30, 240_000),
+        ] {
+            store
+                .insert_task(&make_task(
+                    id,
+                    AgentKind::Codex,
+                    TaskStatus::Done,
+                    now - Duration::minutes(minutes_ago),
+                    Some(duration_ms),
+                ))
+                .unwrap();
+        }
+
+        let running = make_task(
+            "t-run",
+            AgentKind::Codex,
+            TaskStatus::Running,
+            now - Duration::seconds(elapsed_seconds),
+            None,
+        );
+
+        assert_eq!(estimate_progress_at(&running, &store, now), Some(expected));
     }
-
-    let running = make_task(
-        "t-run",
-        AgentKind::Codex,
-        TaskStatus::Running,
-        now - Duration::seconds(90),
-        None,
-    );
-
-    assert_eq!(estimate_progress_at(&running, &store, now), Some(50));
 }
 
-#[test]
-fn test_estimate_progress_caps_at_99() {
-    let (_temp, _guard, store) = isolated_store();
-    let now = Local::now();
-    for (id, minutes_ago, duration_ms) in [
-        ("t-done-1", 10, 120_000),
-        ("t-done-2", 20, 180_000),
-        ("t-done-3", 30, 240_000),
-    ] {
-        store
-            .insert_task(&make_task(
-                id,
-                AgentKind::Codex,
-                TaskStatus::Done,
-                now - Duration::minutes(minutes_ago),
-                Some(duration_ms),
-            ))
-            .unwrap();
-    }
 
-    let running = make_task(
-        "t-run",
-        AgentKind::Codex,
-        TaskStatus::Running,
-        now - Duration::seconds(240),
-        None,
-    );
-
-    assert_eq!(estimate_progress_at(&running, &store, now), Some(99));
-}
 
 #[test]
 fn test_estimate_progress_returns_none_without_history() {

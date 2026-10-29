@@ -1,5 +1,6 @@
 // Shared display formatting for byte and character limits, tokens, and elapsed milliseconds.
 // Exports plain formatting functions used by command and terminal interfaces.
+use chrono::{DateTime, Local};
 
 pub(crate) fn truncate(s: &str, max: usize) -> String {
     if s.len() <= max {
@@ -102,5 +103,51 @@ mod tests {
             assert_eq!(format_duration_optional_ms(Some(value)), expected);
         }
         assert_eq!(format_duration_optional_ms(None), "n/a");
+    }
+}
+
+pub(crate) fn title_case(name: &str) -> String {
+    name.split(|c: char| c == '-' || c == '_' || c.is_whitespace())
+        .filter(|seg| !seg.is_empty())
+        .map(|seg| {
+            let mut chars = seg.chars();
+            match chars.next() {
+                Some(f) => f.to_ascii_uppercase().to_string() + chars.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+pub(crate) fn format_relative_time(value: &str) -> String {
+    let Ok(parsed) = DateTime::parse_from_rfc3339(value) else {
+        return value.to_string();
+    };
+    let seconds = Local::now()
+        .signed_duration_since(parsed.with_timezone(&Local))
+        .num_seconds();
+    if seconds <= 0 {
+        "just now".to_string()
+    } else if seconds < 60 {
+        format!("{seconds}s ago")
+    } else if seconds < 3600 {
+        format!("{}m ago", seconds / 60)
+    } else if seconds < 86_400 {
+        format!("{}h ago", seconds / 3600)
+    } else {
+        format!("{}d ago", seconds / 86_400)
+    }
+}
+
+pub(crate) fn elapsed_since(start: chrono::DateTime<chrono::Local>) -> String {
+    let elapsed = chrono::Local::now() - start;
+    let secs = elapsed.num_seconds();
+    if secs < 0 {
+        "0s".to_string()
+    } else if secs < 60 {
+        format!("{secs}s")
+    } else {
+        format!("{}m {:02}s", secs / 60, secs % 60)
     }
 }

@@ -85,7 +85,7 @@ fn retry_keeps_user_model_and_only_the_current_resumable_session() {
     assert!(RunArgs::for_retry(&store, &row).unwrap().session_id.is_none());
 }
 
-fn every_field_set() -> RunArgs {
+pub(super) fn every_field_set() -> RunArgs {
     RunArgs {
         agent_name: "saved-agent".into(), prompt: "requested prompt".into(),
         prompt_file: Some("prompt.md".into()), repo: Some("/tmp/repo".into()),
@@ -131,7 +131,7 @@ fn every_field_set() -> RunArgs {
     }
 }
 
-fn assert_every_field_differs_from_default(saved: &RunArgs) {
+pub(super) fn assert_every_field_differs_from_default(saved: &RunArgs) {
     let default = serde_json::to_value(RunArgs::default()).unwrap();
     let saved = serde_json::to_value(saved).unwrap();
     for (key, value) in saved.as_object().unwrap() {

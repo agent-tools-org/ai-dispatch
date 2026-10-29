@@ -2,6 +2,7 @@
 // Exports: ProjectState IO helpers, compute_state, and prompt summary formatting.
 // Deps: anyhow, chrono, serde, toml, std, crate::{project, store, types}.
 #[cfg(test)]
+use crate::ui::format::format_relative_time;
 use crate::config::project::detect_project_in;
 use crate::store::Store;
 use crate::types::{Task, TaskFilter, TaskOutcome};
@@ -252,26 +253,6 @@ fn project_id_from_aid_dir(dir: &Path) -> Option<String> {
     crate::config::project::load_project(&project_path)
         .ok()
         .map(|config| config.id)
-}
-
-fn format_relative_time(value: &str) -> String {
-    let Ok(parsed) = DateTime::parse_from_rfc3339(value) else {
-        return value.to_string();
-    };
-    let seconds = Local::now()
-        .signed_duration_since(parsed.with_timezone(&Local))
-        .num_seconds();
-    if seconds <= 0 {
-        "just now".to_string()
-    } else if seconds < 60 {
-        format!("{seconds}s ago")
-    } else if seconds < 3600 {
-        format!("{}m ago", seconds / 60)
-    } else if seconds < 86_400 {
-        format!("{}h ago", seconds / 3600)
-    } else {
-        format!("{}d ago", seconds / 86_400)
-    }
 }
 
 fn recent_success_rate(recent_tasks: &[Task]) -> f64 {

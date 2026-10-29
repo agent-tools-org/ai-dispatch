@@ -68,13 +68,7 @@ fn parse_assistant_event(
         v.get("session_id").and_then(|value| value.as_str()),
     );
     let (detail, metadata) = capped_detail_with(text, metadata);
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Reasoning,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Reasoning, detail, now).with_metadata(metadata))
 }
 
 fn parse_tool_use_event(
@@ -100,13 +94,7 @@ fn build_tool_event(
         .map(|value| format!("{name}: {value}"))
         .unwrap_or_else(|| name.to_string());
     let (detail, metadata) = capped_detail(&text);
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::ToolCall,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::ToolCall, detail, now).with_metadata(metadata))
 }
 
 fn parse_system_event(
@@ -126,13 +114,7 @@ fn parse_system_event(
             v.get("session_id").and_then(|value| value.as_str()),
         );
         let (detail, metadata) = capped_detail_with(&detail, metadata);
-        return Some(TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: now,
-            event_kind: EventKind::Reasoning,
-            detail,
-            metadata,
-        });
+        return Some(TaskEvent::at(task_id.clone(), EventKind::Reasoning, detail, now).with_metadata(metadata));
     }
     if subtype == "hook_response" && v.get("outcome").and_then(|value| value.as_str()) == Some("error")
     {
@@ -141,13 +123,7 @@ fn parse_system_event(
             .or_else(|| v.get("output"))
             .and_then(|value| value.as_str())?;
         let (detail, metadata) = capped_detail(text);
-        return Some(TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: now,
-            event_kind: EventKind::Error,
-            detail,
-            metadata,
-        });
+        return Some(TaskEvent::at(task_id.clone(), EventKind::Error, detail, now).with_metadata(metadata));
     }
     None
 }
@@ -173,7 +149,7 @@ fn parse_user_event(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -
     // `~/.aid/rate-limit-claude` on 2026-08-07 off an agent's own message, and a
     // provider that was serving the whole time was held on opencode's needle.
     let (detail, metadata) = capped_detail(detail);
-    Some(TaskEvent { task_id: task_id.clone(), timestamp: now, event_kind: EventKind::Error, detail, metadata })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Error, detail, now).with_metadata(metadata))
 }
 
 fn parse_error_event(
@@ -184,13 +160,7 @@ fn parse_error_event(
         crate::routing::quota::channel::mark_stream_refusal(AgentKind::Claude, None, &v.to_string());
     }
     let (detail, metadata) = capped_detail(detail);
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Error,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Error, detail, now).with_metadata(metadata))
 }
 
 fn base_metadata(model: Option<&str>, session_id: Option<&str>) -> Option<Value> {

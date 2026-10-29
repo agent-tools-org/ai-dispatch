@@ -12,26 +12,10 @@ use crate::support::test_env::git;
 
 use crate::support::test_env::git_output;
 
-fn unique_branch(prefix: &str) -> String {
-    format!(
-        "{prefix}-{}-{}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    )
-}
+use crate::support::test_repo::unique_name as unique_branch;
 
 fn init_repo() -> TempDir {
-    let repo = TempDir::new().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("base.txt"), "base\n").unwrap();
-    git(repo.path(), &["add", "base.txt"]);
-    git(repo.path(), &["commit", "-m", "init"]);
-    repo
+    crate::support::test_repo::repo_with_file("base.txt", "base\n", "init")
 }
 
 #[test]

@@ -16,8 +16,7 @@ fn task_fixture(id: &str, status: TaskStatus, worktree_path: Option<&str>) -> Ta
 
 #[test]
 fn record_execution_failure_stores_phase_event_and_snapshot() {
-    let _aid_home = crate::support::test_env::TestHome::with_dirs();
-    let store = Store::open_memory().unwrap();
+    let (_aid_home, store) = crate::support::test_env::TestHome::with_dirs().store();
     let worktree_path = crate::workspace::worktree::aid_worktree_path(Path::new(env!("CARGO_MANIFEST_DIR")), "feat/fast-fail");
     let worktree_path = worktree_path.to_string_lossy().to_string();
     let task = task_fixture("t-fast-fail", TaskStatus::Running, Some(&worktree_path));

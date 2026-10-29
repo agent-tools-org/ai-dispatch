@@ -22,6 +22,7 @@ pub(crate) static VERIFY_LOCK: Mutex<()> = Mutex::new(());
 pub(crate) const VERIFY_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(Debug, Clone)]
+#[cfg_attr(test, derive(Default))]
 pub struct VerifyResult {
     pub success: bool,
     /// True when the verify command was killed by the wall-clock cap.

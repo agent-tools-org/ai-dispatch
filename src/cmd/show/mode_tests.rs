@@ -12,7 +12,7 @@ fn task(id: &str) -> Task {
     crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
 }
 
-fn numbered_assistant_log(count: usize, body_len: usize) -> String {
+pub(super) fn numbered_assistant_log(count: usize, body_len: usize) -> String {
     (0..count)
         .map(|index| {
             serde_json::to_string(&json!({

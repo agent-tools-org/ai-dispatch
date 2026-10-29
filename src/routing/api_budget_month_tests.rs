@@ -87,8 +87,7 @@ fn expiration_bonus_is_strictly_within_seven_days_and_below_eighty_percent_pace(
 
 #[test]
 fn launch_checks_completed_budget_without_installing_a_hold_or_changing_task_outcome() {
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     store
         .insert_task(&task("finished-over", Utc::now(), 250.0))
         .unwrap();

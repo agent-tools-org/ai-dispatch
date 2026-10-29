@@ -101,8 +101,7 @@ mod tests {
 
     #[test]
     fn unstick_queues_default_message_when_absent() {
-        let _temp = crate::support::test_env::TestHome::new();
-        let store = Store::open_memory().unwrap();
+        let (_temp, store) = crate::support::test_env::TestHome::new().store();
         store.insert_task(&make_task("t-unstick", TaskStatus::Running)).unwrap();
         save_process_spec("t-unstick", Some(std::process::id()), None);
 
@@ -116,8 +115,7 @@ mod tests {
 
     #[test]
     fn unstick_dead_worker_returns_error_without_queuing_nudge() {
-        let _temp = crate::support::test_env::TestHome::new();
-        let store = Store::open_memory().unwrap();
+        let (_temp, store) = crate::support::test_env::TestHome::new().store();
         store.insert_task(&make_task("t-dead", TaskStatus::Running)).unwrap();
         save_process_spec("t-dead", Some(999_999), Some(888_888));
 

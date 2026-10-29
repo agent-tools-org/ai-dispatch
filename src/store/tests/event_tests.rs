@@ -33,22 +33,20 @@ fn gets_latest_milestone() {
         .unwrap();
 
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId("t-0030".to_string()),
-            timestamp: Local::now() - chrono::Duration::seconds(2),
-            event_kind: EventKind::Milestone,
-            detail: "types defined".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::at(
+            TaskId("t-0030".to_string()),
+            EventKind::Milestone,
+            "types defined".to_string(),
+            Local::now() - chrono::Duration::seconds(2),
+        ))
         .unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId("t-0030".to_string()),
-            timestamp: Local::now() - chrono::Duration::seconds(1),
-            event_kind: EventKind::ToolCall,
-            detail: "cargo check".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::at(
+            TaskId("t-0030".to_string()),
+            EventKind::ToolCall,
+            "cargo check".to_string(),
+            Local::now() - chrono::Duration::seconds(1),
+        ))
         .unwrap();
     store
         .insert_event(&TaskEvent::new(
@@ -105,13 +103,12 @@ fn started_at_batch_uses_the_earliest_start_event_when_column_is_empty() {
     store.insert_task(&make_task("t-started-event", AgentKind::Codex, TaskStatus::Done)).unwrap();
     let started = Local::now() - chrono::Duration::minutes(2);
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId("t-started-event".to_string()),
-            timestamp: started,
-            event_kind: EventKind::Setup,
-            detail: "started".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::at(
+            TaskId("t-started-event".to_string()),
+            EventKind::Setup,
+            "started".to_string(),
+            started,
+        ))
         .unwrap();
 
     let values = store.started_at_batch(&["t-started-event"]).unwrap();

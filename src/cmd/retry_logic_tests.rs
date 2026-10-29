@@ -13,14 +13,7 @@ use crate::support::test_env::git;
 use crate::support::test_env::git_output;
 
 fn init_repo() -> tempfile::TempDir {
-    let repo = tempfile::tempdir().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("base.txt"), "base\n").unwrap();
-    git(repo.path(), &["add", "base.txt"]);
-    git(repo.path(), &["commit", "-m", "init"]);
-    repo
+    crate::support::test_repo::repo_with_file("base.txt", "base\n", "init")
 }
 
 fn failed_task(id: &str) -> Task {

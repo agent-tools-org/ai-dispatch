@@ -10,8 +10,7 @@ use rusqlite::params;
 
     #[test]
     fn clean_orphaned_shared_dirs_removes_unknown_workgroup_dirs() {
-        let _temp = crate::support::test_env::TestHome::new();
-        let store = Store::open_memory().unwrap();
+        let (_temp, store) = crate::support::test_env::TestHome::new().store();
         crate::support::shared_dir::create_shared_dir("wg-orphanned").unwrap();
         crate::support::shared_dir::create_shared_dir("wg-known").unwrap();
         store.create_workgroup("Known", "", None, Some("wg-known")).unwrap();
@@ -24,8 +23,7 @@ use rusqlite::params;
 
     #[test]
     fn failed_task_home_removal_does_not_abort_later_homes() {
-        let _aid_home = crate::support::test_env::TestHome::new();
-        let store = Store::open_memory().unwrap();
+        let (_aid_home, store) = crate::support::test_env::TestHome::new().store();
         for (id, created_at) in [("t-failed-home", "2026-01-02T00:00:00Z"), ("t-good-home", "2026-01-01T00:00:00Z")] {
             store.db().execute(
                 "INSERT INTO tasks (id, agent, prompt, status, created_at) VALUES (?1, 'codex', 'test', 'done', ?2)",
@@ -82,8 +80,7 @@ use rusqlite::params;
             }
         }
 
-        let aid_home = crate::support::test_env::TestHome::new();
-        let store = Store::open_memory().unwrap();
+        let (aid_home, store) = crate::support::test_env::TestHome::new().store();
         store.db().execute(
             "INSERT INTO tasks (id, agent, prompt, status, created_at) VALUES ('t-unresolved-home', 'codex', 'test', 'done', '2026-01-01T00:00:00Z')",
             [],

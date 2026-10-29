@@ -5,19 +5,11 @@ use super::*;
 
 #[tokio::test]
 async fn streaming_watch_populates_success_exit_code() {
-    let temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let task_id = TaskId("t-exit-code".to_string());
     insert_running_task(store.as_ref(), &task_id);
     let log_path = temp.path().join("stream.log");
-    let mut child = tokio::process::Command::new("sh")
-        .current_dir(temp.path())
-        .arg("-c")
-        .arg("printf 'done\\n'; exit 0")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+    let mut child = crate::support::test_command::piped_shell(temp.path(), "printf 'done\\n'; exit 0");
 
     let info = watch_streaming(
         &StubStreamingAgent,

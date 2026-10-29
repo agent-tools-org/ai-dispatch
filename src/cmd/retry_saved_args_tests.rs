@@ -60,13 +60,8 @@ fn retry_rehydrates_saved_context_scope_team_and_agent_override_wins() {
         RetryArgs {
             task_id: task.id.to_string(),
             feedback: Some("fix it".to_string()),
-            feedback_file: None,
             agent: Some("grok".to_string()),
-            model: None,
-            idle_timeout_secs: None,
-            dir: None,
-            reset: false,
-            bg: false,
+            ..Default::default()
         },
         false,
     ).unwrap();
@@ -177,13 +172,7 @@ fn retry_refuses_persisted_worktree_that_equals_repo_path() {
         RetryArgs {
             task_id: task.id.to_string(),
             feedback: Some("fix it".to_string()),
-            feedback_file: None,
-            agent: None,
-            model: None,
-            idle_timeout_secs: None,
-            dir: None,
-            reset: false,
-            bg: false,
+            ..Default::default()
         },
         false,
     ) {
@@ -243,13 +232,8 @@ fn retry_args(store: &Store, task: &Task, dir: Option<&str>) -> RunArgs {
         RetryArgs {
             task_id: task.id.to_string(),
             feedback: Some("fix it".to_string()),
-            feedback_file: None,
-            agent: None,
-            model: None,
-            idle_timeout_secs: None,
             dir: dir.map(str::to_string),
-            reset: false,
-            bg: false,
+            ..Default::default()
         },
         false,
     )

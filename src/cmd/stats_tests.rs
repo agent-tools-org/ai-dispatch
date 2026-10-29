@@ -36,7 +36,12 @@ fn collects_agent_failure_and_model_stats() {
     for task in [task("t-1", AgentKind::Codex, TaskStatus::Done, 1, "gpt-5.4", Some(10.0), Some(120_000), 1_000), task("t-2", AgentKind::Codex, TaskStatus::Failed, 2, "gpt-5.4", Some(5.0), Some(60_000), 1_000), task("t-3", AgentKind::Cursor, TaskStatus::Merged, 1, "composer-2", None, Some(90_000), 1_000), task("t-4", AgentKind::OpenCode, TaskStatus::Failed, 8, "glm-4.7", Some(1.0), Some(30_000), 1_000)] {
         store.insert_task(&task).unwrap();
     }
-    store.insert_event(&TaskEvent { task_id: TaskId("t-2".to_string()), timestamp: now, event_kind: EventKind::Error, detail: "verify failed (cargo check)".to_string(), metadata: None }).unwrap();
+    store.insert_event(&TaskEvent::at(
+        TaskId("t-2".to_string()),
+        EventKind::Error,
+        "verify failed (cargo check)".to_string(),
+        now,
+    )).unwrap();
     let stats = collect(&store, UsageWindow::Days(7), None, now).unwrap();
     assert_eq!(stats.agent_rows[0], AgentRow { agent: "codex".to_string(), tasks: 2, share_pct: 66, success_rate: 50.0, avg_duration_ms: Some(90_000), cost: "$15.00".to_string() });
     assert_eq!(stats.agent_rows[1], AgentRow { agent: "cursor".to_string(), tasks: 1, share_pct: 33, success_rate: 100.0, avg_duration_ms: Some(90_000), cost: "subscription".to_string() });

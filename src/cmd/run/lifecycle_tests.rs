@@ -29,7 +29,9 @@ fn write_path(dir: &Path, path: &str, content: &str) {
 }
 
 fn prompt_bundle() -> PromptBundle {
-    PromptBundle { effective_prompt: "prompt".to_string(), context_files: Vec::new(), prompt_tokens: 0, injected_memory_ids: Vec::new() }
+    PromptBundle { effective_prompt: "prompt".to_string(),
+        ..Default::default()
+    }
 }
 
 fn task(id: &str, status: TaskStatus) -> Task {

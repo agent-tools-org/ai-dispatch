@@ -27,13 +27,7 @@ pub(super) fn parse_item_event(
             }
             crate::routing::quota::channel::mark_stream_refusal(AgentKind::Codex, route, &item.to_string());
             let (detail, metadata) = capped_detail(message);
-            Some(TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: EventKind::Error,
-                detail,
-                metadata,
-            })
+            Some(TaskEvent::at(task_id.clone(), EventKind::Error, detail, now).with_metadata(metadata))
         }
         _ => None,
     }
@@ -63,22 +57,10 @@ fn parse_agent_message(
             .map(str::trim_start)
             .find(|line| line.starts_with("NO_CHANGES_NEEDED"))
     {
-        return Some(TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: now,
-            event_kind: EventKind::NoOp,
-            detail: extract_noop_reason(marker),
-            metadata: None,
-        });
+        return Some(TaskEvent::at(task_id.clone(), EventKind::NoOp, extract_noop_reason(marker), now));
     }
     let (detail, metadata) = capped_detail(text);
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Reasoning,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Reasoning, detail, now).with_metadata(metadata))
 }
 
 pub(super) fn parse_turn_completed(
@@ -107,20 +89,14 @@ pub(super) fn parse_turn_completed(
     };
 
     let cost_usd = v.get("cost_usd").and_then(|c| c.as_f64());
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Completion,
-        detail,
-        metadata: Some(completion_metadata(
+    Some(TaskEvent::at(task_id.clone(), EventKind::Completion, detail, now).with_metadata(Some(completion_metadata(
             total_tokens,
             input_tokens,
             output_tokens,
             cached_input_tokens,
             extract_model(v),
             cost_usd,
-        )),
-    })
+        ))))
 }
 
 pub(super) fn parse_error_event(
@@ -138,13 +114,7 @@ pub(super) fn parse_error_event(
     crate::routing::quota::channel::mark_stream_refusal(AgentKind::Codex, route, &v.to_string());
 
     let (detail, metadata) = capped_detail(detail);
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Error,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Error, detail, now).with_metadata(metadata))
 }
 
 pub(super) fn parse_thread_started(
@@ -157,13 +127,7 @@ pub(super) fn parse_thread_started(
     if let Some(model) = v.get("model").and_then(Value::as_str) {
         metadata["model"] = json!(model);
     }
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Milestone,
-        detail: format!("session {}", thread_id),
-        metadata: Some(metadata),
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Milestone, format!("session {}", thread_id), now).with_metadata(Some(metadata)))
 }
 
 fn parse_file_change_event(
@@ -185,13 +149,7 @@ fn parse_file_change_event(
         format!("{} files changed", paths.len())
     };
     let (detail, metadata) = capped_detail_with(&text, Some(json!({ "files": paths })));
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::FileWrite,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::FileWrite, detail, now).with_metadata(metadata))
 }
 
 fn completion_metadata(

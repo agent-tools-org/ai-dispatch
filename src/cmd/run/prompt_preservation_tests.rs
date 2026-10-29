@@ -4,8 +4,7 @@ use super::*;
 
 #[test]
 fn retry_task_above_token_budget_keeps_feedback_and_original_whole() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let feedback = "feedback line\n".repeat(600);
     let original = "original task line\n".repeat(9000);
     let args = RunArgs {
@@ -34,8 +33,7 @@ fn auxiliary_omission_records_one_visible_warning_event() {
         return;
     }
     crate::ui::output::set_quiet(true);
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     insert_prompt_task(&store, "task-warning");
     let group = store
         .create_workgroup("test", &"shared line\n".repeat(1000), None, None)
@@ -119,8 +117,7 @@ fn insert_prompt_task(store: &Store, task_id: &str) {
 
 #[test]
 fn task_over_6500_chars_is_delivered_whole_with_context_flag_without_a_warning() {
-    let temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (temp, store) = crate::support::test_env::TestHome::new().store();
     let context = temp.path().join("context.md");
     std::fs::write(&context, "caller context").unwrap();
     let args = RunArgs {
@@ -150,8 +147,7 @@ fn task_over_6500_chars_is_delivered_whole_with_context_flag_without_a_warning()
 
 #[test]
 fn stored_context_preservation_bounds_memory_and_rules_with_one_warning() {
-    let home = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (home, store) = crate::support::test_env::TestHome::new().store();
     insert_prompt_task(&store, "task-warning");
     store.insert_memory(&large_memory(home.path())).unwrap();
     let project = project::ProjectConfig {

@@ -39,14 +39,8 @@ impl Fixture {
                 store
                     .record_agent_completion(
                         TaskCompletionUpdate {
-                            id: task.id.as_str(),
-                            status,
-                            tokens: None,
-                            duration_ms: 77,
-                            observed_model: None,
-                            attribution_source: None,
-                            cost_usd: None,
                             exit_code: Some(0),
+                            ..TaskCompletionUpdate::new(task.id.as_str(), status, 77)
                         },
                         None
                     )

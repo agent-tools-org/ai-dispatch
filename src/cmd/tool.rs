@@ -2,6 +2,7 @@
 // Exports: run_tool_command.
 // Deps: crate::config::toolbox, crate::support::sanitize, anyhow, std::fs.
 
+use crate::ui::format::title_case;
 use anyhow::{bail, Context, Result};
 use std::fs;
 
@@ -125,20 +126,6 @@ fn test_tool(name: &str, team: Option<&str>, args: &[String]) -> Result<()> {
         println!("Tool '{}' exited with status {}", name, code);
     }
     Ok(())
-}
-
-fn title_case(name: &str) -> String {
-    name.split(|c: char| c == '-' || c == '_' || c.is_whitespace())
-        .filter(|seg| !seg.is_empty())
-        .map(|seg| {
-            let mut chars = seg.chars();
-            match chars.next() {
-                Some(f) => f.to_ascii_uppercase().to_string() + chars.as_str(),
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 #[cfg(test)]

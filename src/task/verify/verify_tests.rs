@@ -134,12 +134,9 @@ fn configured_skip_command_fails() {
 fn format_report_pass() {
     let result = VerifyResult {
         success: true,
-        timed_out: false,
         output: "all good".to_string(),
         command: "cargo check".to_string(),
-        infrastructure_failure: false,
-        rbox_result: None,
-        exit_code: None,
+        ..Default::default()
     };
     let report = format_verify_report(&result);
     assert!(report.starts_with("Verify PASS"));
@@ -148,13 +145,9 @@ fn format_report_pass() {
 #[test]
 fn format_report_fail_shows_output() {
     let result = VerifyResult {
-        success: false,
-        timed_out: false,
         output: "error[E0308]: mismatched types".to_string(),
         command: "cargo check".to_string(),
-        infrastructure_failure: false,
-        rbox_result: None,
-        exit_code: None,
+        ..Default::default()
     };
     let report = format_verify_report(&result);
     assert!(report.contains("FAIL"));
@@ -204,13 +197,10 @@ fn record_verify_status_maps_timeout_separately_from_failure() {
         &store,
         &task.id,
         &VerifyResult {
-            success: false,
             timed_out: true,
             output: "Verification timed out after 1 seconds".to_string(),
             command: "sleep 30".to_string(),
-            infrastructure_failure: false,
-            rbox_result: None,
-        exit_code: None,
+            ..Default::default()
         },
     );
     let loaded = store.get_task(task.id.as_str()).unwrap().unwrap();
@@ -221,13 +211,10 @@ fn record_verify_status_maps_timeout_separately_from_failure() {
 #[test]
 fn format_report_timeout_label() {
     let result = VerifyResult {
-        success: false,
         timed_out: true,
         output: "still compiling".to_string(),
         command: "cargo test".to_string(),
-        infrastructure_failure: false,
-        rbox_result: None,
-        exit_code: None,
+        ..Default::default()
     };
     let report = format_verify_report(&result);
     assert!(report.starts_with("Verify TIMEOUT"));

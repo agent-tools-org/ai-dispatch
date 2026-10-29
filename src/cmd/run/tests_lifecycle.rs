@@ -86,8 +86,7 @@ fn auto_save_creates_output_for_research_task() {
 
 #[tokio::test]
 async fn dry_run_returns_without_starting_task() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task_id = run(
         store.clone(),
         RunArgs {
@@ -110,8 +109,7 @@ async fn dry_run_returns_without_starting_task() {
 
 #[tokio::test]
 async fn run_records_worktree_setup_failure_event() {
-    let temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task_id = TaskId("t-worktree-fail".to_string());
 
     let err = run(

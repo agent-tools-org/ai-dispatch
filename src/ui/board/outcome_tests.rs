@@ -21,8 +21,7 @@ fn timed_out_task() -> Task {
 
 #[test]
 fn board_marks_timed_out_verification_without_counting_success() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
 
     let output = render_board(&[timed_out_task()], &store).unwrap();
 
@@ -32,8 +31,7 @@ fn board_marks_timed_out_verification_without_counting_success() {
 
 #[test]
 fn infrastructure_verification_renders_its_own_tag() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let mut task = timed_out_task();
     task.verify_status = VerifyStatus::InfrastructureFailure;
     store.insert_task(&task).expect("task");
@@ -52,8 +50,7 @@ fn infrastructure_verification_renders_its_own_tag() {
 
 #[test]
 fn board_omits_verification_tags_when_no_verification_result_exists() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let mut failed = timed_out_task();
     failed.id = TaskId("t-failed".to_string());
     failed.status = TaskStatus::Failed;
@@ -73,8 +70,7 @@ fn board_omits_verification_tags_when_no_verification_result_exists() {
 
 #[test]
 fn board_counts_only_active_lifecycle_statuses_as_running() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let mut waiting = timed_out_task();
     waiting.id = TaskId("t-waiting".to_string());
     waiting.status = TaskStatus::Waiting;
@@ -94,8 +90,7 @@ fn board_counts_only_active_lifecycle_statuses_as_running() {
 
 #[test]
 fn board_marks_unobserved_detach_without_counting_success() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let mut task = timed_out_task();
     task.id = TaskId("t-unobserved".to_string());
     task.verify = None;
@@ -109,8 +104,7 @@ fn board_marks_unobserved_detach_without_counting_success() {
 
 #[test]
 fn board_does_not_count_stopped_tasks_as_failed() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let mut stopped = timed_out_task();
     stopped.status = TaskStatus::Stopped;
     stopped.verify_status = VerifyStatus::Skipped;
@@ -123,8 +117,7 @@ fn board_does_not_count_stopped_tasks_as_failed() {
 
 #[test]
 fn board_total_names_unknown_costs_instead_of_hiding_them() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let mut unknown = timed_out_task();
     unknown.tokens = Some(5_000);
     let mut priced = timed_out_task();

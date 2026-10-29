@@ -15,14 +15,7 @@ use crate::support::test_env::git;
 use crate::support::test_env::git_output;
 
 fn init_repo() -> tempfile::TempDir {
-    let repo = tempfile::tempdir().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("base.txt"), "base\n").unwrap();
-    git(repo.path(), &["add", "base.txt"]);
-    git(repo.path(), &["commit", "-m", "init"]);
-    repo
+    crate::support::test_repo::repo_with_file("base.txt", "base\n", "init")
 }
 
 fn failed_task(repo: &Path, worktree: &Path, branch: &str) -> Task {
@@ -60,13 +53,7 @@ fn retry_recreates_pruned_committed_worktree_at_branch_tip() {
     let retry = retry_task_to_run_args(&store, &task, RetryArgs {
         task_id: task.id.to_string(),
         feedback: Some("continue".to_string()),
-        feedback_file: None,
-        agent: None,
-        model: None,
-        idle_timeout_secs: None,
-        dir: None,
-        reset: false,
-        bg: false,
+        ..Default::default()
     }, false).unwrap();
 
     assert_eq!(retry.base_branch.as_deref(), Some(branch.as_str()));

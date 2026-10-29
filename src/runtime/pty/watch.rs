@@ -92,13 +92,7 @@ impl MonitorState {
     ) -> Self {
         Self {
             absolute_deadline: Instant::now() + timeout_policy.max_duration.min(timeout_policy.hard_cap),
-            info: CompletionInfo {
-                tokens: None,
-                status: TaskStatus::Done,
-                model: None,
-                cost_usd: None,
-                exit_code: None,
-            },
+            info: CompletionInfo::new(TaskStatus::Done),
             full_output: String::new(),
             line_buffer: String::new(),
             event_count: 0,

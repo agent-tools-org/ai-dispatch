@@ -102,13 +102,12 @@ mod tests {
     use chrono::{Duration, Local};
 
     fn event(kind: EventKind, detail: &str, age_seconds: i64) -> TaskEvent {
-        TaskEvent {
-            task_id: TaskId("t-state".to_string()),
-            timestamp: Local::now() - Duration::seconds(age_seconds),
-            event_kind: kind,
-            detail: detail.to_string(),
-            metadata: None,
-        }
+        TaskEvent::at(
+            TaskId("t-state".to_string()),
+            kind,
+            detail.to_string(),
+            Local::now() - Duration::seconds(age_seconds),
+        )
     }
 
     #[test]

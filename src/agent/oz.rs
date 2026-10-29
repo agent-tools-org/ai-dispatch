@@ -71,35 +71,17 @@ impl super::Agent for OzAgent {
                     return None;
                 }
                 let (detail, metadata) = capped_detail(text);
-                Some(TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: now,
-                    event_kind: EventKind::Reasoning,
-                    detail,
-                    metadata,
-                })
+                Some(TaskEvent::at(task_id.clone(), EventKind::Reasoning, detail, now).with_metadata(metadata))
             }
             "tool_call" => {
                 let (event_kind, detail, metadata) = parse_tool_call(&v);
-                Some(TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: now,
-                    event_kind,
-                    detail,
-                    metadata,
-                })
+                Some(TaskEvent::at(task_id.clone(), event_kind, detail, now).with_metadata(metadata))
             }
             "error" => {
                 let msg = v.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error");
                 crate::routing::quota::channel::mark_stream_refusal(crate::types::AgentKind::Oz, None, line);
                 let (detail, metadata) = capped_detail(msg);
-                Some(TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: now,
-                    event_kind: EventKind::Error,
-                    detail,
-                    metadata,
-                })
+                Some(TaskEvent::at(task_id.clone(), EventKind::Error, detail, now).with_metadata(metadata))
             }
             "tool_result" | "system" => None,
             _ => None,

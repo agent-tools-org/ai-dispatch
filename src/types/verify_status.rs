@@ -60,15 +60,6 @@ impl VerifyStatus {
         }
     }
 
-    #[cfg(test)]
-    /// True when a verify command was started (pass, fail, or timeout).
-    /// Distinct from delivery: an empty-diff task can still have been verified.
-    pub fn was_attempted(self) -> bool {
-        matches!(
-            self,
-            Self::Passed | Self::Failed | Self::TimedOut | Self::InfrastructureFailure
-        )
-    }
 }
 
 #[cfg(test)]
@@ -99,14 +90,4 @@ mod tests {
         assert_eq!(VerifyStatus::parse_str("unobserved"), Some(VerifyStatus::Unobserved));
     }
 
-    #[test]
-    fn was_attempted_excludes_skipped_pending_and_unobserved() {
-        assert!(VerifyStatus::Passed.was_attempted());
-        assert!(VerifyStatus::Failed.was_attempted());
-        assert!(VerifyStatus::TimedOut.was_attempted());
-        assert!(VerifyStatus::InfrastructureFailure.was_attempted());
-        assert!(!VerifyStatus::Skipped.was_attempted());
-        assert!(!VerifyStatus::Pending.was_attempted());
-        assert!(!VerifyStatus::Unobserved.was_attempted());
-    }
 }

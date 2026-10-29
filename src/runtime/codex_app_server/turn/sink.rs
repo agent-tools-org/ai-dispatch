@@ -25,13 +25,7 @@ impl<'a> Sink<'a> {
     pub fn new(run: &'a Run<'a>) -> Result<Self> {
         Ok(Self {
             run,
-            info: CompletionInfo {
-                status: TaskStatus::Done,
-                tokens: None,
-                model: None,
-                cost_usd: None,
-                exit_code: None,
-            },
+            info: CompletionInfo::new(TaskStatus::Done),
             log: std::fs::File::create(run.log)?,
             tracker: SyntheticMilestoneTracker::new(),
             delivery: DeliveryEvidence::default(),

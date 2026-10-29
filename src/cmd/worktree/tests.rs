@@ -12,12 +12,7 @@ use std::process::Command;
 use crate::support::test_env::git;
 
 fn init_repo(repo_dir: &Path) {
-    git(repo_dir, &["init", "-b", "main"]);
-    git(repo_dir, &["config", "user.email", "test@example.com"]);
-    git(repo_dir, &["config", "user.name", "Test User"]);
-    std::fs::write(repo_dir.join("file.txt"), "hello\n").unwrap();
-    git(repo_dir, &["add", "file.txt"]);
-    git(repo_dir, &["commit", "-m", "init"]);
+    crate::support::test_repo::init_with_file(repo_dir, "file.txt", "hello\n", "init")
 }
 
 fn legacy_path(name: &str) -> PathBuf {

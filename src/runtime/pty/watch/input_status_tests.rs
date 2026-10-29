@@ -27,8 +27,7 @@ fn auto_unstick_queue_status_audit_regression() {
 #[test]
 fn steer_pty_write_status_audit_regression() {
     let _permit = crate::support::test_subprocess::acquire();
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_home, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut task = super::tests::pty_task("t-steer-stage", TaskStatus::Running);
     task.agent = AgentKind::Cursor;
     store.insert_task(&task).unwrap();

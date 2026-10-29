@@ -20,8 +20,7 @@ fn make_task(id: &str, status: TaskStatus) -> Task {
 
 #[test]
 fn reply_async_returns_immediately() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     store.insert_task(&make_task("t-reply-async", TaskStatus::Running)).unwrap();
 
     let outcome = run(&store, "t-reply-async", Some("follow this path"), None, true, 30).unwrap();
@@ -35,8 +34,7 @@ fn reply_async_returns_immediately() {
 
 #[test]
 fn reply_polls_until_written() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     store.insert_task(&make_task("t-reply-ack", TaskStatus::AwaitingInput)).unwrap();
 
     let mut polls = 0usize;
@@ -65,8 +63,7 @@ fn reply_polls_until_written() {
 
 #[test]
 fn reply_times_out_cleanly() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     store.insert_task(&make_task("t-reply-timeout", TaskStatus::Stalled)).unwrap();
 
     let outcome = run_with_hook(

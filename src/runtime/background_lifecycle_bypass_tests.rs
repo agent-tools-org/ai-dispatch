@@ -16,8 +16,7 @@ use std::time::{Duration, Instant};
 
 #[tokio::test]
 async fn worker_keeps_spec_until_error_lifecycle_finishes() {
-    let temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let id = "t-bg-barrier";
     // The agent resolves for the lifecycle but its binary is missing, so the
     // worker fails before launching anything.
@@ -45,8 +44,7 @@ async fn worker_keeps_spec_until_error_lifecycle_finishes() {
 
 #[tokio::test]
 async fn inner_error_runs_post_lifecycle_once_without_duplicate_callbacks() {
-    let temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     store
         .insert_task(&task("t-bg-error", TaskStatus::Running))
         .unwrap();
@@ -72,8 +70,7 @@ async fn inner_error_runs_post_lifecycle_once_without_duplicate_callbacks() {
 
 #[tokio::test]
 async fn inner_error_appends_completion_exactly_once() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     store
         .insert_task(&task("t-bg-completion", TaskStatus::Running))
         .unwrap();
@@ -93,8 +90,7 @@ async fn inner_error_appends_completion_exactly_once() {
 
 #[tokio::test]
 async fn worker_without_saved_args_fails_the_task_and_notifies_once() {
-    let temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let id = "t-bg-unsaved";
     store.insert_task(&task(id, TaskStatus::Running)).unwrap();
     let done_path = temp.path().join("done.txt");
@@ -166,19 +162,8 @@ fn spec(task_id: &str) -> BackgroundRunSpec {
     BackgroundRunSpec {
         task_id: task_id.to_string(),
         worker_pid: Some(123),
-        dir: None,
-        budget: false,
-        max_duration_mins: None,
-        max_duration_secs: None,
-        idle_timeout_secs: None,
         interactive: true,
-        on_done: None,
-        env: None,
-        agent_pid: None,
-        agent_started: None,
-        audit_report_mode: false,
-        pre_task_dirty_paths: None,
-        foreground: false,
+        ..Default::default()
     }
 }
 

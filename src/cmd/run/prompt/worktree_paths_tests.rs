@@ -12,12 +12,7 @@ use crate::support::test_env::git;
 use crate::support::test_env::git_output;
 
 fn init_git_repo_with_commit(dir: &Path) {
-    git(dir, &["init", "-b", "main"]);
-    git(dir, &["config", "user.email", "test@example.com"]);
-    git(dir, &["config", "user.name", "Test User"]);
-    std::fs::write(dir.join("file.txt"), "hello\n").unwrap();
-    git(dir, &["add", "file.txt"]);
-    git(dir, &["commit", "-m", "init"]);
+    crate::support::test_repo::init_with_file(dir, "file.txt", "hello\n", "init")
 }
 
 #[test]

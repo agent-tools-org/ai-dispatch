@@ -58,6 +58,7 @@ struct DiagnosticKey {
 }
 
 #[derive(Debug)]
+#[cfg_attr(test, derive(Default))]
 pub(crate) struct BuildReport {
     pub(crate) success: bool,
     pub(crate) command: String,

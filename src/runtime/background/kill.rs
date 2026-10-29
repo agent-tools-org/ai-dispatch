@@ -107,18 +107,9 @@ mod tests {
             task_id: "t-kill".to_string(),
             worker_pid: Some(11),
             dir: Some(".".to_string()),
-            budget: false,
-            max_duration_mins: None,
-            max_duration_secs: None,
-            idle_timeout_secs: None,
             interactive: true,
-            on_done: None,
-            env: None,
             agent_pid,
-            agent_started: None,
-            audit_report_mode: false,
-            pre_task_dirty_paths: None,
-            foreground: false,
+            ..Default::default()
         }
     }
 

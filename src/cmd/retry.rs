@@ -11,6 +11,7 @@ use crate::agent::model_validation::ModelSource;
 use crate::store::Store;
 use crate::types::TaskId;
 
+#[cfg_attr(test, derive(Default))]
 pub struct RetryArgs {
     pub task_id: String,
     pub feedback: Option<String>,

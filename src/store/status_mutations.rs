@@ -236,13 +236,12 @@ fn stop_unlaunched_child(tx: &rusqlite::Transaction<'_>, id: &str) -> Result<Opt
     )?;
     super::mutations::insert_event_on(
         tx,
-        &TaskEvent {
-            task_id: TaskId(id.to_string()),
-            timestamp: now,
-            event_kind: EventKind::Completion,
-            detail: format!("Parent task '{parent}' stopped; child launch refused"),
-            metadata: None,
-        },
+        &TaskEvent::at(
+            TaskId(id.to_string()),
+            EventKind::Completion,
+            format!("Parent task '{parent}' stopped; child launch refused"),
+            now,
+        ),
     )?;
     Ok(Some(parent))
 }

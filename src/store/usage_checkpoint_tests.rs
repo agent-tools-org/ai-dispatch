@@ -26,13 +26,7 @@ fn setup(store: &Store, kind: AgentKind) -> TaskId {
 }
 
 fn info() -> CompletionInfo {
-    CompletionInfo {
-        tokens: None,
-        cost_usd: None,
-        model: None,
-        status: TaskStatus::Done,
-        exit_code: None,
-    }
+    CompletionInfo::new(TaskStatus::Done)
 }
 
 fn ingest(store: &Arc<Store>, id: &TaskId, agent: &dyn Agent, lines: &str) -> CompletionInfo {
@@ -70,14 +64,9 @@ fn complete(
         store
             .record_agent_completion(
                 TaskCompletionUpdate {
-                    id: id.as_str(),
-                    status,
-                    tokens,
-                    duration_ms: 100,
-                    observed_model: None,
-                    attribution_source: None,
+                    tokens: tokens,
                     cost_usd: cost,
-                    exit_code: None,
+                    ..TaskCompletionUpdate::new(id.as_str(), status, 100)
                 },
                 None
             )

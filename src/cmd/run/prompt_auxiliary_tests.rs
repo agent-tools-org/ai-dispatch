@@ -60,8 +60,7 @@ fn assert_bounded(store: &Store, prompt: &str, label: &str) {
 
 #[test]
 fn sibling_file_list_preservation_bounds_auxiliary_and_warns_once() {
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     let group = store.create_workgroup("siblings", "", None, None).unwrap();
     insert_task(&store, "t-current", None, Some(group.id.as_str()));
     insert_task(&store, "t-sibling", None, Some(group.id.as_str()));
@@ -75,10 +74,8 @@ fn sibling_file_list_preservation_bounds_auxiliary_and_warns_once() {
         files_changed: (0..4000)
             .map(|n| format!("src/very_long_file_name_{n}.rs"))
             .collect(),
-        summary_text: String::new(),
         conclusion: "Conclusion preserved".into(),
-        duration_secs: None,
-        token_count: None,
+        ..Default::default()
     };
     store
         .save_completion_summary("t-sibling", &serde_json::to_string(&summary).unwrap())
@@ -97,8 +94,7 @@ fn sibling_file_list_preservation_bounds_auxiliary_and_warns_once() {
 
 #[test]
 fn prior_output_preservation_bounds_auxiliary_and_warns_once() {
-    let home = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (home, store) = crate::support::test_env::TestHome::new().store();
     let output = home.path().join("output.md");
     std::fs::write(&output, "Prior result é\n".repeat(8000)).unwrap();
     insert_task(&store, "t-prior", Some(output.to_str().unwrap()), None);
@@ -145,8 +141,7 @@ fn shared_output_preservation_bounds_auxiliary_and_warns_once() {
         );
         return;
     }
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     insert_task(&store, "t-current", None, None);
     let args = RunArgs {
         prompt: "Caller brief".into(),
@@ -162,8 +157,7 @@ fn shared_output_preservation_bounds_auxiliary_and_warns_once() {
 
 #[test]
 fn methodology_preservation_bounds_auxiliary_and_aggregates_warning() {
-    let home = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (home, store) = crate::support::test_env::TestHome::new().store();
     insert_task(&store, "t-current", None, None);
     let skills = crate::support::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&skills).unwrap();
@@ -188,8 +182,7 @@ fn methodology_preservation_bounds_auxiliary_and_aggregates_warning() {
 
 #[test]
 fn background_cascade_preservation_does_not_accumulate_launch_context() {
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     let group = store
         .create_workgroup("cascade", "Injected shared context", None, None)
         .unwrap();

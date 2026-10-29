@@ -226,36 +226,36 @@ fn build_prompt_bundle_includes_shared_dir_instruction_when_env_is_set() {
 }
 
 #[test]
-fn fill_empty_output_from_log_populates_zero_byte_file() {
-    let log = tempfile::NamedTempFile::new().unwrap();
-    let output = tempfile::NamedTempFile::new().unwrap();
-    std::fs::write(
-        log.path(),
-        "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"human-readable output\"}\n",
-    )
-    .unwrap();
-    std::fs::write(output.path(), "").unwrap();
+fn fill_empty_output_from_log_preserves_existing_content() {
+    for (initial, log, expected) in [
+        (
+            "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"human-readable output\"}\n",
+            "",
+            "human-readable output",
+        ),
+        (
+            "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"replacement\"}\n",
+            "existing",
+            "existing",
+        ),
+    ] {
+        eprintln!("case: {:?}", (initial, log, expected));
+        let log = tempfile::NamedTempFile::new().unwrap();
+        let output = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            log.path(),
+            initial,
+        )
+        .unwrap();
+        std::fs::write(output.path(), log).unwrap();
 
-    fill_empty_output_from_log(log.path(), Some(output.path()), None).unwrap();
+        fill_empty_output_from_log(log.path(), Some(output.path()), None).unwrap();
 
-    assert_eq!(
-        std::fs::read_to_string(output.path()).unwrap(),
-        "human-readable output"
-    );
+        assert_eq!(
+            std::fs::read_to_string(output.path()).unwrap(),
+            expected
+        );
+    }
 }
 
-#[test]
-fn fill_empty_output_from_log_keeps_existing_output() {
-    let log = tempfile::NamedTempFile::new().unwrap();
-    let output = tempfile::NamedTempFile::new().unwrap();
-    std::fs::write(
-        log.path(),
-        "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"replacement\"}\n",
-    )
-    .unwrap();
-    std::fs::write(output.path(), "existing").unwrap();
 
-    fill_empty_output_from_log(log.path(), Some(output.path()), None).unwrap();
-
-    assert_eq!(std::fs::read_to_string(output.path()).unwrap(), "existing");
-}

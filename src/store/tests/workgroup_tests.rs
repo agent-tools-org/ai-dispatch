@@ -37,31 +37,28 @@ fn gets_workgroup_milestones() {
     store.insert_task(&other).unwrap();
 
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId("t-0040".to_string()),
-            timestamp: Local::now() - chrono::Duration::seconds(3),
-            event_kind: EventKind::Milestone,
-            detail: "finding one".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::at(
+            TaskId("t-0040".to_string()),
+            EventKind::Milestone,
+            "finding one".to_string(),
+            Local::now() - chrono::Duration::seconds(3),
+        ))
         .unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId("t-0040".to_string()),
-            timestamp: Local::now() - chrono::Duration::seconds(2),
-            event_kind: EventKind::ToolCall,
-            detail: "ignored".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::at(
+            TaskId("t-0040".to_string()),
+            EventKind::ToolCall,
+            "ignored".to_string(),
+            Local::now() - chrono::Duration::seconds(2),
+        ))
         .unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId("t-0041".to_string()),
-            timestamp: Local::now() - chrono::Duration::seconds(1),
-            event_kind: EventKind::Milestone,
-            detail: "finding two".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::at(
+            TaskId("t-0041".to_string()),
+            EventKind::Milestone,
+            "finding two".to_string(),
+            Local::now() - chrono::Duration::seconds(1),
+        ))
         .unwrap();
     store
         .insert_event(&TaskEvent::new(

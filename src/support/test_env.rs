@@ -160,6 +160,10 @@ pub(crate) fn git(dir: &Path, args: &[&str]) {
     git_stdout(dir, args);
 }
 
+pub(crate) fn git_at(dir: &str, args: &[&str]) {
+    git(Path::new(dir), args);
+}
+
 pub(crate) fn git_output(dir: &Path, args: &[&str]) -> String {
     git_stdout(dir, args).trim().to_string()
 }
@@ -186,6 +190,16 @@ pub(crate) struct TestHome {
 }
 
 impl TestHome {
+    pub(crate) fn store(self) -> (Self, crate::store::Store) {
+        let store = crate::store::Store::open_memory().expect("test store");
+        (self, store)
+    }
+
+    pub(crate) fn shared_store(self) -> (Self, std::sync::Arc<crate::store::Store>) {
+        let (home, store) = self.store();
+        (home, std::sync::Arc::new(store))
+    }
+
     pub(crate) fn new() -> Self {
         let dir = tempfile::tempdir().expect("test home");
         let guard = crate::support::paths::AidHomeGuard::set(dir.path());

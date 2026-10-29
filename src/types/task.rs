@@ -208,33 +208,7 @@ pub struct TaskEvent {
     pub metadata: Option<serde_json::Value>,
 }
 
-impl TaskEvent {
-    pub(crate) fn new(task_id: TaskId, event_kind: EventKind, detail: String) -> Self {
-        Self {
-            task_id,
-            timestamp: Local::now(),
-            event_kind,
-            detail,
-            metadata: None,
-        }
-    }
 
-    pub(crate) fn with_metadata(mut self, metadata: Option<serde_json::Value>) -> Self {
-        self.metadata = metadata;
-        self
-    }
-
-    /// Untruncated detail: parsers stash text over the display cap in
-    /// metadata under `"full"`.
-    pub fn full_detail(&self) -> std::borrow::Cow<'_, str> {
-        let detail = self.metadata
-            .as_ref()
-            .and_then(|meta| meta.get("full"))
-            .and_then(|value| value.as_str())
-            .unwrap_or(&self.detail);
-        self.render_detail(detail)
-    }
-}
 
 #[derive(Debug, Clone, Copy)]
 pub enum TaskFilter {
@@ -253,6 +227,18 @@ pub struct CompletionInfo {
     pub model: Option<String>,
     pub cost_usd: Option<f64>,
     pub exit_code: Option<i32>,
+}
+
+impl CompletionInfo {
+    pub(crate) fn new(status: TaskStatus) -> Self {
+        Self {
+            tokens: None,
+            status,
+            model: None,
+            cost_usd: None,
+            exit_code: None,
+        }
+    }
 }
 
 /// Renders model attribution for humans. An unconfirmed request is marked with

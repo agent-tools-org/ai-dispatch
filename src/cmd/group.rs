@@ -167,8 +167,7 @@ mod tests {
 
     #[test]
     fn cancel_group_stops_only_non_terminal_tasks() {
-        let _temp = crate::support::test_env::TestHome::new();
-        let store = Arc::new(Store::open_memory().unwrap());
+        let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
         store.create_workgroup("demo", "", Some("cli"), Some("wg-1")).unwrap();
         for task in [
             make_task("t-wait", "wg-1", TaskStatus::Waiting),
@@ -191,8 +190,7 @@ mod tests {
 
     #[test]
     fn delete_group_without_cascade_keeps_tagged_tasks() {
-        let _temp = crate::support::test_env::TestHome::new();
-        let store = Arc::new(Store::open_memory().unwrap());
+        let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
         store.create_workgroup("demo", "", Some("cli"), Some("wg-1")).unwrap();
         store
             .insert_task(&make_task("t-keep", "wg-1", TaskStatus::Done))
@@ -206,8 +204,7 @@ mod tests {
 
     #[test]
     fn delete_group_with_cascade_removes_group_and_tasks() {
-        let _temp = crate::support::test_env::TestHome::new();
-        let store = Arc::new(Store::open_memory().unwrap());
+        let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
         store.create_workgroup("demo", "", Some("cli"), Some("wg-1")).unwrap();
         store
             .insert_task(&make_task("t-drop", "wg-1", TaskStatus::Done))

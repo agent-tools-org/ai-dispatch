@@ -24,30 +24,20 @@ pub(super) fn make_spec(
         task_id: task_id.to_string(),
         worker_pid,
         dir: Some(".".to_string()),
-        budget: false,
-        max_duration_mins: None,
-        max_duration_secs: None,
         idle_timeout_secs,
         interactive: true,
-        on_done: None,
-        env: None,
-        agent_pid: None,
-        agent_started: None,
-        audit_report_mode: false,
-        pre_task_dirty_paths: None,
-        foreground: false,
+        ..Default::default()
     }
 }
 
 pub(super) fn insert_event(store: &Store, task_id: &str, age_secs: i64, event_kind: EventKind) {
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId(task_id.to_string()),
-            timestamp: Local::now() - chrono::Duration::seconds(age_secs),
+        .insert_event(&TaskEvent::at(
+            TaskId(task_id.to_string()),
             event_kind,
-            detail: "last progress".to_string(),
-            metadata: None,
-        })
+            "last progress".to_string(),
+            Local::now() - chrono::Duration::seconds(age_secs),
+        ))
         .expect("insert event");
 }
 
@@ -126,13 +116,12 @@ fn latest_activity_ignores_setup_as_agent_output() {
     task.created_at = Local::now() - chrono::Duration::seconds(200);
     store.insert_task(&task).expect("insert task");
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId("t-setup-act".to_string()),
-            timestamp: Local::now() - chrono::Duration::seconds(190),
-            event_kind: EventKind::Setup,
-            detail: "Cargo target seeded: /tmp/target from /cache in 12ms".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::at(
+            TaskId("t-setup-act".to_string()),
+            EventKind::Setup,
+            "Cargo target seeded: /tmp/target from /cache in 12ms".to_string(),
+            Local::now() - chrono::Duration::seconds(190),
+        ))
         .expect("insert setup");
 
     let activity = latest_activity(&store, &task).expect("activity");
@@ -152,13 +141,12 @@ fn latest_activity_counts_transcript_bytes_as_progress() {
     task.created_at = Local::now() - chrono::Duration::seconds(200);
     store.insert_task(&task).expect("insert task");
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId("t-bytes-act".to_string()),
-            timestamp: Local::now() - chrono::Duration::seconds(190),
-            event_kind: EventKind::Setup,
-            detail: "Cargo target seeded".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::at(
+            TaskId("t-bytes-act".to_string()),
+            EventKind::Setup,
+            "Cargo target seeded".to_string(),
+            Local::now() - chrono::Duration::seconds(190),
+        ))
         .expect("insert setup");
     std::fs::create_dir_all(paths::task_dir("t-bytes-act")).expect("task dir");
     let transcript = paths::transcript_path("t-bytes-act");

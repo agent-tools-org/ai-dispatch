@@ -126,8 +126,7 @@ fn insert_memory(store: &Store, root: &std::path::Path, n: usize, tier: MemoryTi
 
 #[test]
 fn round2_preservation_remaining_memory_slots_report_omissions() {
-    let temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (temp, store) = crate::support::test_env::TestHome::new().store();
     for n in 0..10 {
         insert_memory(&store, temp.path(), n, MemoryTier::Identity, "Identity");
     }

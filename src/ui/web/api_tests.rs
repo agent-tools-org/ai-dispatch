@@ -140,8 +140,7 @@ async fn task_response_reports_started_at_after_running_transition() {
 
 #[tokio::test]
 async fn fleet_returns_redacted_tasks_and_summary_in_one_snapshot() {
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_home, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut task = make_task("t-fleet");
     task.project_id = Some("client-api".to_string());
     task.cost_usd = None;
@@ -204,8 +203,7 @@ async fn get_task_output_reads_output_file_before_log_file() {
 
 #[tokio::test]
 async fn get_task_result_reads_persisted_report() {
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_home, store) = crate::support::test_env::TestHome::new().shared_store();
     store.insert_task(&make_task("t-result")).unwrap();
     let result_path = crate::support::paths::task_dir("t-result").join("result.md");
     std::fs::create_dir_all(result_path.parent().unwrap()).unwrap();

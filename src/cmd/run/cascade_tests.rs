@@ -12,14 +12,7 @@ use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
 use crate::support::test_env::git;
 
 fn init_repo() -> tempfile::TempDir {
-    let repo = tempfile::tempdir().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
-    git(repo.path(), &["add", "file.txt"]);
-    git(repo.path(), &["commit", "-m", "init"]);
-    repo
+    crate::support::test_repo::repo_with_file("file.txt", "hello\n", "init")
 }
 
 fn failed_task(path: &str) -> Task {

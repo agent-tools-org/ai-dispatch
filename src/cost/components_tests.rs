@@ -180,13 +180,7 @@ fn watcher_completion_components_set_cost_and_replace_previous_totals() {
     let mut task = task(AgentKind::Codex, 238_440, None);
     task.observed_model = Some("previous-run-model".to_string());
     store.insert_task(&task).expect("task");
-    let mut info = CompletionInfo {
-        tokens: None,
-        model: None,
-        status: TaskStatus::Done,
-        cost_usd: None,
-        exit_code: None,
-    };
+    let mut info = CompletionInfo::new(TaskStatus::Done);
     let (mut count, mut saved) = (0, false);
     let mut tracker = SyntheticMilestoneTracker::new();
     for _ in 0..2 {

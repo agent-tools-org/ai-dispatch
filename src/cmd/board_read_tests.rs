@@ -19,8 +19,7 @@ fn seed(store: &Store) {
 
 #[test]
 fn board_and_stream_selection_keep_text_json_and_showing_count() {
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     seed(&store);
     for limit in [None, Some(0), Some(3), Some(500)] {
         let mut expected = store.list_tasks(TaskFilter::All).unwrap();

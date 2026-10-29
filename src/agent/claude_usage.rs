@@ -92,13 +92,7 @@ pub(super) fn parse_result_event(
         ),
     );
     let (detail, metadata) = capped_detail_with(&detail, Some(metadata));
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Completion,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Completion, detail, now).with_metadata(metadata))
 }
 
 fn token_metadata(usage: &Value, counts: [i64; 4]) -> Value {

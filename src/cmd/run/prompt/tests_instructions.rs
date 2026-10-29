@@ -89,8 +89,7 @@ fn extract_raw_text_from_log_ignores_aid_sentinel_lines() {
 
 #[test]
 fn build_prompt_bundle_appends_batch_siblings_after_system_context() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let group = store
         .create_workgroup("batch", "desc", Some("seed"), Some("wg-batch"))
         .unwrap();

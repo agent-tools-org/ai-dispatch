@@ -25,13 +25,7 @@ fn base_retry(task_id: &str) -> RetryArgs {
     RetryArgs {
         task_id: task_id.to_string(),
         feedback: Some("fix it".to_string()),
-        feedback_file: None,
-        agent: None,
-        model: None,
-        idle_timeout_secs: None,
-        dir: None,
-        reset: false,
-        bg: false,
+        ..Default::default()
     }
 }
 

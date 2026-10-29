@@ -23,13 +23,7 @@ fn feed_stream_line_with_agent(
     agent: &dyn Agent,
 ) {
     let mut synthetic = SyntheticMilestoneTracker::new();
-    let mut info = CompletionInfo {
-        tokens: None,
-        status: TaskStatus::Done,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    };
+    let mut info = CompletionInfo::new(TaskStatus::Done);
     let mut event_count = 0u32;
     let mut session_saved = false;
     let ctx = super::StreamLineContext {
@@ -130,13 +124,7 @@ fn term_escape_strip_allows_droid_stream_parse_via_stream_path() {
     store.insert_task(&task).unwrap();
 
     let mut synthetic = SyntheticMilestoneTracker::new();
-    let mut info = CompletionInfo {
-        tokens: None,
-        status: TaskStatus::Done,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    };
+    let mut info = CompletionInfo::new(TaskStatus::Done);
     let mut event_count = 0u32;
     let mut session_saved = false;
     let agent = crate::agent::droid::DroidAgent;

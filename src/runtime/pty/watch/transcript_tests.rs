@@ -5,8 +5,7 @@ use super::*;
 
 #[test]
 fn finalize_streaming_persists_transcript() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let task = crate::types::Task::test_fixture(TaskId("t-pty-transcript".to_string()), TaskStatus::Running);
     store.insert_task(&task).unwrap();
     let mut state = MonitorState::new(true, None);

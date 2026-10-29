@@ -93,8 +93,7 @@ fn audit_text_shows_pending_reason() {
 
 #[test]
 fn audit_text_shows_done_status_when_result_file_is_missing() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let task = task_fixture("t-done-no-result", "investigate issue", None, None);
     store.insert_task(&task).unwrap();
 
@@ -136,8 +135,7 @@ fn task_hook_payload_adds_outcome_and_verification_status() {
 
 #[test]
 fn audit_text_shows_failed_status_when_result_file_is_missing() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut task = task_fixture("t-failed-no-result", "investigate issue", None, None);
     task.status = TaskStatus::Failed;
     store.insert_task(&task).unwrap();
@@ -218,8 +216,7 @@ fn task_json_does_not_report_unobserved_as_success() {
 
 #[test]
 fn result_text_reads_task_result_file() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let path = crate::support::paths::task_dir("t-result").join("result.md");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(&path, "structured result\n").unwrap();
@@ -231,8 +228,7 @@ fn result_text_reads_task_result_file() {
 
 #[test]
 fn render_mode_text_reads_transcript() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let task = task_fixture("t-show-transcript", "raw prompt", None, None);
     store.insert_task(&task).unwrap();
     let transcript = crate::support::paths::transcript_path(task.id.as_str());
@@ -278,11 +274,9 @@ fn save_completion_summary(store: &Store, task_id: &str, conclusion: &str) {
         task_id: task_id.to_string(),
         agent: "codex".to_string(),
         status: "done".to_string(),
-        files_changed: vec![],
         summary_text: "research task completed".to_string(),
         conclusion: conclusion.to_string(),
-        duration_secs: None,
-        token_count: None,
+        ..Default::default()
     };
     store
         .save_completion_summary(task_id, &serde_json::to_string(&summary).unwrap())

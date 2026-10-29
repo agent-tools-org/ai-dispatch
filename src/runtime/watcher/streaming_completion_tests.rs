@@ -27,8 +27,7 @@ fn fixture(name: &str) -> String {
 }
 
 async fn watch_exit0(agent: &dyn Agent, output: &str, task_id: &str) -> TaskStatus {
-    let temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let task_id = crate::types::TaskId(task_id.to_string());
     insert_running_task(store.as_ref(), &task_id);
     let log_path = temp.path().join("stream.log");
@@ -125,8 +124,7 @@ pub(super) async fn watch_usage(
     max_cost: Option<f64>,
 ) -> (crate::types::CompletionInfo, Vec<crate::types::TaskEvent>) {
     use std::os::unix::process::CommandExt;
-    let temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let task_id = crate::types::TaskId("t-opencode-usage".to_string());
     insert_running_task(store.as_ref(), &task_id);
     let input_path = temp.path().join("input.jsonl");
@@ -187,13 +185,7 @@ async fn opencode_running_sum_enforces_cost_ceiling() {
 fn opencode_step_usage_accumulates_before_final_parsing() {
     let agent = crate::agent::get_agent(AgentKind::OpenCode);
     let task_id = crate::types::TaskId("t-opencode-steps".to_string());
-    let mut info = crate::types::CompletionInfo {
-        tokens: None,
-        status: TaskStatus::Done,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    };
+    let mut info = crate::types::CompletionInfo::new(TaskStatus::Done);
     for (line, (tokens, cost)) in fixture("opencode-multi-step.jsonl")
         .lines()
         .zip([(14_346, 0.00851796), (29_465, 0.009527012)])
@@ -225,10 +217,8 @@ fn opencode_fix_preserves_claude_and_codex_final_totals() {
         let agent = crate::agent::get_agent(kind);
         let mut info = crate::types::CompletionInfo {
             tokens: Some(1),
-            status: TaskStatus::Done,
-            model: None,
             cost_usd: Some(1.0),
-            exit_code: None,
+            ..CompletionInfo::new(TaskStatus::Done)
         };
         let event = agent.parse_event(&task_id, line).unwrap();
         for _ in 0..2 {

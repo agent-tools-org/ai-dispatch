@@ -47,13 +47,7 @@ pub(super) fn parse_stream_event(
         _ => return None,
     };
     let (detail, metadata) = super::super::truncate::capped_detail_with(&detail, metadata);
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: kind,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), kind, detail, now).with_metadata(metadata))
 }
 
 fn completion_metadata(

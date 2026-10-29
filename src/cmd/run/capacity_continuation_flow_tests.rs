@@ -161,9 +161,7 @@ impl Fixture {
         .expect("baseline");
         let prompt = PromptBundle {
             effective_prompt: "task".into(),
-            context_files: vec![],
-            prompt_tokens: 0,
-            injected_memory_ids: vec![],
+            ..Default::default()
         };
         post_run_lifecycle(
             LifecycleMode::Background,

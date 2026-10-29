@@ -229,9 +229,7 @@ fn stop_followup_background_dispatch_after_parent_stop_writes_no_spec() {
     assert!(crate::task::lifecycle::mark_stopped(&store, parent.id.as_str()).unwrap());
     let prompt = PromptBundle {
         effective_prompt: args.prompt.clone(),
-        context_files: Vec::new(),
-        prompt_tokens: 0,
-        injected_memory_ids: Vec::new(),
+        ..Default::default()
     };
 
     let error = run_dispatch_execute::run_background_task(&store, &args, &prepared, &prompt)

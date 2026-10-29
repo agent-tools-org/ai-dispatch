@@ -11,13 +11,12 @@ use crate::types::{EventKind, Memory, MemoryId, MemoryTier, MemoryType, TaskEven
 pub(super) fn row_to_event(row: &Row) -> rusqlite::Result<TaskEvent> {
     let metadata_str: Option<String> = row.get(4)?;
     let metadata = metadata_str.and_then(|value| serde_json::from_str(&value).ok());
-    Ok(TaskEvent {
-        task_id: TaskId(row.get::<_, String>(0)?),
-        timestamp: parse_dt(&row.get::<_, String>(1)?),
-        event_kind: EventKind::parse_or_warn(&row.get::<_, String>(2)?),
-        detail: row.get(3)?,
-        metadata,
-    })
+    Ok(TaskEvent::at(
+        TaskId(row.get::<_, String>(0)?),
+        EventKind::parse_or_warn(&row.get::<_, String>(2)?),
+        row.get(3)?,
+        parse_dt(&row.get::<_, String>(1)?),
+    ).with_metadata(metadata))
 }
 
 pub(super) fn row_to_memory(row: &Row) -> rusqlite::Result<Result<Memory>> {

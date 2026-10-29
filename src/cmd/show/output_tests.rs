@@ -1,6 +1,7 @@
 // Tests for `aid show` output and diff helpers.
 // Exports: none; validates the re-exported show_output module API.
 // Deps: show_output hub, Store, Task, tempfile.
+use super::super::show_mode_tests::numbered_assistant_log;
 use super::*;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus};
@@ -12,20 +13,6 @@ use tempfile::NamedTempFile;
 
 fn test_task(id: &str) -> Task {
     crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
-}
-
-fn numbered_assistant_log(count: usize, body_len: usize) -> String {
-    (0..count)
-        .map(|index| {
-            serde_json::to_string(&json!({
-                "type": "message",
-                "role": "assistant",
-                "content": format!("message-{index:02}-{}", "x".repeat(body_len)),
-            }))
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap()
-        .join("\n")
 }
 
 fn write_log(path: &Path, content: String) {

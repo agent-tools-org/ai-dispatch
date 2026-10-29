@@ -37,13 +37,7 @@ fn parse_mission_step(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>)
         _ => description.to_string(),
     };
     let (detail, metadata) = capped_detail(&text);
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Milestone,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Milestone, detail, now).with_metadata(metadata))
 }
 
 fn parse_session_forked(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
@@ -52,25 +46,13 @@ fn parse_session_forked(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local
         Some(parent_id) if !parent_id.is_empty() => format!("forked {new_id} from {parent_id}"),
         _ => format!("forked {new_id}"),
     };
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Milestone,
-        detail,
-        metadata: Some(json!({ "agent_session_id": new_id })),
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Milestone, detail, now).with_metadata(Some(json!({ "agent_session_id": new_id }))))
 }
 
 fn parse_error_event(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
     crate::routing::quota::channel::mark_stream_refusal(AgentKind::Droid, None, &v.to_string());
     let (detail, metadata) = capped_detail(droid_error_detail(v).as_deref().unwrap_or("unknown error"));
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Error,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Error, detail, now).with_metadata(metadata))
 }
 
 fn droid_error_detail(v: &Value) -> Option<String> {
@@ -108,13 +90,7 @@ fn parse_tool_call(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) ->
     let metadata = signature.as_ref().map(|s| json!({ "command": s }));
     let (detail, metadata) = capped_detail_with(&text, metadata);
 
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::ToolCall,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::ToolCall, detail, now).with_metadata(metadata))
 }
 
 fn parse_text(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
@@ -127,13 +103,7 @@ fn parse_text(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -> Opti
         return None;
     }
     let (detail, metadata) = capped_detail(text);
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Reasoning,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Reasoning, detail, now).with_metadata(metadata))
 }
 
 fn parse_usage(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
@@ -142,16 +112,15 @@ fn parse_usage(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -> Opt
     let total = input + output;
     let cost = v.get("cost_usd").and_then(|c| c.as_f64());
     let model = v.get("model").and_then(|m| m.as_str()).map(ToOwned::to_owned);
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Completion,
-        detail: format!("tokens: {input} in + {output} out = {total}"),
-        metadata: Some(json!({
+    Some(TaskEvent::at(
+        task_id.clone(),
+        EventKind::Completion,
+        format!("tokens: {input} in + {output} out = {total}"),
+        now,
+    ).with_metadata(Some(json!({
             "tokens": total, "input_tokens": input, "output_tokens": output,
             "model": model, "cost_usd": cost,
-        })),
-    })
+        }))))
 }
 
 fn tool_signature(v: &Value, name: &str) -> Option<String> {

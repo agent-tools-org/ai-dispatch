@@ -126,14 +126,8 @@ fn complete_task_atomic_leaves_terminal_row_without_rejection_event() {
     let changed = store
         .record_agent_completion(
             TaskCompletionUpdate {
-                id: "t-atomic-merged",
-                status: TaskStatus::Failed,
-                tokens: None,
-                duration_ms: 5000,
-                observed_model: None,
-                attribution_source: None,
-                cost_usd: None,
                 exit_code: Some(1),
+                ..TaskCompletionUpdate::new("t-atomic-merged", TaskStatus::Failed, 5000)
             },
             Some(&event),
         )

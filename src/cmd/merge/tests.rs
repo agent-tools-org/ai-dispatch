@@ -12,16 +12,7 @@ use tempfile::TempDir;
 
 use crate::support::test_env::git;
 
-fn unique(prefix: &str) -> String {
-    format!(
-        "{prefix}-{}-{}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    )
-}
+use crate::support::test_repo::unique_name as unique;
 
 /// Create a git repo with one commit. Returns the TempDir.
 fn init_repo() -> TempDir {

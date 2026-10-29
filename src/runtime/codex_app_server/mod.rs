@@ -108,13 +108,7 @@ fn failed(args: &Run<'_>, reason: &str) -> Result<CompletionInfo> {
             )?;
         }
     }
-    Ok(CompletionInfo {
-        status: TaskStatus::Failed,
-        tokens: None,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    })
+    Ok(CompletionInfo::new(TaskStatus::Failed))
 }
 
 fn run_inner(args: &Run<'_>) -> Result<Option<CompletionInfo>> {

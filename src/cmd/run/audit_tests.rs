@@ -93,42 +93,41 @@ fn audit_records_pass_verdict() {
 }
 
 #[test]
-fn audit_records_fail_verdict() {
-    let _guard = env_lock();
-    let temp = tempfile::tempdir().unwrap();
-    install_aic_shim(
-        temp.path(),
-        "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'report: /tmp/fail.md\\n'\nexit 1",
-    );
-    set_env("AIC_TEST_BINARY", temp.path().join("aic"));
-    let store = Store::open_memory().unwrap();
-    store.insert_task(&done_task("t-audit-fail")).unwrap();
+fn audit_records_failure_verdicts() {
+    for (case, script, task_id, detail) in [
+        (
+            "audit_records_fail_verdict",
+            "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'report: /tmp/fail.md\\n'\nexit 1",
+            "t-audit-fail",
+            "fail",
+        ),
+        (
+            "audit_records_error_verdict",
+            "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nexit 200",
+            "t-audit-error",
+            "error",
+        ),
+    ] {
+        eprintln!("case: {case}");
+        let _guard = env_lock();
+        let temp = tempfile::tempdir().unwrap();
+        install_aic_shim(
+            temp.path(),
+            script,
+        );
+        set_env("AIC_TEST_BINARY", temp.path().join("aic"));
+        let store = Store::open_memory().unwrap();
+        store.insert_task(&done_task(task_id)).unwrap();
 
-    run_audit_for_task(&store, "t-audit-fail", &audit_args(true));
+        run_audit_for_task(&store, task_id, &audit_args(true));
 
-    let task = store.get_task("t-audit-fail").unwrap().unwrap();
-    assert_eq!(task.audit_verdict.as_deref(), Some("fail"));
-    remove_env("AIC_TEST_BINARY");
+        let task = store.get_task(task_id).unwrap().unwrap();
+        assert_eq!(task.audit_verdict.as_deref(), Some(detail));
+        remove_env("AIC_TEST_BINARY");
+    }
 }
 
-#[test]
-fn audit_records_error_verdict() {
-    let _guard = env_lock();
-    let temp = tempfile::tempdir().unwrap();
-    install_aic_shim(
-        temp.path(),
-        "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nexit 200",
-    );
-    set_env("AIC_TEST_BINARY", temp.path().join("aic"));
-    let store = Store::open_memory().unwrap();
-    store.insert_task(&done_task("t-audit-error")).unwrap();
 
-    run_audit_for_task(&store, "t-audit-error", &audit_args(true));
-
-    let task = store.get_task("t-audit-error").unwrap().unwrap();
-    assert_eq!(task.audit_verdict.as_deref(), Some("error"));
-    remove_env("AIC_TEST_BINARY");
-}
 
 #[test]
 fn audit_respects_timeout() {

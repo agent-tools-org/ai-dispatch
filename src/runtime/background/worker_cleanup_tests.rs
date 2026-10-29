@@ -5,9 +5,7 @@ use super::*;
 
 #[test]
 fn marks_running_background_tasks_failed_when_worker_is_missing() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     store
         .insert_task(&make_task("t-1a1a", TaskStatus::Running))
         .unwrap();
@@ -48,9 +46,7 @@ fn marks_running_background_tasks_failed_when_worker_is_missing() {
 
 #[test]
 fn reaps_alive_worker_when_events_are_stale_beyond_idle_margin() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let task = make_task("t-wedged", TaskStatus::Running);
     store.insert_task(&task).unwrap();
     save_spec(&BackgroundRunSpec {
@@ -83,9 +79,7 @@ fn reaps_alive_worker_when_events_are_stale_beyond_idle_margin() {
 
 #[test]
 fn keeps_alive_worker_when_events_are_recent_within_idle_margin() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let task = make_task("t-healthy", TaskStatus::Running);
     store.insert_task(&task).unwrap();
     save_spec(&BackgroundRunSpec {
@@ -109,9 +103,7 @@ fn keeps_alive_worker_when_events_are_recent_within_idle_margin() {
 #[cfg(unix)]
 fn skips_awaiting_input_live_worker_even_when_events_are_stale() {
     let _permit = test_subprocess::acquire();
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let task = make_task("t-awaiting", TaskStatus::AwaitingInput);
     store.insert_task(&task).unwrap();
     let mut child = std::process::Command::new("sleep")
@@ -143,9 +135,7 @@ fn skips_awaiting_input_live_worker_even_when_events_are_stale() {
 
 #[test]
 fn reaps_running_task_kept_alive_only_by_idle_bookkeeping_events() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let task = make_task("t-idle-bookkeeping", TaskStatus::Running);
     store.insert_task(&task).unwrap();
     save_spec(&BackgroundRunSpec {
@@ -172,9 +162,7 @@ fn reaps_running_task_kept_alive_only_by_idle_bookkeeping_events() {
 
 #[test]
 fn reaps_running_task_kept_alive_only_by_acked_reply_bookkeeping() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let task = make_task("t-acked-bookkeeping", TaskStatus::Running);
     store.insert_task(&task).unwrap();
     save_spec(&BackgroundRunSpec {
@@ -185,13 +173,12 @@ fn reaps_running_task_kept_alive_only_by_acked_reply_bookkeeping() {
     .unwrap();
     insert_event(&store, "t-acked-bookkeeping", 61);
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId("t-acked-bookkeeping".to_string()),
-            timestamp: Local::now() - Duration::seconds(1),
-            event_kind: EventKind::Reasoning,
-            detail: "Acked reply".to_string(),
-            metadata: Some(serde_json::json!({ "acked_reply": true })),
-        })
+        .insert_event(&TaskEvent::at(
+            TaskId("t-acked-bookkeeping".to_string()),
+            EventKind::Reasoning,
+            "Acked reply".to_string(),
+            Local::now() - Duration::seconds(1),
+        ).with_metadata(Some(serde_json::json!({ "acked_reply": true }))))
         .unwrap();
 
     let cleaned = check_zombie_tasks_with(&store, |pid| pid == 202).unwrap();
@@ -209,9 +196,7 @@ fn reaps_running_task_kept_alive_only_by_acked_reply_bookkeeping() {
 
 #[test]
 fn reaps_running_task_kept_alive_only_by_nudge_echo_reasoning() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let task = make_task("t-nudge-echo-reaper", TaskStatus::Running);
     store.insert_task(&task).unwrap();
     save_spec(&BackgroundRunSpec {
@@ -222,13 +207,12 @@ fn reaps_running_task_kept_alive_only_by_nudge_echo_reasoning() {
     .unwrap();
     insert_event(&store, "t-nudge-echo-reaper", 61);
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId("t-nudge-echo-reaper".to_string()),
-            timestamp: Local::now() - Duration::seconds(1),
-            event_kind: EventKind::Reasoning,
-            detail: crate::task::unstick::default_nudge_message(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::at(
+            TaskId("t-nudge-echo-reaper".to_string()),
+            EventKind::Reasoning,
+            crate::task::unstick::default_nudge_message(),
+            Local::now() - Duration::seconds(1),
+        ))
         .unwrap();
 
     let cleaned = check_zombie_tasks_with(&store, |pid| pid == 202).unwrap();

@@ -63,40 +63,40 @@ fn build_command_adds_model_session_and_dir() {
 }
 
 #[test]
-fn parse_event_saves_session_id() {
-    let event = CommandCodeAgent
-        .parse_event(
-            &TaskId("t-session".to_string()),
+fn parse_event_preserves_session_and_model_metadata() {
+    for (line, metadata_key, expected, value_4) in [
+        (
+            "t-session",
             r#"{"type":"event","event":{"type":"run_start","sessionId":"74aaa8c1-ae8d-45bc-ac19-ceebb870ff5a"}}"#,
-        )
-        .expect("event should parse");
-    assert_eq!(event.event_kind, EventKind::Milestone);
-    assert_eq!(
-        event
-            .metadata
-            .and_then(|meta| meta.get("agent_session_id").and_then(|value| value.as_str()).map(str::to_string))
-            .as_deref(),
-        Some("74aaa8c1-ae8d-45bc-ac19-ceebb870ff5a")
-    );
+            "agent_session_id",
+            "74aaa8c1-ae8d-45bc-ac19-ceebb870ff5a",
+        ),
+        (
+            "t-model",
+            r#"{"type":"event","event":{"type":"model_request_start","model":"deepseek/deepseek-v4-flash"}}"#,
+            "model",
+            "deepseek/deepseek-v4-flash",
+        ),
+    ] {
+        eprintln!("case: {:?}", (line, metadata_key, expected, value_4));
+        let event = CommandCodeAgent
+            .parse_event(
+                &TaskId(line.to_string()),
+                metadata_key,
+            )
+            .expect("event should parse");
+        assert_eq!(event.event_kind, EventKind::Milestone);
+        assert_eq!(
+            event
+                .metadata
+                .and_then(|meta| meta.get(expected).and_then(|value| value.as_str()).map(str::to_string))
+                .as_deref(),
+            Some(value_4)
+        );
+    }
 }
 
-#[test]
-fn parse_event_captures_echoed_model() {
-    let event = CommandCodeAgent
-        .parse_event(
-            &TaskId("t-model".to_string()),
-            r#"{"type":"event","event":{"type":"model_request_start","model":"deepseek/deepseek-v4-flash"}}"#,
-        )
-        .expect("event should parse");
-    assert_eq!(event.event_kind, EventKind::Milestone);
-    assert_eq!(
-        event
-            .metadata
-            .and_then(|meta| meta.get("model").and_then(|value| value.as_str()).map(str::to_string))
-            .as_deref(),
-        Some("deepseek/deepseek-v4-flash")
-    );
-}
+
 
 #[test]
 fn parse_completion_marks_success_and_echoed_model() {

@@ -208,13 +208,7 @@ pub fn parse_grok_completion(output: &str) -> CompletionInfo {
 }
 
 fn failed_completion() -> CompletionInfo {
-    CompletionInfo {
-        tokens: None,
-        status: TaskStatus::Failed,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    }
+    CompletionInfo::new(TaskStatus::Failed)
 }
 
 fn extract_model_usage_key(value: &Value) -> Option<String> {

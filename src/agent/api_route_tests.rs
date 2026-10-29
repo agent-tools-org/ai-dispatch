@@ -227,13 +227,7 @@ fn credit_refusal_preserves_reported_cost_before_stopping() {
             false,
         )
         .unwrap();
-    let mut info = CompletionInfo {
-        tokens: None,
-        status: TaskStatus::Done,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    };
+    let mut info = CompletionInfo::new(TaskStatus::Done);
     let line = r#"{"type":"result","is_error":true,"error":{"type":"billing_error"},"result":"Credit balance is too low",
         "total_cost_usd":0.05}"#;
     assert!(record_stream_failure(&adapter(), line, &store, &id, &mut info).unwrap());

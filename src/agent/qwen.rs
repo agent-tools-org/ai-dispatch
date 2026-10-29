@@ -112,11 +112,9 @@ impl super::Agent for QwenAgent {
         }
 
         CompletionInfo {
-            tokens,
-            status,
-            model,
-            cost_usd: None,
-            exit_code: None,
+            tokens: tokens,
+            model: model,
+            ..CompletionInfo::new(status)
         }
     }
 

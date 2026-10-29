@@ -9,16 +9,7 @@ use tempfile::TempDir;
 
 use crate::support::test_env::git;
 
-fn unique_branch(prefix: &str) -> String {
-    format!(
-        "{prefix}-{}-{}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    )
-}
+use crate::support::test_repo::unique_name as unique_branch;
 
 #[test]
 fn validate_git_repo_fails_on_nonrepo() {

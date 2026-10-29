@@ -39,14 +39,10 @@ fn update_completion() {
     store
         .record_agent_completion(
             TaskCompletionUpdate {
-                id: "t-0002",
-                status: TaskStatus::Done,
                 tokens: Some(3000),
-                duration_ms: 47000,
                 observed_model: Some("gemini-2.5-flash"),
-                attribution_source: None,
                 cost_usd: Some(0.0038),
-                exit_code: None,
+                ..TaskCompletionUpdate::new("t-0002", TaskStatus::Done, 47000)
             },
             None,
         )

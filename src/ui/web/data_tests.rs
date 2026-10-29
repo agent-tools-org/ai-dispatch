@@ -16,8 +16,7 @@ use crate::types::{AttributionSource, TaskStatus};
 
 #[tokio::test(flavor = "current_thread")]
 async fn running_task_reports_measured_worker_rss_and_fleet_sums_it() {
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_home, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut task = make_task("t-memory");
     task.status = TaskStatus::Pending;
     task.project_id = Some("memory-sector".to_string());
@@ -63,8 +62,7 @@ async fn running_task_reports_measured_worker_rss_and_fleet_sums_it() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn sector_workgroup_is_derived_from_any_task_in_the_sector() {
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_home, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut first = make_task("t-sector-first");
     first.project_id = Some("shared-sector".to_string());
     first.workgroup_id = None;
@@ -98,8 +96,7 @@ async fn sector_workgroup_is_derived_from_any_task_in_the_sector() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn fleet_reports_the_latest_observed_model_for_an_agent() {
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_home, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut task = make_task("t-observed-model");
     task.observed_model = Some("gpt-observed".to_string());
     task.attribution_source = Some(AttributionSource::Echoed);

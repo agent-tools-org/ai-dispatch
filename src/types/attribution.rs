@@ -50,12 +50,6 @@ impl AttributionSource {
         }
     }
 
-    #[cfg(test)]
-    /// Whether this grade may be used to score a model's capability or to learn
-    /// an agent's default model. Only a statement by the CLI qualifies.
-    pub fn is_conclusive(self) -> bool {
-        matches!(self, Self::Echoed | Self::RecordedByCli)
-    }
 }
 
 /// Names that select a model rather than being one. Confirming these by success
@@ -108,12 +102,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_an_echo_is_conclusive() {
-        assert!(AttributionSource::Echoed.is_conclusive());
-        assert!(!AttributionSource::ConfirmedBySuccess.is_conclusive());
-    }
-
-    #[test]
     fn grades_round_trip_through_storage() {
         for grade in [
             AttributionSource::Echoed,
@@ -148,8 +136,7 @@ mod grade_observation_tests {
     }
 
     #[test]
-    fn a_cli_session_record_is_conclusive_but_not_an_echo() {
-        assert!(AttributionSource::RecordedByCli.is_conclusive());
+    fn a_cli_session_record_uses_its_storage_label() {
         assert_eq!(AttributionSource::RecordedByCli.as_str(), "recorded_by_cli");
     }
 

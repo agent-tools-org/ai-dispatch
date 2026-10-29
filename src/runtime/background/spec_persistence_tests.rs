@@ -9,18 +9,9 @@ fn serializes_spec_to_json() {
         task_id: "t-5a0e".to_string(),
         worker_pid: Some(4242),
         dir: Some(".".to_string()),
-        budget: false,
         max_duration_mins: Some(90),
-        max_duration_secs: None,
-        idle_timeout_secs: None,
         interactive: true,
-        on_done: None,
-        env: None,
-        agent_pid: None,
-        agent_started: None,
-        audit_report_mode: false,
-        pre_task_dirty_paths: None,
-        foreground: false,
+        ..Default::default()
     };
 
     let content = serde_json::to_string_pretty(&spec).unwrap();

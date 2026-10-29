@@ -16,8 +16,7 @@ fn transcript_path_helper_works() {
 
 #[test]
 fn auto_save_prefers_transcript_over_log() {
-    let temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (temp, store) = crate::support::test_env::TestHome::new().store();
     let transcript = paths::transcript_path("t-transcript-save");
     std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
     std::fs::write(
@@ -51,8 +50,7 @@ fn auto_save_prefers_transcript_over_log() {
 
 #[test]
 fn auto_save_persists_plain_text_transcript() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let transcript = paths::transcript_path("t-plain-transcript");
     std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
     std::fs::write(&transcript, "### Research Summary\n\nplain markdown output").unwrap();

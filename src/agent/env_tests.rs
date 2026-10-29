@@ -249,9 +249,5 @@ fn durable_codex_home_is_disabled_for_isolated_wrappers() {
     assert!(!should_use_durable_codex_home(AgentKind::Claude, false, false));
 }
 
-fn command_env(cmd: &Command, name: &str) -> Option<String> {
-    cmd.get_envs()
-        .find(|(key, _)| *key == name)
-        .and_then(|(_, value)| value)
-        .map(|value| value.to_string_lossy().to_string())
-}
+
+use crate::support::test_command::env as command_env;

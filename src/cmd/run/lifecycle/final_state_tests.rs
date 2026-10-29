@@ -18,14 +18,7 @@ use std::sync::Arc;
 use crate::support::test_env::git;
 
 fn init_repo() -> tempfile::TempDir {
-    let repo = tempfile::tempdir().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("base.txt"), "base\n").unwrap();
-    git(repo.path(), &["add", "base.txt"]);
-    git(repo.path(), &["commit", "-m", "base"]);
-    repo
+    crate::support::test_repo::repo_with_file("base.txt", "base\n", "base")
 }
 
 fn failed_task(id: &str, repo: &Path, wt: &Path, branch: &str) -> Task {
@@ -56,9 +49,7 @@ async fn failed_lifecycle_captures_final_branch_before_fast_fail_cleanup() {
     store.insert_task(&task).unwrap();
     let prompt_bundle = PromptBundle {
         effective_prompt: "prompt".to_string(),
-        context_files: Vec::new(),
-        prompt_tokens: 0,
-        injected_memory_ids: Vec::new(),
+        ..Default::default()
     };
 
     post_run_lifecycle(

@@ -17,13 +17,12 @@ fn operator_input_bookkeeping_does_not_postpone_the_reaper() {
     store.insert_task(&task).expect("insert task");
     let now = Local::now();
     let event =
-        |age: i64, event_kind: EventKind, detail: &str, metadata: Option<Value>| TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: now - Duration::seconds(age),
+        |age: i64, event_kind: EventKind, detail: &str, metadata: Option<Value>| TaskEvent::at(
+            task.id.clone(),
             event_kind,
-            detail: detail.to_string(),
-            metadata,
-        };
+            detail.to_string(),
+            now - Duration::seconds(age),
+        ).with_metadata(metadata);
     let agent_event = event(600, EventKind::Reasoning, "agent progress", None);
     let bookkeeping = [
         event(

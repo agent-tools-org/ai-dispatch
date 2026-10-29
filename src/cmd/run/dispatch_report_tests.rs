@@ -234,8 +234,7 @@ fn fix_round_two_dispatch_rejects_same_report_and_output_destination() {
 
 #[test]
 fn prepare_dispatch_uses_task_specific_audit_result_file() {
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_home, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut args = RunArgs {
         agent_name: "codex".to_string(),
         prompt: "Read-only audit of branch X.".to_string(),
@@ -253,8 +252,7 @@ fn prepare_dispatch_uses_task_specific_audit_result_file() {
 
 #[test]
 fn prepare_dispatch_skips_auto_result_file_when_output_is_set() {
-    let home = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (home, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut args = RunArgs {
         agent_name: "codex".to_string(),
         prompt: "Review the implementation and list findings.".to_string(),

@@ -2,6 +2,7 @@
 // Exports: run plus local formatting helpers and tests.
 // Deps: crate::{paths, project, state, store}, anyhow, chrono.
 
+use crate::ui::format::format_relative_time;
 use super::current_git_root;
 use crate::config::project;
 use crate::store::state::{self, ProjectState};
@@ -102,26 +103,6 @@ fn format_timestamp(value: &str) -> String {
     DateTime::parse_from_rfc3339(value)
         .map(|time| time.with_timezone(&Local).format("%Y-%m-%d %H:%M").to_string())
         .unwrap_or_else(|_| value.to_string())
-}
-
-fn format_relative_time(value: &str) -> String {
-    let Ok(parsed) = DateTime::parse_from_rfc3339(value) else {
-        return value.to_string();
-    };
-    let seconds = Local::now()
-        .signed_duration_since(parsed.with_timezone(&Local))
-        .num_seconds();
-    if seconds <= 0 {
-        "just now".to_string()
-    } else if seconds < 60 {
-        format!("{seconds}s ago")
-    } else if seconds < 3600 {
-        format!("{}m ago", seconds / 60)
-    } else if seconds < 86_400 {
-        format!("{}h ago", seconds / 3600)
-    } else {
-        format!("{}d ago", seconds / 86_400)
-    }
 }
 
 #[cfg(test)]

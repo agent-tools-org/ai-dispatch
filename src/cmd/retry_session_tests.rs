@@ -16,13 +16,7 @@ fn retry_preservation_manual_retry_of_retry_keeps_all_feedback() {
         RetryArgs {
             task_id: task.id.to_string(),
             feedback: Some("New correction".into()),
-            feedback_file: None,
-            agent: None,
-            model: None,
-            idle_timeout_secs: None,
-            dir: None,
-            reset: false,
-            bg: false,
+            ..Default::default()
         },
         false,
     )
@@ -59,13 +53,7 @@ fn retry_preservation_keeps_long_feedback_first_and_whole_on_codex_resume() {
         RetryArgs {
             task_id: task.id.to_string(),
             feedback: Some(feedback.clone()),
-            feedback_file: None,
-            agent: None,
-            model: None,
-            idle_timeout_secs: None,
-            dir: None,
-            reset: false,
-            bg: false,
+            ..Default::default()
         },
         false,
     )

@@ -39,16 +39,7 @@ pub(crate) fn fail_task_on_agent_spawn(
     );
     let _ = crate::task::lifecycle::complete_task_atomic(
         store,
-        TaskCompletionUpdate {
-            id: task_id.as_str(),
-            status: TaskStatus::Failed,
-            tokens: None,
-            duration_ms: 0,
-            observed_model: None,
-            attribution_source: None,
-            cost_usd: None,
-            exit_code: None,
-        },
+        TaskCompletionUpdate::new(task_id.as_str(), TaskStatus::Failed, 0),
         &TaskEvent::new(task_id.clone(), EventKind::Error, detail),
     );
 }

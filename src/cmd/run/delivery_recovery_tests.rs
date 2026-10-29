@@ -6,8 +6,7 @@ use crate::types::DeliveryAssessment;
 
 #[tokio::test]
 async fn round2_preservation_recovery_keeps_brief_feedback_and_missing_rollout() {
-    let temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let task = recovery_task(temp.path());
     store.insert_task(&task).unwrap();
     let args = RunArgs {
@@ -82,13 +81,7 @@ async fn assert_manual_retry(store: &Arc<Store>, child: &Task) {
         crate::cmd::retry::RetryArgs {
             task_id: child.id.to_string(),
             feedback: Some("Manual correction".into()),
-            feedback_file: None,
-            agent: None,
-            model: None,
-            idle_timeout_secs: None,
-            dir: None,
-            reset: false,
-            bg: false,
+            ..Default::default()
         },
         false,
     )

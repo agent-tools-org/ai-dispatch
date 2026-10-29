@@ -49,8 +49,7 @@ mod tests {
 
     #[test]
     fn respond_rejects_one_shot_agents_without_writing_signal() {
-        let _temp_home = crate::support::test_env::TestHome::new();
-        let store = Store::open_memory().unwrap();
+        let (_temp_home, store) = crate::support::test_env::TestHome::new().store();
         for (task_id, agent) in [("t-respond-agy", AgentKind::Antigravity), ("t-respond-grok", AgentKind::Grok)] {
             store.insert_task(&make_task(task_id, agent)).unwrap();
             let err = run(&store, task_id, Some("yes"), None).unwrap_err();
@@ -61,8 +60,7 @@ mod tests {
 
     #[test]
     fn respond_refuses_codex_without_writing_signal() {
-        let _temp_home = crate::support::test_env::TestHome::new();
-        let store = Store::open_memory().unwrap();
+        let (_temp_home, store) = crate::support::test_env::TestHome::new().store();
         store.insert_task(&make_task("t-respond-codex", AgentKind::Codex)).unwrap();
         let error = run(&store, "t-respond-codex", Some("yes"), None).unwrap_err();
         assert!(error.to_string().contains("aid retry t-respond-codex -f"));
@@ -71,8 +69,7 @@ mod tests {
 
     #[test]
     fn respond_explains_how_to_recover_deleted_custom_agent() {
-        let _temp_home = crate::support::test_env::TestHome::new();
-        let store = Store::open_memory().unwrap();
+        let (_temp_home, store) = crate::support::test_env::TestHome::new().store();
         let mut task = make_task("t-respond-missing-custom", AgentKind::Custom);
         task.custom_agent_name = Some("gone".to_string());
         store.insert_task(&task).unwrap();

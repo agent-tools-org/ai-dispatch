@@ -8,8 +8,7 @@ use std::sync::Arc;
 
 #[test]
 fn configured_verification_is_pending_when_dispatch_inserts_task() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut args = RunArgs {
         agent_name: "codex".to_string(),
         prompt: "Run the configured verification command.".to_string(),

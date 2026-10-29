@@ -20,28 +20,20 @@ impl Agent for BufferedTestAgent {
     fn accepts_interactive_input(&self) -> bool { false }
     fn build_command(&self, _: &str, _: &RunOpts) -> anyhow::Result<Command> { unreachable!() }
     fn parse_event(&self, _: &TaskId, _: &str) -> Option<TaskEvent> { None }
-    fn parse_completion(&self, _: &str) -> CompletionInfo {
-        CompletionInfo { tokens: None, status: TaskStatus::Done, model: None, cost_usd: None, exit_code: None }
-    }
 }
 
 #[tokio::test]
 async fn watch_buffered_persists_transcript() {
-    let temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task = Task {
         agent: AgentKind::Antigravity,
         ..crate::types::Task::test_fixture(TaskId("t-watch-buffered".to_string()), TaskStatus::Running)
     };
     store.insert_task(&task).unwrap();
-    let mut child = tokio::process::Command::new("sh")
-        .current_dir(temp.path())
-        .arg("-c")
-        .arg("printf '{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"buffered transcript\"}\\n'")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+    let mut child = crate::support::test_command::piped_shell(
+        temp.path(),
+        "printf '{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"buffered transcript\"}\\n'",
+    );
 
     watch_buffered(
         &BufferedTestAgent,
@@ -63,8 +55,7 @@ async fn watch_buffered_persists_transcript() {
 
 #[tokio::test]
 async fn watch_buffered_clears_rate_limit_on_success() {
-    let temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task = Task {
         agent: AgentKind::Antigravity,
         ..crate::types::Task::test_fixture(
@@ -80,15 +71,7 @@ async fn watch_buffered_clears_rate_limit_on_success() {
     );
     assert!(rate_limit::is_rate_limited(&AgentKind::Antigravity, None));
 
-    let mut child = tokio::process::Command::new("sh")
-
-        .current_dir(temp.path())
-        .arg("-c")
-        .arg("printf 'done\\n'")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+    let mut child = crate::support::test_command::piped_shell(temp.path(), "printf 'done\\n'");
 
     watch_buffered(
         &BufferedTestAgent,
@@ -123,21 +106,11 @@ impl Agent for BufferedAgyTestAgent {
     fn parse_event(&self, _: &TaskId, _: &str) -> Option<TaskEvent> {
         None
     }
-    fn parse_completion(&self, _: &str) -> CompletionInfo {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
-    }
 }
 
 #[tokio::test]
 async fn watch_buffered_records_quota_refusal_and_fails_task() {
-    let temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task = Task {
         agent: AgentKind::Antigravity,
         requested_model: Some("gemini-3.6-flash".to_string()),
@@ -145,15 +118,10 @@ async fn watch_buffered_records_quota_refusal_and_fails_task() {
     };
     store.insert_task(&task).unwrap();
 
-    let mut child = tokio::process::Command::new("sh")
-
-        .current_dir(temp.path())
-        .arg("-c")
-        .arg(r#"printf '{"type":"error","message":"Individual quota reached."}\n'"#)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+    let mut child = crate::support::test_command::piped_shell(
+        temp.path(),
+        r#"printf '{"type":"error","message":"Individual quota reached."}\n'"#,
+    );
 
     let info = watch_buffered(
         &BufferedAgyTestAgent,

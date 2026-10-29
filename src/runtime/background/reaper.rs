@@ -221,12 +221,13 @@ pub(crate) fn fail_stale_pending_task(
     let Some(pending_reason) = infer_pending_reason(store, task)? else {
         return Ok(false);
     };
-    let event = TaskEvent {
-        task_id: task.id.clone(), timestamp: now, event_kind: EventKind::Error,
-        detail: format!("Task timed out in pending state after {}s (reason: {})",
+    let event = TaskEvent::at(
+        task.id.clone(),
+        EventKind::Error,
+        format!("Task timed out in pending state after {}s (reason: {})",
             elapsed_secs, pending_reason),
-        metadata: None,
-    };
+        now,
+    );
     if !store.settle_task_status(task_id, TaskStatus::Failed, Some(&[TaskStatus::Pending]),
         PendingReason::parse_str(&pending_reason), Some(&event))? {
         return Ok(false);

@@ -38,6 +38,7 @@ use auxiliary::*;
 const VERIFY_RETRY_FEEDBACK: &str =
     "Verification failed. Please fix the compilation/test errors and try again.";
 
+#[cfg_attr(test, derive(Default))]
 pub(crate) struct PromptBundle {
     pub effective_prompt: String,
     pub context_files: Vec<String>,

@@ -26,14 +26,7 @@ use crate::support::test_env::git;
 use crate::support::test_env::git_output;
 
 fn init_repo() -> tempfile::TempDir {
-    let repo = tempfile::tempdir().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("base.txt"), "base\n").unwrap();
-    git(repo.path(), &["add", "base.txt"]);
-    git(repo.path(), &["commit", "-m", "init"]);
-    repo
+    crate::support::test_repo::repo_with_file("base.txt", "base\n", "init")
 }
 
 #[test]
@@ -151,8 +144,7 @@ fn retry_prepare_persists_live_worktree_metadata() {
 
 #[test]
 fn prepare_dispatch_updates_log_path_when_id_is_auto_suffixed() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut first = RunArgs {
         agent_name: "codex".to_string(),
         existing_task_id: Some(TaskId("t-ebcf".to_string())),

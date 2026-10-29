@@ -127,8 +127,7 @@ fn steer_non_running_task_errors() {
 
 #[test]
 fn steer_rejects_one_shot_agents_without_queuing() {
-    let _temp_home = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp_home, store) = crate::support::test_env::TestHome::new().store();
 
     for (task_id, agent) in [
         ("t-steer-agy", AgentKind::Antigravity),
@@ -154,8 +153,7 @@ fn steer_rejects_one_shot_agents_without_queuing() {
 
 #[test]
 fn steer_refuses_codex_without_queuing() {
-    let _temp_home = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp_home, store) = crate::support::test_env::TestHome::new().store();
     let mut task = make_task("t-steer-codex", TaskStatus::Running);
     task.agent = AgentKind::Codex;
     store.insert_task(&task).unwrap();
@@ -172,8 +170,7 @@ fn steer_refuses_codex_without_queuing() {
 
 #[test]
 fn steer_explains_how_to_recover_deleted_custom_agent() {
-    let _temp_home = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp_home, store) = crate::support::test_env::TestHome::new().store();
     let mut task = make_task("t-steer-missing-custom", TaskStatus::Running);
     task.agent = AgentKind::Custom;
     task.custom_agent_name = Some("gone".to_string());

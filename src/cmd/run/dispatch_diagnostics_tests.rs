@@ -145,14 +145,8 @@ fn record_agent_exit(store: &Store, id: &TaskId) {
         "agent exited 17".into(),
     );
     let completion = crate::store::TaskCompletionUpdate {
-        id: id.as_str(),
-        status: TaskStatus::Failed,
-        tokens: None,
-        duration_ms: 10,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
         exit_code: Some(17),
+        ..TaskCompletionUpdate::new(id.as_str(), TaskStatus::Failed, 10)
     };
     assert!(
         crate::task::lifecycle::complete_task_atomic(store, completion, &event)

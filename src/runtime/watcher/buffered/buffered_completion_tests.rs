@@ -21,8 +21,7 @@ fn buffered_task(id: &str) -> Task {
 
 #[tokio::test]
 async fn agy_exit_zero_with_terminal_agent_error_fails_completion() {
-    let temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task = buffered_task("t-agy-exit-zero-terminal-error");
     store.insert_task(&task).unwrap();
     std::fs::create_dir_all(paths::task_dir(task.id.as_str())).unwrap();
@@ -31,14 +30,10 @@ async fn agy_exit_zero_with_terminal_agent_error_fails_completion() {
         include_str!("../../../../tests/fixtures/agy-exit0-terminal-error.log"),
     )
     .unwrap();
-    let mut child = tokio::process::Command::new("sh")
-        .current_dir(temp.path())
-        .arg("-c")
-        .arg("printf 'Now let me inspect the remaining call sites:\n'; exit 0")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+    let mut child = crate::support::test_command::piped_shell(
+        temp.path(),
+        "printf 'Now let me inspect the remaining call sites:\n'; exit 0",
+    );
 
     let info = watch_buffered(
         &AntigravityAgent,
@@ -68,8 +63,7 @@ async fn agy_exit_zero_with_terminal_agent_error_fails_completion() {
 
 #[tokio::test]
 async fn agy_exit_zero_with_non_quota_executor_error_fails_completion() {
-    let temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task = buffered_task("t-agy-exit-zero-network-error");
     store.insert_task(&task).unwrap();
     std::fs::create_dir_all(paths::task_dir(task.id.as_str())).unwrap();
@@ -78,14 +72,10 @@ async fn agy_exit_zero_with_non_quota_executor_error_fails_completion() {
         include_str!("../../../../tests/fixtures/agy-exit0-terminal-network-error.log"),
     )
     .unwrap();
-    let mut child = tokio::process::Command::new("sh")
-        .current_dir(temp.path())
-        .arg("-c")
-        .arg("printf 'Now let me inspect the remaining call sites:\n'; exit 0")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+    let mut child = crate::support::test_command::piped_shell(
+        temp.path(),
+        "printf 'Now let me inspect the remaining call sites:\n'; exit 0",
+    );
 
     let info = watch_buffered(
         &AntigravityAgent,
@@ -106,8 +96,7 @@ async fn agy_exit_zero_with_non_quota_executor_error_fails_completion() {
 
 #[tokio::test]
 async fn agy_recovered_tool_error_keeps_successful_completion() {
-    let temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task = buffered_task("t-agy-recovered-tool-error");
     store.insert_task(&task).unwrap();
     std::fs::create_dir_all(paths::task_dir(task.id.as_str())).unwrap();
@@ -116,14 +105,10 @@ async fn agy_recovered_tool_error_keeps_successful_completion() {
         include_str!("../../../../tests/fixtures/agy-recovered-tool-error.log"),
     )
     .unwrap();
-    let mut child = tokio::process::Command::new("sh")
-        .current_dir(temp.path())
-        .arg("-c")
-        .arg("printf 'Audit complete. Overall verdict: SHIP.\n'; exit 0")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+    let mut child = crate::support::test_command::piped_shell(
+        temp.path(),
+        "printf 'Audit complete. Overall verdict: SHIP.\n'; exit 0",
+    );
 
     let info = watch_buffered(
         &AntigravityAgent,

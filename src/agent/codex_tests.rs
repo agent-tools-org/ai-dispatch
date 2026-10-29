@@ -21,15 +21,6 @@ fn semver_parsing() {
 }
 
 #[test]
-fn version_comparison_for_model_flag() {
-    assert!((0, 116, 0) >= (0, 116, 0));
-    assert!((0, 117, 0) >= (0, 116, 0));
-    assert!((1, 0, 0) >= (0, 116, 0));
-    assert!((0, 115, 9) < (0, 116, 0));
-    assert!((0, 0, 0) < (0, 116, 0));
-}
-
-#[test]
 fn parses_agent_message_items() {
     let agent = CodexAgent;
     let line = r#"{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Planning the next edit."}}"#;

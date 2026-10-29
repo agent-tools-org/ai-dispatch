@@ -28,15 +28,6 @@ impl Agent for FakeAgent {
     fn parse_event(&self, _: &TaskId, _: &str) -> Option<TaskEvent> {
         None
     }
-    fn parse_completion(&self, _: &str) -> CompletionInfo {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
-    }
 }
 
 async fn watch_silent_child(script: &str) -> (CompletionInfo, Vec<TaskEvent>) {

@@ -1,6 +1,7 @@
 // Tests for full-default and brief output rendering.
 // Exports: none; covers output_text and output_text_brief behavior.
 // Deps: show_output hub, Store, Task, tempfile.
+use super::super::show_mode_tests::numbered_assistant_log;
 use super::*;
 use crate::store::Store;
 use crate::types::{Task, TaskId, TaskStatus};
@@ -14,20 +15,6 @@ fn test_task(id: &str, worktree: &Path) -> Task {
         worktree_path: Some(worktree.display().to_string()),
         ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
-}
-
-fn numbered_assistant_log(count: usize, body_len: usize) -> String {
-    (0..count)
-        .map(|index| {
-            serde_json::to_string(&json!({
-                "type": "message",
-                "role": "assistant",
-                "content": format!("message-{index:02}-{}", "x".repeat(body_len)),
-            }))
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap()
-        .join("\n")
 }
 
 #[test]

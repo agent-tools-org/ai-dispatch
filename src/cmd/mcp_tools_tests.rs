@@ -136,8 +136,7 @@ async fn board_tool_reports_outcome_and_verification_status() {
 
 #[test]
 fn board_group_sql_preserves_mcp_rows_on_many_tied_tasks() {
-    let _home = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_home, store) = crate::support::test_env::TestHome::new().shared_store();
     for i in 0..150 {
         store
             .db()

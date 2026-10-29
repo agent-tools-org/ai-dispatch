@@ -11,8 +11,7 @@ use std::sync::Arc;
 
 #[test]
 fn run_agent_process_marks_task_failed_when_spawn_fails() {
-    let _aid_home = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_aid_home, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task_id = TaskId("t-kilo-missing".to_string());
     store
         .insert_task(&task_fixture(&task_id, TaskStatus::Running))

@@ -5,9 +5,7 @@ use super::*;
 
 #[test]
 fn marks_stale_pending_tasks_failed() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let mut task = make_task("t-aa01", TaskStatus::Pending);
     task.created_at = Local::now() - Duration::seconds(601);
     store.insert_task(&task).unwrap();
@@ -40,9 +38,7 @@ fn marks_stale_pending_tasks_failed() {
 
 #[test]
 fn stale_pending_timeout_uses_rate_limited_reason() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let mut task = make_task("t-aa04", TaskStatus::Pending);
     task.created_at = Local::now() - Duration::seconds(601);
     store.insert_task(&task).unwrap();
@@ -72,9 +68,7 @@ fn stale_pending_timeout_uses_rate_limited_reason() {
 
 #[test]
 fn stale_pending_timeout_uses_worker_capacity_reason() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let mut task = make_task("t-aa05", TaskStatus::Pending);
     task.created_at = Local::now() - Duration::seconds(601);
     store.insert_task(&task).unwrap();
@@ -100,9 +94,7 @@ fn stale_pending_timeout_uses_worker_capacity_reason() {
 
 #[test]
 fn stale_pending_timeout_uses_agent_starting_reason_when_agent_pid_exists() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let mut task = make_task("t-a11e", TaskStatus::Pending);
     task.created_at = Local::now() - Duration::seconds(601);
     store.insert_task(&task).unwrap();
@@ -146,8 +138,7 @@ fn keeps_recent_pending_tasks_pending() {
 
 #[test]
 fn stale_pending_timeout_skips_tasks_that_already_moved_out_of_pending() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let mut task = make_task("t-aa03", TaskStatus::Pending);
     task.created_at = Local::now() - Duration::seconds(601);
     store.insert_task(&task).unwrap();

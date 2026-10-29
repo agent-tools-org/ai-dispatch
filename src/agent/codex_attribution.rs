@@ -232,13 +232,7 @@ mod tests {
     #[test]
     fn codex_without_rollout_stays_unknown_instead_of_confirming_request() {
         let store = Store::open_memory().expect("in-memory store");
-        let info = CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        };
+        let info = CompletionInfo::new(TaskStatus::Done);
 
         assert_eq!(
             grade_completion_observation(

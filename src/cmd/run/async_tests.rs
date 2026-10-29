@@ -9,8 +9,7 @@ use std::sync::Arc;
 
 #[tokio::test]
 async fn dry_run_returns_without_starting_task() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task_id = run(store.clone(), RunArgs {
         agent_name: "codex".to_string(),
         prompt: "Inspect the repository state".to_string(),
@@ -48,8 +47,7 @@ async fn rate_limited_agent_without_cascade_fails_early() {
 
 #[tokio::test]
 async fn rate_limited_agent_with_cascade_proceeds() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     crate::routing::rate_limit::mark_rate_limited_until(
         &AgentKind::Kilo, None,
         chrono::Local::now().naive_local() + chrono::Duration::days(1), "Insufficient balance",

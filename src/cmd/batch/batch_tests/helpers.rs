@@ -53,8 +53,7 @@ fn resolve_batch_path_uses_aid_batches_fallback() {
 
 #[test]
 fn ensure_batch_workgroup_reuses_existing_default_group() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let existing = store
         .create_workgroup("existing", "shared", Some("seed"), Some("wg-shared"))
         .unwrap();
@@ -70,8 +69,7 @@ fn ensure_batch_workgroup_reuses_existing_default_group() {
 
 #[test]
 fn ensure_batch_workgroup_creates_missing_default_group() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
 
     let (workgroup_id, shared_path) =
         ensure_batch_workgroup(&store, "batch", Some("wg-custom"), false).unwrap();
@@ -86,8 +84,7 @@ fn ensure_batch_workgroup_creates_missing_default_group() {
 
 #[test]
 fn ensure_batch_workgroup_creates_shared_dir_when_enabled() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
 
     let (workgroup_id, shared_path) =
         ensure_batch_workgroup(&store, "batch", Some("wg-custom"), true).unwrap();
@@ -161,8 +158,7 @@ prompt = "second prompt"
 
 #[tokio::test]
 async fn batch_group_flag_assigns_existing_workgroup() {
-    let temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::new().shared_store();
     store
         .create_workgroup("existing", "shared", Some("seed"), Some("wg-shared"))
         .unwrap();

@@ -68,8 +68,7 @@ fn board_json_row_does_not_report_unobserved_as_success() {
 
 #[test]
 fn format_group_header_includes_custom_name() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let workgroup = store.create_workgroup("My Batch", "", Some("seed"), Some("wg-batch")).unwrap();
     assert_eq!(super::format_group_header(&workgroup), "Workgroup: wg-batch (My Batch)\n\n");
 }
@@ -96,8 +95,7 @@ fn board_output_is_written_when_anti_poll_cooldown_applies() {
 
 #[test]
 fn board_output_shows_terminal_status_when_result_file_is_missing() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let tasks = vec![make_task("t-done-no-result", TaskStatus::Done, Local::now())];
     let mut output = Vec::new();
 
@@ -111,8 +109,7 @@ fn board_output_shows_terminal_status_when_result_file_is_missing() {
 
 #[test]
 fn board_output_shows_failed_status_when_result_file_is_missing() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let tasks = vec![make_task("t-failed-no-result", TaskStatus::Failed, Local::now())];
     let mut output = Vec::new();
 
@@ -124,8 +121,7 @@ fn board_output_shows_failed_status_when_result_file_is_missing() {
 
 #[test]
 fn board_loads_actual_pre_upgrade_spec_with_detached_field() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     store
         .insert_task(&make_task("t-9ef43f87", TaskStatus::Running, Local::now()))
         .unwrap();

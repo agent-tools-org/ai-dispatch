@@ -8,6 +8,8 @@ pub(crate) mod test_env;
 #[cfg(test)]
 pub(crate) mod test_command;
 #[cfg(test)]
+pub(crate) mod test_repo;
+#[cfg(test)]
 pub(crate) mod test_subprocess;
 pub(crate) mod repo_root;
 pub(crate) mod shared_dir;

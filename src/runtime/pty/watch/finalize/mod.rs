@@ -79,23 +79,11 @@ fn finalize_buffered(
         write_output_file(agent.kind(), path, &state.full_output)?;
     }
     state.info = if state.info.status == TaskStatus::Failed {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Failed,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
+        CompletionInfo::new(TaskStatus::Failed)
     } else if exit_status.success() {
         agent.parse_completion(&state.full_output)
     } else {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Failed,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
+        CompletionInfo::new(TaskStatus::Failed)
     };
     state.info.exit_code = i32::try_from(exit_status.exit_code()).ok();
     let mut event = crate::agent::completion_event::make_completion_event(task_id, &state.info);

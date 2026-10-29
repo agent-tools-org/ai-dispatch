@@ -154,8 +154,7 @@ fn sandboxed_agents_identified() {
 
 #[test]
 fn build_prompt_bundle_uses_relative_workspace_for_sandboxed_agents() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let group = store.create_workgroup("batch", "desc", Some("seed"), None).unwrap();
     let workspace = crate::support::paths::workspace_dir(group.id.as_str()).unwrap();
     let bundle = run_prompt::build_prompt_bundle(
@@ -182,8 +181,7 @@ fn build_prompt_bundle_uses_relative_workspace_for_sandboxed_agents() {
 
 #[test]
 fn build_prompt_bundle_keeps_absolute_workspace_for_non_sandboxed_agents() {
-    let _temp = crate::support::test_env::TestHome::with_dirs();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let group = store.create_workgroup("batch", "desc", Some("seed"), None).unwrap();
     let workspace = crate::support::paths::workspace_dir(group.id.as_str()).unwrap();
     let bundle = run_prompt::build_prompt_bundle(

@@ -102,8 +102,7 @@ fn launch_preserves_prompt_options_environment_and_workspace() {
 #[tokio::test]
 async fn multiple_results_drain_and_stdin_closes_after_queued_steer_replay() {
     let _permit = crate::support::test_subprocess::acquire();
-    let home = crate::support::test_env::TestHome::with_dirs();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (home, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task = task(&store);
     let id = queue(&store, &task);
     let output = home.path().join("input.json");
@@ -159,8 +158,7 @@ async fn multiple_results_drain_and_stdin_closes_after_queued_steer_replay() {
 #[tokio::test]
 async fn writes_wrong_replays_and_eof_leave_acceptance_unconfirmed_without_resend() {
     let _permit = crate::support::test_subprocess::acquire();
-    let home = crate::support::test_env::TestHome::with_dirs();
-    let store = Store::open_memory().unwrap();
+    let (home, store) = crate::support::test_env::TestHome::with_dirs().store();
     let task = task(&store);
     let id = queue(&store, &task);
     let output = home.path().join("input.json");

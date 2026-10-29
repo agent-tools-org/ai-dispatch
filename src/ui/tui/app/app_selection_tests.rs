@@ -16,8 +16,7 @@ fn make_task(id: &str) -> Task {
 
 #[test]
 fn selection_follows_task_identity_when_newer_task_appears() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
 
     let mut older = make_task("t-sel-old");
     older.created_at = Local::now() - Duration::seconds(30);
@@ -66,8 +65,7 @@ fn selection_follows_task_identity_when_newer_task_appears() {
 
 #[test]
 fn detail_scroll_clamps_to_content() {
-    let _temp = crate::support::test_env::TestHome::new();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
     store.insert_task(&make_task("t-scroll-1")).unwrap();
     let mut app = App::new(
         store,

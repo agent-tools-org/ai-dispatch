@@ -72,14 +72,8 @@ fn assert_result(store: &Store, id: &TaskId, started: Instant, pty: bool) {
         !store
             .record_agent_completion(
                 TaskCompletionUpdate {
-                    id: id.as_str(),
-                    status: TaskStatus::Done,
-                    tokens: None,
-                    duration_ms: 9_999,
-                    observed_model: None,
-                    attribution_source: None,
-                    cost_usd: None,
                     exit_code: Some(0),
+                    ..TaskCompletionUpdate::new(id.as_str(), TaskStatus::Done, 9_999)
                 },
                 None
             )

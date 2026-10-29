@@ -4,7 +4,7 @@
 use super::CursorAgent;
 use crate::agent::{Agent, RunOpts};
 use crate::types::{AgentKind, EventKind, TaskId};
-use crate::{support::paths, routing::rate_limit};
+use crate::{routing::rate_limit};
 use std::fs;
 use std::sync::{Mutex, OnceLock};
 
@@ -86,7 +86,7 @@ fn skips_all_thinking_deltas() {
 
 #[test]
 fn uses_cursor_agent_binary() {
-    let cmd = CursorAgent.build_command("test prompt", &run_opts()).unwrap();
+    let cmd = CursorAgent.build_command("test prompt", &RunOpts::default()).unwrap();
     let program = cmd.get_program().to_string_lossy();
     let is_cursor_cli = program == "agent"
         || program == "cursor-agent"
@@ -105,7 +105,7 @@ fn build_command_embeds_context_files_in_prompt() {
     let dir = tempfile::tempdir().unwrap();
     let context_file = dir.path().join("context.txt");
     fs::write(&context_file, "cursor context").unwrap();
-    let mut opts = run_opts();
+    let mut opts = RunOpts::default();
     opts.context_files = vec![context_file.to_string_lossy().into_owned()];
 
     let cmd = CursorAgent.build_command("test prompt", &opts).unwrap();
@@ -119,7 +119,7 @@ fn read_only_build_command_adds_trust_and_context() {
     let dir = tempfile::tempdir().unwrap();
     let context_file = dir.path().join("readonly.txt");
     fs::write(&context_file, "readonly context").unwrap();
-    let mut opts = run_opts();
+    let mut opts = RunOpts::default();
     opts.read_only = true;
     opts.context_files = vec![context_file.to_string_lossy().into_owned()];
 
@@ -131,14 +131,11 @@ fn read_only_build_command_adds_trust_and_context() {
 
 #[test]
 fn read_only_with_result_file_uses_force_not_plan() {
-    let mut opts = run_opts();
+    let mut opts = RunOpts::default();
     opts.read_only = true;
     opts.result_file = Some("result.md".to_string());
     let cmd = CursorAgent.build_command("audit findings", &opts).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|a| a.to_string_lossy().into_owned())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert!(args.iter().any(|a| a == "--force"));
     assert!(!args.windows(2).any(|w| w == ["--mode", "plan"]));
     assert!(args.iter().any(|a| a.contains("EXCEPT the result file")));
@@ -152,8 +149,7 @@ fn read_only_with_result_file_uses_force_not_plan() {
 /// says.
 #[test]
 fn parse_event_classifies_but_never_marks() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let _guard = rate_limit_lock().lock().unwrap();
     let _ = rate_limit::clear_rate_limit(&AgentKind::Cursor, None);
 
@@ -185,8 +181,7 @@ fn parse_event_classifies_but_never_marks() {
 /// stays dispatchable.
 #[test]
 fn cursors_error_envelope_is_read_on_the_stream_channel() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let _guard = rate_limit_lock().lock().unwrap();
     let _ = rate_limit::clear_rate_limit(&AgentKind::Cursor, None);
 
@@ -227,18 +222,9 @@ fn rate_limit_lock() -> &'static Mutex<()> {
     LOCK.get_or_init(|| Mutex::new(()))
 }
 
-fn run_opts() -> RunOpts {
-    RunOpts {
-        dir: None, output: None, result_file: None, model: None, budget: false,
-        read_only: false, sandbox: false, context_files: vec![], session_id: None,
-        env: None, env_forward: None,
-    }
-}
-
 #[test]
 fn parse_cursor_models_output_strips_ansi_escapes() {
     let raw = "\u{1b}[1mcomposer-2.5\u{1b}[0m (current)\n\u{1b}[32mcomposer-2.5-fast\u{1b}[0m\n\u{1b}[34mgpt-5.6\u{1b}[0m\n";
     let models = super::parse_cursor_models_output(raw);
     assert_eq!(models, vec!["composer-2.5", "composer-2.5-fast", "gpt-5.6"]);
 }
-

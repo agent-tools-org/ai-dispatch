@@ -4,9 +4,8 @@
 use super::shared::{make_task, seed_task};
 use crate::runtime::background::{BackgroundRunSpec, save_spec};
 use crate::store::Store;
-use crate::support::paths::AidHomeGuard;
+
 use crate::types::{AgentKind, TaskStatus};
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::super::batch_helpers::batch_summary;
@@ -14,10 +13,7 @@ use super::super::batch_types::BatchTaskOutcome;
 
 #[test]
 fn reconcile_and_poll_completed_tasks_marks_zombies_failed() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     store
         .insert_task(&super::shared::make_stored_task(
             "t-zombie",
@@ -29,18 +25,8 @@ fn reconcile_and_poll_completed_tasks_marks_zombies_failed() {
         task_id: "t-zombie".to_string(),
         worker_pid: Some(999_999),
         dir: Some(".".to_string()),
-        budget: false,
-        max_duration_mins: None,
-        max_duration_secs: None,
-        idle_timeout_secs: None,
         interactive: true,
-        on_done: None,
-        env: None,
-        agent_pid: None,
-        agent_started: None,
-        audit_report_mode: false,
-        pre_task_dirty_paths: None,
-        foreground: false,
+        ..Default::default()
     })
     .unwrap();
     let mut active = vec![(0, "t-zombie".to_string())];

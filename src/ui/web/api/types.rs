@@ -233,11 +233,11 @@ impl AgentResponse {
 mod retention_tests {
     #[test]
     fn trimmed_event_response_explains_missing_output() {
-        let event = crate::types::TaskEvent {
-            task_id: crate::types::TaskId("trimmed".into()), timestamp: chrono::Local::now(),
-            event_kind: crate::types::EventKind::Build, detail: "build".into(),
-            metadata: Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})),
-        };
+        let event = crate::types::TaskEvent::new(
+            crate::types::TaskId("trimmed".into()),
+            crate::types::EventKind::Build,
+            "build".into(),
+        ).with_metadata(Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})));
         let response = super::TaskEventResponse::from(event);
         assert!(response.detail.contains("output trimmed"));
         assert_eq!(response.metadata.unwrap()["full"]["trimmed"], true);

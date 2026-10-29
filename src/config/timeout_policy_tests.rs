@@ -3,7 +3,7 @@
 // Deps: timeout_policy internals, project config, and command builders.
 
 use super::*;
-use crate::support::paths::AidHomeGuard;
+
 use crate::config::project::{ProjectConfig, ProjectUnstickConfig};
 use std::fs;
 
@@ -15,8 +15,7 @@ fn policy_resolution_precedence_is_cli_agent_project_default() {
     unsafe {
         std::env::remove_var("AID_FIRST_TOKEN_TIMEOUT_SECS");
     }
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     crate::config::agent::save_agent_idle_timeout("codex", Some(420)).expect("save config");
     let project = ProjectConfig {
         idle_timeout: Some(300),

@@ -68,8 +68,7 @@ fn saved_remote_deadline_expires_while_waiting_for_verify_lock_without_launch() 
         return;
     }
     let (store, id, _) = stored_task();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     write_executable(
         &temp.path().join("verify"),
         "#!/bin/bash\necho launched > launched\necho finished\n",
@@ -106,8 +105,7 @@ fn saved_remote_deadline_lock_delay_reduces_command_wait_allowance() {
         return;
     }
     let (store, id, _) = stored_task();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     write_executable(
         &temp.path().join("verify"),
         "#!/bin/bash\necho launched > launched\necho \"$AID_BUILD_BOX\"\nexec /bin/sleep 2\n",

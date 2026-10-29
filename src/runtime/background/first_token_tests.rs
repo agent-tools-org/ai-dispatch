@@ -8,11 +8,7 @@ use super::*;
 /// not 2× idle (the t-764b2a1d 1200s hang).
 #[test]
 fn reaps_silent_since_spawn_on_first_token_budget() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let mut task = make_task("t-silent0", TaskStatus::Running);
     // Past first-token (90s) but well under 2× idle (2×600 = 1200s).
     task.created_at = Local::now() - Duration::seconds(120);
@@ -51,11 +47,7 @@ fn reaps_silent_since_spawn_on_first_token_budget() {
 /// Setup is bookkeeping; with no agent bytes this is still first-token.
 #[test]
 fn reaps_buffered_setup_without_bytes_on_first_token_budget() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let mut task = make_task("t-setup0", TaskStatus::Running);
     task.created_at = Local::now() - Duration::seconds(120);
     store.insert_task(&task).unwrap();
@@ -69,13 +61,12 @@ fn reaps_buffered_setup_without_bytes_on_first_token_budget() {
     })
     .unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId("t-setup0".to_string()),
-            timestamp: Local::now() - Duration::seconds(115),
-            event_kind: EventKind::Setup,
-            detail: "Cargo target seeded: /tmp/target from /cache in 12ms".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::at(
+            TaskId("t-setup0".to_string()),
+            EventKind::Setup,
+            "Cargo target seeded: /tmp/target from /cache in 12ms".to_string(),
+            Local::now() - Duration::seconds(115),
+        ))
         .unwrap();
     // No transcript/log bytes — buffered agent has produced nothing.
 
@@ -102,11 +93,7 @@ fn reaps_buffered_setup_without_bytes_on_first_token_budget() {
 /// the completion event after exit; bytes are the progress signal.
 #[test]
 fn keeps_buffered_with_agent_bytes_within_idle_budget() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let mut task = make_task("t-bytes1", TaskStatus::Running);
     // Past first-token (90s) but well under 2× idle (2×600 = 1200s).
     task.created_at = Local::now() - Duration::seconds(120);
@@ -121,13 +108,12 @@ fn keeps_buffered_with_agent_bytes_within_idle_budget() {
     })
     .unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId("t-bytes1".to_string()),
-            timestamp: Local::now() - Duration::seconds(115),
-            event_kind: EventKind::Setup,
-            detail: "Cargo target seeded: /tmp/target from /cache in 12ms".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::at(
+            TaskId("t-bytes1".to_string()),
+            EventKind::Setup,
+            "Cargo target seeded: /tmp/target from /cache in 12ms".to_string(),
+            Local::now() - Duration::seconds(115),
+        ))
         .unwrap();
     // Simulate watch_buffered having observed stdout bytes — age the file so
     // activity is past first-token; only the 2× idle budget keeps it alive.
@@ -158,11 +144,7 @@ fn keeps_buffered_with_agent_bytes_within_idle_budget() {
 
 #[test]
 fn keeps_silent_since_spawn_within_first_token_budget() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let mut task = make_task("t-quiet", TaskStatus::Running);
     task.created_at = Local::now() - Duration::seconds(30);
     store.insert_task(&task).unwrap();

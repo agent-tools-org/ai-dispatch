@@ -4,26 +4,11 @@
 
 use super::{cleanup_orphaned_idle_tasks, insert_event, make_task};
 use crate::types::{EventKind, TaskStatus};
-use crate::{support::paths, store::Store};
-
-struct TestHome {
-    _temp: tempfile::TempDir,
-    _guard: paths::AidHomeGuard,
-}
-
-fn setup_home() -> TestHome {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let guard = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().expect("ensure dirs");
-    TestHome {
-        _temp: temp,
-        _guard: guard,
-    }
-}
+use crate::{store::Store};
 
 #[test]
 fn orphan_reaper_fails_stale_task_without_background_spec() {
-    let _home = setup_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().expect("store");
     let task = make_task("t-nospec-stale");
     store.insert_task(&task).expect("insert task");
@@ -42,7 +27,7 @@ fn orphan_reaper_fails_stale_task_without_background_spec() {
 
 #[test]
 fn orphan_reaper_keeps_recent_task_without_background_spec() {
-    let _home = setup_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().expect("store");
     let task = make_task("t-nospec-recent");
     store.insert_task(&task).expect("insert task");

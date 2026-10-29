@@ -127,12 +127,9 @@ fn feed_reads_from_isolated_cache_file() {
         count: Some(1),
         models: vec![price_feed::FeedModel {
             id: "custom/feed-model-x".to_string(),
-            aliases: vec![],
             input_per_mtok: 1.0,
             output_per_mtok: 2.0,
-            cached_input_per_mtok: None,
-            context_length: None,
-            source: None,
+            ..Default::default()
         }],
     };
     let json = serde_json::to_vec(&feed).unwrap();
@@ -198,9 +195,8 @@ fn exact_feed_match_prices_and_near_miss_does_not() {
             aliases: vec!["gpt-5.9-mini-alias".to_string()],
             input_per_mtok: 0.75,
             output_per_mtok: 4.5,
-            cached_input_per_mtok: None,
-            context_length: None,
             source: Some("openrouter".to_string()),
+            ..Default::default()
         }],
     });
     let price = |model| pricing_resolution::resolve_model_pricing(model, AgentKind::Codex);

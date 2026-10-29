@@ -3,53 +3,15 @@
 
 use super::*;
 use crate::store::Store;
-use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
-use chrono::Local;
+use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
 use serde_json::json;
 use std::sync::Arc;
 
 fn task(id: &str) -> Task {
-    Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
-    }
+    crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
 }
 
-fn numbered_assistant_log(count: usize, body_len: usize) -> String {
+pub(super) fn numbered_assistant_log(count: usize, body_len: usize) -> String {
     (0..count)
         .map(|index| {
             serde_json::to_string(&json!({
@@ -69,13 +31,7 @@ fn events_text_lists_only_events() {
     let task = task("t-events-only");
     store.insert_task(&task).unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "started work".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(task.id.clone(), EventKind::Milestone, "started work".to_string()))
         .unwrap();
 
     let text = events_text(&store, task.id.as_str(), false).unwrap();
@@ -93,13 +49,7 @@ fn events_text_full_renders_metadata_full_detail() {
     let full_text = format!("reasoning {}", "y".repeat(120));
     let (detail, metadata) = crate::agent::truncate::capped_detail(&full_text);
     store
-        .insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Reasoning,
-            detail,
-            metadata,
-        })
+        .insert_event(&TaskEvent::new(task.id.clone(), EventKind::Reasoning, detail).with_metadata(metadata))
         .unwrap();
 
     let brief = events_text(&store, task.id.as_str(), false).unwrap();
@@ -112,8 +62,7 @@ fn events_text_full_renders_metadata_full_detail() {
 
 #[test]
 fn output_mode_uses_full_flag_for_untruncated_messages() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(crate::support::paths::logs_dir()).unwrap();
     std::fs::write(crate::support::paths::log_path("t-show-full"), numbered_assistant_log(22, 500))
         .unwrap();
@@ -134,8 +83,7 @@ fn output_mode_uses_full_flag_for_untruncated_messages() {
 
 #[test]
 fn log_mode_uses_full_flag_for_untruncated_log() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(crate::support::paths::logs_dir()).unwrap();
     let log = (0..220)
         .map(|index| format!("line-{index:03}"))
@@ -156,11 +104,11 @@ fn trimmed_events_text_explains_missing_output() {
     let store = std::sync::Arc::new(crate::store::Store::open_memory().unwrap());
     store.db().execute_batch("INSERT INTO tasks (id,agent,prompt,status,created_at)
         VALUES ('trimmed','codex','test','done','2020-01-01')").unwrap();
-    store.insert_event(&crate::types::TaskEvent {
-        task_id: crate::types::TaskId("trimmed".into()), timestamp: chrono::Local::now(),
-        event_kind: crate::types::EventKind::Build, detail: "build".into(),
-        metadata: Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})),
-    }).unwrap();
+    store.insert_event(&crate::types::TaskEvent::new(
+        crate::types::TaskId("trimmed".into()),
+        crate::types::EventKind::Build,
+        "build".into(),
+    ).with_metadata(Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})))).unwrap();
     for full in [false, true] {
         assert!(super::text::events_text(&store, "trimmed", full).unwrap().contains("output trimmed"));
     }

@@ -3,46 +3,12 @@
 // Deps: super and chrono.
 
 use super::*;
-use chrono::Local;
 
 fn sample_task(agent: AgentKind, custom_agent_name: Option<&str>) -> Task {
     Task {
-        id: TaskId("t-test".to_string()),
         agent,
         custom_agent_name: custom_agent_name.map(|name| name.to_string()),
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Pending,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId("t-test".to_string()), TaskStatus::Pending)
     }
 }
 
@@ -234,7 +200,6 @@ fn resumable_agents_report_session_support() {
     }
 }
 
-
 #[test]
 fn event_kind_parse_or_warn_falls_back_and_warns_once() {
     assert_eq!(EventKind::parse_or_warn("tool_call"), EventKind::ToolCall);
@@ -246,13 +211,11 @@ fn event_kind_parse_or_warn_falls_back_and_warns_once() {
 
 #[test]
 fn task_event_full_detail_prefers_metadata_full() {
-    let mut event = TaskEvent {
-        task_id: TaskId("t-full".to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Reasoning,
-        detail: "truncated...".to_string(),
-        metadata: Some(serde_json::json!({ "full": "the complete untruncated text" })),
-    };
+    let mut event = TaskEvent::new(
+        TaskId("t-full".to_string()),
+        EventKind::Reasoning,
+        "truncated...".to_string(),
+    ).with_metadata(Some(serde_json::json!({ "full": "the complete untruncated text" })));
     assert_eq!(event.full_detail(), "the complete untruncated text");
     event.metadata = None;
     assert_eq!(event.full_detail(), "truncated...");
@@ -260,11 +223,8 @@ fn task_event_full_detail_prefers_metadata_full() {
 
 #[test]
 fn trimmed_event_readers_explain_missing_output() {
-    let event = TaskEvent {
-        task_id: TaskId("t-trimmed".into()), timestamp: Local::now(),
-        event_kind: EventKind::Build, detail: "build output".into(),
-        metadata: Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})),
-    };
+    let event = TaskEvent::new(TaskId("t-trimmed".into()), EventKind::Build, "build output".into())
+        .with_metadata(Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})));
     assert!(event.trimmed_note().is_some());
     assert_eq!(event.full_detail(), "build output [full output trimmed]");
     assert_eq!(event.display_detail(), "build output [full output trimmed]");
@@ -272,11 +232,11 @@ fn trimmed_event_readers_explain_missing_output() {
 
 #[test]
 fn provider_only_marker_is_visible_to_event_readers() {
-    let event = TaskEvent {
-        task_id: TaskId("t-provider-trimmed".into()), timestamp: Local::now(),
-        event_kind: EventKind::Error, detail: "provider output".into(),
-        metadata: Some(serde_json::json!({"provider_stdout": {"trimmed": true, "bytes": 5000}})),
-    };
+    let event = TaskEvent::new(
+        TaskId("t-provider-trimmed".into()),
+        EventKind::Error,
+        "provider output".into(),
+    ).with_metadata(Some(serde_json::json!({"provider_stdout": {"trimmed": true, "bytes": 5000}})));
     assert!(event.trimmed_note().is_some());
     assert_eq!(event.full_detail(), "provider output [provider_stdout output trimmed]");
     assert!(event.display_detail().contains("output trimmed"));

@@ -17,7 +17,6 @@ mod failure;
 pub(crate) struct ServedModelsCacheEntry {
     pub models: Vec<String>,
     pub updated_at_secs: u64,
-    #[serde(default)]
     pub fingerprint: Option<String>,
 }
 

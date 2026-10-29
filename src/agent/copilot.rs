@@ -66,13 +66,12 @@ impl super::Agent for CopilotAgent {
             "session.tools_updated" => parse_model_update(task_id, &value, now),
             "session.error" => parse_session_error(task_id, &value, line, now),
             "error" => parse_plain_error(task_id, &value, line, now),
-            "result" => Some(TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: EventKind::Completion,
-                detail: completion_detail(&value),
-                metadata: completion_metadata(&value),
-            }),
+            "result" => Some(TaskEvent::at(
+                task_id.clone(),
+                EventKind::Completion,
+                completion_detail(&value),
+                now,
+            ).with_metadata(completion_metadata(&value))),
             _ => None,
         }
     }
@@ -117,13 +116,7 @@ fn parse_assistant_message(
             .and_then(Value::as_i64)
             .map(|tokens| json!({ "output_tokens": tokens })),
     );
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Reasoning,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Reasoning, detail, now).with_metadata(metadata))
 }
 
 fn parse_tool_start(task_id: &TaskId, value: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
@@ -131,13 +124,12 @@ fn parse_tool_start(task_id: &TaskId, value: &Value, now: chrono::DateTime<Local
     let tool_name = data.get("toolName").and_then(Value::as_str).unwrap_or("tool");
     let text = tool_start_detail(tool_name, data.get("arguments"))?;
     let (detail, metadata) = capped_detail(&text);
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: classify_tool_kind(tool_name, data.get("arguments")),
+    Some(TaskEvent::at(
+        task_id.clone(),
+        classify_tool_kind(tool_name, data.get("arguments")),
         detail,
-        metadata,
-    })
+        now,
+    ).with_metadata(metadata))
 }
 
 fn parse_tool_error(task_id: &TaskId, value: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
@@ -152,24 +144,13 @@ fn parse_tool_error(task_id: &TaskId, value: &Value, now: chrono::DateTime<Local
         .or_else(|| data.pointer("/result/error").and_then(Value::as_str))
         .unwrap_or("unknown error");
     let (detail, metadata) = capped_detail(&format!("{tool_name}: {detail}"));
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Error,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Error, detail, now).with_metadata(metadata))
 }
 
 fn parse_model_update(task_id: &TaskId, value: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
     let model = value.pointer("/data/model").and_then(Value::as_str)?;
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Milestone,
-        detail: format!("model: {model}"),
-        metadata: Some(json!({ "model": model })),
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Milestone, format!("model: {model}"), now)
+        .with_metadata(Some(json!({ "model": model }))))
 }
 
 fn parse_session_error(
@@ -185,13 +166,7 @@ fn parse_session_error(
     let text = data.get("message").and_then(Value::as_str)?;
     crate::routing::quota::channel::mark_stream_refusal(AgentKind::Copilot, None, line);
     let (detail, metadata) = capped_detail(text);
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Error,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Error, detail, now).with_metadata(metadata))
 }
 
 fn parse_plain_error(
@@ -207,13 +182,7 @@ fn parse_plain_error(
         .unwrap_or("unknown error");
     crate::routing::quota::channel::mark_stream_refusal(AgentKind::Copilot, None, line);
     let (detail, metadata) = capped_detail(text);
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Error,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Error, detail, now).with_metadata(metadata))
 }
 
 fn classify_tool_kind(tool_name: &str, args: Option<&Value>) -> EventKind {

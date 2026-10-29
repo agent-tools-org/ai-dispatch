@@ -5,8 +5,28 @@ use super::*;
 use chrono::Duration;
 use crate::types::{AttributionSource, EventKind, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 
-fn task(id: &str, agent: AgentKind, status: TaskStatus, age_days: i64, model: &str, cost_usd: Option<f64>, duration_ms: Option<i64>, tokens: i64) -> Task {
-    Task { id: TaskId(id.to_string()), agent, custom_agent_name: None, prompt: "prompt".to_string(), resolved_prompt: None, category: None, status, parent_task_id: None, workgroup_id: None, caller_kind: None, caller_session_id: None, agent_session_id: None, repo_path: None, project_id: None, worktree_path: None, effective_dir: None, worktree_branch: None, final_head_sha: None, final_branch: None, start_sha: None, log_path: None, output_path: None, tokens: Some(tokens), prompt_tokens: None, duration_ms, requested_model: Some(model.to_string()), observed_model: Some(model.to_string()), attribution_source: Some(AttributionSource::Echoed), cost_usd, exit_code: None, created_at: Local::now() - Duration::days(age_days), completed_at: None, verify: None, verify_status: VerifyStatus::Skipped, pending_reason: None, read_only: false, budget: false, audit_verdict: None, audit_report_path: None, delivery_assessment: None }
+fn task(
+    id: &str,
+    agent: AgentKind,
+    status: TaskStatus,
+    age_days: i64,
+    model: &str,
+    cost_usd: Option<f64>,
+    duration_ms: Option<i64>,
+    tokens: i64
+) -> Task {
+    Task {
+        agent,
+        tokens: Some(tokens),
+        duration_ms,
+        requested_model: Some(model.to_string()),
+        observed_model: Some(model.to_string()),
+        attribution_source: Some(AttributionSource::Echoed),
+        cost_usd,
+        created_at: Local::now() - Duration::days(age_days),
+        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), status)
+    }
 }
 
 #[test]
@@ -16,7 +36,12 @@ fn collects_agent_failure_and_model_stats() {
     for task in [task("t-1", AgentKind::Codex, TaskStatus::Done, 1, "gpt-5.4", Some(10.0), Some(120_000), 1_000), task("t-2", AgentKind::Codex, TaskStatus::Failed, 2, "gpt-5.4", Some(5.0), Some(60_000), 1_000), task("t-3", AgentKind::Cursor, TaskStatus::Merged, 1, "composer-2", None, Some(90_000), 1_000), task("t-4", AgentKind::OpenCode, TaskStatus::Failed, 8, "glm-4.7", Some(1.0), Some(30_000), 1_000)] {
         store.insert_task(&task).unwrap();
     }
-    store.insert_event(&TaskEvent { task_id: TaskId("t-2".to_string()), timestamp: now, event_kind: EventKind::Error, detail: "verify failed (cargo check)".to_string(), metadata: None }).unwrap();
+    store.insert_event(&TaskEvent::at(
+        TaskId("t-2".to_string()),
+        EventKind::Error,
+        "verify failed (cargo check)".to_string(),
+        now,
+    )).unwrap();
     let stats = collect(&store, UsageWindow::Days(7), None, now).unwrap();
     assert_eq!(stats.agent_rows[0], AgentRow { agent: "codex".to_string(), tasks: 2, share_pct: 66, success_rate: 50.0, avg_duration_ms: Some(90_000), cost: "$15.00".to_string() });
     assert_eq!(stats.agent_rows[1], AgentRow { agent: "cursor".to_string(), tasks: 1, share_pct: 33, success_rate: 100.0, avg_duration_ms: Some(90_000), cost: "subscription".to_string() });

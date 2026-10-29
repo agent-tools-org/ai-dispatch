@@ -25,16 +25,8 @@ fn build_command_adds_effective_target_without_granting_parent() {
     let roots = vec![metadata.clone(), common.clone(), cargo_target.canonicalize().unwrap()];
     let opts = RunOpts {
         dir: Some(worktree.to_string_lossy().into_owned()),
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
         sandbox: true,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = CodexAgent
         .build_command_with_context(
@@ -46,10 +38,7 @@ fn build_command_adds_effective_target_without_granting_parent() {
             },
         )
         .unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     let config = args.iter().find(|arg| arg.starts_with("permissions=")).unwrap();
     let parsed: toml::Value = config.parse().unwrap();
     let roots = parsed["permissions"]["aid-write"]["filesystem"].as_table().unwrap();
@@ -74,13 +63,13 @@ fn read_only_command_grants_only_supplied_task_and_scratch_directories_on_resume
         dir: Some(repo.to_string_lossy().into_owned()),
         read_only: true,
         session_id: Some("saved-session".into()),
-        ..super::command_tests::test_opts()
+        ..crate::agent::RunOpts::default()
     };
     let cmd = CodexAgent.build_command_with_context("audit", &opts, CommandContext {
         durable_codex_home: false,
         writable_roots: vec![task.clone(), scratch.clone()],
     }).unwrap();
-    let args: Vec<_> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    let args: Vec<_> = crate::support::test_command::args(&cmd);
     assert_eq!(&args[..2], ["exec", "resume"]);
     let config = args.iter().find(|arg| arg.starts_with("permissions=")).unwrap();
     let parsed: toml::Value = config.parse().unwrap();

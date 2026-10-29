@@ -142,12 +142,11 @@ mod custom_tests;
 #[cfg(test)]
 mod home_guard_tests {
     use super::*;
-    use crate::support::paths::{self, AidHomeGuard};
+    use crate::support::paths::{self};
 
     #[test]
     fn marker_path_writes_under_isolated_home() {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = AidHomeGuard::set(temp.path());
+        let temp = crate::support::test_env::TestHome::new();
         std::fs::create_dir_all(paths::aid_dir()).unwrap();
 
         mark_rate_limited(&AgentKind::Codex, None, "rate limit exceeded");

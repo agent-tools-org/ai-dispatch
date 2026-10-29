@@ -13,8 +13,7 @@ mod concurrent_tests;
 #[tokio::test]
 async fn scope_cut_symlink_report_is_not_copied_by_official_persistence() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let f = Fixture::new(home.path(), false, false, false);
     let dir = Path::new(f.args.dir.as_ref().unwrap());
     fs::write(dir.join("base.txt"), "base\n").unwrap();
@@ -35,8 +34,7 @@ async fn scope_cut_symlink_report_is_not_copied_by_official_persistence() {
 async fn read_only_violation_records_audit_verdict_when_report_exists() {
     let _permit = test_subprocess::acquire();
     let _env = crate::task::aic::test_env_lock();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let mut f = Fixture::new(home.path(), true, false, false);
     let aic = home.path().join("aic");
     crate::support::test_env::write_executable(&aic, "#!/bin/sh\nprintf 'report: /tmp/audit.md\\n'\nexit 0\n");
@@ -62,8 +60,7 @@ async fn read_only_violation_records_audit_verdict_when_report_exists() {
 #[tokio::test]
 async fn read_only_settlement_detects_head_and_ref_changes_in_clean_checkout() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let f = Fixture::new(home.path(), false, false, false);
     let dir = Path::new(f.args.dir.as_ref().unwrap());
     fs::write(dir.join("base.txt"), "base\n").unwrap();
@@ -87,8 +84,7 @@ async fn read_only_settlement_detects_head_and_ref_changes_in_clean_checkout() {
 #[tokio::test]
 async fn fix_round_one_read_only_delivers_staged_required_report_outside_repository() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let mut f = Fixture::new(home.path(), false, false, false);
     f.args.agent_name = "codex".into();
     f.args.result_file_required = Some(true);
@@ -106,8 +102,7 @@ async fn fix_round_one_read_only_delivers_staged_required_report_outside_reposit
 #[tokio::test]
 async fn fix_round_one_read_only_delivers_staged_output_to_explicit_absolute_path() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let mut f = Fixture::new(home.path(), false, false, false);
     f.args.agent_name = "codex".into();
     f.args.result_file = None;
@@ -125,8 +120,7 @@ async fn fix_round_one_read_only_delivers_staged_output_to_explicit_absolute_pat
 #[tokio::test]
 async fn fix_round_one_read_only_missing_staged_report_rejects_stale_destination() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let mut f = Fixture::new(home.path(), true, false, false);
     f.args.agent_name = "codex".into();
     let dir = Path::new(f.args.dir.as_ref().unwrap());
@@ -146,8 +140,7 @@ async fn fix_round_one_read_only_missing_staged_report_rejects_stale_destination
 async fn fix_round_two_read_only_refuses_repository_destinations_at_dispatch() {
     let _permit = test_subprocess::acquire();
     for destination in ["base.txt", "new/reports/final.md", "git-config", "parent-alias"] {
-        let home = tempfile::tempdir().unwrap();
-        let _guard = paths::AidHomeGuard::set(home.path());
+        let home = crate::support::test_env::TestHome::new();
         let mut f = Fixture::new(home.path(), false, false, false);
         let dir = PathBuf::from(f.args.dir.as_ref().unwrap());
         fs::write(dir.join("base.txt"), "base\n").unwrap();
@@ -175,8 +168,7 @@ async fn fix_round_two_read_only_refuses_repository_destinations_at_dispatch() {
 #[tokio::test]
 async fn fix_round_two_read_only_refuses_destination_symlink_into_repository_at_dispatch() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let mut f = Fixture::new(home.path(), false, false, false);
     let dir = PathBuf::from(f.args.dir.as_ref().unwrap());
     fs::write(dir.join("base.txt"), "base\n").unwrap();
@@ -194,8 +186,7 @@ async fn fix_round_two_read_only_refuses_destination_symlink_into_repository_at_
 #[tokio::test]
 async fn fix_round_two_read_only_output_replaces_external_symlink_atomically() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let mut f = Fixture::new(home.path(), false, false, false);
     let dir = Path::new(f.args.dir.as_ref().unwrap());
     fs::write(dir.join("base.txt"), "base\n").unwrap();

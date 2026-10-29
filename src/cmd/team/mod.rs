@@ -2,6 +2,7 @@
 // Exports: run_team_command.
 // Deps: crate::config::team, crate::support::paths, std::fs.
 
+use crate::ui::format::title_case;
 mod display;
 use display::show_team;
 
@@ -121,20 +122,6 @@ fn delete_team(name: &str) -> Result<()> {
     fs::remove_file(&target)?;
     println!("Removed team '{name}'");
     Ok(())
-}
-
-fn title_case(name: &str) -> String {
-    name.split(|c: char| c == '-' || c == '_' || c.is_whitespace())
-        .filter(|seg| !seg.is_empty())
-        .map(|seg| {
-            let mut chars = seg.chars();
-            match chars.next() {
-                Some(f) => f.to_ascii_uppercase().to_string() + chars.as_str(),
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 #[cfg(test)]

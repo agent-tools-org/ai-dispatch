@@ -2,8 +2,7 @@
 // Deps: parent extraction helpers, task fixtures, and tempfile.
 
 use super::{extract_conclusion, extract_last_log_message};
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-use chrono::Local;
+use crate::types::{Task, TaskId, TaskStatus};
 
 #[test]
 fn extracts_copilot_message_after_tool_boundary() {
@@ -32,46 +31,11 @@ fn extracts_text_from_content_arrays() {
 
 fn missing_output_task(log: &std::path::Path) -> Task {
     Task {
-        id: TaskId("t-summary-missing".into()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
         prompt: "test".into(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None,
-        project_id: None,
-        worktree_path: None,
-        effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
         log_path: Some(log.display().to_string()),
         output_path: Some("report.md".to_string()),
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
         read_only: true,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId("t-summary-missing".into()), TaskStatus::Done)
     }
 }
 

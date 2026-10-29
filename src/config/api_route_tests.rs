@@ -48,8 +48,7 @@ fn rejects_invalid_routes() {
 
 #[test]
 fn keychain_identifiers_reject_shell_syntax_at_config_load() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     for field in ["keychain_service", "keychain_account"] {
         for value in [
             "",

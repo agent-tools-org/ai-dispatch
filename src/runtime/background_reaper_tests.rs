@@ -10,46 +10,13 @@ use super::{BackgroundRunSpec, check_zombie_tasks_with, save_spec};
 mod wrap_up;
 use crate::store::Store;
 use crate::support::paths;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 
 fn task(id: &str, status: TaskStatus) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
         created_at: Local::now() - Duration::seconds(5),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
         read_only: true,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), status)
     }
 }
 
@@ -58,39 +25,17 @@ fn spec(id: &str) -> BackgroundRunSpec {
         task_id: id.to_string(),
         worker_pid: Some(77),
         dir: Some(".".to_string()),
-        budget: false,
         max_duration_mins: Some(60),
-        max_duration_secs: None,
         idle_timeout_secs: Some(1),
         interactive: true,
-        on_done: None,
-        env: None,
         agent_pid: Some(88),
-        agent_started: None,
-        audit_report_mode: false,
-        pre_task_dirty_paths: None,
-        foreground: false,
-    }
-}
-
-struct TestHome {
-    _temp: tempfile::TempDir,
-    _guard: paths::AidHomeGuard,
-}
-
-fn setup_home() -> TestHome {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let guard = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().expect("ensure dirs");
-    TestHome {
-        _temp: temp,
-        _guard: guard,
+        ..Default::default()
     }
 }
 
 #[test]
 fn reaper_terminalizes_awaiting_input_task_with_dead_worker() {
-    let _home = setup_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().expect("store");
     store
         .insert_task(&task("t-await-dead", TaskStatus::AwaitingInput))
@@ -108,7 +53,7 @@ fn reaper_terminalizes_awaiting_input_task_with_dead_worker() {
 
 #[test]
 fn reaper_terminalizes_stalled_task_with_dead_worker() {
-    let _home = setup_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().expect("store");
     store
         .insert_task(&task("t-stalled-dead", TaskStatus::Stalled))
@@ -126,7 +71,7 @@ fn reaper_terminalizes_stalled_task_with_dead_worker() {
 
 #[test]
 fn reaper_cleaned_list_excludes_tasks_that_did_not_transition() {
-    let _home = setup_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().expect("store");
     store
         .insert_task(&task("t-raced-done", TaskStatus::Running))
@@ -153,7 +98,7 @@ fn reaper_cleaned_list_excludes_tasks_that_did_not_transition() {
 /// A missing worker always fails the task and kills any recorded agent.
 #[test]
 fn reaps_task_with_dead_worker_and_kills_its_live_agent() {
-    let _home = setup_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().expect("store");
     store
         .insert_task(&task("t-orphan-live", TaskStatus::Running))
@@ -181,7 +126,7 @@ fn reaps_task_with_dead_worker_and_kills_its_live_agent() {
 
 #[test]
 fn reaps_task_with_dead_worker_and_agent() {
-    let _home = setup_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().expect("store");
     store
         .insert_task(&task("t-no-detach", TaskStatus::Running))
@@ -202,7 +147,7 @@ fn reaps_task_with_dead_worker_and_agent() {
 
 #[test]
 fn reaper_skips_unreadable_spec_and_continues_with_other_tasks() {
-    let _home = setup_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().expect("store");
     store
         .insert_task(&task("t-unreadable-spec", TaskStatus::Running))

@@ -4,18 +4,11 @@
 use super::*;
 use super::{SyntheticMilestoneTracker, parse_milestone_event};
 use crate::agent::Agent;
-use crate::support::paths;
+
 use crate::types::{AgentKind, CompletionInfo, EventKind, Task, TaskEvent, TaskId, TaskStatus};
-use chrono::Local;
 
 fn tracker_event(kind: EventKind, detail: &str) -> TaskEvent {
-    TaskEvent {
-        task_id: TaskId("t-synth".to_string()),
-        timestamp: Local::now(),
-        event_kind: kind,
-        detail: detail.to_string(),
-        metadata: None,
-    }
+    TaskEvent::new(TaskId("t-synth".to_string()), kind, detail.to_string())
 }
 
 fn feed_stream_line(store: &std::sync::Arc<crate::store::Store>, task: &Task, line: &str) {
@@ -29,13 +22,7 @@ fn feed_stream_line_with_agent(
     agent: &dyn Agent,
 ) {
     let mut synthetic = SyntheticMilestoneTracker::new();
-    let mut info = CompletionInfo {
-        tokens: None,
-        status: TaskStatus::Done,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    };
+    let mut info = CompletionInfo::new(TaskStatus::Done);
     let mut event_count = 0u32;
     let mut session_saved = false;
     let ctx = super::StreamLineContext {
@@ -57,44 +44,9 @@ fn feed_stream_line_with_agent(
 
 fn running_task(id: &str, agent: AgentKind) -> Task {
     Task {
-        id: TaskId(id.to_string()),
         agent,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Running,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: chrono::Local::now(),
-        completed_at: None,
-        verify: None,
         verify_status: crate::types::VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Running)
     }
 }
 
@@ -107,8 +59,7 @@ mod summary_tests;
 /// Tool-derived Error events carry the model's request, not the provider.
 #[test]
 fn tool_error_events_do_not_mark_quota() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = std::sync::Arc::new(crate::store::Store::open_memory().unwrap());
     let task = running_task("t-copilot-tool", AgentKind::Copilot);
     store.insert_task(&task).unwrap();
@@ -123,8 +74,7 @@ fn tool_error_events_do_not_mark_quota() {
 
 #[test]
 fn streamed_opencode_refusal_holds_only_the_dispatched_provider() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = std::sync::Arc::new(crate::store::Store::open_memory().unwrap());
     let mut task = running_task("t-opencode-provider-scope", AgentKind::OpenCode);
     task.requested_model = Some("opencode/deepseek-v4-pro".to_string());
@@ -163,61 +113,17 @@ fn streamed_opencode_refusal_holds_only_the_dispatched_provider() {
 
 #[test]
 fn term_escape_strip_allows_droid_stream_parse_via_stream_path() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = std::sync::Arc::new(crate::store::Store::open_memory().unwrap());
     let task = Task {
-        id: TaskId("t-droid-osc".to_string()),
         agent: AgentKind::Droid,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Running,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None,
-        project_id: None,
-        worktree_path: None,
-        effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: chrono::Local::now(),
-        completed_at: None,
-        verify: None,
         verify_status: crate::types::VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId("t-droid-osc".to_string()), TaskStatus::Running)
     };
     store.insert_task(&task).unwrap();
 
     let mut synthetic = SyntheticMilestoneTracker::new();
-    let mut info = CompletionInfo {
-        tokens: None,
-        status: TaskStatus::Done,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    };
+    let mut info = CompletionInfo::new(TaskStatus::Done);
     let mut event_count = 0u32;
     let mut session_saved = false;
     let agent = crate::agent::droid::DroidAgent;

@@ -2,7 +2,6 @@
 // Records stopped before signalling, then preserves output and releases task resources.
 
 use anyhow::{anyhow, bail, Result};
-use chrono::Local;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -78,10 +77,7 @@ fn terminate(
     let terminal = task.status.is_terminal()
         && !(task.status == TaskStatus::Done && task.completed_at.is_none());
     if !terminal {
-        let event = TaskEvent {
-            task_id: task.id.clone(), timestamp: Local::now(), event_kind: EventKind::Completion,
-            detail: detail.to_string(), metadata: None,
-        };
+        let event = TaskEvent::new(task.id.clone(), EventKind::Completion, detail.to_string());
         store.settle_task_status(task_id, TaskStatus::Stopped, None, None, Some(&event))?;
     }
     if graceful && task.agent == crate::types::AgentKind::Codex {

@@ -5,6 +5,7 @@
 use clap::Args;
 
 #[derive(Args)]
+#[cfg_attr(test, derive(Default))]
 pub struct RetryArgs {
     pub task_id: String,
     #[arg(short, long, conflicts_with = "feedback_file")]

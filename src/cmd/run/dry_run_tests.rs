@@ -4,29 +4,15 @@
 
 use super::*;
 use crate::store::Store;
-use std::process::Command;
+
 use std::sync::Arc;
 use tempfile::TempDir;
 
-fn git(dir: &std::path::Path, args: &[&str]) {
-    let output = Command::new("git")
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .expect("git command failed");
-    assert!(
-        output.status.success(),
-        "git {:?} failed: {}",
-        args,
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
+use crate::support::test_env::git;
 
 #[tokio::test]
 async fn dry_run_with_explicit_repo_rejects_missing_effective_dir() {
-    let aid_home = TempDir::new().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(aid_home.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let _aid_home = crate::support::test_env::TestHome::with_dirs();
     let repo = TempDir::new().unwrap();
     git(repo.path(), &["init", "-b", "main"]);
     git(repo.path(), &["config", "user.email", "aid@example.com"]);

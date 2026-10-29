@@ -9,18 +9,10 @@ use super::{
     run_prompt::PromptBundle,
 };
 use crate::{config::hooks::Hook, store::Store, support::test_subprocess, types::*};
-use chrono::Local;
+
 use std::{path::Path, process::Command, sync::Arc};
 
-fn git(dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .status()
-        .unwrap()
-        .success());
-}
+use crate::support::test_env::git;
 
 fn init_repo() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
@@ -28,57 +20,16 @@ fn init_repo() -> tempfile::TempDir {
     dir
 }
 
-fn write_path(dir: &Path, path: &str, content: &str) {
-    let file = dir.join(path);
-    if let Some(parent) = file.parent() {
-        std::fs::create_dir_all(parent).unwrap();
-    }
-    std::fs::write(file, content).unwrap();
-}
+use crate::support::test_repo::write_path;
 
 fn prompt_bundle() -> PromptBundle {
-    PromptBundle { effective_prompt: "prompt".to_string(), context_files: Vec::new(), prompt_tokens: 0, injected_memory_ids: Vec::new() }
+    PromptBundle { effective_prompt: "prompt".to_string(),
+        ..Default::default()
+    }
 }
 
 fn task(id: &str, status: TaskStatus) -> Task {
-    Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
-    }
+    crate::types::Task::test_fixture(TaskId(id.to_string()), status)
 }
 
 #[test]
@@ -218,8 +169,7 @@ async fn audit_report_mode_skips_dirty_worktree_enforcement() {
 #[tokio::test]
 async fn background_lifecycle_runs_verify_and_checklist_scan() {
     let _permit = test_subprocess::acquire();
-    let aid_home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
+    let _aid_home = crate::support::test_env::TestHome::new();
     let dir = tempfile::tempdir().unwrap();
     let store = Arc::new(Store::open_memory().unwrap());
     let task_id = TaskId("t-bg-lifecycle-ok".to_string());

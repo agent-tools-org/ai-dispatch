@@ -83,22 +83,20 @@ pub(super) fn record(store: &Store, task: &TaskId, id: i64, result: Result<Strin
             (false, error.to_string(), None, unconfirmed)
         }
     };
-    store.insert_event(&TaskEvent {
-        task_id: task.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: if accepted {
+    store.insert_event(&TaskEvent::new(
+        task.clone(),
+        if accepted {
             EventKind::Milestone
         } else {
             EventKind::Error
         },
-        detail: text.clone(),
-        metadata: Some(json!({
+        text.clone(),
+    ).with_metadata(Some(json!({
             "codex_steer_message_id":id,
             "accepted":if unconfirmed {None} else {Some(accepted)},
             "unconfirmed":unconfirmed,"turn_id":turn,
             "error":if accepted {None} else {Some(text)}
-        })),
-    })?;
+        }))))?;
     if accepted {
         store.mark_delivered(id)?;
     }

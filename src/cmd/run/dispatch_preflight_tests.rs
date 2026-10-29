@@ -114,9 +114,7 @@ fn validate_command_preflight_skips_agy_model_check_on_dry_run() {
 
 #[test]
 fn prepare_dispatch_rejects_custom_agent_with_missing_binary_before_task_exists() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
     let agents_dir = crate::support::paths::aid_dir().join("agents");
     std::fs::create_dir_all(&agents_dir).unwrap();
     std::fs::write(
@@ -182,8 +180,7 @@ fn foreign_agent_binary_blocks_cursor_in_advise_and_preflight_alike() {
 #[test]
 #[ignore]
 fn reports_cursor_route_for_subprocess() {
-    let temp = tempfile::tempdir().unwrap();
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let declared = crate::types::DeclaredTaskProfile {
         difficulty: crate::types::TaskDifficulty::Moderate,
         budget: crate::types::TaskBudget::Standard,

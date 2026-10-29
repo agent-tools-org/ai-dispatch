@@ -40,11 +40,9 @@ impl Agent for FinalizingAgent {
                 self.store.get_task(self.id.as_str()).expect("stopped task");
         }
         CompletionInfo {
-            status: self.status,
             tokens: Some(1_000_000),
             model: Some("component-test-model".into()),
-            cost_usd: None,
-            exit_code: None,
+            ..CompletionInfo::new(self.status)
         }
     }
 }

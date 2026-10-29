@@ -19,13 +19,7 @@ pub(crate) fn parse_line(task_id: &TaskId, value: &Value, now: chrono::DateTime<
                 .and_then(Value::as_str)
                 .unwrap_or("commandcode error");
             let (detail, metadata) = capped_detail(detail);
-            Some(TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: EventKind::Error,
-                detail,
-                metadata,
-            })
+            Some(TaskEvent::at(task_id.clone(), EventKind::Error, detail, now).with_metadata(metadata))
         }
         _ => None,
     }
@@ -39,37 +33,24 @@ pub(crate) fn parse_stream_event(
     match event.get("type").and_then(Value::as_str)? {
         "run_start" => {
             let session_id = event.get("sessionId")?.as_str()?;
-            Some(TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: EventKind::Milestone,
-                detail: format!("session {session_id}"),
-                metadata: Some(json!({ "agent_session_id": session_id })),
-            })
+            Some(TaskEvent::at(
+                task_id.clone(),
+                EventKind::Milestone,
+                format!("session {session_id}"),
+                now,
+            ).with_metadata(Some(json!({ "agent_session_id": session_id }))))
         }
         "model_request_start" => {
             let model = event.get("model")?.as_str()?;
             let (detail, metadata) =
                 capped_detail_with(&format!("model {model}"), Some(json!({ "model": model })));
-            Some(TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind: EventKind::Milestone,
-                detail,
-                metadata,
-            })
+            Some(TaskEvent::at(task_id.clone(), EventKind::Milestone, detail, now).with_metadata(metadata))
         }
         "thinking_end" => {
             let text = event.get("text").and_then(Value::as_str).unwrap_or("");
             (!text.is_empty()).then(|| {
                 let (detail, metadata) = capped_detail(text);
-                TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: now,
-                    event_kind: EventKind::Reasoning,
-                    detail,
-                    metadata,
-                }
+                TaskEvent::at(task_id.clone(), EventKind::Reasoning, detail, now).with_metadata(metadata)
             })
         }
         "tool_queued" | "tool_running" | "tool_completed" => tool_event(task_id, event, now),
@@ -97,25 +78,13 @@ pub(crate) fn parse_result_event(
     if commandcode_result_failed(value) {
         let detail = format!("Command Code stopped with {subtype} ({stop_reason})");
         let (detail, metadata) = capped_detail_with(&detail, metadata);
-        Some(TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: now,
-            event_kind: EventKind::Error,
-            detail,
-            metadata,
-        })
+        Some(TaskEvent::at(task_id.clone(), EventKind::Error, detail, now).with_metadata(metadata))
     } else {
         let detail = usage
             .and_then(usage_detail)
             .unwrap_or_else(|| "completed".to_string());
         let (detail, metadata) = capped_detail_with(&detail, metadata);
-        Some(TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: now,
-            event_kind: EventKind::Completion,
-            detail,
-            metadata,
-        })
+        Some(TaskEvent::at(task_id.clone(), EventKind::Completion, detail, now).with_metadata(metadata))
     }
 }
 
@@ -127,13 +96,7 @@ pub(crate) fn usage_event(
     let detail = usage_detail(usage)?;
     let metadata = usage_metadata(usage);
     let (detail, metadata) = capped_detail_with(&detail, metadata);
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::Completion,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::Completion, detail, now).with_metadata(metadata))
 }
 
 pub(crate) fn usage_detail(usage: &Value) -> Option<String> {
@@ -178,11 +141,5 @@ fn tool_event(task_id: &TaskId, event: &Value, now: chrono::DateTime<Local>) -> 
     let tool = event.get("toolName").and_then(Value::as_str).unwrap_or("tool");
     let detail = format!("{tool}: {}", event.get("type").and_then(Value::as_str)?);
     let (detail, metadata) = capped_detail_with(&detail, Some(json!({ "tool": tool })));
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: EventKind::ToolCall,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), EventKind::ToolCall, detail, now).with_metadata(metadata))
 }

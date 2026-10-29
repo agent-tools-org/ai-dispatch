@@ -10,7 +10,7 @@ use chrono::{Duration, Local};
 use tempfile::TempDir;
 
 use crate::store::state::{
-    compute_state, format_state_summary_in, load_state_in, refresh_project_state_in,
+    compute_state, format_state_summary_for_project, refresh_project_state_in,
     save_state_in, ContextState, HealthState, PerformanceState, ProjectState,
 };
 use crate::store::{Store, TaskCompletionUpdate};
@@ -25,7 +25,10 @@ fn state_path_and_roundtrip_use_project_aid_dir() {
     let state = sample_state();
     save_state_in(&state, &nested).unwrap();
     assert!(dir.path().join("repo/.aid/state.toml").is_file());
-    assert_eq!(load_state_in(&nested).unwrap(), Some(state));
+    let saved: ProjectState = toml::from_str(
+        &fs::read_to_string(dir.path().join("repo/.aid/state.toml")).unwrap(),
+    ).unwrap();
+    assert_eq!(saved, state);
 }
 
 #[test]
@@ -144,7 +147,9 @@ fn refresh_project_state_writes_state_after_completion_update() {
 
     refresh_project_state_in(&store, &task.id, dir.path());
 
-    let state = load_state_in(dir.path()).unwrap().unwrap();
+    let state: ProjectState = toml::from_str(
+        &fs::read_to_string(dir.path().join(".aid/state.toml")).unwrap(),
+    ).unwrap();
     assert_eq!(state.context.last_task_id.as_deref(), Some("t-refresh"));
     assert_eq!(state.health.total_tasks, 1);
 }
@@ -170,15 +175,12 @@ fn refresh_project_state_skips_tasks_without_repo_path() {
 
     refresh_project_state_in(&store, &task.id, dir.path());
 
-    assert_eq!(load_state_in(dir.path()).unwrap(), None);
+    assert!(!dir.path().join(".aid/state.toml").exists());
 }
 
 #[test]
 fn summary_formats_key_lines() {
-    let dir = TempDir::new().unwrap();
-    fs::create_dir_all(dir.path().join(".aid")).unwrap();
-    fs::write(dir.path().join(".aid/project.toml"), "[project]\nid = \"alpha\"\n").unwrap();
-    let summary = format_state_summary_in(&sample_state(), dir.path());
+    let summary = format_state_summary_for_project(&sample_state(), "alpha");
     assert!(summary.contains("[Project State: alpha]"));
     assert!(summary.contains("Health: 94% success (47/50 recent), verify: passed"));
     assert!(summary.contains("Best agents: codex (92%), grok (88%)"));
@@ -224,41 +226,13 @@ fn make_task(
     verify_status: VerifyStatus,
 ) -> Task {
     Task {
-        id: TaskId(id.to_string()),
         agent,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: Some(repo_path.to_string_lossy().to_string()), project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
+        repo_path: Some(repo_path.to_string_lossy().to_string()),
         duration_ms: Some((duration_secs * 1000.0) as i64),
-        requested_model: None, observed_model: None, attribution_source: None,
         cost_usd,
-        exit_code: None,
         created_at: Local::now() - Duration::minutes(minutes_ago),
         completed_at: Some(Local::now() - Duration::minutes(minutes_ago - 1)),
-        verify: None,
         verify_status,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), status)
     }
 }

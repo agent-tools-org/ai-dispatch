@@ -2,7 +2,6 @@
 // Runs combined stdout/stderr through prompt detection and file-based input forwarding.
 
 use anyhow::Result;
-use chrono::Local;
 use std::io::Read;
 use std::path::Path;
 use std::sync::mpsc;
@@ -70,13 +69,7 @@ fn fail_task_on_spawn_error(
     detail: &str,
 ) {
     let _ = std::fs::write(crate::support::paths::stderr_path(task_id.as_str()), format!("{detail}\n"));
-    let event = TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: detail.to_string(),
-        metadata: None,
-    };
+    let event = TaskEvent::new(task_id.clone(), EventKind::Error, detail.to_string());
     let _ = crate::task::lifecycle::complete_task_atomic(
         store.as_ref(),
         TaskCompletionUpdate {

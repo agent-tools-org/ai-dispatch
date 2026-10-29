@@ -207,13 +207,11 @@ fn finalize_command_env(
     crate::agent::api_route::validate_launch(agent, store, args.container.is_some())?;
     agent.finalize_launch_env(std_cmd);
     if let Some(route) = agent.api_route() {
-        store.insert_agent_event(&crate::types::TaskEvent {
-            task_id: TaskId(spec.task_id.clone()),
-            timestamp: chrono::Local::now(),
-            event_kind: crate::types::EventKind::Setup,
-            detail: format!("API route {} launch", route.id),
-            metadata: Some(serde_json::json!({"api_route_launch": route.id})),
-        })?;
+        store.insert_agent_event(&crate::types::TaskEvent::new(
+            TaskId(spec.task_id.clone()),
+            crate::types::EventKind::Setup,
+            format!("API route {} launch", route.id),
+        ).with_metadata(Some(serde_json::json!({"api_route_launch": route.id}))))?;
     }
     Ok(())
 }

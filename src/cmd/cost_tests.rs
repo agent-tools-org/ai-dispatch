@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use super::cost::{daily_summary_rows, group_tasks, run};
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 use crate::cost::usage::UsageWindow;
 
 fn make_task(
@@ -18,42 +18,13 @@ fn make_task(
     cost_usd: f64,
 ) -> Task {
     Task {
-        id: TaskId(id.to_string()),
         agent,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
         workgroup_id: group.map(str::to_string),
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
         tokens: Some(tokens),
-        prompt_tokens: None,
         duration_ms: Some(1_000),
-        requested_model: None, observed_model: None, attribution_source: None,
         cost_usd: Some(cost_usd),
-        exit_code: None,
         created_at,
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
 }
 

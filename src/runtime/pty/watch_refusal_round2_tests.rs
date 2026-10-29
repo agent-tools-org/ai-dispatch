@@ -17,8 +17,7 @@ const ASSISTANT: &str = r#"{"type":"text","part":{"text":"Continuing normally"}}
 
 fn captured_auth(output: &str, exit: i32) -> bool {
     let _permit = crate::support::test_subprocess::acquire();
-    let home = tempfile::tempdir().expect("home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("directories");
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut task = crate::runtime::pty::watch::tests::pty_task("t-pty-auth", TaskStatus::Running);
@@ -74,8 +73,7 @@ fn real_401_failure_over_pty_marks_round2_regression() {
 
 #[test]
 fn raw_401_log_without_decoded_event_does_not_mark_round2_regression() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("directories");
     let store = Store::open_memory().expect("store");
     let mut task = crate::runtime::pty::watch::tests::pty_task("t-log-only", TaskStatus::Failed);

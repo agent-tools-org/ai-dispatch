@@ -11,19 +11,7 @@ use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
 
-fn git(dir: &Path, args: &[&str]) {
-    let output = Command::new("git")
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .expect("git command failed");
-    assert!(
-        output.status.success(),
-        "git {:?} failed: {}",
-        args,
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
+use crate::support::test_env::git;
 
 fn staged_names(dir: &Path) -> String {
     let output = Command::new("git")

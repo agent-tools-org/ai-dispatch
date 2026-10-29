@@ -100,8 +100,7 @@ fn settle_first_reaper_after_signal_cannot_replace_stop_with_failure() {
 
 #[test]
 fn settle_first_reaper_snapshot_before_stop_cannot_record_failure() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     store
@@ -124,8 +123,7 @@ fn settle_first_reaper_snapshot_before_stop_cannot_record_failure() {
 #[test]
 fn settle_first_restop_signals_live_worker_without_duplicate_event() {
     let _permit = crate::support::test_subprocess::acquire();
-    let home = tempfile::tempdir().expect("home");
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     store

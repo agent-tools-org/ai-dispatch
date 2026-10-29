@@ -92,8 +92,7 @@ mod tests {
 
     #[test]
     fn custom_delegate_reports_its_actual_forced_default() {
-        let home = tempfile::tempdir().expect("temporary aid home");
-        let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+        let home = crate::support::test_env::TestHome::new();
         std::fs::create_dir(home.path().join("agents")).expect("agents directory");
         std::fs::write(home.path().join("agents/byok.toml"),
             "[agent]\nid = 'byok'\ndisplay_name = 'BYOK'\ncommand = 'opencode'\ndelegate_to = 'opencode'\nforced_model = 'provider/custom-model'\n",
@@ -144,8 +143,7 @@ mod tests {
 
     #[test]
     fn routed_retry_model_keeps_its_source() {
-        let home = tempfile::tempdir().expect("temporary aid home");
-        let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+        let _home = crate::support::test_env::TestHome::new();
         let args = RunArgs {
             agent_name: "cursor".to_string(), force_default_model: true, ..Default::default()
         };

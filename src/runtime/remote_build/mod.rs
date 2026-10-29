@@ -72,11 +72,11 @@ pub(crate) fn saved_box(store: &Store, task_id: &str) -> Result<Option<String>> 
 
 pub(crate) fn record(store: &Store, task_id: &TaskId, args: &RunArgs) -> Result<()> {
     let Some(name) = args.remote_build.as_deref() else { return Ok(()) };
-    store.insert_event(&TaskEvent {
-        task_id: task_id.clone(), timestamp: chrono::Local::now(), event_kind: EventKind::Milestone,
-        detail: format!("Remote build box: {name}"),
-        metadata: Some(serde_json::json!({"remote_build": name})),
-    })?;
+    store.insert_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Milestone,
+        format!("Remote build box: {name}"),
+    ).with_metadata(Some(serde_json::json!({"remote_build": name}))))?;
     Ok(())
 }
 
@@ -151,14 +151,13 @@ fn verify_with(
     let replacement = selection::pick_before(rbox, path, &name, deadline).map_err(|error| {
         anyhow::anyhow!("Remote build box {name}: {refusal}; re-pick failed: {error}")
     })?;
-    store.insert_event(&TaskEvent {
-        task_id: TaskId(task_id.to_string()), timestamp: chrono::Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: format!(
+    store.insert_event(&TaskEvent::new(
+        TaskId(task_id.to_string()),
+        EventKind::Milestone,
+        format!(
             "Remote build box: {name} infrastructure failure ({refusal}); re-picked {replacement}"
         ),
-        metadata: Some(serde_json::json!({"remote_build": replacement, "refused_box": name})),
-    })?;
+    ).with_metadata(Some(serde_json::json!({"remote_build": replacement, "refused_box": name}))))?;
     persist_box(store, task_id, &replacement)?;
     verify_on(task_id, &replacement, path, command, target, container, deadline)
 }

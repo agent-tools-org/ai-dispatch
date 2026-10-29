@@ -11,90 +11,41 @@ use super::{
 use crate::store::Store;
 use crate::support::paths;
 use crate::support::test_subprocess;
-use crate::types::{AgentKind, EventKind, PendingReason, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{AgentKind, EventKind, PendingReason, Task, TaskEvent, TaskId, TaskStatus};
 
 fn make_spec(task_id: &str) -> BackgroundRunSpec {
     BackgroundRunSpec {
         task_id: task_id.to_string(),
         worker_pid: Some(if task_id == "t-1a1a" { 101 } else { 202 }),
         dir: Some(".".to_string()),
-        budget: false,
-        max_duration_mins: None,
-        max_duration_secs: None,
-        idle_timeout_secs: None,
         interactive: true,
-        on_done: None,
-        env: None,
-        agent_pid: None,
-        agent_started: None,
-        audit_report_mode: false,
-        pre_task_dirty_paths: None,
-        foreground: false,
+        ..Default::default()
     }
 }
 
 fn make_task(task_id: &str, status: TaskStatus) -> Task {
-    Task {
-        id: TaskId(task_id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
-    }
+    crate::types::Task::test_fixture(TaskId(task_id.to_string()), status)
 }
 
 fn insert_event(store: &Store, task_id: &str, age_secs: i64) {
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId(task_id.to_string()),
-            timestamp: Local::now() - Duration::seconds(age_secs),
-            event_kind: EventKind::Milestone,
-            detail: "last progress".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::at(
+            TaskId(task_id.to_string()),
+            EventKind::Milestone,
+            "last progress".to_string(),
+            Local::now() - Duration::seconds(age_secs),
+        ))
         .unwrap();
 }
 
 fn insert_idle_escalation_event(store: &Store, task_id: &str, age_secs: i64) {
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId(task_id.to_string()),
-            timestamp: Local::now() - Duration::seconds(age_secs),
-            event_kind: EventKind::Milestone,
-            detail: "Auto-escalated: task stalled".to_string(),
-            metadata: Some(serde_json::json!({ "auto_escalated": true })),
-        })
+        .insert_event(&TaskEvent::at(
+            TaskId(task_id.to_string()),
+            EventKind::Milestone,
+            "Auto-escalated: task stalled".to_string(),
+            Local::now() - Duration::seconds(age_secs),
+        ).with_metadata(Some(serde_json::json!({ "auto_escalated": true }))))
         .unwrap();
 }
 

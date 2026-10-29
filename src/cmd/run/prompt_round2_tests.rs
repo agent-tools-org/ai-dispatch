@@ -48,8 +48,7 @@ fn bundle(store: &Store, args: &RunArgs, root: &std::path::Path) -> PromptBundle
 #[test]
 fn round2_preservation_toolbox_bounds_large_description_and_many_tools() {
     for (count, length) in [(1, 100_000), (100, 1000)] {
-        let temp = tempfile::tempdir().unwrap();
-        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+        let temp = crate::support::test_env::TestHome::new();
         let tools = toolbox::tools_dir();
         std::fs::create_dir_all(&tools).unwrap();
         for n in 0..count {
@@ -78,8 +77,7 @@ fn round2_preservation_toolbox_bounds_large_description_and_many_tools() {
 
 #[test]
 fn round2_preservation_knowledge_and_memory_caps_share_warning() {
-    let temp = tempfile::tempdir().unwrap();
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let team = crate::config::team::teams_dir().join("round2");
     std::fs::create_dir_all(&team).unwrap();
     let index = (0..6)
@@ -128,9 +126,7 @@ fn insert_memory(store: &Store, root: &std::path::Path, n: usize, tier: MemoryTi
 
 #[test]
 fn round2_preservation_remaining_memory_slots_report_omissions() {
-    let temp = tempfile::tempdir().unwrap();
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
+    let (temp, store) = crate::support::test_env::TestHome::new().store();
     for n in 0..10 {
         insert_memory(&store, temp.path(), n, MemoryTier::Identity, "Identity");
     }
@@ -155,8 +151,7 @@ fn round2_preservation_remaining_memory_slots_report_omissions() {
 
 #[test]
 fn round2_preservation_project_knowledge_caps_warn() {
-    let temp = tempfile::tempdir().unwrap();
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let knowledge = project::project_knowledge_dir(temp.path());
     std::fs::create_dir_all(&knowledge).unwrap();
     std::fs::write(

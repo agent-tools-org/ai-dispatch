@@ -94,11 +94,10 @@ fn record(
     accepted: bool,
     sent: bool,
 ) -> Result<()> {
-    store.insert_event(&TaskEvent {
-        task_id: task.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: if accepted {
+    store.insert_event(&TaskEvent::new(
+        task.clone(),
+        EventKind::Milestone,
+        if accepted {
             "accepted by claude"
         } else if sent {
             "Claude input sent, unconfirmed"
@@ -106,9 +105,8 @@ fn record(
             "Claude input delivery attempted, unconfirmed"
         }
         .into(),
-        metadata: Some(json!({"claude_steer_message_id":id, "message_uuid":uuid,
-            "accepted":if accepted {Some(true)} else {None}, "unconfirmed":!accepted})),
-    })?;
+    ).with_metadata(Some(json!({"claude_steer_message_id":id, "message_uuid":uuid,
+            "accepted":if accepted {Some(true)} else {None}, "unconfirmed":!accepted}))))?;
     if accepted {
         store.mark_delivered(id)?;
     }

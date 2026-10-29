@@ -9,71 +9,28 @@ use super::{
 };
 use crate::store::Store;
 use crate::support::test_subprocess;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 use chrono::Local;
 use std::path::Path;
-use std::process::Command;
+
 use std::sync::Arc;
 
-fn git(dir: &Path, args: &[&str]) {
-    let status = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .status()
-        .unwrap();
-    assert!(status.success());
-}
+use crate::support::test_env::git;
 
 fn init_repo() -> tempfile::TempDir {
-    let repo = tempfile::tempdir().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("base.txt"), "base\n").unwrap();
-    git(repo.path(), &["add", "base.txt"]);
-    git(repo.path(), &["commit", "-m", "base"]);
-    repo
+    crate::support::test_repo::repo_with_file("base.txt", "base\n", "base")
 }
 
 fn failed_task(id: &str, repo: &Path, wt: &Path, branch: &str) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Failed,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: Some(repo.display().to_string()), project_id: None,
-        worktree_path: Some(wt.display().to_string()), effective_dir: None,
+        repo_path: Some(repo.display().to_string()),
+        worktree_path: Some(wt.display().to_string()),
         worktree_branch: Some(branch.to_string()),
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
         duration_ms: Some(100),
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
         exit_code: Some(1),
         created_at: Local::now(),
         completed_at: Some(Local::now()),
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Failed)
     }
 }
 
@@ -92,9 +49,7 @@ async fn failed_lifecycle_captures_final_branch_before_fast_fail_cleanup() {
     store.insert_task(&task).unwrap();
     let prompt_bundle = PromptBundle {
         effective_prompt: "prompt".to_string(),
-        context_files: Vec::new(),
-        prompt_tokens: 0,
-        injected_memory_ids: Vec::new(),
+        ..Default::default()
     };
 
     post_run_lifecycle(

@@ -2,6 +2,7 @@
 // Exports run() to print task status updates to stdout.
 // Depends on Store lookups and tokio timing utilities.
 
+use crate::ui::format::elapsed_since;
 use anyhow::Result;
 use chrono::Local;
 use std::collections::HashMap;
@@ -234,18 +235,6 @@ fn duration_for_task(task: &Task, store: &Store) -> String {
     match eta::estimate_eta(task, store) {
         Some(eta) => format!("{duration} (ETA: {eta})"),
         None => duration,
-    }
-}
-
-fn elapsed_since(start: chrono::DateTime<chrono::Local>) -> String {
-    let elapsed = chrono::Local::now() - start;
-    let secs = elapsed.num_seconds();
-    if secs < 0 {
-        "0s".to_string()
-    } else if secs < 60 {
-        format!("{secs}s")
-    } else {
-        format!("{}m {:02}s", secs / 60, secs % 60)
     }
 }
 

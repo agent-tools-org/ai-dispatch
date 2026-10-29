@@ -23,14 +23,9 @@ fn setup() -> (tempfile::TempDir, paths::AidHomeGuard, Arc<Store>, TaskId) {
     crate::task::lifecycle::update_task_completion(
         &store,
         TaskCompletionUpdate {
-            id: id.as_str(),
-            status: TaskStatus::Done,
             tokens: Some(10),
-            duration_ms: 100,
-            observed_model: None,
-            attribution_source: None,
-            cost_usd: None,
             exit_code: Some(0),
+            ..TaskCompletionUpdate::new(id.as_str(), TaskStatus::Done, 100)
         },
     )
     .expect("agent exit");
@@ -40,9 +35,7 @@ fn setup() -> (tempfile::TempDir, paths::AidHomeGuard, Arc<Store>, TaskId) {
 async fn settle(store: &Arc<Store>, id: &TaskId) {
     let bundle = run::PromptBundle {
         effective_prompt: "prompt".into(),
-        context_files: vec![],
-        prompt_tokens: 0,
-        injected_memory_ids: vec![],
+        ..Default::default()
     };
     run::post_run_lifecycle(
         run::LifecycleMode::Background,

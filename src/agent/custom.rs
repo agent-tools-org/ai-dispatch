@@ -3,7 +3,6 @@
 //! Deps: serde, toml, serde_json, chrono, std::process::Command, crate::types.
 
 use anyhow::Result;
-use chrono::Local;
 use serde::Deserialize;
 use serde_json::Value;
 use std::process::Command;
@@ -18,6 +17,7 @@ pub struct CustomAgentFile {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(test, derive(Default))]
 pub struct CustomAgentConfig {
     pub id: String,
     pub display_name: String,
@@ -52,27 +52,20 @@ pub struct CustomAgentConfig {
     pub trust_tier: String,
     /// OpenAI-compatible endpoint for this agent, when known. A loopback host
     /// is the only evidence that admits `--egress local`.
-    #[serde(default)]
     pub base_url: Option<String>,
     /// Declared metering entity for this route. Never inferred from the host.
-    #[serde(default)]
     pub provider: Option<String>,
     /// Declared metering shape (`none`, `account_pool`, ...). Stays unknown when unset.
-    #[serde(default)]
     pub metering: Option<String>,
     #[serde(default)]
     pub strengths: Vec<String>,
     /// When set (currently only "opencode"), the registry returns a
     /// declarative overlay around the named engine instead of CustomAgent.
-    #[serde(default)]
     pub delegate_to: Option<String>,
-    #[serde(default)]
     pub forced_model: Option<String>,
-    #[serde(default)]
     pub binary: Option<String>,
     #[serde(default)]
     pub extra_args: Vec<String>,
-    #[serde(default)]
     pub rate_limit_kind: Option<String>,
 }
 
@@ -214,23 +207,19 @@ impl super::Agent for CustomAgent {
                     t if t.contains("complet") => EventKind::Completion,
                     _ => EventKind::Reasoning,
                 };
-                return Some(TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: Local::now(),
-                    event_kind: kind,
-                    detail: super::truncate::truncate_text(detail, 120),
-                    metadata: None,
-                });
+                return Some(TaskEvent::new(
+                    task_id.clone(),
+                    kind,
+                    super::truncate::truncate_text(detail, 120),
+                ));
             }
         }
 
-        Some(TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Reasoning,
-            detail: super::truncate::truncate_text(trimmed, 120),
-            metadata: None,
-        })
+        Some(TaskEvent::new(
+            task_id.clone(),
+            EventKind::Reasoning,
+            super::truncate::truncate_text(trimmed, 120),
+        ))
     }
 }
 

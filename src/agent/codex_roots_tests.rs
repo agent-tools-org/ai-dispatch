@@ -21,22 +21,10 @@ fn build_command_adds_worktree_metadata_to_writable_roots() {
     let common = common.canonicalize().unwrap();
     let opts = RunOpts {
         dir: Some(worktree.to_string_lossy().to_string()),
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert!(args.contains(&"-c".to_string()));
     assert_write_roots(&args, &[metadata, common]);
@@ -53,22 +41,10 @@ fn build_command_falls_back_when_commondir_missing() {
     let metadata = metadata.canonicalize().unwrap();
     let opts = RunOpts {
         dir: Some(worktree.to_string_lossy().to_string()),
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert!(args.contains(&"-c".to_string()));
     assert_write_roots(&args, &[metadata]);
@@ -81,22 +57,10 @@ fn build_command_grants_writable_roots_for_regular_repo() {
     fs::create_dir_all(repo.join(".git")).unwrap();
     let opts = RunOpts {
         dir: Some(repo.to_string_lossy().to_string()),
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert_write_roots(&args, &[repo.join(".git").canonicalize().unwrap()]);
 }
@@ -106,22 +70,10 @@ fn build_command_handles_missing_gitfile_gracefully() {
     let temp = tempdir().unwrap();
     let opts = RunOpts {
         dir: Some(temp.path().to_string_lossy().to_string()),
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert_write_roots(&args, &[]);
 }

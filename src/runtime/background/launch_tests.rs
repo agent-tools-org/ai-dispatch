@@ -5,10 +5,7 @@ use super::*;
 
 #[test]
 fn worker_launch_preservation_uses_resolved_prompt_with_raw_lifecycle_args() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
-    crate::support::paths::ensure_dirs().unwrap();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (home, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let id = "t-launch-preservation";
     let resolved = "Resolved launch context\nCaller brief";
     store
@@ -56,8 +53,7 @@ fn capture_agent() -> agent::custom::CustomAgent {
 
 #[test]
 fn fix_round_one_read_only_launch_stages_explicit_report_and_output_separately() {
-    let temp = tempfile::tempdir().unwrap();
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let spec: BackgroundRunSpec = serde_json::from_value(serde_json::json!({
         "task_id": "t-routing", "agent_name": "codex", "prompt": "audit",
         "dir": null, "output": null, "verify": null, "retry": 0, "group": null

@@ -5,7 +5,6 @@
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskOutcome, TaskStatus, VerifyStatus};
 use anyhow::{Result, anyhow};
-use chrono::Local;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 #[path = "final_branch.rs"]
@@ -122,13 +121,7 @@ fn record_force_merge_warning(store: &Store, task: &Task) -> Result<()> {
         reason,
     );
     aid_warn!("[aid] Warning: {detail}");
-    store.insert_event(&TaskEvent {
-        task_id: TaskId(task.id.to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: detail.clone(),
-        metadata: None,
-    })?;
+    store.insert_event(&TaskEvent::new(TaskId(task.id.to_string()), EventKind::Error, detail.clone()))?;
     store.update_principal_merge_override(task.id.as_str(), &detail)?;
     Ok(())
 }

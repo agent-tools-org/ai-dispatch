@@ -4,69 +4,25 @@
 
 use super::*;
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskStatus, VerifyStatus};
-use chrono::Local;
+use crate::types::{Task, TaskStatus, VerifyStatus};
+
 use std::path::Path;
-use std::process::Command;
+
 use tempfile::TempDir;
 
 fn make_task(id: &str, worktree_path: &str) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: Some(worktree_path.to_string()), effective_dir: None,
+        worktree_path: Some(worktree_path.to_string()),
         worktree_branch: Some("feat/test".to_string()),
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
         verify: Some("false".to_string()),
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
 }
 
-fn git(repo_dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .status()
-        .unwrap()
-        .success());
-}
+use crate::support::test_env::git;
 
 fn init_repo(repo_dir: &Path) {
-    git(repo_dir, &["init", "-b", "main"]);
-    git(repo_dir, &["config", "user.email", "test@example.com"]);
-    git(repo_dir, &["config", "user.name", "Test User"]);
-    std::fs::write(repo_dir.join("file.txt"), "hello\n").unwrap();
-    git(repo_dir, &["add", "file.txt"]);
-    git(repo_dir, &["commit", "-m", "init"]);
+    crate::support::test_repo::init_with_file(repo_dir, "file.txt", "hello\n", "init")
 }
 
 #[test]
@@ -101,7 +57,7 @@ fn maybe_verify_records_missing_deps_hint_for_fresh_worktree() {
         .insert_task(&make_task("t-verify-hint", &worktree_str))
         .unwrap();
 
-    maybe_verify_impl(
+    maybe_verify(
         &store,
         &TaskId("t-verify-hint".to_string()),
         Some(&format!("sh {}", script.display())),
@@ -128,7 +84,7 @@ fn maybe_verify_reports_stale_worktree_when_dir_is_missing() {
     task.verify_status = VerifyStatus::Skipped;
     store.insert_task(&task).unwrap();
 
-    maybe_verify_impl(
+    maybe_verify(
         &store,
         &task_id,
         Some("auto"),
@@ -253,8 +209,7 @@ fn retry_target_application_errors_without_worktree_or_repo() {
 
 #[test]
 fn infrastructure_diagnostic_survives_long_output_in_show_and_board() {
-    let temp = TempDir::new().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().expect("store");
     let dir = temp.path().to_string_lossy().to_string();
     let task = make_task("t-infra-show", &dir);
@@ -270,7 +225,7 @@ fn infrastructure_diagnostic_survives_long_output_in_show_and_board() {
     ));
     let command = format!("PATH='{}:/usr/bin:/bin' rbox exec box", bin.display());
     assert!(command.len() > 200);
-    maybe_verify_impl(&store, &task.id, Some(&command), Some(&dir), None);
+    maybe_verify(&store, &task.id, Some(&command), Some(&dir), None);
     let task = store.get_task(task.id.as_str()).expect("load").expect("task");
     assert_eq!(task.status, TaskStatus::Done);
     assert_eq!(task.verify_status, VerifyStatus::InfrastructureFailure);
@@ -282,15 +237,14 @@ fn infrastructure_diagnostic_survives_long_output_in_show_and_board() {
 
 #[test]
 fn local_verify_with_anchored_rbox_output_stays_failed() {
-    let temp = TempDir::new().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().expect("store");
     let dir = temp.path().to_string_lossy().to_string();
     let task = make_task("t-local-rbox-output", &dir);
     store.insert_task(&task).expect("task");
     assert!(RunArgs::saved_for_task(&store, task.id.as_str()).expect("args").is_none());
     let command = "printf 'rbox: Box lock not acquired within 60 s\\n'; exit 1";
-    maybe_verify_impl(&store, &task.id, Some(command), Some(&dir), None);
+    maybe_verify(&store, &task.id, Some(command), Some(&dir), None);
     let task = store.get_task(task.id.as_str()).expect("load").expect("task");
     assert_eq!(task.verify_status, VerifyStatus::Failed);
     assert_eq!(task.status, TaskStatus::Failed);

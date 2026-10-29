@@ -18,16 +18,8 @@ fn record_native(f: &Fixture) {
             "audit",
             &RunOpts {
                 dir: f.args.dir.clone(),
-                output: None,
-                result_file: None,
-                model: None,
-                budget: false,
                 read_only: true,
-                sandbox: false,
-                context_files: vec![],
-                session_id: None,
-                env: None,
-                env_forward: None,
+                ..Default::default()
             },
             CommandContext {
                 durable_codex_home: false,
@@ -41,8 +33,7 @@ fn record_native(f: &Fixture) {
 #[tokio::test]
 async fn enforced_read_only_concurrent_commit_delivers_report_and_finishes_done() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let f = Fixture::new(home.path(), true, false, false);
     record_native(&f);
     commit_during_audit(&f);
@@ -74,8 +65,7 @@ async fn enforced_read_only_concurrent_commit_delivers_report_and_finishes_done(
 #[tokio::test]
 async fn claude_read_only_concurrent_commit_still_finishes_failed() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let mut f = Fixture::new(home.path(), true, false, false);
     f.args.agent_name = "claude".into();
     let report = Path::new(f.args.result_file.as_ref().unwrap());
@@ -103,8 +93,7 @@ async fn claude_read_only_concurrent_commit_still_finishes_failed() {
 #[tokio::test]
 async fn codex_read_only_concurrent_commit_without_launch_provenance_finishes_failed() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let f = Fixture::new(home.path(), true, false, false);
     commit_during_audit(&f);
     f.settle().await;

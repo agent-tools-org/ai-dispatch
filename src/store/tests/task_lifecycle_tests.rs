@@ -39,14 +39,10 @@ fn update_completion() {
     store
         .record_agent_completion(
             TaskCompletionUpdate {
-                id: "t-0002",
-                status: TaskStatus::Done,
                 tokens: Some(3000),
-                duration_ms: 47000,
                 observed_model: Some("gemini-2.5-flash"),
-                attribution_source: None,
                 cost_usd: Some(0.0038),
-                exit_code: None,
+                ..TaskCompletionUpdate::new("t-0002", TaskStatus::Done, 47000)
             },
             None,
         )
@@ -221,66 +217,3 @@ fn recent_tasks_for_agent_filters_to_recent_done_tasks() {
         .collect::<Vec<_>>();
     assert_eq!(ids, vec!["t-2001".to_string()]);
 }
-
-#[test]
-fn latest_default_model_prefers_most_recent_successful_gemini() {
-    let store = Store::open_memory().unwrap();
-    let now = chrono::Local::now();
-    let mut g_old = make_task("t-la1", AgentKind::Grok, TaskStatus::Done);
-    g_old.created_at = now - chrono::Duration::hours(10);
-    g_old.observed_model = Some("gemini-2.5-flash".to_string());
-    g_old.attribution_source = Some(AttributionSource::Echoed);
-
-    let mut g_new = make_task("t-la2", AgentKind::Grok, TaskStatus::Done);
-    g_new.created_at = now - chrono::Duration::hours(1);
-    g_new.observed_model = Some("gemini-3.1-pro-preview".to_string());
-    g_new.attribution_source = Some(AttributionSource::Echoed);
-
-    let mut failed = make_task("t-la3", AgentKind::Grok, TaskStatus::Failed);
-    failed.created_at = now;
-    failed.observed_model = Some("should-ignore".to_string());
-    failed.attribution_source = Some(AttributionSource::Echoed);
-
-    store.insert_task(&g_old).unwrap();
-    store.insert_task(&g_new).unwrap();
-    store.insert_task(&failed).unwrap();
-
-    assert_eq!(
-        store
-            .latest_default_model(AgentKind::Grok)
-            .unwrap()
-            .as_deref(),
-        Some("gemini-3.1-pro-preview")
-    );
-}
-
-/// An agent's learned default model must come from the CLI naming it, not from
-/// aid inferring it because a run did not fail. Otherwise the first
-/// confirmed-by-success row pins a default that nothing ever confirmed, and
-/// every later dispatch inherits the inference as though it were fact.
-#[test]
-fn latest_default_model_ignores_a_merely_inferred_model() {
-    let store = Store::open_memory().unwrap();
-    let mut inferred = make_task("t-inf1", AgentKind::Codex, TaskStatus::Done);
-    inferred.observed_model = Some("gpt-5.6-luna".to_string());
-    inferred.attribution_source = Some(AttributionSource::ConfirmedBySuccess);
-    store.insert_task(&inferred).unwrap();
-
-    assert_eq!(store.latest_default_model(AgentKind::Codex).unwrap(), None);
-
-    let mut echoed = make_task("t-inf2", AgentKind::Codex, TaskStatus::Done);
-    echoed.observed_model = Some("gpt-5.6".to_string());
-    echoed.attribution_source = Some(AttributionSource::Echoed);
-    store.insert_task(&echoed).unwrap();
-
-    assert_eq!(
-        store
-            .latest_default_model(AgentKind::Codex)
-            .unwrap()
-            .as_deref(),
-        Some("gpt-5.6")
-    );
-}
-
-#[path = "task_default_model_tests.rs"]
-mod default_model;

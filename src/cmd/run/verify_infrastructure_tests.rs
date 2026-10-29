@@ -4,26 +4,14 @@
 
 use super::maybe_verify;
 use crate::types::outcome::UnverifiedReason;
-use crate::{
-    store::Store,
-    types::{AgentKind, Task, TaskId, TaskOutcome, TaskStatus, VerifyStatus},
-};
+use crate::{store::Store, types::{Task, TaskId, TaskOutcome, TaskStatus, VerifyStatus}};
 use chrono::Local;
 
 fn task(id: &str, dir: &str, verify: &str) -> Task {
-    Task {
-        id: TaskId(id.to_string()), agent: AgentKind::Codex, custom_agent_name: None,
-        prompt: "prompt".to_string(), resolved_prompt: None, category: None,
-        status: TaskStatus::Done, parent_task_id: None, workgroup_id: None,
-        caller_kind: None, caller_session_id: None, agent_session_id: None,
-        repo_path: None, project_id: None, worktree_path: Some(dir.to_string()), effective_dir: None,
-        worktree_branch: Some("fix/verify-gate".to_string()), final_head_sha: None,
-        final_branch: None, start_sha: None, log_path: None, output_path: None,
-        tokens: None, prompt_tokens: None, duration_ms: Some(10), requested_model: None,
-        observed_model: None, attribution_source: None, cost_usd: None, exit_code: Some(0),
+    Task { worktree_path: Some(dir.to_string()),
+        worktree_branch: Some("fix/verify-gate".to_string()), duration_ms: Some(10), exit_code: Some(0),
         created_at: Local::now(), completed_at: Some(Local::now()), verify: Some(verify.to_string()),
-        verify_status: VerifyStatus::Skipped, pending_reason: None, read_only: false,
-        budget: false, audit_verdict: None, audit_report_path: None, delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
 }
 

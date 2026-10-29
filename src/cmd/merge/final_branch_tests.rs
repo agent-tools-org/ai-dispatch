@@ -5,26 +5,12 @@
 use super::*;
 use crate::store::Store;
 use crate::support::test_subprocess;
-use crate::types::{AgentKind, VerifyStatus};
-use chrono::Local;
+
 use std::path::Path;
-use std::process::Command;
+
 use tempfile::TempDir;
 
-fn git(dir: &Path, args: &[&str]) {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "git {:?} failed: {}",
-        args,
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
+use crate::support::test_env::git;
 
 fn init_repo() -> TempDir {
     let repo = TempDir::new().unwrap();
@@ -39,42 +25,11 @@ fn init_repo() -> TempDir {
 
 fn task(repo: &Path, dispatch_branch: &str, final_branch: &str) -> Task {
     Task {
-        id: TaskId("t-final-merge".to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
         prompt: "test".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: Some(repo.to_string_lossy().to_string()), project_id: None,
-        worktree_path: None, effective_dir: None,
+        repo_path: Some(repo.to_string_lossy().to_string()),
         worktree_branch: Some(dispatch_branch.to_string()),
-        final_head_sha: None,
         final_branch: Some(final_branch.to_string()),
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId("t-final-merge".to_string()), TaskStatus::Done)
     }
 }
 

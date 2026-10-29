@@ -42,8 +42,7 @@ mod tests {
 
     #[test]
     fn shows_worker_diagnostics_without_agent_log() {
-        let temp = tempfile::tempdir().expect("home");
-        let _home = paths::AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
         let dir = paths::task_dir("t-worker-log");
         std::fs::create_dir_all(&dir).expect("task directory");
         std::fs::write(dir.join("worker.log"), "panic: worker failure\n").expect("worker log");

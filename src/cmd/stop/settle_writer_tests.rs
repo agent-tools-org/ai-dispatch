@@ -10,25 +10,13 @@ use std::sync::Arc;
 
 fn payload(id: &str, status: TaskStatus) -> TaskCompletionUpdate<'_> {
     TaskCompletionUpdate {
-        id,
-        status,
-        tokens: None,
-        duration_ms: 1234,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
         exit_code: Some(1),
+        ..TaskCompletionUpdate::new(id, status, 1234)
     }
 }
 
 fn event(id: &str) -> TaskEvent {
-    TaskEvent {
-        task_id: TaskId(id.into()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: "worker failure".into(),
-        metadata: None,
-    }
+    TaskEvent::new(TaskId(id.into()), EventKind::Error, "worker failure".into())
 }
 
 #[test]
@@ -98,8 +86,7 @@ fn assert_writer_timing(store: &Store, index: usize, status: TaskStatus) {
 
 #[test]
 fn settle_first_worker_failure_after_stop_leaves_row_and_events_unchanged() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     store
         .insert_task(&make_task("t-stop-worker", TaskStatus::Running))
@@ -160,8 +147,7 @@ fn settle_first_terminal_writers_do_not_replace_any_terminal_row() {
 
 #[test]
 fn settle_first_stop_preserves_winning_terminal_reason_without_event() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     store
         .insert_task(&make_task("t-stop-lost", TaskStatus::Running))

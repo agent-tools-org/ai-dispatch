@@ -8,14 +8,13 @@ use super::config_display::{ModelHistory, recent_observed_models_line};
 use super::{builtin_agent_visible, disabled_agent_names, disabled_summary_line, merged_agent_models};
 use crate::routing::model_catalog::load_pricing_overrides;
 use crate::config::agent as agent_config;
-use crate::support::paths::AidHomeGuard;
+
 use crate::routing::rate_limit;
 use crate::types::AgentKind;
 
 #[test]
 fn loads_and_merges_pricing_overrides() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     std::fs::write(
         crate::support::paths::pricing_path(),
         r#"{
@@ -131,8 +130,7 @@ fn recent_observed_models_line_lists_top_three_unsorted_extras_only() {
 
 #[test]
 fn disabled_agent_listing_hides_and_summarizes_agent() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     agent_config::save_agent_disabled("grok", true).unwrap();
 
     assert!(!builtin_agent_visible(AgentKind::Grok));
@@ -151,8 +149,7 @@ fn disabled_agent_listing_hides_and_summarizes_agent() {
 /// never the kind constant ("clear-limit custom").
 #[test]
 fn config_agents_custom_hold_names_agent_id_in_hint() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(crate::support::paths::aid_dir()).ok();
 
     // A message with no reset date causes needs_human = true, so

@@ -126,7 +126,7 @@ fn parse_version(value: &str) -> Option<[u32; 3]> {
 #[cfg(test)]
 mod tests {
     use super::{UpdateCache, maybe_check_update, parse_crates_io_response, read_cache, version_is_newer, write_cache};
-    use crate::support::paths::AidHomeGuard;
+
     use tempfile::TempDir;
 
     #[test]
@@ -160,8 +160,7 @@ mod tests {
 
     #[test]
     fn maybe_check_update_uses_fresh_cache_without_panicking() {
-        let dir = TempDir::new().unwrap();
-        let _guard = AidHomeGuard::set(dir.path());
+        let dir = crate::support::test_env::TestHome::new();
         std::fs::create_dir_all(dir.path()).unwrap();
         write_cache(
             &dir.path().join("update-check.json"),

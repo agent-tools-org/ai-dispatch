@@ -113,31 +113,19 @@ fn requests_requiring_credentials_fail_clearly_without_fallback() {
 }
 
 #[test]
-fn malformed_trailing_protocol_is_not_hidden_by_terminal_success() {
-    let fixture = Fixture::new("corrupt-final");
-    fixture.dispatch();
-    assert_eq!(
-        fixture
-            .store
-            .get_task(fixture.task.as_str())
-            .unwrap()
-            .unwrap()
-            .status,
-        TaskStatus::Failed
-    );
-}
-
-#[test]
-fn shutdown_failure_does_not_override_the_process_error_with_terminal_success() {
-    let fixture = Fixture::new("exit-final");
-    fixture.dispatch();
-    assert_eq!(
-        fixture
-            .store
-            .get_task(fixture.task.as_str())
-            .unwrap()
-            .unwrap()
-            .status,
-        TaskStatus::Failed
-    );
+fn terminal_success_preserves_protocol_and_shutdown_errors() {
+    for mode in ["corrupt-final", "exit-final"] {
+        eprintln!("case: {mode}");
+        let fixture = Fixture::new(mode);
+        fixture.dispatch();
+        assert_eq!(
+            fixture
+                .store
+                .get_task(fixture.task.as_str())
+                .unwrap()
+                .unwrap()
+                .status,
+            TaskStatus::Failed
+        );
+    }
 }

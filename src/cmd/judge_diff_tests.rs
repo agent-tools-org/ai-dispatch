@@ -3,20 +3,11 @@
 // Deps: judge::gather_diff, Task metadata, temporary Git repositories.
 
 use super::{gather_diff, judge_review_material};
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-use chrono::Local;
-use std::path::Path;
-use std::process::Command;
+use crate::types::{Task, TaskId, TaskStatus};
 
-fn git(repo: &Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .args(["-C", &repo.to_string_lossy()])
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-    String::from_utf8_lossy(&output.stdout).trim().to_string()
-}
+use std::path::Path;
+
+use crate::support::test_env::git_output as git;
 
 fn init_repo() -> tempfile::TempDir {
     let repo = tempfile::tempdir().unwrap();
@@ -35,19 +26,10 @@ fn init_repo() -> tempfile::TempDir {
 
 fn task(repo: &Path, start_sha: Option<String>) -> Task {
     Task {
-        id: TaskId("t-diff".into()), agent: AgentKind::Codex, custom_agent_name: None,
-        prompt: "test".into(), resolved_prompt: None, category: None,
-        status: TaskStatus::Failed, parent_task_id: None, workgroup_id: None,
-        caller_kind: None, caller_session_id: None, agent_session_id: None,
-        repo_path: Some(repo.display().to_string()), project_id: None, worktree_path: None, effective_dir: None,
-        worktree_branch: None, final_head_sha: None, final_branch: None,
-        start_sha, log_path: None, output_path: None, tokens: None,
-        prompt_tokens: None, duration_ms: None, requested_model: None,
-        observed_model: None, attribution_source: None, cost_usd: None, exit_code: Some(1),
-        created_at: Local::now(), completed_at: None, verify: None,
-        verify_status: VerifyStatus::Skipped, pending_reason: None, read_only: false,
-        budget: false, audit_verdict: None, audit_report_path: None,
-        delivery_assessment: None,
+        prompt: "test".into(),
+        repo_path: Some(repo.display().to_string()),
+        start_sha, exit_code: Some(1),
+        ..crate::types::Task::test_fixture(TaskId("t-diff".into()), TaskStatus::Failed)
     }
 }
 

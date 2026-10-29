@@ -2,7 +2,6 @@
 // Compares text/JSON output against the former list/filter/truncate path.
 
 use super::*;
-use crate::support::paths::AidHomeGuard;
 
 fn seed(store: &Store) {
     for i in 0..120 {
@@ -19,9 +18,7 @@ fn seed(store: &Store) {
 
 #[test]
 fn board_and_stream_selection_keep_text_json_and_showing_count() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     seed(&store);
     for limit in [None, Some(0), Some(3), Some(500)] {
         let mut expected = store.list_tasks(TaskFilter::All).unwrap();

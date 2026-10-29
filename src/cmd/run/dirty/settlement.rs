@@ -15,30 +15,19 @@ pub(super) fn preserve_shared_checkout(
                 checkpoint.reference, checkpoint.commit, checkpoint.reference,
             );
             aid_info!("[aid] {detail}");
-            store.insert_event(&TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: chrono::Local::now(),
-                event_kind: EventKind::Milestone,
-                detail,
-                metadata: Some(serde_json::json!({
+            store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Milestone, detail)
+                .with_metadata(Some(serde_json::json!({
                     "recovery_ref": checkpoint.reference,
                     "recovery_commit": checkpoint.commit,
                     "shared_checkout": true,
-                })),
-            })?;
+                }))))?;
         }
         Ok(None) => {}
         Err(error) => {
             let detail =
                 format!("Shared checkout preservation failed; original files retained: {error:#}");
             aid_warn!("[aid] {detail}");
-            store.insert_agent_event(&TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: chrono::Local::now(),
-                event_kind: EventKind::Error,
-                detail,
-                metadata: None,
-            })?;
+            store.insert_agent_event(&TaskEvent::new(task_id.clone(), EventKind::Error, detail))?;
             crate::task::lifecycle::mark_failed(store, task_id)?;
             return Ok(DirtyWorktreeAction::Failed);
         }
@@ -70,13 +59,11 @@ pub(super) fn rescue_dirty_worktree(
                 dir,
                 files_list
             );
-            let _ = store.insert_event(&TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: chrono::Local::now(),
-                event_kind: EventKind::Milestone,
-                detail: format!("Rescued {} file(s): {files_list}", outcome.staged.len()),
-                metadata: None,
-            });
+            let _ = store.insert_event(&TaskEvent::new(
+                task_id.clone(),
+                EventKind::Milestone,
+                format!("Rescued {} file(s): {files_list}", outcome.staged.len()),
+            ));
             if let Some(error) = outcome.error {
                 aid_warn!("[aid] rescue: failed to commit rescued files in {dir}: {error}");
             }

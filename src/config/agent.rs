@@ -10,9 +10,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AgentDefaults {
-    #[serde(default)]
     pub model: Option<String>,
-    #[serde(default)]
     pub idle_timeout: Option<u64>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub disabled: bool,
@@ -136,12 +134,10 @@ impl AgentDefaults {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::support::paths::AidHomeGuard;
 
     #[test]
     fn save_and_load_default_model_roundtrip() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let _guard = AidHomeGuard::set(dir.path());
+        let _dir = crate::support::test_env::TestHome::new();
 
         save_agent_default_model("cursor", Some("composer-2")).expect("save config");
 
@@ -152,8 +148,7 @@ mod tests {
 
     #[test]
     fn clearing_default_model_removes_agent_entry() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let _guard = AidHomeGuard::set(dir.path());
+        let _dir = crate::support::test_env::TestHome::new();
 
         save_agent_default_model("codex", Some("gpt-5.4")).expect("save config");
         save_agent_default_model("codex", None).expect("clear config");
@@ -164,8 +159,7 @@ mod tests {
 
     #[test]
     fn save_and_load_idle_timeout_roundtrip() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let _guard = AidHomeGuard::set(dir.path());
+        let _dir = crate::support::test_env::TestHome::new();
 
         save_agent_idle_timeout("codex", Some(600)).expect("save idle timeout");
         assert_eq!(get_default_idle_timeout("codex"), Some(600));
@@ -177,8 +171,7 @@ mod tests {
 
     #[test]
     fn model_and_idle_timeout_coexist() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let _guard = AidHomeGuard::set(dir.path());
+        let _dir = crate::support::test_env::TestHome::new();
 
         save_agent_default_model("cursor", Some("composer-2")).expect("save model");
         save_agent_idle_timeout("cursor", Some(420)).expect("save idle timeout");
@@ -194,8 +187,7 @@ mod tests {
 
     #[test]
     fn save_and_clear_disabled_roundtrip() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let _guard = AidHomeGuard::set(dir.path());
+        let _dir = crate::support::test_env::TestHome::new();
 
         save_agent_disabled("grok", true).expect("disable agent");
         assert!(is_agent_disabled("grok"));
@@ -208,8 +200,7 @@ mod tests {
 
     #[test]
     fn disabled_true_preserves_section_when_model_is_cleared() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let _guard = AidHomeGuard::set(dir.path());
+        let _dir = crate::support::test_env::TestHome::new();
 
         save_agent_default_model("grok", Some("gemini-3-flash")).expect("save model");
         save_agent_disabled("grok", true).expect("disable agent");
@@ -222,8 +213,7 @@ mod tests {
 
     #[test]
     fn alias_names_round_trip_through_normalization() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let _guard = AidHomeGuard::set(dir.path());
+        let _dir = crate::support::test_env::TestHome::new();
 
         // config_key normalizes both "agy" and "antigravity" to the canonical
         // AgentKind::Antigravity as_str value ("agy"), so alias reads/writes
@@ -243,8 +233,7 @@ mod tests {
 
     #[test]
     fn stale_removed_entries_do_not_hide_supported_agent_defaults() {
-        let dir = tempfile::tempdir().expect("home");
-        let _guard = AidHomeGuard::set(dir.path());
+        let dir = crate::support::test_env::TestHome::new();
         let path = dir.path().join("agent_config.toml");
         let content = "[gemini]\nmodel = 42\n[qwen]\nmodel = 'configured-qwen'\ndisabled = true\n\
             [codex]\nmodel = 'gpt-6-sol'\nidle_timeout = 321\n\

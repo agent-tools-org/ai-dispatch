@@ -1,11 +1,7 @@
 // Agent process lifecycle helpers for `aid run`.
-// Exports run_agent_process and streaming/output helpers.
+// Exports process dispatch and scope diagnostics.
 // Depends on run_prompt, watcher, cost estimation, and store/event types.
 use anyhow::Result;
-#[cfg(test)]
-use chrono::Local;
-#[cfg(test)]
-use serde_json::Value;
 use std::path::Path;
 use std::process;
 use std::sync::Arc;
@@ -44,83 +40,6 @@ pub(crate) async fn run_agent_process_with_cost(
         start,
     })
     .await
-}
-
-#[cfg(test)]
-fn spawn_child_with_log(cmd: &mut Command, log_path: &Path) -> Result<tokio::process::Child> {
-    crate::cmd::noninteractive_stdio::configure(cmd);
-    match cmd.spawn() {
-        Ok(child) => Ok(child),
-        Err(err) => {
-            let error_msg = format!("Failed to spawn agent process: {err}");
-            aid_error!("[aid] {error_msg}");
-            write_spawn_error_log(log_path, &error_msg);
-            Err(err.into())
-        }
-    }
-}
-
-#[cfg(test)]
-fn write_spawn_error_log(log_path: &Path, message: &str) {
-    let event = serde_json::json!({
-        "type": "error",
-        "source": "spawn",
-        "message": message,
-        "timestamp": Local::now().to_rfc3339(),
-    });
-    let _ = std::fs::write(log_path, format!("{event}\n"));
-}
-
-#[cfg(test)]
-fn write_streaming_output(log_path: &Path, out_path: &Path) {
-    let Ok(log_content) = std::fs::read_to_string(log_path) else { return };
-    let mut messages = Vec::new();
-    let mut current_stream = String::new();
-    for line in log_content.lines() {
-        if let Ok(v) = serde_json::from_str::<Value>(line) {
-            if v.get("type").and_then(|t| t.as_str()) == Some("message")
-                && v.get("role").and_then(|r| r.as_str()) == Some("assistant")
-                && let Some(content) = v.get("content").and_then(|c| c.as_str())
-            {
-                if v.get("delta").and_then(|d| d.as_bool()) == Some(true) {
-                    current_stream.push_str(content);
-                } else {
-                    if !current_stream.is_empty() && current_stream != content {
-                        messages.push(std::mem::take(&mut current_stream));
-                    } else {
-                        current_stream.clear();
-                    }
-                    messages.push(content.to_string());
-                }
-            }
-            if v.get("type").and_then(|t| t.as_str()) == Some("item.completed")
-                && let Some(item) = v.get("item")
-                && item.get("type").and_then(|t| t.as_str()) == Some("agent_message")
-                && let Some(text) = item.get("text").and_then(|t| t.as_str())
-            {
-                if !current_stream.is_empty() && current_stream != text {
-                    messages.push(std::mem::take(&mut current_stream));
-                } else {
-                    current_stream.clear();
-                }
-                messages.push(text.to_string());
-            }
-        }
-    }
-    if !current_stream.is_empty() {
-        messages.push(current_stream);
-    }
-    let delivered: Vec<String> = messages
-        .into_iter()
-        .filter(|message| !message.trim().is_empty())
-        .collect();
-    let start = delivered.len().saturating_sub(5);
-    let output = delivered[start..].join("\n\n---\n\n");
-    if !output.is_empty()
-        && let Err(err) = std::fs::write(out_path, &output)
-    {
-        aid_error!("[aid] Failed to write output file: {err}");
-    }
 }
 
 pub(crate) fn check_worktree_escape(repo_dir: Option<&str>) {
@@ -176,13 +95,11 @@ pub(crate) fn check_scope_violations(store: &Store, task_id: &TaskId, scope: &[S
         aid_warn!("  ... and {} more", violations.len() - 10);
     }
     aid_warn!("[aid] Declared scope: {}", scope.join(", "));
-    let event = crate::types::TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: crate::types::EventKind::Milestone,
-        detail: format!("Scope violation: {} file(s) outside scope", violations.len()),
-        metadata: None,
-    };
+    let event = crate::types::TaskEvent::new(
+        task_id.clone(),
+        crate::types::EventKind::Milestone,
+        format!("Scope violation: {} file(s) outside scope", violations.len()),
+    );
     let _ = store.insert_event(&event);
 }
 

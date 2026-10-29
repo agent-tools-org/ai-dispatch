@@ -241,14 +241,9 @@ fn completion_without_a_reported_model_leaves_the_request_alone() {
     store
         .record_agent_completion(
             TaskCompletionUpdate {
-                id: "t-attr1",
-                status: TaskStatus::Done,
                 tokens: Some(10),
-                duration_ms: 1000,
-                observed_model: None,
-                attribution_source: None,
-                cost_usd: None,
                 exit_code: Some(0),
+                ..TaskCompletionUpdate::new("t-attr1", TaskStatus::Done, 1000)
             },
             None,
         )

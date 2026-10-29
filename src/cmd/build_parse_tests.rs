@@ -11,9 +11,8 @@ fn report(success: bool, stderr: Vec<String>) -> BuildReport {
         success,
         command: "cargo check --lib".to_string(),
         elapsed: Duration::from_millis(12),
-        diagnostics: Vec::new(),
         stderr_lines: stderr,
-        note: None,
+        ..Default::default()
     }
 }
 
@@ -37,9 +36,7 @@ fn cached_success_with_zero_units_is_not_failure() {
         success: true,
         command: "cargo check".to_string(),
         elapsed: Duration::from_millis(5),
-        diagnostics: Vec::new(),
-        stderr_lines: Vec::new(),
-        note: None,
+        ..Default::default()
     };
     let verdict = evaluate_build_run(&report, 0, 0, false);
     assert!(verdict.success);
@@ -51,12 +48,10 @@ fn cached_success_with_zero_units_is_not_failure() {
 #[test]
 fn compile_failure_preserves_cargo_exit_code() {
     let report = BuildReport {
-        success: false,
         command: "cargo check".to_string(),
         elapsed: Duration::from_millis(50),
-        diagnostics: Vec::new(),
         stderr_lines: vec!["error: could not compile `foo`".to_string()],
-        note: None,
+        ..Default::default()
     };
     let verdict = evaluate_build_run(&report, 4, 101, false);
     assert!(!verdict.success);
@@ -71,9 +66,7 @@ fn event_detail_uses_succeeded_not_finished() {
         success: true,
         command: "cargo check".to_string(),
         elapsed: Duration::from_secs(1),
-        diagnostics: Vec::new(),
-        stderr_lines: Vec::new(),
-        note: None,
+        ..Default::default()
     };
     let detail = event_detail_for("cargo check", &report, 42, true);
     assert_eq!(detail, "cargo check succeeded: 0 errors, 0 warnings, 42 units compiled");

@@ -4,8 +4,7 @@ use super::*;
 
 #[test]
 fn opus_55_numeric_id_and_alias_use_the_feed_not_static_opus() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     super::super::clear_feed_for_tests();
     super::super::set_feed_for_tests(price_feed::Feed {
         built_at: chrono::Utc::now().to_rfc3339(),
@@ -18,8 +17,7 @@ fn opus_55_numeric_id_and_alias_use_the_feed_not_static_opus() {
             input_per_mtok: 4.0,
             output_per_mtok: 20.0,
             cached_input_per_mtok: Some(0.2),
-            context_length: None,
-            source: None,
+            ..Default::default()
         }],
     });
     for model in [

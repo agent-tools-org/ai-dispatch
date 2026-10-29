@@ -35,33 +35,19 @@ pub fn run(store: &Store, task_id: &str, input: Option<&str>, file: Option<&str>
 mod tests {
     use super::run;
     use crate::runtime::input_signal;
-    use crate::support::paths::AidHomeGuard;
-    use crate::store::Store;
-    use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-    use chrono::Local;
+
+    use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 
     fn make_task(id: &str, agent: AgentKind) -> Task {
-        Task {
-            id: TaskId(id.to_string()), agent, custom_agent_name: None,
-            prompt: "test".to_string(), resolved_prompt: None, category: None,
-            status: TaskStatus::Running, parent_task_id: None, workgroup_id: None,
-            caller_kind: None, caller_session_id: None, agent_session_id: None,
-            repo_path: None, project_id: None, worktree_path: None, effective_dir: None, worktree_branch: None,
-            final_head_sha: None, final_branch: None, start_sha: None, log_path: None,
-            output_path: None, tokens: None, prompt_tokens: None, duration_ms: None,
-            requested_model: None, observed_model: None, attribution_source: None,
-            cost_usd: None, exit_code: None, created_at: Local::now(), completed_at: None,
-            verify: None, verify_status: VerifyStatus::Skipped, pending_reason: None,
-            read_only: false, budget: false, audit_verdict: None, audit_report_path: None,
-            delivery_assessment: None,
+        Task { agent,
+            prompt: "test".to_string(),
+            ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Running)
         }
     }
 
     #[test]
     fn respond_rejects_one_shot_agents_without_writing_signal() {
-        let temp_home = tempfile::tempdir().unwrap();
-        let _aid_home = AidHomeGuard::set(temp_home.path());
-        let store = Store::open_memory().unwrap();
+        let (_temp_home, store) = crate::support::test_env::TestHome::new().store();
         for (task_id, agent) in [("t-respond-agy", AgentKind::Antigravity), ("t-respond-grok", AgentKind::Grok)] {
             store.insert_task(&make_task(task_id, agent)).unwrap();
             let err = run(&store, task_id, Some("yes"), None).unwrap_err();
@@ -72,9 +58,7 @@ mod tests {
 
     #[test]
     fn respond_refuses_codex_without_writing_signal() {
-        let temp_home = tempfile::tempdir().unwrap();
-        let _aid_home = AidHomeGuard::set(temp_home.path());
-        let store = Store::open_memory().unwrap();
+        let (_temp_home, store) = crate::support::test_env::TestHome::new().store();
         store.insert_task(&make_task("t-respond-codex", AgentKind::Codex)).unwrap();
         let error = run(&store, "t-respond-codex", Some("yes"), None).unwrap_err();
         assert!(error.to_string().contains("aid retry t-respond-codex -f"));
@@ -83,9 +67,7 @@ mod tests {
 
     #[test]
     fn respond_explains_how_to_recover_deleted_custom_agent() {
-        let temp_home = tempfile::tempdir().unwrap();
-        let _aid_home = AidHomeGuard::set(temp_home.path());
-        let store = Store::open_memory().unwrap();
+        let (_temp_home, store) = crate::support::test_env::TestHome::new().store();
         let mut task = make_task("t-respond-missing-custom", AgentKind::Custom);
         task.custom_agent_name = Some("gone".to_string());
         store.insert_task(&task).unwrap();

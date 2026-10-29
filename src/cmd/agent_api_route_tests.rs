@@ -1,12 +1,11 @@
 // API account quota display is distinct from the Claude subscription.
 // Uses an empty temporary database, without reading any real keychain item.
 use super::*;
-use crate::support::paths::{self, AidHomeGuard};
+use crate::support::paths::{self};
 
 #[test]
 fn api_quota_rows_show_plan_state_and_monthly_dollars() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     std::fs::write(
         paths::config_path(),
         concat!(
@@ -26,8 +25,7 @@ fn api_quota_rows_show_plan_state_and_monthly_dollars() {
 
 #[test]
 fn api_quota_displays_exhausted_and_bill_overage() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let config = concat!(
         "[[api_route]]\nid = 'claude-api-meet'\nagent = 'claude'\n",
         "keychain_service = 'test'\nmonthly_budget_usd = 200\nover_budget = 'stop'\n",
@@ -61,8 +59,7 @@ fn api_quota_displays_exhausted_and_bill_overage() {
 
 #[test]
 fn quota_displays_unknown_completed_task_prices() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     std::fs::write(
         paths::config_path(),
         concat!(

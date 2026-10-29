@@ -4,19 +4,16 @@
 
 use super::*;
 use crate::store::Store;
-use crate::support::paths::AidHomeGuard;
+
 use crate::types::EventKind;
 use std::sync::Arc;
-use tempfile::TempDir;
 
 #[path = "fixture.rs"]
 mod fixture;
 pub(super) use fixture::make_task;
 
 fn with_store<T>(f: impl FnOnce(Arc<Store>) -> T) -> T {
-    let temp = TempDir::new().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
     f(store)
 }
 #[test]
@@ -90,13 +87,8 @@ fn kill_waiting_task_sets_stopped() {
 #[test]
 fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
     use crate::runtime::background::{BackgroundRunSpec, save_spec};
-    use tempfile::TempDir;
 
-    let temp = TempDir::new().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
-
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task = make_task("t-3010", TaskStatus::Running);
     store.insert_task(&task).unwrap();
 
@@ -104,18 +96,7 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
         task_id: "t-3010".to_string(),
         worker_pid: Some(i32::MAX as u32 - 1),
         agent_pid: Some(i32::MAX as u32 - 2),
-        agent_started: None,
-        dir: None,
-        budget: false,
-        max_duration_mins: None,
-        max_duration_secs: None,
-        idle_timeout_secs: None,
-        interactive: false,
-        on_done: None,
-        env: None,
-        audit_report_mode: false,
-        pre_task_dirty_paths: None,
-        foreground: false,
+        ..Default::default()
     };
     save_spec(&spec).unwrap();
 
@@ -130,10 +111,7 @@ fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
 
 #[test]
 fn stop_loads_actual_pre_upgrade_spec_with_detached_field() {
-    let temp = TempDir::new().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     store
         .insert_task(&make_task("t-9ef43f87", TaskStatus::Running))
         .unwrap();

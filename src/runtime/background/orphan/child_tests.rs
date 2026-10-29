@@ -10,8 +10,7 @@ use std::time::Duration;
 
 fn reaped(script: &str, saw_output: bool) -> bool {
     let _permit = crate::support::test_subprocess::acquire();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("task directories");
     let store = Store::open_memory().expect("store");
     let task = make_task("t-child-reaper");
@@ -52,8 +51,7 @@ fn background_cpu_descendant_does_not_extend_first_token_timeout() {
 #[test]
 fn detached_reused_root_cannot_refresh_liveness_even_with_cached_activity() {
     let _permit = crate::support::test_subprocess::acquire();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("dirs");
     let mut command = Command::new("sh");
     command.args(["-c", "sleep 10 & wait"]).stdout(Stdio::null()).stderr(Stdio::null());
@@ -78,8 +76,7 @@ fn detached_reused_root_cannot_refresh_liveness_even_with_cached_activity() {
 #[test]
 fn detached_launch_persists_root_start_identity_with_pid() {
     let _permit = crate::support::test_subprocess::acquire();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let mut command = Command::new("sleep");
     command.arg("10");
     let root = crate::runtime::process::guard::ProcessGuard::spawn(&mut command).expect("root");

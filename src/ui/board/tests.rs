@@ -5,68 +5,28 @@
 use super::*;
 use chrono::Local;
 use serde_json::json;
-use tempfile::TempDir;
 
-use crate::support::paths::AidHomeGuard;
-use crate::store::Store;
 
 fn make_task(id: &str, agent: AgentKind, status: TaskStatus) -> Task {
     Task {
-        id: TaskId(id.to_string()),
         agent,
-        custom_agent_name: None,
-        prompt: "test prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: crate::config::project::current_project_id(),
-        worktree_path: None, effective_dir: None,
+        prompt: "test prompt".to_string(), project_id: crate::config::project::current_project_id(),
         worktree_branch: Some("feat/test".to_string()),
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
         tokens: Some(45000),
-        prompt_tokens: None,
         duration_ms: Some(227000),
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), status)
     }
-}
-
-fn isolated_store() -> (TempDir, AidHomeGuard, Store) {
-    let temp = TempDir::new().unwrap();
-    let guard = AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
-    (temp, guard, store)
 }
 
 #[test]
 fn empty_board() {
-    let (_temp, _guard, store) = isolated_store();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     assert_eq!(render_board(&[], &store).unwrap(), "No tasks found.");
 }
 
 #[test]
 fn board_with_tasks() {
-    let (_temp, _guard, store) = isolated_store();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let tasks = vec![
         make_task("t-0001", AgentKind::Codex, TaskStatus::Done),
         make_task("t-0002", AgentKind::Grok, TaskStatus::Running),
@@ -89,7 +49,7 @@ fn board_with_tasks() {
 
 #[test]
 fn board_route_shows_attribution_and_substitution() {
-    let (_temp, _guard, store) = isolated_store();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let mut task = make_task("t-route", AgentKind::Cursor, TaskStatus::Done);
     task.requested_model = Some("auto".to_string());
     task.observed_model = Some("composer-2".to_string());
@@ -107,7 +67,7 @@ fn board_route_shows_attribution_and_substitution() {
 
 #[test]
 fn board_shows_empty_diff_delivery_assessment() {
-    let (_temp, _guard, store) = isolated_store();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let mut task = make_task("t-empty", AgentKind::Codex, TaskStatus::Done);
     task.delivery_assessment = Some(DeliveryAssessment::EmptyDiff);
 
@@ -118,7 +78,7 @@ fn board_shows_empty_diff_delivery_assessment() {
 
 #[test]
 fn board_shows_hollow_output_delivery_assessment() {
-    let (_temp, _guard, store) = isolated_store();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let mut task = make_task("t-hollow", AgentKind::Codex, TaskStatus::Done);
     task.delivery_assessment = Some(DeliveryAssessment::HollowOutput);
 
@@ -129,16 +89,14 @@ fn board_shows_hollow_output_delivery_assessment() {
 
 #[test]
 fn board_shows_running_task_milestone() {
-    let (_temp, _guard, store) = isolated_store();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let task = make_task("t-0003", AgentKind::Codex, TaskStatus::Running);
     store.insert_task(&task).unwrap();
-    store.insert_event(&TaskEvent {
-        task_id: task.id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: "types defined".to_string(),
-        metadata: None,
-    }).unwrap();
+    store.insert_event(&TaskEvent::new(
+        task.id.clone(),
+        EventKind::Milestone,
+        "types defined".to_string(),
+    )).unwrap();
 
     let output = render_board(&[task], &store).unwrap();
     assert!(output.contains("RUN — types defined"));
@@ -146,16 +104,16 @@ fn board_shows_running_task_milestone() {
 
 #[test]
 fn board_shows_awaiting_input_reason() {
-    let (_temp, _guard, store) = isolated_store();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let task = make_task("t-0004", AgentKind::Codex, TaskStatus::AwaitingInput);
     store.insert_task(&task).unwrap();
-    store.insert_event(&TaskEvent {
-        task_id: task.id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Reasoning,
-        detail: "115:    use super::board::render_board;".to_string(),
-        metadata: Some(json!({ "awaiting_input": true, "awaiting_prompt": "Continue with fix?" })),
-    }).unwrap();
+    store.insert_event(&TaskEvent::new(
+        task.id.clone(),
+        EventKind::Reasoning,
+        "115:    use super::board::render_board;".to_string(),
+    )
+        .with_metadata(Some(json!({ "awaiting_input": true, "awaiting_prompt": "Continue with fix?" }))))
+        .unwrap();
 
     let output = render_board(&[task], &store).unwrap();
     assert!(output.contains("AWAIT — Continue with fix?"));
@@ -164,7 +122,7 @@ fn board_shows_awaiting_input_reason() {
 
 #[test]
 fn board_shows_repo_column_when_present() {
-    let (_temp, _guard, store) = isolated_store();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let mut task = make_task("t-0005", AgentKind::Codex, TaskStatus::Done);
     task.repo_path = Some("/tmp/example-repo".to_string());
 
@@ -175,7 +133,7 @@ fn board_shows_repo_column_when_present() {
 
 #[test]
 fn board_shows_pending_reason_for_failed_pending_timeout() {
-    let (_temp, _guard, store) = isolated_store();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let mut task = make_task("t-0006", AgentKind::Codex, TaskStatus::Failed);
     task.pending_reason = Some("rate_limited".to_string());
 
@@ -185,23 +143,21 @@ fn board_shows_pending_reason_for_failed_pending_timeout() {
 
 #[test]
 fn board_shows_latest_error_for_failed_task() {
-    let (_temp, _guard, store) = isolated_store();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let task = make_task("t-err1", AgentKind::Codex, TaskStatus::Failed);
     store.insert_task(&task).unwrap();
-    store.insert_event(&TaskEvent {
-        task_id: TaskId("t-err1".to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: "Quota exhausted".to_string(),
-        metadata: None,
-    }).unwrap();
+    store.insert_event(&TaskEvent::new(
+        TaskId("t-err1".to_string()),
+        EventKind::Error,
+        "Quota exhausted".to_string(),
+    )).unwrap();
     let output = render_board(&[task], &store).unwrap();
     assert!(output.contains("FAIL — Quota exhausted"), "output: {output}");
 }
 
 #[test]
 fn test_board_shows_eta_for_running_task() {
-    let (_temp, _guard, store) = isolated_store();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let now = Local::now();
     for (id, minutes_ago, duration_ms) in [
         ("t-done-1", 10, 120_000),
@@ -227,13 +183,11 @@ fn test_board_shows_eta_for_running_task() {
 #[test]
 fn task_detail_rendering() {
     let task = make_task("t-0001", AgentKind::Codex, TaskStatus::Done);
-    let events = vec![TaskEvent {
-        task_id: TaskId("t-0001".to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::ToolCall,
-        detail: "exec: cargo test".to_string(),
-        metadata: None,
-    }];
+    let events = vec![TaskEvent::new(
+        TaskId("t-0001".to_string()),
+        EventKind::ToolCall,
+        "exec: cargo test".to_string(),
+    )];
     let output = render_task_detail(&task, &events, None);
     assert!(output.contains("t-0001"));
     assert!(output.contains("cargo test"));
@@ -275,19 +229,17 @@ fn task_detail_shows_iteration_eval_output() {
     let task = make_task("t-iter", AgentKind::Codex, TaskStatus::Done);
     let output = render_task_detail(
         &task,
-        &[TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "Iteration 1/3: eval failed (exit 1), retrying as t-next".to_string(),
-            metadata: Some(json!({
+        &[TaskEvent::new(
+            task.id.clone(),
+            EventKind::Milestone,
+            "Iteration 1/3: eval failed (exit 1), retrying as t-next".to_string(),
+        ).with_metadata(Some(json!({
                 "iterate": {
                     "iteration": 1,
                     "max_iterations": 3,
                     "eval_output": "cargo test failed"
                 }
-            })),
-        }],
+            })))],
         None,
     );
 

@@ -10,15 +10,14 @@ pub(crate) fn event(
     info: &CompletionInfo,
     cost_usd: Option<f64>,
 ) -> TaskEvent {
-    TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: if info.status == crate::types::TaskStatus::Done {
+    TaskEvent::new(
+        task_id.clone(),
+        if info.status == crate::types::TaskStatus::Done {
             crate::types::EventKind::Completion
         } else {
             crate::types::EventKind::Error
         },
-        detail: format!(
+        format!(
             "{} ({}{}{})",
             crate::routing::capacity::terminal_label(store, task_id, agent.kind(), info.status),
             format_duration_ms(duration_ms),
@@ -29,6 +28,5 @@ pub(crate) fn event(
                 .map(|c| format!(", {}", cost::format_cost(Some(c))))
                 .unwrap_or_default(),
         ),
-        metadata: None,
-    }
+    )
 }

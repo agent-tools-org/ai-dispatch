@@ -99,37 +99,20 @@ async fn settle_result(
             settle_execution_failure(
                 args, duration_ms, &format!("exceeded hard timeout of {} seconds", limit.as_secs()),
             );
-            Ok(CompletionInfo {
-                status: TaskStatus::Failed,
-                tokens: None,
-                model: None,
-                cost_usd: None,
-                exit_code: None,
-            })
+            Ok(CompletionInfo::new(TaskStatus::Failed))
         }
     }
 }
 
 fn settle_execution_failure(args: &RunProcessArgs<'_>, duration_ms: i64, detail: &str) {
-    let event = TaskEvent {
-        task_id: args.task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: format!("Failed during execution: {detail}"),
-        metadata: None,
-    };
+    let event = TaskEvent::new(
+        args.task_id.clone(),
+        EventKind::Error,
+        format!("Failed during execution: {detail}"),
+    );
     let _ = crate::task::lifecycle::complete_task_atomic(
         args.store,
-        TaskCompletionUpdate {
-            id: args.task_id.as_str(),
-            status: TaskStatus::Failed,
-            tokens: None,
-            duration_ms,
-            observed_model: None,
-            attribution_source: None,
-            cost_usd: None,
-            exit_code: None,
-        },
+        TaskCompletionUpdate::new(args.task_id.as_str(), TaskStatus::Failed, duration_ms),
         &event,
     );
 }

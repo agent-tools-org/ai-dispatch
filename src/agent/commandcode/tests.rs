@@ -6,22 +6,6 @@ use super::*;
 use crate::agent::RunOpts;
 use crate::types::{EventKind, TaskId, TaskStatus};
 
-fn base_opts() -> RunOpts {
-    RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
-    }
-}
-
 fn args_of(prompt: &str, opts: &RunOpts) -> Vec<String> {
     CommandCodeAgent
         .build_command(prompt, opts)
@@ -33,7 +17,7 @@ fn args_of(prompt: &str, opts: &RunOpts) -> Vec<String> {
 
 #[test]
 fn build_command_write_mode_uses_yolo_and_skip_flags() {
-    let args = args_of("ship it", &base_opts());
+    let args = args_of("ship it", &RunOpts::default());
     assert_eq!(args.first().map(String::as_str), Some("-p"));
     assert!(args.contains(&"--output-format".to_string()));
     assert!(args.contains(&"json".to_string()));
@@ -47,7 +31,7 @@ fn build_command_write_mode_uses_yolo_and_skip_flags() {
 fn build_command_read_only_never_uses_yolo() {
     let opts = RunOpts {
         read_only: true,
-        ..base_opts()
+        ..RunOpts::default()
     };
     let args = args_of("inspect", &opts);
     assert!(args.windows(2).any(|pair| pair == ["--permission-mode", "plan"]));
@@ -60,15 +44,12 @@ fn build_command_adds_model_session_and_dir() {
         model: Some("gpt-5.6-sol".to_string()),
         session_id: Some("74aaa8".to_string()),
         dir: Some("/tmp".to_string()),
-        ..base_opts()
+        ..RunOpts::default()
     };
     let cmd = CommandCodeAgent
         .build_command("inspect", &opts)
         .expect("command should build");
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert!(args.windows(2).any(|pair| pair == ["-m", "gpt-5.6-sol"]));
     assert!(args.windows(2).any(|pair| pair == ["--session", "74aaa8"]));
     assert!(args.windows(2).any(|pair| pair == ["--add-dir", "/tmp"]));
@@ -76,39 +57,37 @@ fn build_command_adds_model_session_and_dir() {
 }
 
 #[test]
-fn parse_event_saves_session_id() {
-    let event = CommandCodeAgent
-        .parse_event(
-            &TaskId("t-session".to_string()),
+fn parse_event_preserves_session_and_model_metadata() {
+    for (task_id, line, metadata_key, expected) in [
+        (
+            "t-session",
             r#"{"type":"event","event":{"type":"run_start","sessionId":"74aaa8c1-ae8d-45bc-ac19-ceebb870ff5a"}}"#,
-        )
-        .expect("event should parse");
-    assert_eq!(event.event_kind, EventKind::Milestone);
-    assert_eq!(
-        event
-            .metadata
-            .and_then(|meta| meta.get("agent_session_id").and_then(|value| value.as_str()).map(str::to_string))
-            .as_deref(),
-        Some("74aaa8c1-ae8d-45bc-ac19-ceebb870ff5a")
-    );
-}
-
-#[test]
-fn parse_event_captures_echoed_model() {
-    let event = CommandCodeAgent
-        .parse_event(
-            &TaskId("t-model".to_string()),
+            "agent_session_id",
+            "74aaa8c1-ae8d-45bc-ac19-ceebb870ff5a",
+        ),
+        (
+            "t-model",
             r#"{"type":"event","event":{"type":"model_request_start","model":"deepseek/deepseek-v4-flash"}}"#,
-        )
-        .expect("event should parse");
-    assert_eq!(event.event_kind, EventKind::Milestone);
-    assert_eq!(
-        event
-            .metadata
-            .and_then(|meta| meta.get("model").and_then(|value| value.as_str()).map(str::to_string))
-            .as_deref(),
-        Some("deepseek/deepseek-v4-flash")
-    );
+            "model",
+            "deepseek/deepseek-v4-flash",
+        ),
+    ] {
+        eprintln!("case: {task_id}");
+        let event = CommandCodeAgent
+            .parse_event(
+                &TaskId(task_id.to_string()),
+                line,
+            )
+            .expect("event should parse");
+        assert_eq!(event.event_kind, EventKind::Milestone);
+        assert_eq!(
+            event
+                .metadata
+                .and_then(|meta| meta.get(metadata_key).and_then(|value| value.as_str()).map(str::to_string))
+                .as_deref(),
+            Some(expected)
+        );
+    }
 }
 
 #[test]

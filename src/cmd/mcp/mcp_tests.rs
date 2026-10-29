@@ -3,7 +3,7 @@
 
 use super::{TransportMode, handle_message, read_message};
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{Task, TaskId, TaskStatus};
 use chrono::Local;
 use std::io::Cursor;
 use std::sync::Arc;
@@ -46,45 +46,13 @@ async fn dispatches_board_tool_calls() {
 
 fn sample_task() -> Task {
     Task {
-        id: TaskId("t-1234".to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
         prompt: "Investigate the failing MCP test".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None,
-        project_id: None,
-        worktree_path: None,
-        effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
         tokens: Some(42),
-        prompt_tokens: None,
         duration_ms: Some(1_500),
         requested_model: Some("gpt-5".to_string()),
-        observed_model: None,
-        attribution_source: None,
         cost_usd: Some(0.01),
-        exit_code: None,
         created_at: Local::now(),
         completed_at: Some(Local::now()),
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId("t-1234".to_string()), TaskStatus::Done)
     }
 }

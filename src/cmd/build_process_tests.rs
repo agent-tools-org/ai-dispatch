@@ -54,9 +54,7 @@ fn final_detail_includes_compiled_unit_count() {
         success: true,
         command: "cargo check".to_string(),
         elapsed: Duration::from_secs(1),
-        diagnostics: Vec::new(),
-        stderr_lines: Vec::new(),
-        note: None,
+        ..Default::default()
     };
     assert_eq!(
         event_detail_for("cargo check", &report, 187, true),

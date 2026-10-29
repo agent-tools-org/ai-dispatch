@@ -2,15 +2,7 @@
 // Deps: parent command helpers, temporary aid homes.
 
 use super::*;
-use crate::support::paths::AidHomeGuard;
 use std::{fs, path::PathBuf};
-use tempfile::TempDir;
-
-fn test_env() -> (TempDir, AidHomeGuard) {
-    let temp = TempDir::new().unwrap();
-    let guard = AidHomeGuard::set(temp.path());
-    (temp, guard)
-}
 
 fn team_file(name: &str) -> PathBuf {
     team::teams_dir().join(format!("{name}.toml"))
@@ -24,7 +16,7 @@ fn write_team_file(name: &str, contents: &str) {
 
 #[test]
 fn create_team_happy_path() {
-    let (_temp, _guard) = test_env();
+    let _temp = crate::support::test_env::TestHome::new();
     run_team_command(TeamAction::Create {
         name: "ops".to_string(),
     })
@@ -42,7 +34,7 @@ fn create_team_happy_path() {
 
 #[test]
 fn create_team_duplicate_name_error() {
-    let (_temp, _guard) = test_env();
+    let _temp = crate::support::test_env::TestHome::new();
     run_team_command(TeamAction::Create {
         name: "ops".to_string(),
     })
@@ -56,7 +48,7 @@ fn create_team_duplicate_name_error() {
 
 #[test]
 fn delete_team_happy_path() {
-    let (_temp, _guard) = test_env();
+    let _temp = crate::support::test_env::TestHome::new();
     run_team_command(TeamAction::Create {
         name: "removable".to_string(),
     })
@@ -72,7 +64,7 @@ fn delete_team_happy_path() {
 
 #[test]
 fn delete_team_missing_name_error() {
-    let (_temp, _guard) = test_env();
+    let _temp = crate::support::test_env::TestHome::new();
     let err = run_team_command(TeamAction::Delete {
         name: "ghost".to_string(),
     })
@@ -82,13 +74,13 @@ fn delete_team_missing_name_error() {
 
 #[test]
 fn list_teams_no_teams() {
-    let (_temp, _guard) = test_env();
+    let _temp = crate::support::test_env::TestHome::new();
     run_team_command(TeamAction::List).unwrap();
 }
 
 #[test]
 fn list_teams_multiple_entries() {
-    let (_temp, _guard) = test_env();
+    let _temp = crate::support::test_env::TestHome::new();
     run_team_command(TeamAction::Create {
         name: "alpha".to_string(),
     })
@@ -102,7 +94,7 @@ fn list_teams_multiple_entries() {
 
 #[test]
 fn show_team_with_overrides() {
-    let (_temp, _guard) = test_env();
+    let _temp = crate::support::test_env::TestHome::new();
     let contents = r#"
             [team]
             id = "ops"
@@ -124,7 +116,7 @@ fn show_team_with_overrides() {
 
 #[test]
 fn show_team_without_overrides() {
-    let (_temp, _guard) = test_env();
+    let _temp = crate::support::test_env::TestHome::new();
     let contents = r#"
             [team]
             id = "solo"
@@ -140,7 +132,7 @@ fn show_team_without_overrides() {
 
 #[test]
 fn show_team_not_found_error() {
-    let (_temp, _guard) = test_env();
+    let _temp = crate::support::test_env::TestHome::new();
     let err = run_team_command(TeamAction::Show {
         name: "missing".to_string(),
     })

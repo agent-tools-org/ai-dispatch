@@ -4,51 +4,19 @@ use super::*;
 
 #[test]
 fn build_prompt_bundle_skips_sibling_context_for_opencode() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let group = store
         .create_workgroup("batch", "desc", Some("seed"), Some("wg-opencode-test"))
         .unwrap();
 
     let sibling_task: crate::types::Task = crate::types::Task {
-        id: crate::types::TaskId("task-sibling".to_string()),
         agent: crate::types::AgentKind::Codex,
-        custom_agent_name: None,
         prompt: "Sibling task prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
         workgroup_id: Some(group.id.to_string()),
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
         tokens: Some(100),
-        prompt_tokens: None,
         duration_ms: Some(1000),
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: chrono::Local::now(),
-        completed_at: None,
-        verify: None,
         verify_status: crate::types::VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(crate::types::TaskId("task-sibling".to_string()), TaskStatus::Done)
     };
     store.insert_task(&sibling_task).unwrap();
     let summary = crate::cmd::summary::CompletionSummary {
@@ -85,51 +53,22 @@ fn build_prompt_bundle_skips_sibling_context_for_opencode() {
 
 #[test]
 fn build_prompt_bundle_skips_sibling_context_for_kilo() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let group = store
         .create_workgroup("batch", "desc", Some("seed"), Some("wg-kilo-test"))
         .unwrap();
 
     let sibling_task: crate::types::Task = crate::types::Task {
-        id: crate::types::TaskId("task-sibling-kilo".to_string()),
         agent: crate::types::AgentKind::Codex,
-        custom_agent_name: None,
         prompt: "Sibling task prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
         workgroup_id: Some(group.id.to_string()),
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
         tokens: Some(100),
-        prompt_tokens: None,
         duration_ms: Some(1000),
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: chrono::Local::now(),
-        completed_at: None,
-        verify: None,
         verify_status: crate::types::VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(
+            crate::types::TaskId("task-sibling-kilo".to_string()),
+            TaskStatus::Done,
+        )
     };
     store.insert_task(&sibling_task).unwrap();
     let summary = crate::cmd::summary::CompletionSummary {
@@ -166,51 +105,22 @@ fn build_prompt_bundle_skips_sibling_context_for_kilo() {
 
 #[test]
 fn build_prompt_bundle_includes_sibling_context_for_codex() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let group = store
         .create_workgroup("batch", "desc", Some("seed"), Some("wg-codex-test"))
         .unwrap();
 
     let sibling_task: crate::types::Task = crate::types::Task {
-        id: crate::types::TaskId("task-sibling-codex".to_string()),
         agent: crate::types::AgentKind::Codex,
-        custom_agent_name: None,
         prompt: "Sibling task prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
         workgroup_id: Some(group.id.to_string()),
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
         tokens: Some(100),
-        prompt_tokens: None,
         duration_ms: Some(1000),
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: chrono::Local::now(),
-        completed_at: None,
-        verify: None,
         verify_status: crate::types::VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(
+            crate::types::TaskId("task-sibling-codex".to_string()),
+            TaskStatus::Done,
+        )
     };
     store.insert_task(&sibling_task).unwrap();
     let summary = crate::cmd::summary::CompletionSummary {

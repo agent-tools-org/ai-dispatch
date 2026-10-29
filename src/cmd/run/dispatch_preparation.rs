@@ -4,13 +4,8 @@ use super::*;
 
 pub(crate) fn record_error(store: &Store, task_id: &TaskId, err: &anyhow::Error) -> Result<()> {
     store.settle_worker(task_id.as_str(), "launch_failed", Some(&err.to_string()))?;
-    let event = TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: format!("{err:#}"),
-        metadata: Some(serde_json::json!({"failure_kind": "preparation"})),
-    };
+    let event = TaskEvent::new(task_id.clone(), EventKind::Error, format!("{err:#}"))
+        .with_metadata(Some(serde_json::json!({"failure_kind": "preparation"})));
     if store.settle_task_status(
         task_id.as_str(),
         TaskStatus::Failed,

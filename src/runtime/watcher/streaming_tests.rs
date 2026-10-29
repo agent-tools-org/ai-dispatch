@@ -9,10 +9,7 @@ use std::sync::Arc;
 use crate::agent::{Agent, RunOpts};
 use crate::store::Store;
 use crate::support::paths;
-use crate::types::{
-    AgentKind, CompletionInfo, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus,
-};
-use chrono::Local;
+use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus};
 
 use super::watch_streaming;
 
@@ -39,56 +36,13 @@ impl Agent for StubStreamingAgent {
         None
     }
 
-    fn parse_completion(&self, _output: &str) -> CompletionInfo {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
-    }
 }
 
 pub(crate) fn insert_running_task(store: &Store, task_id: &TaskId) {
     store
         .insert_task(&Task {
-            id: task_id.clone(),
             agent: AgentKind::Custom,
-            custom_agent_name: None,
-            prompt: "prompt".to_string(),
-            resolved_prompt: None,
-            category: None,
-            status: TaskStatus::Running,
-            parent_task_id: None,
-            workgroup_id: None,
-            caller_kind: None,
-            caller_session_id: None,
-            agent_session_id: None,
-            repo_path: None, project_id: None,
-            worktree_path: None, effective_dir: None,
-            worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-            start_sha: None,
-            log_path: None,
-            output_path: None,
-            tokens: None,
-            prompt_tokens: None,
-            duration_ms: None,
-            requested_model: None, observed_model: None, attribution_source: None,
-            cost_usd: None,
-            exit_code: None,
-            created_at: Local::now(),
-            completed_at: None,
-            verify: None,
-            verify_status: VerifyStatus::Skipped,
-            pending_reason: None,
-            read_only: false,
-            budget: false,
-            audit_verdict: None,
-            audit_report_path: None,
-            delivery_assessment: None,
+            ..crate::types::Task::test_fixture(task_id.clone(), TaskStatus::Running)
         })
         .unwrap();
 }
@@ -101,23 +55,14 @@ mod stream_output_tests;
 
 #[tokio::test]
 async fn droid_osc_prefixed_completion_line_yields_completion_event() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let task_id = TaskId("t-droid-osc".to_string());
     insert_running_task(store.as_ref(), &task_id);
     let log_path = temp.path().join("stream.log");
     // Real droid >=0.159 PTY output shape: OSC window-title and OSC 9;4
     // progress escapes glued to the front of stream-json lines.
     let script = r#"printf '\033]0;\342\233\254 reply pong\007{"type":"text","text":"pong"}\n'; printf '\033]9;4;0;\007{"type":"turn_complete","input_tokens":10,"output_tokens":5}\n'"#;
-    let mut child = tokio::process::Command::new("sh")
-        .current_dir(temp.path())
-        .arg("-c")
-        .arg(script)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+    let mut child = crate::support::test_command::piped_shell(temp.path(), script);
 
     let info = watch_streaming(
         &crate::agent::droid::DroidAgent,
@@ -146,9 +91,7 @@ async fn droid_osc_prefixed_completion_line_yields_completion_event() {
 
 #[tokio::test]
 async fn streaming_watch_logs_report_containing_milestone_and_emits_event() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let task_id = TaskId("t-milestone-report".to_string());
     insert_running_task(store.as_ref(), &task_id);
     let log_path = temp.path().join("stream.log");

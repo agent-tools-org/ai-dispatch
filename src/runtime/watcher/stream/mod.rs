@@ -35,18 +35,16 @@ pub(crate) fn apply_codex_delivery_guard(
         task_id.as_str(),
         Some(DeliveryAssessment::MissingFinalDelivery),
     );
-    let _ = store.insert_agent_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Error,
-        detail: "Missing final delivery: Codex exited without a final agent message".to_string(),
-        metadata: Some(serde_json::json!({
+    let _ = store.insert_agent_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Error,
+        "Missing final delivery: Codex exited without a final agent message".to_string(),
+    ).with_metadata(Some(serde_json::json!({
             "delivery_guard": "missing_final_delivery",
             "last_work_kind": last_work_kind,
             "last_message_chars": last_message_chars,
             "exit_code": exit_code,
-        })),
-    });
+        }))));
     TaskStatus::Failed
 }
 

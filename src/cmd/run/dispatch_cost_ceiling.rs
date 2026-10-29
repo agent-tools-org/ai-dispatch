@@ -25,13 +25,7 @@ pub(crate) fn warn_unenforceable_cost_ceiling(
         model.unwrap_or("agent default"),
     );
     aid_warn!("[aid] Warning: {detail}");
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Setup,
-        detail,
-        metadata: None,
-    });
+    let _ = store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Setup, detail));
 }
 
 #[cfg(test)]
@@ -50,8 +44,7 @@ mod tests {
 
     /// `price` writes an operator pricing override for exactly this route first.
     fn dispatch_with_override(agent: &str, model: &str, max_task_cost: Option<f64>, price: Option<f64>) -> Vec<String> {
-        let home = tempfile::tempdir().expect("temporary aid home");
-        let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+        let _home = crate::support::test_env::TestHome::new();
         if let Some(price) = price {
             crate::support::paths::ensure_dirs().expect("aid dirs");
             let row = serde_json::json!({"agent": agent, "model": model, "input_per_m": price,

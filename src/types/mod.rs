@@ -21,6 +21,7 @@ mod task;
 mod event_retention;
 mod task_profile;
 mod memory;
+mod string_values;
 pub(crate) mod outcome;
 
 pub use self::agent::AgentKind;
@@ -114,6 +115,9 @@ impl fmt::Display for WorkgroupId {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod task_fixture;
 
 #[cfg(test)]
 mod status_transition_tests;

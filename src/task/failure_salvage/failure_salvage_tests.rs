@@ -2,27 +2,13 @@
 // Covers dirty WIP commit creation, clean no-op behavior, and best-effort failure.
 // Deps: failure_salvage module, Store, AidHomeGuard, git CLI.
 
-use crate::support::paths::{self, AidHomeGuard};
+use crate::support::paths::{self};
 use crate::store::{Store, TaskCompletionUpdate};
-use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
-use chrono::Local;
+use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
 use std::path::Path;
 use std::process::Command;
 
-fn git(dir: &Path, args: &[&str]) {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .output()
-        .expect("git command");
-    assert!(
-        output.status.success(),
-        "git {:?} failed: {}",
-        args,
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
+use crate::support::test_env::git;
 
 fn git_stdout(dir: &Path, args: &[&str]) -> String {
     String::from_utf8(
@@ -52,42 +38,10 @@ fn init_repo() -> tempfile::TempDir {
 
 fn task(id: &str, worktree_path: Option<String>) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Failed,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: worktree_path.clone(), effective_dir: None, project_id: None,
+        repo_path: worktree_path.clone(),
         worktree_path,
         worktree_branch: Some("feat/salvage".to_string()),
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Failed)
     }
 }
 
@@ -97,27 +51,14 @@ fn insert_activity(store: &Store, task_id: &TaskId) {
         (EventKind::ToolCall, "write src/lib.rs"),
     ] {
         store
-            .insert_event(&TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: Local::now(),
-                event_kind: kind,
-                detail: detail.to_string(),
-                metadata: None,
-            })
+            .insert_event(&TaskEvent::new(task_id.clone(), kind, detail.to_string()))
             .expect("event");
     }
 }
 
-fn isolated_home() -> (tempfile::TempDir, AidHomeGuard) {
-    let home = tempfile::tempdir().expect("home");
-    let guard = AidHomeGuard::set(home.path());
-    paths::ensure_dirs().expect("dirs");
-    (home, guard)
-}
-
 #[test]
 fn salvage_writes_partial_work_and_commits_dirty_worktree() {
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     std::fs::write(repo.path().join("base.txt"), "changed\n").expect("write");
     std::fs::write(repo.path().join("new.txt"), "new\n").expect("write");
@@ -128,14 +69,9 @@ fn salvage_writes_partial_work_and_commits_dirty_worktree() {
     insert_activity(&store, &task.id);
 
     crate::task::lifecycle::update_task_completion(&store, TaskCompletionUpdate {
-            id: task.id.as_str(),
-            status: TaskStatus::Failed,
-            tokens: None,
-            duration_ms: 10,
-            observed_model: None, attribution_source: None,
-            cost_usd: None,
-            exit_code: Some(1),
-        })
+        exit_code: Some(1),
+        ..TaskCompletionUpdate::new(task.id.as_str(), TaskStatus::Failed, 10)
+    })
         .expect("fail");
 
     let partial = std::fs::read_to_string(paths::task_dir(task.id.as_str()).join("partial-work.md"))
@@ -152,7 +88,7 @@ fn salvage_writes_partial_work_and_commits_dirty_worktree() {
 
 #[test]
 fn salvage_records_file_write_only_activity() {
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     std::fs::write(repo.path().join("base.txt"), "edited\n").expect("write");
     let store = Store::open_memory().expect("store");
@@ -160,13 +96,11 @@ fn salvage_records_file_write_only_activity() {
     task.status = TaskStatus::Running;
     store.insert_task(&task).expect("insert");
     store
-        .insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::FileWrite,
-            detail: "Edit files: src/lib.rs".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(
+            task.id.clone(),
+            EventKind::FileWrite,
+            "Edit files: src/lib.rs".to_string(),
+        ))
         .expect("event");
 
     crate::task::lifecycle::mark_failed(&store, &task.id).expect("fail");
@@ -179,7 +113,7 @@ fn salvage_records_file_write_only_activity() {
 
 #[test]
 fn salvage_records_file_read_only_activity() {
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     std::fs::write(repo.path().join("base.txt"), "edited\n").expect("write");
     let store = Store::open_memory().expect("store");
@@ -187,13 +121,11 @@ fn salvage_records_file_read_only_activity() {
     task.status = TaskStatus::Running;
     store.insert_task(&task).expect("insert");
     store
-        .insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::FileRead,
-            detail: "Read file: src/lib.rs".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(
+            task.id.clone(),
+            EventKind::FileRead,
+            "Read file: src/lib.rs".to_string(),
+        ))
         .expect("event");
 
     crate::task::lifecycle::mark_failed(&store, &task.id).expect("fail");
@@ -206,7 +138,7 @@ fn salvage_records_file_read_only_activity() {
 
 #[test]
 fn salvage_noops_when_worktree_is_clean() {
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     let before = git_stdout(repo.path(), &["rev-parse", "HEAD"]);
     let store = Store::open_memory().expect("store");
@@ -222,7 +154,7 @@ fn salvage_noops_when_worktree_is_clean() {
 
 #[test]
 fn salvage_excludes_aid_runtime_files_from_commit() {
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     std::fs::write(repo.path().join("base.txt"), "changed\n").expect("write");
     std::fs::write(repo.path().join(".aid-lock"), "pid=1234\n").expect("write lock");
@@ -251,7 +183,7 @@ fn salvage_excludes_aid_runtime_files_from_commit() {
 
 #[test]
 fn salvage_excludes_aid_directory_from_commit() {
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     std::fs::write(repo.path().join("base.txt"), "changed\n").expect("write");
     std::fs::create_dir_all(repo.path().join(".aid")).expect("mkdir");
@@ -275,7 +207,7 @@ fn salvage_excludes_aid_directory_from_commit() {
 
 #[test]
 fn salvage_error_does_not_change_failed_status() {
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let not_repo = tempfile::tempdir().expect("tempdir");
     let store = Store::open_memory().expect("store");
     let mut task = task("t-salvage-error", Some(not_repo.path().display().to_string()));

@@ -44,9 +44,7 @@ fn fixture_steer_is_literal_input_and_matches_its_response() {
 
 #[test]
 fn failed_receipt_stays_undelivered_and_success_names_turn() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     let task = TaskId("t-receipt".into());
     insert_task(&store, &task);
     let failed = store
@@ -119,9 +117,7 @@ fn assert_delivered(store: &Store, task: &TaskId, index: usize) {
 
 #[test]
 fn timeout_receipt_records_unknown_acceptance_instead_of_refusal() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     let task = TaskId("t-receipt".into());
     insert_task(&store, &task);
     let message = store

@@ -1,12 +1,11 @@
 // Batch and fallback acceptance of configured API route ids.
 // Exercises existing name validation with temporary account configuration.
 use super::*;
-use crate::support::paths::{self, AidHomeGuard};
+use crate::support::paths::{self};
 
 #[test]
 fn batch_and_fallback_names_accept_api_routes() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     std::fs::write(
         paths::config_path(),
         concat!(

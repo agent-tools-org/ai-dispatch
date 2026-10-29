@@ -104,6 +104,7 @@ mod tests {
     use rusqlite::params;
     use std::fs;
     use std::path::Path;
+
     use std::process::Command;
 
     fn git(dir: &Path, args: &[&str]) -> String {

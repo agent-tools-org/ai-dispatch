@@ -8,17 +8,8 @@ use crate::runtime::codex_app_server::fixture::Fixture;
 
 fn build(fixture: &mut Fixture) {
     let opts = RunOpts {
-        dir: None,
         output: Some(fixture.output.to_string_lossy().into_owned()),
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     crate::agent::codex::cli_config::set_test_codex_home(Some(
         fixture.home.path().join("real-codex"),

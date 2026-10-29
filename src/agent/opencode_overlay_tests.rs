@@ -3,27 +3,11 @@
 
 use super::*;
 use crate::agent::read_only::read_only_prompt;
-use crate::{support::paths, routing::rate_limit};
+use crate::{routing::rate_limit};
 use std::process::Command;
 
-fn base_opts() -> RunOpts {
-    RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: Vec::new(),
-        session_id: None,
-        env: None,
-        env_forward: None,
-    }
-}
-
 fn command_args(cmd: &Command) -> Vec<String> {
-    cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect()
+    crate::support::test_command::args(&cmd)
 }
 
 #[test]
@@ -31,12 +15,12 @@ fn overlay_kind_and_model_resolution() {
     let agent = OpenCodeOverlayAgent::new("mimo".into(), "mimo/mimo-v2.5-pro".into());
     assert_eq!(agent.kind(), AgentKind::Custom);
 
-    let cmd_default = agent.build_command("hi", &base_opts()).unwrap();
+    let cmd_default = agent.build_command("hi", &RunOpts::default()).unwrap();
     let args_default = command_args(&cmd_default);
     let i = args_default.iter().position(|a| a == "-m").expect("-m flag");
     assert_eq!(args_default.get(i + 1).map(String::as_str), Some("mimo/mimo-v2.5-pro"));
 
-    let mut opts = base_opts();
+    let mut opts = RunOpts::default();
     opts.model = Some("mimo/mimo-v2.5".into());
     let cmd_override = agent.build_command("hi", &opts).unwrap();
     let args_override = command_args(&cmd_override);
@@ -46,8 +30,7 @@ fn overlay_kind_and_model_resolution() {
 
 #[test]
 fn overlay_spec_uses_binary_args_kind_and_rate_limit_kind() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     rate_limit::clear_rate_limit(&AgentKind::MiMoCode, None);
     rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
     let agent = OpenCodeOverlayAgent::from_spec(OpenCodeOverlaySpec {
@@ -61,7 +44,7 @@ fn overlay_spec_uses_binary_args_kind_and_rate_limit_kind() {
         allow_external_directories: false,
         probe_served_models: false,
     });
-    let cmd = agent.build_command("hi", &base_opts()).unwrap();
+    let cmd = agent.build_command("hi", &RunOpts::default()).unwrap();
     assert_eq!(agent.kind(), AgentKind::MiMoCode);
     assert_eq!(cmd.get_program().to_string_lossy(), "mimo");
     let args = command_args(&cmd);
@@ -82,8 +65,7 @@ fn overlay_spec_uses_binary_args_kind_and_rate_limit_kind() {
 
 #[test]
 fn custom_overlay_marks_its_own_id_not_opencode() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let agent = OpenCodeOverlayAgent::from_spec(OpenCodeOverlaySpec {
         id: "auditor".into(),
         reported_kind: AgentKind::Custom,
@@ -141,7 +123,7 @@ fn overlay_served_models_probe_behavior() {
 #[test]
 fn argv_parity_base_opts_across_all_variants() {
     let prompt = "test base prompt";
-    let opts = base_opts();
+    let opts = RunOpts::default();
 
     // Native OpenCode
     let oc_cmd = super::super::get_agent(AgentKind::OpenCode).build_command(prompt, &opts).unwrap();
@@ -176,16 +158,13 @@ fn argv_parity_complex_opts_across_all_variants() {
     let prompt = "complex test prompt";
     let opts = RunOpts {
         dir: Some("/tmp/workdir".into()),
-        output: None,
         result_file: Some("report.md".into()),
         model: Some("vendor/override-model".into()),
         budget: true,
         read_only: true,
-        sandbox: false,
         context_files: vec!["a.rs".into(), "b.rs".into()],
         session_id: Some("sess-999".into()),
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let expected_prompt = read_only_prompt(prompt, &opts);
     let expected_suffix = vec![

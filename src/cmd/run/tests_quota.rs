@@ -5,8 +5,7 @@ use crate::routing::rate_limit;
 
 #[test]
 fn failed_pty_quota_excerpt_allows_continuation_without_promoting_its_hold() {
-    let home = TempDir::new().expect("home");
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("directories");
     let mut task = make_failed_task("t-oz-pty-quota");
     task.agent = AgentKind::Oz;
@@ -81,8 +80,7 @@ fn take_next_cascade_agent_returns_none_when_empty() {
 
 #[test]
 fn read_quota_error_message_uses_stderr() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
     std::fs::write(
         paths::stderr_path("t-quota-stderr"),
@@ -95,8 +93,7 @@ fn read_quota_error_message_uses_stderr() {
 
 #[test]
 fn read_quota_error_message_falls_back_to_log() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
     std::fs::write(
         paths::log_path("t-quota-log"),
@@ -111,8 +108,7 @@ fn read_quota_error_message_falls_back_to_log() {
 
 #[test]
 fn read_quota_error_message_extracts_rate_limit_line_only() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
     std::fs::write(
         paths::stderr_path("t-quota-mixed"),
@@ -125,8 +121,7 @@ fn read_quota_error_message_extracts_rate_limit_line_only() {
 
 #[test]
 fn read_quota_error_message_detects_402_payment_errors() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
     std::fs::write(
         paths::log_path("t-quota-402"),
@@ -139,8 +134,7 @@ fn read_quota_error_message_detects_402_payment_errors() {
 
 #[test]
 fn read_quota_error_message_ignores_agent_grep_in_log() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
     crate::routing::rate_limit::clear_rate_limit(&AgentKind::Cursor, None);
     let grep_line = "completed: grep clear_rate_limit_if_stale|marker_path";
@@ -160,8 +154,7 @@ fn read_quota_error_message_ignores_agent_grep_in_log() {
 
 #[test]
 fn terminal_failure_refuses_empty_worktree_rescue() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
+    let dir = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(paths::logs_dir()).unwrap();
 
     let wt_dir = quota_worktree(dir.path(), None);
@@ -189,87 +182,53 @@ fn terminal_failure_refuses_empty_worktree_rescue() {
 }
 
 #[test]
-fn terminal_failure_preserves_worktree_with_modified_code() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
-    std::fs::create_dir_all(paths::logs_dir()).unwrap();
+fn terminal_failure_preserves_worktree_changes() {
+    for (case, task_id, changed_file, contents) in [
+        ("terminal_failure_preserves_worktree_with_modified_code", "t-work-wt", "file.txt", "modified"),
+        (
+            "terminal_failure_preserves_untracked_source_files",
+            "t-untracked-wt",
+            "new_file.txt",
+            "untracked work",
+        ),
+    ] {
+        eprintln!("case: {case}");
+        let dir = crate::support::test_env::TestHome::new();
+        std::fs::create_dir_all(paths::logs_dir()).unwrap();
 
-    let wt_dir = quota_worktree(dir.path(), None);
+        let wt_dir = quota_worktree(dir.path(), None);
 
-    std::fs::write(
-        paths::stderr_path("t-work-wt"),
-        "Error: You have hit your usage limit.",
-    )
-    .unwrap();
+        std::fs::write(
+            paths::stderr_path(task_id),
+            "Error: You have hit your usage limit.",
+        )
+        .unwrap();
 
-    let store = Store::open_memory().unwrap();
-    let mut task = make_failed_task("t-work-wt");
-    task.worktree_path = Some(wt_dir.to_str().unwrap().to_string());
-    task.verify_status = VerifyStatus::Passed;
-    store.insert_task(&task).unwrap();
+        let store = Store::open_memory().unwrap();
+        let mut task = make_failed_task(task_id);
+        task.worktree_path = Some(wt_dir.to_str().unwrap().to_string());
+        task.verify_status = VerifyStatus::Passed;
+        store.insert_task(&task).unwrap();
 
-    // The terminal failure is preserved with a clean worktree.
-    assert_terminal_failure_preserved(
-        &store,
-        &task.id,
-        read_quota_error_message(&task.id, &task.agent).as_deref(),
-    );
-    let checked_task = store.get_task("t-work-wt").unwrap().unwrap();
-    assert_eq!(checked_task.status, TaskStatus::Failed);
+        // The terminal failure is preserved with a clean worktree.
+        assert_terminal_failure_preserved(
+            &store,
+            &task.id,
+            read_quota_error_message(&task.id, &task.agent).as_deref(),
+        );
+        let checked_task = store.get_task(task_id).unwrap().unwrap();
+        assert_eq!(checked_task.status, TaskStatus::Failed);
 
-    // Modifying a file does not reopen the terminal result.
-    std::fs::write(wt_dir.join("file.txt"), "modified").unwrap();
-    assert_terminal_failure_preserved(
-        &store,
-        &task.id,
-        read_quota_error_message(&task.id, &task.agent).as_deref(),
-    );
+        // Modifying a file does not reopen the terminal result.
+        std::fs::write(wt_dir.join(changed_file), contents).unwrap();
+        assert_terminal_failure_preserved(
+            &store,
+            &task.id,
+            read_quota_error_message(&task.id, &task.agent).as_deref(),
+        );
 
-    let task = store.get_task("t-work-wt").unwrap().unwrap();
-    assert_eq!(task.status, TaskStatus::Failed);
-    assert_eq!(std::fs::read_to_string(wt_dir.join("file.txt")).unwrap(), "modified");
-}
-
-#[test]
-fn terminal_failure_preserves_untracked_source_files() {
-    let dir = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(dir.path());
-    std::fs::create_dir_all(paths::logs_dir()).unwrap();
-
-    let wt_dir = quota_worktree(dir.path(), None);
-
-    std::fs::write(
-        paths::stderr_path("t-untracked-wt"),
-        "Error: You have hit your usage limit.",
-    )
-    .unwrap();
-
-    let store = Store::open_memory().unwrap();
-    let mut task = make_failed_task("t-untracked-wt");
-    task.worktree_path = Some(wt_dir.to_str().unwrap().to_string());
-    task.verify_status = VerifyStatus::Passed;
-    store.insert_task(&task).unwrap();
-
-    // Both an untouched and a changed worktree preserve the terminal result.
-    assert_terminal_failure_preserved(
-        &store,
-        &task.id,
-        read_quota_error_message(&task.id, &task.agent).as_deref(),
-    );
-    let checked = store.get_task("t-untracked-wt").unwrap().unwrap();
-    assert_eq!(checked.status, TaskStatus::Failed);
-
-    // The agent's only output is an untracked file. `git diff` cannot see it,
-    // which is how the first version of this guard threw such work away.
-    std::fs::write(wt_dir.join("new_file.txt"), "untracked work").unwrap();
-
-    assert_terminal_failure_preserved(
-        &store,
-        &task.id,
-        read_quota_error_message(&task.id, &task.agent).as_deref(),
-    );
-
-    let task = store.get_task("t-untracked-wt").unwrap().unwrap();
-    assert_eq!(task.status, TaskStatus::Failed);
-    assert_eq!(std::fs::read_to_string(wt_dir.join("new_file.txt")).unwrap(), "untracked work");
+        let task = store.get_task(task_id).unwrap().unwrap();
+        assert_eq!(task.status, TaskStatus::Failed);
+        assert_eq!(std::fs::read_to_string(wt_dir.join(changed_file)).unwrap(), contents);
+    }
 }

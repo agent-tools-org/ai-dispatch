@@ -13,34 +13,31 @@ fn write_temp(content: &str) -> NamedTempFile {
 }
 
 #[test]
-fn renamed_defaults_timeout_has_clear_error() {
-    let path = write_temp(
-        "[defaults]\ntimeout = 30\n\n[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\n",
-    );
-    let err = parse_batch_file(path.path()).unwrap_err().to_string();
-    assert!(err.contains("timeout"));
-    assert!(err.contains("max_duration_mins"));
-    assert!(err.contains("[defaults]"));
-}
-
-#[test]
-fn renamed_task_timeout_has_clear_error() {
-    let path = write_temp(
-        "[[tasks]]\nname = \"build\"\nagent = \"codex\"\nprompt = \"test\"\ntimeout = 30\n",
-    );
-    let err = parse_batch_file(path.path()).unwrap_err().to_string();
-    assert!(err.contains("timeout"));
-    assert!(err.contains("max_duration_mins"));
-    assert!(err.contains("task build"));
-}
-
-#[test]
-fn renamed_task_alias_timeout_has_clear_error() {
-    let path = write_temp(
-        "[[task]]\nname = \"build\"\nagent = \"codex\"\nprompt = \"test\"\ntimeout = 30\n",
-    );
-    let err = parse_batch_file(path.path()).unwrap_err().to_string();
-    assert!(err.contains("timeout"));
-    assert!(err.contains("max_duration_mins"));
-    assert!(err.contains("task build"));
+fn renamed_timeout_fields_have_clear_errors() {
+    for (case, config, context) in [
+        (
+            "renamed_defaults_timeout_has_clear_error",
+            "[defaults]\ntimeout = 30\n\n[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\n",
+            "[defaults]",
+        ),
+        (
+            "renamed_task_timeout_has_clear_error",
+            "[[tasks]]\nname = \"build\"\nagent = \"codex\"\nprompt = \"test\"\ntimeout = 30\n",
+            "task build",
+        ),
+        (
+            "renamed_task_alias_timeout_has_clear_error",
+            "[[task]]\nname = \"build\"\nagent = \"codex\"\nprompt = \"test\"\ntimeout = 30\n",
+            "task build",
+        ),
+    ] {
+        eprintln!("case: {case}");
+        let path = write_temp(
+            config,
+        );
+        let err = parse_batch_file(path.path()).unwrap_err().to_string();
+        assert!(err.contains("timeout"));
+        assert!(err.contains("max_duration_mins"));
+        assert!(err.contains(context));
+    }
 }

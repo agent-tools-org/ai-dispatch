@@ -29,15 +29,9 @@ fn native_command(fixture: &Fixture, resumed: bool) -> std::process::Command {
             &RunOpts {
                 dir: Some(repo.display().to_string()),
                 output: Some(fixture.output.display().to_string()),
-                result_file: None,
-                model: None,
-                budget: false,
                 read_only: true,
-                sandbox: false,
-                context_files: vec![],
                 session_id: resumed.then(|| "resume-thread".into()),
-                env: None,
-                env_forward: None,
+                ..Default::default()
             },
             CommandContext {
                 durable_codex_home: false,

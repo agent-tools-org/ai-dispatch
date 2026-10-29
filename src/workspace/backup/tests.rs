@@ -4,51 +4,18 @@
 use super::config::{expand_folder, parse_cli_spec, resolve, Artifact};
 use super::lifecycle_tests::settle;
 use super::*;
-use crate::support::paths::AidHomeGuard;
+
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{Task, TaskId, TaskStatus};
 use chrono::Local;
 use std::cell::RefCell;
 use std::fs;
 
 fn task(id: &str) -> Task {
-    Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: Some("proj".to_string()),
-        worktree_path: None, effective_dir: None,
+    Task { project_id: Some("proj".to_string()),
         worktree_branch: Some("feat/x".to_string()),
         final_head_sha: Some("0123456789abcdef".to_string()),
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
 }
 
@@ -99,9 +66,7 @@ fn folder_templates_expand_task_fields() {
 
 #[test]
 fn bundle_packs_export_diff_and_transcript() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     let task = task("t-bundle");
     store.insert_task(&task).unwrap();
     let log = crate::support::paths::log_path("t-bundle");
@@ -123,9 +88,7 @@ fn bundle_packs_export_diff_and_transcript() {
 
 #[test]
 fn bundle_without_any_artifact_is_an_error() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     let task = task("t-empty");
     store.insert_task(&task).unwrap();
 
@@ -168,9 +131,7 @@ fn settings() -> BackupSettings {
 
 #[test]
 fn successful_backup_records_url_and_milestone() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     store.insert_task(&task("t-ok")).unwrap();
     let target = FakeTarget { dests: RefCell::new(Vec::new()), fail: false };
 
@@ -188,9 +149,7 @@ fn successful_backup_records_url_and_milestone() {
 
 #[test]
 fn failed_backup_warns_and_leaves_task_untouched() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     store.insert_task(&task("t-bad")).unwrap();
     let target = FakeTarget { dests: RefCell::new(Vec::new()), fail: true };
 
@@ -217,8 +176,7 @@ fn repo_with_backup(toml: &str) -> tempfile::TempDir {
 
 #[test]
 fn settled_task_reads_project_config_and_reports_unknown_target() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let repo = repo_with_backup("[backup]\ntarget = 'nope'\non = ['complete']");
     let store = Store::open_memory().unwrap();
     let mut task = task("t-proj");
@@ -238,8 +196,7 @@ fn settled_task_reads_project_config_and_reports_unknown_target() {
 
 #[test]
 fn settled_task_honors_no_backup_and_ignores_unconfigured_tasks() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let repo = repo_with_backup("[backup]\ntarget = 'nope'");
     let store = Store::open_memory().unwrap();
     let mut off = task("t-off");
@@ -259,9 +216,7 @@ fn settled_task_honors_no_backup_and_ignores_unconfigured_tasks() {
 
 #[test]
 fn cli_backup_flag_enables_backup_without_project_config() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
-    let store = Store::open_memory().unwrap();
+    let (_home, store) = crate::support::test_env::TestHome::new().store();
     store.insert_task(&task("t-cli")).unwrap();
     let args = crate::cmd::run::RunArgs { backup: Some("nope:x".into()), ..Default::default() };
     store.update_task_dispatch_args("t-cli", &args.dispatch_args_json().unwrap()).unwrap();

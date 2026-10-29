@@ -205,9 +205,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn args(cmd: &Command) -> Vec<String> {
-        cmd.get_args()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect()
+        crate::support::test_command::args(&cmd)
     }
 
     #[test]
@@ -283,7 +281,6 @@ mod tests {
             .windows(2)
             .any(|pair| pair == ["-e", "CARGO_TARGET_DIR=/tmp/cache/_base"]));
     }
-
 
 }
 

@@ -143,11 +143,11 @@ mod tests {
 
     #[test]
     fn trimmed_event_line_explains_missing_output() {
-        let event = crate::types::TaskEvent {
-            task_id: crate::types::TaskId("trimmed".into()), timestamp: chrono::Local::now(),
-            event_kind: EventKind::Build, detail: "build".into(),
-            metadata: Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})),
-        };
+        let event = crate::types::TaskEvent::new(
+            crate::types::TaskId("trimmed".into()),
+            EventKind::Build,
+            "build".into(),
+        ).with_metadata(Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})));
         let line = super::event_line(&event);
         assert!(line.spans.iter().any(|span| span.content.contains("output trimmed")));
     }

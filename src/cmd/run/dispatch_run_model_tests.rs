@@ -2,13 +2,12 @@
 // Deps: dispatch_run_model::input, RunModelInput::declared, isolated AID_HOME and codex home.
 
 use super::*;
-use crate::support::paths::AidHomeGuard;
+
 use crate::types::{DeclaredTaskProfile, TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
 
 #[test]
 fn run_and_advise_resolve_identical_models_for_the_same_profile() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let codex_home = temp.path().join("codex");
     std::fs::create_dir_all(&codex_home).expect("codex home");
     std::fs::write(codex_home.join("config.toml"), "model = \"gpt-6-sol\"\n").expect("config");
@@ -45,8 +44,7 @@ fn run_and_advise_resolve_identical_models_for_the_same_profile() {
 
 #[test]
 fn run_passes_the_model_to_the_cli_only_when_pinned() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let codex_home = temp.path().join("codex");
     std::fs::create_dir_all(&codex_home).expect("codex home");
     std::fs::write(codex_home.join("config.toml"), "model = \"gpt-6-sol\"\n").expect("config");

@@ -76,8 +76,7 @@ fn test_agent_list_json_serialization_roundtrip() {
 
 #[test]
 fn agent_list_marks_discovered_agy_metadata_unknown() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("aid dirs");
     crate::agent::model_validation::clear_served_models_cache();
     let now = std::time::SystemTime::now()
@@ -110,11 +109,6 @@ fn sample_custom_config() -> CustomAgentConfig {
         display_name: "Ollama".into(),
         command: "bash".into(),
         prompt_mode: "arg".into(),
-        prompt_flag: String::new(),
-        dir_flag: String::new(),
-        model_flag: String::new(),
-        output_flag: String::new(),
-        fixed_args: Vec::new(),
         streaming: true,
         interactive_input: true,
         output_format: "jsonl".into(),
@@ -123,12 +117,9 @@ fn sample_custom_config() -> CustomAgentConfig {
         base_url: Some("http://10.0.32.184:11434/v1".into()),
         provider: Some("ollama".into()),
         metering: Some("none".into()),
-        strengths: Vec::new(),
         delegate_to: Some("opencode".into()),
         forced_model: Some("ollama/qwen3:4b".into()),
-        binary: None,
-        extra_args: Vec::new(),
-        rate_limit_kind: None,
+        ..Default::default()
     }
 }
 

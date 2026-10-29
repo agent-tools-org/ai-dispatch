@@ -72,8 +72,7 @@ mod tests {
 
     #[test]
     fn writes_and_consumes_response_file() {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = paths::AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
 
         write_response("t-abcd", "yes").unwrap();
         assert!(paths::job_input_path("t-abcd").exists());
@@ -85,8 +84,7 @@ mod tests {
 
     #[test]
     fn writes_and_consumes_steer_file() {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = paths::AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
 
         write_steer("t-bcde", "go left").unwrap();
         assert!(paths::steer_signal_path("t-bcde").exists());

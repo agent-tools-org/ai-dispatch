@@ -1,6 +1,7 @@
 // Text rendering for task board and task detail views.
 // Board rows can enrich output with stored milestone events.
 
+use crate::ui::format::elapsed_since;
 use anyhow::Result;
 
 use crate::cmd::eta;
@@ -104,18 +105,6 @@ pub(super) fn format_with_outcome(task: &Task, base: String) -> String {
         .verification_tag()
         .map(|tag| format!("{base} [{tag}]"))
         .unwrap_or(base)
-}
-
-fn elapsed_since(start: chrono::DateTime<chrono::Local>) -> String {
-    let elapsed = chrono::Local::now() - start;
-    let secs = elapsed.num_seconds();
-    if secs < 0 {
-        "0s".to_string()
-    } else if secs < 60 {
-        format!("{secs}s")
-    } else {
-        format!("{}m {:02}s", secs / 60, secs % 60)
-    }
 }
 
 pub(super) fn format_running_duration(task: &Task, store: &Store) -> String {

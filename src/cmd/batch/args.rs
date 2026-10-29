@@ -211,8 +211,7 @@ mod tests {
 
     #[test]
     fn standard_and_premium_batch_leave_model_unset_without_config() {
-        let home = tempfile::tempdir().expect("temporary aid home");
-        let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+        let _home = crate::support::test_env::TestHome::new();
         let store = Arc::new(Store::open_memory().expect("store"));
         for agent in ["codex", "agy"] {
             for budget in ["standard", "premium"] {

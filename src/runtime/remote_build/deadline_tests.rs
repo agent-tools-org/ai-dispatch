@@ -37,8 +37,7 @@ fn isolated_runner(test: &str) -> bool {
 #[test]
 fn configured_remote_allowance_above_120_seconds_reaches_verify_runner() {
     let (store, id, _) = stored_task();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let now = Local::now();
     save_policy(&store, &id, Duration::from_secs(900), Duration::from_secs(1800));
     timestamps(&store, &id, now, Some(now));
@@ -87,8 +86,7 @@ fn sub_120_second_max_duration_and_hard_cap_are_both_respected() {
 fn short_remote_cap_kills_the_command_and_remains_inconclusive() {
     if !isolated_runner("short_remote_cap_kills_the_command_and_remains_inconclusive") { return; }
     let (store, id, _) = stored_task();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     write_executable(&temp.path().join("verify"), "#!/bin/bash\necho launched > launched\nexec /bin/sleep 5\n");
     save_policy(&store, &id, Duration::from_secs(900), Duration::from_millis(500));
     let now = Local::now();
@@ -105,8 +103,7 @@ fn short_remote_cap_kills_the_command_and_remains_inconclusive() {
 #[test]
 fn exhausted_task_deadline_launches_neither_verify_nor_remote_pick() {
     let (store, id, _) = stored_task();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     write_executable(&temp.path().join("verify"), "#!/bin/bash\necho launched > launched\nexit 69\n");
     let rbox = temp.path().join("rbox");
     write_executable(&rbox, "#!/bin/bash\necho picked > picked\necho second-box\n");
@@ -150,8 +147,7 @@ fn near_future_timestamp_is_clamped_once_and_never_extends_the_cap() {
 fn repick_consumes_original_deadline_and_persists_the_attempted_replacement() {
     if !isolated_runner("repick_consumes_original_deadline_and_persists_the_attempted_replacement") { return; }
     let (store, id, _) = stored_task();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     write_executable(&temp.path().join("verify"), r#"#!/bin/bash
 echo "$AID_BUILD_BOX" >> attempts
 if [[ $AID_BUILD_BOX == chosen-box ]]; then
@@ -183,8 +179,7 @@ exec /bin/sleep 1.5
 fn deadline_exhausted_during_repick_skips_replacement_command() {
     if !isolated_runner("deadline_exhausted_during_repick_skips_replacement_command") { return; }
     let (store, id, _) = stored_task();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     refusing_verify(temp.path(), "chosen-box");
     let rbox = temp.path().join("rbox");
     write_executable(&rbox, "#!/bin/bash\n/bin/sleep 1\necho second-box\n");
@@ -200,8 +195,7 @@ fn deadline_exhausted_during_repick_skips_replacement_command() {
 #[test]
 fn local_and_legacy_verification_ignore_task_deadline_and_keep_120_seconds() {
     let (store, id, _) = stored_task();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     write_executable(&temp.path().join("verify"), "#!/bin/bash\n/bin/sleep 0.1\necho local\n");
     timestamps(&store, &id, Local::now() - chrono::Duration::hours(2), None);
     let args = RunArgs { timeout_policy: crate::config::timeout_policy::TimeoutPolicy {

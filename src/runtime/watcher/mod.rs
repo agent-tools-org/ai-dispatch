@@ -35,7 +35,6 @@ use crate::task::delivery_guard::{DeliveryEvidence, DeliveryOutcome};
 use crate::types::*;
 use anyhow::Result;
 pub(crate) use buffered::watch_buffered;
-use chrono::Local;
 pub(crate) use esc::strip_terminal_escapes;
 #[cfg(test)]
 use extract::{extract_finding_detail, extract_milestone_detail, parse_milestone_event};

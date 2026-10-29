@@ -24,22 +24,10 @@ fn expected_project_id(repo_dir: &Path) -> String {
     format!("{basename}-{}", hash.chars().take(8).collect::<String>())
 }
 
-fn git(repo_dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .status()
-        .unwrap()
-        .success());
-}
+use crate::support::test_env::git;
 
 fn init_repo(repo_dir: &Path) {
-    git(repo_dir, &["init", "-b", "main"]);
-    git(repo_dir, &["config", "user.email", "test@example.com"]);
-    git(repo_dir, &["config", "user.name", "Test User"]);
-    std::fs::write(repo_dir.join("file.txt"), "hello\n").unwrap();
-    git(repo_dir, &["add", "file.txt"]);
-    git(repo_dir, &["commit", "-m", "init"]);
+    crate::support::test_repo::init_with_file(repo_dir, "file.txt", "hello\n", "init")
 }
 
 fn unique_branch(prefix: &str) -> String {
@@ -80,8 +68,7 @@ fn remove_worktree_cleans_up_properly() {
 #[test]
 fn remove_worktree_reaps_branch_target_and_keeps_base() {
     let _permit = test_subprocess::acquire();
-    let aid_home = tempfile::tempdir().unwrap();
-    let _aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
+    let aid_home = crate::support::test_env::TestHome::new();
     let repo = tempfile::tempdir().unwrap();
     init_repo(repo.path());
     let branch = unique_branch("feat/reap-target");

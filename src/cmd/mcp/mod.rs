@@ -19,7 +19,6 @@ const METHOD_NOT_FOUND: i32 = -32601;
 #[derive(Deserialize)]
 struct JsonRpcRequest {
     jsonrpc: String,
-    #[serde(default)]
     id: Option<Value>,
     method: String,
     #[serde(default)]

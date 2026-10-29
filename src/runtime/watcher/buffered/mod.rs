@@ -150,13 +150,7 @@ fn finish_buffered(
     let mut info = if exit_status.success() {
         agent.parse_completion(buffer)
     } else {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Failed,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
+        CompletionInfo::new(TaskStatus::Failed)
     };
     let diagnostic_failure = agent.diagnostics_report_terminal_failure(&diagnostics);
     if diagnostic_failure {

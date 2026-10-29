@@ -102,13 +102,7 @@ pub(crate) fn final_dirty_assertion(
         "FAIL: agent left uncommitted changes after rescue and retry — aborting to prevent data loss. Files: {files}"
     );
     aid_warn!("[aid] {detail}");
-    store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Milestone,
-        detail,
-        metadata: None,
-    })?;
+    store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Milestone, detail))?;
     crate::task::lifecycle::mark_failed(store, task_id)?;
     Ok(true)
 }
@@ -147,13 +141,11 @@ async fn maybe_retry_uncommitted(
 
     let dirty_files = worktree_status_lines(dir).unwrap_or_default().join(", ");
     aid_warn!("[aid] retry: uncommitted changes remain in {dir} — {dirty_files}");
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: format!("Retrying uncommitted changes: {dirty_files}"),
-        metadata: None,
-    });
+    let _ = store.insert_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Milestone,
+        format!("Retrying uncommitted changes: {dirty_files}"),
+    ));
 
     let mut retry_args = build_uncommitted_retry_args(args, &task, task_id, dir)?;
     if task.agent.supports_session_resume() {

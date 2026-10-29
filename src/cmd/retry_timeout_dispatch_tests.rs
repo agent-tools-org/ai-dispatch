@@ -209,9 +209,7 @@ async fn explicit_retry_supersedes_running_parent_and_launches() {
 
 #[tokio::test]
 async fn idle_override_recomputes_first_token_and_preserves_exact_hard_timeout() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     std::fs::create_dir_all(crate::support::paths::aid_dir().join("agents")).unwrap();
     std::fs::write(crate::support::paths::aid_dir().join("agents/retry-policy.toml"),
         "[agent]\nid = \"retry-policy\"\ndisplay_name = \"Retry Policy\"\ncommand = \"/bin/sh\"\nprompt_mode = \"arg\"\nfixed_args = [\"-c\", \"echo completed\"]\ninteractive_input = false\n").unwrap();

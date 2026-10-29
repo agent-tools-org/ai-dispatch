@@ -22,15 +22,13 @@ fn collector_deduplicates_matching_messages() {
 #[test]
 fn digest_counts_warnings_without_rendering_by_default() {
     let report = BuildReport {
-        success: false,
         command: "cargo check".to_string(),
         elapsed: Duration::from_millis(120),
         diagnostics: vec![
             parse_diagnostic(&compiler_message("error", "src/lib.rs", 2, "bad type")).expect("error diagnostic"),
             parse_diagnostic(&compiler_message("warning", "src/lib.rs", 4, "unused")).expect("warning diagnostic"),
         ],
-        stderr_lines: Vec::new(),
-        note: None,
+        ..Default::default()
     };
     let digest = render_digest(&report, false);
     assert!(digest.contains("failed: 1 errors, 1 warnings"));
@@ -47,8 +45,7 @@ fn digest_renders_warnings_when_requested() {
         diagnostics: vec![
             parse_diagnostic(&compiler_message("warning", "src/lib.rs", 4, "unused")).expect("warning diagnostic"),
         ],
-        stderr_lines: Vec::new(),
-        note: None,
+        ..Default::default()
     };
     assert!(render_digest(&report, true).contains("warning: src/lib.rs:4: unused"));
 }
@@ -59,9 +56,8 @@ fn digest_includes_fallback_note_after_status_line() {
         success: true,
         command: "cargo check".to_string(),
         elapsed: Duration::from_millis(200),
-        diagnostics: Vec::new(),
-        stderr_lines: Vec::new(),
         note: Some("note: CARGO_TARGET_DIR unwritable; fell back from /shared to /local/target".into()),
+        ..Default::default()
     };
     let digest = render_digest(&report, false);
     let lines: Vec<_> = digest.lines().collect();
@@ -119,12 +115,10 @@ fn digest_marks_suppressed_diagnostics() {
         })
         .collect();
     let report = BuildReport {
-        success: false,
         command: "cargo check".to_string(),
         elapsed: Duration::from_secs(1),
         diagnostics,
-        stderr_lines: Vec::new(),
-        note: None,
+        ..Default::default()
     };
     let digest = render_digest(&report, true);
     assert_eq!(digest.lines().count(), MAX_DIGEST_LINES);
@@ -133,11 +127,9 @@ fn digest_marks_suppressed_diagnostics() {
 
 fn report_with_diagnostics(diagnostics: Vec<Diagnostic>) -> BuildReport {
     BuildReport {
-        success: false,
         command: "cargo check".to_string(),
         elapsed: Duration::from_secs(1),
         diagnostics,
-        stderr_lines: Vec::new(),
-        note: None,
+        ..Default::default()
     }
 }

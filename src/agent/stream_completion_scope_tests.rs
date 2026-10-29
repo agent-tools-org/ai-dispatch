@@ -7,8 +7,7 @@ use crate::types::AgentKind;
 
 #[test]
 fn pty_needs_human_excerpt_never_fails_a_successful_run() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let text = "Insufficient balance. Manage your billing here";
     let outcome =
         record_quota_exhaustion_with_delivery(text, AgentKind::OpenCode, None, None, false);
@@ -35,8 +34,7 @@ fn pty_needs_human_excerpt_never_fails_a_successful_run() {
 
 #[test]
 fn unsplit_monthly_refusal_gets_only_a_transient_hold() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let text = include_str!("../../tests/fixtures/cursor-usage-limit-refusal.txt");
     let outcome = record_quota_exhaustion(text, AgentKind::Cursor, None, Some("auto"));
     assert!(outcome.recorded());
@@ -53,8 +51,7 @@ fn unsplit_monthly_refusal_gets_only_a_transient_hold() {
 
 #[test]
 fn typed_non_quota_codex_error_overrules_quoted_quota_text() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let event = serde_json::json!({"type":"error", "error":{
         "codexErrorInfo":"contextWindowExceeded", "message":"hit your usage limit"}});
     assert!(!record_quota_exhaustion(&event.to_string(), AgentKind::Codex, None, None).recorded());
@@ -62,8 +59,7 @@ fn typed_non_quota_codex_error_overrules_quoted_quota_text() {
 
 #[test]
 fn unwrapped_claude_reset_preserves_an_excerpt_without_a_long_hold() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let reset = chrono::Utc::now().timestamp() + 7 * 24 * 3600;
     let message = format!("You've hit your limit|{reset}");
     let outcome = record_quota_exhaustion(&message, AgentKind::Claude, None, None);
@@ -77,8 +73,7 @@ fn unwrapped_claude_reset_preserves_an_excerpt_without_a_long_hold() {
 
 #[test]
 fn unsplit_codex_refusal_records_without_failing() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let outcome = record_quota_exhaustion(
         "You have hit your usage limit.", AgentKind::Codex, None, None,
     );

@@ -47,13 +47,7 @@ fn opencode_family_step_usage_accumulates_before_final_parsing() {
         Box::new(custom_opencode_agent()),
     ];
     for agent in agents {
-        let mut info = CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        };
+        let mut info = CompletionInfo::new(TaskStatus::Done);
         for (line, (tokens, cost)) in MULTI_STEP
             .lines()
             .zip([(14_346, 0.00851796), (29_465, 0.009527012)])

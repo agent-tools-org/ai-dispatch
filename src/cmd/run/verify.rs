@@ -1,7 +1,6 @@
 // Verify and retry helpers for `aid run`.
 // Exports verification execution and verify-driven retry logic.
 use anyhow::Result;
-use chrono::Local;
 use std::sync::Arc;
 
 use crate::cmd::checklist_scan;
@@ -15,7 +14,7 @@ mod outcome;
 #[path = "verify_evidence.rs"]
 mod evidence;
 
-pub(in crate::cmd) fn maybe_verify_impl(
+pub(crate) fn maybe_verify(
     store: &Store,
     task_id: &TaskId,
     verify: Option<&str>,
@@ -70,13 +69,11 @@ fn record_verify_infrastructure_failure(
 
 fn record_verify_infrastructure_detail(store: &Store, task_id: &TaskId, detail: String) {
     let _ = store.update_verify_status(task_id.as_str(), VerifyStatus::InfrastructureFailure);
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: format!("Verification could not run: {detail}"),
-        metadata: Some(serde_json::json!({ "verify_execution_error": true })),
-    });
+    let _ = store.insert_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Milestone,
+        format!("Verification could not run: {detail}"),
+    ).with_metadata(Some(serde_json::json!({ "verify_execution_error": true }))));
 }
 
 fn verify_infrastructure_detail(result: &crate::task::verify::VerifyResult) -> String {
@@ -99,13 +96,7 @@ pub(in crate::cmd) fn record_verify_not_run(store: &Store, task_id: &TaskId, rea
 
 fn record_verify_failed(store: &Store, task_id: &TaskId, detail: String) {
     let _ = store.update_verify_status(task_id.as_str(), VerifyStatus::Failed);
-    let _ = store.insert_agent_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail,
-        metadata: None,
-    });
+    let _ = store.insert_agent_event(&TaskEvent::new(task_id.clone(), EventKind::Error, detail));
     crate::task::verify::enforce_verify_status(store, task_id);
 }
 
@@ -170,7 +161,7 @@ fn verify_output_suggests_missing_deps(output: &str) -> bool {
     .any(|needle| lower.contains(needle))
 }
 
-pub(in crate::cmd) async fn maybe_auto_retry_after_verify_failure_impl(
+pub(crate) async fn maybe_auto_retry_after_verify_failure(
     store: &Arc<Store>,
     task_id: &TaskId,
     args: &RunArgs,
@@ -209,7 +200,7 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_verify_failure_impl(
     Box::pin(super::super::run(store.clone(), retry_args)).await.map(Some)
 }
 
-pub(in crate::cmd) async fn maybe_auto_retry_after_checklist_miss_impl(
+pub(crate) async fn maybe_auto_retry_after_checklist_miss(
     store: &Arc<Store>,
     task_id: &TaskId,
     args: &super::RunArgs,

@@ -8,8 +8,7 @@ use crate::cmd::run::read_only_delivery;
 #[test]
 fn scope_cut_fix_rejects_task_home_inside_repository_or_git_common_directory() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let f = Fixture::new(home.path(), false, false, false);
     for root in [
         PathBuf::from(f.args.dir.as_ref().unwrap()),
@@ -29,8 +28,7 @@ async fn scope_cut_fix_missing_or_refused_staging_never_selects_old_reports() {
     let _permit = test_subprocess::acquire();
     for output in [false, true] {
         for refused in [false, true] {
-            let home = tempfile::tempdir().unwrap();
-            let _guard = paths::AidHomeGuard::set(home.path());
+            let home = crate::support::test_env::TestHome::new();
             let mut f = Fixture::new(home.path(), false, false, false);
             fs::write(
                 Path::new(f.args.dir.as_ref().unwrap()).join("base.txt"),
@@ -92,8 +90,7 @@ async fn assert_not_delivered(f: &Fixture) {
 #[tokio::test]
 async fn scope_cut_fix_official_report_copy_failure_records_task_event() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let f = Fixture::new(home.path(), true, false, false);
     fs::write(
         Path::new(f.args.dir.as_ref().unwrap()).join("base.txt"),
@@ -108,8 +105,7 @@ async fn scope_cut_fix_official_report_copy_failure_records_task_event() {
 #[tokio::test]
 async fn scope_cut_fix_replacement_after_validation_is_not_published_to_any_sink() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let f = Fixture::new(home.path(), true, false, false);
     fs::write(
         Path::new(f.args.dir.as_ref().unwrap()).join("base.txt"),
@@ -139,8 +135,7 @@ async fn scope_cut_fix_replacement_after_validation_is_not_published_to_any_sink
 #[tokio::test]
 async fn scope_cut_fix_hard_linked_staged_report_is_refused() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let f = Fixture::new(home.path(), true, false, false);
     fs::write(
         Path::new(f.args.dir.as_ref().unwrap()).join("base.txt"),

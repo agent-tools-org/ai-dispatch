@@ -4,7 +4,7 @@
 use super::shared::seed_task;
 use crate::batch;
 use crate::store::Store;
-use crate::support::paths::AidHomeGuard;
+
 use crate::types::{TaskFilter, TaskStatus};
 use std::fs;
 use std::sync::Arc;
@@ -39,8 +39,7 @@ impl Drop for EnvVarGuard {
 
 #[test]
 fn resolve_batch_path_uses_aid_batches_fallback() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
 
     let batches_dir = crate::support::paths::aid_dir().join("batches");
     fs::create_dir_all(&batches_dir).unwrap();
@@ -54,9 +53,7 @@ fn resolve_batch_path_uses_aid_batches_fallback() {
 
 #[test]
 fn ensure_batch_workgroup_reuses_existing_default_group() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let existing = store
         .create_workgroup("existing", "shared", Some("seed"), Some("wg-shared"))
         .unwrap();
@@ -72,9 +69,7 @@ fn ensure_batch_workgroup_reuses_existing_default_group() {
 
 #[test]
 fn ensure_batch_workgroup_creates_missing_default_group() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
 
     let (workgroup_id, shared_path) =
         ensure_batch_workgroup(&store, "batch", Some("wg-custom"), false).unwrap();
@@ -89,9 +84,7 @@ fn ensure_batch_workgroup_creates_missing_default_group() {
 
 #[test]
 fn ensure_batch_workgroup_creates_shared_dir_when_enabled() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
 
     let (workgroup_id, shared_path) =
         ensure_batch_workgroup(&store, "batch", Some("wg-custom"), true).unwrap();
@@ -106,8 +99,7 @@ fn ensure_batch_workgroup_creates_shared_dir_when_enabled() {
 
 #[tokio::test]
 async fn batch_title_sets_auto_created_workgroup_name() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let _group_guard = EnvVarGuard::remove("AID_GROUP");
     let store = Arc::new(Store::open_memory().unwrap());
 
@@ -166,9 +158,7 @@ prompt = "second prompt"
 
 #[tokio::test]
 async fn batch_group_flag_assigns_existing_workgroup() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::new().shared_store();
     store
         .create_workgroup("existing", "shared", Some("seed"), Some("wg-shared"))
         .unwrap();
@@ -230,8 +220,7 @@ prompt = "second prompt"
 
 #[test]
 fn failed_batch_reports_and_archives_before_returning_error() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let batch_file = temp.path().join("failed.toml");
     fs::write(
         &batch_file,

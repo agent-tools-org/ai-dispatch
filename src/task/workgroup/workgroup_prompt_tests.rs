@@ -117,16 +117,7 @@ fn finding(content: String) -> crate::types::Finding {
         workgroup_id: "wg-test".into(),
         content,
         source_task_id: Some("t-1".into()),
-        severity: None,
-        title: None,
-        file: None,
-        lines: None,
-        category: None,
-        confidence: None,
-        verdict: None,
-        score: None,
-        note: None,
         created_at: chrono::Local::now(),
-        updated_at: None,
+        ..Default::default()
     }
 }

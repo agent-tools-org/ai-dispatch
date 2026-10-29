@@ -12,30 +12,16 @@ use crate::{
     support::test_subprocess,
     types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus},
 };
-use chrono::Local;
+
 use std::{path::{Path, PathBuf}, process::Command, sync::Arc};
 
 #[path = "lifecycle_read_only_backup_tests.rs"]
 mod read_only_backup_tests;
 
-fn git(dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
-        .args(["-C", &dir.to_string_lossy()])
-        .args(args)
-        .status()
-        .unwrap()
-        .success());
-}
+use crate::support::test_env::git;
 
 fn init_repo() -> tempfile::TempDir {
-    let repo = tempfile::tempdir().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("base.txt"), "base\n").unwrap();
-    git(repo.path(), &["add", "base.txt"]);
-    git(repo.path(), &["commit", "-m", "base"]);
-    repo
+    crate::support::test_repo::repo_with_file("base.txt", "base\n", "base")
 }
 
 fn create_worktree(repo: &Path, branch: &str) -> PathBuf {
@@ -47,51 +33,20 @@ fn create_worktree(repo: &Path, branch: &str) -> PathBuf {
 
 fn task(id: &str, repo: &Path, wt: &Path, branch: &str) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: Some(repo.display().to_string()), project_id: None,
-        worktree_path: Some(wt.display().to_string()), effective_dir: None,
+        repo_path: Some(repo.display().to_string()),
+        worktree_path: Some(wt.display().to_string()),
         worktree_branch: Some(branch.to_string()),
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
         duration_ms: Some(1_000),
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
         exit_code: Some(0),
-        created_at: Local::now(),
-        completed_at: None,
         verify: Some("false".to_string()),
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
 }
 
 fn prompt_bundle() -> PromptBundle {
     PromptBundle {
         effective_prompt: "prompt".to_string(),
-        context_files: Vec::new(),
-        prompt_tokens: 0,
-        injected_memory_ids: Vec::new(),
+        ..Default::default()
     }
 }
 
@@ -196,8 +151,7 @@ fn capturing_gws(home: &Path, capture: &Path) -> PathBuf {
 #[tokio::test]
 async fn backup_runs_once_after_the_verify_gate_settles_the_task() {
     let _permit = test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let capture = home.path().join("capture");
     std::fs::create_dir_all(&capture).unwrap();
     let log = capturing_gws(home.path(), &capture);

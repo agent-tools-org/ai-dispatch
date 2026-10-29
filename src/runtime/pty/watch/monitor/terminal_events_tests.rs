@@ -70,22 +70,10 @@ fn stop_wins_deadline_before_pty_failure_finalization() {
         !store
             .record_agent_completion(
                 TaskCompletionUpdate {
-                    id: id.as_str(),
-                    status: TaskStatus::Failed,
-                    duration_ms: 500,
-                    tokens: None,
-                    observed_model: None,
-                    attribution_source: None,
-                    cost_usd: None,
                     exit_code: Some(1),
+                    ..TaskCompletionUpdate::new(id.as_str(), TaskStatus::Failed, 500)
                 },
-                Some(&TaskEvent {
-                    task_id: id.clone(),
-                    timestamp: Local::now(),
-                    event_kind: EventKind::Error,
-                    detail: "losing deadline".into(),
-                    metadata: None,
-                })
+                Some(&TaskEvent::new(id.clone(), EventKind::Error, "losing deadline".into()))
             )
             .expect("late settlement")
     );

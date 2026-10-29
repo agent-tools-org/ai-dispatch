@@ -4,50 +4,17 @@
 
 use super::*;
 use crate::support::test_subprocess;
-use std::path::Path;
-use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+
 use tempfile::TempDir;
 
-fn git(repo_dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .status()
-        .unwrap()
-        .success());
-}
+use crate::support::test_env::git;
 
-fn git_output(repo_dir: &Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    String::from_utf8(output.stdout).unwrap().trim().to_string()
-}
+use crate::support::test_env::git_output;
 
-fn unique_branch(prefix: &str) -> String {
-    format!(
-        "{prefix}-{}-{}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    )
-}
+use crate::support::test_repo::unique_name as unique_branch;
 
 fn init_repo() -> TempDir {
-    let repo = TempDir::new().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
-    git(repo.path(), &["add", "file.txt"]);
-    git(repo.path(), &["commit", "-m", "init"]);
-    repo
+    crate::support::test_repo::repo_with_file("file.txt", "hello\n", "init")
 }
 
 #[test]

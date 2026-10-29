@@ -38,8 +38,7 @@ fn agent(name: &str) -> AgentJson {
 
 #[test]
 fn served_only_models_appear_unrated_for_every_probe_agent() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     write_served_cache(serde_json::json!({
         "codex": ["gpt-5.6-sol", "gpt-6-sol"],
         "grok": ["grok-9-served"],
@@ -105,8 +104,7 @@ fn served_only_models_appear_unrated_for_every_probe_agent() {
 
 #[test]
 fn codex_default_is_the_resolver_model_and_never_a_catalog_guess() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let codex_home = temp.path().join("codex-home");
     std::fs::create_dir_all(&codex_home).expect("codex home");
     set_test_codex_home(Some(codex_home.clone()));

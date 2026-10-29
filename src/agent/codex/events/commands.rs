@@ -20,17 +20,16 @@ pub(super) fn parse_command_event(
 
     let exit_code = item.get("exit_code").and_then(|v| v.as_i64());
     if matches!(exit_code, Some(code) if code != 0) {
-        return Some(TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: now,
-            event_kind: EventKind::Error,
-            detail: format!(
+        return Some(TaskEvent::at(
+            task_id.clone(),
+            EventKind::Error,
+            format!(
                 "command failed ({}) {}",
                 exit_code.unwrap_or(-1),
                 truncate_text(command, 60)
             ),
-            metadata: Some(json!({ "command": command, "exit_code": exit_code })),
-        });
+            now,
+        ).with_metadata(Some(json!({ "command": command, "exit_code": exit_code }))));
     }
 
     let output = item
@@ -42,13 +41,7 @@ pub(super) fn parse_command_event(
         output,
         Some(json!({ "command": command, "exit_code": exit_code })),
     );
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), event_kind, detail, now).with_metadata(metadata))
 }
 
 fn command_started(task_id: &TaskId, command: &str, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
@@ -56,11 +49,5 @@ fn command_started(task_id: &TaskId, command: &str, now: chrono::DateTime<Local>
         command,
         Some(json!({ "command": command, "status": "in_progress" })),
     );
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: classify_command(command),
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), classify_command(command), detail, now).with_metadata(metadata))
 }

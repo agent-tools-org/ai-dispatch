@@ -6,60 +6,19 @@
 use super::*;
 use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-use chrono::Local;
+use crate::types::{Task, TaskId, TaskStatus};
 use std::fs;
 use std::path::Path;
 
 fn task(id: &str, status: TaskStatus) -> Task {
-    Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: Some("proj".to_string()),
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
+    Task { project_id: Some("proj".to_string()),
         final_head_sha: Some("0123456789abcdef".to_string()),
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), status)
     }
 }
 
 fn event(task_id: &str, kind: EventKind, detail: &str) -> TaskEvent {
-    TaskEvent {
-        task_id: TaskId(task_id.to_string()),
-        timestamp: Local::now(),
-        event_kind: kind,
-        detail: detail.to_string(),
-        metadata: None,
-    }
+    TaskEvent::new(TaskId(task_id.to_string()), kind, detail.to_string())
 }
 
 /// A `gws` that logs every call and always fails, wired in through the global
@@ -102,8 +61,7 @@ pub(super) fn settle(store: &Store, task_id: &str, status: TaskStatus) {
 #[test]
 fn settled_done_task_uploads_exactly_once() {
     let _permit = crate::support::test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let log = working_gws(home.path());
     let store = Store::open_memory().unwrap();
     store.insert_task(&task("t-done", TaskStatus::Done)).unwrap();
@@ -122,8 +80,7 @@ fn settled_done_task_uploads_exactly_once() {
 
 #[test]
 fn task_failed_by_fail_active_execution_alone_is_not_backed_up() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let log = working_gws(home.path());
     let store = Store::open_memory().unwrap();
     store.insert_task(&task("t-reaped", TaskStatus::Running)).unwrap();
@@ -138,8 +95,7 @@ fn task_failed_by_fail_active_execution_alone_is_not_backed_up() {
 
 #[test]
 fn task_without_saved_dispatch_args_is_never_backed_up() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let repo = tempfile::tempdir().unwrap();
     fs::create_dir_all(repo.path().join(".git")).unwrap();
     fs::create_dir_all(repo.path().join(".aid")).unwrap();
@@ -163,8 +119,7 @@ fn task_without_saved_dispatch_args_is_never_backed_up() {
 
 #[test]
 fn backup_runs_at_most_once_even_after_a_failed_attempt() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let log = failing_gws(home.path());
     let store = Store::open_memory().unwrap();
     store.insert_task(&task("t-once", TaskStatus::Done)).unwrap();
@@ -188,8 +143,7 @@ fn backup_runs_at_most_once_even_after_a_failed_attempt() {
 
 #[test]
 fn failed_backup_keeps_the_agent_error_as_latest_error() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     failing_gws(home.path());
     let store = Store::open_memory().unwrap();
     store.insert_task(&task("t-agent-err", TaskStatus::Failed)).unwrap();
@@ -246,8 +200,7 @@ fn two_settlement_contenders_upload_exactly_once() {
 #[test]
 fn failed_event_write_does_not_allow_another_backup_attempt() {
     let _permit = crate::support::test_subprocess::acquire();
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let log = failing_gws(home.path());
     let store = Store::open_memory().unwrap();
     store.insert_task(&task("t-event-fail", TaskStatus::Failed)).unwrap();

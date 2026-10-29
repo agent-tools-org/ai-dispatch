@@ -32,9 +32,7 @@ struct UsageWindow {
     used_percent: f64,
     #[serde(default)]
     label: String,
-    #[serde(default)]
     resets_at: Option<DateTime<Utc>>,
-    #[serde(default)]
     group: Option<String>,
 }
 

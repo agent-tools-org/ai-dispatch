@@ -66,50 +66,14 @@ mod tests {
 
     #[test]
     fn notify_completion_records_unobserved_as_unverified() {
-        let temp = tempfile::tempdir().unwrap();
-        let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-        crate::support::paths::ensure_dirs().unwrap();
+        let _temp = crate::support::test_env::TestHome::with_dirs();
         let task = crate::types::Task {
-            id: crate::types::TaskId("t-unobs".to_string()),
             agent: crate::types::AgentKind::Codex,
-            custom_agent_name: None,
-            prompt: "prompt".to_string(),
-            resolved_prompt: None,
-            category: None,
-            status: crate::types::TaskStatus::Done,
-            parent_task_id: None,
-            workgroup_id: None,
-            caller_kind: None,
-            caller_session_id: None,
-            agent_session_id: None,
-            repo_path: None,
-            project_id: None,
-            worktree_path: None,
-            effective_dir: None,
-            worktree_branch: None,
-            final_head_sha: None,
-            final_branch: None,
-            start_sha: None,
-            log_path: None,
-            output_path: None,
-            tokens: None,
-            prompt_tokens: None,
-            duration_ms: None,
-            requested_model: None,
-            observed_model: None,
-            attribution_source: None,
-            cost_usd: None,
-            exit_code: None,
-            created_at: chrono::Local::now(),
-            completed_at: None,
-            verify: None,
             verify_status: crate::types::VerifyStatus::Unobserved,
-            pending_reason: None,
-            read_only: false,
-            budget: false,
-            audit_verdict: None,
-            audit_report_path: None,
-            delivery_assessment: None,
+            ..crate::types::Task::test_fixture(
+                crate::types::TaskId("t-unobs".to_string()),
+                crate::types::TaskStatus::Done,
+            )
         };
         notify_completion(&task);
         let path = crate::support::paths::aid_dir().join("completions.jsonl");

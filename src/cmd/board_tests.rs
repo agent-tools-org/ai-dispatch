@@ -5,10 +5,9 @@
 use super::{TruncationNotice, apply_limit, board_json_row, long_running_warning, truncation_notice_message, write_board_output};
 use super::board_poll::{AntiPollStatus, anti_poll_status, write_board_marker};
 use chrono::{Duration, Local};
-use crate::support::paths::AidHomeGuard;
+
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-use std::sync::Arc;
+use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
 
 #[test]
 fn long_running_warning_counts_running_tasks_older_than_one_hour() {
@@ -68,17 +67,14 @@ fn board_json_row_does_not_report_unobserved_as_success() {
 
 #[test]
 fn format_group_header_includes_custom_name() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let workgroup = store.create_workgroup("My Batch", "", Some("seed"), Some("wg-batch")).unwrap();
     assert_eq!(super::format_group_header(&workgroup), "Workgroup: wg-batch (My Batch)\n\n");
 }
 
 #[test]
 fn board_output_is_written_when_anti_poll_cooldown_applies() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let marker = crate::support::paths::aid_dir().join("board-last.txt");
     let store = Store::open_memory().unwrap();
     let tasks = vec![make_task("t-1001", TaskStatus::Done, Local::now())];
@@ -98,9 +94,7 @@ fn board_output_is_written_when_anti_poll_cooldown_applies() {
 
 #[test]
 fn board_output_shows_terminal_status_when_result_file_is_missing() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let tasks = vec![make_task("t-done-no-result", TaskStatus::Done, Local::now())];
     let mut output = Vec::new();
 
@@ -114,9 +108,7 @@ fn board_output_shows_terminal_status_when_result_file_is_missing() {
 
 #[test]
 fn board_output_shows_failed_status_when_result_file_is_missing() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let tasks = vec![make_task("t-failed-no-result", TaskStatus::Failed, Local::now())];
     let mut output = Vec::new();
 
@@ -128,10 +120,7 @@ fn board_output_shows_failed_status_when_result_file_is_missing() {
 
 #[test]
 fn board_loads_actual_pre_upgrade_spec_with_detached_field() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     store
         .insert_task(&make_task("t-9ef43f87", TaskStatus::Running, Local::now()))
         .unwrap();
@@ -146,8 +135,7 @@ fn board_loads_actual_pre_upgrade_spec_with_detached_field() {
 
 #[test]
 fn test_anti_poll_cooldown_reports_rapid_calls() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let marker = crate::support::paths::aid_dir().join("board-last.txt");
     std::fs::write(&marker, "100\nfp\n0").unwrap();
     assert_eq!(anti_poll_status(&marker, "changed", 103, false).0, AntiPollStatus::Cooldown(3))
@@ -155,8 +143,7 @@ fn test_anti_poll_cooldown_reports_rapid_calls() {
 
 #[test]
 fn test_anti_poll_force_bypasses_cooldown() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let marker = crate::support::paths::aid_dir().join("board-last.txt");
     std::fs::write(&marker, "100\nfp\n0").unwrap();
     assert_eq!(anti_poll_status(&marker, "changed", 103, true).0, AntiPollStatus::Allowed(0))
@@ -164,8 +151,7 @@ fn test_anti_poll_force_bypasses_cooldown() {
 
 #[test]
 fn test_anti_poll_allows_first_empty_board_call() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let marker = crate::support::paths::aid_dir().join("board-last.txt");
 
     assert_eq!(anti_poll_status(&marker, "", 111, false).0, AntiPollStatus::Allowed(0));
@@ -173,8 +159,7 @@ fn test_anti_poll_allows_first_empty_board_call() {
 
 #[test]
 fn test_anti_poll_repeat_blocks_on_second_same_fingerprint_call() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let marker = crate::support::paths::aid_dir().join("board-last.txt");
     write_board_marker(&marker, "fp", 100, 0, 0, 0);
 
@@ -183,8 +168,7 @@ fn test_anti_poll_repeat_blocks_on_second_same_fingerprint_call() {
 
 #[test]
 fn test_anti_poll_repeat_precedes_cooldown_for_rapid_same_state() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let marker = crate::support::paths::aid_dir().join("board-last.txt");
     write_board_marker(&marker, "fp", 100, 0, 2, 100);
 
@@ -193,8 +177,7 @@ fn test_anti_poll_repeat_precedes_cooldown_for_rapid_same_state() {
 
 #[test]
 fn test_anti_poll_preserves_force_state_for_normal_calls() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let marker = crate::support::paths::aid_dir().join("board-last.txt");
     write_board_marker(&marker, "fp", 100, 0, 2, 100);
 
@@ -207,8 +190,7 @@ fn test_anti_poll_preserves_force_state_for_normal_calls() {
 
 #[test]
 fn test_force_bypasses_cooldown_within_30s() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let marker = crate::support::paths::aid_dir().join("board-last.txt");
     write_board_marker(&marker, "fp", 100, 0, 0, 0);
     assert_eq!(anti_poll_status(&marker, "changed", 120, true).0, AntiPollStatus::Allowed(0));
@@ -216,8 +198,7 @@ fn test_force_bypasses_cooldown_within_30s() {
 
 #[test]
 fn test_force_cooldown_allows_after_30s() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let marker = crate::support::paths::aid_dir().join("board-last.txt");
     write_board_marker(&marker, "fp", 100, 0, 0, 0);
     assert_eq!(anti_poll_status(&marker, "changed", 130, true).0, AntiPollStatus::Allowed(0));
@@ -225,8 +206,7 @@ fn test_force_cooldown_allows_after_30s() {
 
 #[test]
 fn test_force_escalation_blocks_after_3_calls() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let marker = crate::support::paths::aid_dir().join("board-last.txt");
 
     write_board_marker(&marker, "fp", 100, 0, 1, 100);
@@ -241,8 +221,7 @@ fn test_force_escalation_blocks_after_3_calls() {
 
 #[test]
 fn test_force_escalation_resets_after_window() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let marker = crate::support::paths::aid_dir().join("board-last.txt");
     write_board_marker(&marker, "fp", 100, 0, 3, 10);
 
@@ -255,41 +234,7 @@ fn test_force_escalation_resets_after_window() {
 
 fn make_task(task_id: &str, status: TaskStatus, created_at: chrono::DateTime<Local>) -> Task {
     Task {
-        id: TaskId(task_id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
         created_at,
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(task_id.to_string()), status)
     }
 }

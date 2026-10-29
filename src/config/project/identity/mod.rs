@@ -52,16 +52,6 @@ pub fn project_display(project_id: Option<&str>) -> &str {
     }
 }
 
-/// Keep only tasks that belong to `filter`.
-/// `filter = None` means the unattributed bucket (SQL NULL), not "all projects".
-#[cfg(test)]
-pub fn retain_project(tasks: &mut Vec<crate::types::Task>, filter: Option<&str>) {
-    match filter {
-        Some(id) => tasks.retain(|task| task.project_id.as_deref() == Some(id)),
-        None => tasks.retain(|task| task.project_id.is_none()),
-    }
-}
-
 /// Banner text when a project filter is active (never silent).
 pub fn project_filter_banner(filter: Option<&str>, all_projects: bool) -> String {
     if all_projects {

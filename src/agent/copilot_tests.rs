@@ -5,31 +5,21 @@
 use super::CopilotAgent;
 use crate::agent::{Agent, RunOpts};
 use crate::types::{AgentKind, EventKind, TaskId};
-use crate::{support::paths, routing::rate_limit};
+use crate::{routing::rate_limit};
 
 fn opts() -> RunOpts {
     RunOpts {
         dir: Some("/tmp/project".to_string()),
-        output: None,
-        result_file: None,
         model: Some("gpt-5.2".to_string()),
-        budget: false,
-        read_only: false,
-        sandbox: false,
         context_files: vec!["/tmp/project/docs/spec.md".to_string()],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     }
 }
 
 #[test]
 fn build_command_uses_copilot_prompt_mode() {
     let cmd = CopilotAgent.build_command("ship it", &opts()).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert_eq!(cmd.get_program().to_string_lossy(), "copilot");
     assert!(args.windows(2).any(|pair| pair == ["-p", "ship it"]));
     assert!(
@@ -82,8 +72,7 @@ fn parse_event_ignores_persistence_session_errors() {
 /// Live t-03a68876: `session.error` + `data.errorCode=quota_exceeded`.
 #[test]
 fn parse_event_marks_live_session_error_quota() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     rate_limit::clear_rate_limit(&AgentKind::Copilot, None);
     let line = r#"{"type":"session.error","data":{"errorType":"quota","message":"You have exceeded your monthly quota (Request ID: EC26:161163:156CE45:19CFB24:6A75A3A0)","statusCode":402,"errorCode":"quota_exceeded"}}"#;
     let event = CopilotAgent

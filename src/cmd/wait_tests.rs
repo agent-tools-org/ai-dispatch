@@ -1,46 +1,11 @@
 // Regression coverage for task waiting and verification.
 use super::*;
-use chrono::Local;
-use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 
 pub(super) fn make_task(id: &str, status: TaskStatus) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
         prompt: "test prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-    final_head_sha: None,
-    final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), status)
     }
 }
 
@@ -60,13 +25,11 @@ async fn wait_for_task_ids_completes_with_existing_milestone_event() {
     let mut task = make_task("t-done", TaskStatus::Done);
     task.duration_ms = Some(1_000);
     store.insert_task(&task).unwrap();
-    store.insert_event(&TaskEvent {
-        task_id: TaskId("t-done".to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: "background progress".to_string(),
-        metadata: None,
-    }).unwrap();
+    store.insert_event(&TaskEvent::new(
+        TaskId("t-done".to_string()),
+        EventKind::Milestone,
+        "background progress".to_string(),
+    )).unwrap();
     let outcome = wait_for_task_ids(&store, &[String::from("t-done")], None, false, None).await.unwrap();
     assert_eq!(outcome, WaitOutcome::Completed);
 }

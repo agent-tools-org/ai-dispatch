@@ -60,8 +60,7 @@ fn offline_auto_box_retries_once_but_named_box_does_not_switch() {
         store
             .update_task_dispatch_args(id.as_str(), &args.dispatch_args_json().expect("json"))
             .expect("save");
-        let temp = tempfile::tempdir().expect("temp");
-        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+        let temp = crate::support::test_env::TestHome::new();
         let (rbox, command) = fake_rbox(
             temp.path(),
             "echo 'rbox: tailnet-offline (probe age 0.0s): chosen-box: offline'; exit 1",
@@ -94,8 +93,7 @@ fn offline_auto_box_retries_once_but_named_box_does_not_switch() {
 #[test]
 fn second_infrastructure_failure_stops_after_one_replacement() {
     let (store, id, _) = stored_task();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let (rbox, command) = fake_rbox(
         temp.path(),
         "echo 'rbox: Box lock not acquired within 60 s'; exit 75",
@@ -131,8 +129,7 @@ fn completed_numeric_exits_sync_failure_and_running_jobs_never_repick() {
         "echo 'rbox: job abc still running after 10 s; the job continues on the box'; exit 124",
     ] {
         let (store, id, _) = stored_task();
-        let temp = tempfile::tempdir().expect("temp");
-        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+        let temp = crate::support::test_env::TestHome::new();
         let (rbox, command) = fake_rbox(temp.path(), output, "exit 0");
         let result = verify_with(
             &store,
@@ -159,8 +156,7 @@ fn completed_numeric_exits_sync_failure_and_running_jobs_never_repick() {
 fn unusable_replacement_never_falls_back_to_local_or_reuses_failed_host() {
     for response in ["exit 1", "echo chosen-box", "exit 0"] {
         let (store, id, _) = stored_task();
-        let temp = tempfile::tempdir().expect("temp");
-        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+        let temp = crate::support::test_env::TestHome::new();
         let (rbox, command) = fake_rbox(
             temp.path(),
             "echo 'rbox: Box lock not acquired within 60 s'; exit 75",
@@ -198,8 +194,7 @@ fn unusable_replacement_never_falls_back_to_local_or_reuses_failed_host() {
 fn typed_repick_runs_once_only_when_every_receipt_is_retryable() {
     for reason in ["lock_timeout", "sync_failed"] {
         let (store, id, _) = stored_task();
-        let temp = tempfile::tempdir().expect("temp");
-        let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+        let temp = crate::support::test_env::TestHome::new();
         let refusal = serde_json::json!({"version":1, "phase":"not_started", "job":null,
             "reason":"lock_timeout", "detail":"typed refusal"});
         let mut other = refusal.clone();

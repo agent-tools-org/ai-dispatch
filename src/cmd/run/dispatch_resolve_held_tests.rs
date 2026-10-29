@@ -8,8 +8,7 @@ use super::super::held::{
 
 #[test]
 fn held_opencode_provider_switches_before_dispatch() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::OpenCode,
         None,
@@ -34,8 +33,7 @@ fn held_opencode_provider_switches_before_dispatch() {
 
 #[test]
 fn held_cursor_premium_switches_to_auto_without_changing_agent() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::Cursor,
         None,
@@ -63,8 +61,7 @@ fn held_cursor_premium_switches_to_auto_without_changing_agent() {
 /// Windowed class; without one the 402 is human-cleared and must not bypass.
 #[test]
 fn background_urgency_keeps_held_ungrouped_agent() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let dir = crate::support::test_env::TestHome::new();
     let cache = dir.path().join("aidbar");
     std::fs::create_dir_all(&cache).unwrap();
     let _probe = crate::routing::quota::live::CacheDirGuard::set(&cache);
@@ -99,8 +96,7 @@ fn background_urgency_keeps_held_ungrouped_agent() {
 /// must not invent a group hold from the agent marker and undo that keep.
 #[test]
 fn background_urgency_keeps_held_droid_agent() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     crate::routing::rate_limit::mark_rate_limited_until(
         &AgentKind::Droid,
         None,
@@ -130,8 +126,7 @@ fn background_urgency_keeps_held_droid_agent() {
 /// leave the agent, including when the caller named a Core model.
 #[test]
 fn agent_wide_droid_hold_cascades_away_even_with_a_core_model() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     crate::routing::rate_limit::mark_rate_limited(
         &AgentKind::Droid,
         None,
@@ -160,8 +155,7 @@ fn agent_wide_droid_hold_cascades_away_even_with_a_core_model() {
 /// skipped.
 #[test]
 fn group_held_fallback_is_skipped_when_cascade_steps_over_held_route() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::OpenCode,
         None,
@@ -215,8 +209,7 @@ fn group_held_fallback_is_skipped_when_cascade_steps_over_held_route() {
 /// gate read agent-level markers, so this must hold agy and skip it.
 #[test]
 fn agent_level_held_fallback_is_skipped_when_cascade_steps_over_held_route() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::OpenCode,
         None,

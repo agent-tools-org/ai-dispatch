@@ -262,7 +262,7 @@ fn stop_followup_child_launched_before_parent_stop_is_unaffected() {
         .unwrap();
 
     store
-        .with_running_task(false, child.id.as_str(), || Ok(()))
+        .with_running_task(false, child.id.as_str(), |_pid| Ok(()))
         .unwrap();
     assert!(crate::task::lifecycle::mark_stopped(&store, parent.id.as_str()).unwrap());
 

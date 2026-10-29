@@ -72,14 +72,10 @@ fn caller_owned_post_spawn_failure_keeps_worker_barrier_and_never_claims_launch_
         store.get_task("t-launch").expect("task").expect("row").status,
         TaskStatus::Running
     );
-    assert!(
-        store
-            .execution_facts("t-launch")
-            .expect("facts")
-            .expect("row")
-            .settlement
-            .is_none()
-    );
+    let worker = store.execution_facts("t-launch").expect("facts").expect("row")
+        .settlement.expect("known worker PID persisted");
+    assert_eq!(worker.pid, Some(u32::MAX));
+    assert_ne!(worker.state, "settled");
 }
 
 #[test]

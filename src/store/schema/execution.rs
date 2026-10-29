@@ -72,11 +72,10 @@ pub(super) fn sequence(conn: &Connection) -> Result<()> {
            DELETE FROM execution_revisions;
          END;
          CREATE TRIGGER execution_change_revision
-         AFTER UPDATE OF status, agent, custom_agent_name, execution_policy, worker_settlement,
+         AFTER UPDATE OF status, agent, custom_agent_name, worker_settlement,
                          model, observed_model, attribution_source, exit_code, completed_at ON tasks
          WHEN OLD.status IS NOT NEW.status OR OLD.agent IS NOT NEW.agent
            OR OLD.custom_agent_name IS NOT NEW.custom_agent_name
-           OR OLD.execution_policy IS NOT NEW.execution_policy
            OR OLD.worker_settlement IS NOT NEW.worker_settlement
            OR OLD.model IS NOT NEW.model OR OLD.observed_model IS NOT NEW.observed_model
            OR OLD.attribution_source IS NOT NEW.attribution_source
@@ -87,6 +86,7 @@ pub(super) fn sequence(conn: &Connection) -> Result<()> {
            DELETE FROM execution_revisions;
          END;",
     )?;
+    policy_revision(conn)?;
     Ok(())
 }
 
@@ -106,5 +106,15 @@ pub(super) fn agent_evidence(conn: &Connection) -> Result<()> {
           UPDATE tasks SET revision = last_insert_rowid() WHERE id = NEW.id;
           DELETE FROM execution_revisions;
         END;")?;
+    Ok(())
+}
+
+fn policy_revision(conn: &Connection) -> Result<()> {
+    conn.execute_batch("CREATE TRIGGER execution_policy_revision
+        AFTER UPDATE OF execution_policy ON tasks BEGIN
+           INSERT INTO execution_revisions(id) VALUES(NULL);
+           UPDATE tasks SET revision = last_insert_rowid() WHERE id = NEW.id;
+           DELETE FROM execution_revisions;
+         END;")?;
     Ok(())
 }

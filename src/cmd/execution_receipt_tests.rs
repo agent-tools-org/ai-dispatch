@@ -20,6 +20,7 @@ fn caller_owned_receipt_terminal_is_not_worker_settlement() {
     task.requested_model = Some("own-request".into());
     task.observed_model = Some("own-observed".into());
     store.insert_task(&task).expect("task");
+    store.test_caller_owned(task.id.as_str());
     store.db().execute("UPDATE tasks SET agent_process = NULL WHERE id = ?1", [task.id.as_str()]).expect("legacy evidence");
     let before = receipt(&store, task.id.as_str()).expect("receipt");
     assert_eq!(before["task"]["terminal"], true);
@@ -72,6 +73,7 @@ fn caller_owned_receipt_records_lost_worker_before_reading_snapshot() {
     let mut task = crate::cost::test_support::task(AgentKind::Codex, 0, None);
     task.id = TaskId("t-lost-receipt".into());
     store.insert_task(&task).expect("task");
+    store.test_caller_owned(task.id.as_str());
     let mut spec: background::BackgroundRunSpec =
         serde_json::from_str(include_str!("../../testdata/legacy-background-spec.json")).expect("spec");
     spec.task_id = task.id.0.clone();

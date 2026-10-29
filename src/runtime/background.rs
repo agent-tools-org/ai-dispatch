@@ -39,7 +39,8 @@ pub(crate) use self::spawn::{daemonize_worker_if_requested, WorkerSpawned};
 pub(crate) use self::spawn::spawn_worker;
 pub use self::spec::{load_spec_if_exists, load_worker_pid, save_spec, BackgroundRunSpec};
 pub(crate) use self::process::{
-    update_worker_pid, publish_agent_pid, AgentPublicationFailure, AgentSpawnFailure,
+    update_worker_pid, publish_agent_pid, abort_agent_publication,
+    AgentLaunchIdentity, AgentPublicationFailure, AgentSpawnFailure,
 };
 pub(crate) use self::reaper::{check_zombie_tasks_with, record_failure};
 #[cfg(test)]

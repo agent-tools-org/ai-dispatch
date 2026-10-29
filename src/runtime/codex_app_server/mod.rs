@@ -152,11 +152,16 @@ fn spawn(args: &Run<'_>, launch: &mut command::Launch) -> Result<io::Rpc> {
         &crate::support::paths::stderr_path(args.task.as_str()),
     )?;
     let mut publication_failed = false;
-    let child = args.store.with_running_task(args.caller_owned, args.task.as_str(), || {
+    let child = args.store.with_running_task(args.caller_owned, args.task.as_str(), |identity| {
         let child = io::Rpc::spawn(&mut launch.command).map_err(|error| {
             if args.caller_owned { crate::runtime::background::AgentSpawnFailure(error).into() }
             else { error }
         })?;
+        if args.caller_owned {
+            *identity = Some((child.id(),
+                crate::runtime::process::monitor::activity::root_started(child.id()),
+            ));
+        }
         if let Err(error) = crate::runtime::background::publish_agent_pid(
             args.caller_owned, args.task.as_str(), child.id(),
         ) {

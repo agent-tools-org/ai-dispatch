@@ -18,6 +18,7 @@ fn caller_owned_stop_json_missing_identity_is_unconfirmed_without_signals() {
         let mut task = Task::test_fixture(TaskId("t-unconfirmed-stop".into()), status);
         task.completed_at = terminal.then(chrono::Local::now);
         store.insert_task(&task).expect("task");
+    store.test_caller_owned(task.id.as_str());
         let mut command = Command::new("sleep");
         command.arg("60");
         let mut child = ProcessGuard::spawn(&mut command).expect("agent");
@@ -39,20 +40,7 @@ fn caller_owned_stop_json_missing_identity_is_unconfirmed_without_signals() {
         );
         let row = store.get_task(task.id.as_str()).expect("task").expect("row");
         assert_eq!(row.status, if terminal { status } else { TaskStatus::Stopped });
-        let facts = store
-            .execution_facts(task.id.as_str())
-            .expect("facts")
-            .expect("row");
-        let worker = facts.settlement.expect("worker state");
-        assert_eq!(worker.state, "unconfirmed");
-        assert_eq!(worker.pid, Some(child.id()));
-        assert!(worker.outcome.is_none());
-        assert!(worker.settled_at.is_none());
-        assert!(
-            background::load_spec_if_exists(task.id.as_str())
-                .expect("spec")
-                .is_some()
-        );
+        assert_unconfirmed_evidence(&store, task.id.as_str(), child.id());
         assert!(row.final_head_sha.is_none());
     }
 }
@@ -63,6 +51,7 @@ fn stop_exit_confirmation_leaves_exited_recorded_child_waitable_by_its_owner() {
     let (_home, store) = TestHome::with_dirs().shared_store();
     let task = Task::test_fixture(TaskId("t-stop-owner-wait".into()), TaskStatus::Running);
     store.insert_task(&task).expect("task");
+    store.test_caller_owned(task.id.as_str());
     let mut command = Command::new("sh");
     command.args(["-c", "exit 7"]);
     let mut child = ProcessGuard::spawn(&mut command).expect("recorded child");
@@ -88,4 +77,21 @@ fn stop_exit_confirmation_leaves_exited_recorded_child_waitable_by_its_owner() {
         facts.settlement.expect("settled").outcome.as_deref(),
         Some("stopped")
     );
+}
+
+fn assert_unconfirmed_evidence(store: &Store, id: &str, pid: u32) {
+        let facts = store
+            .execution_facts(id)
+            .expect("facts")
+            .expect("row");
+        let worker = facts.settlement.expect("worker state");
+        assert_eq!(worker.state, "unconfirmed");
+        assert_eq!(worker.pid, Some(pid));
+        assert!(worker.outcome.is_none());
+        assert!(worker.settled_at.is_none());
+        assert!(
+            background::load_spec_if_exists(id)
+                .expect("spec")
+                .is_some()
+        );
 }

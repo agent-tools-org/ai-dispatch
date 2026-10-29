@@ -160,6 +160,14 @@ impl Store {
     }
 
     #[cfg(test)]
+    pub(crate) fn test_caller_owned(&self, id: &str) {
+        self.db().execute("UPDATE tasks SET execution_policy=?2 WHERE id=?1",
+            params![id, serde_json::json!({"name":"caller-owned","version":1,
+                "agent":"codex","model":"test","accepted_at":"now"}).to_string()])
+            .expect("caller-owned test policy");
+    }
+
+    #[cfg(test)]
     pub(crate) fn settle_worker(&self, id: &str, outcome: &str, _detail: Option<&str>) -> Result<()> {
         self.persist_settlement(id, outcome)?;
         Ok(())
@@ -185,7 +193,9 @@ impl Store {
                  'requested_model', model, 'observed_model', observed_model,
                  'attribution_source', attribution_source, 'exit_code', exit_code,
                  'completed_at', completed_at),
-               'worker', json(worker_settlement)) FROM tasks WHERE id = ?1",
+               'worker', json(CASE WHEN execution_policy IS NULL THEN
+                 json_object('state','unconfirmed','outcome',NULL,'pid',NULL,'settled_at',NULL,'detail',NULL)
+                 ELSE worker_settlement END)) FROM tasks WHERE id = ?1",
                 [id],
                 |row| row.get::<_, String>(0),
             )
@@ -203,13 +213,13 @@ pub(crate) struct AgentProcess {
     pub started: Option<String>,
 }
 
-pub(super) fn record_agent_on(conn: &rusqlite::Connection, id: &str) -> Result<()> {
-    let Some(spec) = crate::runtime::background::load_spec_if_exists(id)? else {
-        return Ok(());
-    };
-    let Some(pid) = spec.agent_pid else {
-        return Ok(());
-    };
+pub(super) fn record_agent_on(
+    conn: &rusqlite::Connection, id: &str, expected_pid: Option<u32>,
+) -> Result<()> {
+    let spec = crate::runtime::background::load_spec_if_exists(id)?
+        .ok_or_else(|| anyhow::anyhow!("Agent spec missing after spawn"))?;
+    let pid = spec.agent_pid.ok_or_else(|| anyhow::anyhow!("Agent PID missing after spawn"))?;
+    anyhow::ensure!(Some(pid) == expected_pid, "Agent PID was not published for this launch");
     let pgid = Some(pid);
     let agent = AgentProcess {
         state: "spawned".into(),
@@ -231,3 +241,7 @@ mod launch_tests;
 #[cfg(test)]
 #[path = "execution_round7_tests.rs"]
 mod round7_tests;
+
+#[cfg(test)]
+#[path = "execution_publication_tests.rs"]
+mod publication_tests;

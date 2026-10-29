@@ -138,9 +138,9 @@ fn spawn_failure_marks_failed_and_removes_prepared_spec() {
         store.get_task("t-launch").unwrap().unwrap().status,
         TaskStatus::Failed
     );
-    crate::cmd::execution_receipt::receipt(&store, "t-launch").expect("observe launch failure");
-    assert_eq!(store.execution_facts("t-launch").expect("facts").expect("row")
-        .settlement.expect("settled").outcome.as_deref(), Some("launch_failed"));
+    let receipt = crate::cmd::execution_receipt::receipt(&store, "t-launch").expect("default receipt");
+    assert_eq!(receipt["worker"]["state"], "unconfirmed");
+    assert!(store.execution_facts("t-launch").expect("facts").expect("row").settlement.is_none());
 }
 
 #[test]

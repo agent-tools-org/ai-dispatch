@@ -76,8 +76,7 @@ fn terminate(
     }
     let task = store.get_task(task_id)?.ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
     let recover_signal = task.status == TaskStatus::Stopped
-        && background::load_worker_pid(task_id)?.is_some_and(|pid|
-            crate::runtime::execution_probe::alive(pid).unwrap_or(true));
+        && background::load_worker_pid(task_id)?.is_some_and(background::is_process_running);
     if !recover_signal {
         let event = TaskEvent::new(task.id.clone(), EventKind::Completion, detail.to_string());
         if task.status.is_terminal() && !(task.status == TaskStatus::Done && task.completed_at.is_none())
@@ -143,12 +142,12 @@ fn signal_task(task_id: &str, task: &Task, graceful: bool, preserve_label: &str)
 fn wait_for_exit(pid: u32) -> bool {
     let deadline = Instant::now() + WAIT_TIMEOUT;
     while Instant::now() < deadline {
-        if !crate::runtime::execution_probe::alive(pid).unwrap_or(true) {
+        if !background::is_process_running(pid) {
             return false;
         }
         std::thread::sleep(POLL_INTERVAL);
     }
-    crate::runtime::execution_probe::alive(pid).unwrap_or(true)
+    background::is_process_running(pid)
 }
 
 fn preserve_worktree(task_id: &str, task: &Task, action: &str) {
@@ -223,3 +222,7 @@ mod close_tests;
 #[cfg(all(test, unix))]
 #[path = "stop/protocol_round6_tests.rs"]
 mod protocol_round6_tests;
+
+#[cfg(test)]
+#[path = "stop/default_probe_tests.rs"]
+mod default_probe_tests;

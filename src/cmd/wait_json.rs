@@ -5,6 +5,7 @@ use super::*;
 pub(crate) async fn run_json(store: &Store, ids: &[String], timeout: Option<u64>) -> Result<i32> {
     anyhow::ensure!(ids.len() == 1, "aid wait --json requires exactly one task ID");
     let id = &ids[0];
+    crate::cmd::execution_receipt::require_caller_owned(store, id)?;
     wait_json_with(store, id, timeout, crate::cmd::execution_receipt::receipt).await
 }
 
@@ -47,6 +48,7 @@ mod tests {
         task.id = crate::types::TaskId("t-wait-json".into());
         task.status = TaskStatus::Failed;
         store.insert_task(&task).expect("task");
+    store.test_caller_owned(task.id.as_str());
         store.db().execute("UPDATE tasks SET agent_process = NULL WHERE id = ?1", [task.id.as_str()]).expect("missing evidence");
         let ids = vec![task.id.0.clone()];
         assert_eq!(run_json(&store, &ids, Some(0)).await.expect("observe"), 124);
@@ -76,6 +78,7 @@ mod tests {
         let (_home, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
         let task = Task::test_fixture(crate::types::TaskId("t-wait-unconfirmed".into()), TaskStatus::Failed);
         store.insert_task(&task).expect("task");
+    store.test_caller_owned(task.id.as_str());
         store.db().execute("UPDATE tasks SET agent_process = NULL WHERE id = ?1", [task.id.as_str()]).expect("missing evidence");
         let started = Instant::now();
         assert_eq!(run_json(&store, &[task.id.to_string()], Some(1)).await.expect("wait"), 124);
@@ -88,11 +91,13 @@ mod tests {
         let mut task = Task::test_fixture(crate::types::TaskId("t-main-wait".into()), TaskStatus::Done);
         task.completed_at = Some(chrono::Local::now());
         store.insert_task(&task).expect("task");
+
         store.db().execute("UPDATE tasks SET agent_process = NULL WHERE id = ?1", [task.id.as_str()]).expect("legacy");
         let ids = [task.id.to_string()];
         assert_eq!(wait_for_task_ids(&store, &ids, None, false, Some(Duration::from_secs(1)))
             .await.expect("main text wait"), WaitOutcome::Completed);
-        assert_eq!(run_json(&store, &ids, Some(0)).await.expect("JSON evidence wait"), 124);
+        assert_eq!(run_json(&store, &ids, Some(0)).await.expect_err("default JSON refusal")
+            .downcast_ref::<crate::execution::Refusal>().expect("refusal").exit, 3);
     }
 
     #[tokio::test]

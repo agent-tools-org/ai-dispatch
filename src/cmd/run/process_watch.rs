@@ -12,12 +12,16 @@ pub(super) fn spawn_agent(args: &mut RunProcessArgs<'_>) -> Result<(Child, Optio
     args.cmd.process_group(0);
     crate::cmd::noninteractive_stdio::configure(&mut args.cmd);
     if prompt.is_some() { args.cmd.stdin(std::process::Stdio::piped()); }
-    let mut child = match args.store.with_running_task(args.caller_owned, args.task_id.as_str(), || {
+    let mut child = match args.store.with_running_task(args.caller_owned, args.task_id.as_str(), |identity| {
         let child = args.cmd.spawn().map_err(|error| {
             let error = anyhow::Error::from(error);
             if args.caller_owned { crate::runtime::background::AgentSpawnFailure(error).into() }
             else { error }
         })?;
+        if args.caller_owned {
+            *identity = child.id().map(|pid| (pid,
+                crate::runtime::process::monitor::activity::root_started(pid)));
+        }
         if let Some(pid) = child.id() {
             crate::runtime::background::publish_agent_pid(args.caller_owned, args.task_id.as_str(), pid)?;
         }

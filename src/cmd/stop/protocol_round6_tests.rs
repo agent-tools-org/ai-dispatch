@@ -33,6 +33,7 @@ fn caller_owned_missing_agent_evidence_does_not_prevent_signalling_the_verified_
     let (_home, store) = TestHome::with_dirs().shared_store();
     let task = Task::test_fixture(TaskId("t-worker-identity".into()), TaskStatus::Running);
     store.insert_task(&task).expect("task");
+    store.test_caller_owned(task.id.as_str());
     store
         .db()
         .execute(
@@ -85,6 +86,7 @@ fn caller_owned_waiting_placeholder_can_be_stopped_without_inventing_an_agent_id
             .state,
         "not_started"
     );
+    store.test_caller_owned("t-waiting-stop");
     assert_eq!(
         stop_json(&store, "t-waiting-stop", true).expect("stop waiting"),
         0
@@ -102,8 +104,9 @@ fn caller_owned_stop_signals_agent_descendants_in_separate_sessions_before_the_g
     let (_home, store) = TestHome::with_dirs().shared_store();
     let task = Task::test_fixture(TaskId("t-agent-tools".into()), TaskStatus::Running);
     store.insert_task(&task).expect("task");
+    store.test_caller_owned(task.id.as_str());
     let mut agent = store
-        .with_running_task(true, task.id.as_str(), || {
+        .with_running_task(true, task.id.as_str(), |_pid| {
             let mut command = std::process::Command::new("sh");
             command
                 .args([
@@ -112,6 +115,7 @@ fn caller_owned_stop_signals_agent_descendants_in_separate_sessions_before_the_g
                 ])
                 .stdout(std::process::Stdio::piped());
             let agent = crate::runtime::process::guard::ProcessGuard::spawn(&mut command)?;
+            *_pid = Some((agent.id(), crate::runtime::process::monitor::activity::root_started(agent.id())));
             background::update_agent_pid(task.id.as_str(), agent.id())?;
             Ok(agent)
         })
@@ -151,6 +155,7 @@ fn caller_owned_stop_signals_worker_descendants_in_separate_sessions() {
     let (_home, store) = TestHome::with_dirs().shared_store();
     let task = Task::test_fixture(TaskId("t-worker-tools".into()), TaskStatus::Running);
     store.insert_task(&task).expect("task");
+    store.test_caller_owned(task.id.as_str());
     let mut command = std::process::Command::new("sh");
     command
         .args([

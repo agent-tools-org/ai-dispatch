@@ -9,6 +9,7 @@ fn fixture() -> (crate::support::test_env::TestHome, std::sync::Arc<Store>, Task
     store
         .insert_task(&Task::test_fixture(id.clone(), TaskStatus::Running))
         .expect("task");
+    store.test_caller_owned(id.as_str());
     (home, store, id)
 }
 
@@ -40,7 +41,7 @@ fn default_launches_never_write_execution_evidence_or_read_policy() {
             .with_worker_launch(false, id.as_str(), || Ok(()))
             .expect("default worker");
         store
-            .with_running_task(false, id.as_str(), || Ok(()))
+            .with_running_task(false, id.as_str(), |_pid| Ok(()))
             .expect("default agent");
     }
     let after = store
@@ -60,7 +61,7 @@ fn revision_does_not_advance_for_any_unchanged_lifecycle_field() {
         .db()
         .execute(
             "UPDATE tasks SET status=status,agent=agent,custom_agent_name=custom_agent_name,
-        execution_policy=execution_policy,worker_settlement=worker_settlement,model=model,
+        worker_settlement=worker_settlement,model=model,
         observed_model=observed_model,attribution_source=attribution_source,exit_code=exit_code,
         completed_at=completed_at,agent_process=agent_process,worker_spawned=worker_spawned,
         execution_stop=execution_stop WHERE id=?1",
@@ -91,7 +92,7 @@ fn caller_owned_refused_launch_keeps_a_live_workers_lifecycle_barrier() {
         .expect("failed during lifecycle");
     assert!(
         store
-            .with_running_task(true, id.as_str(), || -> Result<()> {
+            .with_running_task(true, id.as_str(), |_pid| -> Result<()> {
                 panic!("guard refuses before spawn");
             })
             .is_err()
@@ -105,7 +106,7 @@ fn caller_owned_refused_launch_keeps_a_live_workers_lifecycle_barrier() {
 #[test]
 fn caller_owned_spawn_failure_resets_evidence_and_derives_launch_failed() {
     let (_home, store, id) = fixture();
-    let result = store.with_running_task(true, id.as_str(), || {
+    let result = store.with_running_task(true, id.as_str(), |_pid| {
         std::process::Command::new("/definitely/missing/aid-agent")
             .spawn()
             .map_err(|error| background::AgentSpawnFailure(error.into()).into())

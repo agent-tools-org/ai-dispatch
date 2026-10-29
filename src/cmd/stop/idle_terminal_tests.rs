@@ -34,6 +34,7 @@ fn assert_idle_terminal(status: TaskStatus, outcome: Option<&str>) {
         error.to_string(),
         format!("task already {}: previous failure", status.as_str())
     );
+    store.test_caller_owned(task.id.as_str());
     assert_eq!(stop_json(&store, task.id.as_str(), true).expect("JSON stop"), 0);
     assert_eq!(
         git_stdout(repo.path(), &["rev-parse", "HEAD"]),
@@ -99,7 +100,10 @@ fn terminal_reused_pid_is_not_signalled_and_does_not_block_json_settlement() {
     command.arg("60");
     let mut child = crate::runtime::process::guard::ProcessGuard::spawn(&mut command).expect("foreign child");
     super::settle_first_tests::save_worker(task.id.as_str(), child.id());
+    store.test_caller_owned(task.id.as_str());
     assert_eq!(stop_json(&store, task.id.as_str(), true).expect("JSON stop"), 0);
+    store.db().execute("UPDATE tasks SET execution_policy=NULL WHERE id=?1", [task.id.as_str()])
+        .expect("default text parity");
     let error = stop(&store, task.id.as_str()).expect_err("idle terminal text refusal");
     assert!(error.to_string().starts_with("task already failed:"));
     assert!(

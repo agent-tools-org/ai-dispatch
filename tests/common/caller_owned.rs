@@ -42,14 +42,14 @@ impl Harness {
             h.path("models").display(),
             body
         );
-        crate::common::write_executable(&h.path("agent"), &script);
+        crate::common::write_executable(&h.path("controlled-agent"), &script);
         fs::write(
             h.path("aid/agents/controlled.toml"),
             format!(
                 "[agent]\nid = \"{AGENT}\"\ndisplay_name = \"controlled\"\ncommand = \"{}\"\n\
              model_flag = \"--model\"\nstreaming = true\noutput_format = \"jsonl\"\n\
              interactive_input = false\ntrust_tier = \"local\"\n",
-                h.path("agent").display()
+                h.path("controlled-agent").display()
             ),
         )
         .unwrap();

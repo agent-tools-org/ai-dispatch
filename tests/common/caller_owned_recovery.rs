@@ -61,6 +61,8 @@ impl Recovery {
             while index < args.len() {
                 if args[index] == "--policy" {
                     index += 2;
+                } else if args[index] == "--json" {
+                    index += 1;
                 } else {
                     cmd.arg(&args[index]);
                     index += 1;

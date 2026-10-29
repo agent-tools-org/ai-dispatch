@@ -2,7 +2,7 @@
 // Covers eval success/failure flow, prompt feedback, and iteration limits.
 
 use super::*;
-use crate::support::paths::AidHomeGuard;
+use chrono::Local;
 use crate::store::Store;
 
 use std::path::Path;

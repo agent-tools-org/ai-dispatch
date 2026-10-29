@@ -108,7 +108,6 @@ fn remove_workspace_dir(id: &str) -> Result<()> {
 mod tests {
     use super::*;
     use crate::types::{Task, TaskId, TaskStatus};
-    use chrono::Local;
 
     fn make_task(id: &str, group_id: &str) -> Task {
         Task {

@@ -28,7 +28,7 @@ fn poll_at(age: i64, cap: u64, agent: AgentKind) -> (Store, Task) {
 
 #[test]
 fn ninety_percent_cap_steers_commit_and_report_once_refusal_regression() {
-    let _home = setup_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let (store, task) = poll_at(540, 600, AgentKind::Cursor);
     let messages = store.list_messages_for_task(task.id.as_str()).expect("messages");
     assert_eq!(messages.len(), 1);
@@ -78,7 +78,7 @@ fn wrap_up_skips_early_short_and_unsupported_runs_refusal_regression() {
         (540, 600, AgentKind::Claude),
         (540, 600, AgentKind::Grok),
     ] {
-        let _home = setup_home();
+        let _home = crate::support::test_env::TestHome::with_dirs();
         let (store, task) = poll_at(age, cap, agent);
         assert!(
             store
@@ -96,7 +96,7 @@ fn wrap_up_skips_early_short_and_unsupported_runs_refusal_regression() {
 
 #[test]
 fn read_only_reaper_queues_report_only_wrap_up() {
-    let _home = setup_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().expect("store");
     let mut task = task("t-read-only-wrap", TaskStatus::Running);
     task.agent = AgentKind::Cursor;
@@ -125,7 +125,7 @@ fn read_only_reaper_queues_report_only_wrap_up() {
 
 #[test]
 fn wrap_up_delivery_failure_can_recover_once_fix_regression() {
-    let _home = setup_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().expect("store");
     let mut task = task("t-wrap-recovery", TaskStatus::Running);
     task.agent = AgentKind::Cursor;
@@ -150,7 +150,7 @@ fn wrap_up_delivery_failure_can_recover_once_fix_regression() {
 
 #[test]
 fn legacy_wrap_up_record_prevents_duplicate_queueing() {
-    let _home = setup_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().unwrap();
     let mut task = task("t-legacy-wrap", TaskStatus::Running);
     task.agent = AgentKind::Cursor;
@@ -170,7 +170,7 @@ fn legacy_wrap_up_record_prevents_duplicate_queueing() {
 
 #[test]
 fn worker_claim_then_reaper_keeps_one_wrap_up_request() {
-    let _home = setup_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let (store, task) = poll_at(0, 600, AgentKind::Cursor);
     assert!(crate::cmd::steer::wrap_up_before_timeout(
         &store, task.id.as_str(), 540, 600,

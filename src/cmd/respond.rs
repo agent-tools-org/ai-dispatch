@@ -36,7 +36,6 @@ mod tests {
     use super::run;
     use crate::runtime::input_signal;
 
-    use crate::store::Store;
     use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 
     fn make_task(id: &str, agent: AgentKind) -> Task {

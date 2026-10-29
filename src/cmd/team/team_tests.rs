@@ -2,9 +2,7 @@
 // Deps: parent command helpers, temporary aid homes.
 
 use super::*;
-use crate::support::paths::AidHomeGuard;
 use std::{fs, path::PathBuf};
-use tempfile::TempDir;
 
 fn team_file(name: &str) -> PathBuf {
     team::teams_dir().join(format!("{name}.toml"))

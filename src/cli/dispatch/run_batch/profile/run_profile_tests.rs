@@ -3,7 +3,6 @@
 // Deps: explicit_agent, AidHomeGuard, TaskEgress.
 
 use super::*;
-use crate::support::paths::AidHomeGuard;
 use crate::types::TaskEgress;
 
 #[test]

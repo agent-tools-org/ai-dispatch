@@ -4,7 +4,7 @@
 
 use super::{cleanup_orphaned_idle_tasks, insert_event, make_task};
 use crate::types::{EventKind, TaskStatus};
-use crate::{support::paths, store::Store};
+use crate::{store::Store};
 
 #[test]
 fn orphan_reaper_fails_stale_task_without_background_spec() {

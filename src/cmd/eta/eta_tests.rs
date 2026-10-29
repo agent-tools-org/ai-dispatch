@@ -3,10 +3,8 @@
 
 use super::*;
 use crate::store::Store;
-use crate::support::paths::AidHomeGuard;
 use crate::types::{AgentKind, TaskId};
 use chrono::Duration;
-use tempfile::TempDir;
 
 fn make_task(
     id: &str,

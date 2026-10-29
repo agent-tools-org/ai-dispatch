@@ -8,12 +8,7 @@ use super::{
     run_lifecycle::{LifecycleMode, post_run_lifecycle},
     run_prompt::PromptBundle,
 };
-use crate::{
-    support::paths::{self, AidHomeGuard},
-    store::Store,
-    support::test_subprocess,
-    types::{AgentKind, Task, TaskId, TaskStatus},
-};
+use crate::{store::Store, support::test_subprocess, types::{AgentKind, Task, TaskId, TaskStatus}};
 use chrono::Local;
 use std::{path::Path, sync::Arc};
 

@@ -8,7 +8,6 @@ use crate::cmd::run::RunArgs;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 
-
 fn failed_task(id: &str) -> Task {
     Task {
         prompt: "original prompt".to_string(),

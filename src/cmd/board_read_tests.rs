@@ -3,7 +3,6 @@
 
 use super::*;
 
-
 fn seed(store: &Store) {
     for i in 0..120 {
         store

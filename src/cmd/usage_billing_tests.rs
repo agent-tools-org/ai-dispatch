@@ -14,7 +14,8 @@ fn overage(store: &Store, task: &Task) {
     store.insert_task(task).expect("task");
     for _ in 0..2 {
         store
-            .insert_event(&TaskEvent::new(task.id.clone(), EventKind::Setup, "billing: overage".into()).with_metadata(Some(serde_json::json!({"billing_state":"overage"}))))
+            .insert_event(&TaskEvent::new(task.id.clone(), EventKind::Setup, "billing: overage".into())
+                .with_metadata(Some(serde_json::json!({"billing_state":"overage"}))))
             .expect("event");
     }
 }

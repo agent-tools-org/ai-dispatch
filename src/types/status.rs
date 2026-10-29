@@ -35,39 +35,8 @@ impl TaskStatus {
         Self::Stopped,
     ];
 
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Waiting => "waiting",
-            Self::Pending => "pending",
-            Self::Running => "running",
-            Self::AwaitingInput => "awaiting_input",
-            Self::Stalled => "stalled",
-            Self::Done => "done",
-            Self::Merged => "merged",
-            Self::Failed => "failed",
-            Self::Skipped => "skipped",
-            Self::Stopped => "stopped",
-        }
-    }
-
     pub fn parse_str(s: &str) -> Option<Self> {
         Self::from_str(s)
-    }
-
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "waiting" => Some(Self::Waiting),
-            "pending" => Some(Self::Pending),
-            "running" => Some(Self::Running),
-            "awaiting_input" => Some(Self::AwaitingInput),
-            "stalled" => Some(Self::Stalled),
-            "done" => Some(Self::Done),
-            "merged" => Some(Self::Merged),
-            "failed" => Some(Self::Failed),
-            "skipped" => Some(Self::Skipped),
-            "stopped" => Some(Self::Stopped),
-            _ => None,
-        }
     }
 
     pub fn label(&self) -> &'static str {
@@ -111,6 +80,21 @@ impl TaskStatus {
 
 }
 
+super::string_values::string_values!(
+    TaskStatus, as_str(&self), pub from_str {
+        Waiting => "waiting",
+        Pending => "pending",
+        Running => "running",
+        AwaitingInput => "awaiting_input",
+        Stalled => "stalled",
+        Done => "done",
+        Merged => "merged",
+        Failed => "failed",
+        Skipped => "skipped",
+        Stopped => "stopped",
+    }
+);
+
 impl fmt::Display for TaskStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
@@ -128,30 +112,16 @@ pub enum PendingReason {
     Unknown,
 }
 
-impl PendingReason {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Preparation => "preparation",
-            Self::AgentStarting => "agent_starting",
-            Self::RateLimited => "rate_limited",
-            Self::WorkerCapacity => "worker_capacity",
-            Self::WaitTimeout => "wait_timeout",
-            Self::Unknown => "unknown",
-        }
+super::string_values::string_values!(
+    PendingReason, as_str(&self), pub parse_str {
+        Preparation => "preparation",
+        AgentStarting => "agent_starting",
+        RateLimited => "rate_limited",
+        WorkerCapacity => "worker_capacity",
+        WaitTimeout => "wait_timeout",
+        Unknown => "unknown",
     }
-
-    pub fn parse_str(s: &str) -> Option<Self> {
-        match s {
-            "preparation" => Some(Self::Preparation),
-            "agent_starting" => Some(Self::AgentStarting),
-            "rate_limited" => Some(Self::RateLimited),
-            "worker_capacity" => Some(Self::WorkerCapacity),
-            "wait_timeout" => Some(Self::WaitTimeout),
-            "unknown" => Some(Self::Unknown),
-            _ => None,
-        }
-    }
-}
+);
 
 impl fmt::Display for PendingReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -202,47 +172,6 @@ impl EventKind {
         !matches!(self, Self::NoOp)
     }
 
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Setup => "setup",
-            Self::ToolCall => "tool_call",
-            Self::Reasoning => "reasoning",
-            Self::Milestone => "milestone",
-            Self::Build => "build",
-            Self::Test => "test",
-            Self::Commit => "commit",
-            Self::Completion => "completion",
-            Self::Error => "error",
-            Self::NoOp => "noop",
-            Self::FileWrite => "file_write",
-            Self::FileRead => "file_read",
-            Self::WebSearch => "web_search",
-            Self::Lint => "lint",
-            Self::Format => "format",
-        }
-    }
-
-    pub fn parse_str(s: &str) -> Option<Self> {
-        match s {
-            "setup" => Some(Self::Setup),
-            "tool_call" => Some(Self::ToolCall),
-            "reasoning" => Some(Self::Reasoning),
-            "milestone" => Some(Self::Milestone),
-            "build" => Some(Self::Build),
-            "test" => Some(Self::Test),
-            "commit" => Some(Self::Commit),
-            "completion" => Some(Self::Completion),
-            "error" => Some(Self::Error),
-            "noop" => Some(Self::NoOp),
-            "file_write" => Some(Self::FileWrite),
-            "file_read" => Some(Self::FileRead),
-            "web_search" => Some(Self::WebSearch),
-            "lint" => Some(Self::Lint),
-            "format" => Some(Self::Format),
-            _ => None,
-        }
-    }
-
     /// Parse a stored event kind, warning once per unknown value before
     /// falling back to Reasoning.
     pub fn parse_or_warn(s: &str) -> Self {
@@ -254,6 +183,26 @@ impl EventKind {
         })
     }
 }
+
+super::string_values::string_values!(
+    EventKind, as_str(&self), pub parse_str {
+        Setup => "setup",
+        ToolCall => "tool_call",
+        Reasoning => "reasoning",
+        Milestone => "milestone",
+        Build => "build",
+        Test => "test",
+        Commit => "commit",
+        Completion => "completion",
+        Error => "error",
+        NoOp => "noop",
+        FileWrite => "file_write",
+        FileRead => "file_read",
+        WebSearch => "web_search",
+        Lint => "lint",
+        Format => "format",
+    }
+);
 
 /// Returns true the first time `raw` is seen, so the caller warns only once
 /// per unknown kind per process.

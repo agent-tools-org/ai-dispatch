@@ -206,6 +206,5 @@ fn extract_messages_full_skips_truncation() {
     assert!(parts.iter().all(|part| part.len() > 500));
 }
 
-
 #[path = "output_render_tests.rs"]
 mod render;

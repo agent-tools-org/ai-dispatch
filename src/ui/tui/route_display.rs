@@ -58,7 +58,6 @@ mod tests {
     use super::*;
     use crate::types::{AgentKind, AttributionSource, TaskId, TaskStatus};
 
-
     fn task_with(
         agent: AgentKind,
         custom: Option<&str>,

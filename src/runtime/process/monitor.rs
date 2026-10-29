@@ -3,7 +3,6 @@
 // Deps: serde_json, crate::store, crate::types.
 
 use anyhow::Result;
-use chrono::Local;
 use serde_json::json;
 
 use crate::store::Store;
@@ -52,7 +51,8 @@ pub(crate) fn insert_hung_detected_events(
 }
 
 pub(crate) fn insert_hung_retry_event(store: &Store, task_id: &TaskId) -> Result<()> {
-    store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Milestone, "HUNG → retry".to_string()).with_metadata(Some(json!({ "hung_auto_retried": true }))))?;
+    store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Milestone, "HUNG → retry".to_string())
+        .with_metadata(Some(json!({ "hung_auto_retried": true }))))?;
     Ok(())
 }
 
@@ -104,7 +104,8 @@ mod tests {
     use super::*;
 
     fn event(metadata: serde_json::Value) -> TaskEvent {
-        TaskEvent::new(TaskId("t-hung".to_string()), EventKind::Milestone, "hung_detected".to_string()).with_metadata(Some(metadata))
+        TaskEvent::new(TaskId("t-hung".to_string()), EventKind::Milestone, "hung_detected".to_string())
+            .with_metadata(Some(metadata))
     }
 
     #[test]

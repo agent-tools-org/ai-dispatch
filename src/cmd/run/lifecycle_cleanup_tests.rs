@@ -17,13 +17,6 @@ use crate::{
 use chrono::Local;
 use std::{path::Path, sync::Arc};
 
-fn isolated_home() -> (tempfile::TempDir, AidHomeGuard) {
-    let home = tempfile::tempdir().expect("home");
-    let guard = AidHomeGuard::set(home.path());
-    paths::ensure_dirs().expect("dirs");
-    (home, guard)
-}
-
 use crate::support::test_env::git;
 
 fn init_repo() -> tempfile::TempDir {
@@ -86,7 +79,7 @@ async fn run_lifecycle(
 #[tokio::test(flavor = "current_thread")]
 async fn completed_worktree_survives_when_checklist_retry_dispatches() {
     let _permit = test_subprocess::acquire();
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     let branch = "fix/lifecycle-retry-keep";
     let wt = committed_worktree(repo.path(), branch);
@@ -119,7 +112,7 @@ async fn completed_worktree_survives_when_checklist_retry_dispatches() {
 #[tokio::test(flavor = "current_thread")]
 async fn completed_worktree_survives_when_no_retry_dispatches() {
     let _permit = test_subprocess::acquire();
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     let branch = "fix/lifecycle-finish-prune";
     let wt = committed_worktree(repo.path(), branch);
@@ -149,7 +142,7 @@ async fn completed_worktree_survives_when_no_retry_dispatches() {
 #[tokio::test(flavor = "current_thread")]
 async fn failed_lifecycle_retains_worktree_branch_and_output() {
     let _permit = test_subprocess::acquire();
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     let branch = "fix/lifecycle-failed-keep";
     let wt = committed_worktree(repo.path(), branch);

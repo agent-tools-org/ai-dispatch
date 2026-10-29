@@ -6,7 +6,6 @@ use super::*;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 
-
 #[test]
 fn maybe_auto_retry_transient_plan_allows_zero_cli_retry() {
     let args = RunArgs { retry: 0, ..Default::default() };

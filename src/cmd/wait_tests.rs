@@ -1,6 +1,5 @@
 // Regression coverage for task waiting and verification.
 use super::*;
-use chrono::Local;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 
 pub(super) fn make_task(id: &str, status: TaskStatus) -> Task {

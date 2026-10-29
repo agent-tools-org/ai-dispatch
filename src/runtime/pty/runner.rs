@@ -2,7 +2,6 @@
 // Runs combined stdout/stderr through prompt detection and file-based input forwarding.
 
 use anyhow::Result;
-use chrono::Local;
 use std::io::Read;
 use std::path::Path;
 use std::sync::mpsc;

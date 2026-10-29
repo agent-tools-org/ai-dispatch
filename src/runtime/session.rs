@@ -107,7 +107,6 @@ mod tests {
     }
     use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 
-
     #[test]
     fn display_shortens_long_session_ids() {
         let task = Task {

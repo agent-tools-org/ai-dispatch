@@ -7,7 +7,6 @@ use crate::types::{Task, TaskId, TaskStatus};
 
 use std::path::Path;
 
-
 use crate::support::test_env::git_output as git;
 
 fn init_repo() -> tempfile::TempDir {

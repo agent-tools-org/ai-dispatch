@@ -6,7 +6,6 @@ use super::*;
 use crate::support::test_subprocess;
 use std::path::Path;
 
-
 use crate::support::test_env::git;
 
 use crate::support::test_env::git_output;

@@ -157,13 +157,7 @@ mod tests {
         dir
     }
 
-    fn write_path(dir: &Path, path: &str, content: &str) {
-        let file = dir.join(path);
-        if let Some(parent) = file.parent() {
-            std::fs::create_dir_all(parent).unwrap();
-        }
-        std::fs::write(file, content).unwrap();
-    }
+    use crate::support::test_repo::write_path;
 
     fn commit_path(dir: &Path, path: &str, content: &str) {
         write_path(dir, path, content);

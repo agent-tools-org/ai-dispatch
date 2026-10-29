@@ -5,8 +5,6 @@
 use super::*;
 use crate::cmd::run::apply_retry_target;
 
-
-
 use std::sync::Arc;
 
 fn isolated_home() -> crate::support::paths::AidHomeGuard {

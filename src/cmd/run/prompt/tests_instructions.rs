@@ -135,7 +135,6 @@ async fn run_auto_retries_after_verify_failure() {
         "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"completion\",\"tokens\":1}'\n",
     );
 
-
     let path_value = OsString::from(format!("{}:/bin:/usr/bin", bin_dir.display()));
     let _path = EnvVarGuard::set("PATH", &path_value);
     let _task_id_guard = EnvVarGuard::remove("AID_TASK_ID");

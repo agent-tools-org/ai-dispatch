@@ -2,7 +2,6 @@
 // Uses isolated Codex configuration, markers and an in-memory store.
 use super::*;
 
-
 struct ConfigGuard;
 impl Drop for ConfigGuard {
     fn drop(&mut self) {

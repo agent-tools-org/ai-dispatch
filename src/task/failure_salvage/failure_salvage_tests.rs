@@ -5,7 +5,6 @@
 use crate::support::paths::{self, AidHomeGuard};
 use crate::store::{Store, TaskCompletionUpdate};
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
-use chrono::Local;
 use std::path::Path;
 use std::process::Command;
 
@@ -57,16 +56,9 @@ fn insert_activity(store: &Store, task_id: &TaskId) {
     }
 }
 
-fn isolated_home() -> (tempfile::TempDir, AidHomeGuard) {
-    let home = tempfile::tempdir().expect("home");
-    let guard = AidHomeGuard::set(home.path());
-    paths::ensure_dirs().expect("dirs");
-    (home, guard)
-}
-
 #[test]
 fn salvage_writes_partial_work_and_commits_dirty_worktree() {
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     std::fs::write(repo.path().join("base.txt"), "changed\n").expect("write");
     std::fs::write(repo.path().join("new.txt"), "new\n").expect("write");
@@ -96,7 +88,7 @@ fn salvage_writes_partial_work_and_commits_dirty_worktree() {
 
 #[test]
 fn salvage_records_file_write_only_activity() {
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     std::fs::write(repo.path().join("base.txt"), "edited\n").expect("write");
     let store = Store::open_memory().expect("store");
@@ -121,7 +113,7 @@ fn salvage_records_file_write_only_activity() {
 
 #[test]
 fn salvage_records_file_read_only_activity() {
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     std::fs::write(repo.path().join("base.txt"), "edited\n").expect("write");
     let store = Store::open_memory().expect("store");
@@ -146,7 +138,7 @@ fn salvage_records_file_read_only_activity() {
 
 #[test]
 fn salvage_noops_when_worktree_is_clean() {
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     let before = git_stdout(repo.path(), &["rev-parse", "HEAD"]);
     let store = Store::open_memory().expect("store");
@@ -162,7 +154,7 @@ fn salvage_noops_when_worktree_is_clean() {
 
 #[test]
 fn salvage_excludes_aid_runtime_files_from_commit() {
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     std::fs::write(repo.path().join("base.txt"), "changed\n").expect("write");
     std::fs::write(repo.path().join(".aid-lock"), "pid=1234\n").expect("write lock");
@@ -191,7 +183,7 @@ fn salvage_excludes_aid_runtime_files_from_commit() {
 
 #[test]
 fn salvage_excludes_aid_directory_from_commit() {
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     std::fs::write(repo.path().join("base.txt"), "changed\n").expect("write");
     std::fs::create_dir_all(repo.path().join(".aid")).expect("mkdir");
@@ -215,7 +207,7 @@ fn salvage_excludes_aid_directory_from_commit() {
 
 #[test]
 fn salvage_error_does_not_change_failed_status() {
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let not_repo = tempfile::tempdir().expect("tempdir");
     let store = Store::open_memory().expect("store");
     let mut task = task("t-salvage-error", Some(not_repo.path().display().to_string()));

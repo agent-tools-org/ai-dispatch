@@ -3,7 +3,6 @@
 
 use super::*;
 
-
 const GROK_ERROR: &str = concat!(
     r#"{"type":"error","message":"Not signed in. To authenticate without a browser, run:"#,
     r#"\n  grok login --device-code"}"#,

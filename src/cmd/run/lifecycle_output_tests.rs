@@ -7,9 +7,6 @@ use crate::store::Store;
 use crate::support::test_subprocess;
 use crate::types::{Task, TaskId, TaskStatus};
 
-
-
-
 use crate::support::test_env::git;
 
 use crate::support::test_env::git_output as git_stdout;

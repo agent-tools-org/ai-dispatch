@@ -118,7 +118,8 @@ impl Store {
     }
 
     pub fn fail_waiting_with_reason(&self, id: &str, detail: &str) -> Result<bool> {
-        let event = TaskEvent::new(TaskId(id.to_string()), EventKind::Error, detail.to_string()).with_metadata(Some(serde_json::json!({ "failure_kind": "wait_timeout" })));
+        let event = TaskEvent::new(TaskId(id.to_string()), EventKind::Error, detail.to_string())
+            .with_metadata(Some(serde_json::json!({ "failure_kind": "wait_timeout" })));
         self.settle_task_status(id, TaskStatus::Failed, Some(&[TaskStatus::Waiting]),
             Some(PendingReason::WaitTimeout), Some(&event))
     }

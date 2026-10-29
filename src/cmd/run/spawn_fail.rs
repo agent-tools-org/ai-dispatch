@@ -1,7 +1,6 @@
 // Terminalize tasks whose agent process never started.
 // Exports: fail_task_on_agent_spawn, insert_phase_error_event.
 // Deps: Store, task lifecycle, event types.
-use chrono::Local;
 use super::{FailureContext, FAST_FAIL_SNAPSHOT_MS};
 use crate::store::{Store, TaskCompletionUpdate};
 use crate::types::{EventKind, TaskEvent, TaskId, TaskStatus};

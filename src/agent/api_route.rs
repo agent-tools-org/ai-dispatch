@@ -184,7 +184,8 @@ fn sweep_unverified_tasks(store: &crate::store::Store, route: &str) -> Result<Op
         }
         let reason = format!("route {route} is not billed to its API key");
         api_budget::hold(route, &reason, false)?;
-        store.insert_event(&TaskEvent::new(task.id.clone(), EventKind::Error, reason.clone()).with_metadata(Some(serde_json::json!({"api_route_unverified_held": true}))))?;
+        store.insert_event(&TaskEvent::new(task.id.clone(), EventKind::Error, reason.clone())
+            .with_metadata(Some(serde_json::json!({"api_route_unverified_held": true}))))?;
         swept = Some(format!("{reason} (task {})", task.id.as_str()));
     }
     Ok(swept)

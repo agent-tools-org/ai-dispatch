@@ -33,12 +33,10 @@ pub(crate) fn seed_prices(cached: Option<f64>) -> (tempfile::TempDir, AidHomeGua
         count: Some(1),
         models: vec![FeedModel {
             id: "component-test-model".to_string(),
-            aliases: vec![],
             input_per_mtok: 1.25,
             output_per_mtok: 10.0,
             cached_input_per_mtok: cached,
-            context_length: None,
-            source: None,
+            ..Default::default()
         }],
     });
     (dir, guard)

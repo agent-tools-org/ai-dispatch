@@ -2,7 +2,6 @@
 // Exports: prepare_worktree_dependencies() and missing_deps_hint().
 // Deps: crate::runtime::process::guard, crate::store, crate::types, std fs/process/path helpers.
 use anyhow::{Context, Result};
-use chrono::Local;
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};

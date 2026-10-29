@@ -14,22 +14,12 @@ pub enum MessageDirection {
     Out,
 }
 
-impl MessageDirection {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::In => "in",
-            Self::Out => "out",
-        }
+super::string_values::string_values!(
+    MessageDirection, as_str(&self), parse_str {
+        In => "in",
+        Out => "out",
     }
-
-    fn parse_str(value: &str) -> Option<Self> {
-        match value {
-            "in" => Some(Self::In),
-            "out" => Some(Self::Out),
-            _ => None,
-        }
-    }
-}
+);
 
 impl TryFrom<&str> for MessageDirection {
     type Error = String;
@@ -48,26 +38,14 @@ pub enum MessageSource {
     AgentAck,
 }
 
-impl MessageSource {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Reply => "reply",
-            Self::Steer => "steer",
-            Self::UnstickAuto => "unstick-auto",
-            Self::AgentAck => "agent-ack",
-        }
+super::string_values::string_values!(
+    MessageSource, as_str(&self), parse_str {
+        Reply => "reply",
+        Steer => "steer",
+        UnstickAuto => "unstick-auto",
+        AgentAck => "agent-ack",
     }
-
-    fn parse_str(value: &str) -> Option<Self> {
-        match value {
-            "reply" => Some(Self::Reply),
-            "steer" => Some(Self::Steer),
-            "unstick-auto" => Some(Self::UnstickAuto),
-            "agent-ack" => Some(Self::AgentAck),
-            _ => None,
-        }
-    }
-}
+);
 
 impl TryFrom<&str> for MessageSource {
     type Error = String;

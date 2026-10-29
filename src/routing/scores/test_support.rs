@@ -28,12 +28,9 @@ pub(crate) fn seed_feed(feed: &Feed) {
             .iter()
             .map(|model| crate::cost::price_feed::FeedModel {
                 id: model.id.clone(),
-                aliases: vec![],
                 input_per_mtok: 1.0,
                 output_per_mtok: 1.0,
-                cached_input_per_mtok: None,
-                context_length: None,
-                source: None,
+                ..Default::default()
             })
             .collect(),
     };

@@ -4,7 +4,6 @@
 
 use super::preserve_shared_checkout;
 
-
 use crate::support::test_env::git_output as git;
 
 fn repo(commit: bool) -> tempfile::TempDir {

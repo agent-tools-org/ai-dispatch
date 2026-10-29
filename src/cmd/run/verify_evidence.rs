@@ -1,7 +1,6 @@
 // Durable verification execution records independent of worker stdout.
 // Stores command, local checkout identity, process status, and bounded output in task events.
 use anyhow::Result;
-use chrono::Local;
 use std::path::Path;
 use std::process::Command;
 
@@ -45,7 +44,8 @@ fn record(
         ),
         None => format!("Verification starting: {command} in {}", dir.display()),
     };
-    store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Milestone, detail).with_metadata(Some(serde_json::json!({
+    store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Milestone, detail)
+        .with_metadata(Some(serde_json::json!({
             "verification": if result.is_some() { "finished" } else { "started" },
             "requested_command": requested,
             "command": command,

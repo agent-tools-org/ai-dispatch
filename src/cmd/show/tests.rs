@@ -5,7 +5,6 @@ use super::show_json::task_json;
 use super::*;
 use crate::cmd::summary::CompletionSummary;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
-use chrono::Local;
 use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
@@ -157,7 +156,9 @@ fn audit_text_shows_full_failure_details() {
         .insert_event(&TaskEvent::new(
             task.id.clone(),
             EventKind::Error,
-            "Failed during execution: agent exited with code 1\nFailure context: working directory: /tmp/demo; agent binary: /bin/sh; worktree path: /Users/test/.aid/worktrees/demo/feat/demo; worktree created: true".to_string(),
+            "Failed during execution: agent exited with code 1\nFailure context: working directory: \
+                /tmp/demo; agent binary: /bin/sh; worktree path: \
+                /Users/test/.aid/worktrees/demo/feat/demo; worktree created: true".to_string(),
         ))
         .unwrap();
 

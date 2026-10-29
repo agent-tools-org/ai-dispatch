@@ -127,8 +127,6 @@ fn audit_records_failure_verdicts() {
     }
 }
 
-
-
 #[test]
 fn audit_respects_timeout() {
     let _guard = env_lock();

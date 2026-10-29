@@ -23,7 +23,6 @@ pub(super) fn effective_max_active(
         .max(1))
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

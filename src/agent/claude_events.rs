@@ -114,7 +114,8 @@ fn parse_system_event(
             v.get("session_id").and_then(|value| value.as_str()),
         );
         let (detail, metadata) = capped_detail_with(&detail, metadata);
-        return Some(TaskEvent::at(task_id.clone(), EventKind::Reasoning, detail, now).with_metadata(metadata));
+        return Some(TaskEvent::at(task_id.clone(), EventKind::Reasoning, detail, now)
+            .with_metadata(metadata));
     }
     if subtype == "hook_response" && v.get("outcome").and_then(|value| value.as_str()) == Some("error")
     {
@@ -164,19 +165,8 @@ fn parse_error_event(
 }
 
 fn base_metadata(model: Option<&str>, session_id: Option<&str>) -> Option<Value> {
-    match (model, session_id) {
-        (None, None) => None,
-        _ => {
-            let mut metadata = json!({});
-            if let Some(model) = model {
-                metadata["model"] = json!(normalize_model(model));
-            }
-            if let Some(session_id) = session_id {
-                metadata["agent_session_id"] = json!(session_id);
-            }
-            Some(metadata)
-        }
-    }
+    let model = model.map(normalize_model);
+    crate::agent::event_metadata::model_session(model.as_deref(), session_id)
 }
 
 #[cfg(test)]

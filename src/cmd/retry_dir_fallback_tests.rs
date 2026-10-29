@@ -9,7 +9,6 @@ use crate::cmd::run::RunArgs;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 
-
 fn task_with(id: &str, effective_dir: Option<String>, repo_path: Option<String>) -> Task {
     Task {
         agent: AgentKind::Kilo,

@@ -4,7 +4,6 @@
     use super::*;
     use crate::types::{TaskId, TaskStatus};
 
-
     fn mk(id: &str, parent: Option<&str>) -> Task {
         mk_group(id, parent, None)
     }

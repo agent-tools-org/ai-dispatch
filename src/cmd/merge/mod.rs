@@ -5,7 +5,6 @@
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskOutcome, TaskStatus, VerifyStatus};
 use anyhow::{Result, anyhow};
-use chrono::Local;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 #[path = "final_branch.rs"]

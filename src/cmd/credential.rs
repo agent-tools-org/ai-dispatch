@@ -61,7 +61,6 @@ mod tests {
 
     use std::fs;
 
-
     const SAMPLE: &str = r#"
 [codex]
 strategy = "round_robin"

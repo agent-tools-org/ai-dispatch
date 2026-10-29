@@ -11,6 +11,7 @@ pub mod cursor;
 pub mod droid;
 pub(crate) mod antigravity_response;
 mod stream_text;
+mod event_metadata;
 pub(crate) mod completion_event;
 pub(crate) mod removed;
 pub mod grok;

@@ -5,7 +5,6 @@ use super::*;
 
 use std::fs;
 
-
 #[test]
 fn loads_tool_from_toml_file() {
     let _temp = crate::support::test_env::TestHome::new();

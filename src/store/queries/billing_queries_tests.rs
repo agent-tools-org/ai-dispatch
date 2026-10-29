@@ -4,7 +4,6 @@
 use super::*;
 use crate::routing::quota::live::CacheDirGuard;
 
-
 fn insert(store: &Store, id: &str, created_at: &str, kind: &str, metadata: &str) {
     store
         .db()

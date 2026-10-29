@@ -7,7 +7,6 @@ use super::super::super::selection_scoring::{
 };
 use super::*;
 
-
 fn testing_advice(difficulty: TaskDifficulty, team: Option<&TeamConfig>) -> AdviceReport {
     advise(
         "add tests",

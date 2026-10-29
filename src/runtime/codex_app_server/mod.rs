@@ -94,7 +94,8 @@ fn failed(args: &Run<'_>, reason: &str) -> Result<CompletionInfo> {
         "{}",
         serde_json::json!({"type":"error","message":message})
     )?;
-    args.store.insert_agent_event(&TaskEvent::new(args.task.clone(), EventKind::Error, detail).with_metadata(metadata))?;
+    args.store.insert_agent_event(&TaskEvent::new(args.task.clone(), EventKind::Error, detail)
+        .with_metadata(metadata))?;
     for message in args.store.pending_inbound_for_task(args.task.as_str())? {
         if matches!(
             receipt(args.store, args.task.as_str(), message.id),

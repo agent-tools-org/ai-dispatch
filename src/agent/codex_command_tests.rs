@@ -4,16 +4,10 @@
 use super::CodexAgent;
 use crate::agent::{Agent, RunOpts};
 
-pub(super) fn test_opts() -> RunOpts {
-    RunOpts {
-        ..Default::default()
-    }
-}
-
 #[test]
 fn fix_round_one_read_only_uses_one_permission_mechanism_for_fresh_and_resume() {
     for session in [None, Some("saved-session".to_string())] {
-        let opts = RunOpts { read_only: true, session_id: session, ..test_opts() };
+        let opts = RunOpts { read_only: true, session_id: session, ..RunOpts::default() };
         let cmd = CodexAgent.build_command_with_context("audit", &opts,
             crate::agent::CommandContext { durable_codex_home: false, writable_roots: vec![] }).unwrap();
         let args: Vec<_> = cmd.get_args().map(|arg| arg.to_string_lossy()).collect();
@@ -27,7 +21,7 @@ fn fix_round_one_read_only_uses_one_permission_mechanism_for_fresh_and_resume() 
 #[test]
 fn fix_round_one_write_policy_is_explicit_for_fresh_and_resume() {
     for session in [None, Some("saved-session".to_string())] {
-        let opts = RunOpts { session_id: session, ..test_opts() };
+        let opts = RunOpts { session_id: session, ..RunOpts::default() };
         let cmd = CodexAgent.build_command_with_context("write", &opts,
             crate::agent::CommandContext { durable_codex_home: false, writable_roots: vec![] }).unwrap();
         assert!(cmd.get_args().any(|arg| arg == "default_permissions=\"aid-write\""));

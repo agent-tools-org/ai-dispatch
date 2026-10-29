@@ -6,7 +6,6 @@ use crate::runtime::background::{BackgroundRunSpec, save_spec};
 use crate::store::Store;
 
 use crate::types::{AgentKind, TaskStatus};
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::super::batch_helpers::batch_summary;

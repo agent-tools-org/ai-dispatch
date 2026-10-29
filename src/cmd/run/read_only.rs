@@ -13,7 +13,8 @@ pub(in crate::cmd::run) fn capture_baseline(store: &Store, task_id: &TaskId, dir
     if !is_git_directory(dir)? {
         let detail = format!("Warning: read-only enforcement unavailable in {dir}: not a git repository. Enforcement covers Git run directories only.");
         aid_warn!("[aid] {detail}");
-        store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Setup, detail).with_metadata(Some(serde_json::json!({"warning": true}))))?;
+        store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Setup, detail)
+            .with_metadata(Some(serde_json::json!({"warning": true}))))?;
         return Ok(None);
     }
     Ok(Some(crate::workspace::worktree::capture_worktree_snapshot(Path::new(dir))?.read_only_state(Path::new(dir))?))
@@ -76,7 +77,8 @@ fn record_concurrent_change(
          changed paths: {}.", paths.join(", "),
     );
     aid_warn!("[aid] {detail}");
-    store.insert_event(&TaskEvent::new(task.clone(), EventKind::Setup, detail).with_metadata(Some(serde_json::json!({
+    store.insert_event(&TaskEvent::new(task.clone(), EventKind::Setup, detail)
+        .with_metadata(Some(serde_json::json!({
             "warning": "read_only_concurrent_change", "input_stability": "unknown",
             "baseline_head": baseline_head, "current_head": current_head, "changed_paths": paths,
         }))))

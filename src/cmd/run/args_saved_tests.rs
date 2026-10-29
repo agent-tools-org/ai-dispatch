@@ -2,17 +2,12 @@
 // Every saved RunArgs field must reach the worker; env values are never persisted.
 use super::args_retry_tests::{every_field_set, assert_every_field_differs_from_default};
 use super::RunArgs;
-use crate::agent::classifier::TaskCategory;
-use crate::agent::model_validation::ModelSource;
 use crate::runtime::background::{load_spec_if_exists, save_spec, BackgroundRunSpec};
 use crate::store::Store;
-use crate::config::timeout_policy::TimeoutPolicy;
 use crate::types::*;
 
 use serde_json::{json, Value};
-use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 #[test]
 fn worker_rebuild_keeps_every_saved_field() {

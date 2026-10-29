@@ -6,7 +6,6 @@ use super::tests::task_fixture;
 use super::*;
 use crate::cmd::run::RunArgs;
 use crate::types::TaskStatus;
-use std::sync::Arc;
 
 fn request_result_file(store: &Store, task_id: &str) {
     let args = RunArgs { result_file: Some(format!("result-{task_id}.md")), ..Default::default() };

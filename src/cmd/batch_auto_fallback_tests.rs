@@ -2,7 +2,6 @@
 // Covers one-shot retry gating and fallback agent resolution from stored tasks.
 // Deps: crate::cmd::batch, crate::store::Store, crate::types.
 
-
 use tempfile::TempDir;
 
 use super::batch::{

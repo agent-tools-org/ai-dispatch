@@ -1,7 +1,6 @@
 // Verify and retry helpers for `aid run`.
 // Exports verification execution and verify-driven retry logic.
 use anyhow::Result;
-use chrono::Local;
 use std::sync::Arc;
 
 use crate::cmd::checklist_scan;
@@ -15,7 +14,7 @@ mod outcome;
 #[path = "verify_evidence.rs"]
 mod evidence;
 
-pub(in crate::cmd) fn maybe_verify_impl(
+pub(crate) fn maybe_verify(
     store: &Store,
     task_id: &TaskId,
     verify: Option<&str>,
@@ -162,7 +161,7 @@ fn verify_output_suggests_missing_deps(output: &str) -> bool {
     .any(|needle| lower.contains(needle))
 }
 
-pub(in crate::cmd) async fn maybe_auto_retry_after_verify_failure_impl(
+pub(crate) async fn maybe_auto_retry_after_verify_failure(
     store: &Arc<Store>,
     task_id: &TaskId,
     args: &RunArgs,
@@ -200,7 +199,7 @@ pub(in crate::cmd) async fn maybe_auto_retry_after_verify_failure_impl(
     Box::pin(super::super::run(store.clone(), retry_args)).await.map(Some)
 }
 
-pub(in crate::cmd) async fn maybe_auto_retry_after_checklist_miss_impl(
+pub(crate) async fn maybe_auto_retry_after_checklist_miss(
     store: &Arc<Store>,
     task_id: &TaskId,
     args: &super::RunArgs,

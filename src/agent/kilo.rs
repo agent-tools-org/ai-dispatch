@@ -30,12 +30,6 @@ mod tests {
     use crate::{routing::rate_limit};
     use crate::types::{EventKind, TaskId};
 
-    fn base_opts() -> RunOpts {
-        RunOpts {
-            ..Default::default()
-        }
-    }
-
     fn args_of(prompt: &str, opts: &RunOpts) -> Vec<String> {
         agent()
             .build_command(prompt, opts)
@@ -47,7 +41,7 @@ mod tests {
 
     #[test]
     fn build_command_uses_kilo_binary_and_auto_flag() {
-        let cmd = agent().build_command("test prompt", &base_opts()).unwrap();
+        let cmd = agent().build_command("test prompt", &RunOpts::default()).unwrap();
         assert_eq!(cmd.get_program().to_string_lossy(), "kilo");
         let args: Vec<String> = crate::support::test_command::args(&cmd);
         assert_eq!(args.first().map(String::as_str), Some("run"));
@@ -64,7 +58,7 @@ mod tests {
             context_files: vec!["src/main.rs".to_string()],
             dir: Some("/tmp/wt".to_string()),
             budget: true,
-            ..base_opts()
+            ..RunOpts::default()
         };
         let cmd = agent().build_command("test", &opts).unwrap();
         assert_eq!(cmd.get_current_dir().unwrap(), std::path::Path::new("/tmp/wt"));
@@ -78,7 +72,7 @@ mod tests {
 
     #[test]
     fn build_command_read_only_prefixes_prompt() {
-        let opts = RunOpts { read_only: true, ..base_opts() };
+        let opts = RunOpts { read_only: true, ..RunOpts::default() };
         let args = args_of("inspect", &opts);
         let last_arg = args.last().expect("should have prompt as last arg");
         assert!(last_arg.contains("Do NOT modify, create, or delete any files."));

@@ -3,7 +3,6 @@
 // Covers both directions: error envelope → Failed, success log → Done.
 
 use std::process::Stdio;
-use std::sync::Arc;
 
 use crate::agent::claude::ClaudeAgent;
 use crate::agent::commandcode::CommandCodeAgent;
@@ -11,7 +10,6 @@ use crate::agent::cursor::CursorAgent;
 use crate::types::AgentKind;
 use crate::agent::Agent;
 
-use crate::store::Store;
 use crate::types::TaskStatus;
 
 use super::streaming_tests::insert_running_task;
@@ -218,7 +216,7 @@ fn opencode_fix_preserves_claude_and_codex_final_totals() {
         let mut info = crate::types::CompletionInfo {
             tokens: Some(1),
             cost_usd: Some(1.0),
-            ..CompletionInfo::new(TaskStatus::Done)
+            ..crate::types::CompletionInfo::new(TaskStatus::Done)
         };
         let event = agent.parse_event(&task_id, line).unwrap();
         for _ in 0..2 {

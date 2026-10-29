@@ -181,6 +181,7 @@ pub struct Workgroup {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(Default))]
 pub struct Finding {
     pub id: i64,
     pub workgroup_id: String,
@@ -207,8 +208,6 @@ pub struct TaskEvent {
     pub detail: String,
     pub metadata: Option<serde_json::Value>,
 }
-
-
 
 #[derive(Debug, Clone, Copy)]
 pub enum TaskFilter {

@@ -90,7 +90,6 @@ mod tests {
     use crate::ui::tui::route_display::format_route_fit;
     use crate::types::{Task, TaskId, TaskStatus};
 
-
     fn base_task() -> Task {
         Task {
             prompt: "p".to_string(),

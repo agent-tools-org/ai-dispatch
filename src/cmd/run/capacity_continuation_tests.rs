@@ -120,7 +120,8 @@ fn provider_capacity_regression_never_selects_automatic_advice_fallback() {
 }
 
 fn seed_stdout(store: &Store, id: &TaskId, raw: &str) {
-    store.insert_event(&TaskEvent::new(id.clone(), EventKind::Error, CAPACITY.into()).with_metadata(Some(serde_json::json!({"provider_stdout": raw})))).expect("stdout event");
+    store.insert_event(&TaskEvent::new(id.clone(), EventKind::Error, CAPACITY.into())
+        .with_metadata(Some(serde_json::json!({"provider_stdout": raw})))).expect("stdout event");
 }
 
 async fn continue_capacity(store: &Arc<Store>, args: &RunArgs, id: &TaskId) -> Result<Option<TaskId>> {

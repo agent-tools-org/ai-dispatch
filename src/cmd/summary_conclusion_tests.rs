@@ -4,7 +4,6 @@
 use super::{extract_conclusion, extract_last_log_message};
 use crate::types::{Task, TaskId, TaskStatus};
 
-
 #[test]
 fn extracts_copilot_message_after_tool_boundary() {
     let log = concat!(

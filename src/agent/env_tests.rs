@@ -249,5 +249,4 @@ fn durable_codex_home_is_disabled_for_isolated_wrappers() {
     assert!(!should_use_durable_codex_home(AgentKind::Claude, false, false));
 }
 
-
 use crate::support::test_command::env as command_env;

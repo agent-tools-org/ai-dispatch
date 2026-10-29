@@ -5,37 +5,17 @@ use super::super::Agent;
 use super::*;
 use crate::types::{EventKind, TaskId};
 
-fn base_opts() -> RunOpts {
-    RunOpts {
-        ..Default::default()
-    }
-}
-
 fn base_config(command: &str) -> CustomAgentConfig {
     CustomAgentConfig {
         id: "custom".into(),
         display_name: "Custom Agent".into(),
         command: command.into(),
         prompt_mode: default_prompt_mode(),
-        prompt_flag: String::new(),
-        dir_flag: String::new(),
-        model_flag: String::new(),
-        output_flag: String::new(),
-        fixed_args: Vec::new(),
-        streaming: false,
         interactive_input: default_interactive_input(),
         output_format: default_output_format(),
         capabilities: CapabilityScores::default(),
         trust_tier: default_trust_tier(),
-        base_url: None,
-        provider: None,
-        metering: None,
-        strengths: Vec::new(),
-        delegate_to: None,
-        forced_model: None,
-        binary: None,
-        extra_args: Vec::new(),
-        rate_limit_kind: None,
+        ..Default::default()
     }
 }
 
@@ -95,7 +75,7 @@ fn build_command_with_arg_mode() {
     let mut config = base_config("agent-cli");
     config.fixed_args.push("--yes".into());
     let agent = CustomAgent { config };
-    let cmd = agent.build_command("ask", &base_opts()).unwrap();
+    let cmd = agent.build_command("ask", &RunOpts::default()).unwrap();
     let args: Vec<_> = crate::support::test_command::args(&cmd);
     assert_eq!(args, vec!["--yes", "ask"]);
 }
@@ -108,7 +88,7 @@ fn build_command_with_flag_mode() {
     config.fixed_args.push("--ready".into());
     let agent = CustomAgent { config };
     let args: Vec<_> = agent
-        .build_command("prompt", &base_opts())
+        .build_command("prompt", &RunOpts::default())
         .unwrap()
         .get_args()
         .map(|arg| arg.to_string_lossy().into_owned())
@@ -142,7 +122,7 @@ fn build_command_read_only_prepends_warning_to_prompt() {
     let agent = CustomAgent {
         config: base_config("agent-cli"),
     };
-    let mut opts = base_opts();
+    let mut opts = RunOpts::default();
     opts.read_only = true;
     let cmd = agent.build_command("ask", &opts).unwrap();
     let args: Vec<_> = crate::support::test_command::args(&cmd);
@@ -155,7 +135,7 @@ fn build_command_read_only_with_result_file_uses_exception_text() {
     let agent = CustomAgent {
         config: base_config("agent-cli"),
     };
-    let mut opts = base_opts();
+    let mut opts = RunOpts::default();
     opts.read_only = true;
     opts.result_file = Some("result.md".into());
     let cmd = agent.build_command("audit", &opts).unwrap();
@@ -172,7 +152,7 @@ fn build_command_normal_mode_does_not_mutate_prompt() {
     let agent = CustomAgent {
         config: base_config("agent-cli"),
     };
-    let cmd = agent.build_command("hello", &base_opts()).unwrap();
+    let cmd = agent.build_command("hello", &RunOpts::default()).unwrap();
     let args: Vec<_> = crate::support::test_command::args(&cmd);
     assert_eq!(args, vec!["hello"]);
 }
@@ -181,7 +161,7 @@ fn build_command_normal_mode_does_not_mutate_prompt() {
 fn build_command_with_dir() {
     let mut config = base_config("agent-cli");
     config.dir_flag = "--dir".into();
-    let mut opts = base_opts();
+    let mut opts = RunOpts::default();
     opts.dir = Some("/tmp/work".into());
     let cmd = CustomAgent { config }
         .build_command("prompt", &opts)

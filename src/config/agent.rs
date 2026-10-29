@@ -135,7 +135,6 @@ impl AgentDefaults {
 mod tests {
     use super::*;
 
-
     #[test]
     fn save_and_load_default_model_roundtrip() {
         let _dir = crate::support::test_env::TestHome::new();

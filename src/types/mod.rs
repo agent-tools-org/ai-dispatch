@@ -21,6 +21,7 @@ mod task;
 mod event_retention;
 mod task_profile;
 mod memory;
+mod string_values;
 pub(crate) mod outcome;
 
 pub use self::agent::AgentKind;

@@ -48,7 +48,6 @@ mod tests {
 
     use crate::types::{TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
 
-
     fn profile() -> DeclaredTaskProfile {
         DeclaredTaskProfile {
             difficulty: TaskDifficulty::Moderate, budget: TaskBudget::Standard,

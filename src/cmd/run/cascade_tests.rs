@@ -6,9 +6,6 @@ use super::{run_lifecycle::inherit_cascade_target, RunArgs};
 use crate::support::test_subprocess;
 use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
 
-
-
-
 use crate::support::test_env::git;
 
 fn init_repo() -> tempfile::TempDir {

@@ -248,7 +248,8 @@ pub(super) fn record_prompt_omissions(store: &Store, task_id: &str, omissions: &
         return Ok(());
     }
     let detail = format!("Prompt context bounded: {}", omissions.join("; "));
-    store.insert_event(&TaskEvent::new(TaskId(task_id.to_string()), EventKind::Setup, detail.clone()).with_metadata(Some(serde_json::json!({"type": "prompt_context_bounded", "omissions": omissions}))))?;
+    store.insert_event(&TaskEvent::new(TaskId(task_id.to_string()), EventKind::Setup, detail.clone())
+        .with_metadata(Some(serde_json::json!({"type": "prompt_context_bounded", "omissions": omissions}))))?;
     aid_warn!("[aid] Warning: {detail}");
     Ok(())
 }

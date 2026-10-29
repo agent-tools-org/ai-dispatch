@@ -108,8 +108,6 @@ mod tests {
     use super::capture_live_worktree_state;
     use crate::support::test_subprocess;
 
-
-
     use crate::support::test_env::git;
 
     fn repo() -> tempfile::TempDir {

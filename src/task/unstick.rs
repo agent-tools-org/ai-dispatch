@@ -35,7 +35,6 @@ pub fn mark_task_stalled(store: &Store, task_id: &str) -> Result<bool> {
 #[cfg(test)]
 mod tests {
 
-
     use super::*;
     use crate::store::Store;
     use crate::types::{Task, TaskId};

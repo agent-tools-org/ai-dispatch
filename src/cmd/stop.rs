@@ -2,7 +2,6 @@
 // Records stopped before signalling, then preserves output and releases task resources.
 
 use anyhow::{anyhow, bail, Result};
-use chrono::Local;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

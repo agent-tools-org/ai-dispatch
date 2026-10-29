@@ -4,7 +4,6 @@ use super::*;
 use crate::agent::claude::ClaudeAgent;
 
 use std::process::Stdio;
-use std::sync::Arc;
 
 fn insert_task(store: &Store, task: &TaskId) {
     store.db().execute(

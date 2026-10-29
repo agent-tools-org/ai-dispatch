@@ -3,7 +3,6 @@
 // Deps: super and chrono.
 
 use super::*;
-use chrono::Local;
 
 fn sample_task(agent: AgentKind, custom_agent_name: Option<&str>) -> Task {
     Task {
@@ -201,7 +200,6 @@ fn resumable_agents_report_session_support() {
     }
 }
 
-
 #[test]
 fn event_kind_parse_or_warn_falls_back_and_warns_once() {
     assert_eq!(EventKind::parse_or_warn("tool_call"), EventKind::ToolCall);
@@ -225,7 +223,8 @@ fn task_event_full_detail_prefers_metadata_full() {
 
 #[test]
 fn trimmed_event_readers_explain_missing_output() {
-    let event = TaskEvent::new(TaskId("t-trimmed".into()), EventKind::Build, "build output".into()).with_metadata(Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})));
+    let event = TaskEvent::new(TaskId("t-trimmed".into()), EventKind::Build, "build output".into())
+        .with_metadata(Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})));
     assert!(event.trimmed_note().is_some());
     assert_eq!(event.full_detail(), "build output [full output trimmed]");
     assert_eq!(event.display_detail(), "build output [full output trimmed]");

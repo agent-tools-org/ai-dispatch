@@ -4,7 +4,6 @@
 
 use super::*;
 use crate::types::{verify_required, TaskOutcome};
-use std::sync::Arc;
 
 #[test]
 fn configured_verification_is_pending_when_dispatch_inserts_task() {

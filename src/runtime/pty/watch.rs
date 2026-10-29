@@ -2,7 +2,6 @@
 // Owns chunk parsing, prompt detection, input forwarding, and completion finalization.
 
 use anyhow::Result;
-use chrono::Local;
 use serde_json::json;
 use std::collections::HashSet;
 use std::io::Write;

@@ -5,7 +5,6 @@ use super::*;
 use crate::support::test_subprocess;
 
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
 
 use crate::support::test_env::git;

@@ -4,9 +4,6 @@
 
 use super::*;
 
-
-
-
 use crate::support::test_env::git;
 
 fn init_repo() -> tempfile::TempDir {

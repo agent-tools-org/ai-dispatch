@@ -106,7 +106,6 @@ mod tests {
     use crate::types::{
         AgentKind, AttributionSource, TaskId, TaskStatus, };
 
-
     fn sample(agent: AgentKind) -> Task {
         Task {
             agent,

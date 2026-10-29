@@ -2,9 +2,7 @@
 // Covers transcript path wiring and transcript-first autosave behavior.
 // Deps: parent run test helpers, paths, Store, tempfile.
 use super::{auto_save_task_output, make_failed_task, paths};
-use crate::store::Store;
 use crate::types::TaskStatus;
-
 
 #[test]
 fn transcript_path_helper_works() {

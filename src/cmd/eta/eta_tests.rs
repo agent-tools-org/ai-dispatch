@@ -24,35 +24,27 @@ fn make_task(
     }
 }
 
-fn isolated_store() -> (TempDir, AidHomeGuard, Store) {
-    let temp = TempDir::new().unwrap();
-    let guard = AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
-    (temp, guard, store)
+fn insert_history(store: &Store, now: DateTime<Local>, count: usize) {
+    for (id, minutes_ago, duration_ms) in [
+        ("t-done-1", 10, 120_000),
+        ("t-done-2", 20, 180_000),
+        ("t-done-3", 30, 240_000),
+    ].into_iter().take(count) {
+        store.insert_task(&make_task(
+            id,
+            AgentKind::Codex,
+            TaskStatus::Done,
+            now - Duration::minutes(minutes_ago),
+            Some(duration_ms),
+        )).unwrap();
+    }
 }
 
 #[test]
 fn estimate_eta_returns_none_without_history() {
-    let (_temp, _guard, store) = isolated_store();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let now = Local::now();
-    store
-        .insert_task(&make_task(
-            "t-done-1",
-            AgentKind::Codex,
-            TaskStatus::Done,
-            now - Duration::minutes(10),
-            Some(120_000),
-        ))
-        .unwrap();
-    store
-        .insert_task(&make_task(
-            "t-done-2",
-            AgentKind::Codex,
-            TaskStatus::Done,
-            now - Duration::minutes(20),
-            Some(180_000),
-        ))
-        .unwrap();
+    insert_history(&store, now, 2);
 
     let running = make_task(
         "t-run",
@@ -67,23 +59,9 @@ fn estimate_eta_returns_none_without_history() {
 
 #[test]
 fn estimate_eta_returns_remaining_time() {
-    let (_temp, _guard, store) = isolated_store();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let now = Local::now();
-    for (id, minutes_ago, duration_ms) in [
-        ("t-done-1", 10, 120_000),
-        ("t-done-2", 20, 180_000),
-        ("t-done-3", 30, 240_000),
-    ] {
-        store
-            .insert_task(&make_task(
-                id,
-                AgentKind::Codex,
-                TaskStatus::Done,
-                now - Duration::minutes(minutes_ago),
-                Some(duration_ms),
-            ))
-            .unwrap();
-    }
+    insert_history(&store, now, 3);
 
     let running = make_task(
         "t-run",
@@ -103,23 +81,9 @@ fn progress_reports_percentage_and_caps_at_99() {
         ("test_estimate_progress_caps_at_99", 240, 99),
     ] {
         eprintln!("case: {case}");
-        let (_temp, _guard, store) = isolated_store();
+        let (_temp, store) = crate::support::test_env::TestHome::new().store();
         let now = Local::now();
-        for (id, minutes_ago, duration_ms) in [
-            ("t-done-1", 10, 120_000),
-            ("t-done-2", 20, 180_000),
-            ("t-done-3", 30, 240_000),
-        ] {
-            store
-                .insert_task(&make_task(
-                    id,
-                    AgentKind::Codex,
-                    TaskStatus::Done,
-                    now - Duration::minutes(minutes_ago),
-                    Some(duration_ms),
-                ))
-                .unwrap();
-        }
+        insert_history(&store, now, 3);
 
         let running = make_task(
             "t-run",
@@ -133,30 +97,11 @@ fn progress_reports_percentage_and_caps_at_99() {
     }
 }
 
-
-
 #[test]
 fn test_estimate_progress_returns_none_without_history() {
-    let (_temp, _guard, store) = isolated_store();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let now = Local::now();
-    store
-        .insert_task(&make_task(
-            "t-done-1",
-            AgentKind::Codex,
-            TaskStatus::Done,
-            now - Duration::minutes(10),
-            Some(120_000),
-        ))
-        .unwrap();
-    store
-        .insert_task(&make_task(
-            "t-done-2",
-            AgentKind::Codex,
-            TaskStatus::Done,
-            now - Duration::minutes(20),
-            Some(180_000),
-        ))
-        .unwrap();
+    insert_history(&store, now, 2);
 
     let running = make_task(
         "t-run",

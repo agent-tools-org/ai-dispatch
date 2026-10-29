@@ -250,7 +250,6 @@ fn verify_kills_background_grandchildren() {
         "#!/bin/sh\nsleep 30 &\nchild_pid=$!\necho \"$child_pid\"\nexit 0\n",
     );
 
-
     let result = run_verify(dir.path(), script.to_str(), None, None).unwrap();
     assert!(result.success);
     let pid = result.output.trim().parse::<i32>().unwrap();

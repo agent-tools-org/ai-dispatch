@@ -3,7 +3,6 @@
 
 use super::*;
 
-
 #[test]
 fn opencode_structured_401_sets_auth_marker_refusal_regression() {
     let _home = crate::support::test_env::TestHome::new();

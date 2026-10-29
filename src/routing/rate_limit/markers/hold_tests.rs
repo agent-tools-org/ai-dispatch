@@ -2,7 +2,6 @@
 // Uses real marker entry points and isolated state without an operator Codex home.
 use super::*;
 
-
 #[test]
 fn dateless_provider_refusal_writes_manual_hold_while_default_keeps_its_clock() {
     let home = crate::support::test_env::TestHome::new();

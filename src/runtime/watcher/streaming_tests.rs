@@ -9,9 +9,7 @@ use std::sync::Arc;
 use crate::agent::{Agent, RunOpts};
 use crate::store::Store;
 use crate::support::paths;
-use crate::types::{
-    AgentKind, CompletionInfo, EventKind, Task, TaskEvent, TaskId, TaskStatus, };
-
+use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus};
 
 use super::watch_streaming;
 

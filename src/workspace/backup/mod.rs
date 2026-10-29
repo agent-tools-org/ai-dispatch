@@ -136,5 +136,6 @@ fn record_success(store: &Store, task_id: &str, target: &str, backup: &BackupRef
 fn warn(store: &Store, task_id: &str, err: &anyhow::Error) {
     let detail = format!("Backup failed: {err:#}");
     eprintln!("[aid] {task_id}: {detail}");
-    let _ = store.insert_event(&TaskEvent::new(TaskId(task_id.to_string()), EventKind::Milestone, detail).with_metadata(Some(serde_json::json!({"backup": "failed"}))));
+    let _ = store.insert_event(&TaskEvent::new(TaskId(task_id.to_string()), EventKind::Milestone, detail)
+        .with_metadata(Some(serde_json::json!({"backup": "failed"}))));
 }

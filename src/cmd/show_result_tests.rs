@@ -5,7 +5,6 @@ use crate::cmd::show::read_task_output;
 use crate::support::paths::AidHomeGuard;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 
-
 fn task(id: &str) -> Task {
     Task {
         category: Some("research".to_string()),

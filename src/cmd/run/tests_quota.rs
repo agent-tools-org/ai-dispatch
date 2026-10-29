@@ -232,5 +232,3 @@ fn terminal_failure_preserves_worktree_changes() {
         assert_eq!(std::fs::read_to_string(wt_dir.join(changed_file)).unwrap(), contents);
     }
 }
-
-

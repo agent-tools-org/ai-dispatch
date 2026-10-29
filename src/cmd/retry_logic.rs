@@ -87,8 +87,6 @@ fn backoff_for_attempt(attempt: u32) -> u64 {
 mod tests {
     use super::*;
 
-
-
     fn task(id: &str) -> Task {
         crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Failed)
     }

@@ -2,7 +2,6 @@
 // Probes the `grok` binary specifically — not the generic `agent` name.
 
 use anyhow::{Result, bail};
-use chrono::Local;
 use serde_json::{Value, json};
 use std::path::Path;
 use std::process::Command;
@@ -255,7 +254,8 @@ pub fn make_completion_event(task_id: &TaskId, info: &CompletionInfo) -> TaskEve
         metadata["cost_usd"] = json!(cost_usd);
         has_fields = true;
     }
-    TaskEvent::new(task_id.clone(), EventKind::Completion, detail).with_metadata(has_fields.then_some(metadata))
+    TaskEvent::new(task_id.clone(), EventKind::Completion, detail)
+        .with_metadata(has_fields.then_some(metadata))
 }
 
 #[cfg(test)]

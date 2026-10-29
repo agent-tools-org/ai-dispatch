@@ -9,12 +9,6 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
 
-fn isolated_home() -> (tempfile::TempDir, AidHomeGuard) {
-    let temp = tempfile::tempdir().unwrap();
-    let guard = AidHomeGuard::set(temp.path());
-    (temp, guard)
-}
-
 fn done_task(id: &str, dir: &str, parent_task_id: Option<&str>) -> Task {
     Task {
         prompt: "Write code".to_string(),
@@ -83,7 +77,7 @@ async fn eval_success_on_first_try_returns_none() {
 
 #[tokio::test]
 async fn eval_failure_retries_with_feedback_output() {
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let temp = tempfile::tempdir().unwrap();
     init_git_repo(temp.path());
@@ -161,7 +155,7 @@ async fn max_iterations_reached_stops_retrying() {
 
 #[tokio::test]
 async fn feedback_template_placeholders_are_replaced() {
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().unwrap());
     let temp = tempfile::tempdir().unwrap();
     init_git_repo(temp.path());

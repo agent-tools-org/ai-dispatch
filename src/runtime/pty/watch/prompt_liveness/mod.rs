@@ -6,7 +6,6 @@ use super::{MonitorState, extract_awaiting_prompt, mark_awaiting_input};
 use crate::store::Store;
 use crate::types::{EventKind, TaskEvent, TaskId};
 use anyhow::Result;
-use chrono::Local;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Instant;

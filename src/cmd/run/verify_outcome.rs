@@ -2,8 +2,6 @@
 // Exports: nothing_to_verify_reason, record_verify_timed_out.
 // Deps: chrono, store, types, verify.
 
-use chrono::Local;
-
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId};
 use crate::task::verify::VerifyResult;

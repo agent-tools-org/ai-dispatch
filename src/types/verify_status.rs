@@ -35,32 +35,19 @@ impl VerifyStatus {
         Self::Unobserved,
     ];
 
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Pending => "pending",
-            Self::Passed => "passed",
-            Self::Failed => "failed",
-            Self::Skipped => "skipped",
-            Self::TimedOut => "timed_out",
-            Self::InfrastructureFailure => "infrastructure_failure",
-            Self::Unobserved => "unobserved",
-        }
-    }
-
-    pub fn parse_str(s: &str) -> Option<Self> {
-        match s {
-            "pending" => Some(Self::Pending),
-            "passed" => Some(Self::Passed),
-            "failed" => Some(Self::Failed),
-            "skipped" => Some(Self::Skipped),
-            "timed_out" => Some(Self::TimedOut),
-            "infrastructure_failure" => Some(Self::InfrastructureFailure),
-            "unobserved" => Some(Self::Unobserved),
-            _ => None,
-        }
-    }
-
 }
+
+super::string_values::string_values!(
+    VerifyStatus, as_str(&self), pub parse_str {
+        Pending => "pending",
+        Passed => "passed",
+        Failed => "failed",
+        Skipped => "skipped",
+        TimedOut => "timed_out",
+        InfrastructureFailure => "infrastructure_failure",
+        Unobserved => "unobserved",
+    }
+);
 
 #[cfg(test)]
 mod tests {

@@ -6,7 +6,6 @@ use super::*;
 use crate::store::Store;
 use crate::support::test_subprocess;
 
-
 use std::path::Path;
 
 use tempfile::TempDir;

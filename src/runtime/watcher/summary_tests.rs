@@ -54,8 +54,6 @@ fn cost_ceiling_only_triggers_above_limit() {
     assert!(!exceeds_cost_ceiling(Some(1.0), None));
 }
 
-
-
 /// The live false positive of 2026-08-07 at the call site that produced it.
 ///
 /// A cursor audit task quoted `src/agent/cursor_tests.rs:142` into its report.

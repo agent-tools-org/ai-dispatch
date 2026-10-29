@@ -2,8 +2,6 @@
 // Exports: none.
 // Deps: web handlers, background specs, Store, and task fixtures.
 
-use std::sync::Arc;
-
 use axum::extract::{Path, Query, State};
 use axum::Json;
 
@@ -11,7 +9,6 @@ use super::api::get_task;
 use super::api_tests::make_task;
 use super::fleet::{FleetParams, ServerInfo, get_fleet};
 use crate::runtime::background::{BackgroundRunSpec, save_spec};
-use crate::store::Store;
 use crate::types::{AttributionSource, TaskStatus};
 
 #[tokio::test(flavor = "current_thread")]

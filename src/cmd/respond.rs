@@ -39,7 +39,6 @@ mod tests {
     use crate::store::Store;
     use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 
-
     fn make_task(id: &str, agent: AgentKind) -> Task {
         Task { agent,
             prompt: "test".to_string(),

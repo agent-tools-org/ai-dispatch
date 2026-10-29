@@ -6,7 +6,6 @@ use super::*;
 use crate::store::Store;
 use crate::types::{Task, TaskId, TaskStatus};
 
-use serde_json::json;
 use std::path::Path;
 use std::sync::Arc;
 

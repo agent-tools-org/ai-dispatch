@@ -149,7 +149,8 @@ fn parse_tool_error(task_id: &TaskId, value: &Value, now: chrono::DateTime<Local
 
 fn parse_model_update(task_id: &TaskId, value: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {
     let model = value.pointer("/data/model").and_then(Value::as_str)?;
-    Some(TaskEvent::at(task_id.clone(), EventKind::Milestone, format!("model: {model}"), now).with_metadata(Some(json!({ "model": model }))))
+    Some(TaskEvent::at(task_id.clone(), EventKind::Milestone, format!("model: {model}"), now)
+        .with_metadata(Some(json!({ "model": model }))))
 }
 
 fn parse_session_error(

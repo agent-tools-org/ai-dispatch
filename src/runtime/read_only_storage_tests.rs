@@ -106,7 +106,8 @@ fn older_database_initializes_private_table_without_trusting_event_provenance() 
     let id = task(&store, true);
     let proof = profile(&command(repo.path(), scratch.path(), false)).unwrap();
     store
-        .insert_event(&TaskEvent::new(id.clone(), EventKind::Setup, "Read-only launch provenance".into()).with_metadata(Some(serde_json::json!({
+        .insert_event(&TaskEvent::new(id.clone(), EventKind::Setup, "Read-only launch provenance".into())
+            .with_metadata(Some(serde_json::json!({
                 "read_only_launch": {"transport": "exec", "profile": proof},
             }))))
         .unwrap();

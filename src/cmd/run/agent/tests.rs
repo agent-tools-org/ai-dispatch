@@ -3,7 +3,6 @@
 
 use crate::store::Store;
 use crate::types::{Task, TaskId, TaskStatus};
-use chrono::Local;
 use std::path::Path;
 
 fn task_fixture(id: &str, status: TaskStatus, worktree_path: Option<&str>) -> Task {

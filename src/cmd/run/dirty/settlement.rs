@@ -15,7 +15,8 @@ pub(super) fn preserve_shared_checkout(
                 checkpoint.reference, checkpoint.commit, checkpoint.reference,
             );
             aid_info!("[aid] {detail}");
-            store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Milestone, detail).with_metadata(Some(serde_json::json!({
+            store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Milestone, detail)
+                .with_metadata(Some(serde_json::json!({
                     "recovery_ref": checkpoint.reference,
                     "recovery_commit": checkpoint.commit,
                     "shared_checkout": true,

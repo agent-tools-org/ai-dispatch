@@ -82,7 +82,6 @@ impl super::Agent for CommandCodeAgent {
     }
 }
 
-
 pub(crate) fn parse_commandcode_completion(output: &str) -> CompletionInfo {
     let mut info = CompletionInfo::new(TaskStatus::Failed);
     let mut saw_result = false;

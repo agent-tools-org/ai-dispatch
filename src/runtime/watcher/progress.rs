@@ -1,8 +1,6 @@
 // Watcher helpers for synthetic milestones and final-delivery NoOp events.
 // Exports tracker types shared by watcher flows and PTY monitoring.
 
-use chrono::Local;
-
 use crate::types::{EventKind, TaskEvent, TaskId};
 
 const SYNTHETIC_PROGRESS_WINDOW: usize = 10;
@@ -74,7 +72,8 @@ impl SyntheticMilestoneTracker {
             }
         }?;
 
-        Some(TaskEvent::new(task_id.clone(), EventKind::Milestone, detail).with_metadata(Some(serde_json::json!({ "synthetic": true }))))
+        Some(TaskEvent::new(task_id.clone(), EventKind::Milestone, detail)
+            .with_metadata(Some(serde_json::json!({ "synthetic": true }))))
     }
 
     fn tool_kind(detail: &str) -> SyntheticToolKind {

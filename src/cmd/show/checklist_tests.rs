@@ -4,7 +4,6 @@ use crate::cmd::show_checklist::{extract_checklist_from_prompt, render_checklist
 use crate::store::Store;
 use crate::types::{Task, TaskId, TaskStatus};
 
-
 fn sample_block(items: &[&str]) -> String {
     let mut lines = vec![
         "<aid-checklist>".to_string(),

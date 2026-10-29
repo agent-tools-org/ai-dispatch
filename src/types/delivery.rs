@@ -12,22 +12,6 @@ pub enum DeliveryAssessment {
 }
 
 impl DeliveryAssessment {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::EmptyDiff => "empty_diff",
-            Self::HollowOutput => "hollow_output",
-            Self::MissingFinalDelivery => "missing_final_delivery",
-        }
-    }
-
-    pub fn parse_str(value: &str) -> Option<Self> {
-        match value {
-            "empty_diff" => Some(Self::EmptyDiff),
-            "hollow_output" => Some(Self::HollowOutput),
-            "missing_final_delivery" => Some(Self::MissingFinalDelivery),
-            _ => None,
-        }
-    }
 
     pub fn implies_no_changes(self) -> bool {
         matches!(
@@ -36,3 +20,11 @@ impl DeliveryAssessment {
         )
     }
 }
+
+super::string_values::string_values!(
+    DeliveryAssessment, as_str(&self), pub parse_str {
+        EmptyDiff => "empty_diff",
+        HollowOutput => "hollow_output",
+        MissingFinalDelivery => "missing_final_delivery",
+    }
+);

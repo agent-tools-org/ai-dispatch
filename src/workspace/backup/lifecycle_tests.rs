@@ -7,7 +7,6 @@ use super::*;
 use crate::support::paths::AidHomeGuard;
 use crate::store::Store;
 use crate::types::{Task, TaskId, TaskStatus};
-use chrono::Local;
 use std::fs;
 use std::path::Path;
 

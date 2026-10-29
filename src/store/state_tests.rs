@@ -10,7 +10,7 @@ use chrono::{Duration, Local};
 use tempfile::TempDir;
 
 use crate::store::state::{
-    compute_state, format_state_summary_in, load_state_in, refresh_project_state_in,
+    compute_state, format_state_summary_for_project, refresh_project_state_in,
     save_state_in, ContextState, HealthState, PerformanceState, ProjectState,
 };
 use crate::store::{Store, TaskCompletionUpdate};
@@ -25,7 +25,10 @@ fn state_path_and_roundtrip_use_project_aid_dir() {
     let state = sample_state();
     save_state_in(&state, &nested).unwrap();
     assert!(dir.path().join("repo/.aid/state.toml").is_file());
-    assert_eq!(load_state_in(&nested).unwrap(), Some(state));
+    let saved: ProjectState = toml::from_str(
+        &fs::read_to_string(dir.path().join("repo/.aid/state.toml")).unwrap(),
+    ).unwrap();
+    assert_eq!(saved, state);
 }
 
 #[test]
@@ -144,7 +147,9 @@ fn refresh_project_state_writes_state_after_completion_update() {
 
     refresh_project_state_in(&store, &task.id, dir.path());
 
-    let state = load_state_in(dir.path()).unwrap().unwrap();
+    let state: ProjectState = toml::from_str(
+        &fs::read_to_string(dir.path().join(".aid/state.toml")).unwrap(),
+    ).unwrap();
     assert_eq!(state.context.last_task_id.as_deref(), Some("t-refresh"));
     assert_eq!(state.health.total_tasks, 1);
 }
@@ -170,15 +175,12 @@ fn refresh_project_state_skips_tasks_without_repo_path() {
 
     refresh_project_state_in(&store, &task.id, dir.path());
 
-    assert_eq!(load_state_in(dir.path()).unwrap(), None);
+    assert!(!dir.path().join(".aid/state.toml").exists());
 }
 
 #[test]
 fn summary_formats_key_lines() {
-    let dir = TempDir::new().unwrap();
-    fs::create_dir_all(dir.path().join(".aid")).unwrap();
-    fs::write(dir.path().join(".aid/project.toml"), "[project]\nid = \"alpha\"\n").unwrap();
-    let summary = format_state_summary_in(&sample_state(), dir.path());
+    let summary = format_state_summary_for_project(&sample_state(), "alpha");
     assert!(summary.contains("[Project State: alpha]"));
     assert!(summary.contains("Health: 94% success (47/50 recent), verify: passed"));
     assert!(summary.contains("Best agents: codex (92%), grok (88%)"));

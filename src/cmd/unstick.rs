@@ -3,7 +3,6 @@
 // Deps: crate::cmd::reply, crate::store::Store, crate::task::unstick helpers.
 
 use anyhow::{Result, anyhow, bail};
-use chrono::Local;
 
 use crate::runtime::background;
 use crate::cmd::reply::{self, InputCommand};
@@ -65,7 +64,6 @@ fn require_running_task(store: &Store, task_id: &str) -> Result<crate::types::Ta
 
 #[cfg(test)]
 mod tests {
-
 
     use super::{ESCALATED_EVENT_DETAIL, run};
     use crate::runtime::background::{self, BackgroundRunSpec};

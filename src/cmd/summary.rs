@@ -185,7 +185,8 @@ mod tests {
     fn format_sibling_summaries_renders_list() {
         let summaries = vec![
             CompletionSummary { task_id: "t-1".into(), agent: "codex".into(), status: "done".into(), files_changed: vec!["src/a.rs".into()], summary_text: "...".into(), conclusion: "Implemented retry logic.".into(), duration_secs: Some(60), token_count: None },
-            CompletionSummary { task_id: "t-2".into(), agent: "grok".into(), status: "done".into(), summary_text: "...".into(),
+            CompletionSummary { task_id: "t-2".into(), agent: "grok".into(), status: "done".into(),
+                summary_text: "...".into(),
                 ..Default::default()
             },
         ];

@@ -52,17 +52,7 @@ fn parse_system_event(
     let detail = model
         .map(|model| format!("{subtype}: {model}"))
         .unwrap_or_else(|| subtype.to_string());
-    let metadata = match (model, session_id) {
-        (None, None) => None,
-        _ => {
-            let mut metadata = json!({});
-            if let Some(model) = model { metadata["model"] = json!(model); }
-            if let Some(session_id) = session_id {
-                metadata["agent_session_id"] = json!(session_id);
-            }
-            Some(metadata)
-        }
-    };
+    let metadata = crate::agent::event_metadata::model_session(model, session_id);
     (EventKind::Reasoning, detail, metadata)
 }
 

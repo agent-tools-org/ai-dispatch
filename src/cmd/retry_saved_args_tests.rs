@@ -10,7 +10,6 @@ use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-
 use crate::support::test_env::git;
 
 fn linked_worktree(branch: &str) -> (tempfile::TempDir, tempfile::TempDir, PathBuf) {
@@ -182,7 +181,6 @@ fn retry_refuses_persisted_worktree_that_equals_repo_path() {
 
     assert!(err.to_string().contains("recorded worktree path"));
 }
-
 
 #[test]
 fn retry_cleaned_worktree_preserves_saved_dir_and_recreates_branch() {

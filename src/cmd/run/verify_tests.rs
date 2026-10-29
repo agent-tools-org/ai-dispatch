@@ -57,7 +57,7 @@ fn maybe_verify_records_missing_deps_hint_for_fresh_worktree() {
         .insert_task(&make_task("t-verify-hint", &worktree_str))
         .unwrap();
 
-    maybe_verify_impl(
+    maybe_verify(
         &store,
         &TaskId("t-verify-hint".to_string()),
         Some(&format!("sh {}", script.display())),
@@ -84,7 +84,7 @@ fn maybe_verify_reports_stale_worktree_when_dir_is_missing() {
     task.verify_status = VerifyStatus::Skipped;
     store.insert_task(&task).unwrap();
 
-    maybe_verify_impl(
+    maybe_verify(
         &store,
         &task_id,
         Some("auto"),
@@ -225,7 +225,7 @@ fn infrastructure_diagnostic_survives_long_output_in_show_and_board() {
     ));
     let command = format!("PATH='{}:/usr/bin:/bin' rbox exec box", bin.display());
     assert!(command.len() > 200);
-    maybe_verify_impl(&store, &task.id, Some(&command), Some(&dir), None);
+    maybe_verify(&store, &task.id, Some(&command), Some(&dir), None);
     let task = store.get_task(task.id.as_str()).expect("load").expect("task");
     assert_eq!(task.status, TaskStatus::Done);
     assert_eq!(task.verify_status, VerifyStatus::InfrastructureFailure);
@@ -244,7 +244,7 @@ fn local_verify_with_anchored_rbox_output_stays_failed() {
     store.insert_task(&task).expect("task");
     assert!(RunArgs::saved_for_task(&store, task.id.as_str()).expect("args").is_none());
     let command = "printf 'rbox: Box lock not acquired within 60 s\\n'; exit 1";
-    maybe_verify_impl(&store, &task.id, Some(command), Some(&dir), None);
+    maybe_verify(&store, &task.id, Some(command), Some(&dir), None);
     let task = store.get_task(task.id.as_str()).expect("load").expect("task");
     assert_eq!(task.verify_status, VerifyStatus::Failed);
     assert_eq!(task.status, TaskStatus::Failed);

@@ -8,7 +8,6 @@ use crate::store::Store;
 use crate::types::EventKind;
 use std::sync::Arc;
 
-
 #[path = "fixture.rs"]
 mod fixture;
 pub(super) use fixture::make_task;
@@ -79,7 +78,6 @@ fn kill_waiting_task_sets_stopped() {
 #[test]
 fn stop_attempts_agent_cleanup_when_agent_pid_exists() {
     use crate::runtime::background::{BackgroundRunSpec, save_spec};
-
 
     let (_temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task = make_task("t-3010", TaskStatus::Running);

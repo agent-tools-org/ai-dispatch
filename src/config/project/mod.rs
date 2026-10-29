@@ -216,7 +216,6 @@ fn parse_budget_shorthand(value: &str) -> Result<ProjectBudget, String> {
     })
 }
 
-
 pub fn detect_project() -> Option<ProjectConfig> {
     let cwd = env::current_dir().ok()?;
     detect_project_in(&cwd)

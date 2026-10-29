@@ -136,7 +136,6 @@ fn read_answer(task_id: &TaskId, capture_path: &Path) -> Result<String> {
 mod tests {
     use super::*;
 
-
     #[test]
     fn prepare_request_defaults_to_agy() {
         let _dir = crate::support::test_env::TestHome::new();

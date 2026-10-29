@@ -7,7 +7,6 @@ use crate::cmd::run::RunArgs;
 use crate::store::Store;
 use crate::types::{Task, TaskBudget, TaskDifficulty, TaskId, TaskProfileDeclaration, TaskStatus};
 
-
 struct EnvGuard {
     key: &'static str,
     previous: Option<String>,

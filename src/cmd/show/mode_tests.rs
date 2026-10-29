@@ -4,7 +4,6 @@
 use super::*;
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
-use chrono::Local;
 use serde_json::json;
 use std::sync::Arc;
 

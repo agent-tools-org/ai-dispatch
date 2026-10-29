@@ -5,11 +5,7 @@ use super::watch_buffered;
 use crate::agent::antigravity::AntigravityAgent;
 use crate::support::paths;
 use crate::routing::rate_limit;
-use crate::store::Store;
 use crate::types::{AgentKind, EventKind, Task, TaskId, TaskStatus};
-
-use std::process::Stdio;
-use std::sync::Arc;
 
 fn buffered_task(id: &str) -> Task {
     Task {

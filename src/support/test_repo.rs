@@ -28,3 +28,11 @@ pub(crate) fn unique_name(prefix: &str) -> String {
         SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
     )
 }
+
+pub(crate) fn write_path(dir: &Path, path: &str, content: &str) {
+    let file = dir.join(path);
+    if let Some(parent) = file.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
+    std::fs::write(file, content).unwrap();
+}

@@ -82,17 +82,8 @@ fn includes_findings_from_investigation() {
         workgroup_id: "wg-1".to_string(),
         content: "gamma can be zero".to_string(),
         source_task_id: Some("t-100".to_string()),
-        severity: None,
-        title: None,
-        file: None,
-        lines: None,
-        category: None,
-        confidence: None,
-        verdict: None,
-        score: None,
-        note: None,
         created_at: Local::now(),
-        updated_at: None,
+        ..Default::default()
     }];
     let prompt = compose_prompt("investigate", None, None, &[], &findings).text;
     assert!(prompt.contains("[Shared Findings]"));
@@ -107,17 +98,8 @@ fn finding_content_truncated_at_500() {
         workgroup_id: "wg-1".to_string(),
         content: long,
         source_task_id: Some("t-100".to_string()),
-        severity: None,
-        title: None,
-        file: None,
-        lines: None,
-        category: None,
-        confidence: None,
-        verdict: None,
-        score: None,
-        note: None,
         created_at: Local::now(),
-        updated_at: None,
+        ..Default::default()
     }];
 
     let prompt = compose_prompt("investigate", None, None, &[], &findings).text;
@@ -143,17 +125,8 @@ fn short_finding_unchanged() {
         workgroup_id: "wg-1".to_string(),
         content: "short finding".to_string(),
         source_task_id: Some("t-100".to_string()),
-        severity: None,
-        title: None,
-        file: None,
-        lines: None,
-        category: None,
-        confidence: None,
-        verdict: None,
-        score: None,
-        note: None,
         created_at: Local::now(),
-        updated_at: None,
+        ..Default::default()
     }];
 
     let prompt = compose_prompt("investigate", None, None, &[], &findings).text;

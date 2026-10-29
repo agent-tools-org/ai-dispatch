@@ -71,7 +71,8 @@ impl super::Agent for OzAgent {
                     return None;
                 }
                 let (detail, metadata) = capped_detail(text);
-                Some(TaskEvent::at(task_id.clone(), EventKind::Reasoning, detail, now).with_metadata(metadata))
+                Some(TaskEvent::at(task_id.clone(), EventKind::Reasoning, detail, now)
+                    .with_metadata(metadata))
             }
             "tool_call" => {
                 let (event_kind, detail, metadata) = parse_tool_call(&v);

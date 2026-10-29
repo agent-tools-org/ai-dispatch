@@ -6,7 +6,6 @@ use super::run_lifecycle::record_missing_report;
 use super::run_prompt::ResultDelivery;
 use crate::store::Store;
 use crate::types::{DeliveryAssessment, EventKind, Task, TaskEvent, TaskId, TaskStatus};
-use chrono::Local;
 
 fn task(id: &str, status: TaskStatus) -> Task {
     crate::types::Task::test_fixture(TaskId(id.to_string()), status)

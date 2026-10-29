@@ -282,7 +282,6 @@ mod tests {
             .any(|pair| pair == ["-e", "CARGO_TARGET_DIR=/tmp/cache/_base"]));
     }
 
-
 }
 
 #[cfg(test)]

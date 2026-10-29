@@ -2,7 +2,6 @@
 // Exports: make_completion_event. Deps: task types, chrono, serde_json.
 
 use crate::types::{CompletionInfo, EventKind, TaskEvent, TaskId};
-use chrono::Local;
 use serde_json::json;
 
 pub fn make_completion_event(task_id: &TaskId, info: &CompletionInfo) -> TaskEvent {

@@ -119,7 +119,6 @@ fn find_model_unavailable_json_error(content: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Local;
 
     fn failed_task(id: &str) -> Task {
         crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Failed)

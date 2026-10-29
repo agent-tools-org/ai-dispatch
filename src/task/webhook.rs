@@ -102,7 +102,6 @@ mod tests {
     use crate::config::WebhookConfig;
     use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
 
-
     #[test]
     fn webhook_payload_adds_outcome_and_verification_status() {
         let task = Task {

@@ -156,8 +156,6 @@ mod tests {
 
     use crate::types::{Task, TaskId, TaskStatus};
 
-
-
     fn make_task(id: &str, group_id: &str, status: TaskStatus) -> Task {
         Task {
             workgroup_id: Some(group_id.to_string()),

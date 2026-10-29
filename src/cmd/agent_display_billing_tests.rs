@@ -4,7 +4,6 @@
 use super::*;
 use crate::routing::quota::live::CacheDirGuard;
 
-
 #[test]
 fn billing_states_replace_ok_in_quota_rows() {
     let temp = crate::support::test_env::TestHome::new();

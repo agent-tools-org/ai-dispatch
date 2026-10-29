@@ -5,12 +5,9 @@ use super::watch_buffered;
 use crate::agent::{Agent, RunOpts};
 use crate::support::paths;
 use crate::routing::rate_limit;
-use crate::store::Store;
-use crate::types::{
-    AgentKind, CompletionInfo, Task, TaskEvent, TaskId, TaskStatus, };
+use crate::types::{AgentKind, Task, TaskEvent, TaskId, TaskStatus};
 
-use std::process::{Command, Stdio};
-use std::sync::Arc;
+use std::process::{Command};
 
 struct BufferedTestAgent;
 

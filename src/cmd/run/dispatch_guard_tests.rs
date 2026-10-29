@@ -5,9 +5,6 @@ use super::*;
 
 use crate::types::{TaskId, TaskStatus};
 
-
-use std::time::{SystemTime, UNIX_EPOCH};
-
 fn task_with_branch(id: &str, branch: Option<&str>) -> Task {
     Task { worktree_branch: branch.map(str::to_string),
         ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Pending)

@@ -188,8 +188,6 @@ fn measure_skill_tokens_includes_gotchas_and_script_listing() {
     assert_eq!(tokens, expected);
 }
 
-
-
 #[test]
 fn estimate_tokens_uses_length_divided_by_four() {
     assert_eq!(estimate_tokens("abcd"), 1);

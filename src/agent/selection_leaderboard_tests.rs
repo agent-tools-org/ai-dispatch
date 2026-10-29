@@ -42,7 +42,6 @@ fn leaderboard_alias_resolution_is_shared_and_unmapped_models_are_unrated() {
     );
 }
 
-
 #[test]
 fn leaderboard_uses_configured_codex_effort_for_exact_harness() {
     use crate::agent::classifier::TaskCategory;

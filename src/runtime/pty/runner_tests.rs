@@ -4,10 +4,7 @@
 use super::run_agent_process_with_control;
 use crate::agent::get_agent;
 use crate::support::paths;
-use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus};
-
-use std::sync::Arc;
 
 #[test]
 fn run_agent_process_marks_task_failed_when_spawn_fails() {

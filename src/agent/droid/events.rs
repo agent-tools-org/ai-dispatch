@@ -46,7 +46,8 @@ fn parse_session_forked(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local
         Some(parent_id) if !parent_id.is_empty() => format!("forked {new_id} from {parent_id}"),
         _ => format!("forked {new_id}"),
     };
-    Some(TaskEvent::at(task_id.clone(), EventKind::Milestone, detail, now).with_metadata(Some(json!({ "agent_session_id": new_id }))))
+    Some(TaskEvent::at(task_id.clone(), EventKind::Milestone, detail, now)
+        .with_metadata(Some(json!({ "agent_session_id": new_id }))))
 }
 
 fn parse_error_event(task_id: &TaskId, v: &Value, now: chrono::DateTime<Local>) -> Option<TaskEvent> {

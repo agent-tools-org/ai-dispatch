@@ -102,7 +102,6 @@ fn stderr_drain_waits_for_file_io_after_child_exit() {
     });
 }
 
-
 #[tokio::test]
 async fn stderr_drain_times_out_continuously_ready_reader() {
     let temp = tempfile::tempdir().unwrap();
@@ -118,7 +117,6 @@ async fn stderr_drain_times_out_continuously_ready_reader() {
     assert!(drained.is_ok(), "ready stderr reads starved the drain deadline");
     assert!(std::fs::metadata(stderr_path).unwrap().len() > 0);
 }
-
 
 struct ReadyStderr;
 

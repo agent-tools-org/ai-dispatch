@@ -7,7 +7,6 @@ use crate::types::*;
 
 use std::env;
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
 
 use crate::support::test_env::git;

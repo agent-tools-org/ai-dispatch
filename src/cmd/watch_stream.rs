@@ -161,7 +161,6 @@ fn elapsed_secs(task: &Task) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Local;
     use crate::store::Store;
     use crate::types::{TaskId, VerifyStatus};
 

@@ -4,7 +4,6 @@ use super::*;
 use crate::agent::Agent;
 use crate::routing::{availability, rate_limit};
 
-
 #[test]
 fn google_only_refusals_do_not_hold_qwen() {
     let _home = crate::support::test_env::TestHome::new();

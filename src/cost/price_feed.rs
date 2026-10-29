@@ -23,6 +23,7 @@ const MAX_SERVER_AGE: i64 = 24 * 60 * 60;
 
 /// A canonical priced model from the feed.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[cfg_attr(test, derive(Default))]
 pub struct FeedModel {
     pub id: String,
     #[serde(default)]
@@ -116,7 +117,6 @@ pub fn maybe_refresh() {
 mod tests {
     use super::*;
 
-
     fn sample_feed() -> Feed {
         Feed {
             built_at: Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
@@ -129,18 +129,15 @@ mod tests {
                     aliases: vec!["gpt-5.3-codex-high".to_string()],
                     input_per_mtok: 1.75,
                     output_per_mtok: 14.0,
-                    cached_input_per_mtok: None,
-                    context_length: None,
                     source: Some("openrouter".to_string()),
+                    ..Default::default()
                 },
                 FeedModel {
                     id: "gpt-5.6-sol".to_string(),
-                    aliases: vec![],
                     input_per_mtok: 5.0,
                     output_per_mtok: 30.0,
-                    cached_input_per_mtok: None,
-                    context_length: None,
                     source: Some("openrouter".to_string()),
+                    ..Default::default()
                 },
             ],
         }

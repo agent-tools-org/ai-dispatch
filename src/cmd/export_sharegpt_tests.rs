@@ -5,8 +5,6 @@ use super::{ShareGptRecord, export_sharegpt};
 use crate::support::paths::{self};
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
-use chrono::Local;
-
 
 #[test]
 fn prompt_preservation_matches_show_and_sharegpt_stored_context() {

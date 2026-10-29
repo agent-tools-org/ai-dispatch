@@ -6,7 +6,6 @@ use crate::store::Store;
 use crate::types::{AgentKind, TaskStatus, TaskUrgency};
 use std::sync::Arc;
 
-
 #[tokio::test]
 async fn dry_run_returns_without_starting_task() {
     let (_temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();

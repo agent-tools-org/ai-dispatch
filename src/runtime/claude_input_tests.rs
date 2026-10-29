@@ -4,7 +4,6 @@ use super::*;
 use crate::agent::{Agent, RunOpts, claude::ClaudeAgent};
 
 use std::process::Stdio;
-use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 fn task(store: &Store) -> TaskId {

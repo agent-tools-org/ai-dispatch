@@ -86,39 +86,6 @@ fn git_without_toml_uses_path_based_id_shared_by_worktree() {
 }
 
 #[test]
-fn retain_project_keeps_unattributed_bucket_explicit() {
-    use crate::types::{Task, TaskId, TaskStatus};
-
-
-    fn task(id: &str, project_id: Option<&str>) -> Task {
-        Task {
-            prompt: "p".into(),
-            project_id: project_id.map(str::to_string),
-            ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
-        }
-    }
-
-    let mut tasks = vec![
-        task("t-a", Some("ai-dispatch")),
-        task("t-u", None),
-        task("t-b", Some("other")),
-    ];
-    retain_project(&mut tasks, Some("ai-dispatch"));
-    assert_eq!(tasks.len(), 1);
-    assert_eq!(tasks[0].id.as_str(), "t-a");
-
-    let mut tasks = vec![
-        task("t-a", Some("ai-dispatch")),
-        task("t-u", None),
-        task("t-b", Some("other")),
-    ];
-    retain_project(&mut tasks, None);
-    assert_eq!(tasks.len(), 1);
-    assert_eq!(tasks[0].id.as_str(), "t-u");
-    assert!(tasks[0].project_id.is_none());
-}
-
-#[test]
 fn project_filter_banner_marks_active_filter() {
     let current = project_filter_banner(Some("ai-dispatch"), false);
     assert!(current.contains("project:ai-dispatch"));

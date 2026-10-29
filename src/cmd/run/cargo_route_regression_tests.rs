@@ -5,7 +5,6 @@
 use super::maybe_verify;
 use crate::{store::Store, types::{Task, TaskId, TaskStatus, VerifyStatus}};
 
-
 fn task(id: &str, dir: &str) -> Task {
     Task {
         worktree_path: Some(dir.to_string()),

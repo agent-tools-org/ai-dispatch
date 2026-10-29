@@ -63,7 +63,7 @@ fn read_only_command_grants_only_supplied_task_and_scratch_directories_on_resume
         dir: Some(repo.to_string_lossy().into_owned()),
         read_only: true,
         session_id: Some("saved-session".into()),
-        ..super::command_tests::test_opts()
+        ..crate::agent::RunOpts::default()
     };
     let cmd = CodexAgent.build_command_with_context("audit", &opts, CommandContext {
         durable_codex_home: false,

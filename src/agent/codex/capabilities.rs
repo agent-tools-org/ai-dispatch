@@ -165,9 +165,8 @@ mod tests {
     fn failed_help_probe_does_not_block_a_known_version() {
         let runner = |_program: &str, _args: &[&str]| {
             Ok(CliCommandOutput {
-                success: false,
-                stdout: String::new(),
                 stderr: "unsupported".to_string(),
+                ..Default::default()
             })
         };
 

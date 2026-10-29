@@ -162,7 +162,6 @@ mod tests {
     use super::*;
 
     use crate::types::{TaskId, TaskStatus};
-    use chrono::Local;
 
     fn task(id: &str) -> Task {
         crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)

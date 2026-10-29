@@ -31,7 +31,6 @@ fn retry_preservation_manual_retry_of_retry_keeps_all_feedback() {
     assert!(!args.prompt.contains("Injected launch context"));
 }
 
-
 #[test]
 fn retry_preservation_keeps_long_feedback_first_and_whole_on_codex_resume() {
     let store = Store::open_memory().unwrap();

@@ -5,7 +5,6 @@ use crate::config::AidConfig;
 use crate::store::Store;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 
-
 use crate::cost::usage_report::render_usage;
 
 pub(super) fn make_task(id: &str, agent: AgentKind, tokens: i64, cost_usd: f64) -> Task {

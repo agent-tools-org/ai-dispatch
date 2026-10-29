@@ -8,7 +8,6 @@ use chrono::{Duration, Local};
 
 use crate::store::Store;
 use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
-use std::sync::Arc;
 
 #[test]
 fn long_running_warning_counts_running_tasks_older_than_one_hour() {

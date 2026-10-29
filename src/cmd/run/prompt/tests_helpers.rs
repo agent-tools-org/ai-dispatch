@@ -227,7 +227,7 @@ fn build_prompt_bundle_includes_shared_dir_instruction_when_env_is_set() {
 
 #[test]
 fn fill_empty_output_from_log_preserves_existing_content() {
-    for (initial, log, expected) in [
+    for (log_content, initial_output, expected) in [
         (
             "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"human-readable output\"}\n",
             "",
@@ -239,15 +239,14 @@ fn fill_empty_output_from_log_preserves_existing_content() {
             "existing",
         ),
     ] {
-        eprintln!("case: {:?}", (initial, log, expected));
         let log = tempfile::NamedTempFile::new().unwrap();
         let output = tempfile::NamedTempFile::new().unwrap();
         std::fs::write(
             log.path(),
-            initial,
+            log_content,
         )
         .unwrap();
-        std::fs::write(output.path(), log).unwrap();
+        std::fs::write(output.path(), initial_output).unwrap();
 
         fill_empty_output_from_log(log.path(), Some(output.path()), None).unwrap();
 
@@ -257,5 +256,3 @@ fn fill_empty_output_from_log_preserves_existing_content() {
         );
     }
 }
-
-

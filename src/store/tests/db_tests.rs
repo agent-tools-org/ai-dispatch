@@ -9,4 +9,3 @@ fn optimize_for_concurrency_supports_in_memory_db() {
     let conn = rusqlite::Connection::open_in_memory().unwrap();
     optimize_for_concurrency(&conn).unwrap();
 }
-

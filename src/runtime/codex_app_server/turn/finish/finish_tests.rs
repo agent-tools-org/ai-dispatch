@@ -114,11 +114,8 @@ fn requests_requiring_credentials_fail_clearly_without_fallback() {
 
 #[test]
 fn terminal_success_preserves_protocol_and_shutdown_errors() {
-    for (mode) in [
-        ("corrupt-final"),
-        ("exit-final"),
-    ] {
-        eprintln!("case: {:?}", (mode));
+    for mode in ["corrupt-final", "exit-final"] {
+        eprintln!("case: {mode}");
         let fixture = Fixture::new(mode);
         fixture.dispatch();
         assert_eq!(
@@ -132,5 +129,3 @@ fn terminal_success_preserves_protocol_and_shutdown_errors() {
         );
     }
 }
-
-

@@ -3,7 +3,6 @@
 //! Deps: serde, toml, serde_json, chrono, std::process::Command, crate::types.
 
 use anyhow::Result;
-use chrono::Local;
 use serde::Deserialize;
 use serde_json::Value;
 use std::process::Command;
@@ -18,6 +17,7 @@ pub struct CustomAgentFile {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(test, derive(Default))]
 pub struct CustomAgentConfig {
     pub id: String,
     pub display_name: String,

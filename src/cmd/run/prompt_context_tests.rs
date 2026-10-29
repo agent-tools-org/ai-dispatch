@@ -49,21 +49,9 @@ fn make_entry(topic: &str, path: Option<&str>, description: &str, content: Optio
 
 fn make_memory_with_age(id: &str, memory_type: MemoryType, content: &str, age: chrono::Duration) -> Memory {
     Memory {
-        id: MemoryId(id.to_string()),
         memory_type,
-        tier: MemoryTier::OnDemand,
-        content: content.to_string(),
-        source_task_id: None,
-        agent: None,
-        project_path: Some("/test-project".to_string()),
-        content_hash: format!("hash-{id}"),
         created_at: Local::now() - age,
-        expires_at: None,
-        supersedes: None,
-        version: 1,
-        inject_count: 0,
-        last_injected_at: None,
-        success_count: 0,
+        ..make_memory(id, MemoryTier::OnDemand, content, Some("/test-project".to_string()))
     }
 }
 
@@ -86,7 +74,6 @@ fn make_memory(id: &str, tier: MemoryTier, content: &str, project_path: Option<S
         success_count: 0,
     }
 }
-
 
 #[path = "prompt_context_tests_selection.rs"]
 mod selection;

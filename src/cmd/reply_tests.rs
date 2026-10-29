@@ -3,11 +3,8 @@
 
 use std::time::Duration;
 
-
-
 use super::{InputCommand, ReplyOutcome, run, run_with_hook, run_with_hook_and_sleep};
 
-use crate::store::Store;
 use crate::types::{AgentKind, MessageSource, Task, TaskId, TaskStatus};
 
 fn make_task(id: &str, status: TaskStatus) -> Task {

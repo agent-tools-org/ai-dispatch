@@ -20,13 +20,7 @@ fn init_repo() -> tempfile::TempDir {
     dir
 }
 
-fn write_path(dir: &Path, path: &str, content: &str) {
-    let file = dir.join(path);
-    if let Some(parent) = file.parent() {
-        std::fs::create_dir_all(parent).unwrap();
-    }
-    std::fs::write(file, content).unwrap();
-}
+use crate::support::test_repo::write_path;
 
 fn prompt_bundle() -> PromptBundle {
     PromptBundle { effective_prompt: "prompt".to_string(),

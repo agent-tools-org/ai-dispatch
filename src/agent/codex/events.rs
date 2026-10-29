@@ -89,7 +89,8 @@ pub(super) fn parse_turn_completed(
     };
 
     let cost_usd = v.get("cost_usd").and_then(|c| c.as_f64());
-    Some(TaskEvent::at(task_id.clone(), EventKind::Completion, detail, now).with_metadata(Some(completion_metadata(
+    Some(TaskEvent::at(task_id.clone(), EventKind::Completion, detail, now)
+        .with_metadata(Some(completion_metadata(
             total_tokens,
             input_tokens,
             output_tokens,
@@ -127,7 +128,8 @@ pub(super) fn parse_thread_started(
     if let Some(model) = v.get("model").and_then(Value::as_str) {
         metadata["model"] = json!(model);
     }
-    Some(TaskEvent::at(task_id.clone(), EventKind::Milestone, format!("session {}", thread_id), now).with_metadata(Some(metadata)))
+    Some(TaskEvent::at(task_id.clone(), EventKind::Milestone, format!("session {}", thread_id), now)
+        .with_metadata(Some(metadata)))
 }
 
 fn parse_file_change_event(

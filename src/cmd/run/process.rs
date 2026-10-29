@@ -1,6 +1,5 @@
 // Agent process lifecycle: spawn, watch, completion update, retry branch helpers.
 use anyhow::Result;
-use chrono::Local;
 use std::sync::Arc;
 use tokio::process::Command;
 
@@ -108,7 +107,6 @@ pub(crate) fn record_execution_failure(store: &Store, task_id: &TaskId, duration
         insert_fast_fail_snapshot_event(store, task_id, duration_ms, exit_code, context);
     }
 }
-
 
 fn compact_excerpt(text: &str, max_chars: usize) -> String {
     let text = text.trim();

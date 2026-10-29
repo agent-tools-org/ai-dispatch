@@ -6,7 +6,6 @@ use super::{SyntheticMilestoneTracker, parse_milestone_event};
 use crate::agent::Agent;
 
 use crate::types::{AgentKind, CompletionInfo, EventKind, Task, TaskEvent, TaskId, TaskStatus};
-use chrono::Local;
 
 fn tracker_event(kind: EventKind, detail: &str) -> TaskEvent {
     TaskEvent::new(TaskId("t-synth".to_string()), kind, detail.to_string())

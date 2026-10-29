@@ -14,7 +14,7 @@ fn write_temp(content: &str) -> NamedTempFile {
 
 #[test]
 fn renamed_timeout_fields_have_clear_errors() {
-    for (case, config, value_2) in [
+    for (case, config, context) in [
         (
             "renamed_defaults_timeout_has_clear_error",
             "[defaults]\ntimeout = 30\n\n[[tasks]]\nagent = \"codex\"\nprompt = \"test\"\n",
@@ -38,10 +38,6 @@ fn renamed_timeout_fields_have_clear_errors() {
         let err = parse_batch_file(path.path()).unwrap_err().to_string();
         assert!(err.contains("timeout"));
         assert!(err.contains("max_duration_mins"));
-        assert!(err.contains(value_2));
+        assert!(err.contains(context));
     }
 }
-
-
-
-

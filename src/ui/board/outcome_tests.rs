@@ -3,11 +3,7 @@
 // Deps: board::render_board, Store, and task outcome types.
 
 use super::render_board;
-use chrono::Local;
 
-
-
-use crate::store::Store;
 use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
 
 fn timed_out_task() -> Task {

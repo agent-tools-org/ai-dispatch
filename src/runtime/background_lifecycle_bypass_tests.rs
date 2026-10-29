@@ -4,13 +4,11 @@
 
 use super::{BackgroundRunSpec, handle_run_task_inner_error};
 use crate::cmd::run::RunArgs;
-use crate::store::Store;
 use crate::support::paths;
 use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 

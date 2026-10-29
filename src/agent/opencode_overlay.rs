@@ -162,4 +162,3 @@ impl Agent for OpenCodeOverlayAgent {
 #[cfg(test)]
 #[path = "opencode_overlay_tests.rs"]
 mod tests;
-

@@ -59,7 +59,7 @@ fn finish_stop(store: &Store, id: &str, task: &Task, label: &str, signalled: boo
         preserve_worktree(id, &task, label);
         capture_final_worktree_state(store, &task.id)?;
         if let Some(path) = &task.worktree_path {
-            crate::workspace::worktree::clear_worktree_lock(Path::new(path), id)?;
+            crate::workspace::worktree::clear_worktree_lock(Path::new(path), id).map_err(anyhow::Error::msg)?;
         }
     }
     // Never remove a live worker's barrier or replace it after a failed close.

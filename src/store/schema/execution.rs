@@ -82,3 +82,18 @@ pub(super) fn sequence(conn: &Connection) -> Result<()> {
     )?;
     Ok(())
 }
+
+
+pub(super) fn agent_evidence(conn: &Connection) -> Result<()> {
+    for definition in ["agent_process TEXT", "worker_spawned INTEGER NOT NULL DEFAULT 0",
+        "execution_stop INTEGER NOT NULL DEFAULT 0"] {
+        super::version::add_column(conn, "tasks", definition)?;
+    }
+    conn.execute_batch("CREATE TRIGGER IF NOT EXISTS execution_evidence_revision
+        AFTER UPDATE OF agent_process, worker_spawned, execution_stop ON tasks BEGIN
+          INSERT INTO execution_revisions(id) VALUES(NULL);
+          UPDATE tasks SET revision = last_insert_rowid() WHERE id = NEW.id;
+          DELETE FROM execution_revisions;
+        END;")?;
+    Ok(())
+}

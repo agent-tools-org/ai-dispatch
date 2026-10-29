@@ -14,6 +14,7 @@ pub(crate) const REFUSED: &[&str] = &[
     "audit",
     "budget",
     "dry_run",
+    "container",
 ];
 
 #[derive(Debug)]
@@ -92,6 +93,7 @@ pub(crate) fn validate(args: &crate::cmd::run::RunArgs) -> Result<()> {
         args.audit_explicit,
         args.budget || args.declared_budget.is_some(),
         args.dry_run,
+        args.container.is_some(),
     ];
     for (flag, refused) in REFUSED.iter().zip(flags) {
         if refused {
@@ -109,6 +111,7 @@ pub(crate) fn validate_cli(cli: &crate::cli::run_args::RunArgs) -> Result<()> {
     validate(&crate::cmd::run::RunArgs {
         policy: cli.policy.clone(),
         dry_run: cli.dry_run,
+        container: cli.container.clone(),
         existing_task_id: cli.id.clone().map(crate::types::TaskId),
         model: cli.model.clone(),
         retry: cli.retry,

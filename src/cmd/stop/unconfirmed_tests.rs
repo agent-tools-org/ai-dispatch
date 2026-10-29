@@ -71,7 +71,7 @@ fn stop_exit_confirmation_leaves_exited_recorded_child_waitable_by_its_owner() {
         crate::support::test_subprocess::wait_dead(child.id() as i32, std::time::Duration::from_secs(5)),
         "child exited without owner reaping"
     );
-    stop(&store, task.id.as_str()).expect("dead worker stop");
+    assert_eq!(stop_json(&store, task.id.as_str(), true).expect("dead worker stop"), 0);
     assert_eq!(
         child
             .child_mut()

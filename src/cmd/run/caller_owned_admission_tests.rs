@@ -77,3 +77,21 @@ async fn caller_owned_dry_run_refuses_before_consuming_or_changing_an_id() {
         before
     );
 }
+
+#[tokio::test]
+async fn caller_owned_container_refusal_preserves_an_unused_id_and_existing_rows() {
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let args = RunArgs {
+        policy: Some("caller-owned".into()), existing_task_id: Some(TaskId("t-no-container".into())),
+        model: Some("exact".into()), container: Some("dev:latest".into()), ..Default::default()
+    };
+    let error = crate::cmd::run::run(store.clone(), args.clone()).await.expect_err("refuse");
+    let refusal = error.downcast_ref::<crate::execution::Refusal>().expect("protocol error");
+    assert_eq!((refusal.code, refusal.exit, refusal.detail.as_deref()), ("flag_refused", 3, Some("container")));
+    assert!(store.get_task("t-no-container").expect("query").is_none());
+    let task = Task::test_fixture(TaskId("t-no-container".into()), crate::types::TaskStatus::Pending);
+    store.insert_task(&task).expect("reuse unused ID");
+    let before = store.execution_snapshot(task.id.as_str()).expect("snapshot");
+    assert!(crate::cmd::run::run(store.clone(), args).await.is_err());
+    assert_eq!(store.execution_snapshot(task.id.as_str()).expect("snapshot"), before);
+}

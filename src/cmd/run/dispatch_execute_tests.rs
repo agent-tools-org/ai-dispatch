@@ -32,8 +32,9 @@ fn setup() -> (
     store
         .db()
         .execute(
-            "INSERT INTO tasks (id, agent, prompt, status, created_at)
-         VALUES ('t-launch', 'codex', 'launch', 'running', '2026-10-23T00:00:00Z')",
+            "INSERT INTO tasks (id, agent, prompt, status, created_at, agent_process)
+         VALUES ('t-launch', 'codex', 'launch', 'running', '2026-10-23T00:00:00Z',
+                 json_object('state','not_started'))",
             [],
         )
         .expect("task");
@@ -137,6 +138,7 @@ fn spawn_failure_marks_failed_and_removes_prepared_spec() {
         store.get_task("t-launch").unwrap().unwrap().status,
         TaskStatus::Failed
     );
+    crate::cmd::execution_receipt::receipt(&store, "t-launch").expect("observe launch failure");
     assert_eq!(store.execution_facts("t-launch").expect("facts").expect("row")
         .settlement.expect("settled").outcome.as_deref(), Some("launch_failed"));
 }

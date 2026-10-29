@@ -5,7 +5,10 @@ use super::*;
 pub(super) fn spawn_background_worker(store: &Store, spec: &BackgroundRunSpec) -> Result<u32> {
     let spawned = std::cell::Cell::new(false);
     spawn_inner(store, spec, &spawned).map_err(|error| {
-        if spawned.get() {
+        if spawned.get() || error.is::<WorkerSpawned>() {
+            if let Err(persist) = store.mark_worker_spawned(&spec.task_id) {
+                aid_warn!("[aid] Could not record worker spawn {}: {persist}", spec.task_id);
+            }
             WorkerSpawned(error).into()
         } else {
             error

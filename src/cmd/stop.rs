@@ -4,12 +4,15 @@
 use anyhow::{anyhow, bail, Result};
 use std::path::Path;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crate::runtime::background;
-use crate::runtime::execution_close::{close_execution, Closed, Closer};
 use crate::cmd::run::capture_final_worktree_state;
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
+
+const WAIT_TIMEOUT: Duration = Duration::from_secs(5);
+const POLL_INTERVAL: Duration = Duration::from_millis(200);
 
 pub fn stop(store: &Arc<Store>, task_id: &str) -> Result<()> { terminate(store, task_id, true, "Task stopped by user", "stopped", Some("Stopped")) }
 
@@ -68,79 +71,35 @@ fn terminate(
     preserve_label: &'static str,
     print_label: Option<&'static str>,
 ) -> Result<()> {
-    let task = store.get_task(task_id)?.ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
-    if task.status.is_terminal() && !(task.status == TaskStatus::Done && task.completed_at.is_none())
-        && !store.is_caller_owned(task_id)? {
-        return already_terminal(store, task_id);
+    if store.is_caller_owned(task_id)? {
+        return protocol::text(store, task_id, graceful, detail, preserve_label, print_label);
     }
-    let (idle_terminal, _) = terminate_task(store, task_id, graceful, detail, preserve_label, false)
-        .inspect_err(|error| aid_warn!("[aid] Stop unconfirmed for {task_id}: {error}"))?;
-    if idle_terminal && !store.is_caller_owned(task_id)? { return already_terminal(store, task_id); }
-    if let Some(label) = print_label { println!("{label} {task_id}"); }
-    Ok(())
-}
-
-#[path = "stop_worker.rs"]
-mod worker;
-
-fn terminate_task(
-    store: &Arc<Store>, task_id: &str, graceful: bool,
-    detail: &'static str, preserve_label: &str, json: bool,
-) -> Result<(bool, Closed)> {
     let task = store.get_task(task_id)?.ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
-    let terminal = task.status.is_terminal()
-        && !(task.status == TaskStatus::Done && task.completed_at.is_none());
-    if terminal && !json && !store.is_caller_owned(task_id)? {
-        already_terminal(store, task_id)?;
-    }
-    if !terminal {
+    let recover_signal = task.status == TaskStatus::Stopped
+        && background::load_worker_pid(task_id)?.is_some_and(background::is_process_running);
+    if !recover_signal {
         let event = TaskEvent::new(task.id.clone(), EventKind::Completion, detail.to_string());
-        store.settle_task_status(task_id, TaskStatus::Stopped, None, None, Some(&event))?;
+        if task.status.is_terminal() && !(task.status == TaskStatus::Done && task.completed_at.is_none())
+            || !store.settle_task_status(task_id, TaskStatus::Stopped, None, None, Some(&event))?
+        {
+            return already_terminal(store, task_id);
+        }
     }
-    let mut spec = background::load_spec_if_exists(task_id)?;
-    let targets = worker::Targets::load(task_id, spec.as_ref())?;
-    if graceful && targets.has_live() && task.agent == crate::types::AgentKind::Codex {
+    if graceful && task.agent == crate::types::AgentKind::Codex {
         crate::runtime::codex_app_server::wait_for_interrupt(task_id);
     }
-    let mut signalled = false;
-    if let Some(spec) = spec.as_mut() {
-        crate::runtime::execution_processes::capture(spec)?;
-        signalled = background::stop_task_processes(spec.worker_pid, spec, !graceful);
-    }
-    signalled |= targets.stop(graceful)?;
-    if let Some(spec) = &spec { background::stop_task_processes(spec.worker_pid, spec, true); }
-    if terminal && !signalled && spec.as_ref().is_none_or(|s| s.tool_sessions.is_empty() && s.container_name.is_none()) {
-        let closed = close_execution(store, task_id, "stopped", Closer::Stop, spec.as_ref())?;
-        return closed_stop(true, closed);
-    }
-    finish_stop(store, task_id, &task, preserve_label, signalled, spec.as_ref())
-}
-
-fn finish_stop(
-    store: &Arc<Store>, task_id: &str, task: &Task, preserve_label: &str,
-    signalled: bool, spec: Option<&background::BackgroundRunSpec>,
-) -> Result<(bool, Closed)> {
-    if signalled {
-        crate::runtime::sandbox::kill_container(task_id);
-        preserve_worktree(task_id, &task, preserve_label);
-    }
+    signal_task(task_id, &task, graceful, preserve_label)?;
     capture_final_worktree_state(store.as_ref(), &TaskId(task_id.to_string()))?;
     if let Some(ref path) = task.worktree_path
-        && let Err(error) = crate::workspace::worktree::clear_worktree_lock(Path::new(path), task_id)
+        && let Err(err) = crate::workspace::worktree::clear_worktree_lock(Path::new(path), task_id)
     {
-        aid_warn!("[aid] Warning: failed to release worktree lock for task {task_id}: {error}");
-    }
-    if let Some(name) = spec.and_then(|s| s.container_name.as_ref()) {
-        crate::runtime::container::stop_container(name);
+        aid_warn!("[aid] Warning: failed to release worktree lock for task {task_id}: {err}");
     }
     background::clear_spec(task_id)?;
-    let closed = close_execution(store, task_id, "stopped", Closer::Stop, spec)?;
-    closed_stop(false, closed)
-}
-
-fn closed_stop(idle: bool, closed: Closed) -> Result<(bool, Closed)> {
-    if let Closed::Unconfirmed(reason) = &closed { bail!("{reason}"); }
-    Ok((idle, closed))
+    if let Some(print_label) = print_label {
+        println!("{print_label} {task_id}");
+    }
+    Ok(())
 }
 
 fn already_terminal(store: &Store, task_id: &str) -> Result<()> {
@@ -149,6 +108,46 @@ fn already_terminal(store: &Store, task_id: &str) -> Result<()> {
         .find(|event| matches!(event.event_kind, EventKind::Completion | EventKind::Error))
         .map(|event| event.detail).unwrap_or_else(|| "no terminal reason recorded".to_string());
     bail!("task already {}: {}", task.status.as_str(), reason)
+}
+
+fn signal_task(task_id: &str, task: &Task, graceful: bool, preserve_label: &str) -> Result<()> {
+    let spec = background::load_spec_if_exists(task_id)?;
+    if let Some(pid) = spec.as_ref().and_then(|spec| {
+        spec.worker_pid.filter(|pid| {
+            Some(*pid) != spec.agent_pid && background::BackgroundRunSpec::is_task_worker(*pid, task_id)
+        })
+    }) {
+        if graceful {
+            background::kill_process(pid);
+            if wait_for_exit(pid) && background::BackgroundRunSpec::is_task_worker(pid, task_id) {
+                background::sigkill_process(pid);
+            }
+        } else {
+            background::sigkill_process(pid);
+            let _ = wait_for_exit(pid);
+        }
+    }
+    if let Some(pid) = spec.as_ref().and_then(|spec| spec.agent_pid_for_signal()) {
+        if graceful { background::kill_process(pid); } else { background::sigkill_process(pid); }
+    }
+    crate::runtime::sandbox::kill_container(task_id);
+    if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput
+        | TaskStatus::Stalled | TaskStatus::Stopped | TaskStatus::Done)
+    {
+        preserve_worktree(task_id, task, preserve_label);
+    }
+    Ok(())
+}
+
+fn wait_for_exit(pid: u32) -> bool {
+    let deadline = Instant::now() + WAIT_TIMEOUT;
+    while Instant::now() < deadline {
+        if !background::is_process_running(pid) {
+            return false;
+        }
+        std::thread::sleep(POLL_INTERVAL);
+    }
+    background::is_process_running(pid)
 }
 
 fn preserve_worktree(task_id: &str, task: &Task, action: &str) {
@@ -204,6 +203,8 @@ mod terminal_events_tests;
 #[path = "stop/worker_identity_tests.rs"]
 mod worker_identity_tests;
 
+#[path = "stop_protocol.rs"]
+mod protocol;
 #[path = "stop_json.rs"]
 mod json;
 pub(crate) use json::stop_json;
@@ -211,11 +212,9 @@ pub(crate) use json::stop_json;
 #[cfg(test)]
 #[path = "stop/idle_terminal_tests.rs"]
 mod idle_terminal_tests;
-
-#[cfg(all(test, unix))]
+#[cfg(test)]
 #[path = "stop/unconfirmed_tests.rs"]
 mod unconfirmed_tests;
-
 #[cfg(test)]
 #[path = "stop/close_tests.rs"]
 mod close_tests;

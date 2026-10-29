@@ -7,7 +7,6 @@ pub(crate) async fn run_json(store: &Store, ids: &[String], timeout: Option<u64>
     let id = &ids[0];
     let start = Instant::now();
     loop {
-        let barrier = worker_is_settling(id);
         let receipt = crate::cmd::execution_receipt::receipt(store, id)?;
         if receipt["settled"] == true {
             println!("{receipt}");
@@ -17,12 +16,6 @@ pub(crate) async fn run_json(store: &Store, ids: &[String], timeout: Option<u64>
         {
             println!("{receipt}");
             return Ok(124);
-        }
-        // The same barrier read used by ordinary wait owns completion ordering.
-        if let Err(error) = barrier {
-            if receipt["worker"]["state"] != "unconfirmed" {
-                return Err(error);
-            }
         }
         sleep(Duration::from_millis(100)).await;
     }
@@ -41,6 +34,7 @@ mod tests {
         task.id = crate::types::TaskId("t-wait-json".into());
         task.status = TaskStatus::Failed;
         store.insert_task(&task).expect("task");
+        store.db().execute("UPDATE tasks SET agent_process = NULL WHERE id = ?1", [task.id.as_str()]).expect("missing evidence");
         let ids = vec![task.id.0.clone()];
         assert_eq!(run_json(&store, &ids, Some(0)).await.expect("observe"), 124);
         store
@@ -69,9 +63,23 @@ mod tests {
         let (_home, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
         let task = Task::test_fixture(crate::types::TaskId("t-wait-unconfirmed".into()), TaskStatus::Failed);
         store.insert_task(&task).expect("task");
+        store.db().execute("UPDATE tasks SET agent_process = NULL WHERE id = ?1", [task.id.as_str()]).expect("missing evidence");
         let started = Instant::now();
         assert_eq!(run_json(&store, &[task.id.to_string()], Some(1)).await.expect("wait"), 124);
         assert!(started.elapsed() >= Duration::from_secs(1), "unconfirmed is not an early timeout");
+    }
+
+    #[tokio::test]
+    async fn default_text_wait_keeps_main_terminal_behavior_without_group_evidence() {
+        let (_home, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
+        let mut task = Task::test_fixture(crate::types::TaskId("t-main-wait".into()), TaskStatus::Done);
+        task.completed_at = Some(chrono::Local::now());
+        store.insert_task(&task).expect("task");
+        store.db().execute("UPDATE tasks SET agent_process = NULL WHERE id = ?1", [task.id.as_str()]).expect("legacy");
+        let ids = [task.id.to_string()];
+        assert_eq!(wait_for_task_ids(&store, &ids, None, false, Some(Duration::from_secs(1)))
+            .await.expect("main text wait"), WaitOutcome::Completed);
+        assert_eq!(run_json(&store, &ids, Some(0)).await.expect("JSON evidence wait"), 124);
     }
 
 }

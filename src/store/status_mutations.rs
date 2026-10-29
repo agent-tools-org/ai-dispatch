@@ -62,7 +62,8 @@ impl Store {
         launch: impl FnOnce() -> Result<T>,
     ) -> Result<T> {
         crate::runtime::background::BackgroundRunSpec::prepare_agent(id)?;
-        let result = self.with_launch_guard(id, launch);
+        self.begin_agent_launch(id)?;
+        let result = self.with_launch_guard(id, launch, true);
         #[cfg(test)]
         if result.is_ok() {
             tests::agent_committed();
@@ -78,13 +79,14 @@ impl Store {
         id: &str,
         launch: impl FnOnce() -> Result<T>,
     ) -> Result<T> {
-        self.with_launch_guard(id, launch)
+        self.with_launch_guard(id, launch, false)
     }
 
     fn with_launch_guard<T>(
         &self,
         id: &str,
         launch: impl FnOnce() -> Result<T>,
+        agent: bool,
     ) -> Result<T> {
         let conn = self.db();
         let tx = conn.unchecked_transaction()?;
@@ -105,6 +107,11 @@ impl Store {
             anyhow::bail!("Task '{id}' is no longer running; refusing launch");
         }
         let result = launch()?;
+        if agent {
+            super::execution_protocol::record_agent_on(&tx, id)?;
+        } else {
+            tx.execute("UPDATE tasks SET worker_spawned = 1 WHERE id = ?1 AND worker_spawned = 0", [id])?;
+        }
         tx.commit()?;
         Ok(result)
     }

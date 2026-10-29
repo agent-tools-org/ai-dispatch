@@ -59,7 +59,7 @@ fn assert_idle_metadata(store: &Store, task: &Task, outcome: Option<&str>) {
     assert!(
         background::load_spec_if_exists(task.id.as_str())
             .expect("spec")
-            .is_some()
+            .is_some() == outcome.is_some()
     );
     let facts = store
         .execution_facts(task.id.as_str())
@@ -125,6 +125,6 @@ fn terminal_reused_pid_is_not_signalled_and_does_not_block_json_settlement() {
     assert!(
         background::load_spec_if_exists(task.id.as_str())
             .expect("spec")
-            .is_some()
+            .is_none()
     );
 }

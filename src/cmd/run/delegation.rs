@@ -13,12 +13,22 @@ pub(crate) const MAX_TASK_DEPTH: u32 = 2;
 /// Apply AID_TASK_ID nesting rules before a task is claimed.
 /// Only activates when the dispatcher itself runs inside an agent process.
 pub(crate) fn apply_nested_delegation(store: &Store, args: &mut RunArgs) -> Result<()> {
-    let Ok(env_parent) = std::env::var("AID_TASK_ID") else {
+    let parent = std::env::var("AID_TASK_ID").ok();
+    let depth = std::env::var("AID_TASK_DEPTH").ok();
+    apply_delegation_from(store, args, parent.as_deref(), depth.as_deref())
+}
+
+/// Apply nesting rules for the given parent task ID and parent depth values.
+fn apply_delegation_from(
+    store: &Store,
+    args: &mut RunArgs,
+    env_parent: Option<&str>,
+    env_depth: Option<&str>,
+) -> Result<()> {
+    let Some(env_parent) = env_parent.filter(|parent| !parent.trim().is_empty()) else {
         return Ok(());
     };
-    if env_parent.trim().is_empty() {
-        return Ok(());
-    }
+    let env_parent = env_parent.to_string();
     if store.is_caller_owned(&env_parent)? {
         anyhow::bail!("caller-owned task refuses nested delegation");
     }
@@ -30,8 +40,7 @@ pub(crate) fn apply_nested_delegation(store: &Store, args: &mut RunArgs) -> Resu
             "delegated child tasks cannot use --bg; they must run synchronously so the parent worktree stays leased"
         );
     }
-    let parent_depth = std::env::var("AID_TASK_DEPTH")
-        .ok()
+    let parent_depth = env_depth
         .and_then(|value| value.parse::<u32>().ok())
         .unwrap_or_else(|| task_depth(store, &env_parent).unwrap_or(0));
     let child_depth = parent_depth.saturating_add(1);

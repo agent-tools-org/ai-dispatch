@@ -1,34 +1,11 @@
 // Tests for nested-agent delegation constraints.
 // Covers parent fill, depth refusal, sync requirement, and profile ceilings.
-// Deps: run_delegation helpers, Store, tempfile env isolation.
+// Deps: run_delegation helpers, Store; parent and depth are passed in, not read from env.
 
-use super::{apply_nested_delegation, task_depth, MAX_TASK_DEPTH};
+use super::{apply_delegation_from, task_depth, MAX_TASK_DEPTH};
 use crate::cmd::run::RunArgs;
 use crate::store::Store;
 use crate::types::{Task, TaskBudget, TaskDifficulty, TaskId, TaskProfileDeclaration, TaskStatus};
-
-struct EnvGuard {
-    key: &'static str,
-    previous: Option<String>,
-}
-
-impl EnvGuard {
-    fn set(key: &'static str, value: &str) -> Self {
-        let previous = std::env::var(key).ok();
-        // SAFETY: tests run serially for these keys within this module.
-        unsafe { std::env::set_var(key, value) };
-        Self { key, previous }
-    }
-}
-
-impl Drop for EnvGuard {
-    fn drop(&mut self) {
-        match &self.previous {
-            Some(value) => unsafe { std::env::set_var(self.key, value) },
-            None => unsafe { std::env::remove_var(self.key) },
-        }
-    }
-}
 
 fn make_task(id: &str, parent: Option<&str>) -> Task {
     Task {
@@ -42,13 +19,12 @@ fn make_task(id: &str, parent: Option<&str>) -> Task {
 fn fills_parent_from_aid_task_id_and_forces_sync() {
     let store = Store::open_memory().expect("store");
     store.insert_task(&make_task("t-parent", None)).expect("insert");
-    let _id = EnvGuard::set("AID_TASK_ID", "t-parent");
-    let _depth = EnvGuard::set("AID_TASK_DEPTH", "0");
     let mut args = RunArgs {
         background: true,
         ..Default::default()
     };
-    let err = apply_nested_delegation(&store, &mut args).expect_err("bg must fail");
+    let err = apply_delegation_from(&store, &mut args, Some("t-parent"), Some("0"))
+        .expect_err("bg must fail");
     assert!(err.to_string().contains("--bg"));
     assert_eq!(args.parent_task_id.as_deref(), Some("t-parent"));
 }
@@ -63,10 +39,10 @@ fn refuses_dispatch_beyond_max_depth() {
     store
         .insert_task(&make_task("t-leaf", Some("t-mid")))
         .expect("insert");
-    let _id = EnvGuard::set("AID_TASK_ID", "t-leaf");
-    let _depth = EnvGuard::set("AID_TASK_DEPTH", &MAX_TASK_DEPTH.to_string());
+    let depth = MAX_TASK_DEPTH.to_string();
     let mut args = RunArgs::default();
-    let err = apply_nested_delegation(&store, &mut args).expect_err("depth 3 must fail");
+    let err = apply_delegation_from(&store, &mut args, Some("t-leaf"), Some(&depth))
+        .expect_err("depth 3 must fail");
     assert!(err.to_string().contains("depth"));
 }
 
@@ -85,19 +61,19 @@ fn refuses_child_difficulty_or_budget_above_parent() {
             },
         )
         .expect("profile");
-    let _id = EnvGuard::set("AID_TASK_ID", "t-parent");
-    let _depth = EnvGuard::set("AID_TASK_DEPTH", "0");
     let mut args = RunArgs {
         declared_difficulty: Some(TaskDifficulty::Complex),
         declared_budget: Some(TaskBudget::Cheap),
         ..Default::default()
     };
-    let err = apply_nested_delegation(&store, &mut args).expect_err("difficulty must fail");
+    let err = apply_delegation_from(&store, &mut args, Some("t-parent"), Some("0"))
+        .expect_err("difficulty must fail");
     assert!(err.to_string().contains("difficulty"));
 
     args.declared_difficulty = Some(TaskDifficulty::Simple);
     args.declared_budget = Some(TaskBudget::Premium);
-    let err = apply_nested_delegation(&store, &mut args).expect_err("budget must fail");
+    let err = apply_delegation_from(&store, &mut args, Some("t-parent"), Some("0"))
+        .expect_err("budget must fail");
     assert!(err.to_string().contains("budget"));
 }
 
@@ -130,10 +106,9 @@ fn caller_owned_gates_nested_delegation_before_parent_assignment() {
             Some(&policy),
         )
         .expect("parent");
-    let _id = EnvGuard::set("AID_TASK_ID", "t-owned-parent");
     let mut args = RunArgs::default();
     assert!(
-        apply_nested_delegation(&store, &mut args)
+        apply_delegation_from(&store, &mut args, Some("t-owned-parent"), None)
             .expect_err("policy refuses nesting")
             .to_string()
             .contains("caller-owned")

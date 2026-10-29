@@ -129,7 +129,7 @@ fn v2_migration_only_drops_duplicate_index_and_preserves_events() {
     let version: i64 = conn
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .expect("version");
-    assert_eq!(version, 3);
+    assert_eq!(version, crate::store::schema::version::CURRENT_VERSION);
 }
 
 #[test]

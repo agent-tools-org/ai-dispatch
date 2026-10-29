@@ -21,7 +21,10 @@ use std::sync::Arc;
 use self::process::build_on_done_command;
 use self::process::spawn_on_done_command;
 use self::reaper::record_worker_failure_skip_notify;
-use self::spec::{load_spec, remove_spec};
+use self::spec::load_spec;
+#[path = "background/close.rs"]
+mod close;
+use close::finish_worker;
 use crate::agent;
 use crate::cmd::run::RunArgs;
 use crate::support::paths;
@@ -45,6 +48,7 @@ pub(crate) use self::reaper::cleanup_stale_pending_tasks;
 #[cfg(test)]
 pub(crate) use self::reaper::{fail_stale_pending_task, ZOMBIE_FAILURE_DETAIL};
 pub(crate) use self::spec::clear_spec;
+pub(crate) use self::kill::signal_tree as stop_task_processes;
 
 /// Check whether spawning another worker would exceed the process limit.
 /// Returns Ok(()) if within limits, Err if at capacity.
@@ -73,15 +77,7 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
         Ok(()) => Ok(()),
         Err(err) => handle_run_task_inner_error(&store, &spec, args.as_ref().ok(), err).await,
     };
-    store.settle_worker_warn(task_id, "completed", None);
-    let _ = remove_spec(task_id);
-    let _ = crate::runtime::input_signal::clear_response(task_id);
-    let _ = crate::runtime::input_signal::clear_steer(task_id);
-    result?;
-    if let Some(cmd) = spec.on_done.as_ref() {
-        let _ = spawn_on_done_command(cmd, task_id, "done");
-    }
-    Ok(())
+    finish_worker(&store, &spec, result)
 }
 
 pub fn check_zombie_tasks(store: &Store) -> Result<Vec<String>> { check_zombie_tasks_with(store, is_process_running) }
@@ -246,3 +242,7 @@ mod provider_tests;
 #[cfg(test)]
 #[path = "background/settlement_failure_tests.rs"]
 mod settlement_failure_tests;
+
+#[cfg(test)]
+#[path = "background/close_tests.rs"]
+mod close_tests;

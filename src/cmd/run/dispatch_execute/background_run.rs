@@ -50,6 +50,8 @@ impl<'a> BackgroundRun<'a> {
             audit_report_mode: args.audit_report_mode,
             pre_task_dirty_paths,
             foreground: args.foreground,
+            tool_sessions: Vec::new(),
+            container_name: None,
         }
     }
 

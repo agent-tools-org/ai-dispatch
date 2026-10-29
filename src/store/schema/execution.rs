@@ -52,3 +52,33 @@ pub(super) fn migrate(conn: &Connection) -> Result<()> {
     )?;
     Ok(())
 }
+
+
+pub(super) fn sequence(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS execution_revisions (id INTEGER PRIMARY KEY AUTOINCREMENT);
+         INSERT INTO execution_revisions(id) SELECT MAX(revision) FROM tasks
+         HAVING MAX(revision) > COALESCE((SELECT seq FROM sqlite_sequence
+                                        WHERE name = 'execution_revisions'), 0);
+         DROP TRIGGER IF EXISTS execution_status_revision;
+         DROP TRIGGER IF EXISTS execution_policy_revision;
+         DROP TRIGGER IF EXISTS execution_worker_revision;
+         DROP TRIGGER IF EXISTS execution_attribution_revision;
+         DROP TRIGGER IF EXISTS execution_insert_revision;
+         DROP TRIGGER IF EXISTS execution_change_revision;
+         CREATE TRIGGER execution_insert_revision AFTER INSERT ON tasks BEGIN
+           INSERT INTO execution_revisions(id) VALUES(NULL);
+           UPDATE tasks SET revision = last_insert_rowid() WHERE id = NEW.id;
+           DELETE FROM execution_revisions;
+         END;
+         CREATE TRIGGER execution_change_revision
+         AFTER UPDATE OF status, agent, custom_agent_name, execution_policy, worker_settlement,
+                         model, observed_model, attribution_source, exit_code, completed_at ON tasks
+         BEGIN
+           INSERT INTO execution_revisions(id) VALUES(NULL);
+           UPDATE tasks SET revision = last_insert_rowid() WHERE id = NEW.id;
+           DELETE FROM execution_revisions;
+         END;",
+    )?;
+    Ok(())
+}

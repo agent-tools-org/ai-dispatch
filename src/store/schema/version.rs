@@ -3,7 +3,7 @@
 use anyhow::{Result, bail};
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
-pub(super) const CURRENT_VERSION: i64 = 4;
+pub(in crate::store) const CURRENT_VERSION: i64 = 5;
 
 pub(in crate::store) fn ensure_current(conn: &Connection) -> Result<()> {
     let version = schema_version(conn)?;
@@ -30,6 +30,9 @@ pub(in crate::store) fn ensure_current(conn: &Connection) -> Result<()> {
     }
     if version < 4 {
         super::execution::migrate(&tx)?;
+    }
+    if version < 5 {
+        super::execution::sequence(&tx)?;
     }
     if !has_private_launch_table(&tx)? {
         crate::store::read_only_launch::create_table(&tx)?;

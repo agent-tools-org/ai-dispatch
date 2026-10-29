@@ -1,6 +1,6 @@
 // Stored execution facts for aid.execution/1.
 // Reads policy and settlement independently of legacy Task row mapping.
-use anyhow::{Result, bail};
+use anyhow::Result;
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use super::Store;
@@ -88,30 +88,18 @@ impl Store {
             .is_some_and(|facts| facts.policy.is_some()))
     }
 
-    pub(crate) fn settle_worker_warn(&self, id: &str, outcome: &str, detail: Option<&str>) {
-        if let Err(error) = self.settle_worker(id, outcome, detail) {
-            aid_warn!("[aid] Could not persist worker settlement for {id}: {error}");
-        }
-    }
-
-    pub(crate) fn settle_worker(&self, id: &str, outcome: &str, detail: Option<&str>) -> Result<()> {
-        if !matches!(outcome, "completed" | "stopped" | "lost" | "launch_failed") {
-            bail!("Invalid worker settlement outcome");
-        }
-        let settlement = WorkerSettlement {
-            state: "settled".into(),
-            outcome: Some(outcome.into()),
-            pid: None,
-            settled_at: Some(chrono::Utc::now().to_rfc3339()),
-            detail: detail.map(str::to_owned),
+    #[cfg(test)]
+    pub(crate) fn settle_worker(&self, id: &str, outcome: &str, _detail: Option<&str>) -> Result<()> {
+        use crate::runtime::execution_close::{close_execution, Closer};
+        let spec = crate::runtime::background::BackgroundRunSpec {
+            task_id: id.into(), ..Default::default()
         };
-        self.db().execute(
-            "UPDATE tasks SET worker_settlement = ?2 WHERE id = ?1
-             AND COALESCE(json_extract(worker_settlement, '$.state'), '') != 'settled' ",
-            params![id, serde_json::to_string(&settlement)?],
-        )?;
+        close_execution(self, id, outcome, if outcome == "launch_failed" {
+            Closer::LaunchFailed
+        } else { Closer::Stop }, Some(&spec))?;
         Ok(())
     }
+
 }
 
 #[cfg(test)]

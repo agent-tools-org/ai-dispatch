@@ -34,6 +34,7 @@ fn configured_args() -> cmd::run::RunArgs {
         "--hook", "done:hook", "--bg", "--dry-run", "--read-only", "--best-of", "2",
         "--metric", "score", "--parent", "t-parent", "--id", "t-existing",
         "--timeout", "601", "--idle-timeout", "121", "--audit", "--no-link-deps",
+        "--policy", "caller-owned", "--json",
     ])
 }
 
@@ -70,6 +71,8 @@ fn cli_run_conversion_preserves_lifecycle_flags() {
     assert_eq!(args.judge.as_deref(), Some("agy"));
     assert_eq!(args.peer_review.as_deref(), Some("claude"));
     assert_eq!(args.retry, 3);
+    assert_eq!(args.policy.as_deref(), Some("caller-owned"));
+    assert!(args.execution_json);
     assert!(args.background && args.dry_run && args.announce && args.read_only);
     assert_eq!(args.best_of, Some(2));
     assert_eq!(args.metric.as_deref(), Some("score"));
@@ -109,6 +112,7 @@ fn cli_run_conversion_keeps_default_model_resolution_and_optional_flags() {
     assert_eq!(args.declared_rigor, None);
     assert_eq!(args.declared_egress, TaskEgress::Any);
     assert_eq!(args.retry, 0);
+    assert!(args.policy.is_none() && !args.execution_json);
     assert!(!args.background && !args.dry_run && !args.read_only);
     assert!(args.announce && args.link_deps);
     let args = parsed_args(&["--no-skill", "--no-audit", "--backup", "gdrive:reports", "--sandbox"]);

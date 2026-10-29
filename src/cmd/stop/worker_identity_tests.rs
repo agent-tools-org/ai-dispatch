@@ -122,6 +122,7 @@ fn caller_owned_stop_signals_live_workers_behind_every_terminal_status() {
                         rusqlite::params![id, status.as_str()],
                     )
                     .expect("terminal row");
+                caller_owned(store, id);
                 let mut child = worker(id, "trap - TERM; kill -TERM $$");
                 save_worker(id, child.id());
                 action(store, id).expect("stop terminal row worker");
@@ -147,4 +148,11 @@ fn caller_owned_stop_signals_live_workers_behind_every_terminal_status() {
             });
         }
     }
+}
+
+fn caller_owned(store: &Store, id: &str) {
+                store.db().execute("UPDATE tasks SET execution_policy = ?2 WHERE id = ?1",
+                    rusqlite::params![id, serde_json::json!({"name":"caller-owned", "version":1,
+                        "agent":"grok", "model":"test", "accepted_at":"now"}).to_string()])
+                    .expect("policy");
 }

@@ -104,8 +104,7 @@ fn caller_owned_revision_tracks_every_policy_write_and_worker_change() {
         .settle_worker("t-revision", "completed", None)
         .expect("settled");
     assert_eq!(revision(), 5);
-    store
-        .settle_worker("t-revision", "lost", None)
+    store.settle_worker("t-revision", "lost", None)
         .expect("idempotent settlement");
     assert_eq!(revision(), 5);
     assert_eq!(
@@ -146,4 +145,20 @@ fn caller_owned_revision_and_settlement_survive_reopen() {
         facts.settlement.expect("settled").outcome.as_deref(),
         Some("launch_failed")
     );
+}
+
+
+#[test]
+fn caller_owned_revision_survives_delete_reuse_and_changes_agent() {
+    let store = Store::open_memory().expect("store");
+    store.insert_task(&task("t-reused-revision")).expect("insert");
+    let revision = || store.execution_facts("t-reused-revision").expect("facts").expect("row").revision;
+    let initial = revision();
+    store.db().execute("UPDATE tasks SET agent = 'grok' WHERE id = 't-reused-revision'", [])
+        .expect("agent change");
+    let changed = revision();
+    assert!(changed > initial);
+    store.db().execute("DELETE FROM tasks WHERE id = 't-reused-revision'", []).expect("delete");
+    store.insert_task(&task("t-reused-revision")).expect("reuse ID");
+    assert!(revision() > changed, "the store-wide sequence must survive task deletion");
 }

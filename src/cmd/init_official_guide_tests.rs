@@ -34,10 +34,8 @@ const UNDOCUMENTED_FLAGS: &[&str] = &[
     "--finding-file",
     "--git",
     "--hook",
-    "--id",
     "--include-waiting",
     "--insights",
-    "--iterate",
     "--key",
     "--lines",
     "--max-runs",
@@ -50,7 +48,6 @@ const UNDOCUMENTED_FLAGS: &[&str] = &[
     "--on-done",
     "--package",
     "--parent",
-    "--peer-review",
     "--project",
     "--prompt-file",
     "--reset",
@@ -225,7 +222,10 @@ impl<'de> IntoDeserializer<'de, Error> for Fields<'_> {
 
 #[test]
 fn official_guide_bundles_dispatch_references_within_file_limits() {
-    for name in ["dispatch.md", "dispatch-routing.md", "dispatch-delivery.md", "dispatch-retry.md"] {
+    for name in [
+        "caller-owned.md", "dispatch.md", "dispatch-routing.md", "dispatch-delivery.md",
+        "dispatch-retry.md",
+    ] {
         let content = reference(&format!("references/{name}"));
         assert!(content.lines().count() <= 300, "{name} exceeds 300 lines");
     }

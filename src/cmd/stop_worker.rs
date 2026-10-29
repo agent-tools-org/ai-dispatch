@@ -3,8 +3,7 @@
 use anyhow::{Result, bail};
 use crate::runtime::background::{self, BackgroundRunSpec};
 use std::time::{Duration, Instant};
-#[path = "stop_probe.rs"]
-mod probe;
+use crate::runtime::execution_processes::probe;
 
 const WAIT_TIMEOUT: Duration = Duration::from_secs(5);
 const POLL_INTERVAL: Duration = Duration::from_millis(25);

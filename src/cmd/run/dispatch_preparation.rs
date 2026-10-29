@@ -3,9 +3,6 @@
 use super::*;
 
 pub(crate) fn record_error(store: &Store, task_id: &TaskId, err: &anyhow::Error) -> Result<()> {
-    if !super::super::run_dispatch_execute::worker_was_spawned(err) {
-        store.settle_worker_warn(task_id.as_str(), "launch_failed", Some(&err.to_string()));
-    }
     let event = TaskEvent::new(task_id.clone(), EventKind::Error, format!("{err:#}"))
         .with_metadata(Some(serde_json::json!({"failure_kind": "preparation"})));
     if store.settle_task_status(
@@ -16,6 +13,10 @@ pub(crate) fn record_error(store: &Store, task_id: &TaskId, err: &anyhow::Error)
         Some(&event),
     )? {
         crate::task::lifecycle::salvage_failed_task(store, task_id);
+    }
+    if !super::super::run_dispatch_execute::worker_was_spawned(err) {
+        crate::runtime::execution_close::close_warn(store, task_id.as_str(), "launch_failed",
+            crate::runtime::execution_close::Closer::LaunchFailed, None);
     }
     Ok(())
 }

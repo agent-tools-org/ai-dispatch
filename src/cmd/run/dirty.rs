@@ -30,15 +30,6 @@ pub(crate) async fn post_agent_dirty_worktree_cleanup(
     if args.read_only {
         return read_only::settle(store, task_id, args, dir, pre_task_dirty_paths);
     }
-    if store.is_caller_owned(task_id.as_str())? {
-        return Ok(
-            if final_dirty_assertion(store, task_id, dir, false, pre_task_dirty_paths)? {
-                DirtyWorktreeAction::Failed
-            } else {
-                DirtyWorktreeAction::Continue
-            },
-        );
-    }
     if args.audit_report_mode {
         return Ok(DirtyWorktreeAction::Continue);
     }

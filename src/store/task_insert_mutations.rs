@@ -75,10 +75,10 @@ impl Store {
         self.db().execute(
             "INSERT INTO tasks (
              id, agent, prompt, resolved_prompt, status, workgroup_id, repo_path,
-             worktree_branch, model, created_at, verify, verify_status, read_only, budget, worker_settlement
+             worktree_branch, model, created_at, verify, verify_status, read_only, budget, worker_settlement, agent_process
              ) VALUES (?1, ?2, ?3, ?4, 'waiting', ?5, ?6, ?7, ?8, ?9, ?10, 'skipped', ?11, ?12,
              json_object('state','pending','outcome',NULL,
-             'pid',NULL,'settled_at',NULL,'detail',NULL))",
+             'pid',NULL,'settled_at',NULL,'detail',NULL), json_object('state','not_started'))",
             params![
                 id,
                 agent,

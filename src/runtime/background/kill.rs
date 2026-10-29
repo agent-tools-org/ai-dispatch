@@ -32,24 +32,44 @@ thread_local! {
 /// their own sessions and are untraceable once the worker and agent die.
 #[cfg_attr(test, allow(dead_code))]
 fn signal_targets(worker_pid: Option<u32>, spec: &BackgroundRunSpec) {
-    let agent_pid = spec.agent_pid_for_signal();
     let worker_pid = worker_pid.filter(|pid| {
         Some(*pid) != spec.agent_pid && BackgroundRunSpec::is_task_worker(*pid, &spec.task_id)
     });
     let mut pids = worker_pid.into_iter().collect::<Vec<_>>();
-    #[cfg(unix)]
-    if let Some(worker_pid) = worker_pid
-        && (spec.agent_pid.is_none() || agent_pid.is_some())
-    {
-        let descendants = crate::runtime::process::group::descendant_pids(worker_pid);
-        pids.extend(descendants.into_iter().filter(|pid| Some(*pid) != spec.agent_pid));
-    }
+    pids.extend(capture_descendants(worker_pid, spec, false).into_iter().map(|(pid, _)| pid));
     for signal in [kill_process, sigkill_process] {
         for &pid in &pids {
             signal(pid);
         }
         if let Some(pid) = spec.agent_pid_for_signal() {
             signal(pid);
+        }
+    }
+}
+
+pub(crate) fn capture_descendants(worker: Option<u32>, spec: &BackgroundRunSpec, agent_children: bool)
+    -> Vec<(u32, Option<String>)> {
+    let agent = spec.agent_pid_for_signal();
+    let worker = worker.filter(|pid| BackgroundRunSpec::is_task_worker(*pid, &spec.task_id))
+        .filter(|_| spec.agent_pid.is_none() || agent.is_some());
+    let mut roots = worker.into_iter().collect::<Vec<_>>();
+    if agent_children { roots.extend(agent); }
+    let mut found = Vec::new();
+    #[cfg(unix)]
+    for root in roots {
+        for pid in crate::runtime::process::group::descendant_pids(root) {
+            if Some(pid) != spec.agent_pid && !found.iter().any(|(seen, _)| *seen == pid) {
+                found.push((pid, crate::runtime::process::monitor::activity::root_started(pid)));
+            }
+        }
+    }
+    found
+}
+
+pub(crate) fn signal_descendants(targets: &[(u32, Option<String>)], force: bool) {
+    for (pid, started) in targets {
+        if crate::runtime::process::monitor::activity::root_matches(*pid, started.as_deref()) {
+            if force { sigkill_process(*pid); } else { kill_process(*pid); }
         }
     }
 }

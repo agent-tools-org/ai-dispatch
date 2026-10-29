@@ -95,6 +95,7 @@ fn configure_gitbutler(
     wt_path: Option<&str>,
     repo_path: Option<&str>,
 ) -> bool {
+    if args.policy.is_some() { return false; }
     if std::env::var("AID_GITBUTLER").map(|value| value == "0").unwrap_or(false) {
         return false;
     }

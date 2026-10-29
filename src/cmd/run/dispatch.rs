@@ -88,7 +88,7 @@ fn prepare_prompt(
         store.update_prompt_tokens(prepared.task_id.as_str(), prompt_bundle.prompt_tokens)?;
         if !args.dry_run {
             ensure_agent_binary_available(prepared, args)?;
-            let runtime_hooks = load_runtime_hooks(args)?;
+            let runtime_hooks = load_runtime_hooks(store, &prepared.task_id, args)?;
             start_dispatch(store, prepared, &runtime_hooks)?;
         }
         Ok(prompt_bundle)

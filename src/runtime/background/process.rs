@@ -19,10 +19,15 @@ pub fn update_agent_pid(task_id: &str, agent_pid: u32) -> Result<()> {
         spec.agent_started = crate::runtime::process::monitor::activity::root_started(agent_pid);
         save_spec(&spec)
     })();
-    if result.is_err() {
+    result.map_err(|error| {
         sigkill_process(agent_pid);
-    }
-    result
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while crate::cmd::execution_receipt::group_gone(agent_pid).is_err() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        AgentPublicationFailure { source: error,
+            confirmed_gone: crate::cmd::execution_receipt::group_gone(agent_pid).is_ok() }.into()
+    })
 }
 
 pub fn load_agent_pid(task_id: &str) -> Result<Option<u32>> {
@@ -30,6 +35,8 @@ pub fn load_agent_pid(task_id: &str) -> Result<Option<u32>> {
 }
 
 pub(crate) fn spawn_on_done_command(command: &str, task_id: &str, status: &str) -> Result<()> {
+    #[cfg(test)]
+    ON_DONE_CALLS.with(|calls| calls.set(calls.get() + 1));
     let mut cmd = build_on_done_command(command)?;
     cmd.env("AID_TASK_ID", task_id)
         .env("AID_TASK_STATUS", status);
@@ -152,4 +159,22 @@ mod tests {
         assert!(!child.wait().expect("reap failed launch").success());
         assert!(!is_process_running(pid));
     }
+}
+
+
+#[derive(Debug)]
+pub(crate) struct AgentPublicationFailure {
+    source: anyhow::Error,
+    pub confirmed_gone: bool,
+}
+impl std::fmt::Display for AgentPublicationFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.source, formatter)
+    }
+}
+impl std::error::Error for AgentPublicationFailure {}
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static ON_DONE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }

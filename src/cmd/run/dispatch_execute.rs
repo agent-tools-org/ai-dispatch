@@ -16,7 +16,8 @@ use anyhow::Result;
 use std::path::Path;
 use std::sync::Arc;
 
-pub(super) fn load_runtime_hooks(args: &RunArgs) -> Result<Vec<hooks::Hook>> {
+pub(super) fn load_runtime_hooks(store: &Store, id: &TaskId, args: &RunArgs) -> Result<Vec<hooks::Hook>> {
+    if store.is_caller_owned(id.as_str())? { return Ok(Vec::new()); }
     let mut runtime_hooks = hooks::load_hooks()?;
     runtime_hooks.extend(hooks::parse_cli_hooks(&args.hooks)?);
     Ok(runtime_hooks)
@@ -158,3 +159,12 @@ fn launch_background_worker(
 #[cfg(test)]
 #[path = "dispatch_execute_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[test]
+fn caller_owned_dispatch_ignores_default_hooks_using_the_persisted_policy() {
+    let _home=crate::support::test_env::TestHome::with_dirs();
+    let (store,id,args)=crate::cmd::run::caller_owned_tests::setup();
+    std::fs::write(crate::support::paths::aid_dir().join("hooks.toml"),"invalid default hooks").expect("hooks");
+    assert!(load_runtime_hooks(&store,&id,&args).expect("ignored defaults").is_empty());
+}

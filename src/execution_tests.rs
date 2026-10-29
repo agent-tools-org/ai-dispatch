@@ -64,6 +64,8 @@ fn caller_owned_refuses_every_explicit_execution_expansion_flag() {
         vec!["--budget", "standard"],
         vec!["--dry-run"],
         vec!["--container", "dev:latest"],
+        vec!["--on-done", "true"],
+        vec!["--hook", "on_done:true"],
     ] {
         let mut base = vec!["--id", "t-explicit", "--model", "m"];
         base.extend(flags);

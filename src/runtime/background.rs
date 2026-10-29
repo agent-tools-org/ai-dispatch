@@ -38,13 +38,14 @@ pub(crate) use self::spawn::{daemonize_worker_if_requested, WorkerSpawned};
 #[cfg(not(test))]
 pub(crate) use self::spawn::spawn_worker;
 pub use self::spec::{load_spec_if_exists, load_worker_pid, save_spec, BackgroundRunSpec};
-pub(crate) use self::process::update_worker_pid;
+pub(crate) use self::process::{update_worker_pid, AgentPublicationFailure};
 pub(crate) use self::reaper::{check_zombie_tasks_with, record_failure};
 #[cfg(test)]
 pub(crate) use self::reaper::cleanup_stale_pending_tasks;
 #[cfg(test)]
 pub(crate) use self::reaper::{fail_stale_pending_task, ZOMBIE_FAILURE_DETAIL};
 pub(crate) use self::spec::clear_spec;
+pub(crate) use self::kill::{capture_descendants, signal_descendants};
 
 /// Check whether spawning another worker would exceed the process limit.
 /// Returns Ok(()) if within limits, Err if at capacity.
@@ -77,7 +78,7 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
     let _ = crate::runtime::input_signal::clear_response(task_id);
     let _ = crate::runtime::input_signal::clear_steer(task_id);
     result?;
-    if let Some(cmd) = spec.on_done.as_ref() {
+    if !store.is_caller_owned(task_id).unwrap_or(true) && let Some(cmd) = spec.on_done.as_ref() {
         let _ = spawn_on_done_command(cmd, task_id, "done");
     }
     Ok(())
@@ -103,7 +104,7 @@ async fn handle_run_task_inner_error(
         // Without saved args there is no lifecycle to notify on our behalf.
         crate::task::notify::notify_completion(&task);
     }
-    if let Some(ref cmd) = spec.on_done {
+    if !store.is_caller_owned(&spec.task_id).unwrap_or(true) && let Some(ref cmd) = spec.on_done {
         let _ = spawn_on_done_command(cmd, &spec.task_id, "failed");
     }
     Err(err)

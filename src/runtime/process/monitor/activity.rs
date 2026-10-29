@@ -85,13 +85,20 @@ pub(crate) fn root_started(pid: u32) -> Option<String> {
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let output = std::process::Command::new("ps")
-            .args(["-p", &pid.to_string(), "-o", "lstart="])
+        let output = identity_command(pid)
             .output().ok().filter(|output| output.status.success())?;
         let started = String::from_utf8(output.stdout).ok()?
             .split_whitespace().collect::<Vec<_>>().join(" ");
         (!started.is_empty()).then_some(started)
     }
+}
+
+#[cfg(any(not(target_os = "linux"), test))]
+fn identity_command(pid: u32) -> std::process::Command {
+    let mut command = std::process::Command::new("ps");
+    command.env("TZ", "UTC0").env("LC_ALL", "C")
+        .args(["-p", &pid.to_string(), "-o", "lstart="]);
+    command
 }
 
 fn advance(
@@ -253,3 +260,7 @@ fn descendants(root: u32, table: &[Process]) -> Vec<Process> {
 #[cfg(test)]
 #[path = "activity_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "activity_identity_tests.rs"]
+mod identity_tests;

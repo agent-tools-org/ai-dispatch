@@ -218,3 +218,7 @@ mod unconfirmed_tests;
 #[cfg(test)]
 #[path = "stop/close_tests.rs"]
 mod close_tests;
+
+#[cfg(all(test, unix))]
+#[path = "stop/protocol_round6_tests.rs"]
+mod protocol_round6_tests;

@@ -102,3 +102,16 @@ fn default_reaper_keeps_main_spec_and_never_derives_settlement() {
     assert!(load_spec_if_exists(task.id.as_str()).expect("main leaves spec").is_some());
     assert_eq!(store.execution_snapshot(task.id.as_str()).expect("row").expect("snapshot")["worker"]["state"], "pending");
 }
+
+#[tokio::test]
+async fn caller_owned_background_never_runs_a_saved_completion_callback() {
+    let (_home,store)=TestHome::with_dirs().shared_store();
+    let task=Task::test_fixture(TaskId("t-ignore-saved-callback".into()),TaskStatus::Running);
+    store.insert_task(&task).expect("task");
+    store.db().execute("UPDATE tasks SET execution_policy=?2 WHERE id=?1",rusqlite::params![task.id.as_str(),
+        serde_json::json!({"name":"caller-owned","version":1,"agent":"codex","model":"test","accepted_at":"now"}).to_string()]).expect("policy");
+    save_spec(&BackgroundRunSpec {task_id:task.id.to_string(),on_done:Some("true".into()),..Default::default()}).expect("saved callback");
+    process::ON_DONE_CALLS.with(|calls|calls.set(0));
+    assert!(run_task(store,task.id.as_str()).await.is_err(),"no saved dispatch args");
+    assert_eq!(process::ON_DONE_CALLS.with(|calls|calls.get()),0);
+}

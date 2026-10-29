@@ -62,8 +62,18 @@ impl Store {
         launch: impl FnOnce() -> Result<T>,
     ) -> Result<T> {
         crate::runtime::background::BackgroundRunSpec::prepare_agent(id)?;
-        self.begin_agent_launch(id)?;
-        let result = self.with_launch_guard(id, launch, true);
+        let previous = self.begin_agent_launch(id)?;
+        let invoked = std::cell::Cell::new(false);
+        let result = self.with_launch_guard(id, || { invoked.set(true); launch() }, true);
+        if let Err(error) = &result {
+            let killed = error.downcast_ref::<crate::runtime::background::AgentPublicationFailure>()
+                .is_some_and(|failure| failure.confirmed_gone);
+            if !invoked.get() || killed {
+                if let Err(error) = self.recover_agent_launch(id, previous, killed) {
+                    aid_warn!("[aid] Could not recover agent evidence for {id}: {error}");
+                }
+            }
+        }
         #[cfg(test)]
         if result.is_ok() {
             tests::agent_committed();
@@ -108,7 +118,9 @@ impl Store {
         }
         let result = launch()?;
         if agent {
-            super::execution_protocol::record_agent_on(&tx, id)?;
+            if let Err(error) = super::execution_protocol::record_agent_on(&tx, id) {
+                aid_warn!("[aid] Could not record agent launch for {id}: {error}");
+            }
         } else {
             tx.execute("UPDATE tasks SET worker_spawned = 1 WHERE id = ?1 AND worker_spawned = 0", [id])?;
         }

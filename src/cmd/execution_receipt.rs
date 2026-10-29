@@ -9,10 +9,26 @@ use crate::{
 
 pub(crate) fn receipt(store: &Store, id: &str) -> Result<Value> {
     derive_settlement(store, id)?;
-    let mut receipt = store
+    decorate(store, id, snapshot(store, id)?)
+}
+
+pub(crate) fn read_only_receipt(store: &Store, id: &str) -> Result<Value> {
+    let mut receipt = snapshot(store, id)?;
+    if receipt["worker"]["state"] != "settled" {
+        receipt["worker"] = serde_json::to_value(observation(store, id)?)?;
+    }
+    decorate(store, id, receipt)
+}
+
+fn snapshot(store: &Store, id: &str) -> Result<Value> {
+    store
         .execution_snapshot(id)?
-        .ok_or_else(|| crate::execution::refuse("not_found", Some(id), 1))?;
+        .ok_or_else(|| crate::execution::refuse("not_found", Some(id), 1))
+}
+
+fn decorate(store: &Store, id: &str, mut receipt: Value) -> Result<Value> {
     receipt["settled"] = json!(receipt["worker"]["state"] == "settled");
+    receipt["agent_process"] = serde_json::to_value(store.execution_process(id)?.0)?;
     receipt["observed_at"] = json!(chrono::Utc::now().to_rfc3339());
     Ok(receipt)
 }
@@ -24,30 +40,52 @@ pub(crate) fn derive_settlement(store: &Store, id: &str) -> Result<bool> {
     if facts.settlement.is_some_and(|worker| worker.state == "settled") {
         return Ok(false);
     }
-    let observed = observe(store, id);
-    match observed {
-        Ok(Some(outcome)) => store.persist_settlement(id, outcome),
-        Ok(None) => Ok(false),
-        Err(error) => {
-            store.observe_worker_state(id, "unconfirmed", None, Some(error.to_string()))?;
-            Ok(false)
-        }
+    let worker = observation(store, id)?;
+    if let Some(outcome) = &worker.outcome {
+        return store.persist_settlement(id, outcome);
+    }
+    store.observe_worker_state(id, &worker.state, worker.pid, worker.detail)?;
+    Ok(false)
+}
+
+fn observation(store: &Store, id: &str) -> Result<crate::store::execution_protocol::WorkerSettlement> {
+    Ok(match observe(store, id) {
+        Ok(worker) => worker,
+        Err(error) => worker("unconfirmed", None, None, Some(error.to_string())),
+    })
+}
+
+fn worker(
+    state: &str,
+    pid: Option<u32>,
+    outcome: Option<&str>,
+    detail: Option<String>,
+) -> crate::store::execution_protocol::WorkerSettlement {
+    crate::store::execution_protocol::WorkerSettlement {
+        state: state.into(),
+        pid,
+        outcome: outcome.map(str::to_owned),
+        detail,
+        settled_at: outcome.map(|_| chrono::Utc::now().to_rfc3339()),
     }
 }
 
-fn observe(store: &Store, id: &str) -> Result<Option<&'static str>> {
+fn observe(store: &Store, id: &str) -> Result<crate::store::execution_protocol::WorkerSettlement> {
     let spec = background::load_spec_if_exists(id)?;
+    #[cfg(test)]
+    OBSERVE_HOOK.with(|hook| {
+        if let Some(hook) = hook.borrow_mut().take() {
+            hook();
+        }
+    });
     if let Some(spec) = &spec {
         anyhow::ensure!(spec.task_id == id, "Worker spec identity mismatch");
         if let Some(pid) = spec.worker_pid {
-            store.mark_worker_spawned(id)?;
             if !worker_gone(pid, id)? {
-                store.observe_worker_state(id, "running", Some(pid), None)?;
-                return Ok(None);
+                return Ok(worker("running", Some(pid), None, None));
             }
         } else {
-            store.observe_worker_state(id, "pending", None, None)?;
-            return Ok(None);
+            return Ok(worker("pending", None, None, None));
         }
     }
     let (agent, spawned, stopped) = store.execution_process(id)?;
@@ -60,27 +98,34 @@ fn observe(store: &Store, id: &str) -> Result<Option<&'static str>> {
     let task = store
         .get_task(id)?
         .ok_or_else(|| crate::execution::refuse("not_found", Some(id), 1))?;
-    if !spawned && agent.as_ref().is_some_and(|a| a.state == "not_started") && !task.status.is_terminal() {
-        return Ok(None);
+    let spawned = spawned || spec.as_ref().is_some_and(|spec| spec.worker_pid.is_some());
+    if !spawned
+        && agent.as_ref().is_some_and(|agent| agent.state == "not_started")
+        && !task.status.is_terminal()
+    {
+        return Ok(worker("pending", None, None, None));
     }
-    Ok(Some(
-        if stopped || task.status == crate::types::TaskStatus::Stopped {
-            "stopped"
-        } else if !spawned && agent.as_ref().is_some_and(|a| a.state == "not_started") {
-            "launch_failed"
-        } else if spec.is_some() {
-            "lost"
-        } else {
-            "completed"
-        },
-    ))
+    let outcome = if stopped {
+        "stopped"
+    } else if !spawned && agent.as_ref().is_some_and(|agent| agent.state == "not_started") {
+        "launch_failed"
+    } else if spec.is_some() && crate::support::paths::job_path(id).try_exists()? {
+        "lost"
+    } else {
+        "completed"
+    };
+    Ok(worker("settled", None, Some(outcome), None))
 }
 
 pub(crate) fn worker_gone(pid: u32, id: &str) -> Result<bool> {
     if !probe::alive(pid)? {
         return Ok(true);
     }
-    let args = probe::field(pid, "args")?;
+    let args = match probe::field(pid, "args") {
+        Ok(args) => args,
+        Err(_) if !probe::alive(pid)? => return Ok(true),
+        Err(error) => return Err(error),
+    };
     Ok(!args
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -93,20 +138,13 @@ pub(crate) fn agent_group_gone(agent: Option<&crate::store::execution_protocol::
     if agent.state == "not_started" {
         return Ok(());
     }
-    let (Some(pid), Some(pgid), Some(started)) = (agent.pid, agent.pgid, agent.started.as_deref()) else {
+    let (Some(_pid), Some(pgid), Some(started)) = (agent.pid, agent.pgid, agent.started.as_deref()) else {
         anyhow::bail!("Agent process group or launch identity missing");
     };
     anyhow::ensure!(
         pgid > 1 && pgid <= i32::MAX as u32 && !started.is_empty(),
         "Invalid agent identity"
     );
-    if probe::alive(pid)? {
-        let current = crate::runtime::process::monitor::activity::root_started(pid)
-            .ok_or_else(|| anyhow::anyhow!("Agent identity unreadable"))?;
-        if current != started {
-            return Ok(());
-        }
-    }
     group_gone(pgid)
 }
 
@@ -147,3 +185,12 @@ mod tests;
 #[cfg(all(test, unix))]
 #[path = "execution_barrier_tests.rs"]
 mod barrier_tests;
+
+#[cfg(test)]
+thread_local! {
+    static OBSERVE_HOOK: std::cell::RefCell<Option<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(all(test, unix))]
+#[path = "execution_receipt_round6_tests.rs"]
+mod round6_tests;

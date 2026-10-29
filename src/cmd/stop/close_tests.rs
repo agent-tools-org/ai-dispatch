@@ -3,7 +3,7 @@
 use super::*;
 use crate::{support::test_env::TestHome, runtime::process::guard::ProcessGuard};
 
-fn agent_fixture() -> (TestHome, Arc<Store>, Task, ProcessGuard) {
+pub(super) fn agent_fixture() -> (TestHome, Arc<Store>, Task, ProcessGuard) {
     let (home, store) = TestHome::with_dirs().shared_store();
     let task = Task::test_fixture(TaskId("t-protocol-stop".into()), TaskStatus::Running);
     store.insert_task(&task).expect("task");

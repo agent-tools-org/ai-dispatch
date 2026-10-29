@@ -115,6 +115,8 @@ fn missing_checklist_item_does_not_retry() {
 
 #[test]
 fn dirty_worktree_does_not_launch_a_rescue_agent() {
+    // Rescue commits are aid's preservation of the agent's changes, not an execution (protocol section 6),
+    // so both modes commit them; the policy only forbids a rescue agent, which would be a second invocation.
     let body = format!("printf 'changed\\n' > tracked.txt\n{SUCCESS}");
     for owned in [false, true] {
         let fixture = Recovery::new(&body);
@@ -122,18 +124,14 @@ fn dirty_worktree_does_not_launch_a_rescue_agent() {
         let id = if owned { "t-dirty-owned" } else { "t-dirty-control" };
         fixture.start(id, owned, &["--worktree", "test/caller-dirty"]);
         if owned {
-            assert_eq!(fixture.assert_owned(id)["task"]["status"], "failed");
-            assert!(fixture.has_event(id, "FAIL: agent left uncommitted changes"));
+            assert_eq!(fixture.assert_owned(id)["task"]["status"], "done");
         } else {
             fixture.assert_control(id, 1, 1);
-            assert!(fixture.has_event(id, "Rescued 1 file(s)"));
         }
+        assert!(fixture.has_event(id, "Rescued 1 file(s)"));
         let shown = fixture.show(id);
         let worktree = shown["worktree_path"].as_str().unwrap();
         let subject = fixture.git(worktree, &["log", "-1", "--format=%s"]);
-        assert_eq!(subject.contains("[aid] rescue:"), !owned, "{subject}");
-        let status = fixture.git(worktree, &["status", "--porcelain", "--", "tracked.txt"]);
-        // Also catches failure_salvage committing caller-owned changes after mark_failed.
-        assert_eq!(status.contains("tracked.txt"), owned, "{status}");
+        assert!(subject.contains("[aid] rescue:"), "{subject}");
     }
 }

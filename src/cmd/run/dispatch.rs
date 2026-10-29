@@ -45,7 +45,7 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
     let result = execute_prepared(&store, &args, &prepared).await;
     if args.policy.is_some() {
         if let Err(error) = result {
-            super::run_dispatch_prepare::record_error(&store, &task_id, &error)?;
+            aid_warn!("[aid] Dispatch observation failed for {task_id}: {error}");
         }
         super::caller_owned::emit(&store, &args, &task_id, "launched")?;
         return Ok(task_id);

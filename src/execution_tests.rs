@@ -16,6 +16,8 @@ fn args(flags: &[&str]) -> crate::cli::run_args::RunArgs {
 #[test]
 fn caller_owned_capability_contract() {
     let caps = capabilities();
+    assert!(caps["policies"]["caller-owned"]["refused_flags"].as_array().expect("flags")
+        .contains(&json!("dry_run")));
     assert_eq!(caps["protocol"], PROTOCOL);
     assert_eq!(caps["policies"]["caller-owned"]["version"], 1);
     assert_eq!(caps["policies"]["caller-owned"]["refused_flags"], json!(REFUSED));
@@ -58,6 +60,7 @@ fn caller_owned_refuses_every_explicit_execution_expansion_flag() {
         vec!["--peer-review", "agy"],
         vec!["--audit"],
         vec!["--budget", "standard"],
+        vec!["--dry-run"],
     ] {
         let mut base = vec!["--id", "t-explicit", "--model", "m"];
         base.extend(flags);

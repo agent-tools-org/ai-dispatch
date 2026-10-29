@@ -88,6 +88,12 @@ impl Store {
             .is_some_and(|facts| facts.policy.is_some()))
     }
 
+    pub(crate) fn settle_worker_warn(&self, id: &str, outcome: &str, detail: Option<&str>) {
+        if let Err(error) = self.settle_worker(id, outcome, detail) {
+            aid_warn!("[aid] Could not persist worker settlement for {id}: {error}");
+        }
+    }
+
     pub(crate) fn settle_worker(&self, id: &str, outcome: &str, detail: Option<&str>) -> Result<()> {
         if !matches!(outcome, "completed" | "stopped" | "lost" | "launch_failed") {
             bail!("Invalid worker settlement outcome");

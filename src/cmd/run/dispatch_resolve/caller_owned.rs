@@ -11,7 +11,8 @@ pub(super) fn caller_owned_setup(args: &mut RunArgs) -> Result<AgentSetup> {
         .model
         .as_deref()
         .ok_or_else(|| crate::execution::refuse("model_required", None, 3))?;
-    if !agent::model_validation::validate_model_for_agent(
+    if agent::model_validation::get_served_models_cached(agent.as_ref()).is_some()
+        && !agent::model_validation::validate_model_for_agent(
         agent.as_ref(),
         model,
         agent::model_validation::ModelSource::UserSupplied,

@@ -3,7 +3,9 @@
 use super::*;
 
 pub(crate) fn record_error(store: &Store, task_id: &TaskId, err: &anyhow::Error) -> Result<()> {
-    store.settle_worker(task_id.as_str(), "launch_failed", Some(&err.to_string()))?;
+    if !super::super::run_dispatch_execute::worker_was_spawned(err) {
+        store.settle_worker_warn(task_id.as_str(), "launch_failed", Some(&err.to_string()));
+    }
     let event = TaskEvent::new(task_id.clone(), EventKind::Error, format!("{err:#}"))
         .with_metadata(Some(serde_json::json!({"failure_kind": "preparation"})));
     if store.settle_task_status(
@@ -77,3 +79,7 @@ pub(super) fn prepared_dispatch(
         effective_dir: setup.effective_dir,
     }
 }
+
+#[cfg(test)]
+#[path = "dispatch_settlement_tests.rs"]
+mod settlement_tests;

@@ -134,3 +134,16 @@ fn acknowledgement_helper() {
         std::env::var("AID_TEST_ACK").expect("expectation") == "1"
     );
 }
+
+#[test]
+#[cfg(unix)]
+fn caller_owned_pid_handoff_failure_is_marked_after_actual_spawn() {
+    let _permit = crate::support::test_subprocess::acquire();
+    let mut command = Command::new("sh");
+    command.args(["-c", "echo invalid-pid"]).stdin(Stdio::piped()).stdout(Stdio::piped());
+    let error = spawn_prepared(&mut command, true).expect_err("invalid PID handoff");
+    assert!(error.downcast_ref::<WorkerSpawned>().is_some(), "spawn fact must survive: {error}");
+    let mut missing = Command::new("/nonexistent/aid-worker-executable");
+    let error = spawn_prepared(&mut missing, false).expect_err("no process was spawned");
+    assert!(error.downcast_ref::<WorkerSpawned>().is_none());
+}

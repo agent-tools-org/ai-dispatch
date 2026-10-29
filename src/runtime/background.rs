@@ -34,7 +34,7 @@ use crate::types::{AgentKind, TaskFilter, TaskId};
 const MAX_WORKERS: usize = 32;
 
 pub use self::process::{is_process_running, kill_process, load_agent_pid, sigkill_process, update_agent_pid};
-pub(crate) use self::spawn::daemonize_worker_if_requested;
+pub(crate) use self::spawn::{daemonize_worker_if_requested, WorkerSpawned};
 #[cfg(not(test))]
 pub(crate) use self::spawn::spawn_worker;
 pub use self::spec::{load_spec_if_exists, load_worker_pid, save_spec, BackgroundRunSpec};
@@ -73,7 +73,7 @@ pub async fn run_task(store: Arc<Store>, task_id: &str) -> Result<()> {
         Ok(()) => Ok(()),
         Err(err) => handle_run_task_inner_error(&store, &spec, args.as_ref().ok(), err).await,
     };
-    store.settle_worker(task_id, "completed", None)?;
+    store.settle_worker_warn(task_id, "completed", None);
     let _ = remove_spec(task_id);
     let _ = crate::runtime::input_signal::clear_response(task_id);
     let _ = crate::runtime::input_signal::clear_steer(task_id);
@@ -242,3 +242,7 @@ mod claude_stream_tests;
 #[cfg(test)]
 #[path = "background_provider_tests.rs"]
 mod provider_tests;
+
+#[cfg(test)]
+#[path = "background/settlement_failure_tests.rs"]
+mod settlement_failure_tests;

@@ -15,7 +15,7 @@ fn assert_idle_terminal(status: TaskStatus, outcome: Option<&str>) {
         .insert_event(&TaskEvent::new(
             task.id.clone(),
             EventKind::Error,
-            "previous failure",
+            "previous failure".to_string(),
         ))
         .expect("event");
     if let Some(outcome) = outcome {

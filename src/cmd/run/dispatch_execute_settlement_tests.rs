@@ -62,6 +62,7 @@ fn caller_owned_post_spawn_failure_keeps_worker_barrier_and_never_claims_launch_
     });
     let error = launch_background_worker(&store, &prepared, &spec).expect_err("PID publication failure");
     assert!(worker_was_spawned(&error));
+    assert!(store.execution_process("t-launch").expect("spawn evidence").1);
     assert!(
         crate::support::paths::job_path("t-launch").is_dir(),
         "barrier retained"
@@ -91,6 +92,7 @@ fn default_post_spawn_failure_does_not_claim_launch_failed_and_retains_cleanup()
     });
     let error = launch_background_worker(&store, &prepared, &spec).expect_err("PID publication failure");
     assert!(worker_was_spawned(&error));
+    assert!(store.execution_process("t-launch").expect("spawn evidence").1);
     assert!(!crate::support::paths::job_path("t-launch").exists());
     assert_eq!(
         store.get_task("t-launch").expect("task").expect("row").status,

@@ -8,7 +8,6 @@ use super::orphan;
 use super::kill::terminate_task_processes;
 use super::spec::{load_spec_for_reaper, BackgroundRunSpec};
 use super::waiting;
-use super::close::cleanup_dead_worker;
 use super::MAX_WORKERS;
 use crate::{config, task::notify, support::paths, support::sanitize};
 use crate::store::Store;
@@ -131,6 +130,22 @@ fn cleanup_missing_pid_task(
     cleanup_dead_worker(store, task_id, spec, None, cleaned)
 }
 
+fn cleanup_dead_worker(
+    store: &Store,
+    task_id: &str,
+    spec: &BackgroundRunSpec,
+    worker_pid: Option<u32>,
+    cleaned: &mut Vec<String>,
+) -> Result<()> {
+    preserve_zombie_changes(store, task_id, spec)?;
+    terminate_task_processes(worker_pid, spec);
+    let detail = format!("{ZOMBIE_FAILURE_DETAIL}; worker log: {}",
+        paths::task_dir(task_id).join("worker.log").display());
+    if record_failure(store, task_id, &detail, &detail)? {
+        cleaned.push(task_id.to_string());
+    }
+    Ok(())
+}
 
 pub(super) fn preserve_zombie_changes(store: &Store, task_id: &str, spec: &BackgroundRunSpec) -> Result<()> {
     if let Some(task) = store.get_task(task_id)?

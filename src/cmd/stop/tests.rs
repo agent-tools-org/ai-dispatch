@@ -25,23 +25,13 @@ fn stop_missing_task_returns_error() {
 }
 
 #[test]
-fn stop_done_task_settles_worker_without_changing_terminal_status() {
+fn stop_done_task_returns_error() {
     with_store(|store| {
         let mut task = make_task("t-done", TaskStatus::Done);
         task.completed_at = Some(chrono::Local::now());
         store.insert_task(&task).unwrap();
-        let error = stop(&store, "t-done").expect_err("text mode retains terminal refusal");
-        assert_eq!(error.to_string(), "task already done: no terminal reason recorded");
-        assert_eq!(
-            store
-                .execution_facts("t-done")
-                .expect("facts")
-                .expect("row")
-                .settlement
-                .expect("worker")
-                .outcome
-                .as_deref(),
-            Some("stopped"));
+        let err = stop(&store, "t-done").unwrap_err();
+        assert!(err.to_string().contains("task already done: no terminal reason recorded"));
         let reloaded = store.get_task("t-done").unwrap().unwrap();
         assert_eq!(reloaded.status, TaskStatus::Done);
     });

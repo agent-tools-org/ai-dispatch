@@ -1,74 +1,44 @@
-// Stop must finish cleanup before settlement and preserve default text terminal behavior.
-// Competing closers determine the final JSON stop result, rather than the initial snapshot.
+// Protocol stop covers the recorded worker/agent group; default text stays on main's path.
+// Real process guards verify group signals and retain the owner's wait responsibility.
 use super::*;
-use crate::support::test_env::TestHome;
+use crate::{support::test_env::TestHome, runtime::process::guard::ProcessGuard};
+
+fn agent_fixture() -> (TestHome, Arc<Store>, Task, ProcessGuard) {
+    let (home, store) = TestHome::with_dirs().shared_store();
+    let task = Task::test_fixture(TaskId("t-protocol-stop".into()), TaskStatus::Running);
+    store.insert_task(&task).expect("task");
+    let agent = store
+        .with_running_task(task.id.as_str(), || {
+            let mut command = std::process::Command::new("sleep");
+            command.arg("60");
+            let agent = ProcessGuard::spawn(&mut command)?;
+            background::update_agent_pid(task.id.as_str(), agent.id())?;
+            Ok(agent)
+        })
+        .expect("agent launch");
+    (home, store, task, agent)
+}
 
 #[test]
 fn caller_owned_stop_cleanup_failure_never_writes_settlement() {
-    let (_home, store) = TestHome::with_dirs().shared_store();
+    let _permit = crate::support::test_subprocess::acquire();
+    let (_home, store, task, mut agent) = agent_fixture();
     let repo = crate::support::test_repo::repo_with_file("base.txt", "base\n", "base");
-    let mut task = Task::test_fixture(TaskId("t-stop-cleanup-fails".into()), TaskStatus::Running);
-    task.worktree_path = Some(repo.path().display().to_string());
-    store.insert_task(&task).expect("task");
+    store
+        .db()
+        .execute(
+            "UPDATE tasks SET worktree_path = ?2 WHERE id = ?1",
+            rusqlite::params![task.id.as_str(), repo.path().display().to_string()],
+        )
+        .expect("worktree");
     store
         .db()
         .execute_batch(
-            "CREATE TRIGGER reject_final_state BEFORE UPDATE OF final_head_sha ON tasks
-        BEGIN SELECT RAISE(ABORT, 'final state unavailable'); END;",
+            "CREATE TRIGGER reject_final BEFORE UPDATE OF final_head_sha ON tasks
+        BEGIN SELECT RAISE(ABORT, 'capture failed'); END;",
         )
-        .expect("inject cleanup failure");
+        .expect("cleanup failure");
     assert_eq!(stop_json(&store, task.id.as_str(), true).expect("JSON stop"), 5);
-    let worker = store
-        .execution_facts(task.id.as_str())
-        .expect("facts")
-        .expect("row")
-        .settlement
-        .expect("worker");
-    assert_eq!(worker.state, "unconfirmed");
-    assert!(worker.outcome.is_none());
-    assert!(worker.settled_at.is_none());
-}
-
-#[cfg(unix)]
-#[test]
-fn default_text_stop_terminal_live_worker_is_untouched_as_on_main() {
-    let _permit = crate::support::test_subprocess::acquire();
-    let (_home, store) = TestHome::with_dirs().shared_store();
-    let task = Task::test_fixture(TaskId("t-default-terminal-stop".into()), TaskStatus::Failed);
-    store.insert_task(&task).expect("task");
-    let mut command = std::process::Command::new("sh");
-    command.args(["-c", "sleep 60", "__run-task", task.id.as_str()]);
-    let mut worker = crate::runtime::process::guard::ProcessGuard::spawn(&mut command).expect("worker");
-    super::settle_first_tests::save_worker(task.id.as_str(), worker.id());
-    let before = store.execution_snapshot(task.id.as_str()).expect("snapshot");
-    let spec = std::fs::read(crate::support::paths::job_path(task.id.as_str())).expect("spec bytes");
-    assert!(
-        stop(&store, task.id.as_str())
-            .expect_err("terminal error")
-            .to_string()
-            .starts_with("task already failed:")
-    );
-    assert!(worker.child_mut().try_wait().expect("owner wait").is_none());
-    assert_eq!(
-        store.execution_snapshot(task.id.as_str()).expect("snapshot"),
-        before
-    );
-    assert_eq!(
-        std::fs::read(crate::support::paths::job_path(task.id.as_str())).expect("spec bytes"),
-        spec
-    );
-}
-
-#[test]
-fn caller_owned_stop_reports_settlement_written_during_its_cleanup_as_existing() {
-    let (_home, store) = TestHome::with_dirs().shared_store();
-    let task = Task::test_fixture(TaskId("t-stop-other-closer".into()), TaskStatus::Running);
-    store.insert_task(&task).expect("task");
-    let spec = background::BackgroundRunSpec {
-        task_id: task.id.to_string(),
-        ..Default::default()
-    };
-    background::save_spec(&spec).expect("spec");
     assert_ne!(
         store
             .execution_snapshot(task.id.as_str())
@@ -76,67 +46,148 @@ fn caller_owned_stop_reports_settlement_written_during_its_cleanup_as_existing()
             .expect("row")["worker"]["state"],
         "settled"
     );
-    let other_store = store.clone();
-    background::BackgroundRunSpec::on_next_save(move || {
-        assert_eq!(
-            close_execution(
-                &other_store,
-                &spec.task_id,
-                "completed",
-                Closer::Worker,
-                Some(&spec)
-            )
-            .expect("other closer"),
-            Closed::Written
-        );
-    });
-    let (_, closed) = terminate_task(
-        &store,
-        task.id.as_str(),
-        true,
-        "Task stopped by user",
-        "stopped",
-        true,
-    )
-    .expect("stop");
-    assert_eq!(closed, Closed::Existing);
-    assert_eq!(json::stop_result(&closed), "already_settled");
+    assert!(
+        background::load_spec_if_exists(task.id.as_str())
+            .expect("barrier kept")
+            .is_some()
+    );
+    agent.child_mut().wait().expect("owner wait");
 }
 
-#[cfg(unix)]
 #[test]
-fn caller_owned_stop_kills_recorded_tools_in_their_own_sessions() {
-    use std::io::{BufRead, BufReader};
+fn default_text_stop_terminal_live_worker_is_untouched_as_on_main() {
     let _permit = crate::support::test_subprocess::acquire();
-    let (_home, store) = TestHome::with_dirs().shared_store();
-    let task = Task::test_fixture(TaskId("t-stop-tool-session".into()), TaskStatus::Running);
-    store.insert_task(&task).expect("task");
-    let mut command = std::process::Command::new("sh");
-    command
-        .args([
-            "-c",
-            "perl -e 'setpgrp(0, 0); exec q(sleep), q(60)' & echo $!; wait",
-            "__run-task",
-            task.id.as_str(),
-        ])
-        .stdout(std::process::Stdio::piped());
-    let mut worker = crate::runtime::process::guard::ProcessGuard::spawn(&mut command).expect("worker");
-    let mut output = BufReader::new(worker.child_mut().stdout.take().expect("stdout"));
-    let mut line = String::new();
-    output.read_line(&mut line).expect("tool pid");
-    let tool = line.trim().parse::<u32>().expect("tool pid");
-    super::settle_first_tests::save_worker(task.id.as_str(), worker.id());
-    let result = stop_json(&store, task.id.as_str(), true).expect("stop");
-    let alive = crate::support::test_subprocess::is_live(tool as i32);
-    if alive {
-        unsafe {
-            libc::kill(tool as i32, libc::SIGKILL);
-        }
-    }
-    assert_eq!(result, 0);
-    assert!(!alive, "stop must kill the tool before it settles");
+    let (_home, store, task, mut agent) = agent_fixture();
+    store
+        .db()
+        .execute(
+            "UPDATE tasks SET status = 'failed' WHERE id = ?1",
+            [task.id.as_str()],
+        )
+        .expect("terminal");
+    let before = store.execution_snapshot(task.id.as_str()).expect("before");
+    let spec = std::fs::read(crate::support::paths::job_path(task.id.as_str())).expect("spec");
     assert!(
-        worker.child_mut().wait().is_ok(),
-        "only the owner reaps the worker"
+        stop(&store, task.id.as_str())
+            .expect_err("main terminal refusal")
+            .to_string()
+            .starts_with("task already failed:")
+    );
+    assert!(agent.child_mut().try_wait().expect("owner wait").is_none());
+    assert_eq!(store.execution_snapshot(task.id.as_str()).expect("after"), before);
+    assert_eq!(
+        std::fs::read(crate::support::paths::job_path(task.id.as_str())).expect("spec unchanged"),
+        spec
+    );
+}
+
+#[test]
+fn caller_owned_stop_json_keeps_existing_derived_settlement() {
+    let (_home, store) = TestHome::with_dirs().shared_store();
+    let task = Task::test_fixture(TaskId("t-stop-existing".into()), TaskStatus::Done);
+    store.insert_task(&task).expect("task");
+    store
+        .mark_worker_spawned(task.id.as_str())
+        .expect("worker was spawned");
+    let first = crate::cmd::execution_receipt::receipt(&store, task.id.as_str()).expect("completed");
+    assert_eq!(stop_json(&store, task.id.as_str(), true).expect("existing"), 0);
+    assert_eq!(
+        store
+            .execution_snapshot(task.id.as_str())
+            .expect("snapshot")
+            .expect("row")["worker"],
+        first["worker"]
+    );
+}
+
+#[test]
+fn caller_owned_stop_json_signals_agent_group_behind_terminal_row() {
+    let _permit = crate::support::test_subprocess::acquire();
+    let (_home, store, task, mut agent) = agent_fixture();
+    store
+        .db()
+        .execute(
+            "UPDATE tasks SET status = 'failed' WHERE id = ?1",
+            [task.id.as_str()],
+        )
+        .expect("terminal");
+    assert_eq!(stop_json(&store, task.id.as_str(), true).expect("stop"), 0);
+    assert!(!agent.child_mut().wait().expect("only owner reaps").success());
+    assert_eq!(
+        store
+            .execution_snapshot(task.id.as_str())
+            .expect("snapshot")
+            .expect("row")["worker"]["outcome"],
+        "stopped"
+    );
+}
+
+#[test]
+fn caller_owned_text_stop_extends_terminal_row_signalling() {
+    let _permit = crate::support::test_subprocess::acquire();
+    let (_home, store, task, mut agent) = agent_fixture();
+    store
+        .db()
+        .execute(
+            "UPDATE tasks SET status = 'failed', execution_policy = ?2 WHERE id = ?1",
+            rusqlite::params![
+                task.id.as_str(),
+                serde_json::json!({"name":"caller-owned","version":1,
+            "agent":"codex","model":"test","accepted_at":"now"})
+                .to_string()
+            ],
+        )
+        .expect("caller-owned");
+    stop(&store, task.id.as_str()).expect("terminal worker stop");
+    assert!(!agent.child_mut().wait().expect("owner wait").success());
+    assert_eq!(
+        crate::cmd::execution_receipt::receipt(&store, task.id.as_str()).expect("receipt")["settled"],
+        true
+    );
+}
+
+#[test]
+fn caller_owned_agent_identity_is_persisted_at_spawn_and_survives_spec_removal() {
+    let _permit = crate::support::test_subprocess::acquire();
+    let (_home, store, task, agent) = agent_fixture();
+    let (recorded, _, _) = store.execution_process(task.id.as_str()).expect("evidence");
+    let recorded = recorded.expect("agent");
+    assert_eq!(recorded.pid, Some(agent.id()));
+    assert_eq!(recorded.pgid, Some(agent.id()));
+    assert!(recorded.started.is_some());
+    background::clear_spec(task.id.as_str()).expect("spec removed");
+    let (persisted, _, _) = store.execution_process(task.id.as_str()).expect("row evidence");
+    assert_eq!(persisted.expect("agent").started, recorded.started);
+    assert_eq!(
+        crate::cmd::execution_receipt::receipt(&store, task.id.as_str()).expect("receipt")["settled"],
+        false
+    );
+}
+
+#[test]
+fn caller_owned_stop_does_not_discard_a_spawned_worker_with_no_published_pid() {
+    let (_home, store) = TestHome::with_dirs().shared_store();
+    let task = Task::test_fixture(TaskId("t-unpublished-worker".into()), TaskStatus::Running);
+    store.insert_task(&task).expect("task");
+    store
+        .mark_worker_spawned(task.id.as_str())
+        .expect("worker spawned");
+    background::save_spec(&background::BackgroundRunSpec {
+        task_id: task.id.to_string(),
+        ..Default::default()
+    })
+    .expect("unpublished worker barrier");
+    assert_eq!(stop_json(&store, task.id.as_str(), true).expect("stop"), 5);
+    assert!(
+        background::load_spec_if_exists(task.id.as_str())
+            .expect("barrier")
+            .is_some()
+    );
+    assert_eq!(
+        store
+            .execution_snapshot(task.id.as_str())
+            .expect("snapshot")
+            .expect("row")["worker"]["state"],
+        "unconfirmed"
     );
 }

@@ -18,6 +18,8 @@ fn caller_owned_capability_contract() {
     let caps = capabilities();
     assert!(caps["policies"]["caller-owned"]["refused_flags"].as_array().expect("flags")
         .contains(&json!("dry_run")));
+    assert!(caps["policies"]["caller-owned"]["refused_flags"].as_array().expect("flags")
+        .contains(&json!("container")));
     assert_eq!(caps["protocol"], PROTOCOL);
     assert_eq!(caps["policies"]["caller-owned"]["version"], 1);
     assert_eq!(caps["policies"]["caller-owned"]["refused_flags"], json!(REFUSED));
@@ -61,6 +63,7 @@ fn caller_owned_refuses_every_explicit_execution_expansion_flag() {
         vec!["--audit"],
         vec!["--budget", "standard"],
         vec!["--dry-run"],
+        vec!["--container", "dev:latest"],
     ] {
         let mut base = vec!["--id", "t-explicit", "--model", "m"];
         base.extend(flags);

@@ -38,13 +38,13 @@ impl Store {
              created_at, completed_at, verify, verify_status, read_only, budget, custom_agent_name,
              category, pending_reason, audit_verdict, audit_report_path, delivery_assessment,
              observed_model, attribution_source, effective_dir, dispatch_args,
-             execution_policy, worker_settlement)
+             execution_policy, worker_settlement, agent_process)
              SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
              ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34,
              ?35, ?36, ?37, ?38, ?39, ?40,
              CASE WHEN ?41 THEN json_object('origin', 'explicit_retry') ELSE NULL END, ?42,
              json_object('state','pending','outcome',NULL,
-             'pid',NULL,'settled_at',NULL,'detail',NULL)
+             'pid',NULL,'settled_at',NULL,'detail',NULL), json_object('state','not_started')
              WHERE ?41 OR NOT EXISTS (SELECT 1 FROM tasks WHERE id = ?6 AND status = 'stopped')",
         )?;
         if insert_task_row(&mut statement, task, agent_value, origin, policy.as_deref())? == 0 {

@@ -88,18 +88,63 @@ impl Store {
             .is_some_and(|facts| facts.policy.is_some()))
     }
 
-    #[cfg(test)]
-    pub(crate) fn settle_worker(&self, id: &str, outcome: &str, _detail: Option<&str>) -> Result<()> {
-        use crate::runtime::execution_close::{close_execution, Closer};
-        let spec = crate::runtime::background::BackgroundRunSpec {
-            task_id: id.into(), ..Default::default()
-        };
-        close_execution(self, id, outcome, if outcome == "launch_failed" {
-            Closer::LaunchFailed
-        } else { Closer::Stop }, Some(&spec))?;
+    pub(crate) fn begin_agent_launch(&self, id: &str) -> Result<()> {
+        self.db().execute(
+            r#"UPDATE tasks SET agent_process = '{"state":"starting"}' WHERE id = ?1"#,
+            [id],
+        )?;
         Ok(())
     }
 
+    pub(crate) fn execution_process(&self, id: &str) -> Result<(Option<AgentProcess>, bool, bool)> {
+        let (agent, spawned, stopped): (Option<String>, bool, bool) = self.db().query_row(
+            "SELECT agent_process, worker_spawned, execution_stop FROM tasks WHERE id = ?1",
+            [id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )?;
+        Ok((
+            agent.map(|json| serde_json::from_str(&json)).transpose()?,
+            spawned,
+            stopped,
+        ))
+    }
+
+    pub(crate) fn record_execution_stop(&self, id: &str) -> Result<()> {
+        self.db().execute(
+            "UPDATE tasks SET execution_stop = 1 WHERE id = ?1 AND execution_stop = 0",
+            [id],
+        )?;
+        Ok(())
+    }
+
+    pub(crate) fn mark_worker_spawned(&self, id: &str) -> Result<()> {
+        self.db().execute(
+            "UPDATE tasks SET worker_spawned = 1 WHERE id = ?1 AND worker_spawned = 0",
+            [id],
+        )?;
+        Ok(())
+    }
+
+    pub(crate) fn persist_settlement(&self, id: &str, outcome: &str) -> Result<bool> {
+        let settlement = WorkerSettlement {
+            state: "settled".into(),
+            outcome: Some(outcome.into()),
+            pid: None,
+            settled_at: Some(chrono::Utc::now().to_rfc3339()),
+            detail: None,
+        };
+        Ok(self.db().execute(
+            "UPDATE tasks SET worker_settlement = ?2 WHERE id = ?1
+            AND COALESCE(json_extract(worker_settlement, '$.state'), '') != 'settled'",
+            params![id, serde_json::to_string(&settlement)?],
+        )? == 1)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn settle_worker(&self, id: &str, outcome: &str, _detail: Option<&str>) -> Result<()> {
+        self.persist_settlement(id, outcome)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -129,4 +174,36 @@ impl Store {
         json.map(|json| serde_json::from_str(&json).map_err(Into::into))
             .transpose()
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct AgentProcess {
+    pub state: String,
+    pub pid: Option<u32>,
+    pub pgid: Option<u32>,
+    pub started: Option<String>,
+}
+
+pub(super) fn record_agent_on(conn: &rusqlite::Connection, id: &str) -> Result<()> {
+    let Some(spec) = crate::runtime::background::load_spec_if_exists(id)? else {
+        return Ok(());
+    };
+    let Some(pid) = spec.agent_pid else {
+        return Ok(());
+    };
+    #[cfg(unix)]
+    let pgid = u32::try_from(unsafe { libc::getpgid(pid as i32) }).ok();
+    #[cfg(not(unix))]
+    let pgid = None;
+    let agent = AgentProcess {
+        state: "spawned".into(),
+        pid: Some(pid),
+        pgid,
+        started: spec.agent_started,
+    };
+    conn.execute(
+        "UPDATE tasks SET agent_process = ?2 WHERE id = ?1",
+        params![id, serde_json::to_string(&agent)?],
+    )?;
+    Ok(())
 }

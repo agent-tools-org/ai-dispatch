@@ -15,7 +15,7 @@ fn reject_settlement(store: &Store) {
 }
 
 #[tokio::test]
-async fn caller_owned_worker_settlement_failure_cleans_inputs_and_retains_identity_evidence() {
+async fn default_worker_cleanup_is_independent_of_settlement_persistence() {
     let (_home, store) = TestHome::with_dirs().shared_store();
     let task = Task::test_fixture(TaskId("t-cleanup-settlement".into()), TaskStatus::Running);
     store.insert_task(&task).expect("task");
@@ -31,7 +31,7 @@ async fn caller_owned_worker_settlement_failure_cleans_inputs_and_retains_identi
         .await
         .expect_err("missing dispatch args");
     assert!(error.to_string().contains("no saved dispatch args"), "{error:#}");
-    assert!(load_spec_if_exists(task.id.as_str()).expect("identity evidence retained").is_some());
+    assert!(load_spec_if_exists(task.id.as_str()).expect("spec removed as on main").is_none());
     assert!(
         crate::runtime::input_signal::take_response(task.id.as_str())
             .expect("response")
@@ -87,4 +87,18 @@ fn caller_owned_reaper_settlement_failure_still_kills_agent_and_fails_row() {
             .expect("error")
             .contains("worker disappeared")
     );
+}
+
+#[test]
+fn default_reaper_keeps_main_spec_and_never_derives_settlement() {
+    let (_home, store) = TestHome::with_dirs().shared_store();
+    let task = Task::test_fixture(TaskId("t-main-reaper".into()), TaskStatus::Running);
+    store.insert_task(&task).expect("task");
+    let spec = BackgroundRunSpec { task_id: task.id.to_string(), worker_pid: Some(u32::MAX), ..Default::default() };
+    save_spec(&spec).expect("spec");
+    let mut cleaned = Vec::new();
+    reaper::cleanup_pid_task(&store, &task, &spec, u32::MAX, &mut cleaned, &|_| false, 60).expect("main cleanup");
+    assert_eq!(cleaned, vec![task.id.to_string()]);
+    assert!(load_spec_if_exists(task.id.as_str()).expect("main leaves spec").is_some());
+    assert_eq!(store.execution_snapshot(task.id.as_str()).expect("row").expect("snapshot")["worker"]["state"], "pending");
 }

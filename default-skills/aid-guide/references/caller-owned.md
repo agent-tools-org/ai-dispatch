@@ -16,11 +16,11 @@ verify/checklist retries, iterate, best-of, judge, peer review, audit, nested de
 transport fallback, and explicit `aid retry`. The store refuses every child of a caller-owned task.
 Project/team defaults cannot enable these features. Verify and checklist still run without retries.
 Preservation commits, including dirty-worktree rescue and failure salvage, still run.
-Other execution flags, including worktrees, sandbox/container and remote builds, retain their behavior.
+Other execution flags, including worktrees, sandbox and remote builds, retain their behavior.
 
 Admission requires valid `--id` and nonempty `--model`. Unknown policies, known unavailable models, and
 explicit positive `--retry`, `--cascade`, `--best-of`, `--iterate`, `--judge`, `--peer-review`,
-`--audit`, `--budget` or `--dry-run` are refused before task insertion (exit 3, structured JSON error).
+`--audit`, `--budget`, `--dry-run` or `--container` are refused before task insertion (exit 3, structured JSON error).
 An agent without a known served-model list receives the explicit model unchanged.
 A same-ID submission with the same agent (after alias/case normalization), model and policy returns `submission: existing`,
 launches nothing and exits 0; a different tuple returns `id_conflict` (exit 4). Concurrent identical
@@ -32,13 +32,17 @@ status and worker settlement are separate: a terminal task can still have a live
 `settled: true`. Settlement outcomes are `completed`, `stopped`, `lost`, or `launch_failed`.
 `policy` is null for default-mode tasks. Revisions come from a store-wide sequence and never
 restart when an ID is deleted and reused; changing the agent also advances the revision.
-Keep the receipt with the highest revision. One closer persists settlement only after cleanup and
-confirmation that recorded workers, agent groups, tool sessions and containers are gone. The worker
-can exempt itself only as its final act, after launching its completion hook and removing its spec.
-`launch_failed` is recorded only when no worker was spawned. Errors after spawn leave settlement
-to the worker, stop, or a confirmed-dead observation. A failed settlement write warns and does not
-skip existing worker, reaper or preparation cleanup. If confirmation or persistence fails, the job
-spec retains process identities for a later observation or stop; it does not claim settlement.
+Keep the receipt with the highest revision. Settlement is derived only by observation: the job
+spec is absent (or its verified worker is dead) and the recorded agent process group is gone.
+The agent PID, group and launch identity are persisted in the task row before monitoring starts,
+so evidence survives spec deletion. Missing group/identity evidence remains `unconfirmed`.
+A readable identity mismatch counts as gone. Processes that leave the agent group are outside
+settlement; aid does not track detached tool sessions or close shared project containers.
+The first derived settlement wins: `stopped` for a recorded stop, `launch_failed` for a failed
+submission that never spawned a worker or agent, `lost` for a dead worker's remaining spec,
+otherwise `completed`. Worker, stop and reaper cleanup never write settlement directly.
+`--container` is refused because its shared project container cannot be attributed to one task.
+`--sandbox` retains its task-specific container behavior.
 
 `aid wait --json` accepts exactly one ID and uses the worker barrier. It exits 0 for settlement,
 124 for an unsettled timeout (still printing the receipt), and 1 for unknown IDs or read errors.
@@ -48,7 +52,7 @@ Stop checks liveness without reaping recorded processes, verifies identity befor
 and confirms exit before recording settlement. A readable identity mismatch means the original
 process is gone: the reused PID is never signalled and does not block settlement. A live process
 with missing or unreadable identity returns `unconfirmed`; non-terminal task rows still become
-`stopped`, but no settlement is written. In text mode the reason is a warning and an error.
+`stopped`, but no settlement is written. Caller-owned text mode returns an error.
 A terminal row with no live recorded task process keeps its status, artifacts, locks and final-state
 metadata untouched. Text mode retains `task already <status>: ...`; JSON acknowledges settlement
 with exit 0. Existing settlement is preserved. Worktree preservation runs only after signalling a

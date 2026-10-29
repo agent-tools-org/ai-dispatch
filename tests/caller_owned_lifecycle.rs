@@ -5,7 +5,8 @@
 #[path = "common/caller_owned.rs"]
 mod caller_owned;
 mod common;
-use caller_owned::{Harness, SUCCESS, json};
+use caller_owned::{Harness, MODEL, SUCCESS, bounded, identity, json};
+use std::time::{Duration, Instant};
 
 #[test]
 fn terminal_status_does_not_satisfy_settlement_wait() {
@@ -53,31 +54,193 @@ fn stop_signals_a_terminal_but_unsettled_worker() {
 
 #[test]
 fn killed_worker_is_lost_and_duplicate_submission_never_relaunches() {
-    let h = Harness::new("exec sleep 8");
+    let h = Harness::new(concat!(
+        "trap '' HUP\n",
+        "printf '%s\\n' \"$$\" > \"$AID_HOME/agent.pid.tmp\"\n",
+        "mv \"$AID_HOME/agent.pid.tmp\" \"$AID_HOME/agent.pid\"\n",
+        "printf '%s\\n' '{\"type\":\"message\",\"text\":\"holding\"}'\n",
+        "i=0\nwhile [ $i -lt 400 ]; do sleep 0.05; i=$((i+1)); done\n"
+    ));
     let id = "t-lost-worker";
     h.launch(id, &[]);
-    h.wait_invoked();
+    h.wait_for(|| h.path("aid/agent.pid").exists());
+    let mut agent = AgentProcess::from_marker(&h);
     let mut running = h.observe(id);
     h.wait_for(|| {
         running = h.observe(id);
         running["worker"]["state"] == "running" && running["worker"]["pid"].is_number()
     });
     let pid = running["worker"]["pid"].as_i64().unwrap() as i32;
+    assert_ne!(pid, agent.pid);
     assert_eq!(unsafe { libc::kill(pid, libc::SIGKILL) }, 0);
-    let (code, observed) = caller_owned::result(h.aid().args(["wait", id, "--json", "--timeout", "12"]));
-    caller_owned::identity(&observed, id);
-    if observed["settled"] == true {
-        assert_eq!(code, 0);
-        assert_eq!(observed["worker"]["outcome"], "lost");
-    } else {
-        assert_eq!(code, 124);
-        assert_eq!(observed["worker"]["state"], "unconfirmed");
+    for _ in 0..3 {
+        assert_agent_unsettled(&agent, &h.observe(id), id);
     }
-    assert!(observed["revision"].as_u64().unwrap() >= running["revision"].as_u64().unwrap());
+    let shown = json(h.aid().args(["show", id, "--json"]), 0);
+    assert_agent_unsettled(&agent, &shown["execution"], id);
+    let waiting = json(h.aid().args(["wait", id, "--json", "--timeout", "1"]), 124);
+    assert_agent_unsettled(&agent, &waiting, id);
+    assert!(waiting["revision"].as_u64().unwrap() >= running["revision"].as_u64().unwrap());
+    assert_eq!(h.count(), 1);
+    agent.kill();
+    let lost = json(h.aid().args(["wait", id, "--json", "--timeout", "25"]), 0);
+    identity(&lost, id);
+    assert_eq!(lost["settled"], true);
+    assert_eq!(lost["worker"]["state"], "settled");
+    assert_eq!(lost["worker"]["outcome"], "lost");
+    assert!(lost["revision"].as_u64().unwrap() > waiting["revision"].as_u64().unwrap());
     let existing = json(h.run(id, &[]), 0);
     assert_eq!(existing["submission"], "existing");
-    caller_owned::identity(&existing, id);
+    identity(&existing, id);
+    assert_eq!(existing["worker"]["outcome"], "lost");
+    assert_eq!(existing["settled"], true);
+    assert_eq!(existing["revision"], lost["revision"]);
     h.assert_rows(id, 1);
+}
+
+struct AgentProcess {
+    pid: i32,
+    armed: bool,
+}
+
+impl AgentProcess {
+    fn from_marker(h: &Harness) -> Self {
+        let pid = std::fs::read_to_string(h.path("aid/agent.pid"))
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        Self { pid, armed: true }
+    }
+
+    fn assert_alive(&self) {
+        assert_eq!(unsafe { libc::kill(self.pid, 0) }, 0, "agent must still be alive");
+        let out =
+            bounded(std::process::Command::new("ps").args(["-p", &self.pid.to_string(), "-o", "stat="]));
+        let state = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            out.status.success() && !state.trim().is_empty() && !state.trim().starts_with('Z'),
+            "agent is not alive: {state}"
+        );
+    }
+
+    fn kill(&mut self) {
+        assert_eq!(unsafe { libc::kill(self.pid, libc::SIGKILL) }, 0);
+        self.armed = false;
+    }
+}
+
+impl Drop for AgentProcess {
+    fn drop(&mut self) {
+        // Stop the deliberately orphaned agent even if a receipt assertion fails.
+        if self.armed {
+            unsafe {
+                libc::kill(self.pid, libc::SIGKILL);
+            }
+        }
+    }
+}
+
+fn assert_agent_unsettled(agent: &AgentProcess, receipt: &serde_json::Value, id: &str) {
+    agent.assert_alive();
+    identity(receipt, id);
+    assert_eq!(receipt["settled"], false, "agent survived the worker: {receipt}");
+    assert!(matches!(
+        receipt["worker"]["state"].as_str(),
+        Some("running" | "unconfirmed")
+    ));
+}
+
+#[test]
+fn unconfirmed_worker_waits_for_the_full_timeout() {
+    let h = Harness::new(SUCCESS);
+    let id = "t-unconfirmed-wait";
+    // A default-mode dry run leaves a skipped row without a worker spec or settlement.
+    let mut cmd = h.aid();
+    cmd.args([
+        "run",
+        "controlled",
+        "preview only",
+        "--id",
+        id,
+        "--model",
+        MODEL,
+        "--dry-run",
+        "--no-hint",
+        "--no-skill",
+    ]);
+    assert!(bounded(&mut cmd).status.success());
+    let early = json(h.aid().args(["wait", id, "--json", "--timeout", "0"]), 124);
+    assert_eq!(early["worker"]["state"], "unconfirmed");
+    assert_eq!(early["settled"], false);
+    let start = Instant::now();
+    let later = json(h.aid().args(["wait", id, "--json", "--timeout", "2"]), 124);
+    assert!(
+        start.elapsed() >= Duration::from_secs(2),
+        "unconfirmed wait returned early"
+    );
+    assert_eq!(later["task_id"], id);
+    assert_eq!(later["task"]["requested_model"], MODEL);
+    assert_eq!(later["worker"]["state"], "unconfirmed");
+    assert_eq!(later["settled"], false);
+    assert!(later["policy"].is_null());
+    let stopped = json(h.aid().args(["stop", id, "--json"]), 0);
+    assert_eq!(stopped["settled"], true);
+    let observed = json(h.aid().args(["wait", id, "--json", "--timeout", "0"]), 0);
+    assert_eq!(observed["task_id"], id);
+    assert_eq!(observed["revision"], stopped["revision"]);
+    assert_default_rows(&h, id, 0);
+}
+
+#[test]
+fn settled_default_done_task_keeps_revision_and_text_stop_refuses() {
+    let h = Harness::new(SUCCESS);
+    let id = "t-default-done-stop";
+    let mut cmd = h.aid();
+    cmd.args([
+        "run",
+        "controlled",
+        "finish once",
+        "--id",
+        id,
+        "--model",
+        MODEL,
+        "--no-hint",
+        "--no-skill",
+        "--timeout",
+        "15",
+    ])
+    .arg("--dir")
+    .arg(h.path("project"));
+    assert!(bounded(&mut cmd).status.success());
+    let done = json(h.aid().args(["wait", id, "--json", "--timeout", "25"]), 0);
+    assert_eq!(done["task"]["status"], "done");
+    assert_eq!(done["settled"], true);
+    let stopped = json(h.aid().args(["stop", id, "--json"]), 0);
+    assert_eq!(stopped["stop"]["result"], "already_settled");
+    assert_eq!(stopped["revision"], done["revision"]);
+    let text = bounded(h.aid().args(["stop", id]));
+    assert!(!text.status.success());
+    let output = format!(
+        "{}{}",
+        String::from_utf8_lossy(&text.stdout),
+        String::from_utf8_lossy(&text.stderr)
+    );
+    assert!(output.contains("task already done"), "{output}");
+    let after = json(h.aid().args(["show", id, "--json"]), 0);
+    assert_eq!(after["execution"]["revision"], done["revision"]);
+    assert_default_rows(&h, id, 1);
+}
+
+fn assert_default_rows(h: &Harness, id: &str, invocations: usize) {
+    assert_eq!(h.count(), invocations);
+    let rows = json(h.aid().args(["board", "--json"]), 0);
+    assert_eq!(rows.as_array().unwrap().len(), 1);
+    assert_eq!(rows[0]["id"], id);
+    assert_eq!(rows[0]["requested_model"], MODEL);
+    let shown = json(h.aid().args(["show", id, "--json"]), 0);
+    assert_eq!(shown["execution"]["task_id"], id);
+    assert!(shown["execution"]["policy"].is_null());
 }
 
 #[test]

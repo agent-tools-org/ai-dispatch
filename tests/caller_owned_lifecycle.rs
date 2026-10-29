@@ -8,7 +8,10 @@ mod common;
 #[path = "common/caller_owned_lifecycle.rs"]
 mod lifecycle;
 use caller_owned::{Harness, MODEL, SUCCESS, bounded, identity, json};
-use lifecycle::{AgentProcess, GROUP_AGENT_SCRIPT, observe_unsettled};
+use lifecycle::{
+    AgentProcess, GROUP_AGENT_SCRIPT, assert_settlement_safe, complete_without_observation,
+    observe_after_worker_loss,
+};
 use std::time::{Duration, Instant};
 
 #[test]
@@ -61,8 +64,8 @@ fn killed_worker_is_lost_and_duplicate_submission_never_relaunches() {
     let id = "t-lost-worker";
     h.launch(id, &[]);
     h.wait_for(|| h.path("aid/agent.pid").exists());
-    let mut agent = AgentProcess::from_marker(&h, "agent");
-    let mut child = AgentProcess::from_marker(&h, "agent-child");
+    let agent = AgentProcess::from_marker(&h, "agent");
+    let child = AgentProcess::from_marker(&h, "agent-child");
     let group = unsafe { libc::getpgid(agent.pid) };
     assert!(group > 0);
     assert_eq!(unsafe { libc::getpgid(child.pid) }, group);
@@ -80,24 +83,17 @@ fn killed_worker_is_lost_and_duplicate_submission_never_relaunches() {
         "fixture processes must be ready"
     );
     assert_eq!(unsafe { libc::kill(pid, libc::SIGKILL) }, 0);
-    let waiting = observe_unsettled(&h, &agent, id);
-    assert!(waiting["revision"].as_u64().unwrap() >= running["revision"].as_u64().unwrap());
-    agent.kill();
-    h.wait_for(|| !agent.is_alive());
-    assert_eq!(unsafe { libc::getpgid(child.pid) }, group);
-    let child_waiting = observe_unsettled(&h, &child, id);
-    assert!(child_waiting["revision"].as_u64().unwrap() >= waiting["revision"].as_u64().unwrap());
-    assert_eq!(h.count(), 1);
-    child.kill();
+    let observed = observe_after_worker_loss(&h, id, &agent, &child, group);
+    assert!(observed["revision"].as_u64().unwrap() >= running["revision"].as_u64().unwrap());
     let lost = json(h.aid().args(["wait", id, "--json", "--timeout", "25"]), 0);
-    identity(&lost, id);
+    assert_settlement_safe(&lost, id, &agent, &child, group);
     assert_eq!(lost["settled"], true);
     assert_eq!(lost["worker"]["state"], "settled");
     assert_eq!(lost["worker"]["outcome"], "lost");
-    assert!(lost["revision"].as_u64().unwrap() > child_waiting["revision"].as_u64().unwrap());
+    assert!(lost["revision"].as_u64().unwrap() > running["revision"].as_u64().unwrap());
     let existing = json(h.run(id, &[]), 0);
     assert_eq!(existing["submission"], "existing");
-    identity(&existing, id);
+    assert_settlement_safe(&existing, id, &agent, &child, group);
     assert_eq!(existing["worker"]["outcome"], "lost");
     assert_eq!(existing["settled"], true);
     assert_eq!(existing["revision"], lost["revision"]);
@@ -108,21 +104,8 @@ fn killed_worker_is_lost_and_duplicate_submission_never_relaunches() {
 fn unconfirmed_worker_waits_for_the_full_timeout() {
     let h = Harness::new(SUCCESS);
     let id = "t-unconfirmed-wait";
-    // Clear launch evidence to simulate a pre-protocol row, not a proven never-launched task.
-    let mut cmd = h.aid();
-    cmd.args([
-        "run",
-        "controlled",
-        "preview only",
-        "--id",
-        id,
-        "--model",
-        MODEL,
-        "--dry-run",
-        "--no-hint",
-        "--no-skill",
-    ]);
-    assert!(bounded(&mut cmd).status.success());
+    complete_without_observation(&h, id);
+    // A caller-owned row with missing launch evidence remains unconfirmed.
     clear_legacy_launch_evidence(&h, id);
     let early = json(h.aid().args(["wait", id, "--json", "--timeout", "0"]), 124);
     assert_eq!(early["worker"]["state"], "unconfirmed");
@@ -137,7 +120,7 @@ fn unconfirmed_worker_waits_for_the_full_timeout() {
     assert_eq!(later["task"]["requested_model"], MODEL);
     assert_eq!(later["worker"]["state"], "unconfirmed");
     assert_eq!(later["settled"], false);
-    assert!(later["policy"].is_null());
+    identity(&later, id);
     // A row without recorded agent evidence cannot prove the agent gone, so stop stays unconfirmed.
     let stopped = json(h.aid().args(["stop", id, "--json"]), 5);
     assert_eq!(stopped["stop"]["result"], "unconfirmed");
@@ -145,7 +128,7 @@ fn unconfirmed_worker_waits_for_the_full_timeout() {
     let observed = json(h.aid().args(["wait", id, "--json", "--timeout", "0"]), 124);
     assert_eq!(observed["task_id"], id);
     assert_eq!(observed["settled"], false);
-    assert_default_rows(&h, id, 0);
+    h.assert_rows(id, 1);
 }
 
 fn clear_legacy_launch_evidence(h: &Harness, id: &str) {
@@ -158,7 +141,7 @@ fn clear_legacy_launch_evidence(h: &Harness, id: &str) {
 }
 
 #[test]
-fn settled_default_done_task_keeps_revision_and_text_stop_refuses() {
+fn default_json_wait_and_stop_refuse_without_changes_and_text_stop_keeps_legacy_error() {
     let h = Harness::new(SUCCESS);
     let id = "t-default-done-stop";
     let mut cmd = h.aid();
@@ -178,12 +161,19 @@ fn settled_default_done_task_keeps_revision_and_text_stop_refuses() {
     .arg("--dir")
     .arg(h.path("project"));
     assert!(bounded(&mut cmd).status.success());
-    let done = json(h.aid().args(["wait", id, "--json", "--timeout", "25"]), 0);
+    let done = json(h.aid().args(["show", id, "--json"]), 0)["execution"].clone();
     assert_eq!(done["task"]["status"], "done");
-    assert_eq!(done["settled"], true);
-    let stopped = json(h.aid().args(["stop", id, "--json"]), 0);
-    assert_eq!(stopped["stop"]["result"], "already_settled");
-    assert_eq!(stopped["revision"], done["revision"]);
+    assert_eq!(done["worker"]["state"], "unconfirmed");
+    assert_eq!(done["settled"], false);
+    for command in ["wait", "stop"] {
+        let refusal = json(h.aid().args([command, id, "--json"]), 3);
+        assert_eq!(refusal["protocol"], caller_owned::PROTOCOL);
+        assert_eq!(refusal["error"]["code"], "policy_unsupported");
+        let after = json(h.aid().args(["show", id, "--json"]), 0);
+        assert_eq!(after["execution"]["revision"], done["revision"]);
+        assert_eq!(after["execution"]["task"], done["task"]);
+        assert_eq!(after["execution"]["worker"], done["worker"]);
+    }
     let text = bounded(h.aid().args(["stop", id]));
     assert!(!text.status.success());
     let output = format!(
@@ -206,35 +196,31 @@ fn assert_default_rows(h: &Harness, id: &str, invocations: usize) {
     let shown = json(h.aid().args(["show", id, "--json"]), 0);
     assert_eq!(shown["execution"]["task_id"], id);
     assert!(shown["execution"]["policy"].is_null());
+    assert_eq!(shown["execution"]["worker"]["state"], "unconfirmed");
+    assert_eq!(shown["execution"]["settled"], false);
 }
 
 #[test]
 fn show_does_not_persist_settlement_after_worker_finishes() {
     let h = Harness::new(SUCCESS);
     let id = "t-show-read-only";
-    let verifier = h.verifier();
-    h.launch(id, &["--verify", &verifier]);
-    h.wait_for(|| h.path("holding").exists());
-    let active = json(h.aid().args(["show", id, "--json"]), 0);
-    let worker = active["execution"]["worker"]["pid"]
-        .as_i64()
-        .expect("gated worker PID") as i32;
-    assert_eq!(active["execution"]["settled"], false);
-    h.release();
-    // Probe process exit directly: no wait/stop observes settlement before these show calls.
-    h.wait_for(|| unsafe { libc::kill(worker, 0) } == -1);
+    complete_without_observation(&h, id);
     let first = json(h.aid().args(["show", id, "--json"]), 0);
     let second = json(h.aid().args(["show", id, "--json"]), 0);
     for shown in [&first, &second] {
         identity(&shown["execution"], id);
         assert_eq!(shown["execution"]["task"]["status"], "done");
-        assert_eq!(shown["execution"]["settled"], true);
-        assert_eq!(shown["execution"]["worker"]["outcome"], "completed");
+        assert_eq!(shown["execution"]["settled"], false);
+        assert!(shown["execution"]["worker"]["outcome"].is_null());
     }
     assert_eq!(first["execution"]["revision"], second["execution"]["revision"]);
     let settled = h.settled(id);
-    assert!(settled["revision"].as_u64().unwrap() >= second["execution"]["revision"].as_u64().unwrap());
+    assert!(settled["revision"].as_u64().unwrap() > second["execution"]["revision"].as_u64().unwrap());
     assert_eq!(settled["worker"]["outcome"], "completed");
+    let after = json(h.aid().args(["show", id, "--json"]), 0);
+    assert_eq!(after["execution"]["settled"], true);
+    assert_eq!(after["execution"]["revision"], settled["revision"]);
+    assert_eq!(after["execution"]["worker"], settled["worker"]);
     h.assert_rows(id, 1);
 }
 

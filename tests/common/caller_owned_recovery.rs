@@ -86,6 +86,21 @@ impl Recovery {
     }
 
     pub fn settle(&self, id: &str) -> Value {
+        if self.show(id)["execution"]["policy"].is_null() {
+            let mut cmd = self.h.aid();
+            cmd.args(["wait", id, "--timeout", "25"]);
+            let out = crate::caller_owned::bounded(&mut self.command(cmd));
+            assert!(
+                matches!(out.status.code(), Some(0 | 1)),
+                "default wait failed: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            let receipt = self.show(id)["execution"].clone();
+            assert_eq!(receipt["task"]["terminal"], true);
+            assert_eq!(receipt["worker"]["state"], "unconfirmed");
+            assert_eq!(receipt["settled"], false);
+            return receipt;
+        }
         let mut cmd = self.h.aid();
         cmd.args(["wait", id, "--json", "--timeout", "25"]);
         let receipt = json(self.command(cmd), 0);
@@ -152,15 +167,14 @@ impl Recovery {
 }
 
 fn is_recovery_event(event: &Value) -> bool {
+    // Rescue/checkpoint commits preserve changes; only another agent execution is recovery.
     let metadata = &event["metadata"];
     metadata["model_self_healed"] == true
         || metadata["hung_auto_retried"] == true
         || metadata["delivery_recovery"] == "started"
-        || metadata["recovery_commit"].is_string()
         || [
             "model unavailable → retry",
             "HUNG → retry",
-            "Rescued ",
             "Retrying uncommitted",
             "auto-cascading",
             "auto-retrying",

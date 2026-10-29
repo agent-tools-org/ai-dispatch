@@ -2,14 +2,12 @@
 // Depends on the toolbox module and temporary filesystem fixtures.
 
 use super::*;
-use crate::support::paths;
+
 use std::fs;
-use tempfile::TempDir;
 
 #[test]
 fn loads_tool_from_toml_file() {
-    let temp = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = tools_dir();
     fs::create_dir_all(&dir).unwrap();
     fs::write(
@@ -32,8 +30,7 @@ fn loads_tool_from_toml_file() {
 
 #[test]
 fn parses_tool_script_metadata() {
-    let temp = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = tools_dir().join("scripts");
     fs::create_dir_all(&dir).unwrap();
     fs::write(
@@ -52,8 +49,7 @@ fn parses_tool_script_metadata() {
 
 #[test]
 fn list_finds_toml_and_scripts() {
-    let temp = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = tools_dir();
     fs::create_dir_all(dir.join("scripts")).unwrap();
     fs::write(
@@ -69,8 +65,7 @@ fn list_finds_toml_and_scripts() {
 
 #[test]
 fn resolve_deduplicates_by_scope_priority() {
-    let temp = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let global = tools_dir();
     fs::create_dir_all(&global).unwrap();
     fs::write(
@@ -138,15 +133,13 @@ fn tool_scope_labels() {
 
 #[test]
 fn empty_dir_returns_no_tools() {
-    let temp = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     assert!(list_tools().is_empty());
 }
 
 #[test]
 fn toml_defaults_when_optional_fields_omitted() {
-    let temp = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = tools_dir();
     fs::create_dir_all(&dir).unwrap();
     fs::write(
@@ -164,8 +157,7 @@ fn toml_defaults_when_optional_fields_omitted() {
 
 #[test]
 fn resolve_toolbox_returns_all_without_filter() {
-    let temp = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = tools_dir();
     fs::create_dir_all(&dir).unwrap();
     fs::write(dir.join("a.toml"), "[tool]\nid = \"a\"\ncommand = \"a-cmd\"\n").unwrap();
@@ -242,8 +234,7 @@ fn filter_by_task_category_empty_category_keeps_all() {
 
 #[test]
 fn project_scope_overrides_global() {
-    let temp = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let global = tools_dir();
     fs::create_dir_all(&global).unwrap();
     fs::write(

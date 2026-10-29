@@ -13,7 +13,6 @@ pub(super) struct ProjectFile {
     pub project: ProjectConfig,
     #[serde(default)]
     pub audit: ProjectAuditConfig,
-    #[serde(default)]
     pub backup: Option<crate::workspace::backup::BackupProjectConfig>,
 }
 

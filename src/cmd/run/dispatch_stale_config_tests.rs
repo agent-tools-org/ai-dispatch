@@ -4,8 +4,7 @@ use super::*;
 
 #[test]
 fn stale_removed_agent_config_does_not_block_resolving_supported_dispatch() {
-    let dir = tempfile::tempdir().expect("home");
-    let _home = AidHomeGuard::set(dir.path());
+    let dir = crate::support::test_env::TestHome::new();
     std::fs::write(
         dir.path().join("agent_config.toml"),
         "[gemini]\nmodel = 'old'\n[qwen]\ndisabled = true\n\

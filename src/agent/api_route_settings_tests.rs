@@ -12,26 +12,17 @@ impl Drop for LibraryOverride {
 fn opts(home: &std::path::Path) -> RunOpts {
     RunOpts {
         dir: Some(home.display().to_string()),
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
         env: Some(std::collections::HashMap::from([(
             "HOME".into(),
             home.display().to_string(),
         )])),
-        env_forward: None,
+        ..Default::default()
     }
 }
 
 #[test]
 fn managed_api_key_helper_override_refuses_route_launch() {
-    let home = tempfile::tempdir().unwrap();
-    let _home = crate::support::paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let library = home.path().join("Library");
     TEST_LIBRARY_ROOT.with(|root| root.replace(Some(library.clone())));
     let _reset = LibraryOverride;

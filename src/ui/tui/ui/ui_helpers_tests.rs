@@ -3,52 +3,14 @@
 
 use super::*;
 use crate::task::view::read_output;
-use crate::types::{AgentKind, TaskId, VerifyStatus};
+use crate::types::{TaskId, VerifyStatus};
 use chrono::Local;
 use tempfile::NamedTempFile;
 
 fn make_task() -> Task {
     Task {
-        id: TaskId("t-ui".to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None,
         project_id: crate::config::project::current_project_id(),
-        worktree_path: None,
-        effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId("t-ui".to_string()), TaskStatus::Done)
     }
 }
 
@@ -96,27 +58,24 @@ fn last_error_detail_prefers_trigger_error_over_earlier_noise() {
     use crate::types::{EventKind, TaskEvent};
     let now = Local::now();
     let events = vec![
-        TaskEvent {
-            task_id: TaskId("t-trigger".to_string()),
-            timestamp: now,
-            event_kind: EventKind::Error,
-            detail: "bot.rs:41: priority_baseline_ha".to_string(),
-            metadata: None,
-        },
-        TaskEvent {
-            task_id: TaskId("t-trigger".to_string()),
-            timestamp: now,
-            event_kind: EventKind::Error,
-            detail: "apply_patch verification failed: Failed to find expected lines".to_string(),
-            metadata: None,
-        },
-        TaskEvent {
-            task_id: TaskId("t-trigger".to_string()),
-            timestamp: now,
-            event_kind: EventKind::Error,
-            detail: "Failed during verification: cargo check ...".to_string(),
-            metadata: None,
-        },
+        TaskEvent::at(
+            TaskId("t-trigger".to_string()),
+            EventKind::Error,
+            "bot.rs:41: priority_baseline_ha".to_string(),
+            now,
+        ),
+        TaskEvent::at(
+            TaskId("t-trigger".to_string()),
+            EventKind::Error,
+            "apply_patch verification failed: Failed to find expected lines".to_string(),
+            now,
+        ),
+        TaskEvent::at(
+            TaskId("t-trigger".to_string()),
+            EventKind::Error,
+            "Failed during verification: cargo check ...".to_string(),
+            now,
+        ),
     ];
 
     let reason = last_error_detail(&events).expect("expected a Reason");
@@ -128,20 +87,18 @@ fn last_error_detail_falls_back_to_first_error_without_trigger() {
     use crate::types::{EventKind, TaskEvent};
     let now = Local::now();
     let events = vec![
-        TaskEvent {
-            task_id: TaskId("t-fallback".to_string()),
-            timestamp: now,
-            event_kind: EventKind::Error,
-            detail: "first generic error".to_string(),
-            metadata: None,
-        },
-        TaskEvent {
-            task_id: TaskId("t-fallback".to_string()),
-            timestamp: now,
-            event_kind: EventKind::Error,
-            detail: "second generic error".to_string(),
-            metadata: None,
-        },
+        TaskEvent::at(
+            TaskId("t-fallback".to_string()),
+            EventKind::Error,
+            "first generic error".to_string(),
+            now,
+        ),
+        TaskEvent::at(
+            TaskId("t-fallback".to_string()),
+            EventKind::Error,
+            "second generic error".to_string(),
+            now,
+        ),
     ];
 
     assert_eq!(

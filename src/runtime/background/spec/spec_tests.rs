@@ -7,8 +7,7 @@ use crate::support::paths;
 
 #[test]
 fn agent_preparation_creates_a_spec_and_preserves_existing_worker_fields() {
-    let temp = tempfile::tempdir().expect("home");
-    let _guard = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     super::BackgroundRunSpec::prepare_agent("t-agent").expect("prepare standalone agent");
     let mut spec = load_spec_if_exists("t-agent").expect("read").expect("spec");
     assert_eq!(spec.task_id, "t-agent");
@@ -48,8 +47,7 @@ fn pid_updates_publish_complete_specs_to_concurrent_readers() {
 
 #[test]
 fn absent_or_removed_spec_is_settled_but_invalid_spec_is_an_error() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     assert!(load_spec_if_exists("t-spec").unwrap().is_none());
     paths::ensure_dirs().unwrap();
     let path = paths::job_path("t-spec");
@@ -61,9 +59,7 @@ fn absent_or_removed_spec_is_settled_but_invalid_spec_is_an_error() {
 
 #[test]
 fn actual_pre_upgrade_spec_from_jobs_loads_without_detached_field() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
     let content = include_str!("../../../../testdata/legacy-background-spec.json");
     assert!(content.contains("\"detached\": true"));
     std::fs::write(paths::job_path("t-9ef43f87"), content).unwrap();
@@ -80,8 +76,7 @@ fn actual_pre_upgrade_spec_from_jobs_loads_without_detached_field() {
 #[test]
 fn saved_spec_is_readable_only_by_owner() {
     use std::os::unix::fs::PermissionsExt;
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let spec: super::BackgroundRunSpec = serde_json::from_str(
         include_str!("../../../../testdata/legacy-background-spec.json")).unwrap();
     super::save_spec(&spec).unwrap();

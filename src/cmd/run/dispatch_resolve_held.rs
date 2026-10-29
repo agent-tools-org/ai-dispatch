@@ -260,12 +260,11 @@ pub(crate) fn maybe_insert_held_route_event(
         .is_none()
         .then_some(original.as_str());
     let wall = wall_label(crate::routing::availability::availability(&from_kind, from_custom).wall);
-    let _ = store.insert_event(&crate::types::TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: crate::types::EventKind::Milestone,
-        detail: held_substitution_detail(original, hold, &setup.agent_display_name, dry_run),
-        metadata: Some(held_substitution_metadata(
+    let _ = store.insert_event(&crate::types::TaskEvent::new(
+        task_id.clone(),
+        crate::types::EventKind::Milestone,
+        held_substitution_detail(original, hold, &setup.agent_display_name, dry_run),
+    ).with_metadata(Some(held_substitution_metadata(
             original,
             &setup.agent_display_name,
             None,
@@ -273,6 +272,5 @@ pub(crate) fn maybe_insert_held_route_event(
             hold,
             wall,
             dry_run,
-        )),
-    });
+        ))));
 }

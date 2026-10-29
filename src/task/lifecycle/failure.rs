@@ -38,17 +38,15 @@ pub(super) fn record_unclassified(store: &Store, task_id: &TaskId) {
     if excerpt.is_empty() {
         return;
     }
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: "Unclassified provider failure".to_string(),
-        metadata: Some(serde_json::json!({
+    let _ = store.insert_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Milestone,
+        "Unclassified provider failure".to_string(),
+    ).with_metadata(Some(serde_json::json!({
             "unclassified_failure": true,
             "agent": task.agent.as_str(),
             "provider_excerpt": excerpt,
-        })),
-    });
+        }))));
 }
 
 fn recognised(raw: &str, agent: AgentKind, source: Channel) -> bool {

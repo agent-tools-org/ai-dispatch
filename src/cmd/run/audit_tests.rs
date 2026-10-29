@@ -6,7 +6,7 @@ use super::{RunArgs, maybe_run_post_done_audit};
 use crate::batch::parse_batch_file;
 use crate::config::project::{ProjectAuditConfig, ProjectConfig};
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{Task, TaskId, TaskStatus};
 use chrono::Local;
 use std::env;
 use std::fs;
@@ -19,42 +19,12 @@ fn env_lock() -> std::sync::MutexGuard<'static, ()> {
 
 fn done_task(task_id: &str) -> Task {
     Task {
-        id: TaskId(task_id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
         prompt: "audit task".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
         duration_ms: Some(1_000),
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
         exit_code: Some(0),
         created_at: Local::now(),
         completed_at: Some(Local::now()),
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(task_id.to_string()), TaskStatus::Done)
     }
 }
 
@@ -123,41 +93,38 @@ fn audit_records_pass_verdict() {
 }
 
 #[test]
-fn audit_records_fail_verdict() {
-    let _guard = env_lock();
-    let temp = tempfile::tempdir().unwrap();
-    install_aic_shim(
-        temp.path(),
-        "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'report: /tmp/fail.md\\n'\nexit 1",
-    );
-    set_env("AIC_TEST_BINARY", temp.path().join("aic"));
-    let store = Store::open_memory().unwrap();
-    store.insert_task(&done_task("t-audit-fail")).unwrap();
+fn audit_records_failure_verdicts() {
+    for (case, script, task_id, detail) in [
+        (
+            "audit_records_fail_verdict",
+            "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'report: /tmp/fail.md\\n'\nexit 1",
+            "t-audit-fail",
+            "fail",
+        ),
+        (
+            "audit_records_error_verdict",
+            "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nexit 200",
+            "t-audit-error",
+            "error",
+        ),
+    ] {
+        eprintln!("case: {case}");
+        let _guard = env_lock();
+        let temp = tempfile::tempdir().unwrap();
+        install_aic_shim(
+            temp.path(),
+            script,
+        );
+        set_env("AIC_TEST_BINARY", temp.path().join("aic"));
+        let store = Store::open_memory().unwrap();
+        store.insert_task(&done_task(task_id)).unwrap();
 
-    run_audit_for_task(&store, "t-audit-fail", &audit_args(true));
+        run_audit_for_task(&store, task_id, &audit_args(true));
 
-    let task = store.get_task("t-audit-fail").unwrap().unwrap();
-    assert_eq!(task.audit_verdict.as_deref(), Some("fail"));
-    remove_env("AIC_TEST_BINARY");
-}
-
-#[test]
-fn audit_records_error_verdict() {
-    let _guard = env_lock();
-    let temp = tempfile::tempdir().unwrap();
-    install_aic_shim(
-        temp.path(),
-        "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nexit 200",
-    );
-    set_env("AIC_TEST_BINARY", temp.path().join("aic"));
-    let store = Store::open_memory().unwrap();
-    store.insert_task(&done_task("t-audit-error")).unwrap();
-
-    run_audit_for_task(&store, "t-audit-error", &audit_args(true));
-
-    let task = store.get_task("t-audit-error").unwrap().unwrap();
-    assert_eq!(task.audit_verdict.as_deref(), Some("error"));
-    remove_env("AIC_TEST_BINARY");
+        let task = store.get_task(task_id).unwrap().unwrap();
+        assert_eq!(task.audit_verdict.as_deref(), Some(detail));
+        remove_env("AIC_TEST_BINARY");
+    }
 }
 
 #[test]

@@ -79,23 +79,11 @@ fn finalize_buffered(
         write_output_file(agent.kind(), path, &state.full_output)?;
     }
     state.info = if state.info.status == TaskStatus::Failed {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Failed,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
+        CompletionInfo::new(TaskStatus::Failed)
     } else if exit_status.success() {
         agent.parse_completion(&state.full_output)
     } else {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Failed,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
+        CompletionInfo::new(TaskStatus::Failed)
     };
     state.info.exit_code = i32::try_from(exit_status.exit_code()).ok();
     let mut event = crate::agent::completion_event::make_completion_event(task_id, &state.info);
@@ -161,22 +149,20 @@ fn record_streaming_exit(
     state: &MonitorState,
     status: TaskStatus,
 ) -> Result<()> {
-    store.insert_agent_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: if status == TaskStatus::Done {
+    store.insert_agent_event(&TaskEvent::new(
+        task_id.clone(),
+        if status == TaskStatus::Done {
             EventKind::Completion
         } else {
             EventKind::Error
         },
-        detail: format!(
+        format!(
             "{} — {} events, exit code {}",
             status.label(),
             state.event_count,
             exit_status.exit_code()
         ),
-        metadata: None,
-    })?;
+    ))?;
     Ok(())
 }
 

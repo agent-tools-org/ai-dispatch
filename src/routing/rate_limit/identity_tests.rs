@@ -3,13 +3,12 @@
 
 use super::*;
 use crate::routing::{availability, rate_limit};
-use crate::support::paths::{self, AidHomeGuard};
+use crate::support::paths::{self};
 use crate::types::{AgentKind, TaskId};
 
 #[test]
 fn custom_balance_hold_is_read_under_its_own_id() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     rate_limit::mark_rate_limited(&AgentKind::Custom, Some("auditor"), "Insufficient balance");
     assert!(rate_limit::is_rate_limited(
         &AgentKind::Custom,
@@ -27,8 +26,7 @@ fn custom_balance_hold_is_read_under_its_own_id() {
 
 #[test]
 fn typed_reset_markers_round_trip_without_changing_the_stated_date() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let reset = chrono::Local::now().naive_local() + chrono::Duration::days(1);
     let stated = rate_limit::format_recovery(reset);
     for (kind, name) in [
@@ -45,8 +43,7 @@ fn typed_reset_markers_round_trip_without_changing_the_stated_date() {
 
 #[test]
 fn overlay_signature_identity_survives_readback_without_a_registry_entry() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let event = serde_json::json!({"type":"error", "error":{"data":{
         "message":"You have hit your usage limit"}}});
     crate::agent::opencode::parse_json_event(
@@ -76,8 +73,7 @@ fn overlay_signature_identity_survives_readback_without_a_registry_entry() {
 
 #[test]
 fn configured_custom_signature_is_used_by_direct_marker_writes() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let agents = paths::aid_dir().join("agents");
     std::fs::create_dir_all(&agents).expect("agents");
     std::fs::write(
@@ -130,8 +126,7 @@ fn stored_custom_identity_cannot_widen_builtin_or_untrusted_signatures() {
 
 #[test]
 fn provider_group_holds_keep_the_engine_signature_and_provider_scope() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     rate_limit::mark_rate_limited_for_model(
         &AgentKind::OpenCode,
         None,

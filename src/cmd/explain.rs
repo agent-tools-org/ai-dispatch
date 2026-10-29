@@ -150,15 +150,13 @@ mod tests {
 
     #[test]
     fn resolve_explain_agent_defaults_to_agy() {
-        let dir = tempfile::tempdir().expect("home");
-        let _guard = paths::AidHomeGuard::set(dir.path());
+        let _dir = crate::support::test_env::TestHome::new();
         assert_eq!(resolve_explain_agent(None).expect("default"), "agy");
     }
 
     #[test]
     fn resolve_explain_agent_rejects_disabled_default_agent() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let _guard = paths::AidHomeGuard::set(dir.path());
+        let _dir = crate::support::test_env::TestHome::new();
         agent_config::save_agent_disabled("agy", true).expect("disable agent");
 
         let err = resolve_explain_agent(None)

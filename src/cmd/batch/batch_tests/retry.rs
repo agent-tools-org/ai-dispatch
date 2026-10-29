@@ -5,7 +5,6 @@ use super::shared::make_stored_task;
 use crate::cmd::run::RunArgs;
 use crate::store::Store;
 use crate::types::{AgentKind, TaskStatus};
-use std::sync::Arc;
 
 use super::super::batch_retry::retry_task_to_run_args;
 
@@ -228,9 +227,7 @@ fn retry_task_to_run_args_uses_waiting_placeholder_fields() {
     // markers, and flips behaviour depending on whether codex happens to be
     // exhausted right now. When it was, the fallback switched the agent to agy
     // and the assertions below silently described a different code path.
-    let aid_home = tempfile::tempdir().unwrap();
-    let _aid_home_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_aid_home, store) = crate::support::test_env::TestHome::new().shared_store();
     let repo = init_repo();
     git(repo.path(), &["branch", "feat/retry"]);
     let prompt = "retry ".repeat(40);

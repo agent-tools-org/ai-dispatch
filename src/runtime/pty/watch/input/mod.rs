@@ -19,13 +19,11 @@ impl MonitorState {
         if !Self::write_input_or_record_failure(bridge, store, task_id, "Response", &input, None)? {
             return Ok(());
         }
-        store.insert_event(&TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Reasoning,
-            detail: "Response written to PTY; consumption unconfirmed".to_string(),
-            metadata: Some(json!({ "input_delivery": "written", "consumption": "unconfirmed" })),
-        })?;
+        store.insert_event(&TaskEvent::new(
+            task_id.clone(),
+            EventKind::Reasoning,
+            "Response written to PTY; consumption unconfirmed".to_string(),
+        ).with_metadata(Some(json!({ "input_delivery": "written", "consumption": "unconfirmed" }))))?;
         register_inbound_echo(&mut self.inbound_echo_suppress, input);
         self.finish_input_delivery(store, task_id)?;
         Ok(())
@@ -46,18 +44,16 @@ impl MonitorState {
         register_inbound_echo(&mut self.inbound_echo_suppress, message.clone());
         store.mark_delivered_matching_inbound(task_id.as_str(), &message)?;
         self.finish_input_delivery(store, task_id)?;
-        store.insert_event(&TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Reasoning,
-            detail: format!(
+        store.insert_event(&TaskEvent::new(
+            task_id.clone(),
+            EventKind::Reasoning,
+            format!(
                 "Steer written to PTY; consumption unconfirmed: {}",
                 message.chars().take(200).collect::<String>()
             ),
-            metadata: Some(json!({
+        ).with_metadata(Some(json!({
                 "input_delivery": "written", "source": "steer", "consumption": "unconfirmed"
-            })),
-        })?;
+            }))))?;
         Ok(())
     }
 
@@ -85,21 +81,19 @@ impl MonitorState {
             register_inbound_echo(&mut self.inbound_echo_suppress, message.content.clone());
             store.mark_delivered(message.id)?;
             self.finish_input_delivery(store, task_id)?;
-            store.insert_event(&TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: Local::now(),
-                event_kind: EventKind::Reasoning,
-                detail: format!(
+            store.insert_event(&TaskEvent::new(
+                task_id.clone(),
+                EventKind::Reasoning,
+                format!(
                     "Reply written to PTY; consumption unconfirmed: {}",
                     message.content.chars().take(200).collect::<String>()
                 ),
-                metadata: Some(json!({
+            ).with_metadata(Some(json!({
                     "message_id": message.id,
                     "source": message.source,
                     "input_delivery": "written",
                     "consumption": "unconfirmed",
-                })),
-            })?;
+                }))))?;
         }
         Ok(())
     }
@@ -120,21 +114,19 @@ impl MonitorState {
         let Err(error) = delivery else {
             return Ok(true);
         };
-        store.insert_event(&TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: format!(
+        store.insert_event(&TaskEvent::new(
+            task_id.clone(),
+            EventKind::Milestone,
+            format!(
                 "{source} PTY write failed; consumption unconfirmed: {} — {error:#}",
                 message.chars().take(200).collect::<String>()
             ),
-            metadata: Some(json!({
+        ).with_metadata(Some(json!({
                 "input_delivery": "failed",
                 "source": source,
                 "message_id": message_id,
                 "error": error.to_string(),
-            })),
-        })?;
+            }))))?;
         Ok(false)
     }
 
@@ -163,15 +155,13 @@ impl MonitorState {
         crate::task::unstick::queue_auto_nudge(store.as_ref(), task_id.as_str(), &message)?;
         self.idle_nudged = true;
         self.idle_warned = true;
-        store.insert_event(&TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Reasoning,
-            detail: "Auto-nudge queued".to_string(),
-            metadata: Some(json!({
+        store.insert_event(&TaskEvent::new(
+            task_id.clone(),
+            EventKind::Reasoning,
+            "Auto-nudge queued".to_string(),
+        ).with_metadata(Some(json!({
                 "message": message, "source": "unstick-auto", "input_delivery": "queued"
-            })),
-        })?;
+            }))))?;
         Ok(())
     }
 }

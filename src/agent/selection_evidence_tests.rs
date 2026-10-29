@@ -6,7 +6,6 @@ use super::super::super::selection_scoring::{
     CandidateContext, NEUTRAL_BASE, model_capability_score, score_breakdown,
 };
 use super::*;
-use tempfile::TempDir;
 
 fn testing_advice(difficulty: TaskDifficulty, team: Option<&TeamConfig>) -> AdviceReport {
     advise(
@@ -154,8 +153,7 @@ fn matrix_removal_agent_list_json_has_no_agent_capability_map() {
 
 #[test]
 fn discovered_agy_model_uses_neutral_base_when_capability_is_unknown() {
-    let temp = TempDir::new().expect("temp dir");
-    let _home = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("aid dirs");
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

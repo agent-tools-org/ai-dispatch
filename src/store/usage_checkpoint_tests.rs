@@ -26,13 +26,7 @@ fn setup(store: &Store, kind: AgentKind) -> TaskId {
 }
 
 fn info() -> CompletionInfo {
-    CompletionInfo {
-        tokens: None,
-        cost_usd: None,
-        model: None,
-        status: TaskStatus::Done,
-        exit_code: None,
-    }
+    CompletionInfo::new(TaskStatus::Done)
 }
 
 fn ingest(store: &Arc<Store>, id: &TaskId, agent: &dyn Agent, lines: &str) -> CompletionInfo {
@@ -70,14 +64,9 @@ fn complete(
         store
             .record_agent_completion(
                 TaskCompletionUpdate {
-                    id: id.as_str(),
-                    status,
-                    tokens,
-                    duration_ms: 100,
-                    observed_model: None,
-                    attribution_source: None,
+                    tokens: tokens,
                     cost_usd: cost,
-                    exit_code: None,
+                    ..TaskCompletionUpdate::new(id.as_str(), status, 100)
                 },
                 None
             )
@@ -93,8 +82,7 @@ fn assert_usage(store: &Store, id: &TaskId, tokens: i64, cost: f64) {
 
 #[test]
 fn claude_checkpoint_survives_worker_loss_and_database_reopen() {
-    let dir = tempfile::tempdir().expect("dir");
-    let _home = crate::support::paths::AidHomeGuard::set(dir.path());
+    let dir = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("dirs");
     let db = dir.path().join("aid.db");
     let store = Arc::new(Store::open(&db).expect("store"));
@@ -133,8 +121,7 @@ fn normal_and_worker_failure_settlement_recover_checkpoint() {
 
 #[test]
 fn stopped_task_keeps_checkpoint_and_rejects_late_completion() {
-    let dir = tempfile::tempdir().expect("dir");
-    let _home = crate::support::paths::AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let id = setup(&store, AgentKind::Claude);

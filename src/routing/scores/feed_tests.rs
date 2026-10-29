@@ -3,7 +3,7 @@
 // Deps: feed cache helpers, isolated AidHomeGuard, tempfile.
 
 use super::*;
-use crate::{support::paths::AidHomeGuard, routing::scores::test_support::sample};
+use crate::{routing::scores::test_support::sample};
 use std::path::Path;
 
 fn store_response(path: &Path, body: Option<&[u8]>) -> anyhow::Result<()> {
@@ -19,8 +19,7 @@ fn store_response(path: &Path, body: Option<&[u8]>) -> anyhow::Result<()> {
 
 #[test]
 fn cache_refresh_keeps_old_sample_on_failure_empty_stale_or_malformed() {
-    let dir = tempfile::tempdir().expect("dir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     let path = crate::support::paths::aid_dir().join("scores.json");
     let old = sample();
     store_response(&path, Some(&serde_json::to_vec(&old).expect("sample"))).expect("store");
@@ -56,8 +55,7 @@ fn cache_refresh_keeps_old_sample_on_failure_empty_stale_or_malformed() {
 
 #[test]
 fn missing_corrupt_or_empty_cache_is_unknown() {
-    let dir = tempfile::tempdir().expect("dir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     assert_eq!(load_cache(), None);
     fs::create_dir_all(crate::support::paths::aid_dir()).expect("dir");
     let path = crate::support::paths::aid_dir().join("scores.json");
@@ -71,8 +69,7 @@ fn missing_corrupt_or_empty_cache_is_unknown() {
 
 #[test]
 fn stale_local_cache_serves_evidence_but_needs_refresh_after_24_hours() {
-    let dir = tempfile::tempdir().expect("dir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     let mut feed = sample();
     feed.built_at = (Utc::now() - chrono::Duration::hours(25)).to_rfc3339();
     fs::create_dir_all(crate::support::paths::aid_dir()).expect("dir");

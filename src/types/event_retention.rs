@@ -1,6 +1,7 @@
-// Display helpers for historical events whose bulky output has been trimmed.
-// Extends TaskEvent; event detail and structured evidence remain available.
-use super::TaskEvent;
+// Event construction and display, including trimmed historical output.
+// Extends TaskEvent; preserves full detail and structured evidence.
+use super::{TaskEvent, TaskId, EventKind};
+use chrono::Local;
 
 impl TaskEvent {
     pub(crate) fn trimmed_note(&self) -> Option<&'static str> {
@@ -38,13 +39,11 @@ mod tests {
     #[test]
     fn full_rendering_preserves_retained_values_and_identifies_each_marker() {
         let marker = json!({"trimmed": true, "bytes": 5000});
-        let mut event = TaskEvent {
-            task_id: crate::types::TaskId("trimmed".into()),
-            timestamp: chrono::Local::now(),
-            event_kind: crate::types::EventKind::Build,
-            detail: "retained detail".into(),
-            metadata: None,
-        };
+        let mut event = TaskEvent::new(
+            crate::types::TaskId("trimmed".into()),
+            crate::types::EventKind::Build,
+            "retained detail".into(),
+        );
         for (metadata, expected) in [
             (
                 json!({"full":"retained full","provider_stdout":marker}),
@@ -67,5 +66,42 @@ mod tests {
             assert_eq!(event.full_detail(), expected);
             assert!(event.display_detail().starts_with("retained detail"));
         }
+    }
+}
+
+impl TaskEvent {
+    pub(crate) fn new(task_id: TaskId, event_kind: EventKind, detail: String) -> Self {
+        Self::at(task_id, event_kind, detail, Local::now())
+    }
+
+    pub(crate) fn at(
+        task_id: TaskId,
+        event_kind: EventKind,
+        detail: String,
+        timestamp: chrono::DateTime<Local>,
+    ) -> Self {
+        Self {
+            task_id,
+            timestamp,
+            event_kind,
+            detail,
+            metadata: None,
+        }
+    }
+
+    pub(crate) fn with_metadata(mut self, metadata: Option<serde_json::Value>) -> Self {
+        self.metadata = metadata;
+        self
+    }
+
+    /// Untruncated detail: parsers stash text over the display cap in
+    /// metadata under `"full"`.
+    pub fn full_detail(&self) -> std::borrow::Cow<'_, str> {
+        let detail = self.metadata
+            .as_ref()
+            .and_then(|meta| meta.get("full"))
+            .and_then(|value| value.as_str())
+            .unwrap_or(&self.detail);
+        self.render_detail(detail)
     }
 }

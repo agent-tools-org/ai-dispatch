@@ -6,24 +6,16 @@ use serde_json::json;
 
 #[test]
 fn completion_metadata_updates_summary_fields() {
-    let mut info = CompletionInfo {
-        tokens: None,
-        status: TaskStatus::Done,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    };
-    let event = TaskEvent {
-        task_id: TaskId("t-usage".to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Completion,
-        detail: "completed".to_string(),
-        metadata: Some(json!({
+    let mut info = CompletionInfo::new(TaskStatus::Done);
+    let event = TaskEvent::new(
+        TaskId("t-usage".to_string()),
+        EventKind::Completion,
+        "completed".to_string(),
+    ).with_metadata(Some(json!({
             "tokens": 12345,
             "model": "gpt-4.1",
             "cost_usd": 0.12
-        })),
-    };
+        })));
 
     apply_completion_event(&mut info, &event);
 
@@ -41,13 +33,11 @@ fn non_completion_events_do_not_change_summary_fields() {
         cost_usd: Some(0.01),
         exit_code: None,
     };
-    let event = TaskEvent {
-        task_id: TaskId("t-ignore".to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Reasoning,
-        detail: "thinking".to_string(),
-        metadata: Some(json!({ "tokens": 999 })),
-    };
+    let event = TaskEvent::new(
+        TaskId("t-ignore".to_string()),
+        EventKind::Reasoning,
+        "thinking".to_string(),
+    ).with_metadata(Some(json!({ "tokens": 999 })));
 
     apply_completion_event(&mut info, &event);
 
@@ -64,8 +54,6 @@ fn cost_ceiling_only_triggers_above_limit() {
     assert!(!exceeds_cost_ceiling(Some(1.0), None));
 }
 
-
-
 /// The live false positive of 2026-08-07 at the call site that produced it.
 ///
 /// A cursor audit task quoted `src/agent/cursor_tests.rs:142` into its report.
@@ -74,8 +62,7 @@ fn cost_ceiling_only_triggers_above_limit() {
 /// diagnostic event is the CLI talking, and the model cannot author one.
 #[test]
 fn only_a_diagnostic_event_can_mark_a_route_rate_limited() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let store = std::sync::Arc::new(crate::store::Store::open_memory().unwrap());
     let task = running_task("t-cursor-quote", AgentKind::Cursor);
     store.insert_task(&task).unwrap();

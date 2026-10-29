@@ -6,9 +6,7 @@ use crate::types::DeliveryAssessment;
 
 #[tokio::test]
 async fn round2_preservation_recovery_keeps_brief_feedback_and_missing_rollout() {
-    let temp = TempDir::new().unwrap();
-    let _home = paths::AidHomeGuard::set(temp.path());
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let task = recovery_task(temp.path());
     store.insert_task(&task).unwrap();
     let args = RunArgs {
@@ -64,16 +62,7 @@ fn recovery_task(root: &std::path::Path) -> Task {
 fn assert_fresh_command(child: &Task, session_id: &str) {
     let opts = RunOpts {
         session_id: Some(session_id.into()),
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let command = crate::agent::codex::CodexAgent
         .build_command(child.resolved_prompt.as_deref().unwrap(), &opts)
@@ -92,13 +81,7 @@ async fn assert_manual_retry(store: &Arc<Store>, child: &Task) {
         crate::cmd::retry::RetryArgs {
             task_id: child.id.to_string(),
             feedback: Some("Manual correction".into()),
-            feedback_file: None,
-            agent: None,
-            model: None,
-            idle_timeout_secs: None,
-            dir: None,
-            reset: false,
-            bg: false,
+            ..Default::default()
         },
         false,
     )

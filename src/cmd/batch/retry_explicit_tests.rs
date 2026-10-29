@@ -4,9 +4,7 @@ use super::*;
 
 #[tokio::test]
 async fn explicit_retry_batch_stopped_parent_launches() {
-    let home = TempDir::new().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
-    paths::ensure_dirs().unwrap();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = TempDir::new().unwrap();
     install_explicit_retry_agent(repo.path());
     let store = Arc::new(Store::open_memory().unwrap());

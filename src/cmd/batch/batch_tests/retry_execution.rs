@@ -5,8 +5,8 @@ use super::shared::make_stored_task;
 use crate::store::Store;
 use crate::support::paths::AidHomeGuard;
 use crate::types::{AgentKind, TaskStatus};
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::{PathBuf};
+
 use std::sync::Arc;
 
 use super::super::batch_retry::retry_failed;
@@ -66,26 +66,10 @@ pub(super) fn isolated_home() -> AidHomeGuard {
     AidHomeGuard::set(temp.path())
 }
 
-pub(super) fn git(repo_dir: &Path, args: &[&str]) {
-    assert!(
-        Command::new("git")
-            .args(["-C", &repo_dir.to_string_lossy()])
-            .args(args)
-            .status()
-            .unwrap()
-            .success()
-    );
-}
+pub(super) use crate::support::test_env::git;
 
 pub(super) fn init_repo() -> tempfile::TempDir {
-    let repo = tempfile::tempdir().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
-    git(repo.path(), &["add", "file.txt"]);
-    git(repo.path(), &["commit", "-m", "init"]);
-    repo
+    crate::support::test_repo::repo_with_file("file.txt", "hello\n", "init")
 }
 
 pub(super) fn linked_worktree(branch: &str) -> (tempfile::TempDir, tempfile::TempDir, PathBuf) {

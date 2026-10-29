@@ -6,8 +6,7 @@ use rusqlite::params;
 
 #[tokio::test]
 async fn agent_rows_and_events_keep_plain_names_in_web_history() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = crate::support::paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     seed_history(&store, home.path());
     let Json(tasks) = list_tasks(Query(TaskListParams { filter: None }), State(store.clone()))

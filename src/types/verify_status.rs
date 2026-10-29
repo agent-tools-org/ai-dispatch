@@ -35,41 +35,19 @@ impl VerifyStatus {
         Self::Unobserved,
     ];
 
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Pending => "pending",
-            Self::Passed => "passed",
-            Self::Failed => "failed",
-            Self::Skipped => "skipped",
-            Self::TimedOut => "timed_out",
-            Self::InfrastructureFailure => "infrastructure_failure",
-            Self::Unobserved => "unobserved",
-        }
-    }
-
-    pub fn parse_str(s: &str) -> Option<Self> {
-        match s {
-            "pending" => Some(Self::Pending),
-            "passed" => Some(Self::Passed),
-            "failed" => Some(Self::Failed),
-            "skipped" => Some(Self::Skipped),
-            "timed_out" => Some(Self::TimedOut),
-            "infrastructure_failure" => Some(Self::InfrastructureFailure),
-            "unobserved" => Some(Self::Unobserved),
-            _ => None,
-        }
-    }
-
-    #[cfg(test)]
-    /// True when a verify command was started (pass, fail, or timeout).
-    /// Distinct from delivery: an empty-diff task can still have been verified.
-    pub fn was_attempted(self) -> bool {
-        matches!(
-            self,
-            Self::Passed | Self::Failed | Self::TimedOut | Self::InfrastructureFailure
-        )
-    }
 }
+
+super::string_values::string_values!(
+    VerifyStatus, as_str(&self), pub parse_str {
+        Pending => "pending",
+        Passed => "passed",
+        Failed => "failed",
+        Skipped => "skipped",
+        TimedOut => "timed_out",
+        InfrastructureFailure => "infrastructure_failure",
+        Unobserved => "unobserved",
+    }
+);
 
 #[cfg(test)]
 mod tests {
@@ -99,14 +77,4 @@ mod tests {
         assert_eq!(VerifyStatus::parse_str("unobserved"), Some(VerifyStatus::Unobserved));
     }
 
-    #[test]
-    fn was_attempted_excludes_skipped_pending_and_unobserved() {
-        assert!(VerifyStatus::Passed.was_attempted());
-        assert!(VerifyStatus::Failed.was_attempted());
-        assert!(VerifyStatus::TimedOut.was_attempted());
-        assert!(VerifyStatus::InfrastructureFailure.was_attempted());
-        assert!(!VerifyStatus::Skipped.was_attempted());
-        assert!(!VerifyStatus::Pending.was_attempted());
-        assert!(!VerifyStatus::Unobserved.was_attempted());
-    }
 }

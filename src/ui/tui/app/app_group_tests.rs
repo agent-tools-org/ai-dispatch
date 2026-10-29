@@ -7,21 +7,12 @@ use chrono::{Duration, Local};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::sync::Arc;
 
-use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
 
 fn task(id: &str) -> Task {
     Task {
-        id: TaskId(id.to_string()), agent: AgentKind::Codex, custom_agent_name: None,
-        prompt: format!("prompt {id}"), resolved_prompt: None, category: None,
-        status: TaskStatus::Done, parent_task_id: None,
-        workgroup_id: None, caller_kind: None, caller_session_id: None, agent_session_id: None,
-        repo_path: None, project_id: None, worktree_path: None, effective_dir: None, worktree_branch: None,
-        final_head_sha: None, final_branch: None, start_sha: None, log_path: None, output_path: None,
-        tokens: None, prompt_tokens: None, duration_ms: None, requested_model: None,
-        observed_model: None, attribution_source: None, cost_usd: None, exit_code: None,
-        created_at: Local::now(), completed_at: None, verify: None, verify_status: VerifyStatus::Skipped,
-        pending_reason: None, read_only: false, budget: false, audit_verdict: None,
-        audit_report_path: None, delivery_assessment: None,
+        prompt: format!("prompt {id}"),
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
 }
 
@@ -141,10 +132,8 @@ fn animation_only_changes_a_real_reasoning_state() {
     let mut reasoning = task("t-thinking");
     reasoning.status = TaskStatus::Running;
     store.insert_task(&reasoning).unwrap();
-    store.insert_event(&TaskEvent {
-        task_id: reasoning.id.clone(), timestamp: Local::now(), event_kind: EventKind::Reasoning,
-        detail: "checking".into(), metadata: None,
-    }).unwrap();
+    store.insert_event(&TaskEvent::new(reasoning.id.clone(), EventKind::Reasoning, "checking".into()))
+        .unwrap();
     let mut app = App::new(store, super::super::RunOptions::default()).unwrap();
     let first = app.task_activity(&reasoning);
     app.tick().unwrap();

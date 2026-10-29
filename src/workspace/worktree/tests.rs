@@ -3,30 +3,12 @@
 use super::*;
 use crate::support::test_subprocess;
 use std::path::Path;
-use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+
 use tempfile::TempDir;
 
-fn git(repo_dir: &Path, args: &[&str]) {
-    let repo_dir = repo_dir.to_string_lossy().to_string();
-    assert!(Command::new("git")
-        .args(["-C", repo_dir.as_str()])
-        .args(args)
-        .status()
-        .unwrap()
-        .success());
-}
+use crate::support::test_env::git;
 
-fn unique_branch(prefix: &str) -> String {
-    format!(
-        "{prefix}-{}-{}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    )
-}
+use crate::support::test_repo::unique_name as unique_branch;
 
 #[test]
 fn validate_git_repo_fails_on_nonrepo() {

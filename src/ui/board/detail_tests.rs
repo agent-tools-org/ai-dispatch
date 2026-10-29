@@ -4,70 +4,23 @@
 
 use super::render_task_detail;
 use crate::support::test_subprocess;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-use chrono::Local;
+use crate::types::{Task, TaskId, TaskStatus};
+
 use std::path::Path;
-use std::process::Command;
 
-fn git(dir: &Path, args: &[&str]) {
-    let status = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .status()
-        .unwrap();
-    assert!(status.success());
-}
+use crate::support::test_env::git;
 
-fn git_stdout(dir: &Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    String::from_utf8(output.stdout).unwrap().trim().to_string()
-}
+use crate::support::test_env::git_output as git_stdout;
 
 fn task(repo: &Path, start_sha: &str, final_sha: &str) -> Task {
     Task {
-        id: TaskId("t-detail-final".to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: Some(repo.to_string_lossy().to_string()), project_id: None,
-        worktree_path: Some(repo.to_string_lossy().to_string()), effective_dir: None,
+        repo_path: Some(repo.to_string_lossy().to_string()),
+        worktree_path: Some(repo.to_string_lossy().to_string()),
         worktree_branch: Some("dispatch/branch".to_string()),
         final_head_sha: Some(final_sha.to_string()),
         final_branch: Some("agent/final".to_string()),
         start_sha: Some(start_sha.to_string()),
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId("t-detail-final".to_string()), TaskStatus::Done)
     }
 }
 

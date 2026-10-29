@@ -5,21 +5,14 @@ use super::*;
 
 #[tokio::test]
 async fn streaming_watch_fast_fail_preserves_stderr_in_log() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task_id = TaskId("t-stderr-log".to_string());
     insert_running_task(store.as_ref(), &task_id);
     let log_path = temp.path().join("stream.log");
-    let mut child = tokio::process::Command::new("sh")
-        .current_dir(temp.path())
-        .arg("-c")
-        .arg("echo 'No saved session found with ID abc' >&2; exit 1")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+    let mut child = crate::support::test_command::piped_shell(
+        temp.path(),
+        "echo 'No saved session found with ID abc' >&2; exit 1",
+    );
 
     let info = watch_streaming(
         &StubStreamingAgent,
@@ -41,21 +34,14 @@ async fn streaming_watch_fast_fail_preserves_stderr_in_log() {
 
 #[tokio::test]
 async fn streaming_watch_signal_killed_process_does_not_replay_stderr() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task_id = TaskId("t-stderr-kill".to_string());
     insert_running_task(store.as_ref(), &task_id);
     let log_path = temp.path().join("stream.log");
-    let mut child = tokio::process::Command::new("sh")
-        .current_dir(temp.path())
-        .arg("-c")
-        .arg("echo 'stderr that must not be replayed' >&2; exec sleep 30")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+    let mut child = crate::support::test_command::piped_shell(
+        temp.path(),
+        "echo 'stderr that must not be replayed' >&2; exec sleep 30",
+    );
 
     let info = watch_streaming(
         &StubStreamingAgent,
@@ -80,21 +66,14 @@ async fn streaming_watch_signal_killed_process_does_not_replay_stderr() {
 
 #[tokio::test]
 async fn streaming_watch_caps_preserved_stderr() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task_id = TaskId("t-stderr-cap".to_string());
     insert_running_task(store.as_ref(), &task_id);
     let log_path = temp.path().join("stream.log");
-    let mut child = tokio::process::Command::new("sh")
-        .current_dir(temp.path())
-        .arg("-c")
-        .arg("yes x | head -c 200000 >&2; exit 1")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+    let mut child = crate::support::test_command::piped_shell(
+        temp.path(),
+        "yes x | head -c 200000 >&2; exit 1",
+    );
 
     let info = watch_streaming(
         &StubStreamingAgent,

@@ -106,8 +106,7 @@ fn settle_first_launch_cannot_revive_concurrent_stop() {
 
 #[test]
 fn settle_first_stopped_launch_claim_is_silent() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     let task = make_task("t-stopped-claim", TaskStatus::Pending);
     store.insert_task(&task).expect("task");

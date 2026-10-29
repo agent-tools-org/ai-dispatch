@@ -83,16 +83,14 @@ fn was_model_self_healed(events: &[TaskEvent]) -> bool {
 }
 
 fn insert_model_selfheal_event(store: &Store, task_id: &TaskId, message: &str) -> Result<()> {
-    store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: format!(
+    store.insert_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Milestone,
+        format!(
             "model unavailable → retry on default: {}",
             crate::agent::truncate::truncate_text(message, 120)
         ),
-        metadata: Some(serde_json::json!({ "model_self_healed": true })),
-    })?;
+    ).with_metadata(Some(serde_json::json!({ "model_self_healed": true }))))?;
     Ok(())
 }
 
@@ -122,67 +120,21 @@ fn find_model_unavailable_json_error(content: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Local;
 
     fn failed_task(id: &str) -> Task {
-        Task {
-            id: TaskId(id.to_string()),
-            agent: AgentKind::Codex,
-            custom_agent_name: None,
-            prompt: "prompt".to_string(),
-            resolved_prompt: None,
-            category: None,
-            status: TaskStatus::Failed,
-            parent_task_id: None,
-            workgroup_id: None,
-            caller_kind: None,
-            caller_session_id: None,
-            agent_session_id: None,
-            repo_path: None, project_id: None,
-            worktree_path: None, effective_dir: None,
-            worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-            start_sha: None,
-            log_path: None,
-            output_path: None,
-            tokens: None,
-            prompt_tokens: None,
-            duration_ms: None,
-            requested_model: None, observed_model: None, attribution_source: None,
-            cost_usd: None,
-            exit_code: None,
-            created_at: Local::now(),
-            completed_at: None,
-            verify: None,
-            verify_status: VerifyStatus::Skipped,
-            pending_reason: None,
-            read_only: false,
-            budget: false,
-            audit_verdict: None,
-            audit_report_path: None,
-            delivery_assessment: None,
-        }
+        crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Failed)
     }
 
     fn marker_event(task_id: &str) -> TaskEvent {
-        TaskEvent {
-            task_id: TaskId(task_id.to_string()),
-            timestamp: Local::now(),
-            event_kind: EventKind::Error,
-            detail: "model unavailable → retry on default".to_string(),
-            metadata: Some(serde_json::json!({ "model_self_healed": true })),
-        }
+        TaskEvent::new(
+            TaskId(task_id.to_string()),
+            EventKind::Error,
+            "model unavailable → retry on default".to_string(),
+        ).with_metadata(Some(serde_json::json!({ "model_self_healed": true })))
     }
 
     fn plain_event(task_id: &str) -> TaskEvent {
-        TaskEvent {
-            task_id: TaskId(task_id.to_string()),
-            timestamp: Local::now(),
-            event_kind: EventKind::Error,
-            detail: "some other failure".to_string(),
-            metadata: None,
-        }
+        TaskEvent::new(TaskId(task_id.to_string()), EventKind::Error, "some other failure".to_string())
     }
 
     #[test]

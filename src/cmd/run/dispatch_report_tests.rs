@@ -7,8 +7,7 @@ use crate::cmd::run::read_only_delivery;
 
 #[test]
 fn scope_cut_explicit_repository_cannot_alias_report_and_output() {
-    let home = tempfile::tempdir().unwrap();
-    let _home = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let repo = home.path().join("repo");
     std::fs::create_dir(&repo).unwrap();
     assert!(std::process::Command::new("git").args(["init", "-b", "main"])
@@ -31,8 +30,7 @@ fn scope_cut_explicit_repository_cannot_alias_report_and_output() {
 #[test]
 fn scope_cut_dispatch_rejects_destinations_in_explicit_repository() {
     for output in [false, true] {
-        let home = tempfile::tempdir().unwrap();
-        let _home = paths::AidHomeGuard::set(home.path());
+        let home = crate::support::test_env::TestHome::new();
         let repo = home.path().join("repo");
         std::fs::create_dir(&repo).unwrap();
         assert!(std::process::Command::new("git").args(["init", "-b", "main"])
@@ -56,8 +54,7 @@ fn scope_cut_dispatch_rejects_destinations_in_explicit_repository() {
 
 #[test]
 fn scope_cut_dispatch_creates_fresh_empty_staging_and_saves_its_identity() {
-    let home = tempfile::tempdir().unwrap();
-    let _home = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let (first, prepared) = prepare(None, false);
     let (second, _) = prepare(None, false);
     let staging = std::path::Path::new(first.artifact_staging.as_ref().unwrap());
@@ -74,8 +71,7 @@ fn scope_cut_dispatch_creates_fresh_empty_staging_and_saves_its_identity() {
 
 #[test]
 fn scope_cut_dispatch_destination_validation_rejects_every_writable_root() {
-    let home = tempfile::tempdir().unwrap();
-    let _home = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let (mut args, _) = prepare(None, false);
     let staging = std::path::PathBuf::from(args.artifact_staging.as_ref().unwrap());
     let other = home.path().join("other-root");
@@ -99,8 +95,7 @@ fn scope_cut_dispatch_destination_validation_rejects_every_writable_root() {
 #[test]
 fn scope_cut_dispatch_rejects_repository_report_and_output_destinations() {
     for output in [false, true] {
-        let home = tempfile::tempdir().unwrap();
-        let _home = paths::AidHomeGuard::set(home.path());
+        let home = crate::support::test_env::TestHome::new();
         let repo = home.path().join("repo");
         std::fs::create_dir(&repo).unwrap();
         let destination = repo.join("new/final.md").display().to_string();
@@ -171,8 +166,7 @@ fn prepare(result: Option<&str>, container: bool) -> (RunArgs, PreparedDispatch)
 
 #[test]
 fn read_only_host_dispatch_places_automatic_report_under_task_directory() {
-    let home = tempfile::tempdir().unwrap();
-    let _home = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let (args, prepared) = prepare(None, false);
     let expected = paths::task_dir(prepared.task_id.as_str()).join("result.md");
     assert_eq!(args.result_file.as_deref(), expected.to_str());
@@ -181,8 +175,7 @@ fn read_only_host_dispatch_places_automatic_report_under_task_directory() {
 
 #[test]
 fn read_only_host_dispatch_preserves_explicit_result_file() {
-    let home = tempfile::tempdir().unwrap();
-    let _home = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let (args, _) = prepare(Some("../reports/explicit.md"), false);
     assert_eq!(args.result_file.as_deref(), Some("../reports/explicit.md"));
     assert_eq!(args.result_file_required, Some(true));
@@ -190,8 +183,7 @@ fn read_only_host_dispatch_preserves_explicit_result_file() {
 
 #[test]
 fn read_only_container_dispatch_keeps_checkout_relative_automatic_report() {
-    let home = tempfile::tempdir().unwrap();
-    let _home = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let (args, prepared) = prepare(None, true);
     assert_eq!(args.result_file, Some(format!("result-{}.md", prepared.task_id)));
 }
@@ -199,8 +191,7 @@ fn read_only_container_dispatch_keeps_checkout_relative_automatic_report() {
 #[test]
 fn fix_round_two_dispatch_rejects_same_report_and_output_destination() {
     for alias in ["same", "parent", "symlink", "traversal", "missing"] {
-        let home = tempfile::tempdir().unwrap();
-        let _home = paths::AidHomeGuard::set(home.path());
+        let home = crate::support::test_env::TestHome::new();
         let directory = home.path().join("delivery");
         std::fs::create_dir(&directory).unwrap();
         let output = directory.join("final.md");
@@ -243,9 +234,7 @@ fn fix_round_two_dispatch_rejects_same_report_and_output_destination() {
 
 #[test]
 fn prepare_dispatch_uses_task_specific_audit_result_file() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_home, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut args = RunArgs {
         agent_name: "codex".to_string(),
         prompt: "Read-only audit of branch X.".to_string(),
@@ -263,9 +252,7 @@ fn prepare_dispatch_uses_task_specific_audit_result_file() {
 
 #[test]
 fn prepare_dispatch_skips_auto_result_file_when_output_is_set() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(home.path());
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (home, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut args = RunArgs {
         agent_name: "codex".to_string(),
         prompt: "Review the implementation and list findings.".to_string(),

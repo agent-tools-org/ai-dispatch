@@ -5,8 +5,7 @@ use super::*;
 
 #[tokio::test]
 async fn provider_capacity_scope_cut_retry_zero_creates_no_child() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     let row = task("t-capacity-zero", home.path());
     store.insert_task(&row).expect("parent");
@@ -48,8 +47,7 @@ async fn provider_capacity_scope_cut_retry_zero_creates_no_child() {
 #[tokio::test]
 async fn provider_capacity_scope_cut_retry_one_runs_ordinary_retry_once() {
     let _permit = crate::support::test_subprocess::acquire();
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let (store, row, args, marker) = ordinary_retry_fixture(home.path());
     let child = crate::cmd::run::run_lifecycle::retry_or_cascade(&store, &args, &row.id)
         .await
@@ -96,8 +94,7 @@ async fn provider_capacity_scope_cut_decoded_failure_records_model_reason_and_ho
         serde_json::json!({"type": "error", "message": CAPACITY}),
         serde_json::json!({"type": "turn.failed", "error": {"message": CAPACITY}}),
     ] {
-        let home = tempfile::tempdir().expect("home");
-        let _home = paths::AidHomeGuard::set(home.path());
+        let home = crate::support::test_env::TestHome::new();
         paths::ensure_dirs().expect("dirs");
         let store = Arc::new(Store::open_memory().expect("store"));
         let mut row = task("t-capacity-decoded-reason", home.path());
@@ -193,8 +190,7 @@ fn assert_capacity_failure(store: &Store, row: &Task) {
 #[test]
 fn provider_capacity_scope_cut_pty_merged_stderr_records_capacity_without_child() {
     let _permit = crate::support::test_subprocess::acquire();
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut row = task("t-capacity-pty", home.path());

@@ -1,8 +1,7 @@
-// Batch warning helpers for prompt size, dir overlap, and read-only audit hints.
-// Exports: warn_prompt_size(), warn_dir_overlap(), warn_audit_without_readonly().
+// Batch warning helpers for prompt size and read-only audit hints.
+// Exports: warn_prompt_size(), warn_audit_without_readonly().
 // Deps: std collections/io and parent `BatchTask`.
 
-use std::collections::HashMap;
 use std::io::{self, Write};
 
 use super::BatchTask;
@@ -21,33 +20,6 @@ pub(super) fn warn_prompt_size(tasks: &[BatchTask], writer: &mut impl Write) -> 
         }
     }
     Ok(())
-}
-
-#[cfg_attr(not(test), allow(dead_code))]
-pub fn warn_dir_overlap(tasks: &[BatchTask]) -> Vec<String> {
-    let mut dir_counts: HashMap<&str, usize> = HashMap::new();
-    for task in tasks {
-        if task.worktree.is_some() {
-            continue;
-        }
-        if let Some(ref dir) = task.dir {
-            *dir_counts.entry(dir.as_str()).or_default() += 1;
-        }
-    }
-    let mut warnings = Vec::new();
-    for (dir, count) in &dir_counts {
-        if *count > 1 {
-            warnings.push(format!(
-                "[aid] ⚠ {} tasks target dir '{}' without worktree isolation — risk of git index.lock contention",
-                count, dir
-            ));
-            warnings.push(
-                "[aid] Tip: add `worktree = \"branch-name\"` to each task for safe parallel execution"
-                    .to_string(),
-            );
-        }
-    }
-    warnings
 }
 
 pub fn warn_audit_without_readonly(tasks: &[BatchTask]) {

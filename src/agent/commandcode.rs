@@ -82,15 +82,8 @@ impl super::Agent for CommandCodeAgent {
     }
 }
 
-
 pub(crate) fn parse_commandcode_completion(output: &str) -> CompletionInfo {
-    let mut info = CompletionInfo {
-        tokens: None,
-        status: TaskStatus::Failed,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    };
+    let mut info = CompletionInfo::new(TaskStatus::Failed);
     let mut saw_result = false;
     for line in output.lines() {
         let Ok(value) = serde_json::from_str::<Value>(line.trim()) else {

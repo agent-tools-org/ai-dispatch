@@ -1,5 +1,6 @@
 // Qwen stream event parsing, usage accounting, and event metadata.
 // Deps: Qwen-owned helpers, shared event types and provider classification.
+use crate::agent::event_metadata::model_session as base_metadata;
 use super::super::qwen_support as support;
 use super::super::qwen_support::{
     classify_tool_result, extract_error_detail, extract_tool_arguments, extract_tool_name,
@@ -47,13 +48,7 @@ pub(super) fn parse_stream_event(
         _ => return None,
     };
     let (detail, metadata) = super::super::truncate::capped_detail_with(&detail, metadata);
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind: kind,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), kind, detail, now).with_metadata(metadata))
 }
 
 fn completion_metadata(
@@ -61,8 +56,8 @@ fn completion_metadata(
     model: Option<&str>,
     session_id: Option<&str>,
 ) -> Option<serde_json::Value> {
-    let mut metadata = json!({});
-    let mut has_fields = false;
+    let mut metadata = base_metadata(model, session_id).unwrap_or_else(|| json!({}));
+    let mut has_fields = model.is_some() || session_id.is_some();
     if let Some(usage) = usage {
         metadata["tokens"] = json!(usage.total_tokens);
         metadata["input_tokens"] = json!(usage.input_tokens);
@@ -71,31 +66,7 @@ fn completion_metadata(
         metadata["prompt_tokens"] = json!(usage.input_tokens);
         has_fields = true;
     }
-    if let Some(model) = model {
-        metadata["model"] = json!(model);
-        has_fields = true;
-    }
-    if let Some(session_id) = session_id {
-        metadata["agent_session_id"] = json!(session_id);
-        has_fields = true;
-    }
     has_fields.then_some(metadata)
-}
-
-fn base_metadata(model: Option<&str>, session_id: Option<&str>) -> Option<serde_json::Value> {
-    match (model, session_id) {
-        (None, None) => None,
-        _ => {
-            let mut metadata = json!({});
-            if let Some(model) = model {
-                metadata["model"] = json!(model);
-            }
-            if let Some(session_id) = session_id {
-                metadata["agent_session_id"] = json!(session_id);
-            }
-            Some(metadata)
-        }
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -152,7 +123,7 @@ fn extract_session_id(value: &serde_json::Value) -> Option<&str> {
 }
 
 fn extract_assistant_text(value: &serde_json::Value) -> Option<String> {
-    support::extract_text_payload(
+    crate::agent::stream_text::extract_text_payload(
         value
             .get("message")
             .and_then(|message| message.get("content"))
@@ -202,7 +173,7 @@ fn content_event(
             if v.get("role").and_then(|r| r.as_str()) != Some("assistant") {
                 return None;
             }
-            let content = support::extract_text_payload(v.get("content"))?;
+            let content = crate::agent::stream_text::extract_text_payload(v.get("content"))?;
             (EventKind::Reasoning, content, None)
         }
         _ => return None,

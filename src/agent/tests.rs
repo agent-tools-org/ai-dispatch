@@ -151,21 +151,11 @@ fn target_dir_for_worktree_isolates_branches() {
 
 #[test]
 fn apply_run_env_sets_explicit_vars_on_command() {
-    let aid_home = TempDir::new().unwrap();
-    let _aid_guard = AidHomeGuard::set(aid_home.path());
+    let _aid_home = crate::support::test_env::TestHome::new();
     let mut cmd = Command::new("echo");
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
         env: Some([("APP_MODE".to_string(), "test".to_string())].into_iter().collect()),
-        env_forward: None,
+        ..Default::default()
     };
 
     let home_guard = crate::agent::home_isolation::IsolatedHomeGuard::create(None).unwrap();
@@ -187,17 +177,9 @@ fn apply_run_env_sets_aid_home_on_command() {
     let _guard = AidHomeGuard::set(&aid_home);
     let mut cmd = Command::new("echo");
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
         env: Some(HashMap::new()),
         env_forward: Some(vec![]),
+        ..Default::default()
     };
 
     let home_guard = crate::agent::home_isolation::IsolatedHomeGuard::create(None).unwrap();
@@ -236,17 +218,8 @@ fn reports_forwarded_env_for_subprocess() {
     let _permit = test_subprocess::acquire();
     let mut cmd = Command::new("echo");
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
         env_forward: Some(vec!["AID_TEST_FORWARDED_ENV".to_string()]),
+        ..Default::default()
     };
     let home_guard = crate::agent::home_isolation::IsolatedHomeGuard::create(None).unwrap();
     apply_run_env(&mut cmd, &opts, &home_guard);

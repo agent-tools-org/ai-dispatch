@@ -92,18 +92,6 @@ impl Task {
         self.observed_model.as_deref()
     }
 
-    #[cfg(test)]
-    /// The model, but only when the CLI itself said so. Capability scoring and
-    /// an agent's learned default model read this rather than
-    /// `attributed_model`, because a model inferred from a run merely not
-    /// failing is not evidence that model performed well — or even that a
-    /// substitution did not happen behind a successful exit.
-    pub fn conclusive_model(&self) -> Option<&str> {
-        self.attribution_source
-            .filter(|source| source.is_conclusive())
-            .and(self.observed_model.as_deref())
-    }
-
     /// The model to price against, and the model a derived dispatch should ask
     /// for again: the observation when there is one, otherwise the original
     /// request. The fallback is legitimate here only because both values are
@@ -193,6 +181,7 @@ pub struct Workgroup {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(Default))]
 pub struct Finding {
     pub id: i64,
     pub workgroup_id: String,
@@ -220,19 +209,6 @@ pub struct TaskEvent {
     pub metadata: Option<serde_json::Value>,
 }
 
-impl TaskEvent {
-    /// Untruncated detail: parsers stash text over the display cap in
-    /// metadata under `"full"`.
-    pub fn full_detail(&self) -> std::borrow::Cow<'_, str> {
-        let detail = self.metadata
-            .as_ref()
-            .and_then(|meta| meta.get("full"))
-            .and_then(|value| value.as_str())
-            .unwrap_or(&self.detail);
-        self.render_detail(detail)
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub enum TaskFilter {
     All,
@@ -250,6 +226,18 @@ pub struct CompletionInfo {
     pub model: Option<String>,
     pub cost_usd: Option<f64>,
     pub exit_code: Option<i32>,
+}
+
+impl CompletionInfo {
+    pub(crate) fn new(status: TaskStatus) -> Self {
+        Self {
+            tokens: None,
+            status,
+            model: None,
+            cost_usd: None,
+            exit_code: None,
+        }
+    }
 }
 
 /// Renders model attribution for humans. An unconfirmed request is marked with

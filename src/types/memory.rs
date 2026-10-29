@@ -36,24 +36,6 @@ pub enum MemoryType {
 }
 
 impl MemoryType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Discovery => "discovery",
-            Self::Convention => "convention",
-            Self::Lesson => "lesson",
-            Self::Fact => "fact",
-        }
-    }
-
-    pub fn parse_str(s: &str) -> Option<Self> {
-        match s {
-            "discovery" => Some(Self::Discovery),
-            "convention" => Some(Self::Convention),
-            "lesson" => Some(Self::Lesson),
-            "fact" => Some(Self::Fact),
-            _ => None,
-        }
-    }
 
     pub fn label(&self) -> &'static str {
         match self {
@@ -64,6 +46,15 @@ impl MemoryType {
         }
     }
 }
+
+super::string_values::string_values!(
+    MemoryType, as_str(&self), pub parse_str {
+        Discovery => "discovery",
+        Convention => "convention",
+        Lesson => "lesson",
+        Fact => "fact",
+    }
+);
 
 impl fmt::Display for MemoryType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -79,26 +70,14 @@ pub enum MemoryTier {
     Deep,
 }
 
-impl MemoryTier {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Identity => "identity",
-            Self::Critical => "critical",
-            Self::OnDemand => "on_demand",
-            Self::Deep => "deep",
-        }
+super::string_values::string_values!(
+    MemoryTier, as_str(&self), pub parse_str {
+        Identity => "identity",
+        Critical => "critical",
+        OnDemand => "on_demand",
+        Deep => "deep",
     }
-
-    pub fn parse_str(s: &str) -> Option<Self> {
-        match s {
-            "identity" => Some(Self::Identity),
-            "critical" => Some(Self::Critical),
-            "on_demand" => Some(Self::OnDemand),
-            "deep" => Some(Self::Deep),
-            _ => None,
-        }
-    }
-}
+);
 
 impl fmt::Display for MemoryTier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

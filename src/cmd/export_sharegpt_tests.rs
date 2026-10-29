@@ -2,16 +2,13 @@
 // Exports: module-local tests for export_sharegpt.rs.
 // Deps: export_sharegpt helpers, Store, AidHomeGuard, tempfile.
 use super::{ShareGptRecord, export_sharegpt};
-use crate::support::paths::{self, AidHomeGuard};
+use crate::support::paths::{self};
 use crate::store::Store;
-use crate::types::{AgentKind, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
-use chrono::Local;
-use tempfile::TempDir;
+use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
 
 #[test]
 fn prompt_preservation_matches_show_and_sharegpt_stored_context() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let store = std::sync::Arc::new(Store::open_memory().unwrap());
     let group = store
         .create_workgroup("context", &"shared line\n".repeat(2000), None, None)
@@ -40,9 +37,7 @@ fn prompt_preservation_matches_show_and_sharegpt_stored_context() {
 
 #[test]
 fn export_sharegpt_writes_system_human_gpt_messages() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
+    let (temp, store) = crate::support::test_env::TestHome::new().store();
     let task = done_task("t-sharegpt", Some("resolved system prompt"));
     store.insert_task(&task).unwrap();
     write_transcript(task.id.as_str(), "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"agent reply\"}\n");
@@ -62,9 +57,7 @@ fn export_sharegpt_writes_system_human_gpt_messages() {
 
 #[test]
 fn export_sharegpt_formats_tool_calls_and_results() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
+    let (temp, store) = crate::support::test_env::TestHome::new().store();
     let task = done_task("t-sharegpt-tools", Some("resolved system prompt"));
     store.insert_task(&task).unwrap();
     write_transcript(
@@ -85,9 +78,7 @@ fn export_sharegpt_formats_tool_calls_and_results() {
 
 #[test]
 fn export_sharegpt_handles_empty_transcript() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
+    let (temp, store) = crate::support::test_env::TestHome::new().store();
     let task = done_task("t-sharegpt-empty", Some("resolved system prompt"));
     store.insert_task(&task).unwrap();
 
@@ -102,19 +93,15 @@ fn export_sharegpt_handles_empty_transcript() {
 
 #[test]
 fn export_sharegpt_fallback_includes_file_writes() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
+    let (temp, store) = crate::support::test_env::TestHome::new().store();
     let task = done_task("t-sharegpt-file-write", Some("resolved system prompt"));
     store.insert_task(&task).unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::FileWrite,
-            detail: "Edit files: src/main.rs".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(
+            task.id.clone(),
+            EventKind::FileWrite,
+            "Edit files: src/main.rs".to_string(),
+        ))
         .unwrap();
 
     let output = temp.path().join("sharegpt-file-write.jsonl");
@@ -129,19 +116,15 @@ fn export_sharegpt_fallback_includes_file_writes() {
 
 #[test]
 fn export_sharegpt_fallback_includes_file_reads() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
+    let (temp, store) = crate::support::test_env::TestHome::new().store();
     let task = done_task("t-sharegpt-file-read", Some("resolved system prompt"));
     store.insert_task(&task).unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::FileRead,
-            detail: "Read file: src/main.rs".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(
+            task.id.clone(),
+            EventKind::FileRead,
+            "Read file: src/main.rs".to_string(),
+        ))
         .unwrap();
 
     let output = temp.path().join("sharegpt-file-read.jsonl");
@@ -156,9 +139,7 @@ fn export_sharegpt_fallback_includes_file_reads() {
 
 #[test]
 fn export_sharegpt_rejects_failed_tasks() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let mut task = done_task("t-sharegpt-failed", Some("resolved system prompt"));
     task.status = TaskStatus::Failed;
     store.insert_task(&task).unwrap();
@@ -170,9 +151,7 @@ fn export_sharegpt_rejects_failed_tasks() {
 
 #[test]
 fn export_sharegpt_rejects_hollow_delivery_done_tasks() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = AidHomeGuard::set(temp.path());
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::new().store();
     let mut task = done_task("t-sharegpt-hollow", Some("resolved system prompt"));
     task.delivery_assessment = Some(crate::types::DeliveryAssessment::HollowOutput);
     store.insert_task(&task).unwrap();
@@ -184,42 +163,9 @@ fn export_sharegpt_rejects_hollow_delivery_done_tasks() {
 
 fn done_task(id: &str, resolved_prompt: Option<&str>) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
         prompt: "user prompt".to_string(),
         resolved_prompt: resolved_prompt.map(str::to_string),
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
 }
 
@@ -235,8 +181,7 @@ fn read_record(path: &std::path::Path) -> ShareGptRecord {
 
 #[test]
 fn round2_preservation_show_export_use_stored_context_or_raw_legacy_prompt() {
-    let temp = TempDir::new().unwrap();
-    let _home = AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let store = std::sync::Arc::new(Store::open_memory().unwrap());
     let group = store.create_workgroup("context", "Context added after dispatch", None, None).unwrap();
     for (id, resolved) in [("t-stored", Some("Exact stored launch\né\n")), ("t-legacy", None)] {

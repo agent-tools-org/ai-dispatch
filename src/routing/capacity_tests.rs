@@ -29,8 +29,7 @@ fn provider_capacity_regression_rejects_provider_shaped_tool_events() {
 fn provider_capacity_regression_rejects_provider_shaped_tool_stderr() {
     let error = serde_json::json!({"type": "error", "message": CAPACITY});
     assert!(classify(&error.to_string(), AgentKind::Codex, Channel::CliStderr).is_none());
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("dirs");
     let store = crate::store::Store::open_memory().expect("store");
     let id = TaskId("t-capacity-tool-stderr".into());
@@ -50,8 +49,7 @@ fn provider_capacity_regression_rejects_raw_quotes_on_both_channels() {
             );
         }
     }
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("dirs");
     let store = crate::store::Store::open_memory().expect("store");
     let id = TaskId("t-capacity-raw-reconnect".into());
@@ -192,8 +190,7 @@ fn provider_capacity_classifies_exhausted_json_reconnect_tail() {
 
 #[test]
 fn provider_capacity_expiry_and_success_release_model_hold() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let agent = AgentKind::Codex;
     let model = Some("gpt-6.1-sol");
     rate_limit::mark_rate_limited_for_model(&agent, None, model, CAPACITY);
@@ -225,10 +222,9 @@ fn provider_capacity_expiry_and_success_release_model_hold() {
          VALUES (?1, 'codex', 'task', 'failed', ?2)",
         rusqlite::params![id.as_str(), chrono::Local::now().to_rfc3339()],
     ).expect("task");
-    store.insert_event(&TaskEvent {
-        task_id: id.clone(), timestamp: chrono::Local::now(), event_kind: EventKind::Error,
-        detail: CAPACITY.into(), metadata: Some(serde_json::json!({"provider_stdout": error.to_string()})),
-    }).expect("stdout event");
+    store.insert_event(&TaskEvent::new(id.clone(), EventKind::Error, CAPACITY.into())
+        .with_metadata(Some(serde_json::json!({"provider_stdout": error.to_string()}))))
+        .expect("stdout event");
     assert_eq!(
         terminal_label(&store, &id, agent, TaskStatus::Failed),
         format!("provider capacity for model (default): {CAPACITY}")

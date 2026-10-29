@@ -12,25 +12,10 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
 
-fn git(repo_dir: &Path, args: &[&str]) {
-    let repo_dir = repo_dir.to_string_lossy().to_string();
-    assert!(Command::new("git")
-        .args(["-C", repo_dir.as_str()])
-        .args(args)
-        .status()
-        .unwrap()
-        .success());
-}
+use crate::support::test_env::git;
 
 fn init_repo() -> TempDir {
-    let repo = TempDir::new().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("file.txt"), "hello\n").unwrap();
-    git(repo.path(), &["add", "file.txt"]);
-    git(repo.path(), &["commit", "-m", "init"]);
-    repo
+    crate::support::test_repo::repo_with_file("file.txt", "hello\n", "init")
 }
 
 fn cleanup_worktree(repo_dir: &Path, worktree: &Path) {

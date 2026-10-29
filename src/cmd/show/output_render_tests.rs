@@ -5,8 +5,7 @@ use super::*;
 
 #[test]
 fn output_text_for_task_prefers_extracted_messages_to_raw_log() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(crate::support::paths::logs_dir()).unwrap();
     let log_path = crate::support::paths::log_path("t-output-messages");
     let log_content = [
@@ -75,8 +74,7 @@ fn extract_messages_research_relaxed_limits() {
 
 #[test]
 fn output_text_uses_research_mode_for_no_worktree() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(crate::support::paths::logs_dir()).unwrap();
     let log_path = crate::support::paths::log_path("t-research-output");
     write_log(&log_path, numbered_assistant_log(12, 1_200));

@@ -1,7 +1,7 @@
 // Monthly accounting, UTC reset boundaries, pace and route independence.
 // Synthetic task costs exercise the production calculator without provider calls.
 use super::*;
-use crate::types::{AgentKind, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{AgentKind, TaskId, TaskStatus};
 
 fn route(bill: bool) -> ApiRoute {
     toml::from_str(&format!(
@@ -14,46 +14,14 @@ fn route(bill: bool) -> ApiRoute {
 
 fn task(id: &str, at: DateTime<Utc>, cost: f64) -> Task {
     Task {
-        id: TaskId(id.into()),
         agent: AgentKind::Custom,
         prompt: String::new(),
-        resolved_prompt: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None,
-        worktree_path: None,
-        worktree_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None,
         cost_usd: Some(cost),
         created_at: at.with_timezone(&Local),
         completed_at: Some(at.with_timezone(&Local)),
-        verify: None,
-        read_only: false,
-        budget: false,
         custom_agent_name: Some("claude-api-ming".into()),
-        verify_status: VerifyStatus::Skipped,
         exit_code: Some(0),
-        category: None,
-        pending_reason: None,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
-        final_head_sha: None,
-        final_branch: None,
-        observed_model: None,
-        attribution_source: None,
-        project_id: None,
-        effective_dir: None,
+        ..crate::types::Task::test_fixture(TaskId(id.into()), TaskStatus::Done)
     }
 }
 

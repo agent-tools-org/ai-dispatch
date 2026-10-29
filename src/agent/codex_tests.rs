@@ -21,15 +21,6 @@ fn semver_parsing() {
 }
 
 #[test]
-fn version_comparison_for_model_flag() {
-    assert!((0, 116, 0) >= (0, 116, 0));
-    assert!((0, 117, 0) >= (0, 116, 0));
-    assert!((1, 0, 0) >= (0, 116, 0));
-    assert!((0, 115, 9) < (0, 116, 0));
-    assert!((0, 0, 0) < (0, 116, 0));
-}
-
-#[test]
 fn parses_agent_message_items() {
     let agent = CodexAgent;
     let line = r#"{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Planning the next edit."}}"#;
@@ -100,17 +91,9 @@ fn finds_only_full_session_id_rollout_matches_in_nested_sessions_dir() {
 #[test]
 fn sandboxed_resume_skips_host_rollout_precheck() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
         sandbox: true,
-        context_files: vec![],
         session_id: Some("not-a-uuid-session".to_string()),
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = CodexAgent
         .build_command_with_context(
@@ -122,10 +105,7 @@ fn sandboxed_resume_skips_host_rollout_precheck() {
             },
         )
         .unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert_eq!(&args[..3], ["exec", "resume", "--json"]);
     assert!(args.contains(&"not-a-uuid-session".to_string()));

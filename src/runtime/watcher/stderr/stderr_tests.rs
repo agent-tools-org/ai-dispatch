@@ -17,9 +17,7 @@ fn stderr_replay_waits_for_pending_log_write() {
         .build()
         .unwrap();
     runtime.block_on(async {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = paths::AidHomeGuard::set(temp.path());
-        paths::ensure_dirs().unwrap();
+        let temp = crate::support::test_env::TestHome::with_dirs();
         let task_id = TaskId("t-stderr-pending-write".to_string());
         std::fs::write(paths::stderr_path(task_id.as_str()), b"saved stderr\n").unwrap();
         let log_path = temp.path().join("stream.log");
@@ -45,9 +43,7 @@ fn stderr_replay_waits_for_pending_log_write() {
 
 #[tokio::test]
 async fn stderr_drain_timeout_preserves_output_before_eof() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let temp = crate::support::test_env::TestHome::with_dirs();
     let task_id = TaskId("t-stderr-held-pipe".to_string());
     let mut child = tokio::process::Command::new("sh")
         .current_dir(temp.path())
@@ -74,9 +70,7 @@ fn stderr_drain_waits_for_file_io_after_child_exit() {
         .build()
         .unwrap();
     runtime.block_on(async {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = paths::AidHomeGuard::set(temp.path());
-        paths::ensure_dirs().unwrap();
+        let temp = crate::support::test_env::TestHome::with_dirs();
         let task_id = TaskId("t-stderr-blocked-file".to_string());
         let mut child = tokio::process::Command::new("sh")
             .current_dir(temp.path())
@@ -108,7 +102,6 @@ fn stderr_drain_waits_for_file_io_after_child_exit() {
     });
 }
 
-
 #[tokio::test]
 async fn stderr_drain_times_out_continuously_ready_reader() {
     let temp = tempfile::tempdir().unwrap();
@@ -125,15 +118,13 @@ async fn stderr_drain_times_out_continuously_ready_reader() {
     assert!(std::fs::metadata(stderr_path).unwrap().len() > 0);
 }
 
-
 struct ReadyStderr;
 
 const CORE_FIXTURE: &str =
     "Fixture: You've reached your monthly Droid Core usage limit (resets in 2 days).";
 
 fn assert_stderr_cannot_hold_core(output: &str) {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("directories");
     let id = TaskId("t-core-fixture".into());
     std::fs::write(paths::stderr_path(id.as_str()), output).expect("stderr");
@@ -161,8 +152,7 @@ fn printed_core_json_stderr_does_not_hold_pool_fix_regression() {
 
 #[test]
 fn raw_core_stream_does_not_hold_pool_fix_regression() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     assert!(!crate::agent::stream_completion::record_quota_exhaustion(
         CORE_FIXTURE, crate::types::AgentKind::Droid, None, None,
     ).recorded());
@@ -172,8 +162,7 @@ fn raw_core_stream_does_not_hold_pool_fix_regression() {
 
 #[test]
 fn assistant_and_tool_core_errors_do_not_hold_pool_fix_regression() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     for value in [
         serde_json::json!({"type": "error", "tool_call": {}, "message": CORE_FIXTURE}),
         serde_json::json!({"type": "assistant", "error": CORE_FIXTURE}),
@@ -188,8 +177,7 @@ fn assistant_and_tool_core_errors_do_not_hold_pool_fix_regression() {
 
 #[tokio::test]
 async fn truncated_stderr_replay_cannot_mark_auth_fix_regression() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("directories");
     let id = TaskId("t-auth-replay".into());
     let error = serde_json::json!({"type": "error", "error": {"name": "APIError",

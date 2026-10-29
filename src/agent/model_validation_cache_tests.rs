@@ -78,8 +78,7 @@ fn isolated_home(home: &std::path::Path) -> CodexHomeGuard {
 
 #[test]
 fn codex_source_rewrite_invalidates_memory_inside_ttl_and_unchanged_source_is_cached() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _aid = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let _codex = isolated_home(temp.path());
     write_models(temp.path(), "gpt-6-sol");
     let agent = CountingCodex::new();
@@ -100,8 +99,7 @@ fn codex_source_rewrite_invalidates_memory_inside_ttl_and_unchanged_source_is_ca
 
 #[test]
 fn codex_source_rewrite_invalidates_disk_inside_ttl_and_unchanged_disk_is_cached() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _aid = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let _codex = isolated_home(temp.path());
     write_models(temp.path(), "gpt-6-sol");
     let agent = CountingCodex::new();
@@ -117,8 +115,7 @@ fn codex_source_rewrite_invalidates_disk_inside_ttl_and_unchanged_disk_is_cached
 
 #[test]
 fn legacy_codex_entry_without_fingerprint_refreshes_from_source() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _aid = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let _codex = isolated_home(temp.path());
     write_models(temp.path(), "gpt-6.1-sol");
     let legacy = serde_json::json!({"codex": {"models": ["gpt-6-sol"], "updated_at_secs": now_secs()}});
@@ -130,8 +127,7 @@ fn legacy_codex_entry_without_fingerprint_refreshes_from_source() {
 
 #[test]
 fn codex_catalog_lookup_refreshes_after_source_rewrite() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _aid = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let _codex = isolated_home(temp.path());
     write_models(temp.path(), "gpt-6-sol");
     assert_eq!(load_from_disk_cache(AgentKind::Codex), Some(vec!["gpt-6-sol".into()]));
@@ -147,8 +143,7 @@ fn codex_catalog_lookup_refreshes_after_source_rewrite() {
 
 #[test]
 fn codex_fingerprint_is_none_for_missing_source_and_none_agents_keep_cache() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _aid = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let _codex = isolated_home(temp.path());
     assert_eq!(CodexAgent.served_models_fingerprint(), None);
     let agent = CountingCodex::new();
@@ -160,8 +155,7 @@ fn codex_fingerprint_is_none_for_missing_source_and_none_agents_keep_cache() {
 
 #[test]
 fn custom_agent_disk_lookup_remains_cache_only() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _aid = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     assert_eq!(load_from_disk_cache(AgentKind::Custom), None);
     save_to_disk_cache(AgentKind::Custom, &["custom-model".into()], None);
     assert_eq!(load_from_disk_cache(AgentKind::Custom), Some(vec!["custom-model".into()]));

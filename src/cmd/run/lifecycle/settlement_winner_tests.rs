@@ -26,13 +26,11 @@ impl Fixture {
         task.status = TaskStatus::Running;
         store.insert_task(&task).expect("running task");
         store
-            .insert_event(&TaskEvent {
-                task_id: task.id.clone(),
-                timestamp: chrono::Local::now(),
-                event_kind: EventKind::Error,
-                detail: "original failure reason".into(),
-                metadata: None,
-            })
+            .insert_event(&TaskEvent::new(
+                task.id.clone(),
+                EventKind::Error,
+                "original failure reason".into(),
+            ))
             .expect("original reason");
         if status == TaskStatus::Stopped {
             crate::cmd::stop::stop(&store, task.id.as_str()).expect("stop wins");
@@ -41,14 +39,8 @@ impl Fixture {
                 store
                     .record_agent_completion(
                         TaskCompletionUpdate {
-                            id: task.id.as_str(),
-                            status,
-                            tokens: None,
-                            duration_ms: 77,
-                            observed_model: None,
-                            attribution_source: None,
-                            cost_usd: None,
                             exit_code: Some(0),
+                            ..TaskCompletionUpdate::new(task.id.as_str(), status, 77)
                         },
                         None
                     )

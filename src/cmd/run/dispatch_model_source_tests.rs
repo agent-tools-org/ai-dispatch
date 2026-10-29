@@ -5,15 +5,14 @@
 use super::super::resolve_agent_setup;
 use crate::agent::model_validation::{ModelSource, MockServedModelsGuard};
 use crate::cmd::run::RunArgs;
-use crate::support::paths::AidHomeGuard;
+
 use crate::store::Store;
 use crate::types::AgentKind;
 use std::sync::Arc;
 
 #[test]
 fn aid_selected_default_is_persisted_as_aid_resolved() {
-    let home = tempfile::tempdir().expect("temporary aid home");
-    let _home_guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     crate::config::agent::save_agent_default_model("grok", Some("stale-aid-model"))
         .expect("save agent default");
     let _served = MockServedModelsGuard::set(
@@ -38,8 +37,7 @@ fn aid_selected_default_is_persisted_as_aid_resolved() {
 
 #[test]
 fn explicit_model_remains_user_supplied() {
-    let home = tempfile::tempdir().expect("temporary aid home");
-    let _home_guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let _served = MockServedModelsGuard::set(
         AgentKind::Grok,
         Some(vec!["explicit-model".to_string()]),
@@ -60,8 +58,7 @@ fn explicit_model_remains_user_supplied() {
 
 #[test]
 fn substituted_model_is_persisted_as_aid_resolved() {
-    let home = tempfile::tempdir().expect("temporary aid home");
-    let _home_guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::Cursor,
         None,
@@ -92,8 +89,7 @@ fn substituted_model_is_persisted_as_aid_resolved() {
 
 #[test]
 fn declared_standard_and_premium_reach_cli_default() {
-    let home = tempfile::tempdir().expect("temporary aid home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     for agent_name in ["codex", "agy"] {
         for budget in [crate::types::TaskBudget::Standard, crate::types::TaskBudget::Premium] {
@@ -142,8 +138,7 @@ fn healthy_defaults_emit_source_without_exhausted_warning() {
 
 #[test]
 fn declared_standard_and_premium_do_not_trigger_simple_task_smart_routing() {
-    let home = tempfile::tempdir().expect("temporary aid home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     for budget in [crate::types::TaskBudget::Standard, crate::types::TaskBudget::Premium] {
         for difficulty in [crate::types::TaskDifficulty::Trivial, crate::types::TaskDifficulty::Simple] {
@@ -161,8 +156,7 @@ fn declared_standard_and_premium_do_not_trigger_simple_task_smart_routing() {
 
 #[test]
 fn model_info_names_final_model_and_precedence_source() {
-    let home = tempfile::tempdir().expect("temporary aid home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let mut args = RunArgs {
         agent_name: "grok".to_string(),
         model: Some("flash".to_string()),
@@ -189,15 +183,12 @@ fn model_info_names_final_model_and_precedence_source() {
 
 #[test]
 fn model_info_reports_existing_adapter_defaults_accurately() {
-    let home = tempfile::tempdir().expect("temporary aid home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     for kind in [AgentKind::Cursor, AgentKind::MiMoCode] {
         let args = RunArgs { agent_name: kind.as_str().to_string(), ..Default::default() };
         let agent = crate::agent::get_agent(kind);
         let opts = crate::agent::RunOpts {
-            dir: None, output: None, result_file: None, model: None, budget: false,
-            read_only: false, sandbox: false, context_files: vec![], session_id: None,
-            env: None, env_forward: None,
+            ..Default::default()
         };
         let command = agent.build_command("say hi", &opts)
             .expect("build adapter command");

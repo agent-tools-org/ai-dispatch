@@ -14,13 +14,7 @@ fn config_edits_do_not_reclassify_cached_or_unrelated_custom_streams() {
     };
     std::fs::write(paths::config_path(), "invalid = [").unwrap();
     let store = crate::store::Store::open_memory().unwrap();
-    let mut info = CompletionInfo {
-        tokens: None,
-        status: TaskStatus::Done,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    };
+    let mut info = CompletionInfo::new(TaskStatus::Done);
     let id = TaskId("t-cached".into());
     let line = r#"{"type":"system","subtype":"init","apiKeySource":"apiKeyHelper"}"#;
     assert!(!record_stream_failure(cached.as_ref(), line, &store, &id, &mut info).unwrap());
@@ -162,13 +156,7 @@ fn ordinary_route_usage_and_over_budget_results_do_not_consult_store_or_fail() {
     let (_home, _guard) = setup();
     let store = crate::store::Store::open_memory().unwrap();
     store.db().execute_batch("DROP TABLE tasks").unwrap();
-    let mut info = CompletionInfo {
-        tokens: None,
-        status: TaskStatus::Done,
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    };
+    let mut info = CompletionInfo::new(TaskStatus::Done);
     for line in [
         r#"{"type":"assistant","message":{"usage":{"input_tokens":1000000}}}"#,
         r#"{"type":"result","is_error":false,"total_cost_usd":250}"#,

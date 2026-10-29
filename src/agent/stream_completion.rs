@@ -52,32 +52,20 @@ pub(crate) fn status_from_result_jsonl(output: &str) -> CompletionInfo {
             }
         }
     }
-    CompletionInfo {
-        tokens: None,
-        status: if failed {
+    CompletionInfo::new(if failed {
             TaskStatus::Failed
         } else {
             TaskStatus::Done
-        },
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    }
+        })
 }
 
 /// Status from `type == "error"` only — no plaintext heuristics.
 pub(crate) fn status_from_error_type_jsonl(output: &str) -> CompletionInfo {
-    CompletionInfo {
-        tokens: None,
-        status: if jsonl_has_error_type(output) {
+    CompletionInfo::new(if jsonl_has_error_type(output) {
             TaskStatus::Failed
         } else {
             TaskStatus::Done
-        },
-        model: None,
-        cost_usd: None,
-        exit_code: None,
-    }
+        })
 }
 
 /// Merge parse_completion into streaming info: Failed wins; fill missing fields.

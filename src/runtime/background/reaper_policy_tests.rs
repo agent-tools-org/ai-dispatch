@@ -5,11 +5,7 @@ use super::*;
 
 #[test]
 fn marks_stale_waiting_tasks_failed() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let mut orphan = make_task("t-wait", TaskStatus::Waiting);
     orphan.created_at = Local::now() - Duration::minutes(61);
     store.insert_task(&orphan).unwrap();
@@ -59,11 +55,7 @@ fn marks_stale_waiting_tasks_failed() {
 
 #[test]
 fn check_zombie_tasks_auto_fails_old_running_tasks() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let mut task = make_task("t-a24f", TaskStatus::Running);
     task.created_at = Local::now() - Duration::hours(25);
     store.insert_task(&task).unwrap();
@@ -146,11 +138,7 @@ fn is_process_running_returns_false_for_zombie() {
 
 #[test]
 fn zombie_cleanup_skips_autocommit_for_read_only() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let mut task = make_task("t-a1b2", TaskStatus::Running);
     task.read_only = true;
     store.insert_task(&task).unwrap();
@@ -173,11 +161,7 @@ fn reaper_kills_processes_even_when_row_is_already_terminal() {
     // Race regression: a task the reaper snapshotted can be terminalized by a
     // concurrent path (e.g. `aid stop`) before record_failure runs. The DB
     // write is then a no-op, but the processes must still be killed.
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
-
-    let store = Store::open_memory().unwrap();
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
     let mut task = make_task("t-race", TaskStatus::Running);
     task.status = TaskStatus::Stopped; // already terminal via concurrent stop
     store.insert_task(&task).unwrap();

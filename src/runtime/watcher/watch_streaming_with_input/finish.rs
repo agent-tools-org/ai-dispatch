@@ -106,17 +106,15 @@ impl WatchRun<'_> {
             exit_status.code().unwrap_or(-1),
             stderr_note,
         );
-        self.store.insert_agent_event(&TaskEvent {
-            task_id: self.task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: if status == TaskStatus::Done {
+        self.store.insert_agent_event(&TaskEvent::new(
+            self.task_id.clone(),
+            if status == TaskStatus::Done {
                 EventKind::Completion
             } else {
                 EventKind::Error
             },
             detail,
-            metadata: None,
-        })?;
+        ))?;
         self.info.status = status;
         Ok(self.info)
     }

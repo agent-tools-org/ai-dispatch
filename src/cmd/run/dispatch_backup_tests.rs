@@ -3,13 +3,10 @@
 // passed on the command line. Deps: prepare_dispatch_with, Store, git CLI.
 
 use super::*;
-use std::process::Command;
+
 use std::sync::Arc;
 
-fn git(repo_dir: &Path, args: &[&str]) {
-    let status = Command::new("git").arg("-C").arg(repo_dir).args(args).status().unwrap();
-    assert!(status.success(), "git {args:?}");
-}
+use crate::support::test_env::git;
 
 fn repo_with_backup_project() -> tempfile::TempDir {
     let repo = tempfile::tempdir().unwrap();
@@ -29,8 +26,7 @@ fn repo_with_backup_project() -> tempfile::TempDir {
 
 #[test]
 fn setup_failure_with_no_backup_makes_zero_backup_attempts() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let _permit = crate::support::test_subprocess::acquire();
     let repo = repo_with_backup_project();
     let store = Arc::new(Store::open_memory().unwrap());

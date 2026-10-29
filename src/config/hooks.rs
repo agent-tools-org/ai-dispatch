@@ -16,7 +16,6 @@ use crate::support::paths;
 pub struct Hook {
     pub event: String,
     pub command: String,
-    #[serde(default)]
     pub agent: Option<String>,
     #[serde(skip)]
     trusted: bool,

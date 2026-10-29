@@ -28,6 +28,21 @@ pub struct TaskCompletionUpdate<'a> {
     pub exit_code: Option<i32>,
 }
 
+impl<'a> TaskCompletionUpdate<'a> {
+    pub(crate) fn new(id: &'a str, status: TaskStatus, duration_ms: i64) -> Self {
+        Self {
+            id,
+            status,
+            duration_ms,
+            tokens: None,
+            observed_model: None,
+            attribution_source: None,
+            cost_usd: None,
+            exit_code: None,
+        }
+    }
+}
+
 impl Store {
     pub fn create_workgroup(
         &self,

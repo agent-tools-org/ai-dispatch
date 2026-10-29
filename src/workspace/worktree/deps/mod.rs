@@ -2,7 +2,6 @@
 // Exports: prepare_worktree_dependencies() and missing_deps_hint().
 // Deps: crate::runtime::process::guard, crate::store, crate::types, std fs/process/path helpers.
 use anyhow::{Context, Result};
-use chrono::Local;
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
@@ -248,13 +247,7 @@ fn write_verify_state(
 }
 
 fn insert_setup_event(store: &Store, task_id: &TaskId, detail: &str) {
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Setup,
-        detail: detail.to_string(),
-        metadata: None,
-    });
+    let _ = store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Setup, detail.to_string()));
 }
 
 #[cfg(test)]

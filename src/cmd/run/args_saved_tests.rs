@@ -1,23 +1,17 @@
 // Worker configuration rebuilt from saved dispatch args across the job-file boundary.
 // Every saved RunArgs field must reach the worker; env values are never persisted.
+use super::args_retry_tests::{every_field_set, assert_every_field_differs_from_default};
 use super::RunArgs;
-use crate::agent::classifier::TaskCategory;
-use crate::agent::model_validation::ModelSource;
 use crate::runtime::background::{load_spec_if_exists, save_spec, BackgroundRunSpec};
 use crate::store::Store;
-use crate::config::timeout_policy::TimeoutPolicy;
 use crate::types::*;
-use chrono::Local;
+
 use serde_json::{json, Value};
-use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 #[test]
 fn worker_rebuild_keeps_every_saved_field() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open(&crate::support::paths::db_path()).unwrap();
     let id = "t-every-field";
     let saved = every_field_set();
@@ -62,9 +56,7 @@ fn worker_rebuild_keeps_every_saved_field() {
 
 #[test]
 fn dispatch_saves_the_callers_budget_request_not_the_resolved_mode() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     std::fs::write(crate::support::paths::config_path(), "[selection]\nbudget_mode = true\n").unwrap();
     std::fs::create_dir_all(crate::support::paths::aid_dir().join("agents")).unwrap();
     std::fs::write(crate::support::paths::aid_dir().join("agents/budget-test.toml"),
@@ -85,9 +77,7 @@ fn dispatch_saves_the_callers_budget_request_not_the_resolved_mode() {
 
 #[tokio::test]
 async fn worker_without_a_dispatched_dir_skips_verify() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
-    crate::support::paths::ensure_dirs().unwrap();
+    let home = crate::support::test_env::TestHome::with_dirs();
     std::fs::create_dir_all(crate::support::paths::aid_dir().join("agents")).unwrap();
     std::fs::write(crate::support::paths::aid_dir().join("agents/noop-test.toml"),
         "[agent]\nid = \"noop-test\"\ndisplay_name = \"Noop Test\"\ncommand = \"/bin/sh\"\nprompt_mode = \"arg\"\nfixed_args = [\"-c\", \"true\"]\ninteractive_input = false\n").unwrap();
@@ -117,61 +107,6 @@ async fn worker_without_a_dispatched_dir_skips_verify() {
     assert!(!marker.exists(), "verify must not run without a dispatched working directory");
 }
 
-fn every_field_set() -> RunArgs {
-    RunArgs {
-        agent_name: "saved-agent".into(), prompt: "requested prompt".into(),
-        prompt_file: Some("prompt.md".into()), repo: Some("/tmp/repo".into()),
-        repo_root: Some("/tmp/root".into()), dir: Some("/tmp/requested".into()),
-        output: Some("out.md".into()), result_file: Some("result.md".into()),
-        artifact_staging: Some("/tmp/staging".into()),
-        result_file_required: Some(true), model: Some("effective-model".into()),
-        model_source: ModelSource::AidResolved,
-        declared_difficulty: Some(TaskDifficulty::Complex), declared_budget: Some(TaskBudget::Premium),
-        declared_urgency: Some(TaskUrgency::Urgent), declared_rigor: Some(TaskRigor::Critical),
-        declared_egress: TaskEgress::Local, kind: Some(TaskCategory::ComplexImpl),
-        worktree: Some("feat/x".into()), base_branch: Some("develop".into()), group: Some("wg-1".into()),
-        verify: Some("true".into()), setup: Some("make setup".into()), iterate: Some(3),
-        eval: Some("make eval".into()), eval_feedback_template: Some("fix {output}".into()),
-        judge: Some("grok".into()), peer_review: Some("claude".into()),
-        max_duration_mins: Some(42), max_task_cost: Some(1.5), retry: 2,
-        context: vec!["ctx.md".into()], checklist: vec!["check".into()], skills: vec!["implementer".into()],
-        hooks: vec!["on_fail:true".into()], template: Some("bug-fix".into()),
-        background: true, dry_run: true, announce: true, foreground: true,
-        parent_task_id: Some("t-parent".into()), on_done: Some("echo done".into()),
-        origin: DispatchOrigin::ExplicitRetry,
-        cascade: vec!["opencode".into()], read_only: true, audit_report_mode: true, sandbox: true,
-        container: Some("ubuntu:latest".into()), remote_build: Some("chosen-box".into()),
-        remote_build_auto_picked: true,
-        backup: Some("gdrive:x".into()), no_backup: true, budget: true, best_of: Some(2),
-        metric: Some("wc -l".into()), session_id: Some("session-1".into()), team: Some("dev".into()),
-        context_from: vec!["t-ctx".into()],
-        batch_siblings: vec![("a".into(), "b".into(), "c".into())], scope: vec!["src/".into()],
-        env: Some(HashMap::from([("TOKEN".into(), "secret-value".into())])),
-        env_forward: Some(vec!["FORWARDED".into()]), judge_retry: true,
-        existing_task_id: Some(TaskId("t-existing".into())), timeout: Some(71),
-        idle_timeout_secs: Some(7),
-        timeout_policy: TimeoutPolicy {
-            idle: Duration::from_secs(7),
-            ..TimeoutPolicy::default()
-        },
-        audit: true,
-        audit_explicit: true,
-        no_audit: true,
-        suppress_nested_repo_warning: true,
-        link_deps: false,
-        force_default_model: true,
-        policy: Some("caller-owned".into()),
-        execution_json: true,
-    }
-}
-
-fn assert_every_field_differs_from_default(saved: &RunArgs) {
-    let default = serde_json::to_value(RunArgs::default()).unwrap();
-    let saved = serde_json::to_value(saved).unwrap();
-    for (key, value) in saved.as_object().unwrap() {
-        assert_ne!(value, &default[key], "fixture leaves `{key}` at its default");
-    }
-}
 
 fn spec(task_id: &str) -> BackgroundRunSpec {
     serde_json::from_value(json!({
@@ -184,18 +119,5 @@ fn spec(task_id: &str) -> BackgroundRunSpec {
 }
 
 fn task(task_id: &str) -> Task {
-    Task {
-        id: TaskId(task_id.to_string()), agent: AgentKind::Codex, custom_agent_name: None,
-        prompt: "prompt".to_string(), resolved_prompt: None, category: None,
-        status: TaskStatus::Running, parent_task_id: None, workgroup_id: None,
-        caller_kind: None, caller_session_id: None, agent_session_id: None,
-        repo_path: None, project_id: None, worktree_path: None, effective_dir: None,
-        worktree_branch: None, final_head_sha: None, final_branch: None, start_sha: None,
-        log_path: None, output_path: None, tokens: None, prompt_tokens: None, duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None, exit_code: None, created_at: Local::now(), completed_at: None,
-        verify: None, verify_status: VerifyStatus::Skipped, pending_reason: None,
-        read_only: false, budget: false, audit_verdict: None, audit_report_path: None,
-        delivery_assessment: None,
-    }
+    crate::types::Task::test_fixture(TaskId(task_id.to_string()), TaskStatus::Running)
 }

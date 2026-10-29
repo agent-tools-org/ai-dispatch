@@ -30,8 +30,7 @@ fn init_repo(repo: &Path) {
 #[test]
 fn cleanup_removes_only_terminal_task_owned_targets() {
     let _permit = crate::support::test_subprocess::acquire();
-    let aid_home = tempfile::tempdir().unwrap();
-    let _aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
+    let aid_home = crate::support::test_env::TestHome::new();
     let target_root = aid_home.path().join("cargo-target");
     let _target_guard = CargoTargetDirGuard::set(&target_root);
     let fallback_root = tempfile::tempdir().unwrap();
@@ -76,8 +75,7 @@ fn cleanup_removes_only_terminal_task_owned_targets() {
 #[test]
 fn cleanup_preserves_root_when_branch_name_matches_root_basename() {
     let _permit = crate::support::test_subprocess::acquire();
-    let aid_home = tempfile::tempdir().unwrap();
-    let _aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
+    let aid_home = crate::support::test_env::TestHome::new();
     let target_root = aid_home.path().join("cargo-target");
     let _target_guard = CargoTargetDirGuard::set(&target_root);
     let fallback_root = tempfile::tempdir().unwrap();
@@ -131,8 +129,7 @@ fn hint_scan_marks_complete_scan_when_limits_are_not_reached() {
 #[test]
 fn hint_estimate_survives_entry_limit_before_byte_threshold() {
     let _permit = crate::support::test_subprocess::acquire();
-    let aid_home = tempfile::tempdir().unwrap();
-    let _aid_guard = crate::support::paths::AidHomeGuard::set(aid_home.path());
+    let aid_home = crate::support::test_env::TestHome::new();
     let target_root = aid_home.path().join("cargo-target");
     let _target_guard = CargoTargetDirGuard::set(&target_root);
     let store = Store::open_memory().unwrap();

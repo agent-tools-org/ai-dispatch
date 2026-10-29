@@ -7,9 +7,8 @@ use crate::agent::{Agent, CommandContext, RunOpts};
 
 fn opts(dir: &Path) -> RunOpts {
     RunOpts {
-        dir: Some(dir.to_string_lossy().into_owned()), output: None, result_file: None,
-        model: None, budget: false, read_only: false, sandbox: false,
-        context_files: vec![], session_id: None, env: None, env_forward: None,
+        dir: Some(dir.to_string_lossy().into_owned()),
+        ..Default::default()
     }
 }
 
@@ -239,8 +238,7 @@ fn read_only_git_metadata_is_omitted_with_a_named_warning() {
 
 #[test]
 fn read_only_launch_roots_include_only_staging_without_git_or_target_grants() {
-    let temp = tempfile::tempdir().unwrap();
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let repo = temp.path().join("repo");
     fs::create_dir_all(repo.join(".git")).unwrap();
     let scratch = create_temp_dir(temp.path()).unwrap();

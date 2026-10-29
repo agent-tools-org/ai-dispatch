@@ -215,8 +215,7 @@ mod tests {
 
     #[test]
     fn non_loopback_token_is_generated_and_reused() {
-        let home = tempfile::tempdir().expect("temporary AID home");
-        let _home = crate::support::paths::AidHomeGuard::set(home.path());
+        let home = crate::support::test_env::TestHome::new();
         let generated = resolve_token("0.0.0.0", None).expect("generate token").expect("token");
         let reused = resolve_token("0.0.0.0", None).expect("read token").expect("token");
         assert_eq!(generated, reused);

@@ -5,9 +5,7 @@ use clap::Parser;
 
 #[test]
 fn provider_clear_limit_scopes_one_route_and_all_discovers_every_provider() {
-    let home = tempfile::tempdir().unwrap();
-    let _home = crate::support::paths::AidHomeGuard::set(home.path());
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_home, store) = crate::support::test_env::TestHome::new().shared_store();
     let first = "codex-provider:X";
     let second = "codex-provider:Y";
     for name in [Some(first), Some(second), None] {

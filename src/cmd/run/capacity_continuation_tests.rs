@@ -9,46 +9,11 @@ const CAPACITY: &str = "Selected model is at capacity. Please try a different mo
 
 fn task(id: &str, dir: &std::path::Path) -> Task {
     Task {
-        id: TaskId(id.into()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
         prompt: "Original task".into(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Failed,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
         agent_session_id: Some("capacity-session".into()),
-        repo_path: None,
-        project_id: None,
-        worktree_path: None,
         effective_dir: Some(dir.display().to_string()),
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
         requested_model: Some("gpt-6.1-sol".into()),
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: chrono::Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.into()), TaskStatus::Failed)
     }
 }
 
@@ -89,8 +54,7 @@ fn install_agent(home: &std::path::Path, name: &str, command: &str) {
 
 #[tokio::test]
 async fn provider_capacity_refusal_keeps_hold_without_automatic_recovery() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![]);
     paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
@@ -136,8 +100,7 @@ mod round2;
 
 #[test]
 fn provider_capacity_regression_never_selects_automatic_advice_fallback() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Grok]);
     let store = Store::open_memory().expect("store");
     let row = task("t-capacity-advice", home.path());
@@ -157,10 +120,8 @@ fn provider_capacity_regression_never_selects_automatic_advice_fallback() {
 }
 
 fn seed_stdout(store: &Store, id: &TaskId, raw: &str) {
-    store.insert_event(&TaskEvent {
-        task_id: id.clone(), timestamp: chrono::Local::now(), event_kind: EventKind::Error,
-        detail: CAPACITY.into(), metadata: Some(serde_json::json!({"provider_stdout": raw})),
-    }).expect("stdout event");
+    store.insert_event(&TaskEvent::new(id.clone(), EventKind::Error, CAPACITY.into())
+        .with_metadata(Some(serde_json::json!({"provider_stdout": raw})))).expect("stdout event");
 }
 
 async fn continue_capacity(store: &Arc<Store>, args: &RunArgs, id: &TaskId) -> Result<Option<TaskId>> {

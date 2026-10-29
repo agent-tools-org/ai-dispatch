@@ -7,51 +7,16 @@
 use super::{retry_task_to_run_args, RetryArgs};
 use crate::cmd::run::RunArgs;
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-use chrono::Local;
+use crate::types::{AgentKind, Task, TaskId, TaskStatus};
 
 fn task_with(id: &str, effective_dir: Option<String>, repo_path: Option<String>) -> Task {
     Task {
-        id: TaskId(id.to_string()),
         agent: AgentKind::Kilo,
-        custom_agent_name: None,
         prompt: "original prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Failed,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
         agent_session_id: Some("ec9e3217-6444-424c-b21a-1d026d22928d".to_string()),
         repo_path: repo_path.clone(),
-        project_id: None,
-        worktree_path: None,
         effective_dir,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Failed)
     }
 }
 
@@ -59,13 +24,7 @@ fn base_retry(task_id: &str) -> RetryArgs {
     RetryArgs {
         task_id: task_id.to_string(),
         feedback: Some("fix it".to_string()),
-        feedback_file: None,
-        agent: None,
-        model: None,
-        idle_timeout_secs: None,
-        dir: None,
-        reset: false,
-        bg: false,
+        ..Default::default()
     }
 }
 

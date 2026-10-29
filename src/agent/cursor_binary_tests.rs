@@ -18,7 +18,7 @@ use tempfile::TempDir;
 fn build_command_prefers_agent_binary() {
     let _guard = CursorBinaryGuard::set("agent");
     let agent = CursorAgent;
-    let command = agent.build_command("test prompt", &run_opts()).unwrap();
+    let command = agent.build_command("test prompt", &RunOpts::default()).unwrap();
     assert_eq!(command.get_program().to_string_lossy(), "agent");
 }
 
@@ -81,8 +81,8 @@ fn oversized_identity_output_does_not_block_cursor_probe() {
 #[test]
 fn build_command_omits_partial_output_flag() {
     let agent = CursorAgent;
-    let cmd = agent.build_command("test prompt", &run_opts()).unwrap();
-    let args: Vec<_> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    let cmd = agent.build_command("test prompt", &RunOpts::default()).unwrap();
+    let args: Vec<_> = crate::support::test_command::args(&cmd);
     assert!(!args.iter().any(|arg| arg == "--stream-partial-output"));
 }
 
@@ -92,7 +92,7 @@ fn cursor_reasoning_stays_coherent_without_partial_output_flag() {
     let _guard = CursorBinaryGuard::set("agent");
     let agent = CursorAgent;
     let task_id = TaskId("t-cursor-stream".to_string());
-    let mut cmd = agent.build_command("test prompt", &run_opts()).unwrap();
+    let mut cmd = agent.build_command("test prompt", &RunOpts::default()).unwrap();
     cmd.env("PATH", bin_dir.path());
 
     let output = cmd.output().unwrap();
@@ -117,7 +117,7 @@ fn cursor_reasoning_stays_coherent_without_partial_output_flag() {
 #[ignore]
 fn reports_cursor_binary_for_subprocess() {
     let agent = CursorAgent;
-    let cmd = agent.build_command("test prompt", &run_opts()).unwrap();
+    let cmd = agent.build_command("test prompt", &RunOpts::default()).unwrap();
     println!("CURSOR_BINARY={}", cmd.get_program().to_string_lossy());
 }
 
@@ -144,7 +144,7 @@ fn reports_cursor_availability_for_subprocess() {
 #[ignore]
 fn reports_cursor_probe_after_oversized_help() {
     let agent = CursorAgent;
-    let cmd = agent.build_command("test prompt", &run_opts()).unwrap();
+    let cmd = agent.build_command("test prompt", &RunOpts::default()).unwrap();
     let marker = format!("CURSOR_BINARY={}", cmd.get_program().to_string_lossy());
     if let Ok(path) = std::env::var("CURSOR_PROBE_MARKER") {
         fs::write(path, marker).unwrap();
@@ -228,8 +228,6 @@ while [ "$n" -gt 0 ]; do printf x; n=$((n - 1)); done
     dir
 }
 
-
-
 fn run_helper(test_name: &str, bin_dir: &TempDir) -> String {
     let output = Command::new(std::env::current_exe().unwrap())
         .args(["--exact", test_name, "--ignored", "--nocapture"])
@@ -272,20 +270,4 @@ fn extract_marker<'a>(output: &'a str, prefix: &str) -> &'a str {
         .lines()
         .find_map(|line| line.strip_prefix(prefix))
         .unwrap_or_else(|| panic!("missing marker {prefix} in output: {output}"))
-}
-
-fn run_opts() -> RunOpts {
-    RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
-    }
 }

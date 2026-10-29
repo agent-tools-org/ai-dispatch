@@ -48,7 +48,6 @@ pub(crate) struct AdviceReport {
     pub notes: Vec<String>,
     pub sources: std::collections::BTreeMap<String, crate::routing::scores::Source>,
     /// The calling session's provider pool, when detected.
-    #[serde(default)]
     pub caller: Option<CallerAdvice>,
 }
 
@@ -90,11 +89,9 @@ pub(crate) struct AdviceCandidate {
     #[serde(default)]
     pub exclusion_codes: Vec<String>,
     /// Ranked below other pools but not excluded (caller pool, model unknown).
-    #[serde(default)]
     pub demotion_reason: Option<String>,
     #[serde(default)]
     pub quota: CandidateQuota,
-    #[serde(default)]
     pub billing: Option<crate::routing::quota::billing::Billing>,
     #[serde(default)]
     pub auth: AuthStatus,

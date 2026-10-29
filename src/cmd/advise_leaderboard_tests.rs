@@ -7,8 +7,7 @@ use crate::types::{AgentKind, DeclaredTaskProfile};
 
 #[test]
 fn unknown_billing_keeps_original_candidate_line_and_known_billing_adds_terms() {
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let _cache = crate::routing::quota::live::CacheDirGuard::set(temp.path());
     let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Grok]);
     let report = crate::agent::selection::advise(

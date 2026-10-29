@@ -46,8 +46,7 @@ fn nested_opencode_error_type_fails() {
 
 #[test]
 fn record_quota_exhaustion_ignores_agent_prose_about_rate_limits() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Cursor, None);
 
     let report = format!(
@@ -61,8 +60,7 @@ fn record_quota_exhaustion_ignores_agent_prose_about_rate_limits() {
 
 #[test]
 fn record_quota_exhaustion_detects_provider_refusal_templates() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
 
     crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
     let codex_out = test_codex_error_envelope(
@@ -99,8 +97,7 @@ fn prose_rate_limit_tokens_are_not_quota_failures() {
 
 #[test]
 fn explicit_delivery_survives_a_later_quota_refusal() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
 
     let mut report = String::from("## Findings\n\n");
@@ -120,8 +117,7 @@ fn explicit_delivery_survives_a_later_quota_refusal() {
 
 #[test]
 fn markdown_shape_does_not_turn_a_refusal_into_delivery() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     crate::routing::rate_limit::clear_rate_limit(&crate::types::AgentKind::Codex, None);
 
     let output = &test_codex_error_envelope("# Error\nYou have hit your usage limit.");
@@ -136,8 +132,7 @@ fn markdown_shape_does_not_turn_a_refusal_into_delivery() {
 /// rate-limited off an audit report twice on 2026-08-06.
 #[test]
 fn unobserved_providers_are_not_guessed_from_generic_prose() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
 
     for agent in [crate::types::AgentKind::Claude, crate::types::AgentKind::Grok] {
         crate::routing::rate_limit::clear_rate_limit(&agent, None);
@@ -221,8 +216,7 @@ fn quota_line_keeps_a_reset_time_embedded_in_json() {
 /// where the split now drops it.
 #[test]
 fn a_report_quoting_this_repos_own_fixture_never_marks_the_agent() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let cursor = crate::types::AgentKind::Cursor;
     crate::routing::rate_limit::clear_all_rate_limits_for_agent(&cursor, None);
 

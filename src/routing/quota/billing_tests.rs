@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::routing::quota::live::{self, CacheDirGuard};
-use crate::support::paths::AidHomeGuard;
+
 use crate::types::{AgentKind, TaskDifficulty, TaskUrgency};
 
 fn profile(budget: TaskBudget, rigor: TaskRigor) -> DeclaredTaskProfile {
@@ -50,8 +50,7 @@ fn billing_policy_matrix() {
 
 #[test]
 fn cache_billing_preserves_optional_contract_and_rejects_stale_or_failed_evidence() {
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let _cache = CacheDirGuard::set(temp.path());
     for (billing, ok, fetched, expected) in cache_cases() {
         let mut snapshot = serde_json::json!({"provider":"codex","windows":[],"fetched_at":fetched});
@@ -118,8 +117,7 @@ fn cache_cases() -> [CacheCase; 6] {
 
 #[test]
 fn malformed_billing_preserves_probe_and_marker_release() {
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let _cache = CacheDirGuard::set(temp.path());
     let marker = temp.path().join("rate-limit-codex");
     std::fs::write(&marker, "recovery_at: Jan 01, 2099 2:23 PM\nmessage: usage limit\n")

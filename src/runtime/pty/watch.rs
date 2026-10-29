@@ -2,7 +2,6 @@
 // Owns chunk parsing, prompt detection, input forwarding, and completion finalization.
 
 use anyhow::Result;
-use chrono::Local;
 use serde_json::json;
 use std::collections::HashSet;
 use std::io::Write;
@@ -92,13 +91,7 @@ impl MonitorState {
     ) -> Self {
         Self {
             absolute_deadline: Instant::now() + timeout_policy.max_duration.min(timeout_policy.hard_cap),
-            info: CompletionInfo {
-                tokens: None,
-                status: TaskStatus::Done,
-                model: None,
-                cost_usd: None,
-                exit_code: None,
-            },
+            info: CompletionInfo::new(TaskStatus::Done),
             full_output: String::new(),
             line_buffer: String::new(),
             event_count: 0,
@@ -146,13 +139,11 @@ impl MonitorState {
             IdleAction::None => {}
             IdleAction::WarnEvent if !self.idle_warned => {
                 self.idle_warned = true;
-                store.insert_event(&TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: Local::now(),
-                    event_kind: EventKind::Reasoning,
-                    detail: "idle warn".to_string(),
-                    metadata: Some(json!({ "idle_warn": true })),
-                })?;
+                store.insert_event(&TaskEvent::new(
+                    task_id.clone(),
+                    EventKind::Reasoning,
+                    "idle warn".to_string(),
+                ).with_metadata(Some(json!({ "idle_warn": true }))))?;
             }
             IdleAction::WarnEvent => {}
             IdleAction::SendNudge(message) => {
@@ -161,13 +152,11 @@ impl MonitorState {
             IdleAction::Escalate
                 if crate::task::unstick::mark_task_stalled(store.as_ref(), task_id.as_str())? =>
             {
-                store.insert_event(&TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: Local::now(),
-                    event_kind: EventKind::Milestone,
-                    detail: "Auto-escalated: task stalled".to_string(),
-                    metadata: Some(json!({ "auto_escalated": true })),
-                })?;
+                store.insert_event(&TaskEvent::new(
+                    task_id.clone(),
+                    EventKind::Milestone,
+                    "Auto-escalated: task stalled".to_string(),
+                ).with_metadata(Some(json!({ "auto_escalated": true }))))?;
             }
             IdleAction::Escalate => {}
         }

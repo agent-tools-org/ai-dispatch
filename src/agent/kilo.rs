@@ -27,24 +27,8 @@ pub(crate) fn spec() -> OpenCodeOverlaySpec {
 mod tests {
     use super::super::{Agent, RunOpts};
     use super::*;
-    use crate::{support::paths, routing::rate_limit};
+    use crate::{routing::rate_limit};
     use crate::types::{EventKind, TaskId};
-
-    fn base_opts() -> RunOpts {
-        RunOpts {
-            dir: None,
-            output: None,
-            result_file: None,
-            model: None,
-            budget: false,
-            read_only: false,
-            sandbox: false,
-            context_files: vec![],
-            session_id: None,
-            env: None,
-            env_forward: None,
-        }
-    }
 
     fn args_of(prompt: &str, opts: &RunOpts) -> Vec<String> {
         agent()
@@ -57,12 +41,9 @@ mod tests {
 
     #[test]
     fn build_command_uses_kilo_binary_and_auto_flag() {
-        let cmd = agent().build_command("test prompt", &base_opts()).unwrap();
+        let cmd = agent().build_command("test prompt", &RunOpts::default()).unwrap();
         assert_eq!(cmd.get_program().to_string_lossy(), "kilo");
-        let args: Vec<String> = cmd
-            .get_args()
-            .map(|arg| arg.to_string_lossy().to_string())
-            .collect();
+        let args: Vec<String> = crate::support::test_command::args(&cmd);
         assert_eq!(args.first().map(String::as_str), Some("run"));
         assert!(args.contains(&"--auto".to_string()));
         assert!(args.contains(&"--format".to_string()));
@@ -77,14 +58,11 @@ mod tests {
             context_files: vec!["src/main.rs".to_string()],
             dir: Some("/tmp/wt".to_string()),
             budget: true,
-            ..base_opts()
+            ..RunOpts::default()
         };
         let cmd = agent().build_command("test", &opts).unwrap();
         assert_eq!(cmd.get_current_dir().unwrap(), std::path::Path::new("/tmp/wt"));
-        let args: Vec<String> = cmd
-            .get_args()
-            .map(|arg| arg.to_string_lossy().to_string())
-            .collect();
+        let args: Vec<String> = crate::support::test_command::args(&cmd);
         assert!(args.windows(2).any(|pair| pair == ["--session", "ses_abc"]));
         assert!(args.contains(&"--continue".to_string()));
         assert!(args.contains(&"--fork".to_string()));
@@ -94,7 +72,7 @@ mod tests {
 
     #[test]
     fn build_command_read_only_prefixes_prompt() {
-        let opts = RunOpts { read_only: true, ..base_opts() };
+        let opts = RunOpts { read_only: true, ..RunOpts::default() };
         let args = args_of("inspect", &opts);
         let last_arg = args.last().expect("should have prompt as last arg");
         assert!(last_arg.contains("Do NOT modify, create, or delete any files."));
@@ -102,8 +80,7 @@ mod tests {
 
     #[test]
     fn parse_event_marks_kilo_rate_limits() {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = paths::AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
         rate_limit::clear_rate_limit(&AgentKind::Kilo, None);
         rate_limit::clear_rate_limit(&AgentKind::OpenCode, None);
         let event = agent()

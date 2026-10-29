@@ -6,23 +6,10 @@ use super::{detect_project_in, project_path_in_repo, resolve_project_id};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+
 use tempfile::TempDir;
 
-fn git(repo: &Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).unwrap().trim().to_string()
-}
+use crate::support::test_env::git_output as git;
 
 fn init_repo() -> (TempDir, PathBuf) {
     let temp = TempDir::new().unwrap();

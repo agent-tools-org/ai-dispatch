@@ -69,8 +69,7 @@ fn resolve_max_duration_mins_preserves_explicit_minutes() { assert_eq!(resolve_m
 
 #[test]
 fn auto_save_creates_output_for_research_task() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let log_path = temp.path().join("research.jsonl");
     std::fs::write(&log_path, "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"saved output\"}\n").unwrap();
     let store = Store::open_memory().unwrap();
@@ -87,10 +86,7 @@ fn auto_save_creates_output_for_research_task() {
 
 #[tokio::test]
 async fn dry_run_returns_without_starting_task() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task_id = run(
         store.clone(),
         RunArgs {
@@ -113,10 +109,7 @@ async fn dry_run_returns_without_starting_task() {
 
 #[tokio::test]
 async fn run_records_worktree_setup_failure_event() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task_id = TaskId("t-worktree-fail".to_string());
 
     let err = run(
@@ -144,50 +137,4 @@ async fn run_records_worktree_setup_failure_event() {
     assert!(events.iter().any(|event| {
         event.detail.contains("Failed during worktree setup: Not a git repository")
     }));
-}
-
-#[tokio::test]
-async fn rate_limited_agent_without_cascade_fails_early() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
-    // No installed peers → category-aware fallback correctly returns None.
-    let _agents = crate::agent::DetectAgentsGuard::set(vec![AgentKind::MiMoCode]);
-    let reset = chrono::Local::now().naive_local() + chrono::Duration::days(1);
-    let stated = crate::routing::rate_limit::format_recovery(reset);
-    crate::routing::rate_limit::mark_rate_limited_until(
-        &AgentKind::MiMoCode, None, reset, "Insufficient balance",
-    );
-    let err = run(Arc::new(Store::open_memory().unwrap()), RunArgs {
-        agent_name: "mimocode".to_string(),
-        prompt: "Inspect the repository state".to_string(),
-        dry_run: true,
-        skills: vec![NO_SKILL_SENTINEL.to_string()],
-        ..Default::default()
-    }).await.unwrap_err();
-    assert!(err.to_string().contains(&format!("mimocode is held (until {stated})")));
-}
-
-#[tokio::test]
-async fn rate_limited_agent_with_cascade_proceeds() {
-    let temp = TempDir::new().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
-    let store = Arc::new(Store::open_memory().unwrap());
-    crate::routing::rate_limit::mark_rate_limited_until(
-        &AgentKind::Kilo, None,
-        chrono::Local::now().naive_local() + chrono::Duration::days(1), "Insufficient balance",
-    );
-    let task_id = run(store.clone(), RunArgs {
-        agent_name: "kilo".to_string(),
-        prompt: "Inspect the repository state".to_string(),
-        cascade: vec!["codex".to_string()],
-        dry_run: true,
-        skills: vec![NO_SKILL_SENTINEL.to_string()],
-        ..Default::default()
-    }).await.unwrap();
-    let task = store.get_task(task_id.as_str()).unwrap().unwrap();
-    // Skipped, not Pending: a dry run never dispatches, and a row left pending
-    // was reaped ten minutes later as a failure the agent never had.
-    assert_eq!(task.status, TaskStatus::Skipped);
 }

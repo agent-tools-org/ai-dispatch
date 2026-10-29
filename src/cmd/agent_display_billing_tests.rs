@@ -3,12 +3,10 @@
 
 use super::*;
 use crate::routing::quota::live::CacheDirGuard;
-use crate::support::paths::AidHomeGuard;
 
 #[test]
 fn billing_states_replace_ok_in_quota_rows() {
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let _cache = CacheDirGuard::set(temp.path());
     for state in ["overage", "exhausted"] {
         std::fs::write(

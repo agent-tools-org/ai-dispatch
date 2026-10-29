@@ -132,34 +132,6 @@ pub(super) fn extract_error_detail(value: &Value) -> Option<String> {
     .find_map(stringify_value)
 }
 
-pub(super) fn extract_text_payload(value: Option<&Value>) -> Option<String> {
-    match value? {
-        Value::Null => None,
-        Value::String(text) => Some(text.clone()),
-        Value::Array(items) => {
-            let parts = items
-                .iter()
-                .filter_map(|item| extract_text_payload(Some(item)))
-                .filter(|text| !text.is_empty())
-                .collect::<Vec<_>>();
-            (!parts.is_empty()).then(|| parts.concat())
-        }
-        Value::Object(map) => {
-            for key in ["text", "content", "parts"] {
-                if let Some(text) = map
-                    .get(key)
-                    .and_then(|item| extract_text_payload(Some(item)))
-                    && !text.is_empty()
-                {
-                    return Some(text);
-                }
-            }
-            None
-        }
-        _ => None,
-    }
-}
-
 fn stringify_value(value: &Value) -> Option<String> {
     match value {
         Value::Null => None,
@@ -171,6 +143,7 @@ fn stringify_value(value: &Value) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::stream_text::extract_text_payload;
 
     #[test]
     fn qwen_helpers_preserve_tool_and_text_shapes() {

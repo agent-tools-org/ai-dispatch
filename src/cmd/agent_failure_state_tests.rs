@@ -33,8 +33,7 @@ fn counts(store: &Store) -> (i64, i64) {
 
 #[test]
 fn handler_preserves_all_rows_and_home_entries() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let store = Store::open_memory().expect("store");
     insert(&store, "milestone", "Provider unknown failure", 0, "codex");
     std::fs::create_dir(home.path().join("holds")).expect("holds");

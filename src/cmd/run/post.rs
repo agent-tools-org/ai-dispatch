@@ -34,13 +34,11 @@ pub(crate) fn maybe_run_post_done_audit(
     if !crate::task::aic::is_available() {
         aid_warn!("[aid] --audit requested but 'aic' not found on PATH — skipping cross-audit");
         store.update_task_audit(task_id.as_str(), Some("skipped"), None)?;
-        store.insert_event(&TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: chrono::Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "audit skipped: aic binary not found".to_string(),
-            metadata: None,
-        })?;
+        store.insert_event(&TaskEvent::new(
+            task_id.clone(),
+            EventKind::Milestone,
+            "audit skipped: aic binary not found".to_string(),
+        ))?;
         return Ok(());
     }
 
@@ -51,13 +49,11 @@ pub(crate) fn maybe_run_post_done_audit(
         Some(result.verdict.as_str()),
         result.report_path.as_deref(),
     )?;
-    store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: format!("Audit complete: {}", result.verdict),
-        metadata: None,
-    })?;
+    store.insert_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Milestone,
+        format!("Audit complete: {}", result.verdict),
+    ))?;
     Ok(())
 }
 

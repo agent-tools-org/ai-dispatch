@@ -8,8 +8,7 @@ use crate::agent::{
 
 #[test]
 fn prepare_preserves_api_route_settings_and_scrubbed_environment() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     let route = ApiRouteAgent(
         serde_json::from_value(json!({
             "id":"synthetic-route", "agent":"claude", "keychain_service":"synthetic",
@@ -57,19 +56,12 @@ fn prepare_preserves_api_route_settings_and_scrubbed_environment() {
 fn opts(home: &std::path::Path) -> RunOpts {
     RunOpts {
         dir: Some(home.display().to_string()),
-        output: None,
-        result_file: None,
         model: Some("sonnet".into()),
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env_forward: None,
         env: Some(std::collections::HashMap::from([
             ("HOME".into(), home.display().to_string()),
             ("ANTHROPIC_API_KEY".into(), "synthetic".into()),
         ])),
+        ..Default::default()
     }
 }
 

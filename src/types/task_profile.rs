@@ -17,24 +17,6 @@ pub enum TaskDifficulty {
 }
 
 impl TaskDifficulty {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Trivial => "trivial",
-            Self::Simple => "simple",
-            Self::Moderate => "moderate",
-            Self::Complex => "complex",
-        }
-    }
-
-    pub(crate) fn parse_str(value: &str) -> Option<Self> {
-        match value {
-            "trivial" => Some(Self::Trivial),
-            "simple" => Some(Self::Simple),
-            "moderate" => Some(Self::Moderate),
-            "complex" => Some(Self::Complex),
-            _ => None,
-        }
-    }
 
     pub(crate) fn capability_floor(self) -> i32 {
         match self {
@@ -56,6 +38,15 @@ impl TaskDifficulty {
     }
 }
 
+super::string_values::string_values!(
+    TaskDifficulty, label(self), pub(crate) parse_str {
+        Trivial => "trivial",
+        Simple => "simple",
+        Moderate => "moderate",
+        Complex => "complex",
+    }
+);
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum TaskBudget {
@@ -67,24 +58,6 @@ pub enum TaskBudget {
 }
 
 impl TaskBudget {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Free => "free",
-            Self::Cheap => "cheap",
-            Self::Standard => "standard",
-            Self::Premium => "premium",
-        }
-    }
-
-    pub(crate) fn parse_str(value: &str) -> Option<Self> {
-        match value {
-            "free" => Some(Self::Free),
-            "cheap" => Some(Self::Cheap),
-            "standard" => Some(Self::Standard),
-            "premium" => Some(Self::Premium),
-            _ => None,
-        }
-    }
 
     pub(crate) fn uses_budget_mode(self) -> bool {
         matches!(self, Self::Free | Self::Cheap)
@@ -101,6 +74,15 @@ impl TaskBudget {
     }
 }
 
+super::string_values::string_values!(
+    TaskBudget, label(self), pub(crate) parse_str {
+        Free => "free",
+        Cheap => "cheap",
+        Standard => "standard",
+        Premium => "premium",
+    }
+);
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum TaskUrgency {
@@ -110,24 +92,13 @@ pub enum TaskUrgency {
     Urgent,
 }
 
-impl TaskUrgency {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Background => "background",
-            Self::Normal => "normal",
-            Self::Urgent => "urgent",
-        }
+super::string_values::string_values!(
+    TaskUrgency, label(self), pub(crate) parse_str {
+        Background => "background",
+        Normal => "normal",
+        Urgent => "urgent",
     }
-
-    pub(crate) fn parse_str(value: &str) -> Option<Self> {
-        match value {
-            "background" => Some(Self::Background),
-            "normal" => Some(Self::Normal),
-            "urgent" => Some(Self::Urgent),
-            _ => None,
-        }
-    }
-}
+);
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
@@ -138,24 +109,13 @@ pub enum TaskRigor {
     Critical,
 }
 
-impl TaskRigor {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Draft => "draft",
-            Self::Standard => "standard",
-            Self::Critical => "critical",
-        }
+super::string_values::string_values!(
+    TaskRigor, label(self), pub(crate) parse_str {
+        Draft => "draft",
+        Standard => "standard",
+        Critical => "critical",
     }
-
-    pub(crate) fn parse_str(value: &str) -> Option<Self> {
-        match value {
-            "draft" => Some(Self::Draft),
-            "standard" => Some(Self::Standard),
-            "critical" => Some(Self::Critical),
-            _ => None,
-        }
-    }
-}
+);
 
 /// Where task data may go. Decided by the provider endpoint, not the CLI.
 /// Independent of [`TaskRigor`]: critical still forces verify+audit and does

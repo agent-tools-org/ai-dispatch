@@ -9,18 +9,9 @@ fn serializes_spec_to_json() {
         task_id: "t-5a0e".to_string(),
         worker_pid: Some(4242),
         dir: Some(".".to_string()),
-        budget: false,
         max_duration_mins: Some(90),
-        max_duration_secs: None,
-        idle_timeout_secs: None,
         interactive: true,
-        on_done: None,
-        env: None,
-        agent_pid: None,
-        agent_started: None,
-        audit_report_mode: false,
-        pre_task_dirty_paths: None,
-        foreground: false,
+        ..Default::default()
     };
 
     let content = serde_json::to_string_pretty(&spec).unwrap();
@@ -47,8 +38,7 @@ fn serializes_cascade_field() {
 
 #[test]
 fn completion_notifications_are_written_as_jsonl() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let mut task = make_task("t-4d4d", TaskStatus::Done);
     task.duration_ms = Some(1_500);
     task.cost_usd = Some(0.25);
@@ -70,10 +60,7 @@ fn completion_notifications_are_written_as_jsonl() {
 #[test]
 fn build_on_done_command_splits_simple_argv() {
     let cmd = build_on_done_command("echo hi").unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert_eq!(cmd.get_program().to_string_lossy(), "echo");
     assert_eq!(args, vec!["hi"]);
 }
@@ -81,18 +68,12 @@ fn build_on_done_command_splits_simple_argv() {
 #[test]
 fn build_on_done_command_routes_shell_operators_through_sh() {
     let chained = build_on_done_command("echo hi && echo bye").unwrap();
-    let chained_args: Vec<String> = chained
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let chained_args: Vec<String> = crate::support::test_command::args(&chained);
     assert_eq!(chained.get_program().to_string_lossy(), "sh");
     assert_eq!(chained_args, vec!["-c", "echo hi && echo bye"]);
 
     let fallback = build_on_done_command("cmd1 || cmd2").unwrap();
-    let fallback_args: Vec<String> = fallback
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let fallback_args: Vec<String> = crate::support::test_command::args(&fallback);
     assert_eq!(fallback.get_program().to_string_lossy(), "sh");
     assert_eq!(fallback_args, vec!["-c", "cmd1 || cmd2"]);
 }
@@ -137,9 +118,7 @@ fn explicit_cascade_takes_priority_over_quota_cascade() {
 
 #[test]
 fn agent_pid_stored_and_loaded_correctly() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
 
     save_spec(&make_spec("t-a100")).unwrap();
 
@@ -157,9 +136,7 @@ fn agent_pid_stored_and_loaded_correctly() {
 
 #[test]
 fn agent_pid_backwards_compatible() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
 
     save_spec(&make_spec("t-c200")).unwrap();
 
@@ -169,9 +146,7 @@ fn agent_pid_backwards_compatible() {
 
 #[test]
 fn full_old_format_job_can_be_waited_stopped_and_reaped() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = paths::AidHomeGuard::set(temp.path());
-    paths::ensure_dirs().unwrap();
+    let _temp = crate::support::test_env::TestHome::with_dirs();
     let store = std::sync::Arc::new(Store::open_memory().unwrap());
     let mut legacy: serde_json::Value =
         serde_json::from_str(include_str!("../../../testdata/full-background-spec.json")).unwrap();

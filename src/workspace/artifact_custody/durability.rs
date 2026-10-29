@@ -156,6 +156,7 @@ fn join_logical_path(parent: &str, child: &str) -> String {
 mod tests {
     use super::verify;
     use std::path::Path;
+
     use std::process::Command;
 
     fn git(repo: &Path, args: &[&str]) -> String {

@@ -10,6 +10,8 @@ pub mod copilot;
 pub mod cursor;
 pub mod droid;
 pub(crate) mod antigravity_response;
+mod stream_text;
+mod event_metadata;
 pub(crate) mod completion_event;
 pub(crate) mod removed;
 pub mod grok;
@@ -114,13 +116,7 @@ pub trait Agent: Send + Sync {
     /// Parse full agent output into completion info.
     /// Called by buffered finalize always, and by streaming finalize when exit code is 0.
     fn parse_completion(&self, _output: &str) -> CompletionInfo {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
+        CompletionInfo::new(TaskStatus::Done)
     }
 
     /// Whether the agent's private diagnostic log proves terminal failure.
@@ -170,6 +166,7 @@ pub fn agent_log_from_opts(opts: &RunOpts) -> Option<&str> {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(test, derive(Default))]
 pub struct RunOpts {
     pub dir: Option<String>,
     pub output: Option<String>,

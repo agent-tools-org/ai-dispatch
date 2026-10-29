@@ -138,13 +138,7 @@ impl Agent for OpenCodeOverlayAgent {
         let (kind, detail) = classify_text_line(trimmed);
         kind.map(|event_kind| {
             let (detail, metadata) = super::truncate::capped_detail(detail);
-            TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: now,
-                event_kind,
-                detail,
-                metadata,
-            }
+            TaskEvent::at(task_id.clone(), event_kind, detail, now).with_metadata(metadata)
         })
     }
 
@@ -168,4 +162,3 @@ impl Agent for OpenCodeOverlayAgent {
 #[cfg(test)]
 #[path = "opencode_overlay_tests.rs"]
 mod tests;
-

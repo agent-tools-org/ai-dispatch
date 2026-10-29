@@ -4,12 +4,11 @@
 use super::CodexAgent;
 use crate::agent::Agent;
 use crate::types::{AgentKind, EventKind, TaskId};
-use crate::{support::paths, routing::rate_limit};
+use crate::{routing::rate_limit};
 
 #[test]
 fn live_usage_limit_error_envelope_marks() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     rate_limit::clear_rate_limit(&AgentKind::Codex, None);
     let line = r#"{"type":"error","message":"You have hit your usage limit. try again at Mar 21st, 2099 2:27 PM."}"#;
     let event = CodexAgent

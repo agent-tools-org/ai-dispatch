@@ -30,8 +30,7 @@ fn first_token_hang_is_inert_when_raw_bytes_keep_arriving() {
 fn first_token_hang_fires_for_buffered_without_raw_bytes_and_no_log() {
     // grok/agy declare streaming()=false. A run that writes neither PTY bytes
     // nor its debug log is dead and must be reaped after the first-token budget.
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("ensure dirs");
 
     let mut state = MonitorState::new(false, None);
@@ -49,8 +48,7 @@ fn first_token_hang_is_inert_for_buffered_with_growing_log() {
     // grok runs --debug-file pointing at agent_log_path. A run whose log is
     // growing is alive even if the PTY is silent for the whole first-token window.
     // Replay of t-73b69cde and t-24f12f38: both died at exactly 183s.
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     paths::ensure_dirs().expect("ensure dirs");
     std::fs::create_dir_all(paths::task_dir("t-buf-live")).expect("task dir");
 

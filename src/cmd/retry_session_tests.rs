@@ -16,13 +16,7 @@ fn retry_preservation_manual_retry_of_retry_keeps_all_feedback() {
         RetryArgs {
             task_id: task.id.to_string(),
             feedback: Some("New correction".into()),
-            feedback_file: None,
-            agent: None,
-            model: None,
-            idle_timeout_secs: None,
-            dir: None,
-            reset: false,
-            bg: false,
+            ..Default::default()
         },
         false,
     )
@@ -36,7 +30,6 @@ fn retry_preservation_manual_retry_of_retry_keeps_all_feedback() {
     );
     assert!(!args.prompt.contains("Injected launch context"));
 }
-
 
 #[test]
 fn retry_preservation_keeps_long_feedback_first_and_whole_on_codex_resume() {
@@ -59,13 +52,7 @@ fn retry_preservation_keeps_long_feedback_first_and_whole_on_codex_resume() {
         RetryArgs {
             task_id: task.id.to_string(),
             feedback: Some(feedback.clone()),
-            feedback_file: None,
-            agent: None,
-            model: None,
-            idle_timeout_secs: None,
-            dir: None,
-            reset: false,
-            bg: false,
+            ..Default::default()
         },
         false,
     )
@@ -87,17 +74,8 @@ fn retry_preservation_keeps_long_feedback_first_and_whole_on_codex_resume() {
 fn codex_resume_prompt(prompt: &str, retry: &RunArgs) -> String {
     use crate::agent::{Agent, CommandContext, RunOpts};
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
         session_id: retry.session_id.clone(),
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let command = crate::agent::codex::CodexAgent
         .build_command_with_context(

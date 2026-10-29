@@ -160,55 +160,16 @@ struct ExportPayload<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::support::paths::AidHomeGuard;
-    use crate::types::{AgentKind, TaskId, TaskStatus, VerifyStatus};
-    use chrono::Local;
+
+    use crate::types::{TaskId, TaskStatus};
 
     fn task(id: &str) -> Task {
-        Task {
-            id: TaskId(id.to_string()),
-            agent: AgentKind::Codex,
-            custom_agent_name: None,
-            prompt: "prompt".to_string(),
-            resolved_prompt: None,
-            category: None,
-            status: TaskStatus::Done,
-            parent_task_id: None,
-            workgroup_id: None,
-            caller_kind: None,
-            caller_session_id: None,
-            agent_session_id: None,
-            repo_path: None, project_id: None,
-            worktree_path: None, effective_dir: None,
-            worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-            start_sha: None,
-            log_path: None,
-            output_path: None,
-            tokens: None,
-            prompt_tokens: None,
-            duration_ms: None,
-            requested_model: None, observed_model: None, attribution_source: None,
-            cost_usd: None,
-            exit_code: None,
-            created_at: Local::now(),
-            completed_at: None,
-            verify: None,
-            verify_status: VerifyStatus::Skipped,
-            pending_reason: None,
-            read_only: false,
-            budget: false,
-            audit_verdict: None,
-            audit_report_path: None,
-            delivery_assessment: None,
-        }
+        crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
 
     #[test]
     fn read_output_uses_persisted_result_when_output_path_absent() {
-        let temp = tempfile::tempdir().unwrap();
-        let _aid_home = AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
         let result_path = paths::task_dir("t-export-result").join("result.md");
         std::fs::create_dir_all(result_path.parent().unwrap()).unwrap();
         std::fs::write(&result_path, "exported report").unwrap();
@@ -220,11 +181,11 @@ mod tests {
 
     #[test]
     fn export_timeline_explains_trimmed_payloads() {
-        let event = TaskEvent {
-            task_id: TaskId("trimmed".into()), timestamp: Local::now(),
-            event_kind: crate::types::EventKind::Build, detail: "build".into(),
-            metadata: Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})),
-        };
+        let event = TaskEvent::new(
+            TaskId("trimmed".into()),
+            crate::types::EventKind::Build,
+            "build".into(),
+        ).with_metadata(Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})));
         assert!(format_event_timeline(&[event])[0].contains("output trimmed"));
     }
 

@@ -163,13 +163,11 @@ pub(crate) fn maybe_flag_hollow_output(
     ) {
         aid_error!("[aid] Failed to record hollow output delivery assessment: {err}");
     }
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: "Hollow output: no output or worktree changes were observed".to_string(),
-        metadata: None,
-    });
+    let _ = store.insert_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Milestone,
+        "Hollow output: no output or worktree changes were observed".to_string(),
+    ));
 }
 pub(super) fn output_has_content(task: &Task) -> bool {
     if task.artifact_delivery_notice().is_some() {

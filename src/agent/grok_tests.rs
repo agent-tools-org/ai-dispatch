@@ -5,16 +5,10 @@ use crate::types::{AgentKind, TaskId, TaskStatus};
 fn opts(read_only: bool) -> RunOpts {
     RunOpts {
         dir: Some("/tmp".to_string()),
-        output: None,
-        result_file: None,
         model: Some("grok-4.5".to_string()),
-        budget: false,
         read_only,
-        sandbox: false,
-        context_files: Vec::new(),
         session_id: Some("sess-1".to_string()),
-        env: None,
-        env_forward: None,
+        ..Default::default()
     }
 }
 
@@ -205,8 +199,7 @@ fn catalog_lists_grok_profile_and_default_model() {
     // rather than isolating it. Clearing the process cache is not enough:
     // feed_index() reloads from AID_HOME on the next miss, so the home is what
     // has to be isolated.
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     crate::cost::clear_feed_for_tests();
     for model_name in ["grok-4.6", "grok-4.5", "grok-4.5-build"] {
         let cost = crate::cost::estimate_cost(100_000, Some(model_name), AgentKind::Grok);

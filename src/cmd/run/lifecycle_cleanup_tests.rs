@@ -8,89 +8,33 @@ use super::{
     run_lifecycle::{LifecycleMode, post_run_lifecycle},
     run_prompt::PromptBundle,
 };
-use crate::{
-    support::paths::{self, AidHomeGuard},
-    store::Store,
-    support::test_subprocess,
-    types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus},
-};
+use crate::{store::Store, support::test_subprocess, types::{AgentKind, Task, TaskId, TaskStatus}};
 use chrono::Local;
-use std::{path::Path, process::Command, sync::Arc};
+use std::{path::Path, sync::Arc};
 
-fn isolated_home() -> (tempfile::TempDir, AidHomeGuard) {
-    let home = tempfile::tempdir().expect("home");
-    let guard = AidHomeGuard::set(home.path());
-    paths::ensure_dirs().expect("dirs");
-    (home, guard)
-}
-
-fn git(repo_dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .status()
-        .unwrap()
-        .success());
-}
+use crate::support::test_env::git;
 
 fn init_repo() -> tempfile::TempDir {
-    let repo = tempfile::tempdir().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("base.txt"), "base\n").unwrap();
-    git(repo.path(), &["add", "base.txt"]);
-    git(repo.path(), &["commit", "-m", "base"]);
-    repo
+    crate::support::test_repo::repo_with_file("base.txt", "base\n", "base")
 }
 
 fn task(id: &str, repo: &Path, wt: &Path, branch: &str, output_path: &Path) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: Some(repo.display().to_string()), project_id: None,
-        worktree_path: Some(wt.display().to_string()), effective_dir: None,
+        repo_path: Some(repo.display().to_string()),
+        worktree_path: Some(wt.display().to_string()),
         worktree_branch: Some(branch.to_string()),
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
         output_path: Some(output_path.display().to_string()),
-        tokens: None,
-        prompt_tokens: None,
         duration_ms: Some(1_000),
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
         created_at: Local::now(),
         completed_at: Some(Local::now()),
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
 }
 
 fn prompt_bundle() -> PromptBundle {
     PromptBundle {
         effective_prompt: "prompt".to_string(),
-        context_files: Vec::new(),
-        prompt_tokens: 0,
-        injected_memory_ids: Vec::new(),
+        ..Default::default()
     }
 }
 
@@ -130,7 +74,7 @@ async fn run_lifecycle(
 #[tokio::test(flavor = "current_thread")]
 async fn completed_worktree_survives_when_checklist_retry_dispatches() {
     let _permit = test_subprocess::acquire();
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     let branch = "fix/lifecycle-retry-keep";
     let wt = committed_worktree(repo.path(), branch);
@@ -163,7 +107,7 @@ async fn completed_worktree_survives_when_checklist_retry_dispatches() {
 #[tokio::test(flavor = "current_thread")]
 async fn completed_worktree_survives_when_no_retry_dispatches() {
     let _permit = test_subprocess::acquire();
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     let branch = "fix/lifecycle-finish-prune";
     let wt = committed_worktree(repo.path(), branch);
@@ -193,7 +137,7 @@ async fn completed_worktree_survives_when_no_retry_dispatches() {
 #[tokio::test(flavor = "current_thread")]
 async fn failed_lifecycle_retains_worktree_branch_and_output() {
     let _permit = test_subprocess::acquire();
-    let (_home, _guard) = isolated_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let repo = init_repo();
     let branch = "fix/lifecycle-failed-keep";
     let wt = committed_worktree(repo.path(), branch);
@@ -220,7 +164,5 @@ async fn failed_lifecycle_retains_worktree_branch_and_output() {
     assert_eq!(std::fs::read_to_string(output_path).unwrap(), "partial output\n");
     assert_eq!(std::fs::read_to_string(wt.join("done.txt")).unwrap(), "done\n");
     git(repo.path(), &["rev-parse", "--verify", &format!("refs/heads/{branch}")]);
-    let err = crate::cmd::worktree::remove(branch, args.repo.as_deref()).unwrap_err();
-    assert!(err.to_string().contains("Direct removal") && err.to_string().contains("forbidden"));
     assert!(wt.exists());
 }

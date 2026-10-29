@@ -1,5 +1,5 @@
 use super::*;
-use crate::support::paths::AidHomeGuard;
+
 use crate::types::AgentKind;
 use std::sync::Arc;
 
@@ -21,8 +21,7 @@ fn write_manual_hold(agent: AgentKind) {
 
 #[test]
 fn resolve_agent_setup_rejects_disabled_agent() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     agent_config::save_agent_disabled("grok", true).expect("disable agent");
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut args = RunArgs {
@@ -44,8 +43,7 @@ fn resolve_agent_setup_rejects_disabled_agent() {
 
 #[test]
 fn resolve_agent_setup_rejects_unserved_model_for_codex() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     crate::agent::model_validation::clear_served_models_cache();
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut args = RunArgs {
@@ -69,8 +67,7 @@ fn resolve_agent_setup_rejects_unserved_model_for_codex() {
 /// first available cascade entry before returning — not after a failed dispatch.
 #[test]
 fn held_agent_switches_to_explicit_cascade_before_dispatch() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     write_manual_hold(AgentKind::Codex);
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut args = RunArgs {
@@ -94,8 +91,7 @@ fn held_agent_switches_to_explicit_cascade_before_dispatch() {
 /// walking to the first non-held option.
 #[test]
 fn held_agent_walks_cascade_past_also_held_agent() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     write_manual_hold(AgentKind::Codex);
     write_manual_hold(AgentKind::Oz);
     let store = Arc::new(Store::open_memory().expect("store"));
@@ -119,8 +115,7 @@ fn held_agent_walks_cascade_past_also_held_agent() {
 /// model id does not reach a different CLI.
 #[test]
 fn held_agent_drops_model_when_switching_to_cascade() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     write_manual_hold(AgentKind::Codex);
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut args = RunArgs {
@@ -142,8 +137,7 @@ fn held_agent_drops_model_when_switching_to_cascade() {
 /// cascade already does — a session belongs to the CLI that issued it.
 #[test]
 fn held_agent_drops_session_when_switching_to_cascade() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     write_manual_hold(AgentKind::Codex);
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut args = RunArgs {
@@ -165,8 +159,7 @@ fn held_agent_drops_session_when_switching_to_cascade() {
 /// is available, resolve_agent_setup must return an error — no dispatch at all.
 #[test]
 fn held_agent_bails_when_cascade_exhausted() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     write_manual_hold(AgentKind::Codex);
     write_manual_hold(AgentKind::Oz);
     // Hold all agents (ALL_BUILTIN omits Claude) so auto-fallback finds nothing.
@@ -190,8 +183,7 @@ fn held_agent_bails_when_cascade_exhausted() {
 
 #[test]
 fn resolve_agent_setup_allows_auto_model_for_cursor() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     crate::agent::model_validation::clear_served_models_cache();
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut args = RunArgs {
@@ -207,8 +199,7 @@ fn resolve_agent_setup_allows_auto_model_for_cursor() {
 
 #[test]
 fn resolve_agent_setup_drops_unserved_aid_selected_model() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     let _served = crate::agent::model_validation::MockServedModelsGuard::set(
         AgentKind::Grok,
         Some(vec!["grok-4.7".to_string()]),
@@ -245,8 +236,7 @@ fn write_custom_agent(name: &str) {
 /// held, not silently dropped because AgentKind::parse_str does not know it.
 #[test]
 fn custom_agent_in_cascade_is_used_when_primary_held() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     write_manual_hold(AgentKind::Codex);
     write_custom_agent("glm5");
     let store = Arc::new(Store::open_memory().expect("store"));
@@ -271,8 +261,7 @@ fn custom_agent_in_cascade_is_used_when_primary_held() {
 /// asked for X by name and we must not silently pretend it does not exist.
 #[test]
 fn unknown_cascade_entry_is_an_error() {
-    let dir = tempfile::tempdir().expect("tempdir");
-    let _guard = AidHomeGuard::set(dir.path());
+    let _dir = crate::support::test_env::TestHome::new();
     write_manual_hold(AgentKind::Codex);
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut args = RunArgs {

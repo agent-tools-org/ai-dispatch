@@ -3,12 +3,10 @@
 use super::*;
 use crate::agent::Agent;
 use crate::routing::{availability, rate_limit};
-use crate::support::paths::AidHomeGuard;
 
 #[test]
 fn google_only_refusals_do_not_hold_qwen() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     for message in [
         "IneligibleTierError",
         "migrate to antigravity",
@@ -34,8 +32,7 @@ fn google_only_refusals_do_not_hold_qwen() {
 
 #[test]
 fn qwen_429_and_generic_rate_limits_only_create_transient_holds() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     for message in [
         "429 Too Many Requests",
         "rate limit reached",
@@ -59,8 +56,7 @@ fn qwen_429_and_generic_rate_limits_only_create_transient_holds() {
 
 #[test]
 fn qwen_terminal_refusal_remains_an_untrusted_excerpt() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let event = serde_json::json!({"type":"result", "is_error":false,
         "result":"Quota exhausted: Your token-plan 1-week quota has been exhausted. The quota will reset at 12-31 10:12:00 UTC."}).to_string();
     let outcome = super::super::stream_completion::record_quota_exhaustion(
@@ -82,8 +78,7 @@ fn qwen_terminal_refusal_remains_an_untrusted_excerpt() {
 
 #[test]
 fn qwen_token_plan_error_is_provider_attributed() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let event = serde_json::json!({"type":"error",
         "message":"Quota exhausted: Your token-plan 5-hour quota has been exhausted."})
     .to_string();
@@ -98,8 +93,7 @@ fn qwen_token_plan_error_is_provider_attributed() {
 
 #[test]
 fn qwen_remains_a_builtin_dispatch_and_configuration_route() {
-    let home = tempfile::tempdir().expect("home");
-    let _home = AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     assert_eq!(AgentKind::parse_str("QWEN"), Some(AgentKind::Qwen));
     assert!(AgentKind::ALL_BUILTIN.contains(&AgentKind::Qwen));
     assert_eq!(
@@ -132,8 +126,7 @@ fn qwen_remains_a_builtin_dispatch_and_configuration_route() {
 #[test]
 fn qwen_weekly_provider_reset_establishes_the_stated_long_hold() {
     use chrono::{Duration, Local, Utc};
-    let home = tempfile::tempdir().expect("home");
-    let _home = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let reset = Utc::now() + Duration::days(7);
     let message = format!(
         "Quota exhausted: Your token-plan 1-week quota has been exhausted. The quota will reset at {} UTC.",

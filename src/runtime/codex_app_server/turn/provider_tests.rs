@@ -46,16 +46,10 @@ fn prepare(mode: &str, resume: bool) -> (Fixture, ConfigGuard) {
 fn options(fixture: &Fixture, resume: bool) -> RunOpts {
     RunOpts {
         dir: Some(fixture.cwd.path().display().to_string()),
-        model: None,
         output: Some(fixture.output.display().to_string()),
-        result_file: None,
-        budget: false,
         read_only: true,
-        sandbox: false,
-        context_files: vec![],
         session_id: resume.then(|| "resume-thread".into()),
-        env: None,
-        env_forward: None,
+        ..Default::default()
     }
 }
 
@@ -177,17 +171,7 @@ fn inline_secret_refuses_command_before_any_child_or_persisted_diagnostic() {
     cli_config::set_test_codex_home(Some(home));
     let _guard = ConfigGuard;
     let opts: RunOpts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let error = CodexAgent.build_command("prompt", &opts).unwrap_err();
     assert!(error.to_string().contains("env_key / env_http_headers"));

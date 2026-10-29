@@ -7,8 +7,7 @@ use crate::types::AgentKind;
 
 #[test]
 fn inject_skill_includes_gotchas_scripts_and_references_for_folder_skill() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = crate::support::paths::aid_dir().join("skills").join("implementer");
     std::fs::create_dir_all(dir.join("gotchas")).unwrap();
     std::fs::create_dir_all(dir.join("scripts")).unwrap();
@@ -40,8 +39,7 @@ fn inject_skill_includes_gotchas_scripts_and_references_for_folder_skill() {
 
 #[test]
 fn inject_skill_includes_methodology_for_short_prompts() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = crate::support::paths::aid_dir().join("skills").join("implementer");
     std::fs::create_dir_all(dir.join("references")).unwrap();
     std::fs::write(dir.join("SKILL.md"), "method").unwrap();

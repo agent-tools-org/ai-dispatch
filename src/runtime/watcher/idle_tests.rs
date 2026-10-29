@@ -28,21 +28,11 @@ impl Agent for FakeAgent {
     fn parse_event(&self, _: &TaskId, _: &str) -> Option<TaskEvent> {
         None
     }
-    fn parse_completion(&self, _: &str) -> CompletionInfo {
-        CompletionInfo {
-            tokens: None,
-            status: TaskStatus::Done,
-            model: None,
-            cost_usd: None,
-            exit_code: None,
-        }
-    }
 }
 
 async fn watch_silent_child(script: &str) -> (CompletionInfo, Vec<TaskEvent>) {
     let _permit = crate::support::test_subprocess::acquire();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     let task_id = TaskId("t-silent-child".into());
     super::streaming_tests::insert_running_task(&store, &task_id);

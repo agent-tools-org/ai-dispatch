@@ -230,32 +230,12 @@ fn empty_diff_still_runs_configured_verify_and_fails_on_broken_tree() {
     // fail when the tree is already broken (`false` as stand-in).
     let repo = tempfile::tempdir().unwrap();
     let dir = repo.path();
-    assert!(std::process::Command::new("git")
-        .args(["-C", &dir.to_string_lossy(), "init", "-b", "main"])
-        .status()
-        .unwrap()
-        .success());
-    assert!(std::process::Command::new("git")
-        .args(["-C", &dir.to_string_lossy(), "config", "user.email", "t@example.com"])
-        .status()
-        .unwrap()
-        .success());
-    assert!(std::process::Command::new("git")
-        .args(["-C", &dir.to_string_lossy(), "config", "user.name", "t"])
-        .status()
-        .unwrap()
-        .success());
+    crate::support::test_env::git_at(&dir.to_string_lossy(), &["init", "-b", "main"]);
+    crate::support::test_env::git_at(&dir.to_string_lossy(), &["config", "user.email", "t@example.com"]);
+    crate::support::test_env::git_at(&dir.to_string_lossy(), &["config", "user.name", "t"]);
     std::fs::write(dir.join("file.txt"), "hello\n").unwrap();
-    assert!(std::process::Command::new("git")
-        .args(["-C", &dir.to_string_lossy(), "add", "file.txt"])
-        .status()
-        .unwrap()
-        .success());
-    assert!(std::process::Command::new("git")
-        .args(["-C", &dir.to_string_lossy(), "commit", "-m", "init"])
-        .status()
-        .unwrap()
-        .success());
+    crate::support::test_env::git_at(&dir.to_string_lossy(), &["add", "file.txt"]);
+    crate::support::test_env::git_at(&dir.to_string_lossy(), &["commit", "-m", "init"]);
     let dir_str = dir.to_string_lossy().to_string();
     let store = Store::open_memory().unwrap();
     let task_id = TaskId("t-empty-still-verify".to_string());
@@ -266,7 +246,6 @@ fn empty_diff_still_runs_configured_verify_and_fails_on_broken_tree() {
     maybe_verify(&store, &task_id, Some("false"), Some(&dir_str), None);
 
     let loaded = store.get_task(task_id.as_str()).unwrap().unwrap();
-    assert!(loaded.verify_status.was_attempted());
     assert_eq!(loaded.verify_status, VerifyStatus::Failed);
     assert_eq!(loaded.status, TaskStatus::Failed);
 }

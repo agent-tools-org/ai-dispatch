@@ -28,11 +28,6 @@ pub fn warn_audit_without_readonly(tasks: &[BatchTask]) {
     self::warnings::warn_audit_without_readonly(tasks);
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
-pub fn warn_dir_overlap(tasks: &[BatchTask]) -> Vec<String> {
-    self::warnings::warn_dir_overlap(tasks)
-}
-
 pub fn parse_batch_file(path: &Path) -> Result<BatchConfig> {
     let current_dir = std::env::current_dir().ok();
     parse_batch_file_with_vars_and_source(path, &HashMap::new(), Some(path), current_dir.as_deref())

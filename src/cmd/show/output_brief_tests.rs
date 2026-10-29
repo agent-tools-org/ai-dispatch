@@ -1,73 +1,24 @@
 // Tests for full-default and brief output rendering.
 // Exports: none; covers output_text and output_text_brief behavior.
 // Deps: show_output hub, Store, Task, tempfile.
+use super::super::show_mode_tests::numbered_assistant_log;
 use super::*;
 use crate::store::Store;
-use crate::types::{AgentKind, Task, TaskId, TaskStatus, VerifyStatus};
-use chrono::Local;
-use serde_json::json;
+use crate::types::{Task, TaskId, TaskStatus};
+
 use std::path::Path;
 use std::sync::Arc;
 
 fn test_task(id: &str, worktree: &Path) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: Some(worktree.display().to_string()), effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        worktree_path: Some(worktree.display().to_string()),
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
-}
-
-fn numbered_assistant_log(count: usize, body_len: usize) -> String {
-    (0..count)
-        .map(|index| {
-            serde_json::to_string(&json!({
-                "type": "message",
-                "role": "assistant",
-                "content": format!("message-{index:02}-{}", "x".repeat(body_len)),
-            }))
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap()
-        .join("\n")
 }
 
 #[test]
 fn output_text_defaults_to_full() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(crate::support::paths::logs_dir()).unwrap();
     std::fs::write(crate::support::paths::log_path("t-output-full"), numbered_assistant_log(22, 500))
         .unwrap();
@@ -86,8 +37,7 @@ fn output_text_defaults_to_full() {
 
 #[test]
 fn output_text_brief_truncates() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(crate::support::paths::logs_dir()).unwrap();
     std::fs::write(crate::support::paths::log_path("t-output-brief"), numbered_assistant_log(22, 500))
         .unwrap();

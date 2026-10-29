@@ -1,12 +1,11 @@
 // API advice displays route billing and independent pace/hold penalties.
 // Tests the full advice engine against persisted account costs.
 use super::*;
-use crate::support::paths::{self, AidHomeGuard};
+use crate::support::paths::{self};
 
 #[test]
 fn named_api_candidates_have_independent_billing_pace_and_holds() {
-    let home = tempfile::tempdir().unwrap();
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     std::fs::write(
         paths::config_path(),
         concat!(

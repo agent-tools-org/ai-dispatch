@@ -1,5 +1,5 @@
 // System resource helpers for batch dispatch defaults and disk safety checks.
-// Exports: cpu_count(), recommended_max_concurrent(), available_disk_mb(), check_disk_space()
+// Exports: cpu_count(), recommended_max_concurrent(), available_disk_mb()
 // Deps: std::process::Command, std::thread
 use std::process::Command;
 
@@ -22,11 +22,6 @@ pub fn available_disk_mb(path: &str) -> Option<u64> {
         .lines()
         .skip(1)
         .find_map(parse_available_mb)
-}
-
-#[cfg(test)]
-pub fn check_disk_space(path: &str, min_mb: u64) -> bool {
-    available_disk_mb(path).is_some_and(|available| available >= min_mb)
 }
 
 fn parse_available_mb(line: &str) -> Option<u64> {
@@ -52,12 +47,6 @@ mod tests {
     fn available_disk_mb_returns_tmp_capacity() {
         let _permit = test_subprocess::acquire();
         assert!(available_disk_mb("/tmp").is_some());
-    }
-
-    #[test]
-    fn check_disk_space_handles_zero_threshold() {
-        let _permit = test_subprocess::acquire();
-        assert!(check_disk_space("/tmp", 0));
     }
 
     #[test]

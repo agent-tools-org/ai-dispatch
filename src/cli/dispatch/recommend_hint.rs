@@ -45,9 +45,8 @@ pub(super) fn recommendation_hint(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::support::paths::AidHomeGuard;
+
     use crate::types::{TaskBudget, TaskDifficulty, TaskRigor, TaskUrgency};
-    use tempfile::TempDir;
 
     fn profile() -> DeclaredTaskProfile {
         DeclaredTaskProfile {
@@ -57,8 +56,7 @@ mod tests {
     }
 
     fn hint(user: &str, prompt: &str, no_hint: bool) -> Option<String> {
-        let temp = TempDir::new().expect("home");
-        let _home = AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::OpenCode]);
         recommendation_hint(user, prompt, no_hint, profile(), None, &Store::open_memory().expect("store"), None)
     }
@@ -89,8 +87,7 @@ mod tests {
 
     #[test]
     fn only_claude_installed_without_preference_keeps_hint_silent() {
-        let temp = TempDir::new().expect("home");
-        let _home = AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Claude]);
         let store = Store::open_memory().expect("store");
         assert_eq!(recommendation_hint("codex", "refactor the scheduler", false,
@@ -99,8 +96,7 @@ mod tests {
 
     #[test]
     fn hint_recommends_the_advise_agent_for_the_same_profile() {
-        let temp = TempDir::new().expect("home");
-        let _home = AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
         let _fleet = crate::agent::DetectAgentsGuard::set(vec![AgentKind::Grok, AgentKind::Droid, AgentKind::OpenCode]);
         let store = Store::open_memory().expect("store");
         let prompt = "refactor the scheduler and rename the routing fields";

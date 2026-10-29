@@ -109,8 +109,7 @@ fn process_completion_claude_reported_cost_stays_authoritative() {
 
 fn replay_stream(agent: &dyn crate::agent::Agent, output: &str) -> (Task, Vec<TaskEvent>) {
     let _permit = crate::support::test_subprocess::acquire();
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("aid dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut task = task(agent.kind(), 0, None);

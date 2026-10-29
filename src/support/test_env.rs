@@ -1,6 +1,6 @@
-// Shared test environment guards for process-global variables and fixture cleanup.
-// Exports: Cargo target dir guard; legacy /tmp worktree Drop guard.
-// Deps: std::env/fs/path/process, synchronization primitives.
+// Shared test environment guards, owning home fixtures, and Git command helpers.
+// Exports: environment/cleanup guards, TestHome, Git output, and executable helpers.
+// Deps: tempfile, isolated path overrides, std process/filesystem/synchronization.
 
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
@@ -17,7 +17,10 @@ impl CargoTargetDirGuard {
         let lock = cargo_target_dir_lock();
         let previous = std::env::var_os("CARGO_TARGET_DIR");
         unsafe { std::env::set_var("CARGO_TARGET_DIR", value) };
-        Self { _lock: lock, previous }
+        Self {
+            _lock: lock,
+            previous,
+        }
     }
 }
 
@@ -47,7 +50,10 @@ impl FallbackTargetDirGuard {
         let lock = fallback_target_dir_lock();
         let previous = std::env::var_os("AID_TEST_FALLBACK_TARGET_ROOT");
         unsafe { std::env::set_var("AID_TEST_FALLBACK_TARGET_ROOT", value) };
-        Self { _lock: lock, previous }
+        Self {
+            _lock: lock,
+            previous,
+        }
     }
 }
 
@@ -122,7 +128,8 @@ pub(crate) fn write_executable(path: &Path, content: &str) {
         .tempfile_in(parent)
         .expect("create sibling temp file");
     use std::io::Write;
-    temp.write_all(content.as_bytes()).expect("write executable content");
+    temp.write_all(content.as_bytes())
+        .expect("write executable content");
     temp.flush().expect("flush executable content");
     let status = Command::new("install")
         .args(["-m", "755"])
@@ -130,7 +137,10 @@ pub(crate) fn write_executable(path: &Path, content: &str) {
         .arg(path)
         .status()
         .expect("run install");
-    assert!(status.success(), "install -m 755 failed with status {status}");
+    assert!(
+        status.success(),
+        "install -m 755 failed with status {status}"
+    );
     let _ = temp.close();
 }
 
@@ -139,8 +149,129 @@ fn write_executable_creates_runnable_file_without_etxtbsy() {
     let temp = tempfile::tempdir().expect("tempdir");
     let script = temp.path().join("sub/test-exec.sh");
     write_executable(&script, "#!/bin/sh\nprintf 'hello executable'\n");
-    let output = Command::new(&script).output().expect("execute written file");
+    let output = Command::new(&script)
+        .output()
+        .expect("execute written file");
     assert!(output.status.success());
     assert_eq!(String::from_utf8_lossy(&output.stdout), "hello executable");
 }
 
+pub(crate) fn git(dir: &Path, args: &[&str]) {
+    git_stdout(dir, args);
+}
+
+pub(crate) fn git_at(dir: &str, args: &[&str]) {
+    git(Path::new(dir), args);
+}
+
+pub(crate) fn git_output(dir: &Path, args: &[&str]) -> String {
+    git_stdout(dir, args).trim().to_string()
+}
+
+pub(crate) fn git_stdout(dir: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .expect("git");
+    assert!(
+        output.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).expect("git stdout")
+}
+
+/// Own the temporary directory and its thread-local override for the same lifetime.
+pub(crate) struct TestHome {
+    _guard: crate::support::paths::AidHomeGuard,
+    dir: tempfile::TempDir,
+}
+
+impl TestHome {
+    pub(crate) fn store(self) -> (Self, crate::store::Store) {
+        let store = crate::store::Store::open_memory().expect("test store");
+        (self, store)
+    }
+
+    pub(crate) fn shared_store(self) -> (Self, std::sync::Arc<crate::store::Store>) {
+        let (home, store) = self.store();
+        (home, std::sync::Arc::new(store))
+    }
+
+    pub(crate) fn new() -> Self {
+        let dir = tempfile::tempdir().expect("test home");
+        let guard = crate::support::paths::AidHomeGuard::set(dir.path());
+        Self { _guard: guard, dir }
+    }
+
+    pub(crate) fn with_dirs() -> Self {
+        let home = Self::new();
+        crate::support::paths::ensure_dirs().expect("aid directories");
+        home
+    }
+}
+
+impl std::ops::Deref for TestHome {
+    type Target = tempfile::TempDir;
+
+    fn deref(&self) -> &Self::Target {
+        &self.dir
+    }
+}
+
+#[test]
+fn nested_test_home_restores_outer_home_and_removes_its_directory() {
+    let outer = TestHome::new();
+    let inner_path = {
+        let inner = TestHome::with_dirs();
+        assert_eq!(crate::support::paths::aid_dir(), inner.path());
+        assert!(inner.path().join("logs").is_dir());
+        assert!(inner.path().join("jobs").is_dir());
+        inner.path().to_path_buf()
+    };
+    assert_eq!(crate::support::paths::aid_dir(), outer.path());
+    assert!(!inner_path.exists());
+}
+
+#[test]
+fn test_home_restores_outer_home_after_unwinding() {
+    let outer = TestHome::new();
+    let result = std::panic::catch_unwind(|| {
+        let _inner = TestHome::new();
+        panic!("test fixture unwind");
+    });
+    assert!(result.is_err());
+    assert_eq!(crate::support::paths::aid_dir(), outer.path());
+}
+
+#[test]
+fn git_stdout_preserves_porcelain_whitespace() {
+    let _permit = crate::support::test_subprocess::acquire();
+    let repo = tempfile::tempdir().expect("repo");
+    git(repo.path(), &["init", "-b", "main"]);
+    std::fs::write(repo.path().join("tracked.txt"), "base").expect("base file");
+    git(repo.path(), &["add", "."]);
+    git(
+        repo.path(),
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "base",
+        ],
+    );
+    std::fs::write(repo.path().join("tracked.txt"), "modified").expect("modified file");
+    assert_eq!(
+        git_stdout(repo.path(), &["status", "--porcelain"]),
+        " M tracked.txt\n"
+    );
+    assert_eq!(
+        git_output(repo.path(), &["status", "--porcelain"]),
+        "M tracked.txt"
+    );
+}

@@ -11,53 +11,11 @@ use tempfile::TempDir;
 
 fn stub_task(name: &str, depends_on: Option<Vec<&str>>) -> batch::BatchTask {
     batch::BatchTask {
-        id: None,
         name: Some(name.to_string()),
         agent: "codex".to_string(),
-        team: None,
         prompt: "test".to_string(),
-        prompt_file: None,
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        worktree: None,
-        group: None,
-        container: None, remote_build: None,
-        best_of: None,
-        max_duration_mins: None,
-        max_wait_mins: None,
-        retry: None,
-        iterate: None,
-        eval: None,
-        eval_feedback_template: None,
-        idle_timeout: None,
-        verify: None,
-        setup: None,
-        judge: None,
-        peer_review: None,
-        metric: None,
-        context: None,
-        checklist: None,
-        skills: None,
-        on_done: None,
-        hooks: None,
         depends_on: depends_on.map(|values| values.into_iter().map(String::from).collect()),
-        parent: None,
-        context_from: None,
-        fallback: None,
-        scope: None,
-        read_only: false,
-        sandbox: false,
-        no_skill: false,
-        difficulty: None, budget: None, urgency: None, rigor: None, egress: None, kind: None,
-        audit: None,
-            env: None,
-        env_forward: None,
-        worktree_link_deps: None,
-        on_success: None,
-        on_fail: None,
-        conditional: false,
+        ..Default::default()
     }
 }
 
@@ -80,8 +38,7 @@ fn parallel_same_dir_without_worktree_errors() {
 
 #[test]
 fn parallel_same_dir_with_force_warns() {
-    let temp = TempDir::new().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let mut first = stub_task("first", None);
     first.dir = Some("src".to_string());
     let mut second = stub_task("second", None);
@@ -103,8 +60,7 @@ fn parallel_same_dir_with_force_warns() {
 
 #[test]
 fn parallel_same_dir_readonly_excluded() {
-    let temp = TempDir::new().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let mut first = stub_task("first", None);
     first.dir = Some("src".to_string());
     first.read_only = true;
@@ -194,8 +150,7 @@ fn read_only_with_worktree_is_rejected() {
 
 #[test]
 fn read_only_without_worktree_is_accepted() {
-    let temp = TempDir::new().unwrap();
-    let _guard = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let mut task = stub_task("audit", None);
     task.read_only = true;
     validate_batch_config(&[task], false, false).unwrap();

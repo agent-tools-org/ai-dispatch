@@ -18,49 +18,23 @@ use super::api::{
 use super::api::types::{ActionResponse, MessageRequest, TaskEnrichment};
 use super::fleet::{FleetParams, ServerInfo, get_fleet};
 use crate::store::Store;
-use crate::types::{
-    AgentKind, DeliveryAssessment, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus,
-};
+use crate::types::{DeliveryAssessment, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
 
 pub(super) fn make_task(id: &str) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
-        prompt: "prompt".to_string(),
         resolved_prompt: Some("resolved".to_string()),
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
         workgroup_id: Some("wg-1".to_string()),
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
         tokens: Some(42),
         prompt_tokens: Some(11),
         duration_ms: Some(5000),
         requested_model: Some("gpt".to_string()),
-        observed_model: None, attribution_source: None,
         cost_usd: Some(0.5),
         exit_code: Some(0),
         created_at: Local::now(),
         completed_at: Some(Local::now()),
         verify: Some("cargo check".to_string()),
         verify_status: VerifyStatus::Passed,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
 }
 
@@ -114,13 +88,7 @@ fn task_response_keeps_unmeasured_values_null() {
 
 #[test]
 fn task_event_response_serializes_timestamp() {
-    let event = TaskEvent {
-        task_id: TaskId("t-1".to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: "done".to_string(),
-        metadata: None,
-    };
+    let event = TaskEvent::new(TaskId("t-1".to_string()), EventKind::Milestone, "done".to_string());
     let json = serde_json::to_value(TaskEventResponse::from(event)).unwrap();
     assert!(json["timestamp"].as_str().unwrap().contains('T'));
     assert_eq!(json["event_kind"], "milestone");
@@ -172,9 +140,7 @@ async fn task_response_reports_started_at_after_running_transition() {
 
 #[tokio::test]
 async fn fleet_returns_redacted_tasks_and_summary_in_one_snapshot() {
-    let home = tempfile::tempdir().unwrap();
-    let _home = crate::support::paths::AidHomeGuard::set(home.path());
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_home, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut task = make_task("t-fleet");
     task.project_id = Some("client-api".to_string());
     task.cost_usd = None;
@@ -212,13 +178,11 @@ async fn get_task_events_returns_serialized_events() {
     let store = Arc::new(Store::open_memory().unwrap());
     store.insert_task(&make_task("t-1")).unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId("t-1".to_string()),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "built".to_string(),
-            metadata: Some(serde_json::json!({"step": 1})),
-        })
+        .insert_event(&TaskEvent::new(
+            TaskId("t-1".to_string()),
+            EventKind::Milestone,
+            "built".to_string(),
+        ).with_metadata(Some(serde_json::json!({"step": 1}))))
         .unwrap();
     let Json(events) = get_task_events(Path("t-1".to_string()), State(store)).await.unwrap();
     assert_eq!(events.len(), 1);
@@ -239,9 +203,7 @@ async fn get_task_output_reads_output_file_before_log_file() {
 
 #[tokio::test]
 async fn get_task_result_reads_persisted_report() {
-    let home = tempfile::tempdir().unwrap();
-    let _home = crate::support::paths::AidHomeGuard::set(home.path());
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_home, store) = crate::support::test_env::TestHome::new().shared_store();
     store.insert_task(&make_task("t-result")).unwrap();
     let result_path = crate::support::paths::task_dir("t-result").join("result.md");
     std::fs::create_dir_all(result_path.parent().unwrap()).unwrap();

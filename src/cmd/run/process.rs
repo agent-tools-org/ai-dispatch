@@ -1,6 +1,5 @@
 // Agent process lifecycle: spawn, watch, completion update, retry branch helpers.
 use anyhow::Result;
-use chrono::Local;
 use std::sync::Arc;
 use tokio::process::Command;
 
@@ -109,7 +108,6 @@ pub(crate) fn record_execution_failure(store: &Store, task_id: &TaskId, duration
     }
 }
 
-
 fn compact_excerpt(text: &str, max_chars: usize) -> String {
     let text = text.trim();
     if text.chars().count() <= max_chars {
@@ -213,13 +211,11 @@ fn apply_cost_ceiling(args: &RunProcessArgs<'_>, info: &mut CompletionInfo) -> R
         let current_cost = cost_usd.unwrap_or_default();
         let max_cost = max_task_cost.unwrap_or_default();
         info.status = TaskStatus::Failed;
-        return Ok(Some(TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Error,
-            detail: format!("Task killed: cost ${current_cost:.2} exceeded ceiling ${max_cost:.2}"),
-            metadata: None,
-        }));
+        return Ok(Some(TaskEvent::new(
+            task_id.clone(),
+            EventKind::Error,
+            format!("Task killed: cost ${current_cost:.2} exceeded ceiling ${max_cost:.2}"),
+        )));
     }
     Ok(None)
 }

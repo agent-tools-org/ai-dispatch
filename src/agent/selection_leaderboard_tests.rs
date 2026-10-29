@@ -7,8 +7,7 @@ use crate::types::AgentKind;
 
 #[test]
 fn leaderboard_rule_uses_epoch_eci_instead_of_catalog_rating() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     crate::routing::scores::test_support::seed();
     assert_eq!(
         model_capability_score(
@@ -22,8 +21,7 @@ fn leaderboard_rule_uses_epoch_eci_instead_of_catalog_rating() {
 
 #[test]
 fn leaderboard_alias_resolution_is_shared_and_unmapped_models_are_unrated() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     crate::routing::scores::test_support::seed_live();
     use crate::agent::classifier::TaskCategory;
     assert_eq!(
@@ -44,12 +42,10 @@ fn leaderboard_alias_resolution_is_shared_and_unmapped_models_are_unrated() {
     );
 }
 
-
 #[test]
 fn leaderboard_uses_configured_codex_effort_for_exact_harness() {
     use crate::agent::classifier::TaskCategory;
-    let home = tempfile::tempdir().expect("home");
-    let _guard = crate::support::paths::AidHomeGuard::set(home.path());
+    let home = crate::support::test_env::TestHome::new();
     crate::routing::scores::test_support::seed_live();
     let codex = home.path().join("codex");
     std::fs::create_dir_all(&codex).expect("codex home");

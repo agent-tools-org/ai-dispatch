@@ -2,7 +2,6 @@
 // Exports iterate config parsing, eval execution, and iterate retry dispatch.
 // Deps: run args/wrappers, store task history, and std process execution.
 use anyhow::{Context, Result, bail};
-use chrono::Local;
 use serde_json::json;
 use std::process::Command;
 use std::sync::Arc;
@@ -246,20 +245,15 @@ fn insert_iteration_event(
     status: &str,
     eval_output: Option<&str>,
 ) {
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Milestone,
-        detail,
-        metadata: Some(json!({
+    let _ = store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Milestone, detail)
+        .with_metadata(Some(json!({
             "iterate": {
                 "iteration": iteration,
                 "max_iterations": max_iterations,
                 "status": status,
                 "eval_output": eval_output,
             }
-        })),
-    });
+        }))));
 }
 
 #[cfg(test)]

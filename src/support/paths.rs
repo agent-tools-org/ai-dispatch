@@ -246,8 +246,7 @@ mod tests {
 
     #[test]
     fn workspace_dir_uses_override_in_tests() {
-        let temp = tempfile::TempDir::new().unwrap();
-        let _guard = AidHomeGuard::set(temp.path());
+        let temp = crate::support::test_env::TestHome::new();
         let path = workspace_dir("wg-abcd").unwrap();
         assert_eq!(path, temp.path().join("workgroups").join("wg-abcd"));
     }
@@ -281,8 +280,7 @@ mod tests {
 
     #[test]
     fn assert_aid_home_isolated_passes_with_temp_dir() {
-        let temp = tempfile::TempDir::new().unwrap();
-        let _guard = AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
         assert_aid_home_isolated("test_isolated");
     }
 

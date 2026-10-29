@@ -55,13 +55,7 @@ pub(crate) fn parse_json_event(
     let metadata = session_metadata(metadata, session_id);
 
     let (detail, metadata) = capped_detail_with(&detail, metadata);
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: now,
-        event_kind,
-        detail,
-        metadata,
-    })
+    Some(TaskEvent::at(task_id.clone(), event_kind, detail, now).with_metadata(metadata))
 }
 
 fn milestone_detail(v: &serde_json::Value, event_type: &str) -> String {

@@ -9,17 +9,9 @@ use tempfile::tempdir;
 
 fn opts(read_only: bool, context_files: Vec<String>) -> RunOpts {
     RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
         read_only,
-        sandbox: false,
         context_files,
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     }
 }
 
@@ -37,10 +29,7 @@ fn build_command_uses_agy_print_mode_and_skip_permissions() {
     let cmd = AntigravityAgent
         .build_command("test prompt", &opts(false, vec![]))
         .unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert_eq!(cmd.get_program().to_string_lossy(), "agy");
     assert!(args.windows(2).any(|pair| pair == ["-p", "test prompt"]));
@@ -245,7 +234,7 @@ fn build_command_points_agy_log_at_the_task_dir() {
     };
     let cmd = AntigravityAgent.build_command("do the thing", &built).unwrap();
     let args: Vec<String> =
-        cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        crate::support::test_command::args(&cmd);
     let idx = args.iter().position(|a| a == "--log-file").expect("--log-file must be passed");
     let path = &args[idx + 1];
     assert!(path.contains("t-abcd1234"), "log must be per task: {path}");
@@ -258,7 +247,7 @@ fn build_command_points_agy_log_at_the_task_dir() {
 fn build_command_omits_the_log_flag_when_no_task_is_known() {
     let cmd = AntigravityAgent.build_command("do the thing", &opts(false, vec![])).unwrap();
     let args: Vec<String> =
-        cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        crate::support::test_command::args(&cmd);
     assert!(!args.iter().any(|a| a == "--log-file"), "got: {args:?}");
 }
 
@@ -267,8 +256,7 @@ fn build_command_omits_the_log_flag_when_no_task_is_known() {
 /// see `env_with_agent_log` and its callers.
 #[test]
 fn build_command_passes_only_the_log_it_was_handed() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("ensure dirs");
 
     let none = crate::agent::env_with_agent_log(None, "t-abcd1234", false);

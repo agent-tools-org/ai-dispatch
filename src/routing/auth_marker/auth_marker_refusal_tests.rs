@@ -2,12 +2,10 @@
 // Deps: auth_marker, paths::AidHomeGuard, temporary credential metadata.
 
 use super::*;
-use crate::support::paths::AidHomeGuard;
 
 #[test]
 fn opencode_structured_401_sets_auth_marker_refusal_regression() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(crate::support::paths::logs_dir()).expect("logs");
     let error = serde_json::json!({"type": "error", "error": {"name": "APIError", "data": {
         "statusCode": 401, "message": "Unauthorized",
@@ -38,8 +36,7 @@ fn opencode_structured_401_sets_auth_marker_refusal_regression() {
 
 #[test]
 fn opencode_auth_hold_waits_for_credentials_change_refusal_regression() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let at = Local::now();
     record_failure_at(AgentKind::OpenCode, "APIError statusCode 401", at);
     assert!(auth_status_at(AgentKind::OpenCode, None, at + Duration::days(2)).failed());
@@ -72,8 +69,7 @@ fn opencode_401_billing_and_tool_errors_do_not_set_auth_markers() {
 }
 
 fn assert_run_has_no_auth_marker(output: &str, stderr: bool) {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("directories");
     std::fs::write(crate::support::paths::log_path("t-fixture"), output).expect("log");
     if stderr {

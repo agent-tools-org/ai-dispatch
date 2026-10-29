@@ -68,17 +68,9 @@ fn retry_uses_exec_when_real_home_lacks_sessions() {
 
 fn retry_options() -> RunOpts {
     RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
         read_only: true,
-        sandbox: false,
-        context_files: vec![],
         session_id: Some("saved-session".into()),
-        env: None,
-        env_forward: None,
+        ..Default::default()
     }
 }
 

@@ -39,17 +39,15 @@ pub(crate) fn record_missing_report(
             EventKind::Milestone
         }
     };
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
+    let _ = store.insert_event(&TaskEvent::new(
+        task_id.clone(),
         event_kind,
-        detail: "Missing final delivery: the explicitly required result file was not written"
+        "Missing final delivery: the explicitly required result file was not written"
             .to_string(),
-        metadata: Some(serde_json::json!({
+    ).with_metadata(Some(serde_json::json!({
             "delivery_guard": "missing_final_delivery",
             "source": "result_file_fallback",
-        })),
-    });
+        }))));
 }
 
 /// Suppress the diagnostic Error only when the run already ended Failed with a recorded

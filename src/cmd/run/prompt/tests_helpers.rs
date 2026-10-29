@@ -32,8 +32,7 @@ fn format_batch_siblings_truncates_and_limits_output() {
 /// tokens on a persona nobody asked for.
 #[test]
 fn effective_skills_default_to_none_when_nothing_is_declared() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = crate::support::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
@@ -78,8 +77,7 @@ fn read_only_run_skips_project_default_skill_but_keeps_declared_one() {
 
 #[test]
 fn a_declared_skill_is_used_verbatim() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     assert_eq!(
         effective_skills(&run_args(vec!["reviewer".to_string()]), None),
         vec!["reviewer"]
@@ -88,8 +86,7 @@ fn a_declared_skill_is_used_verbatim() {
 
 #[test]
 fn effective_skills_respect_no_skill_sentinel() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let dir = crate::support::paths::aid_dir().join("skills");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("implementer.md"), "# Implementer").unwrap();
@@ -229,36 +226,33 @@ fn build_prompt_bundle_includes_shared_dir_instruction_when_env_is_set() {
 }
 
 #[test]
-fn fill_empty_output_from_log_populates_zero_byte_file() {
-    let log = tempfile::NamedTempFile::new().unwrap();
-    let output = tempfile::NamedTempFile::new().unwrap();
-    std::fs::write(
-        log.path(),
-        "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"human-readable output\"}\n",
-    )
-    .unwrap();
-    std::fs::write(output.path(), "").unwrap();
+fn fill_empty_output_from_log_preserves_existing_content() {
+    for (log_content, initial_output, expected) in [
+        (
+            "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"human-readable output\"}\n",
+            "",
+            "human-readable output",
+        ),
+        (
+            "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"replacement\"}\n",
+            "existing",
+            "existing",
+        ),
+    ] {
+        let log = tempfile::NamedTempFile::new().unwrap();
+        let output = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            log.path(),
+            log_content,
+        )
+        .unwrap();
+        std::fs::write(output.path(), initial_output).unwrap();
 
-    fill_empty_output_from_log(log.path(), Some(output.path()), None).unwrap();
+        fill_empty_output_from_log(log.path(), Some(output.path()), None).unwrap();
 
-    assert_eq!(
-        std::fs::read_to_string(output.path()).unwrap(),
-        "human-readable output"
-    );
-}
-
-#[test]
-fn fill_empty_output_from_log_keeps_existing_output() {
-    let log = tempfile::NamedTempFile::new().unwrap();
-    let output = tempfile::NamedTempFile::new().unwrap();
-    std::fs::write(
-        log.path(),
-        "{\"type\":\"message\",\"role\":\"assistant\",\"content\":\"replacement\"}\n",
-    )
-    .unwrap();
-    std::fs::write(output.path(), "existing").unwrap();
-
-    fill_empty_output_from_log(log.path(), Some(output.path()), None).unwrap();
-
-    assert_eq!(std::fs::read_to_string(output.path()).unwrap(), "existing");
+        assert_eq!(
+            std::fs::read_to_string(output.path()).unwrap(),
+            expected
+        );
+    }
 }

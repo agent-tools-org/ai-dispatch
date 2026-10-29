@@ -121,15 +121,13 @@ fn record_success(store: &Store, task_id: &str, target: &str, backup: &BackupRef
     if let Err(err) = store.set_backup_url(task_id, &backup.url) {
         return warn(store, task_id, &err.context("recording backup url"));
     }
-    let _ = store.insert_event(&TaskEvent {
-        task_id: TaskId(task_id.to_string()),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: format!("Backup uploaded to {target}: {}", backup.url),
-        metadata: Some(serde_json::json!({
+    let _ = store.insert_event(&TaskEvent::new(
+        TaskId(task_id.to_string()),
+        EventKind::Milestone,
+        format!("Backup uploaded to {target}: {}", backup.url),
+    ).with_metadata(Some(serde_json::json!({
             "backup": "uploaded", "backup_url": backup.url, "backup_id": backup.id,
-        })),
-    });
+        }))));
 }
 
 /// A backup failure is a milestone, not an error event: `latest_error` must
@@ -138,11 +136,6 @@ fn record_success(store: &Store, task_id: &str, target: &str, backup: &BackupRef
 fn warn(store: &Store, task_id: &str, err: &anyhow::Error) {
     let detail = format!("Backup failed: {err:#}");
     eprintln!("[aid] {task_id}: {detail}");
-    let _ = store.insert_event(&TaskEvent {
-        task_id: TaskId(task_id.to_string()),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Milestone,
-        detail,
-        metadata: Some(serde_json::json!({"backup": "failed"})),
-    });
+    let _ = store.insert_event(&TaskEvent::new(TaskId(task_id.to_string()), EventKind::Milestone, detail)
+        .with_metadata(Some(serde_json::json!({"backup": "failed"}))));
 }

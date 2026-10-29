@@ -66,11 +66,5 @@ pub(crate) fn rollout_filename_matches_for_attribution(
 }
 
 pub(crate) fn resume_fallback_event(task_id: &TaskId) -> TaskEvent {
-    TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: RESUME_FALLBACK_DETAIL.to_string(),
-        metadata: None,
-    }
+    TaskEvent::new(task_id.clone(), EventKind::Milestone, RESUME_FALLBACK_DETAIL.to_string())
 }

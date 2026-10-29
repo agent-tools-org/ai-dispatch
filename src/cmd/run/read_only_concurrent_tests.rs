@@ -11,16 +11,8 @@ fn record_native(store: &Store, id: &TaskId, repo: &Path, scratch: &Path) {
             "audit",
             &RunOpts {
                 dir: Some(repo.display().to_string()),
-                output: None,
-                result_file: None,
-                model: None,
-                budget: false,
                 read_only: true,
-                sandbox: false,
-                context_files: vec![],
-                session_id: None,
-                env: None,
-                env_forward: None,
+                ..Default::default()
             },
             CommandContext {
                 durable_codex_home: false,

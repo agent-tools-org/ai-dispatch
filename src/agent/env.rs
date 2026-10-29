@@ -17,6 +17,7 @@ mod cargo_target_layout;
 use cargo_target_layout::CargoTargetLayout;
 
 #[derive(Debug)]
+#[cfg_attr(test, derive(Default))]
 pub(crate) struct CliCommandOutput {
     pub success: bool,
     pub stdout: String,

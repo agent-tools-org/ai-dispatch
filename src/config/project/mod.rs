@@ -34,43 +34,27 @@ pub use self::project_team::{project_knowledge_dir, read_project_knowledge};
 #[serde(deny_unknown_fields)]
 pub struct ProjectConfig {
     pub id: String,
-    #[serde(default)]
     pub profile: Option<String>,
     #[serde(default)]
     pub require_task_profile: bool,
-    #[serde(default)]
     pub max_task_cost: Option<f64>,
-    #[serde(default)]
     pub team: Option<String>,
-    #[serde(default)]
     pub verify: Option<String>,
-    #[serde(default)]
     pub setup: Option<String>,
-    #[serde(default)]
     pub container: Option<String>,
-    #[serde(default)]
     pub remote_build: Option<String>,
-    #[serde(default)]
     pub idle_timeout: Option<u64>,
-    #[serde(default)]
     pub max_duration_mins: Option<i64>,
-    #[serde(default)]
     pub hard_cap_hours: Option<i64>,
-    #[serde(default)]
     pub idle_warn_secs: Option<u64>,
-    #[serde(default)]
     pub idle_nudge_secs: Option<u64>,
-    #[serde(default)]
     pub idle_escalate_secs: Option<u64>,
     #[serde(default)]
     pub unstick: ProjectUnstickConfig,
-    #[serde(default)]
     pub gitbutler: Option<String>,
     #[serde(default)]
     pub suppress_gitbutler_prompt: bool,
-    #[serde(default)]
     pub worktree_prefix: Option<String>,
-    #[serde(default)]
     pub language: Option<String>,
     #[serde(default)]
     pub rules: Vec<String>,
@@ -94,11 +78,8 @@ pub struct ProjectConfig {
 #[serde(default, deny_unknown_fields)]
 #[derive(Default)]
 pub struct ProjectUnstickConfig {
-    #[serde(default)]
     pub warn_after_secs: Option<u64>,
-    #[serde(default)]
     pub nudge_after_secs: Option<u64>,
-    #[serde(default)]
     pub escalate_after_secs: Option<u64>,
 }
 
@@ -106,11 +87,8 @@ pub struct ProjectUnstickConfig {
 #[serde(default)]
 #[derive(Default)]
 pub struct ProjectBudget {
-    #[serde(default)]
     pub window: Option<String>,
-    #[serde(default)]
     pub cost_limit_usd: Option<f64>,
-    #[serde(default)]
     pub token_limit: Option<u64>,
     #[serde(default)]
     pub prefer_budget: bool,
@@ -237,7 +215,6 @@ fn parse_budget_shorthand(value: &str) -> Result<ProjectBudget, String> {
         ..Default::default()
     })
 }
-
 
 pub fn detect_project() -> Option<ProjectConfig> {
     let cwd = env::current_dir().ok()?;

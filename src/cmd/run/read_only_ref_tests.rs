@@ -9,14 +9,7 @@ use std::{fs, process::Command};
 #[path = "read_only_concurrent_tests.rs"]
 mod concurrent_tests;
 
-fn git(dir: &Path, args: &[&str]) {
-    let output = Command::new("git").current_dir(dir).args(args).output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
+use crate::support::test_env::git;
 
 fn fixture() -> (tempfile::TempDir, Store, TaskId, Vec<String>) {
     let repo = tempfile::tempdir().unwrap();
@@ -142,45 +135,11 @@ fn fix_round_one_read_only_own_branch_and_head_changes_remain_violations() {
 
 fn task(id: &TaskId) -> crate::types::Task {
     crate::types::Task {
-        id: id.clone(),
         agent: crate::types::AgentKind::Codex,
-        custom_agent_name: None,
         prompt: "audit".into(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None,
-        project_id: None,
-        worktree_path: None,
-        effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
         exit_code: Some(0),
-        created_at: chrono::Local::now(),
-        completed_at: None,
-        verify: None,
         verify_status: crate::types::VerifyStatus::Skipped,
-        pending_reason: None,
         read_only: true,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(id.clone(), TaskStatus::Done)
     }
 }

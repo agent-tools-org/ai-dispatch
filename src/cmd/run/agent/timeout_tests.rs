@@ -54,8 +54,7 @@ async fn idle_task_past_deadline_times_out() {
 
 async fn assert_worker_timeout(script: &str) {
     let _permit = crate::support::test_subprocess::acquire();
-    let temp = tempfile::tempdir().expect("temp");
-    let _home = crate::support::paths::AidHomeGuard::set(temp.path());
+    let temp = crate::support::test_env::TestHome::new();
     crate::support::paths::ensure_dirs().expect("dirs");
     let store = Arc::new(Store::open_memory().expect("store"));
     let task_id = TaskId("t-active-deadline".into());
@@ -91,10 +90,7 @@ fn foreground_default_duration_uses_shared_config_constant() {
 
 #[tokio::test]
 async fn max_duration_timeout_reaches_on_fail_lifecycle() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task_id = TaskId("t-foreground-timeout".to_string());
     store.insert_task(&task(&task_id, TaskStatus::Running)).unwrap();
     let log_path = temp.path().join("timeout.log");
@@ -145,9 +141,7 @@ async fn run_failure_hook(store: &Arc<Store>, task_id: &TaskId, hook_path: &std:
         )],
         &crate::cmd::run::PromptBundle {
             effective_prompt: "prompt".to_string(),
-            context_files: Vec::new(),
-            prompt_tokens: 0,
-            injected_memory_ids: Vec::new(),
+            ..Default::default()
         },
         TaskStatus::Failed,
         None,
@@ -158,10 +152,7 @@ async fn run_failure_hook(store: &Arc<Store>, task_id: &TaskId, hook_path: &std:
 
 #[tokio::test]
 async fn spawn_failure_marks_task_failed_not_running() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = crate::support::paths::AidHomeGuard::set(temp.path());
-    crate::support::paths::ensure_dirs().unwrap();
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (temp, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let task_id = TaskId("t-spawn-miss".to_string());
     store.insert_task(&task(&task_id, TaskStatus::Running)).unwrap();
     let log_path = temp.path().join("spawn.log");

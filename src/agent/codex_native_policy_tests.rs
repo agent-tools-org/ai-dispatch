@@ -59,7 +59,7 @@ fn invocations(repo: &std::path::Path, scratch: &std::path::Path) -> Vec<serde_j
             read_only,
             session_id: session.map(str::to_string),
             model: Some("gpt-4.1".into()),
-            ..super::command_tests::test_opts()
+            ..crate::agent::RunOpts::default()
         };
         let cmd = CodexAgent
             .build_command_with_context(

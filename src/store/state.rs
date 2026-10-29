@@ -1,12 +1,11 @@
 // Project runtime state (.aid/state.toml) — computed from task history.
 // Exports: ProjectState IO helpers, compute_state, and prompt summary formatting.
 // Deps: anyhow, chrono, serde, toml, std, crate::{project, store, types}.
-#[cfg(test)]
-use crate::config::project::detect_project_in;
+use crate::ui::format::format_relative_time;
 use crate::store::Store;
 use crate::types::{Task, TaskFilter, TaskOutcome};
 use anyhow::{Context, Result, bail};
-use chrono::{DateTime, Local};
+use chrono::{Local};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -52,22 +51,6 @@ pub struct ContextState {
 pub fn state_path() -> Option<PathBuf> {
     let cwd = std::env::current_dir().ok()?;
     state_path_from(&cwd)
-}
-#[cfg(test)]
-pub(crate) fn load_state_in(dir: &Path) -> Result<Option<ProjectState>> {
-    load_state_at(state_path_from(dir))
-}
-#[cfg(test)]
-fn load_state_at(path: Option<PathBuf>) -> Result<Option<ProjectState>> {
-    let Some(path) = path else {
-        return Ok(None);
-    };
-    if !path.is_file() {
-        return Ok(None);
-    }
-    let contents = fs::read_to_string(&path).with_context(|| format!("Failed to read {}", path.display()))?;
-    let state = toml::from_str(&contents).with_context(|| format!("Failed to parse {}", path.display()))?;
-    Ok(Some(state))
 }
 pub fn save_state(state: &ProjectState) -> Result<()> {
     save_state_at(state, state_path())
@@ -156,11 +139,6 @@ pub fn compute_state(store: &Store, repo_path: &str) -> Result<ProjectState> {
         },
     })
 }
-#[cfg(test)]
-pub(crate) fn format_state_summary_in(state: &ProjectState, dir: &Path) -> String {
-    let label = project_label_in(dir);
-    format_state_summary_for_project(state, label.as_deref().unwrap_or("unknown"))
-}
 pub(crate) fn format_state_summary_for_project(state: &ProjectState, project_id: &str) -> String {
     let recent_total = usize::min(state.health.total_tasks as usize, 50);
     let recent_successes = (state.health.recent_success_rate * recent_total as f64).round() as usize;
@@ -236,42 +214,6 @@ fn git_branch(repo_path: &str) -> Option<String> {
     }
     let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
     (!branch.is_empty()).then_some(branch)
-}
-
-#[cfg(test)]
-fn project_label_in(dir: &Path) -> Option<String> {
-    project_id_from_aid_dir(dir)
-        .or_else(|| detect_project_in(dir).map(|config| config.id))
-        .or_else(|| dir.file_name().map(|name| name.to_string_lossy().to_string()))
-}
-
-#[cfg(test)]
-fn project_id_from_aid_dir(dir: &Path) -> Option<String> {
-    let state_path = state_path_from(dir)?;
-    let project_path = state_path.parent()?.join("project.toml");
-    crate::config::project::load_project(&project_path)
-        .ok()
-        .map(|config| config.id)
-}
-
-fn format_relative_time(value: &str) -> String {
-    let Ok(parsed) = DateTime::parse_from_rfc3339(value) else {
-        return value.to_string();
-    };
-    let seconds = Local::now()
-        .signed_duration_since(parsed.with_timezone(&Local))
-        .num_seconds();
-    if seconds <= 0 {
-        "just now".to_string()
-    } else if seconds < 60 {
-        format!("{seconds}s ago")
-    } else if seconds < 3600 {
-        format!("{}m ago", seconds / 60)
-    } else if seconds < 86_400 {
-        format!("{}h ago", seconds / 3600)
-    } else {
-        format!("{}d ago", seconds / 86_400)
-    }
 }
 
 fn recent_success_rate(recent_tasks: &[Task]) -> f64 {

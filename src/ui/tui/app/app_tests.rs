@@ -5,49 +5,15 @@ use super::*;
 use chrono::{Duration, Local};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::types::{AgentKind, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{TaskId, TaskStatus};
 
 pub(crate) fn make_task(id: &str, group_id: Option<&str>) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
         prompt: format!("prompt for {id}"),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Done,
-        parent_task_id: None,
-        workgroup_id: group_id.map(str::to_string),
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: crate::config::project::current_project_id(),
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
+        workgroup_id: group_id.map(str::to_string), project_id: crate::config::project::current_project_id(),
         // Fixture leaves model unattributed so route display keeps "unknown".
         requested_model: None,
-        observed_model: None,
-        attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Done)
     }
 }
 
@@ -219,26 +185,22 @@ fn loads_running_task_milestone() {
     task.status = TaskStatus::Running;
     store.insert_task(&task).unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: crate::types::EventKind::Milestone,
-            detail: "types defined".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(
+            task.id.clone(),
+            crate::types::EventKind::Milestone,
+            "types defined".to_string(),
+        ))
         .unwrap();
 
     let mut completed_task = make_task("t-1003", Some("wg-a"));
     completed_task.status = TaskStatus::Done;
     store.insert_task(&completed_task).unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: completed_task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: crate::types::EventKind::Milestone,
-            detail: "finished milestone".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(
+            completed_task.id.clone(),
+            crate::types::EventKind::Milestone,
+            "finished milestone".to_string(),
+        ))
         .unwrap();
     let completed_task_id = completed_task.id.clone();
 

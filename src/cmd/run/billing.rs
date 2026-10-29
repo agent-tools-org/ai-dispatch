@@ -43,13 +43,11 @@ pub(super) fn record(store: &Store, task_id: &TaskId, agent: AgentKind) -> anyho
     }) {
         return Ok(());
     }
-    store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Setup,
-        detail: format!("billing: {}", billing.label()),
-        metadata: Some(serde_json::json!({"billing_state": "overage", "billing": billing})),
-    })?;
+    store.insert_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Setup,
+        format!("billing: {}", billing.label()),
+    ).with_metadata(Some(serde_json::json!({"billing_state": "overage", "billing": billing}))))?;
     Ok(())
 }
 

@@ -84,12 +84,13 @@ pub(crate) fn prepare_launch_roots(
                 Ok(path) => {
                     if !roots.contains(&path) { roots.push(path); }
                 }
-                Err(err) => warnings.push(TaskEvent {
-                    task_id: task_id.clone(), timestamp: chrono::Local::now(),
-                    event_kind: EventKind::Setup,
-                    detail: format!("Omitting writable Git metadata grant '{}': {err:#}", path.display()),
-                    metadata: Some(serde_json::json!({ "warning": "sandbox_root_omitted", "directory": path })),
-                }),
+                Err(err) => warnings.push(TaskEvent::new(
+                    task_id.clone(),
+                    EventKind::Setup,
+                    format!("Omitting writable Git metadata grant '{}': {err:#}", path.display()),
+                )
+                    .with_metadata(Some(serde_json::json!({ "warning": "sandbox_root_omitted",
+                    "directory": path })))),
             }
         }
     }

@@ -4,28 +4,18 @@
 
 use super::DroidAgent;
 use crate::agent::{Agent, RunOpts};
-use crate::support::paths;
+
 use crate::routing::rate_limit;
 use crate::types::{AgentKind, EventKind, TaskId};
 
 #[test]
 fn build_command_uses_droid_exec() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = DroidAgent.build_command("test prompt", &opts).unwrap();
     assert_eq!(cmd.get_program().to_str().unwrap(), "droid");
-    let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert!(args.contains(&"exec".to_string()));
     assert!(args.contains(&"stream-json".to_string()));
     assert!(args.contains(&"--skip-permissions-unsafe".to_string()));
@@ -34,20 +24,11 @@ fn build_command_uses_droid_exec() {
 #[test]
 fn build_command_read_only_uses_use_spec() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
         read_only: true,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = DroidAgent.build_command("test", &opts).unwrap();
-    let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     // True read-only: must be --use-spec, NOT --auto low (which still allows file mods).
     assert!(args.contains(&"--use-spec".to_string()));
     assert!(!args.contains(&"--auto".to_string()));
@@ -59,20 +40,12 @@ fn build_command_read_only_uses_use_spec() {
 #[test]
 fn build_command_read_only_with_result_file_skips_use_spec() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
         result_file: Some("result.md".to_string()),
-        model: None,
-        budget: false,
         read_only: true,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = DroidAgent.build_command("audit", &opts).unwrap();
-    let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert!(!args.contains(&"--use-spec".to_string()));
     assert!(args.contains(&"--skip-permissions-unsafe".to_string()));
     assert!(args.iter().any(|a| a.contains("EXCEPT the result file")));
@@ -81,20 +54,11 @@ fn build_command_read_only_with_result_file_skips_use_spec() {
 #[test]
 fn build_command_adds_context_files_via_append_system_prompt_file() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
         context_files: vec!["docs/spec.md".to_string(), "notes/todo.txt".to_string()],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = DroidAgent.build_command("test", &opts).unwrap();
-    let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     // `-f` would replace the prompt source; we use --append-system-prompt-file instead.
     assert!(args
         .windows(2)
@@ -108,40 +72,21 @@ fn build_command_adds_context_files_via_append_system_prompt_file() {
 #[test]
 fn build_command_wires_session_id() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
         session_id: Some("sess_abc123".to_string()),
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = DroidAgent.build_command("continue work", &opts).unwrap();
-    let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert!(args.windows(2).any(|pair| pair == ["-s", "sess_abc123"]));
 }
 
 #[test]
 fn build_command_default_uses_skip_permissions_unsafe() {
     let opts = RunOpts {
-        dir: None,
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = DroidAgent.build_command("test", &opts).unwrap();
-    let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert!(args.contains(&"--skip-permissions-unsafe".to_string()));
     // --skip-permissions-unsafe cannot be combined with --auto.
     assert!(!args.contains(&"--auto".to_string()));
@@ -235,8 +180,7 @@ fn parses_session_forked_events_as_milestones() {
 
 #[test]
 fn marks_droid_rate_limits_from_status_and_error_type() {
-    let temp = tempfile::tempdir().unwrap();
-    let _aid_home = paths::AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     rate_limit::clear_rate_limit(&AgentKind::Droid, None);
     let agent = DroidAgent;
     let line = r#"{"type":"error","status":429,"error_type":"rate_limit_exceeded"}"#;
@@ -276,19 +220,10 @@ fn marks_droid_rate_limits_from_status_and_error_type() {
 fn build_command_with_dir_sets_cwd() {
     let opts = RunOpts {
         dir: Some("/tmp/test".to_string()),
-        output: None,
-        result_file: None,
-        model: None,
-        budget: false,
-        read_only: false,
-        sandbox: false,
-        context_files: vec![],
-        session_id: None,
-        env: None,
-        env_forward: None,
+        ..Default::default()
     };
     let cmd = DroidAgent.build_command("test", &opts).unwrap();
-    let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert!(args.contains(&"--cwd".to_string()));
     assert!(args.contains(&"/tmp/test".to_string()));
 }

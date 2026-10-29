@@ -5,33 +5,33 @@
 use super::*;
 
 #[test]
-fn audit_prompt_enables_report_mode() {
-    assert!(is_audit_report_task(
-        "Cross-audit the split routing fix and produce findings.",
-        true,
-        TaskCategory::Research,
-        None,
-    ));
-}
-
-#[test]
-fn read_only_findings_prompt_enables_report_mode() {
-    assert!(is_audit_report_task(
-        "Check PASS/FAIL with evidence and list findings.",
-        true,
-        TaskCategory::Documentation,
-        None,
-    ));
-}
-
-#[test]
-fn generic_research_prompt_does_not_enable_report_mode() {
-    assert!(!is_audit_report_task(
-        "Explain how routing tiers work.",
-        true,
-        TaskCategory::Research,
-        None,
-    ));
+fn report_mode_matches_prompt_and_dispatch_context() {
+    for (prompt, read_only, category, result_file, expected) in [
+        ("Cross-audit the split routing fix and produce findings.", true, TaskCategory::Research, None, true),
+        ("Check PASS/FAIL with evidence and list findings.", true, TaskCategory::Documentation, None, true),
+        ("Explain how routing tiers work.", true, TaskCategory::Research, None, false),
+        ("cross-audit the audit log feature", true, TaskCategory::Research, None, true),
+        ("Implement an audit log feature", true, TaskCategory::Research, None, false),
+        ("Audit the API surface", false, TaskCategory::ComplexImpl, Some("result.md"), true),
+        (
+            "Cross-audit the split routing fix and produce findings.",
+            false,
+            TaskCategory::Research,
+            None,
+            true,
+        ),
+        ("Redesign the audit subsystem", false, TaskCategory::Research, None, false),
+        (
+            "Audit the routing feature against main and report findings.",
+            false,
+            TaskCategory::Research,
+            None,
+            true,
+        ),
+    ] {
+        assert_eq!(is_audit_report_task(prompt, read_only, category, result_file), expected, "case: {:?}",
+            (prompt, read_only, category, result_file));
+    }
 }
 
 #[test]
@@ -84,46 +84,6 @@ fn read_only_audit_prompts_handle_case_spacing_and_punctuation() {
 }
 
 #[test]
-fn audit_noun_phrase_does_not_mask_explicit_audit_term() {
-    assert!(is_audit_report_task(
-        "cross-audit the audit log feature",
-        true,
-        TaskCategory::Research,
-        None,
-    ));
-}
-
-#[test]
-fn audit_log_feature_prompt_does_not_enable_report_mode() {
-    assert!(!is_audit_report_task(
-        "Implement an audit log feature",
-        true,
-        TaskCategory::Research,
-        None,
-    ));
-}
-
-#[test]
-fn explicit_result_file_enables_audit_prompt_report_mode() {
-    assert!(is_audit_report_task(
-        "Audit the API surface",
-        false,
-        TaskCategory::ComplexImpl,
-        Some("result.md"),
-    ));
-}
-
-#[test]
-fn non_read_only_cross_audit_enables_report_mode() {
-    assert!(is_audit_report_task(
-        "Cross-audit the split routing fix and produce findings.",
-        false,
-        TaskCategory::Research,
-        None,
-    ));
-}
-
-#[test]
 fn prompt_only_read_only_audits_enable_report_mode() {
     for prompt in [
         "READ-ONLY audit.",
@@ -152,16 +112,6 @@ fn prompt_only_report_mode_does_not_imply_dirty_enforcement_bypass() {
 }
 
 #[test]
-fn non_read_only_bare_audit_prompt_does_not_enable_report_mode() {
-    assert!(!is_audit_report_task(
-        "Redesign the audit subsystem",
-        false,
-        TaskCategory::Research,
-        None,
-    ));
-}
-
-#[test]
 fn adversarial_auditor_prompt_enables_report_instruction_only() {
     let prompt = "You are an ADVERSARIAL, read-only code auditor. Do NOT modify any code. Audit the report mode feature on the CURRENT git branch against base main.";
 
@@ -173,16 +123,6 @@ fn adversarial_auditor_prompt_enables_report_instruction_only() {
     ));
     assert!(instruction(prompt, false, TaskCategory::Research, None, None).is_some());
     assert!(!skips_dirty_enforcement(prompt, false, TaskCategory::Research));
-}
-
-#[test]
-fn audit_against_baseline_enables_report_mode() {
-    assert!(is_audit_report_task(
-        "Audit the routing feature against main and report findings.",
-        false,
-        TaskCategory::Research,
-        None,
-    ));
 }
 
 #[test]

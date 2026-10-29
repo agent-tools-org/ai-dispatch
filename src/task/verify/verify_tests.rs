@@ -5,29 +5,16 @@
 use super::*;
 use crate::store::Store;
 use crate::support::test_subprocess;
-use crate::types::{AgentKind, Task, TaskStatus};
-use chrono::Local;
+use crate::types::{Task, TaskStatus};
+
 use std::fs;
 use std::io::Error;
 use std::thread;
 use tempfile::TempDir;
 
 fn make_task(id: &str, status: TaskStatus, verify_status: VerifyStatus) -> Task {
-    Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None, prompt: "test prompt".to_string(), resolved_prompt: None, status,
-        category: None,
-        parent_task_id: None, workgroup_id: None, caller_kind: None, caller_session_id: None,
-        agent_session_id: None, repo_path: None, project_id: None, worktree_path: None, effective_dir: None, worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None, output_path: None, tokens: None, prompt_tokens: None, duration_ms: None,
-        requested_model: None, cost_usd: None, exit_code: None, observed_model: None, attribution_source: None,
-        created_at: Local::now(),
-        completed_at: None, verify: None, verify_status, pending_reason: None, read_only: false, budget: false,
-        audit_verdict: None, audit_report_path: None, delivery_assessment: None,
+    Task { prompt: "test prompt".to_string(), verify_status,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), status)
     }
 }
 
@@ -147,12 +134,9 @@ fn configured_skip_command_fails() {
 fn format_report_pass() {
     let result = VerifyResult {
         success: true,
-        timed_out: false,
         output: "all good".to_string(),
         command: "cargo check".to_string(),
-        infrastructure_failure: false,
-        rbox_result: None,
-        exit_code: None,
+        ..Default::default()
     };
     let report = format_verify_report(&result);
     assert!(report.starts_with("Verify PASS"));
@@ -161,13 +145,9 @@ fn format_report_pass() {
 #[test]
 fn format_report_fail_shows_output() {
     let result = VerifyResult {
-        success: false,
-        timed_out: false,
         output: "error[E0308]: mismatched types".to_string(),
         command: "cargo check".to_string(),
-        infrastructure_failure: false,
-        rbox_result: None,
-        exit_code: None,
+        ..Default::default()
     };
     let report = format_verify_report(&result);
     assert!(report.contains("FAIL"));
@@ -217,13 +197,10 @@ fn record_verify_status_maps_timeout_separately_from_failure() {
         &store,
         &task.id,
         &VerifyResult {
-            success: false,
             timed_out: true,
             output: "Verification timed out after 1 seconds".to_string(),
             command: "sleep 30".to_string(),
-            infrastructure_failure: false,
-            rbox_result: None,
-        exit_code: None,
+            ..Default::default()
         },
     );
     let loaded = store.get_task(task.id.as_str()).unwrap().unwrap();
@@ -234,13 +211,10 @@ fn record_verify_status_maps_timeout_separately_from_failure() {
 #[test]
 fn format_report_timeout_label() {
     let result = VerifyResult {
-        success: false,
         timed_out: true,
         output: "still compiling".to_string(),
         command: "cargo test".to_string(),
-        infrastructure_failure: false,
-        rbox_result: None,
-        exit_code: None,
+        ..Default::default()
     };
     let report = format_verify_report(&result);
     assert!(report.starts_with("Verify TIMEOUT"));
@@ -275,7 +249,6 @@ fn verify_kills_background_grandchildren() {
         &script,
         "#!/bin/sh\nsleep 30 &\nchild_pid=$!\necho \"$child_pid\"\nexit 0\n",
     );
-
 
     let result = run_verify(dir.path(), script.to_str(), None, None).unwrap();
     assert!(result.success);

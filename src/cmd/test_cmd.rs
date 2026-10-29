@@ -163,13 +163,7 @@ fn emit_finished(store: &Store, detail: &str) {
         return;
     };
     let headline = detail.lines().next().unwrap_or(detail);
-    let _ = store.insert_event(&TaskEvent {
-        task_id: TaskId(task_id),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Build,
-        detail: headline.to_string(),
-        metadata: None,
-    });
+    let _ = store.insert_event(&TaskEvent::new(TaskId(task_id), EventKind::Build, headline.to_string()));
 }
 
 #[cfg(test)]

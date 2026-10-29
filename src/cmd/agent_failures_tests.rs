@@ -1,7 +1,7 @@
 // Marker-only listing, grouping, filtering and credential-redaction regressions.
 // Uses a memory store; no agent or model is invoked.
 use super::*;
-use crate::{support::paths::AidHomeGuard, types::AgentKind};
+use crate::{types::AgentKind};
 
 fn load(
     store: &Store,
@@ -106,8 +106,7 @@ fn secrets_are_redacted_in_json_and_text() {
 
 #[test]
 fn no_markers_preserves_rate_limit_marker() {
-    let temp = tempfile::tempdir().expect("home");
-    let _home = AidHomeGuard::set(temp.path());
+    let _temp = crate::support::test_env::TestHome::new();
     let path = crate::routing::rate_limit::marker_path(&AgentKind::Codex, None);
     std::fs::create_dir_all(path.parent().expect("parent")).expect("directory");
     std::fs::write(&path, "synthetic marker state").expect("marker");

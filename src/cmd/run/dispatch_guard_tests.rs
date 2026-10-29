@@ -2,58 +2,22 @@
 // Exports: none.
 // Deps: run_dispatch_guard helpers, Task metadata, temp git repositories.
 use super::*;
-use chrono::Local;
-use crate::types::{AgentKind, TaskId, TaskStatus, VerifyStatus};
-use std::path::Path;
-use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+
+use crate::types::{TaskId, TaskStatus};
 
 fn task_with_branch(id: &str, branch: Option<&str>) -> Task {
-    Task {
-        id: TaskId(id.to_string()), agent: AgentKind::Codex, custom_agent_name: None,
-        prompt: "prompt".to_string(), resolved_prompt: None, category: None,
-        status: TaskStatus::Pending, parent_task_id: None, workgroup_id: None,
-        caller_kind: None, caller_session_id: None, agent_session_id: None,
-        repo_path: None, project_id: None, worktree_path: None, effective_dir: None, worktree_branch: branch.map(str::to_string),
-        final_head_sha: None, final_branch: None, start_sha: None, log_path: None,
-        output_path: None, tokens: None, prompt_tokens: None, duration_ms: None,
-        requested_model: None, cost_usd: None, exit_code: None, created_at: Local::now(), observed_model: None, attribution_source: None,
-        completed_at: None, verify: None, verify_status: VerifyStatus::Skipped,
-        pending_reason: None, read_only: false, budget: false, audit_verdict: None,
-        audit_report_path: None, delivery_assessment: None,
+    Task { worktree_branch: branch.map(str::to_string),
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Pending)
     }
 }
 
-fn git(repo_dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .status()
-        .unwrap()
-        .success());
-}
+use crate::support::test_env::git;
 
 fn init_repo() -> tempfile::TempDir {
-    let repo = tempfile::tempdir().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("base.txt"), "base\n").unwrap();
-    git(repo.path(), &["add", "base.txt"]);
-    git(repo.path(), &["commit", "-m", "init"]);
-    repo
+    crate::support::test_repo::repo_with_file("base.txt", "base\n", "init")
 }
 
-fn unique_branch(prefix: &str) -> String {
-    format!(
-        "{prefix}-{}-{}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    )
-}
+use crate::support::test_repo::unique_name as unique_branch;
 
 #[test]
 fn guard_rejects_worktree_task_resolved_to_repo_root() {

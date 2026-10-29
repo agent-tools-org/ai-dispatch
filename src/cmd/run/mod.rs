@@ -63,7 +63,10 @@ pub(crate) use self::run_lifecycle::capture_final_worktree_state;
 pub(crate) use self::run_lifecycle::{
     foreground_status_hint, post_run_lifecycle, LifecycleMode,
 };
-pub(crate) use self::run_prompt::PromptBundle;
+pub(crate) use self::run_prompt::{
+    PromptBundle, maybe_verify, maybe_auto_retry_after_verify_failure,
+    maybe_auto_retry_after_checklist_miss,
+};
 #[allow(unused_imports)]
 pub(crate) use self::run_iterate::IterateConfig;
 pub(crate) use self::run_iterate::maybe_iterate;
@@ -139,26 +142,7 @@ pub(crate) fn inherit_retry_base_branch(repo_dir: Option<&str>, task: &Task, ret
 pub(crate) fn retry_target(task: &Task) -> Result<(Option<String>, Option<String>)> { run_prompt::retry_target(task) }
 pub(crate) fn apply_retry_target(task: &Task, retry_args: &mut RunArgs) -> Result<()> { run_prompt::apply_retry_target(task, retry_args) }
 pub(crate) fn switch_agent(args: &mut RunArgs, next_agent: String) { run_post::switch_agent(args, next_agent) }
-pub(crate) fn maybe_verify(
-    store: &Store,
-    task_id: &TaskId,
-    verify: Option<&str>,
-    dir: Option<&str>,
-    container_name: Option<&str>,
-) {
-    run_prompt::maybe_verify_impl(store, task_id, verify, dir, container_name);
-}
-pub(crate) async fn maybe_auto_retry_after_verify_failure(store: &Arc<Store>, task_id: &TaskId, args: &RunArgs, pre_verify_status: TaskStatus) -> Result<Option<TaskId>> {
-    run_prompt::maybe_auto_retry_after_verify_failure_impl(store, task_id, args, pre_verify_status).await
-}
-pub(crate) async fn maybe_auto_retry_after_checklist_miss(
-    store: &Arc<Store>,
-    task_id: &TaskId,
-    args: &RunArgs,
-    checklist_result: Option<&crate::cmd::checklist_scan::ChecklistResult>,
-) -> Result<Option<TaskId>> {
-    run_prompt::maybe_auto_retry_after_checklist_miss_impl(store, task_id, args, checklist_result).await
-}
+
 pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_id: &TaskId) -> Result<Option<TaskId>> {
     if store.is_caller_owned(task_id.as_str())? { return Ok(None); }
     if args.judge_retry {
@@ -179,13 +163,11 @@ pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_i
         Ok(result) => result,
         Err(error) => {
             aid_warn!("[aid] Judge inconclusive: {error}");
-            let _ = store.insert_event(&TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: chrono::Local::now(),
-                event_kind: EventKind::Milestone,
-                detail: format!("Judge inconclusive: {error}"),
-                metadata: Some(serde_json::json!({ "judge_inconclusive": true })),
-            });
+            let _ = store.insert_event(&TaskEvent::new(
+                task_id.clone(),
+                EventKind::Milestone,
+                format!("Judge inconclusive: {error}"),
+            ).with_metadata(Some(serde_json::json!({ "judge_inconclusive": true }))));
             return Ok(None);
         }
     };
@@ -209,7 +191,6 @@ pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_i
     let retry_id = Box::pin(run(store.clone(), retry_args)).await?;
     Ok(Some(retry_id))
 }
-
 
 #[cfg(test)]
 pub(crate) use run_dispatch_prepare::claim_test_dispatch;

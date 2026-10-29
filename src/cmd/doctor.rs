@@ -179,8 +179,7 @@ mod tests {
 
     #[test]
     fn doctor_lists_needs_human_hold_reason() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
+        let _temp = crate::support::test_env::TestHome::new();
         std::fs::create_dir_all(crate::support::paths::aid_dir()).expect("aid dir");
         crate::routing::rate_limit::mark_rate_limited(
             &crate::types::AgentKind::Oz,

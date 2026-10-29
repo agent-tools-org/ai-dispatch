@@ -32,42 +32,9 @@ impl Drop for EnvVarGuard {
 
 fn make_task(id: &str, agent: AgentKind, status: TaskStatus) -> Task {
     Task {
-        id: TaskId(id.to_string()),
         agent,
-        custom_agent_name: None,
         prompt: "test prompt".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), status)
     }
 }
 
@@ -82,21 +49,9 @@ fn make_entry(topic: &str, path: Option<&str>, description: &str, content: Optio
 
 fn make_memory_with_age(id: &str, memory_type: MemoryType, content: &str, age: chrono::Duration) -> Memory {
     Memory {
-        id: MemoryId(id.to_string()),
         memory_type,
-        tier: MemoryTier::OnDemand,
-        content: content.to_string(),
-        source_task_id: None,
-        agent: None,
-        project_path: Some("/test-project".to_string()),
-        content_hash: format!("hash-{id}"),
         created_at: Local::now() - age,
-        expires_at: None,
-        supersedes: None,
-        version: 1,
-        inject_count: 0,
-        last_injected_at: None,
-        success_count: 0,
+        ..make_memory(id, MemoryTier::OnDemand, content, Some("/test-project".to_string()))
     }
 }
 
@@ -119,7 +74,6 @@ fn make_memory(id: &str, tier: MemoryTier, content: &str, project_path: Option<S
         success_count: 0,
     }
 }
-
 
 #[path = "prompt_context_tests_selection.rs"]
 mod selection;

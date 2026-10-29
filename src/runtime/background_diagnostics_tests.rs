@@ -4,7 +4,7 @@ use super::*;
 
 #[test]
 fn reaper_appends_without_losing_agent_stderr() {
-    let _home = setup_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().expect("store");
     let id = "t-preserve-stderr";
     store
@@ -28,7 +28,7 @@ fn reaper_appends_without_losing_agent_stderr() {
 
 #[test]
 fn recorded_preparation_reason_survives_malformed_spec() {
-    let _home = setup_home();
+    let _home = crate::support::test_env::TestHome::with_dirs();
     let store = Store::open_memory().expect("store");
     let mut pending = task("t-preparation-stall", crate::types::TaskStatus::Pending);
     pending.created_at = chrono::Local::now() - chrono::Duration::seconds(700);

@@ -4,9 +4,7 @@
 
 use super::*;
 use crate::cmd::run::apply_retry_target;
-use chrono::Local;
-use std::path::Path;
-use std::process::Command;
+
 use std::sync::Arc;
 
 fn isolated_home() -> crate::support::paths::AidHomeGuard {
@@ -16,73 +14,17 @@ fn isolated_home() -> crate::support::paths::AidHomeGuard {
 
 fn test_task(id: &str) -> Task {
     Task {
-        id: TaskId(id.to_string()),
-        agent: AgentKind::Codex,
-        custom_agent_name: None,
         prompt: "seed".to_string(),
-        resolved_prompt: None,
-        category: None,
-        status: TaskStatus::Pending,
-        parent_task_id: None,
-        workgroup_id: None,
-        caller_kind: None,
-        caller_session_id: None,
-        agent_session_id: None,
-        repo_path: None, project_id: None,
-        worktree_path: None, effective_dir: None,
-        worktree_branch: None,
-        final_head_sha: None,
-        final_branch: None,
-        start_sha: None,
-        log_path: None,
-        output_path: None,
-        tokens: None,
-        prompt_tokens: None,
-        duration_ms: None,
-        requested_model: None, observed_model: None, attribution_source: None,
-        cost_usd: None,
-        exit_code: None,
-        created_at: Local::now(),
-        completed_at: None,
-        verify: None,
-        verify_status: VerifyStatus::Skipped,
-        pending_reason: None,
-        read_only: false,
-        budget: false,
-        audit_verdict: None,
-        audit_report_path: None,
-        delivery_assessment: None,
+        ..crate::types::Task::test_fixture(TaskId(id.to_string()), TaskStatus::Pending)
     }
 }
 
-fn git(repo_dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .status()
-        .unwrap()
-        .success());
-}
+use crate::support::test_env::git;
 
-fn git_output(repo_dir: &Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .args(["-C", &repo_dir.to_string_lossy()])
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    String::from_utf8(output.stdout).unwrap().trim().to_string()
-}
+use crate::support::test_env::git_output;
 
 fn init_repo() -> tempfile::TempDir {
-    let repo = tempfile::tempdir().unwrap();
-    git(repo.path(), &["init", "-b", "main"]);
-    git(repo.path(), &["config", "user.email", "test@example.com"]);
-    git(repo.path(), &["config", "user.name", "Test User"]);
-    std::fs::write(repo.path().join("base.txt"), "base\n").unwrap();
-    git(repo.path(), &["add", "base.txt"]);
-    git(repo.path(), &["commit", "-m", "init"]);
-    repo
+    crate::support::test_repo::repo_with_file("base.txt", "base\n", "init")
 }
 
 #[test]
@@ -200,9 +142,7 @@ fn retry_prepare_persists_live_worktree_metadata() {
 
 #[test]
 fn prepare_dispatch_updates_log_path_when_id_is_auto_suffixed() {
-    let temp = tempfile::tempdir().unwrap();
-    let _guard = crate::support::paths::AidHomeGuard::set(temp.path());
-    let store = Arc::new(Store::open_memory().unwrap());
+    let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
     let mut first = RunArgs {
         agent_name: "codex".to_string(),
         existing_task_id: Some(TaskId("t-ebcf".to_string())),

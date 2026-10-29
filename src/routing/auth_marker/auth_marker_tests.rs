@@ -2,7 +2,6 @@
 // Uses auth_marker helpers and isolated AID homes.
 
 use super::*;
-use crate::support::paths::AidHomeGuard;
 
 const GROK_ERROR: &str = concat!(
     r#"{"type":"error","message":"Not signed in. To authenticate without a browser, run:"#,
@@ -11,8 +10,7 @@ const GROK_ERROR: &str = concat!(
 
 #[test]
 fn no_evidence_is_unknown() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let status = auth_status(AgentKind::Grok, None);
     assert_eq!(status.state, "unknown");
     assert_eq!(status.observed_at, None);
@@ -20,8 +18,7 @@ fn no_evidence_is_unknown() {
 
 #[test]
 fn not_signed_in_run_sets_failed_with_observed_time() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     std::fs::create_dir_all(crate::support::paths::logs_dir()).expect("logs");
     std::fs::write(crate::support::paths::log_path("t-auth"), format!("{GROK_ERROR}\n")).expect("log");
     assert!(record_from_run(
@@ -43,8 +40,7 @@ fn not_signed_in_run_sets_failed_with_observed_time() {
 
 #[test]
 fn failed_verdict_expires_after_ttl() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     let at = Local::now() - Duration::seconds(AUTH_FAILED_TTL_SECS + 5);
     record_failure_at(AgentKind::Grok, "Not signed in.", at);
     assert_eq!(auth_status(AgentKind::Grok, None).state, "unknown");
@@ -60,8 +56,7 @@ fn failed_verdict_expires_after_ttl() {
 
 #[test]
 fn successful_run_clears_failed_verdict() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     record_failure_at(
         AgentKind::Claude,
         "Invalid API key · Please run /login",
@@ -74,8 +69,7 @@ fn successful_run_clears_failed_verdict() {
 
 #[test]
 fn unmatched_or_missing_output_never_marks_failed() {
-    let home = tempfile::tempdir().expect("home");
-    let _guard = AidHomeGuard::set(home.path());
+    let _home = crate::support::test_env::TestHome::new();
     assert!(!record_from_run(
         "t-missing",
         AgentKind::Grok,

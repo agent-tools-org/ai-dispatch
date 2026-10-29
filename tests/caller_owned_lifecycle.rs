@@ -73,6 +73,12 @@ fn killed_worker_is_lost_and_duplicate_submission_never_relaunches() {
     });
     let pid = running["worker"]["pid"].as_i64().unwrap() as i32;
     assert_ne!(pid, agent.pid);
+    assert_ne!(pid, child.pid);
+    agent.assert_agent_command();
+    assert!(
+        agent.is_alive() && child.is_alive(),
+        "fixture processes must be ready"
+    );
     assert_eq!(unsafe { libc::kill(pid, libc::SIGKILL) }, 0);
     let waiting = observe_unsettled(&h, &agent, id);
     assert!(waiting["revision"].as_u64().unwrap() >= running["revision"].as_u64().unwrap());
@@ -102,7 +108,7 @@ fn killed_worker_is_lost_and_duplicate_submission_never_relaunches() {
 fn unconfirmed_worker_waits_for_the_full_timeout() {
     let h = Harness::new(SUCCESS);
     let id = "t-unconfirmed-wait";
-    // A default-mode dry run leaves a skipped row without a worker spec or settlement.
+    // Clear launch evidence to simulate a pre-protocol row, not a proven never-launched task.
     let mut cmd = h.aid();
     cmd.args([
         "run",
@@ -117,6 +123,7 @@ fn unconfirmed_worker_waits_for_the_full_timeout() {
         "--no-skill",
     ]);
     assert!(bounded(&mut cmd).status.success());
+    clear_legacy_launch_evidence(&h, id);
     let early = json(h.aid().args(["wait", id, "--json", "--timeout", "0"]), 124);
     assert_eq!(early["worker"]["state"], "unconfirmed");
     assert_eq!(early["settled"], false);
@@ -137,6 +144,15 @@ fn unconfirmed_worker_waits_for_the_full_timeout() {
     assert_eq!(observed["task_id"], id);
     assert_eq!(observed["revision"], stopped["revision"]);
     assert_default_rows(&h, id, 0);
+}
+
+fn clear_legacy_launch_evidence(h: &Harness, id: &str) {
+    let conn = rusqlite::Connection::open(h.path("aid/aid.db")).unwrap();
+    assert_eq!(
+        conn.execute("UPDATE tasks SET agent_process = NULL WHERE id = ?1", [id])
+            .unwrap(),
+        1
+    );
 }
 
 #[test]
@@ -188,6 +204,36 @@ fn assert_default_rows(h: &Harness, id: &str, invocations: usize) {
     let shown = json(h.aid().args(["show", id, "--json"]), 0);
     assert_eq!(shown["execution"]["task_id"], id);
     assert!(shown["execution"]["policy"].is_null());
+}
+
+#[test]
+fn show_does_not_persist_settlement_after_worker_finishes() {
+    let h = Harness::new(SUCCESS);
+    let id = "t-show-read-only";
+    let verifier = h.verifier();
+    h.launch(id, &["--verify", &verifier]);
+    h.wait_for(|| h.path("holding").exists());
+    let active = json(h.aid().args(["show", id, "--json"]), 0);
+    let worker = active["execution"]["worker"]["pid"]
+        .as_i64()
+        .expect("gated worker PID") as i32;
+    assert_eq!(active["execution"]["settled"], false);
+    h.release();
+    // Probe process exit directly: no wait/stop observes settlement before these show calls.
+    h.wait_for(|| unsafe { libc::kill(worker, 0) } == -1);
+    let first = json(h.aid().args(["show", id, "--json"]), 0);
+    let second = json(h.aid().args(["show", id, "--json"]), 0);
+    for shown in [&first, &second] {
+        identity(&shown["execution"], id);
+        assert_eq!(shown["execution"]["task"]["status"], "done");
+        assert_eq!(shown["execution"]["settled"], true);
+        assert_eq!(shown["execution"]["worker"]["outcome"], "completed");
+    }
+    assert_eq!(first["execution"]["revision"], second["execution"]["revision"]);
+    let settled = h.settled(id);
+    assert!(settled["revision"].as_u64().unwrap() >= second["execution"]["revision"].as_u64().unwrap());
+    assert_eq!(settled["worker"]["outcome"], "completed");
+    h.assert_rows(id, 1);
 }
 
 #[test]

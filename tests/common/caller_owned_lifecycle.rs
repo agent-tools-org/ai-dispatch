@@ -5,13 +5,13 @@
 use crate::caller_owned::{Harness, bounded, identity, json};
 
 pub const GROUP_AGENT_SCRIPT: &str = concat!(
-    "trap '' HUP\n",
+    "trap '' HUP PIPE\n",
     "(i=0; while [ $i -lt 400 ]; do sleep 0.05; i=$((i+1)); done) &\n",
     "printf '%s\\n' \"$!\" > \"$AID_HOME/agent-child.pid.tmp\"\n",
     "mv \"$AID_HOME/agent-child.pid.tmp\" \"$AID_HOME/agent-child.pid\"\n",
+    "printf '%s\\n' '{\"type\":\"message\",\"text\":\"holding\"}'\n",
     "printf '%s\\n' \"$$\" > \"$AID_HOME/agent.pid.tmp\"\n",
     "mv \"$AID_HOME/agent.pid.tmp\" \"$AID_HOME/agent.pid\"\n",
-    "printf '%s\\n' '{\"type\":\"message\",\"text\":\"holding\"}'\n",
     "i=0\nwhile [ $i -lt 400 ]; do sleep 0.05; i=$((i+1)); done\n"
 );
 
@@ -28,6 +28,22 @@ impl AgentProcess {
             .parse()
             .unwrap();
         Self { pid, armed: true }
+    }
+
+    pub fn assert_agent_command(&self) {
+        let out = bounded(std::process::Command::new("ps").args([
+            "-ww",
+            "-p",
+            &self.pid.to_string(),
+            "-o",
+            "args=",
+        ]));
+        let command = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            out.status.success() && command.contains("controlled-agent"),
+            "PID {} is not the controlled agent: {command}",
+            self.pid
+        );
     }
 
     pub fn is_alive(&self) -> bool {
@@ -58,7 +74,11 @@ impl Drop for AgentProcess {
 }
 
 fn assert_agent_unsettled(agent: &AgentProcess, receipt: &serde_json::Value, id: &str) {
-    assert!(agent.is_alive(), "recorded process must still be alive");
+    assert!(
+        agent.is_alive(),
+        "fixture process {} died while observing: {receipt}",
+        agent.pid
+    );
     identity(receipt, id);
     assert_eq!(receipt["settled"], false, "agent survived the worker: {receipt}");
     assert!(matches!(

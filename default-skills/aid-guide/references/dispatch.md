@@ -1,6 +1,6 @@
 # Dispatch and Execution
 
-See [caller-owned execution](caller-owned.md) for `aid.execution/1`, container refusal and derived settlement.
+See [caller-owned execution](caller-owned.md) for `aid.execution/1`, hook/container refusals and read-only show receipts.
 
 ## Tools and skills are the caller's choice
 

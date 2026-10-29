@@ -9,20 +9,7 @@ pub(super) fn action(store: &Arc<Store>, id: &str, graceful: bool, detail: &str,
     let task = store
         .get_task(id)?
         .ok_or_else(|| crate::execution::refuse("not_found", Some(id), 1))?;
-    store.record_execution_stop(id)?;
-    if !task.status.is_terminal() || (task.status == TaskStatus::Done && task.completed_at.is_none()) {
-        store.settle_task_status(
-            id,
-            TaskStatus::Stopped,
-            None,
-            None,
-            Some(&TaskEvent::new(
-                task.id.clone(),
-                EventKind::Completion,
-                detail.into(),
-            )),
-        )?;
-    }
+    mark_stopped(store, &task, detail)?;
     let spec = background::load_spec_if_exists(id)?;
     let (agent, spawned, _) = store.execution_process(id)?;
     let worker = spec.as_ref().and_then(|spec| spec.worker_pid);
@@ -37,20 +24,58 @@ pub(super) fn action(store: &Arc<Store>, id: &str, graceful: bool, detail: &str,
                 .is_some_and(|spec| worker.is_none() && !spec.foreground)),
         "Worker identity missing"
     );
+    if graceful && task.agent == crate::types::AgentKind::Codex {
+        crate::runtime::codex_app_server::wait_for_interrupt(id);
+    }
+    let targets = descendant_spec(id, spec.as_ref(), agent.as_ref())?;
+    let descendants = background::capture_descendants(worker, &targets, true);
+    let mut signalled = worker
+        .map(|pid| signal_worker(pid, id, !graceful))
+        .transpose()?
+        .unwrap_or(false);
+    background::signal_descendants(&descendants, !graceful);
     anyhow::ensure!(
         !(spec.as_ref().is_some_and(|s| s.agent_pid.is_some())
             && agent.as_ref().is_none_or(|a| a.state == "not_started")),
         "Agent launch evidence missing"
     );
-    if graceful && task.agent == crate::types::AgentKind::Codex {
-        crate::runtime::codex_app_server::wait_for_interrupt(id);
-    }
-    let mut signalled = signal_agent(agent.as_ref(), !graceful)?;
-    if let Some(pid) = worker {
-        signalled |= signal_worker(pid, id, !graceful)?;
-    }
+    signalled |= signal_agent(agent.as_ref(), !graceful)?;
     wait_gone(id, worker, agent.as_ref(), graceful)?;
+    background::signal_descendants(&descendants, true);
     finish_stop(store, id, &task, label, signalled)
+}
+
+fn mark_stopped(store: &Store, task: &Task, detail: &str) -> Result<()> {
+    if !task.status.is_terminal() || (task.status == TaskStatus::Done && task.completed_at.is_none()) {
+        store.settle_task_status(
+            task.id.as_str(),
+            TaskStatus::Stopped,
+            None,
+            None,
+            Some(&TaskEvent::new(
+                task.id.clone(),
+                EventKind::Completion,
+                detail.into(),
+            )),
+        )?;
+    }
+    Ok(())
+}
+
+fn descendant_spec(
+    id: &str,
+    spec: Option<&background::BackgroundRunSpec>,
+    agent: Option<&AgentProcess>,
+) -> Result<background::BackgroundRunSpec> {
+    let mut spec = match spec {
+        Some(spec) => spec.clone(),
+        None => serde_json::from_value(serde_json::json!({"task_id":id}))?,
+    };
+    if let Some(agent) = agent.filter(|agent| agent.state == "spawned") {
+        spec.agent_pid = agent.pid;
+        spec.agent_started = agent.started.clone();
+    }
+    Ok(spec)
 }
 
 fn finish_stop(store: &Store, id: &str, task: &Task, label: &str, signalled: bool) -> Result<()> {
@@ -59,11 +84,13 @@ fn finish_stop(store: &Store, id: &str, task: &Task, label: &str, signalled: boo
         preserve_worktree(id, &task, label);
         capture_final_worktree_state(store, &task.id)?;
         if let Some(path) = &task.worktree_path {
-            crate::workspace::worktree::clear_worktree_lock(Path::new(path), id).map_err(anyhow::Error::msg)?;
+            crate::workspace::worktree::clear_worktree_lock(Path::new(path), id)
+                .map_err(anyhow::Error::msg)?;
         }
     }
     // Never remove a live worker's barrier or replace it after a failed close.
     background::clear_spec(id)?;
+    store.record_execution_stop(id)?;
     Ok(())
 }
 
@@ -95,6 +122,7 @@ fn signal_agent(agent: Option<&AgentProcess>, force: bool) -> Result<bool> {
         let current = crate::runtime::process::monitor::activity::root_started(pid)
             .ok_or_else(|| anyhow!("Agent identity unreadable"))?;
         if current != started {
+            execution_receipt::group_gone(pgid)?;
             return Ok(false);
         }
     }

@@ -31,7 +31,8 @@ where
         store,
         config.background.max_task_duration_mins,
     )?);
-    let running_tasks = store.list_tasks(TaskFilter::Running)?;
+    let mut running_tasks = store.list_tasks(TaskFilter::Running)?;
+    running_tasks.retain(|task| !store.is_caller_owned(task.id.as_str()).unwrap_or(true));
     cleaned.extend(orphan::cleanup_orphaned_idle_tasks(
         store,
         &running_tasks,

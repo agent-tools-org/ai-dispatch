@@ -35,7 +35,7 @@ pub(super) fn task_json(store: &Arc<Store>, task_id: &str) -> Result<String> {
     let output = output_text_for_task(store.as_ref(), task_id, true).ok();
     let checklist_status = cmd::show_checklist::render_checklist_status(store.as_ref(), &task);
     let mut payload = task_metadata_json(&task, &declared);
-    payload["execution"] = crate::cmd::execution_receipt::receipt(store, task_id)?;
+    payload["execution"] = crate::cmd::execution_receipt::read_only_receipt(store, task_id)?;
     payload["output"] = json!(output);
     payload["checklist_status"] = json!(checklist_status);
     payload["events"] = json!(event_list);
@@ -188,4 +188,19 @@ fn task_diff_json(task: &Task) -> (Vec<serde_json::Value>, usize, u64, u64) {
         )
     });
     (diff_entries, files_changed, insertions, deletions)
+}
+
+#[cfg(test)]
+#[test]
+fn caller_owned_show_json_derives_execution_without_writing_the_store() {
+    let (_home,store)=crate::support::test_env::TestHome::with_dirs().shared_store();
+    let task=crate::types::Task::test_fixture(crate::types::TaskId("t-show-no-write".into()),crate::types::TaskStatus::Done);
+    store.insert_task(&task).expect("task");
+    store.mark_worker_spawned(task.id.as_str()).expect("spawn");
+    let before=store.execution_snapshot(task.id.as_str()).expect("before");
+    let changes=store.db().total_changes();
+    let shown:serde_json::Value=serde_json::from_str(&task_json(&store,task.id.as_str()).expect("show")).expect("json");
+    assert_eq!(shown["execution"]["settled"],true);
+    assert_eq!(store.execution_snapshot(task.id.as_str()).expect("after"),before);
+    assert_eq!(store.db().total_changes(),changes);
 }

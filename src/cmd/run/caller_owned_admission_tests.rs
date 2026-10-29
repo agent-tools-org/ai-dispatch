@@ -95,3 +95,17 @@ async fn caller_owned_container_refusal_preserves_an_unused_id_and_existing_rows
     assert!(crate::cmd::run::run(store.clone(), args).await.is_err());
     assert_eq!(store.execution_snapshot(task.id.as_str()).expect("snapshot"), before);
 }
+
+#[tokio::test]
+async fn caller_owned_hook_refusals_do_not_consume_task_ids() {
+    for hook in [false,true] {
+        let store=Arc::new(Store::open_memory().expect("store"));
+        let mut args=RunArgs { policy:Some("caller-owned".into()),existing_task_id:Some(TaskId("t-no-hooks".into())),
+            model:Some("exact".into()),..Default::default() };
+        if hook {args.hooks=vec!["on_done:true".into()];} else {args.on_done=Some("true".into());}
+        let error=crate::cmd::run::run(store.clone(),args).await.expect_err("refuse hook");
+        let refusal=error.downcast_ref::<crate::execution::Refusal>().expect("refusal");
+        assert_eq!((refusal.code,refusal.exit,refusal.detail.as_deref()),("flag_refused",3,Some(if hook {"hook"} else {"on_done"})));
+        assert!(store.get_task("t-no-hooks").expect("query").is_none());
+    }
+}

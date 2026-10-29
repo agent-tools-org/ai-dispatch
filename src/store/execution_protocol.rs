@@ -88,11 +88,24 @@ impl Store {
             .is_some_and(|facts| facts.policy.is_some()))
     }
 
-    pub(crate) fn begin_agent_launch(&self, id: &str) -> Result<()> {
-        self.db().execute(
-            r#"UPDATE tasks SET agent_process = '{"state":"starting"}' WHERE id = ?1"#,
-            [id],
-        )?;
+    pub(crate) fn begin_agent_launch(&self, id: &str) -> Result<Option<String>> {
+        let conn = self.db();
+        let tx = conn.unchecked_transaction()?;
+        let previous: Option<String> = tx.query_row("SELECT agent_process FROM tasks WHERE id = ?1", [id], |r| r.get(0))?;
+        let changed = tx.execute(r#"UPDATE tasks SET agent_process = '{"state":"starting"}' WHERE id = ?1
+            AND (execution_policy IS NULL OR (json_extract(agent_process, '$.state') = 'not_started'
+              AND COALESCE(json_extract(agent_process, '$.launched'), 0) = 0))"#, [id])?;
+        anyhow::ensure!(changed == 1, "Caller-owned task refuses a second agent launch");
+        tx.commit()?;
+        Ok(previous)
+    }
+
+    pub(crate) fn recover_agent_launch(&self, id: &str, previous: Option<String>, launched: bool) -> Result<()> {
+        let previous = if launched && previous.as_deref().is_some_and(|json| {
+            serde_json::from_str::<AgentProcess>(json).is_ok_and(|agent| agent.state == "not_started")
+        }) { Some(r#"{"state":"not_started","launched":true}"#.to_string()) } else { previous };
+        self.db().execute("UPDATE tasks SET agent_process = ?2 WHERE id = ?1
+            AND json_extract(agent_process, '$.state') = 'starting'", params![id, previous])?;
         Ok(())
     }
 
@@ -191,10 +204,7 @@ pub(super) fn record_agent_on(conn: &rusqlite::Connection, id: &str) -> Result<(
     let Some(pid) = spec.agent_pid else {
         return Ok(());
     };
-    #[cfg(unix)]
-    let pgid = u32::try_from(unsafe { libc::getpgid(pid as i32) }).ok();
-    #[cfg(not(unix))]
-    let pgid = None;
+    let pgid = Some(pid);
     let agent = AgentProcess {
         state: "spawned".into(),
         pid: Some(pid),
@@ -207,3 +217,7 @@ pub(super) fn record_agent_on(conn: &rusqlite::Connection, id: &str) -> Result<(
     )?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "execution_launch_tests.rs"]
+mod launch_tests;

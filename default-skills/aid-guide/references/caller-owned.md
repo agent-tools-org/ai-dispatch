@@ -14,13 +14,13 @@ The policy pins the exact agent and explicit model. It disables retry, cascade, 
 substitution, self-heal, hang retry, delivery recovery, dirty-worktree rescue agents, quota continuation,
 verify/checklist retries, iterate, best-of, judge, peer review, audit, nested delegation,
 transport fallback, and explicit `aid retry`. The store refuses every child of a caller-owned task.
-Project/team defaults cannot enable these features. Verify and checklist still run without retries.
+Project/team defaults, including completion hooks, cannot enable these features. Verify and checklist still run without retries.
 Preservation commits, including dirty-worktree rescue and failure salvage, still run.
 Other execution flags, including worktrees, sandbox and remote builds, retain their behavior.
 
 Admission requires valid `--id` and nonempty `--model`. Unknown policies, known unavailable models, and
 explicit positive `--retry`, `--cascade`, `--best-of`, `--iterate`, `--judge`, `--peer-review`,
-`--audit`, `--budget`, `--dry-run` or `--container` are refused before task insertion (exit 3, structured JSON error).
+`--audit`, `--budget`, `--dry-run`, `--container`, `--on-done` or `--hook` are refused before task insertion (exit 3, structured JSON error).
 An agent without a known served-model list receives the explicit model unchanged.
 A same-ID submission with the same agent (after alias/case normalization), model and policy returns `submission: existing`,
 launches nothing and exits 0; a different tuple returns `id_conflict` (exit 4). Concurrent identical
@@ -34,11 +34,13 @@ status and worker settlement are separate: a terminal task can still have a live
 restart when an ID is deleted and reused; changing the agent also advances the revision.
 Keep the receipt with the highest revision. Settlement is derived only by observation: the job
 spec is absent (or its verified worker is dead) and the recorded agent process group is gone.
-The agent PID, group and launch identity are persisted in the task row before monitoring starts,
+Caller-owned tasks refuse a second agent spawn at the common launch transaction. The agent PID, group and launch identity are persisted in the task row before monitoring starts,
 so evidence survives spec deletion. Missing group/identity evidence remains `unconfirmed`.
-A readable identity mismatch counts as gone. Processes that leave the agent group are outside
-settlement; aid does not track detached tool sessions or close shared project containers.
-The first derived settlement wins: `stopped` for a recorded stop, `launch_failed` for a failed
+The group is always probed, even when the root launch identity differs. A mismatch never authorizes a signal. Processes that leave the agent group are outside
+settlement; stop also signals captured descendants, including tools in separate sessions.
+`aid show --json` derives without writing; run/wait/stop JSON observations persist the first settlement.
+Transient wait observation errors are retried until timeout; the last valid receipt is retained.
+Only confirmed stops are recorded. The first derived settlement wins: `stopped` for a recorded stop, `launch_failed` for a failed
 submission that never spawned a worker or agent, `lost` for a dead worker's remaining spec,
 otherwise `completed`. Worker, stop and reaper cleanup never write settlement directly.
 `--container` is refused because its shared project container cannot be attributed to one task.
@@ -50,7 +52,7 @@ otherwise `completed`. Worker, stop and reaper cleanup never write settlement di
 a terminal row; it exits 0 for `stopped`/`already_settled` and 5 for `unconfirmed`.
 Stop checks liveness without reaping recorded processes, verifies identity before every signal,
 and confirms exit before recording settlement. A readable identity mismatch means the original
-process is gone: the reused PID is never signalled and does not block settlement. A live process
+process is not a signal target: the reused PID is never signalled, and the recorded group must still be gone. A live process
 with missing or unreadable identity returns `unconfirmed`; non-terminal task rows still become
 `stopped`, but no settlement is written. Caller-owned text mode returns an error.
 A terminal row with no live recorded task process keeps its status, artifacts, locks and final-state

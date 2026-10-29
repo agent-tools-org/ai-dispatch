@@ -123,3 +123,19 @@ mod caller_owned_tests {
         assert!(status.stdout.is_empty(), "rescue must commit the file");
     }
 }
+
+#[cfg(test)]
+#[tokio::test]
+async fn caller_owned_full_dirty_cleanup_preserves_a_rescue_commit_and_done_status() {
+    let (store,id,mut args)=crate::cmd::run::caller_owned_tests::setup();
+    let repo=crate::support::test_repo::repo_with_file("base.txt","base\n","base");
+    store.db().execute("UPDATE tasks SET status='done',tokens=0,worktree_path=?2 WHERE id=?1",
+        rusqlite::params![id.as_str(),repo.path().display().to_string()]).expect("worktree");
+    std::fs::write(repo.path().join("main.rs"),"fn main() {}\n").expect("dirty source");
+    args.read_only=false;
+    assert_eq!(super::post_agent_dirty_worktree_cleanup(&store,&id,&args,repo.path().to_str().expect("path"),None)
+        .await.expect("cleanup"),DirtyWorktreeAction::Continue);
+    assert_eq!(store.get_task(id.as_str()).expect("task").expect("row").status,TaskStatus::Done);
+    assert!(!crate::workspace::commit::has_uncommitted_changes(repo.path().to_str().expect("path")).expect("clean"));
+    assert_eq!(store.list_tasks(crate::types::TaskFilter::All).expect("tasks").len(),1);
+}

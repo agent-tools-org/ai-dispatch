@@ -5,15 +5,28 @@ use super::*;
 pub(crate) async fn run_json(store: &Store, ids: &[String], timeout: Option<u64>) -> Result<i32> {
     anyhow::ensure!(ids.len() == 1, "aid wait --json requires exactly one task ID");
     let id = &ids[0];
+    wait_json_with(store, id, timeout, crate::cmd::execution_receipt::receipt).await
+}
+
+async fn wait_json_with(
+    store: &Store, id: &str, timeout: Option<u64>, mut observe: impl FnMut(&Store, &str) -> Result<serde_json::Value>,
+) -> Result<i32> {
     let start = Instant::now();
+    let mut last = None;
+    let mut error = None;
     loop {
-        let receipt = crate::cmd::execution_receipt::receipt(store, id)?;
-        if receipt["settled"] == true {
-            println!("{receipt}");
-            return Ok(0);
+        match observe(store, id) {
+            Ok(receipt) if receipt["settled"] == true => { println!("{receipt}"); return Ok(0); }
+            Ok(receipt) => last = Some(receipt),
+            Err(tick) => {
+                if tick.downcast_ref::<crate::execution::Refusal>().is_some_and(|refusal| refusal.code == "not_found") {
+                    return Err(tick);
+                }
+                error = Some(tick);
+            }
         }
-        if timeout.is_some_and(|seconds| start.elapsed() >= Duration::from_secs(seconds))
-        {
+        if timeout.is_some_and(|seconds| start.elapsed() >= Duration::from_secs(seconds)) {
+            let receipt = last.ok_or_else(|| error.unwrap_or_else(|| anyhow::anyhow!("No receipt available")))?;
             println!("{receipt}");
             return Ok(124);
         }
@@ -80,6 +93,42 @@ mod tests {
         assert_eq!(wait_for_task_ids(&store, &ids, None, false, Some(Duration::from_secs(1)))
             .await.expect("main text wait"), WaitOutcome::Completed);
         assert_eq!(run_json(&store, &ids, Some(0)).await.expect("JSON evidence wait"), 124);
+    }
+
+    #[tokio::test]
+    async fn caller_owned_wait_recovers_after_transient_read_errors() {
+        let store = Store::open_memory().expect("store");
+        let mut tick = 0;
+        let code = wait_json_with(&store,"t-transient",Some(1),|_,_| {
+            tick += 1;
+            match tick {
+                1 | 3 => anyhow::bail!("transient store error"),
+                2 => Ok(serde_json::json!({"settled":false})),
+                _ => Ok(serde_json::json!({"settled":true})),
+            }
+        }).await.expect("recovered");
+        assert_eq!(code,0);
+        assert_eq!(tick,4);
+    }
+
+    #[tokio::test]
+    async fn caller_owned_wait_prints_last_receipt_when_later_ticks_fail() {
+        let store = Store::open_memory().expect("store");
+        let mut first = true;
+        let started = Instant::now();
+        assert_eq!(wait_json_with(&store,"t-transient",Some(1),|_,_| {
+            if first { first=false; Ok(serde_json::json!({"settled":false})) }
+            else { anyhow::bail!("transient store error") }
+        }).await.expect("timeout with receipt"),124);
+        assert!(started.elapsed()>=Duration::from_secs(1));
+    }
+
+    #[tokio::test]
+    async fn caller_owned_wait_reports_read_error_only_after_no_tick_ever_succeeds() {
+        let store = Store::open_memory().expect("store");
+        let started = Instant::now();
+        assert!(wait_json_with(&store,"t-transient",Some(1),|_,_| anyhow::bail!("store unavailable")).await.is_err());
+        assert!(started.elapsed()>=Duration::from_secs(1));
     }
 
 }

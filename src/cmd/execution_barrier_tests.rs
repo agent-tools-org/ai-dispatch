@@ -7,7 +7,7 @@ use crate::{
     types::*,
 };
 
-fn fixture() -> (TestHome, std::sync::Arc<Store>, TaskId) {
+pub(super) fn fixture() -> (TestHome, std::sync::Arc<Store>, TaskId) {
     let (home, store) = TestHome::with_dirs().shared_store();
     let id = TaskId("t-derived-barrier".into());
     store
@@ -16,7 +16,7 @@ fn fixture() -> (TestHome, std::sync::Arc<Store>, TaskId) {
     (home, store, id)
 }
 
-fn record_agent(store: &Store, id: &TaskId, child: &ProcessGuard) {
+pub(super) fn record_agent(store: &Store, id: &TaskId, child: &ProcessGuard) {
     let agent = crate::store::execution_protocol::AgentProcess {
         state: "spawned".into(),
         pid: Some(child.id()),
@@ -33,7 +33,7 @@ fn record_agent(store: &Store, id: &TaskId, child: &ProcessGuard) {
         .expect("record");
 }
 
-fn live_agent() -> ProcessGuard {
+pub(super) fn live_agent() -> ProcessGuard {
     let mut command = std::process::Command::new("sleep");
     command.arg("60");
     ProcessGuard::spawn(&mut command).expect("agent")
@@ -150,7 +150,7 @@ fn caller_owned_missing_identity_is_unconfirmed_even_with_a_pgid() {
 }
 
 #[test]
-fn caller_owned_reused_agent_identity_counts_as_gone_without_signalling() {
+fn caller_owned_mismatched_identity_never_skips_a_live_agent_group() {
     let _permit = crate::support::test_subprocess::acquire();
     let (_home, store, id) = fixture();
     let mut agent = live_agent();
@@ -162,7 +162,7 @@ fn caller_owned_reused_agent_identity_counts_as_gone_without_signalling() {
             [id.as_str()],
         )
         .expect("reused pid");
-    assert_eq!(receipt(&store, id.as_str()).expect("observe")["settled"], true);
+    assert_eq!(receipt(&store, id.as_str()).expect("observe")["settled"], false);
     assert!(agent.child_mut().try_wait().expect("owner wait").is_none());
 }
 

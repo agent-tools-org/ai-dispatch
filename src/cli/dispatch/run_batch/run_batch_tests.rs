@@ -34,7 +34,6 @@ fn configured_args() -> cmd::run::RunArgs {
         "--hook", "done:hook", "--bg", "--dry-run", "--read-only", "--best-of", "2",
         "--metric", "score", "--parent", "t-parent", "--id", "t-existing",
         "--timeout", "601", "--idle-timeout", "121", "--audit", "--no-link-deps",
-        "--policy", "caller-owned", "--json",
     ])
 }
 
@@ -71,8 +70,6 @@ fn cli_run_conversion_preserves_lifecycle_flags() {
     assert_eq!(args.judge.as_deref(), Some("agy"));
     assert_eq!(args.peer_review.as_deref(), Some("claude"));
     assert_eq!(args.retry, 3);
-    assert_eq!(args.policy.as_deref(), Some("caller-owned"));
-    assert!(args.execution_json);
     assert!(args.background && args.dry_run && args.announce && args.read_only);
     assert_eq!(args.best_of, Some(2));
     assert_eq!(args.metric.as_deref(), Some("score"));
@@ -144,6 +141,7 @@ fn cli_run_conversion_does_not_drop_any_configurable_field() {
     let defaults = serde_json::to_value(cmd::run::RunArgs::default()).expect("defaults");
     let fixtures = [
         configured_args(),
+        parsed_args(&["--policy", "caller-owned", "--json"]),
         parsed_args(&["--no-skill", "--no-audit", "--backup", "gdrive:x", "--sandbox"]),
         parsed_args(&["--container", "dev:latest"]),
         run_args(Cli::try_parse_from(["aid", "run", "kilo", "--prompt-file", "prompt.md"])
@@ -231,4 +229,12 @@ async fn cli_run_dry_run_persists_merged_checklist_prompt_and_budget_mode() {
         assert_eq!(args.prompt_file, None);
         assert_eq!(args.budget, expected_budget, "{budget}, config={configured_budget}");
     }
+}
+
+
+#[test]
+fn cli_run_conversion_keeps_protocol_fields_and_suppresses_only_json_announcements() {
+    let args = parsed_args(&["--policy", "caller-owned", "--json"]);
+    assert_eq!(args.policy.as_deref(), Some("caller-owned"));
+    assert!(args.execution_json && !args.announce);
 }

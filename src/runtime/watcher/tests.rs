@@ -9,13 +9,7 @@ use crate::types::{AgentKind, CompletionInfo, EventKind, Task, TaskEvent, TaskId
 use chrono::Local;
 
 fn tracker_event(kind: EventKind, detail: &str) -> TaskEvent {
-    TaskEvent {
-        task_id: TaskId("t-synth".to_string()),
-        timestamp: Local::now(),
-        event_kind: kind,
-        detail: detail.to_string(),
-        metadata: None,
-    }
+    TaskEvent::new(TaskId("t-synth".to_string()), kind, detail.to_string())
 }
 
 fn feed_stream_line(store: &std::sync::Arc<crate::store::Store>, task: &Task, line: &str) {

@@ -7,9 +7,7 @@ use std::{fs, path::Path, process::Command};
 use tempfile::tempdir;
 
 fn args(cmd: &Command) -> Vec<String> {
-    cmd.get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect()
+    crate::support::test_command::args(&cmd)
 }
 
 fn self_mount(path: &Path) -> String {

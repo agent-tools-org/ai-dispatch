@@ -52,13 +52,7 @@ fn insert_activity(store: &Store, task_id: &TaskId) {
         (EventKind::ToolCall, "write src/lib.rs"),
     ] {
         store
-            .insert_event(&TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: Local::now(),
-                event_kind: kind,
-                detail: detail.to_string(),
-                metadata: None,
-            })
+            .insert_event(&TaskEvent::new(task_id.clone(), kind, detail.to_string()))
             .expect("event");
     }
 }
@@ -115,13 +109,11 @@ fn salvage_records_file_write_only_activity() {
     task.status = TaskStatus::Running;
     store.insert_task(&task).expect("insert");
     store
-        .insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::FileWrite,
-            detail: "Edit files: src/lib.rs".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(
+            task.id.clone(),
+            EventKind::FileWrite,
+            "Edit files: src/lib.rs".to_string(),
+        ))
         .expect("event");
 
     crate::task::lifecycle::mark_failed(&store, &task.id).expect("fail");
@@ -142,13 +134,11 @@ fn salvage_records_file_read_only_activity() {
     task.status = TaskStatus::Running;
     store.insert_task(&task).expect("insert");
     store
-        .insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::FileRead,
-            detail: "Read file: src/lib.rs".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(
+            task.id.clone(),
+            EventKind::FileRead,
+            "Read file: src/lib.rs".to_string(),
+        ))
         .expect("event");
 
     crate::task::lifecycle::mark_failed(&store, &task.id).expect("fail");

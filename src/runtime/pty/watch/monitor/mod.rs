@@ -45,13 +45,11 @@ fn deadline_elapsed(state: &mut MonitorState, store: &Store, task_id: &TaskId) -
         return Ok(false);
     }
     state.info.status = TaskStatus::Failed;
-    store.insert_agent_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: "Failed during execution: exceeded hard timeout".into(),
-        metadata: None,
-    })?;
+    store.insert_agent_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Error,
+        "Failed during execution: exceeded hard timeout".into(),
+    ))?;
     Ok(true)
 }
 
@@ -135,13 +133,11 @@ fn cost_exceeded(
     else {
         return false;
     };
-    let _ = store.insert_agent_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: format!("Task killed: cost ${cost:.2} exceeded ceiling ${max:.2}"),
-        metadata: None,
-    });
+    let _ = store.insert_agent_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Error,
+        format!("Task killed: cost ${cost:.2} exceeded ceiling ${max:.2}"),
+    ));
     state.info.status = TaskStatus::Failed;
     let _ = bridge.kill_group();
     true

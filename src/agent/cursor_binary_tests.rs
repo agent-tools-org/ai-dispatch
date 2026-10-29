@@ -82,7 +82,7 @@ fn oversized_identity_output_does_not_block_cursor_probe() {
 fn build_command_omits_partial_output_flag() {
     let agent = CursorAgent;
     let cmd = agent.build_command("test prompt", &run_opts()).unwrap();
-    let args: Vec<_> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    let args: Vec<_> = crate::support::test_command::args(&cmd);
     assert!(!args.iter().any(|arg| arg == "--stream-partial-output"));
 }
 

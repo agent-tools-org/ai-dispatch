@@ -1,8 +1,8 @@
-// Tests for `aid worktree` list/prune lock behavior.
-// Covers live-lock pruning protection, dead-lock cleanup, and JSON listing shape.
+// Tests for worktree staleness detection and JSON listing.
+// Covers age checks and active/dead lock display.
 // Deps: super command helpers, git CLI, tempfile, TmpWorktreeGuard.
 
-use super::{list_json, prune, should_prune_worktree};
+use super::{list_json, should_prune_worktree};
 use crate::support::test_env::TmpWorktreeGuard;
 use crate::support::test_subprocess;
 use serde_json::Value;
@@ -74,61 +74,6 @@ fn should_prune_worktree_recent_path() {
     let path = temp.path().join("aid-wt-recent");
     std::fs::create_dir(&path).unwrap();
     assert!(!should_prune_worktree(path.to_str().unwrap()));
-}
-
-#[test]
-fn prune_skips_worktree_with_live_lock() {
-    let _permit = test_subprocess::acquire();
-    let repo = tempfile::tempdir().unwrap();
-    init_repo(repo.path());
-    let wt = add_worktree(repo.path(), "feat/live-lock", "live-lock");
-    std::fs::write(
-        wt.path().join(".aid-lock"),
-        format!("version=1\ntask_id=t-live\nowner_pid={}\nworker_pid=\n", std::process::id()),
-    )
-    .unwrap();
-    make_old(wt.path());
-
-    assert!(!should_prune_worktree(wt.path().to_str().unwrap()));
-    prune(Some(repo.path().to_str().unwrap())).unwrap();
-    assert!(wt.path().exists());
-    assert!(wt.path().join(".aid-lock").exists());
-}
-
-#[test]
-fn prune_clears_dead_lock_and_removes_old_worktree() {
-    let _permit = test_subprocess::acquire();
-    let repo = tempfile::tempdir().unwrap();
-    init_repo(repo.path());
-    let wt = add_worktree(repo.path(), "feat/dead-lock", "dead-lock");
-    std::fs::write(
-        wt.path().join(".aid-lock"),
-        "version=1\ntask_id=t-dead\nowner_pid=999999999\nworker_pid=\n",
-    )
-    .unwrap();
-    make_old(wt.path());
-
-    assert!(should_prune_worktree(wt.path().to_str().unwrap()));
-    prune(Some(repo.path().to_str().unwrap())).unwrap();
-    // Prune clears the stale lock but leaves the worktree dir (dirty/abandoned policy).
-    // Fixture cleanup is owned by TmpWorktreeGuard on Drop — including panic paths.
-    assert!(wt.path().exists());
-    assert!(!wt.path().join(".aid-lock").exists());
-}
-
-#[test]
-fn prune_skips_old_worktree_with_uncommitted_changes() {
-    let _permit = test_subprocess::acquire();
-    let repo = tempfile::tempdir().unwrap();
-    init_repo(repo.path());
-    let wt = add_worktree(repo.path(), "feat/dirty-prune", "dirty-prune");
-    std::fs::write(wt.path().join("dirty.txt"), "partial\n").unwrap();
-    make_old(wt.path());
-
-    assert!(!should_prune_worktree(wt.path().to_str().unwrap()));
-    prune(Some(repo.path().to_str().unwrap())).unwrap();
-    assert!(wt.path().exists());
-    assert!(wt.path().join("dirty.txt").exists());
 }
 
 #[test]

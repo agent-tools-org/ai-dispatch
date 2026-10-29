@@ -102,13 +102,11 @@ fn board_shows_running_task_milestone() {
     let (_temp, _guard, store) = isolated_store();
     let task = make_task("t-0003", AgentKind::Codex, TaskStatus::Running);
     store.insert_task(&task).unwrap();
-    store.insert_event(&TaskEvent {
-        task_id: task.id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: "types defined".to_string(),
-        metadata: None,
-    }).unwrap();
+    store.insert_event(&TaskEvent::new(
+        task.id.clone(),
+        EventKind::Milestone,
+        "types defined".to_string(),
+    )).unwrap();
 
     let output = render_board(&[task], &store).unwrap();
     assert!(output.contains("RUN — types defined"));
@@ -119,13 +117,11 @@ fn board_shows_awaiting_input_reason() {
     let (_temp, _guard, store) = isolated_store();
     let task = make_task("t-0004", AgentKind::Codex, TaskStatus::AwaitingInput);
     store.insert_task(&task).unwrap();
-    store.insert_event(&TaskEvent {
-        task_id: task.id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Reasoning,
-        detail: "115:    use super::board::render_board;".to_string(),
-        metadata: Some(json!({ "awaiting_input": true, "awaiting_prompt": "Continue with fix?" })),
-    }).unwrap();
+    store.insert_event(&TaskEvent::new(
+        task.id.clone(),
+        EventKind::Reasoning,
+        "115:    use super::board::render_board;".to_string(),
+    ).with_metadata(Some(json!({ "awaiting_input": true, "awaiting_prompt": "Continue with fix?" })))).unwrap();
 
     let output = render_board(&[task], &store).unwrap();
     assert!(output.contains("AWAIT — Continue with fix?"));
@@ -158,13 +154,11 @@ fn board_shows_latest_error_for_failed_task() {
     let (_temp, _guard, store) = isolated_store();
     let task = make_task("t-err1", AgentKind::Codex, TaskStatus::Failed);
     store.insert_task(&task).unwrap();
-    store.insert_event(&TaskEvent {
-        task_id: TaskId("t-err1".to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: "Quota exhausted".to_string(),
-        metadata: None,
-    }).unwrap();
+    store.insert_event(&TaskEvent::new(
+        TaskId("t-err1".to_string()),
+        EventKind::Error,
+        "Quota exhausted".to_string(),
+    )).unwrap();
     let output = render_board(&[task], &store).unwrap();
     assert!(output.contains("FAIL — Quota exhausted"), "output: {output}");
 }
@@ -197,13 +191,11 @@ fn test_board_shows_eta_for_running_task() {
 #[test]
 fn task_detail_rendering() {
     let task = make_task("t-0001", AgentKind::Codex, TaskStatus::Done);
-    let events = vec![TaskEvent {
-        task_id: TaskId("t-0001".to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::ToolCall,
-        detail: "exec: cargo test".to_string(),
-        metadata: None,
-    }];
+    let events = vec![TaskEvent::new(
+        TaskId("t-0001".to_string()),
+        EventKind::ToolCall,
+        "exec: cargo test".to_string(),
+    )];
     let output = render_task_detail(&task, &events, None);
     assert!(output.contains("t-0001"));
     assert!(output.contains("cargo test"));
@@ -245,19 +237,17 @@ fn task_detail_shows_iteration_eval_output() {
     let task = make_task("t-iter", AgentKind::Codex, TaskStatus::Done);
     let output = render_task_detail(
         &task,
-        &[TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "Iteration 1/3: eval failed (exit 1), retrying as t-next".to_string(),
-            metadata: Some(json!({
+        &[TaskEvent::new(
+            task.id.clone(),
+            EventKind::Milestone,
+            "Iteration 1/3: eval failed (exit 1), retrying as t-next".to_string(),
+        ).with_metadata(Some(json!({
                 "iterate": {
                     "iteration": 1,
                     "max_iterations": 3,
                     "eval_output": "cargo test failed"
                 }
-            })),
-        }],
+            })))],
         None,
     );
 

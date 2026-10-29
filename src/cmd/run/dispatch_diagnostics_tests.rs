@@ -139,13 +139,11 @@ fn prepare_pending_dispatch(
 
 fn record_agent_exit(store: &Store, id: &TaskId) {
     assert!(crate::task::lifecycle::mark_running(store, id).expect("start"));
-    let event = crate::types::TaskEvent {
-        task_id: id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: crate::types::EventKind::Error,
-        detail: "agent exited 17".into(),
-        metadata: None,
-    };
+    let event = crate::types::TaskEvent::new(
+        id.clone(),
+        crate::types::EventKind::Error,
+        "agent exited 17".into(),
+    );
     let completion = crate::store::TaskCompletionUpdate {
         id: id.as_str(),
         status: TaskStatus::Failed,

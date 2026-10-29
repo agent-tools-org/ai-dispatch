@@ -16,13 +16,11 @@ pub fn run(store: &Store, task_id: &str, message: Option<&str>, escalate: bool) 
     let task = require_running_task(store, task_id)?;
     if escalate {
         crate::task::unstick::mark_task_stalled(store, task.id.as_str())?;
-        store.insert_event(&TaskEvent {
-            task_id: TaskId(task.id.as_str().to_string()),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: ESCALATED_EVENT_DETAIL.to_string(),
-            metadata: None,
-        })?;
+        store.insert_event(&TaskEvent::new(
+            TaskId(task.id.as_str().to_string()),
+            EventKind::Milestone,
+            ESCALATED_EVENT_DETAIL.to_string(),
+        ))?;
         println!("Unstick escalated {task_id} to stalled");
         return Ok(());
     }

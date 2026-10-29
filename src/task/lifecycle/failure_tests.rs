@@ -20,13 +20,11 @@ fn unknown_failures_record_one_provider_excerpt_without_changing_status() {
         r#"{"type":"item.completed","item":{"type":"agent_message","text":"private assistant prose"}}"#)
         .expect("stdout");
     store
-        .insert_agent_event(&TaskEvent {
-            task_id: id.clone(),
-            timestamp: chrono::Local::now(),
-            event_kind: EventKind::Error,
-            detail: "Original connection failure".into(),
-            metadata: None,
-        })
+        .insert_agent_event(&TaskEvent::new(
+            id.clone(),
+            EventKind::Error,
+            "Original connection failure".into(),
+        ))
         .expect("original error");
     super::super::mark_failed(&store, &id).expect("failure");
     super::super::salvage_failed_task(&store, &id);

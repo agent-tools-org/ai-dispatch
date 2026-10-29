@@ -187,10 +187,7 @@ fn container_sandbox_home_interplay() {
 
     // 1. Sandbox wrap_command test:
     let wrapped_sandbox = crate::runtime::sandbox::wrap_command(&cmd, "t-test", crate::types::AgentKind::Claude, false);
-    let sandbox_args: Vec<String> = wrapped_sandbox
-        .get_args()
-        .map(|a| a.to_string_lossy().into_owned())
-        .collect();
+    let sandbox_args: Vec<String> = crate::support::test_command::args(&wrapped_sandbox);
 
     // Host HOME path must NOT be forwarded as env var
     let host_home_str = guard.path().to_string_lossy().into_owned();
@@ -200,10 +197,7 @@ fn container_sandbox_home_interplay() {
 
     // 2. Container exec_in_container test:
     let wrapped_container = crate::runtime::container::exec_in_container(&cmd, "aid-container");
-    let container_args: Vec<String> = wrapped_container
-        .get_args()
-        .map(|a| a.to_string_lossy().into_owned())
-        .collect();
+    let container_args: Vec<String> = crate::support::test_command::args(&wrapped_container);
 
     assert!(!container_args.iter().any(|arg| arg.contains(&format!("HOME={host_home_str}"))));
     assert!(container_args.iter().any(|arg| arg == "HOME=/root"));

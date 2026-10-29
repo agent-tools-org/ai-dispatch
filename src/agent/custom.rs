@@ -207,23 +207,19 @@ impl super::Agent for CustomAgent {
                     t if t.contains("complet") => EventKind::Completion,
                     _ => EventKind::Reasoning,
                 };
-                return Some(TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: Local::now(),
-                    event_kind: kind,
-                    detail: super::truncate::truncate_text(detail, 120),
-                    metadata: None,
-                });
+                return Some(TaskEvent::new(
+                    task_id.clone(),
+                    kind,
+                    super::truncate::truncate_text(detail, 120),
+                ));
             }
         }
 
-        Some(TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Reasoning,
-            detail: super::truncate::truncate_text(trimmed, 120),
-            metadata: None,
-        })
+        Some(TaskEvent::new(
+            task_id.clone(),
+            EventKind::Reasoning,
+            super::truncate::truncate_text(trimmed, 120),
+        ))
     }
 }
 

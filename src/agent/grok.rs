@@ -261,13 +261,7 @@ pub fn make_completion_event(task_id: &TaskId, info: &CompletionInfo) -> TaskEve
         metadata["cost_usd"] = json!(cost_usd);
         has_fields = true;
     }
-    TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Completion,
-        detail,
-        metadata: has_fields.then_some(metadata),
-    }
+    TaskEvent::new(task_id.clone(), EventKind::Completion, detail).with_metadata(has_fields.then_some(metadata))
 }
 
 #[cfg(test)]

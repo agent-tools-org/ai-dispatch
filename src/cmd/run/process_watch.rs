@@ -111,13 +111,11 @@ async fn settle_result(
 }
 
 fn settle_execution_failure(args: &RunProcessArgs<'_>, duration_ms: i64, detail: &str) {
-    let event = TaskEvent {
-        task_id: args.task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: format!("Failed during execution: {detail}"),
-        metadata: None,
-    };
+    let event = TaskEvent::new(
+        args.task_id.clone(),
+        EventKind::Error,
+        format!("Failed during execution: {detail}"),
+    );
     let _ = crate::task::lifecycle::complete_task_atomic(
         args.store,
         TaskCompletionUpdate {

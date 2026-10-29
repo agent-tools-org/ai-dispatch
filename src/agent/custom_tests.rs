@@ -96,10 +96,7 @@ fn build_command_with_arg_mode() {
     config.fixed_args.push("--yes".into());
     let agent = CustomAgent { config };
     let cmd = agent.build_command("ask", &base_opts()).unwrap();
-    let args: Vec<_> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let args: Vec<_> = crate::support::test_command::args(&cmd);
     assert_eq!(args, vec!["--yes", "ask"]);
 }
 
@@ -148,10 +145,7 @@ fn build_command_read_only_prepends_warning_to_prompt() {
     let mut opts = base_opts();
     opts.read_only = true;
     let cmd = agent.build_command("ask", &opts).unwrap();
-    let args: Vec<_> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let args: Vec<_> = crate::support::test_command::args(&cmd);
     assert!(args.last().unwrap().contains("READ-ONLY MODE"));
     assert!(args.last().unwrap().ends_with("\n\nask"));
 }
@@ -179,10 +173,7 @@ fn build_command_normal_mode_does_not_mutate_prompt() {
         config: base_config("agent-cli"),
     };
     let cmd = agent.build_command("hello", &base_opts()).unwrap();
-    let args: Vec<_> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let args: Vec<_> = crate::support::test_command::args(&cmd);
     assert_eq!(args, vec!["hello"]);
 }
 
@@ -195,10 +186,7 @@ fn build_command_with_dir() {
     let cmd = CustomAgent { config }
         .build_command("prompt", &opts)
         .unwrap();
-    let args: Vec<_> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let args: Vec<_> = crate::support::test_command::args(&cmd);
     assert_eq!(&args[..2], ["--dir".to_string(), "/tmp/work".to_string()]);
     let current_dir = cmd
         .get_current_dir()

@@ -177,13 +177,11 @@ pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_i
         Ok(result) => result,
         Err(error) => {
             aid_warn!("[aid] Judge inconclusive: {error}");
-            let _ = store.insert_event(&TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: chrono::Local::now(),
-                event_kind: EventKind::Milestone,
-                detail: format!("Judge inconclusive: {error}"),
-                metadata: Some(serde_json::json!({ "judge_inconclusive": true })),
-            });
+            let _ = store.insert_event(&TaskEvent::new(
+                task_id.clone(),
+                EventKind::Milestone,
+                format!("Judge inconclusive: {error}"),
+            ).with_metadata(Some(serde_json::json!({ "judge_inconclusive": true }))));
             return Ok(None);
         }
     };

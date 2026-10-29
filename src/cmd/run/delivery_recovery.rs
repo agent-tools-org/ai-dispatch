@@ -63,26 +63,22 @@ fn recovery_already_attempted(store: &Store, task_id: &TaskId) -> Result<bool> {
 }
 
 fn insert_started_event(store: &Store, task_id: &TaskId) -> Result<()> {
-    store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: "Missing final delivery: resuming Codex session once for final report".to_string(),
-        metadata: Some(serde_json::json!({
+    store.insert_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Milestone,
+        "Missing final delivery: resuming Codex session once for final report".to_string(),
+    ).with_metadata(Some(serde_json::json!({
             "delivery_recovery": "started",
-        })),
-    })
+        }))))
 }
 
 fn insert_unavailable_event(store: &Store, task_id: &TaskId) -> Result<()> {
-    store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: "Missing final delivery: Codex session ID unavailable; manual retry required"
+    store.insert_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Milestone,
+        "Missing final delivery: Codex session ID unavailable; manual retry required"
             .to_string(),
-        metadata: Some(serde_json::json!({
+    ).with_metadata(Some(serde_json::json!({
             "delivery_recovery": "unavailable",
-        })),
-    })
+        }))))
 }

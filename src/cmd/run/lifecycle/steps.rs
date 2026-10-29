@@ -122,13 +122,11 @@ pub(super) fn record_checklist_result(
     }
     aid_warn!("[aid] Checklist: {} — missing: {}",
         result.summary(), result.missing_items().join(", "));
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: format!("Checklist: {}", result.summary()),
-        metadata: None,
-    });
+    let _ = store.insert_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Milestone,
+        format!("Checklist: {}", result.summary()),
+    ));
 }
 
 pub(super) fn run_task_postprocess_phase(
@@ -237,10 +235,7 @@ fn record_artifact_failure(store: &Store, task: &Task, native: bool, err: &anyho
     } else { EventKind::Milestone };
     let label = if native { "Read-only artifact delivery failed" }
         else { "Failed to persist result file" };
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task.id.clone(), timestamp: chrono::Local::now(), event_kind,
-        detail: format!("{label}: {err:#}"), metadata: None,
-    });
+    let _ = store.insert_event(&TaskEvent::new(task.id.clone(), event_kind, format!("{label}: {err:#}")));
 }
 
 pub(super) fn handle_failed_postprocess(

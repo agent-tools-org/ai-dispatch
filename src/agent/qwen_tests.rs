@@ -19,7 +19,7 @@ fn build_command_uses_qwen_stream_json_and_yolo_flags() {
     };
 
     let cmd = QwenAgent.build_command("hello", &opts).unwrap();
-    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert_eq!(cmd.get_program().to_string_lossy(), "qwen");
     assert!(args.windows(2).any(|pair| pair == ["-o", "stream-json"]));
@@ -38,7 +38,7 @@ fn build_command_uses_plan_approval_for_read_only() {
     };
 
     let cmd = QwenAgent.build_command("hello", &opts).unwrap();
-    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert!(args.windows(2).any(|pair| pair == ["--approval-mode", "plan"]));
     assert!(!args.iter().any(|arg| arg == "-y"));
@@ -53,7 +53,7 @@ fn build_command_keeps_result_file_writable_in_read_only_mode() {
     };
 
     let cmd = QwenAgent.build_command("hello", &opts).unwrap();
-    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     let prompt = args
         .windows(2)
         .find(|pair| pair[0] == "-p")
@@ -73,7 +73,7 @@ fn build_command_sets_sandbox_flag() {
     };
 
     let cmd = QwenAgent.build_command("hello", &opts).unwrap();
-    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert!(args.iter().any(|arg| arg == "--sandbox"));
 }
 
@@ -85,7 +85,7 @@ fn build_command_sets_session_id_flag() {
     };
 
     let cmd = QwenAgent.build_command("hello", &opts).unwrap();
-    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert!(args.windows(2).any(|pair| pair == ["-r", "session-123"]));
 }
 
@@ -99,7 +99,7 @@ fn print_qwen_command_line() {
         ..base_opts()
     };
     let cmd = QwenAgent.build_command("fix the bug in main.rs", &opts).unwrap();
-    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     println!("QWEN_CMD: qwen {}", args.join(" "));
 }
 
@@ -211,7 +211,7 @@ fn get_qwen_selected_model_reads_settings_json() {
     // Test that build_command defaults to this selected model
     let opts = base_opts();
     let cmd = QwenAgent.build_command("hello", &opts).unwrap();
-    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert!(args.windows(2).any(|pair| pair == ["-m", "my-selected-qwen-model"]));
 
     crate::routing::model_catalog::set_test_qwen_home(None);

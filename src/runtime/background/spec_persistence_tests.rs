@@ -69,10 +69,7 @@ fn completion_notifications_are_written_as_jsonl() {
 #[test]
 fn build_on_done_command_splits_simple_argv() {
     let cmd = build_on_done_command("echo hi").unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert_eq!(cmd.get_program().to_string_lossy(), "echo");
     assert_eq!(args, vec!["hi"]);
 }
@@ -80,18 +77,12 @@ fn build_on_done_command_splits_simple_argv() {
 #[test]
 fn build_on_done_command_routes_shell_operators_through_sh() {
     let chained = build_on_done_command("echo hi && echo bye").unwrap();
-    let chained_args: Vec<String> = chained
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let chained_args: Vec<String> = crate::support::test_command::args(&chained);
     assert_eq!(chained.get_program().to_string_lossy(), "sh");
     assert_eq!(chained_args, vec!["-c", "echo hi && echo bye"]);
 
     let fallback = build_on_done_command("cmd1 || cmd2").unwrap();
-    let fallback_args: Vec<String> = fallback
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let fallback_args: Vec<String> = crate::support::test_command::args(&fallback);
     assert_eq!(fallback.get_program().to_string_lossy(), "sh");
     assert_eq!(fallback_args, vec!["-c", "cmd1 || cmd2"]);
 }

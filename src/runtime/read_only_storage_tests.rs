@@ -52,13 +52,7 @@ fn read_only_attempts_preserve_user_events_and_replace_private_proof() {
     let store = Store::open_memory().unwrap();
     let id = task(&store, true);
     store
-        .insert_event(&TaskEvent {
-            task_id: id.clone(),
-            timestamp: chrono::Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "Visible agent progress".into(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(id.clone(), EventKind::Milestone, "Visible agent progress".into()))
         .unwrap();
     let cmd = command(repo.path(), scratch.path(), false);
     record(&store, &id, &cmd, "app-server").unwrap();
@@ -112,15 +106,9 @@ fn older_database_initializes_private_table_without_trusting_event_provenance() 
     let id = task(&store, true);
     let proof = profile(&command(repo.path(), scratch.path(), false)).unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: id.clone(),
-            timestamp: chrono::Local::now(),
-            event_kind: EventKind::Setup,
-            detail: "Read-only launch provenance".into(),
-            metadata: Some(serde_json::json!({
+        .insert_event(&TaskEvent::new(id.clone(), EventKind::Setup, "Read-only launch provenance".into()).with_metadata(Some(serde_json::json!({
                 "read_only_launch": {"transport": "exec", "profile": proof},
-            })),
-        })
+            }))))
         .unwrap();
     store
         .db()

@@ -14,13 +14,7 @@ fn overage(store: &Store, task: &Task) {
     store.insert_task(task).expect("task");
     for _ in 0..2 {
         store
-            .insert_event(&TaskEvent {
-                task_id: task.id.clone(),
-                timestamp: Local::now(),
-                event_kind: EventKind::Setup,
-                detail: "billing: overage".into(),
-                metadata: Some(serde_json::json!({"billing_state":"overage"})),
-            })
+            .insert_event(&TaskEvent::new(task.id.clone(), EventKind::Setup, "billing: overage".into()).with_metadata(Some(serde_json::json!({"billing_state":"overage"}))))
             .expect("event");
     }
 }
@@ -97,11 +91,11 @@ fn usage_ignores_overage_metadata_on_non_dispatch_events() {
     let store = Store::open_memory().expect("store");
     let task = task();
     store.insert_task(&task).expect("task");
-    store.insert_event(&TaskEvent {
-        task_id: task.id.clone(), timestamp: Local::now(), event_kind: EventKind::Completion,
-        detail: "unrelated completion metadata".into(),
-        metadata: Some(serde_json::json!({"billing_state":"overage"})),
-    }).expect("event");
+    store.insert_event(&TaskEvent::new(
+        task.id.clone(),
+        EventKind::Completion,
+        "unrelated completion metadata".into(),
+    ).with_metadata(Some(serde_json::json!({"billing_state":"overage"})))).expect("event");
     let rows = collect(&store, &[task], None, UsageWindow::All, Local::now()).expect("usage");
     assert!(rows.is_empty(), "only dispatch setup events identify overage");
 }

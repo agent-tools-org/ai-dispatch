@@ -65,15 +65,9 @@ fn native_read_only_provenance_survives_exec_fallback_and_resume_refusal() {
     let resumed = super::super::codex_app_server::exec_fallback(&cmd, &store, &task).unwrap();
     assert!(profile(&resumed).is_some());
     store
-        .insert_event(&TaskEvent {
-            task_id: task.clone(),
-            timestamp: chrono::Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "resume refused".into(),
-            metadata: Some(serde_json::json!({
+        .insert_event(&TaskEvent::new(task.clone(), EventKind::Milestone, "resume refused".into()).with_metadata(Some(serde_json::json!({
                 "codex_app_server_fallback": true, "reason": "Codex thread/resume: refused",
-            })),
-        })
+            }))))
         .unwrap();
     let fresh = super::super::codex_app_server::exec_fallback(&cmd, &store, &task).unwrap();
     assert!(profile(&fresh).is_some());

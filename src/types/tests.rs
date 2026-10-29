@@ -213,13 +213,11 @@ fn event_kind_parse_or_warn_falls_back_and_warns_once() {
 
 #[test]
 fn task_event_full_detail_prefers_metadata_full() {
-    let mut event = TaskEvent {
-        task_id: TaskId("t-full".to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Reasoning,
-        detail: "truncated...".to_string(),
-        metadata: Some(serde_json::json!({ "full": "the complete untruncated text" })),
-    };
+    let mut event = TaskEvent::new(
+        TaskId("t-full".to_string()),
+        EventKind::Reasoning,
+        "truncated...".to_string(),
+    ).with_metadata(Some(serde_json::json!({ "full": "the complete untruncated text" })));
     assert_eq!(event.full_detail(), "the complete untruncated text");
     event.metadata = None;
     assert_eq!(event.full_detail(), "truncated...");
@@ -227,11 +225,7 @@ fn task_event_full_detail_prefers_metadata_full() {
 
 #[test]
 fn trimmed_event_readers_explain_missing_output() {
-    let event = TaskEvent {
-        task_id: TaskId("t-trimmed".into()), timestamp: Local::now(),
-        event_kind: EventKind::Build, detail: "build output".into(),
-        metadata: Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})),
-    };
+    let event = TaskEvent::new(TaskId("t-trimmed".into()), EventKind::Build, "build output".into()).with_metadata(Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})));
     assert!(event.trimmed_note().is_some());
     assert_eq!(event.full_detail(), "build output [full output trimmed]");
     assert_eq!(event.display_detail(), "build output [full output trimmed]");
@@ -239,11 +233,11 @@ fn trimmed_event_readers_explain_missing_output() {
 
 #[test]
 fn provider_only_marker_is_visible_to_event_readers() {
-    let event = TaskEvent {
-        task_id: TaskId("t-provider-trimmed".into()), timestamp: Local::now(),
-        event_kind: EventKind::Error, detail: "provider output".into(),
-        metadata: Some(serde_json::json!({"provider_stdout": {"trimmed": true, "bytes": 5000}})),
-    };
+    let event = TaskEvent::new(
+        TaskId("t-provider-trimmed".into()),
+        EventKind::Error,
+        "provider output".into(),
+    ).with_metadata(Some(serde_json::json!({"provider_stdout": {"trimmed": true, "bytes": 5000}})));
     assert!(event.trimmed_note().is_some());
     assert_eq!(event.full_detail(), "provider output [provider_stdout output trimmed]");
     assert!(event.display_detail().contains("output trimmed"));

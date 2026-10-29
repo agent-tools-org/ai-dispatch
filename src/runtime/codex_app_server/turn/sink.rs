@@ -122,13 +122,11 @@ impl<'a> Sink<'a> {
         if self.run.agent.rate_limit_name().is_some() {
             return Ok(());
         }
-        self.run.store.insert_agent_event(&TaskEvent {
-            task_id: self.run.task.clone(),
-            timestamp: chrono::Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "Codex rate-limit evidence updated".to_string(),
-            metadata: Some(serde_json::json!({"codex_rate_limits":snapshot})),
-        })?;
+        self.run.store.insert_agent_event(&TaskEvent::new(
+            self.run.task.clone(),
+            EventKind::Milestone,
+            "Codex rate-limit evidence updated".to_string(),
+        ).with_metadata(Some(serde_json::json!({"codex_rate_limits":snapshot}))))?;
         if let Some(message) = crate::agent::codex::app_server::quota_message(snapshot) {
             crate::routing::rate_limit::mark_rate_limited_for_model_value(
                 &AgentKind::Codex,
@@ -163,13 +161,11 @@ impl<'a> Sink<'a> {
             self.quota = true;
         }
         let (detail, metadata) = crate::agent::truncate::capped_detail(&stderr);
-        self.run.store.insert_agent_event(&TaskEvent {
-            task_id: self.run.task.clone(),
-            timestamp: chrono::Local::now(),
-            event_kind: EventKind::Error,
+        self.run.store.insert_agent_event(&TaskEvent::new(
+            self.run.task.clone(),
+            EventKind::Error,
             detail,
-            metadata,
-        })?;
+        ).with_metadata(metadata))?;
         writeln!(
             self.log,
             "{}",

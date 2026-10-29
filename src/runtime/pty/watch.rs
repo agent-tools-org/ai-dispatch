@@ -146,13 +146,11 @@ impl MonitorState {
             IdleAction::None => {}
             IdleAction::WarnEvent if !self.idle_warned => {
                 self.idle_warned = true;
-                store.insert_event(&TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: Local::now(),
-                    event_kind: EventKind::Reasoning,
-                    detail: "idle warn".to_string(),
-                    metadata: Some(json!({ "idle_warn": true })),
-                })?;
+                store.insert_event(&TaskEvent::new(
+                    task_id.clone(),
+                    EventKind::Reasoning,
+                    "idle warn".to_string(),
+                ).with_metadata(Some(json!({ "idle_warn": true }))))?;
             }
             IdleAction::WarnEvent => {}
             IdleAction::SendNudge(message) => {
@@ -161,13 +159,11 @@ impl MonitorState {
             IdleAction::Escalate
                 if crate::task::unstick::mark_task_stalled(store.as_ref(), task_id.as_str())? =>
             {
-                store.insert_event(&TaskEvent {
-                    task_id: task_id.clone(),
-                    timestamp: Local::now(),
-                    event_kind: EventKind::Milestone,
-                    detail: "Auto-escalated: task stalled".to_string(),
-                    metadata: Some(json!({ "auto_escalated": true })),
-                })?;
+                store.insert_event(&TaskEvent::new(
+                    task_id.clone(),
+                    EventKind::Milestone,
+                    "Auto-escalated: task stalled".to_string(),
+                ).with_metadata(Some(json!({ "auto_escalated": true }))))?;
             }
             IdleAction::Escalate => {}
         }

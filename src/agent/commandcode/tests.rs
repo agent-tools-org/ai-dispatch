@@ -55,10 +55,7 @@ fn build_command_adds_model_session_and_dir() {
     let cmd = CommandCodeAgent
         .build_command("inspect", &opts)
         .expect("command should build");
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert!(args.windows(2).any(|pair| pair == ["-m", "gpt-5.6-sol"]));
     assert!(args.windows(2).any(|pair| pair == ["--session", "74aaa8"]));
     assert!(args.windows(2).any(|pair| pair == ["--add-dir", "/tmp"]));

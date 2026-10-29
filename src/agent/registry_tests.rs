@@ -149,7 +149,7 @@ forced_model = "mimo/mimo-v2.5-pro"
     let cmd = agent.build_command("hello", &opts).unwrap();
     let program = cmd.get_program().to_string_lossy().into_owned();
     assert_eq!(program, "opencode");
-    let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert!(args.iter().any(|a| a == "-m"));
     assert!(args.iter().any(|a| a == "mimo/mimo-v2.5-pro"));
 }
@@ -173,10 +173,7 @@ rate_limit_kind = "mimocode"
     };
     let cmd = agent.build_command("hello", &opts).unwrap();
     assert_eq!(cmd.get_program().to_string_lossy(), "mimo");
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert!(args.contains(&"--dangerously-skip-permissions".to_string()));
     assert!(args.windows(2).any(|pair| pair == ["-m", "mimo/mimo-auto"]));
 }

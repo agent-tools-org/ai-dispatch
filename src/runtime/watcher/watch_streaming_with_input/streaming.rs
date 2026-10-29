@@ -146,16 +146,14 @@ impl WatchRun<'_> {
         if exceeds_cost_ceiling(self.info.cost_usd, max_task_cost) {
             let current_cost = self.info.cost_usd.unwrap_or_default();
             let max_cost = max_task_cost.unwrap_or_default();
-            let _ = self.store.insert_agent_event(&TaskEvent {
-                task_id: self.task_id.clone(),
-                timestamp: Local::now(),
-                event_kind: EventKind::Error,
-                detail: format!(
+            let _ = self.store.insert_agent_event(&TaskEvent::new(
+                self.task_id.clone(),
+                EventKind::Error,
+                format!(
                     "Task killed: cost ${:.2} exceeded ceiling ${:.2}",
                     current_cost, max_cost
                 ),
-                metadata: None,
-            });
+            ));
             force_kill_process_group(self.child);
             let _ = self.child.kill().await;
             self.info.status = TaskStatus::Failed;

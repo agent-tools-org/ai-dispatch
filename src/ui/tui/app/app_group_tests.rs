@@ -132,10 +132,7 @@ fn animation_only_changes_a_real_reasoning_state() {
     let mut reasoning = task("t-thinking");
     reasoning.status = TaskStatus::Running;
     store.insert_task(&reasoning).unwrap();
-    store.insert_event(&TaskEvent {
-        task_id: reasoning.id.clone(), timestamp: Local::now(), event_kind: EventKind::Reasoning,
-        detail: "checking".into(), metadata: None,
-    }).unwrap();
+    store.insert_event(&TaskEvent::new(reasoning.id.clone(), EventKind::Reasoning, "checking".into())).unwrap();
     let mut app = App::new(store, super::super::RunOptions::default()).unwrap();
     let first = app.task_activity(&reasoning);
     app.tick().unwrap();

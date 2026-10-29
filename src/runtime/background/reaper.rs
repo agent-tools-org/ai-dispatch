@@ -270,13 +270,11 @@ pub(super) fn record_failure_skip_notify(store: &Store, task_id: &str, stderr_de
         &paths::log_path(task_id),
         event_detail,
     );
-    store.insert_event(&TaskEvent {
-        task_id: TaskId(task_id.to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: event_detail.to_string(),
-        metadata: None,
-    })?;
+    store.insert_event(&TaskEvent::new(
+        TaskId(task_id.to_string()),
+        EventKind::Error,
+        event_detail.to_string(),
+    ))?;
     Ok(true)
 }
 

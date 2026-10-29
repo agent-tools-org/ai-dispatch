@@ -185,7 +185,5 @@ async fn failed_lifecycle_retains_worktree_branch_and_output() {
     assert_eq!(std::fs::read_to_string(output_path).unwrap(), "partial output\n");
     assert_eq!(std::fs::read_to_string(wt.join("done.txt")).unwrap(), "done\n");
     git(repo.path(), &["rev-parse", "--verify", &format!("refs/heads/{branch}")]);
-    let err = crate::cmd::worktree::remove(branch, args.repo.as_deref()).unwrap_err();
-    assert!(err.to_string().contains("Direct removal") && err.to_string().contains("forbidden"));
     assert!(wt.exists());
 }

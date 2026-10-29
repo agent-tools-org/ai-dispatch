@@ -245,20 +245,14 @@ fn insert_iteration_event(
     status: &str,
     eval_output: Option<&str>,
 ) {
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Milestone,
-        detail,
-        metadata: Some(json!({
+    let _ = store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Milestone, detail).with_metadata(Some(json!({
             "iterate": {
                 "iteration": iteration,
                 "max_iterations": max_iterations,
                 "status": status,
                 "eval_output": eval_output,
             }
-        })),
-    });
+        }))));
 }
 
 #[cfg(test)]

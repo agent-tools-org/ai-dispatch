@@ -26,13 +26,11 @@ async fn wait_for_task_ids_completes_with_existing_milestone_event() {
     let mut task = make_task("t-done", TaskStatus::Done);
     task.duration_ms = Some(1_000);
     store.insert_task(&task).unwrap();
-    store.insert_event(&TaskEvent {
-        task_id: TaskId("t-done".to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: "background progress".to_string(),
-        metadata: None,
-    }).unwrap();
+    store.insert_event(&TaskEvent::new(
+        TaskId("t-done".to_string()),
+        EventKind::Milestone,
+        "background progress".to_string(),
+    )).unwrap();
     let outcome = wait_for_task_ids(&store, &[String::from("t-done")], None, false, None).await.unwrap();
     assert_eq!(outcome, WaitOutcome::Completed);
 }

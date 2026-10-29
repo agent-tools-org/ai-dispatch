@@ -19,13 +19,7 @@ fn task(id: &str, status: TaskStatus) -> Task {
 }
 
 fn event(task_id: &str, kind: EventKind, detail: &str) -> TaskEvent {
-    TaskEvent {
-        task_id: TaskId(task_id.to_string()),
-        timestamp: Local::now(),
-        event_kind: kind,
-        detail: detail.to_string(),
-        metadata: None,
-    }
+    TaskEvent::new(TaskId(task_id.to_string()), kind, detail.to_string())
 }
 
 /// A `gws` that logs every call and always fails, wired in through the global

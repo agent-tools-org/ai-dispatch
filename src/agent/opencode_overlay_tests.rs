@@ -13,7 +13,7 @@ fn base_opts() -> RunOpts {
 }
 
 fn command_args(cmd: &Command) -> Vec<String> {
-    cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect()
+    crate::support::test_command::args(&cmd)
 }
 
 #[test]

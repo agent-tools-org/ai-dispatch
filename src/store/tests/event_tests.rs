@@ -11,13 +11,11 @@ fn insert_and_get_events() {
         .insert_task(&make_task("t-0020", AgentKind::Codex, TaskStatus::Running))
         .unwrap();
 
-    let event = TaskEvent {
-        task_id: TaskId("t-0020".to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::ToolCall,
-        detail: "exec: cargo test".to_string(),
-        metadata: Some(serde_json::json!({"tool": "exec_command"})),
-    };
+    let event = TaskEvent::new(
+        TaskId("t-0020".to_string()),
+        EventKind::ToolCall,
+        "exec: cargo test".to_string(),
+    ).with_metadata(Some(serde_json::json!({"tool": "exec_command"})));
     store.insert_event(&event).unwrap();
 
     let events = store.get_events("t-0020").unwrap();
@@ -53,13 +51,11 @@ fn gets_latest_milestone() {
         })
         .unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId("t-0030".to_string()),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "tests passing".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(
+            TaskId("t-0030".to_string()),
+            EventKind::Milestone,
+            "tests passing".to_string(),
+        ))
         .unwrap();
 
     let milestone = store.latest_milestone("t-0030").unwrap();
@@ -89,13 +85,11 @@ fn latest_events_batch_returns_only_three_events_per_task() {
     store.insert_task(&make_task("t-events", AgentKind::Codex, TaskStatus::Running)).unwrap();
     for index in 0..5 {
         store
-            .insert_event(&TaskEvent {
-                task_id: TaskId("t-events".to_string()),
-                timestamp: Local::now(),
-                event_kind: EventKind::ToolCall,
-                detail: format!("event-{index}"),
-                metadata: None,
-            })
+            .insert_event(&TaskEvent::new(
+                TaskId("t-events".to_string()),
+                EventKind::ToolCall,
+                format!("event-{index}"),
+            ))
             .unwrap();
     }
 

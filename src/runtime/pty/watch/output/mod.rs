@@ -177,13 +177,7 @@ pub(super) fn mark_awaiting_input(
         return Ok(());
     }
     crate::task::lifecycle::mark_awaiting_input(store.as_ref(), task_id)?;
-    store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Reasoning,
-        detail: prompt.to_string(),
-        metadata: Some(json!({ "awaiting_input": true, "awaiting_prompt": awaiting_prompt })),
-    })?;
+    store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Reasoning, prompt.to_string()).with_metadata(Some(json!({ "awaiting_input": true, "awaiting_prompt": awaiting_prompt }))))?;
     *awaiting_input = true;
     Ok(())
 }

@@ -88,12 +88,6 @@ pub(super) fn is_compiler_artifact_line(line: &str) -> bool {
 
 pub(super) fn emit_event(store: &Store, task_id: &Option<String>, detail: String) {
     if let Some(task_id) = task_id.as_ref() {
-        let _ = store.insert_event(&TaskEvent {
-            task_id: TaskId(task_id.clone()),
-            timestamp: chrono::Local::now(),
-            event_kind: EventKind::Build,
-            detail,
-            metadata: None,
-        });
+        let _ = store.insert_event(&TaskEvent::new(TaskId(task_id.clone()), EventKind::Build, detail));
     }
 }

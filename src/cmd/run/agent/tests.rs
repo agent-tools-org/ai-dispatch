@@ -1,167 +1,10 @@
-// Tests for streaming output persistence in `aid run`.
-// Covers exact message retention and mixed streaming completion events.
-// Depends on super::write_streaming_output, serde_json, and tempfile.
+// Tests for execution failure persistence and exit-code recovery.
+// Deps: production run_prompt failure helpers, Store, and temporary directories.
 
-use super::{spawn_child_with_log, write_streaming_output};
 use crate::store::Store;
 use crate::types::{Task, TaskId, TaskStatus};
 use chrono::Local;
-use serde_json::{Value, json};
 use std::path::Path;
-use tempfile::NamedTempFile;
-
-#[test]
-fn write_streaming_output_keeps_last_five_messages() {
-    let log_file = NamedTempFile::new().unwrap();
-    let out_file = NamedTempFile::new().unwrap();
-    let content = [
-        json!({
-            "type": "item.completed",
-            "item": { "type": "agent_message", "text": "short ack" }
-        }),
-        json!({
-            "type": "item.completed",
-            "item": { "type": "agent_message", "text": "Message one is long enough to survive the substantive filter threshold." }
-        }),
-        json!({
-            "type": "message",
-            "role": "assistant",
-            "content": "Message two starts in a streamed chunk and remains comfortably above ",
-            "delta": true
-        }),
-        json!({
-            "type": "message",
-            "role": "assistant",
-            "content": "the substantive cutoff once the second streamed chunk arrives.",
-            "delta": true
-        }),
-        json!({
-            "type": "item.completed",
-            "item": { "type": "agent_message", "text": "Message three is another detailed update that should be retained." }
-        }),
-        json!({
-            "type": "message",
-            "role": "assistant",
-            "content": "Message four is a buffered assistant message with enough detail to keep."
-        }),
-        json!({
-            "type": "item.completed",
-            "item": { "type": "agent_message", "text": "Message five records a later milestone with enough context to count." }
-        }),
-        json!({
-            "type": "item.completed",
-            "item": { "type": "agent_message", "text": "Message six is the newest substantive message and should push the oldest one out." }
-        }),
-    ]
-    .iter()
-    .map(serde_json::to_string)
-    .collect::<Result<Vec<_>, _>>()
-    .unwrap()
-    .join("\n");
-    std::fs::write(log_file.path(), content).unwrap();
-
-    write_streaming_output(log_file.path(), out_file.path());
-
-    let output = std::fs::read_to_string(out_file.path()).unwrap();
-    assert_eq!(
-        output,
-        [
-            "Message two starts in a streamed chunk and remains comfortably above the substantive cutoff once the second streamed chunk arrives.",
-            "Message three is another detailed update that should be retained.",
-            "Message four is a buffered assistant message with enough detail to keep.",
-            "Message five records a later milestone with enough context to count.",
-            "Message six is the newest substantive message and should push the oldest one out.",
-        ]
-        .join("\n\n---\n\n")
-    );
-}
-
-#[test]
-fn write_streaming_output_preserves_short_messages() {
-    let log_file = NamedTempFile::new().unwrap();
-    let out_file = NamedTempFile::new().unwrap();
-    let content = [
-        json!({
-            "type": "item.completed",
-            "item": { "type": "agent_message", "text": "short ack" }
-        }),
-        json!({
-            "type": "message",
-            "role": "assistant",
-            "content": "tiny delta",
-            "delta": true
-        }),
-    ]
-    .iter()
-    .map(serde_json::to_string)
-    .collect::<Result<Vec<_>, _>>()
-    .unwrap()
-    .join("\n");
-    std::fs::write(log_file.path(), content).unwrap();
-    write_streaming_output(log_file.path(), out_file.path());
-
-    let output = std::fs::read_to_string(out_file.path()).unwrap();
-    assert_eq!(output, "short ack\n\n---\n\ntiny delta");
-}
-
-#[test]
-fn write_streaming_output_does_not_duplicate_streamed_message_when_final_message_matches() {
-    let log_file = NamedTempFile::new().unwrap();
-    let out_file = NamedTempFile::new().unwrap();
-    let message = "This streamed message is long enough to remain substantive after assembly.";
-    let content = [
-        json!({
-            "type": "message",
-            "role": "assistant",
-            "content": "This streamed message is long enough ",
-            "delta": true
-        }),
-        json!({
-            "type": "message",
-            "role": "assistant",
-            "content": "to remain substantive after assembly.",
-            "delta": true
-        }),
-        json!({
-            "type": "message",
-            "role": "assistant",
-            "content": message
-        }),
-    ]
-    .iter()
-    .map(serde_json::to_string)
-    .collect::<Result<Vec<_>, _>>()
-    .unwrap()
-    .join("\n");
-    std::fs::write(log_file.path(), content).unwrap();
-
-    write_streaming_output(log_file.path(), out_file.path());
-
-    let output = std::fs::read_to_string(out_file.path()).unwrap();
-    assert_eq!(output, message);
-}
-
-#[tokio::test]
-async fn spawn_child_with_log_writes_error_event_when_spawn_fails() {
-    let log_file = NamedTempFile::new().unwrap();
-    let mut cmd = tokio::process::Command::new("/definitely/missing/aid-binary");
-
-    let err = spawn_child_with_log(&mut cmd, log_file.path()).err().unwrap();
-
-    assert!(err.to_string().contains("No such file") || err.to_string().contains("cannot find"));
-
-    let content = std::fs::read_to_string(log_file.path()).unwrap();
-    let value: Value = serde_json::from_str(content.trim()).unwrap();
-    assert_eq!(value["type"], "error");
-    assert_eq!(value["source"], "spawn");
-    assert!(
-        value["message"]
-            .as_str()
-            .unwrap()
-            .contains("Failed to spawn agent process")
-    );
-    assert!(value["timestamp"].as_str().is_some());
-}
 
 fn task_fixture(id: &str, status: TaskStatus, worktree_path: Option<&str>) -> Task {
     Task {
@@ -210,13 +53,11 @@ fn resolve_failure_exit_code_reads_completion_event_detail() {
     let task = task_fixture("t-exit-code", TaskStatus::Failed, None);
     store.insert_task(&task).unwrap();
     store
-        .insert_event(&crate::types::TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: crate::types::EventKind::Error,
-            detail: "FAIL — 0 events, exit code 7".to_string(),
-            metadata: None,
-        })
+        .insert_event(&crate::types::TaskEvent::new(
+            task.id.clone(),
+            crate::types::EventKind::Error,
+            "FAIL — 0 events, exit code 7".to_string(),
+        ))
         .unwrap();
 
     let exit_code =

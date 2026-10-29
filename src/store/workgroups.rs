@@ -170,13 +170,11 @@ mod tests {
             .insert_task(&make_task("t-1001", workgroup.id.as_str()))
             .unwrap();
         store
-            .insert_event(&crate::types::TaskEvent {
-                task_id: crate::types::TaskId("t-1001".to_string()),
-                timestamp: Local::now(),
-                event_kind: crate::types::EventKind::Milestone,
-                detail: "deleted with task".to_string(),
-                metadata: None,
-            })
+            .insert_event(&crate::types::TaskEvent::new(
+                crate::types::TaskId("t-1001".to_string()),
+                crate::types::EventKind::Milestone,
+                "deleted with task".to_string(),
+            ))
             .unwrap();
 
         let deleted_tasks = store.delete_workgroup_cascade(workgroup.id.as_str()).unwrap();

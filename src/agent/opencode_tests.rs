@@ -89,10 +89,7 @@ fn session_flags_appear_in_command() {
     let cmd = get_agent(AgentKind::OpenCode)
         .build_command("test prompt", &opts)
         .expect("command should build");
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|a| a.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert!(args.contains(&"--session".to_string()));
     assert!(args.contains(&"ses_test123".to_string()));
@@ -109,10 +106,7 @@ fn budget_mode_sets_minimal_variant() {
     let cmd = get_agent(AgentKind::OpenCode)
         .build_command("test prompt", &opts)
         .expect("command should build");
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|a| a.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert!(args.windows(2).any(|pair| pair == ["--variant", "minimal"]));
 }
@@ -125,10 +119,7 @@ fn no_session_flags_when_session_id_absent() {
     let cmd = get_agent(AgentKind::OpenCode)
         .build_command("test prompt", &opts)
         .expect("command should build");
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|a| a.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert!(!args.contains(&"--session".to_string()));
     assert!(!args.contains(&"--continue".to_string()));
@@ -146,10 +137,7 @@ fn build_command_read_only_prepends_readonly_prefix() {
     let cmd = get_agent(AgentKind::OpenCode)
         .build_command("analyze this code", &opts)
         .expect("command should build");
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|a| a.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     let last_arg = args.last().expect("should have prompt as last arg");
     assert!(last_arg.contains("READ-ONLY MODE"));
@@ -167,10 +155,7 @@ fn build_command_read_only_without_result_file_keeps_strict_prefix() {
     let cmd = get_agent(AgentKind::OpenCode)
         .build_command("analyze this code", &opts)
         .expect("command should build");
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|a| a.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     let last_arg = args.last().expect("should have prompt as last arg");
     assert!(

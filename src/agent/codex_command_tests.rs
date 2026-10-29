@@ -41,10 +41,7 @@ fn build_command_includes_skip_git_repo_check() {
         ..Default::default()
     };
     let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert!(args.contains(&"--skip-git-repo-check".to_string()));
 }
@@ -56,10 +53,7 @@ fn build_command_read_only_selects_native_sandbox_without_write_approval() {
         ..Default::default()
     };
     let cmd = CodexAgent.build_command("analyze this code", &opts).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert!(args.contains(&"default_permissions=\"aid-read-only\"".to_string()));
     assert!(args.contains(&"--ignore-user-config".to_string()));
@@ -77,10 +71,7 @@ fn build_command_read_only_prepends_readonly_prefix() {
         ..Default::default()
     };
     let cmd = CodexAgent.build_command("analyze this code", &opts).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     let last_arg = args.iter().find(|arg| arg.contains("analyze this code")).expect("prompt argument");
     assert!(last_arg.contains("READ-ONLY MODE"));
@@ -96,10 +87,7 @@ fn build_command_read_only_without_result_file_keeps_strict_prefix() {
         ..Default::default()
     };
     let cmd = CodexAgent.build_command("analyze this code", &opts).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     let last_arg = args.iter().find(|arg| arg.contains("analyze this code")).expect("prompt argument");
     assert!(last_arg.contains("Do NOT modify, create, or delete any files. Only read and analyze."));
@@ -112,10 +100,7 @@ fn build_command_includes_context_files_in_prompt() {
         ..Default::default()
     };
     let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     let last_arg = args.iter().find(|arg| arg.contains("test prompt")).expect("prompt argument");
     assert!(last_arg.contains("[Context File:"));
@@ -128,10 +113,7 @@ fn build_command_starts_fresh_when_saved_rollout_is_missing() {
         ..Default::default()
     };
     let cmd = CodexAgent.build_command("write the final report", &opts).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     // The approval flag sits between the fixed prefix and the prompt only when the
     // installed Codex version could be read, so pin the prefix and the prompt by

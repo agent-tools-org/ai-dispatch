@@ -213,13 +213,11 @@ fn apply_cost_ceiling(args: &RunProcessArgs<'_>, info: &mut CompletionInfo) -> R
         let current_cost = cost_usd.unwrap_or_default();
         let max_cost = max_task_cost.unwrap_or_default();
         info.status = TaskStatus::Failed;
-        return Ok(Some(TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Error,
-            detail: format!("Task killed: cost ${current_cost:.2} exceeded ceiling ${max_cost:.2}"),
-            metadata: None,
-        }));
+        return Ok(Some(TaskEvent::new(
+            task_id.clone(),
+            EventKind::Error,
+            format!("Task killed: cost ${current_cost:.2} exceeded ceiling ${max_cost:.2}"),
+        )));
     }
     Ok(None)
 }

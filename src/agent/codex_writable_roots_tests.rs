@@ -38,10 +38,7 @@ fn build_command_adds_effective_target_without_granting_parent() {
             },
         )
         .unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     let config = args.iter().find(|arg| arg.starts_with("permissions=")).unwrap();
     let parsed: toml::Value = config.parse().unwrap();
     let roots = parsed["permissions"]["aid-write"]["filesystem"].as_table().unwrap();
@@ -72,7 +69,7 @@ fn read_only_command_grants_only_supplied_task_and_scratch_directories_on_resume
         durable_codex_home: false,
         writable_roots: vec![task.clone(), scratch.clone()],
     }).unwrap();
-    let args: Vec<_> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    let args: Vec<_> = crate::support::test_command::args(&cmd);
     assert_eq!(&args[..2], ["exec", "resume"]);
     let config = args.iter().find(|arg| arg.starts_with("permissions=")).unwrap();
     let parsed: toml::Value = config.parse().unwrap();

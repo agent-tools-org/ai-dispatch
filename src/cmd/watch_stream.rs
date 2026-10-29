@@ -173,13 +173,11 @@ mod tests {
         let done = task("t-done", TaskStatus::Done);
         store.insert_task(&failed).unwrap();
         store
-            .insert_event(&crate::types::TaskEvent {
-                task_id: failed.id.clone(),
-                timestamp: Local::now(),
-                event_kind: crate::types::EventKind::Error,
-                detail: "agent_crash: exited 1".to_string(),
-                metadata: None,
-            })
+            .insert_event(&crate::types::TaskEvent::new(
+                failed.id.clone(),
+                crate::types::EventKind::Error,
+                "agent_crash: exited 1".to_string(),
+            ))
             .unwrap();
 
         let event = task_event_json(&store, &failed, &[failed.clone(), done]).unwrap();

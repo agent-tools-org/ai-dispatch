@@ -64,13 +64,11 @@ fn gets_workgroup_milestones() {
         })
         .unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId("t-0042".to_string()),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "other group".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(
+            TaskId("t-0042".to_string()),
+            EventKind::Milestone,
+            "other group".to_string(),
+        ))
         .unwrap();
 
     let milestones = store

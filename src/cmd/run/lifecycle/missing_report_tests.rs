@@ -20,13 +20,7 @@ fn narration_miss() -> ResultDelivery {
 
 fn insert_error(store: &Store, task_id: &TaskId, detail: &str) {
     store
-        .insert_event(&TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Error,
-            detail: detail.to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(task_id.clone(), EventKind::Error, detail.to_string()))
         .unwrap();
 }
 

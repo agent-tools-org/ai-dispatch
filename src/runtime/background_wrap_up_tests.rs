@@ -12,13 +12,11 @@ fn poll_at(age: i64, cap: u64, agent: AgentKind) -> (Store, Task) {
     task.created_at = Local::now() - Duration::seconds(age);
     store.insert_task(&task).expect("task");
     store
-        .insert_event(&crate::types::TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Reasoning,
-            detail: "Agent is working".into(),
-            metadata: None,
-        })
+        .insert_event(&crate::types::TaskEvent::new(
+            task.id.clone(),
+            EventKind::Reasoning,
+            "Agent is working".into(),
+        ))
         .expect("progress");
     let mut spec = spec(task.id.as_str());
     spec.max_duration_secs = Some(cap);
@@ -157,13 +155,13 @@ fn legacy_wrap_up_record_prevents_duplicate_queueing() {
     let mut task = task("t-legacy-wrap", TaskStatus::Running);
     task.agent = AgentKind::Cursor;
     store.insert_task(&task).unwrap();
-    store.insert_event(&crate::types::TaskEvent {
-        task_id: task.id.clone(), timestamp: Local::now(), event_kind: EventKind::Milestone,
-        detail: "Hard-cap wrap-up: committing work in progress and writing the report requested".into(),
-        metadata: Some(serde_json::json!({
+    store.insert_event(&crate::types::TaskEvent::new(
+        task.id.clone(),
+        EventKind::Milestone,
+        "Hard-cap wrap-up: committing work in progress and writing the report requested".into(),
+    ).with_metadata(Some(serde_json::json!({
             "steered": true, "hard_cap_wrap_up": true
-        })),
-    }).unwrap();
+        })))).unwrap();
     assert!(!crate::cmd::steer::wrap_up_before_timeout(&store, task.id.as_str(), 540, 600).unwrap());
     assert!(store.list_messages_for_task(task.id.as_str()).unwrap().is_empty());
     let events = store.get_events(task.id.as_str()).unwrap();

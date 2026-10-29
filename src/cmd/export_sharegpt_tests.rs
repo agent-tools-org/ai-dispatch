@@ -103,13 +103,11 @@ fn export_sharegpt_fallback_includes_file_writes() {
     let task = done_task("t-sharegpt-file-write", Some("resolved system prompt"));
     store.insert_task(&task).unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::FileWrite,
-            detail: "Edit files: src/main.rs".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(
+            task.id.clone(),
+            EventKind::FileWrite,
+            "Edit files: src/main.rs".to_string(),
+        ))
         .unwrap();
 
     let output = temp.path().join("sharegpt-file-write.jsonl");
@@ -129,13 +127,11 @@ fn export_sharegpt_fallback_includes_file_reads() {
     let task = done_task("t-sharegpt-file-read", Some("resolved system prompt"));
     store.insert_task(&task).unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::FileRead,
-            detail: "Read file: src/main.rs".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(
+            task.id.clone(),
+            EventKind::FileRead,
+            "Read file: src/main.rs".to_string(),
+        ))
         .unwrap();
 
     let output = temp.path().join("sharegpt-file-read.jsonl");

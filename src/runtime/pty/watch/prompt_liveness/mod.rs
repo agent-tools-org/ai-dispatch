@@ -35,13 +35,11 @@ impl MonitorState {
             .zip(self.awaiting_log_sizes).any(|(size, previous)| *size > previous)
         {
             self.finish_input_delivery(store, task_id)?;
-            store.insert_event(&TaskEvent {
-                task_id: task_id.clone(),
-                timestamp: Local::now(),
-                event_kind: EventKind::Reasoning,
-                detail: "Resumed running: agent log grew after awaiting input".to_string(),
-                metadata: Some(json!({ "awaiting_input": false, "reason": "agent_log_growth" })),
-            })?;
+            store.insert_event(&TaskEvent::new(
+                task_id.clone(),
+                EventKind::Reasoning,
+                "Resumed running: agent log grew after awaiting input".to_string(),
+            ).with_metadata(Some(json!({ "awaiting_input": false, "reason": "agent_log_growth" }))))?;
             return Ok(());
         }
         if Self::buffered_log_grew_within(task_id.as_str(), self.idle_detector.warn_after) {

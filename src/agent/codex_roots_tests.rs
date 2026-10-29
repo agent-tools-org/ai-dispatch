@@ -24,10 +24,7 @@ fn build_command_adds_worktree_metadata_to_writable_roots() {
         ..Default::default()
     };
     let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert!(args.contains(&"-c".to_string()));
     assert_write_roots(&args, &[metadata, common]);
@@ -47,10 +44,7 @@ fn build_command_falls_back_when_commondir_missing() {
         ..Default::default()
     };
     let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert!(args.contains(&"-c".to_string()));
     assert_write_roots(&args, &[metadata]);
@@ -66,10 +60,7 @@ fn build_command_grants_writable_roots_for_regular_repo() {
         ..Default::default()
     };
     let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert_write_roots(&args, &[repo.join(".git").canonicalize().unwrap()]);
 }
@@ -82,10 +73,7 @@ fn build_command_handles_missing_gitfile_gracefully() {
         ..Default::default()
     };
     let cmd = CodexAgent.build_command("test prompt", &opts).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert_write_roots(&args, &[]);
 }

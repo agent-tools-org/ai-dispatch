@@ -32,13 +32,7 @@ fn events_text_lists_only_events() {
     let task = task("t-events-only");
     store.insert_task(&task).unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "started work".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(task.id.clone(), EventKind::Milestone, "started work".to_string()))
         .unwrap();
 
     let text = events_text(&store, task.id.as_str(), false).unwrap();
@@ -56,13 +50,7 @@ fn events_text_full_renders_metadata_full_detail() {
     let full_text = format!("reasoning {}", "y".repeat(120));
     let (detail, metadata) = crate::agent::truncate::capped_detail(&full_text);
     store
-        .insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Reasoning,
-            detail,
-            metadata,
-        })
+        .insert_event(&TaskEvent::new(task.id.clone(), EventKind::Reasoning, detail).with_metadata(metadata))
         .unwrap();
 
     let brief = events_text(&store, task.id.as_str(), false).unwrap();
@@ -117,11 +105,11 @@ fn trimmed_events_text_explains_missing_output() {
     let store = std::sync::Arc::new(crate::store::Store::open_memory().unwrap());
     store.db().execute_batch("INSERT INTO tasks (id,agent,prompt,status,created_at)
         VALUES ('trimmed','codex','test','done','2020-01-01')").unwrap();
-    store.insert_event(&crate::types::TaskEvent {
-        task_id: crate::types::TaskId("trimmed".into()), timestamp: chrono::Local::now(),
-        event_kind: crate::types::EventKind::Build, detail: "build".into(),
-        metadata: Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})),
-    }).unwrap();
+    store.insert_event(&crate::types::TaskEvent::new(
+        crate::types::TaskId("trimmed".into()),
+        crate::types::EventKind::Build,
+        "build".into(),
+    ).with_metadata(Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})))).unwrap();
     for full in [false, true] {
         assert!(super::text::events_text(&store, "trimmed", full).unwrap().contains("output trimmed"));
     }

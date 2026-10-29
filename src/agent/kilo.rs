@@ -49,10 +49,7 @@ mod tests {
     fn build_command_uses_kilo_binary_and_auto_flag() {
         let cmd = agent().build_command("test prompt", &base_opts()).unwrap();
         assert_eq!(cmd.get_program().to_string_lossy(), "kilo");
-        let args: Vec<String> = cmd
-            .get_args()
-            .map(|arg| arg.to_string_lossy().to_string())
-            .collect();
+        let args: Vec<String> = crate::support::test_command::args(&cmd);
         assert_eq!(args.first().map(String::as_str), Some("run"));
         assert!(args.contains(&"--auto".to_string()));
         assert!(args.contains(&"--format".to_string()));
@@ -71,10 +68,7 @@ mod tests {
         };
         let cmd = agent().build_command("test", &opts).unwrap();
         assert_eq!(cmd.get_current_dir().unwrap(), std::path::Path::new("/tmp/wt"));
-        let args: Vec<String> = cmd
-            .get_args()
-            .map(|arg| arg.to_string_lossy().to_string())
-            .collect();
+        let args: Vec<String> = crate::support::test_command::args(&cmd);
         assert!(args.windows(2).any(|pair| pair == ["--session", "ses_abc"]));
         assert!(args.contains(&"--continue".to_string()));
         assert!(args.contains(&"--fork".to_string()));

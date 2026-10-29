@@ -18,13 +18,7 @@ pub(crate) fn insert_phase_error_event(
         detail.push_str("\nStderr: ");
         detail.push_str(stderr);
     }
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail,
-        metadata: None,
-    });
+    let _ = store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Error, detail));
 }
 
 /// Spawn never started — no worker/watchdog will reclaim the row. Terminalize now.
@@ -55,13 +49,7 @@ pub(crate) fn fail_task_on_agent_spawn(
             cost_usd: None,
             exit_code: None,
         },
-        &TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Error,
-            detail,
-            metadata: None,
-        },
+        &TaskEvent::new(task_id.clone(), EventKind::Error, detail),
     );
 }
 
@@ -83,11 +71,5 @@ pub(super) fn insert_fast_fail_snapshot_event(store: &Store, task_id: &TaskId, d
         context.worktree_path.as_deref().unwrap_or("(none)"),
         context.worktree_created,
     );
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail,
-        metadata: None,
-    });
+    let _ = store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Error, detail));
 }

@@ -222,10 +222,7 @@ fn provider_capacity_expiry_and_success_release_model_hold() {
          VALUES (?1, 'codex', 'task', 'failed', ?2)",
         rusqlite::params![id.as_str(), chrono::Local::now().to_rfc3339()],
     ).expect("task");
-    store.insert_event(&TaskEvent {
-        task_id: id.clone(), timestamp: chrono::Local::now(), event_kind: EventKind::Error,
-        detail: CAPACITY.into(), metadata: Some(serde_json::json!({"provider_stdout": error.to_string()})),
-    }).expect("stdout event");
+    store.insert_event(&TaskEvent::new(id.clone(), EventKind::Error, CAPACITY.into()).with_metadata(Some(serde_json::json!({"provider_stdout": error.to_string()})))).expect("stdout event");
     assert_eq!(
         terminal_label(&store, &id, agent, TaskStatus::Failed),
         format!("provider capacity for model (default): {CAPACITY}")

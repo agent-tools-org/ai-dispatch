@@ -10,13 +10,7 @@ const FINDING_TAG: &str = "[FINDING]";
 
 pub(super) fn parse_milestone_event(task_id: &TaskId, line: &str) -> Option<TaskEvent> {
     let detail = extract_milestone_detail(line)?;
-    Some(TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Milestone,
-        detail,
-        metadata: None,
-    })
+    Some(TaskEvent::new(task_id.clone(), EventKind::Milestone, detail))
 }
 
 pub(super) fn extract_milestone_detail(line: &str) -> Option<String> {

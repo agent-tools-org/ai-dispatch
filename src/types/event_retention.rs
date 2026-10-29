@@ -38,13 +38,11 @@ mod tests {
     #[test]
     fn full_rendering_preserves_retained_values_and_identifies_each_marker() {
         let marker = json!({"trimmed": true, "bytes": 5000});
-        let mut event = TaskEvent {
-            task_id: crate::types::TaskId("trimmed".into()),
-            timestamp: chrono::Local::now(),
-            event_kind: crate::types::EventKind::Build,
-            detail: "retained detail".into(),
-            metadata: None,
-        };
+        let mut event = TaskEvent::new(
+            crate::types::TaskId("trimmed".into()),
+            crate::types::EventKind::Build,
+            "retained detail".into(),
+        );
         for (metadata, expected) in [
             (
                 json!({"full":"retained full","provider_stdout":marker}),

@@ -27,7 +27,7 @@ fn build_command_includes_mimocode_permission_flag() {
         .build_command("test prompt", &base_opts())
         .expect("command should build");
     assert_eq!(cmd.get_program().to_string_lossy(), "mimo");
-    let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert_eq!(args.first().map(String::as_str), Some("run"));
     assert!(args.contains(&"--dangerously-skip-permissions".to_string()));
     assert!(!args.contains(&"--auto".to_string()));

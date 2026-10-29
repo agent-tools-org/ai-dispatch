@@ -156,13 +156,11 @@ fn audit_text_shows_full_failure_details() {
     task.status = TaskStatus::Failed;
     store.insert_task(&task).unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Error,
-            detail: "Failed during execution: agent exited with code 1\nFailure context: working directory: /tmp/demo; agent binary: /bin/sh; worktree path: /Users/test/.aid/worktrees/demo/feat/demo; worktree created: true".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(
+            task.id.clone(),
+            EventKind::Error,
+            "Failed during execution: agent exited with code 1\nFailure context: working directory: /tmp/demo; agent binary: /bin/sh; worktree path: /Users/test/.aid/worktrees/demo/feat/demo; worktree created: true".to_string(),
+        ))
         .unwrap();
 
     let text = audit_text(&store, task.id.as_str()).unwrap();

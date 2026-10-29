@@ -209,6 +209,21 @@ pub struct TaskEvent {
 }
 
 impl TaskEvent {
+    pub(crate) fn new(task_id: TaskId, event_kind: EventKind, detail: String) -> Self {
+        Self {
+            task_id,
+            timestamp: Local::now(),
+            event_kind,
+            detail,
+            metadata: None,
+        }
+    }
+
+    pub(crate) fn with_metadata(mut self, metadata: Option<serde_json::Value>) -> Self {
+        self.metadata = metadata;
+        self
+    }
+
     /// Untruncated detail: parsers stash text over the display cap in
     /// metadata under `"full"`.
     pub fn full_detail(&self) -> std::borrow::Cow<'_, str> {

@@ -26,13 +26,11 @@ impl Fixture {
         task.status = TaskStatus::Running;
         store.insert_task(&task).expect("running task");
         store
-            .insert_event(&TaskEvent {
-                task_id: task.id.clone(),
-                timestamp: chrono::Local::now(),
-                event_kind: EventKind::Error,
-                detail: "original failure reason".into(),
-                metadata: None,
-            })
+            .insert_event(&TaskEvent::new(
+                task.id.clone(),
+                EventKind::Error,
+                "original failure reason".into(),
+            ))
             .expect("original reason");
         if status == TaskStatus::Stopped {
             crate::cmd::stop::stop(&store, task.id.as_str()).expect("stop wins");

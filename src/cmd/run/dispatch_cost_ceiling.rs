@@ -25,13 +25,7 @@ pub(crate) fn warn_unenforceable_cost_ceiling(
         model.unwrap_or("agent default"),
     );
     aid_warn!("[aid] Warning: {detail}");
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Setup,
-        detail,
-        metadata: None,
-    });
+    let _ = store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Setup, detail));
 }
 
 #[cfg(test)]

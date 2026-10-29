@@ -9,10 +9,7 @@ fn builtins_without_tables_emit_selection_only() {
         let provider = selected().unwrap().unwrap();
         let mut command = Command::new("codex");
         provider.apply(&mut command);
-        let args: Vec<_> = command
-            .get_args()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect();
+        let args: Vec<_> = crate::support::test_command::args(&command);
         assert_eq!(
             args,
             vec!["-c".to_string(), format!("model_provider=\"{id}\"")]

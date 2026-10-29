@@ -75,13 +75,7 @@ impl SyntheticMilestoneTracker {
             }
         }?;
 
-        Some(TaskEvent {
-            task_id: task_id.clone(),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail,
-            metadata: Some(serde_json::json!({ "synthetic": true })),
-        })
+        Some(TaskEvent::new(task_id.clone(), EventKind::Milestone, detail).with_metadata(Some(serde_json::json!({ "synthetic": true }))))
     }
 
     fn tool_kind(detail: &str) -> SyntheticToolKind {

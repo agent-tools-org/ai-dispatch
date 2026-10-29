@@ -22,13 +22,11 @@ fn complete_task_atomic_writes_both_task_and_event() {
     let store = Store::open_memory().unwrap();
     insert_task_status(&store, "t-atomic", TaskStatus::Running);
 
-    let event = TaskEvent {
-        task_id: TaskId("t-atomic".to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Completion,
-        detail: "completed atomically".to_string(),
-        metadata: None,
-    };
+    let event = TaskEvent::new(
+        TaskId("t-atomic".to_string()),
+        EventKind::Completion,
+        "completed atomically".to_string(),
+    );
     store
         .record_agent_completion(
             TaskCompletionUpdate {
@@ -61,13 +59,11 @@ fn complete_task_atomic_does_not_override_failed_status() {
     let store = Store::open_memory().unwrap();
     insert_task_status(&store, "t-atomic-failed", TaskStatus::Failed);
 
-    let event = TaskEvent {
-        task_id: TaskId("t-atomic-failed".to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Completion,
-        detail: "completed after interrupt".to_string(),
-        metadata: None,
-    };
+    let event = TaskEvent::new(
+        TaskId("t-atomic-failed".to_string()),
+        EventKind::Completion,
+        "completed after interrupt".to_string(),
+    );
     store
         .record_agent_completion(
             TaskCompletionUpdate {
@@ -121,13 +117,11 @@ fn terminal_failure_cannot_be_refined_to_success() {
 fn complete_task_atomic_leaves_terminal_row_without_rejection_event() {
     let store = Store::open_memory().unwrap();
     insert_task_status(&store, "t-atomic-merged", TaskStatus::Merged);
-    let event = TaskEvent {
-        task_id: TaskId("t-atomic-merged".to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: "late failure".to_string(),
-        metadata: None,
-    };
+    let event = TaskEvent::new(
+        TaskId("t-atomic-merged".to_string()),
+        EventKind::Error,
+        "late failure".to_string(),
+    );
 
     let changed = store
         .record_agent_completion(

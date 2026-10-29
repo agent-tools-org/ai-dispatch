@@ -182,11 +182,11 @@ mod tests {
 
     #[test]
     fn export_timeline_explains_trimmed_payloads() {
-        let event = TaskEvent {
-            task_id: TaskId("trimmed".into()), timestamp: Local::now(),
-            event_kind: crate::types::EventKind::Build, detail: "build".into(),
-            metadata: Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})),
-        };
+        let event = TaskEvent::new(
+            TaskId("trimmed".into()),
+            crate::types::EventKind::Build,
+            "build".into(),
+        ).with_metadata(Some(serde_json::json!({"full": {"trimmed": true, "bytes": 5000}})));
         assert!(format_event_timeline(&[event])[0].contains("output trimmed"));
     }
 

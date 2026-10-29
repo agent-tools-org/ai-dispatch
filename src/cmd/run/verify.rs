@@ -70,13 +70,11 @@ fn record_verify_infrastructure_failure(
 
 fn record_verify_infrastructure_detail(store: &Store, task_id: &TaskId, detail: String) {
     let _ = store.update_verify_status(task_id.as_str(), VerifyStatus::InfrastructureFailure);
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: format!("Verification could not run: {detail}"),
-        metadata: Some(serde_json::json!({ "verify_execution_error": true })),
-    });
+    let _ = store.insert_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Milestone,
+        format!("Verification could not run: {detail}"),
+    ).with_metadata(Some(serde_json::json!({ "verify_execution_error": true }))));
 }
 
 fn verify_infrastructure_detail(result: &crate::task::verify::VerifyResult) -> String {
@@ -99,13 +97,7 @@ pub(in crate::cmd) fn record_verify_not_run(store: &Store, task_id: &TaskId, rea
 
 fn record_verify_failed(store: &Store, task_id: &TaskId, detail: String) {
     let _ = store.update_verify_status(task_id.as_str(), VerifyStatus::Failed);
-    let _ = store.insert_agent_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail,
-        metadata: None,
-    });
+    let _ = store.insert_agent_event(&TaskEvent::new(task_id.clone(), EventKind::Error, detail));
     crate::task::verify::enforce_verify_status(store, task_id);
 }
 

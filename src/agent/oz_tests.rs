@@ -11,10 +11,7 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn prompt_arg(cmd: &Command) -> String {
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     let prompt_index = args
         .iter()
         .position(|arg| arg == "-p")
@@ -44,10 +41,7 @@ fn build_command_uses_oz() {
     };
     let cmd = OzAgent.build_command("test prompt", &opts).unwrap();
     assert_eq!(cmd.get_program().to_str().unwrap(), "oz");
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|a| a.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert!(args.contains(&"agent".to_string()));
     assert!(args.contains(&"run".to_string()));
     assert!(args.contains(&"json".to_string()));
@@ -100,10 +94,7 @@ fn build_command_with_dir() {
         ..Default::default()
     };
     let cmd = OzAgent.build_command("test", &opts).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|a| a.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert!(args.contains(&"-C".to_string()));
     assert!(args.contains(&"/tmp/test".to_string()));
 }

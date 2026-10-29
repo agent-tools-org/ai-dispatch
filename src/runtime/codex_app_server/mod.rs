@@ -62,11 +62,10 @@ pub(crate) fn run(args: Run<'_>) -> Result<Option<CompletionInfo>> {
 fn fallback(args: &Run<'_>, reason: &str) -> Result<()> {
     let stderr =
         crate::runtime::watcher::read_capped_stderr(args.task.as_str()).unwrap_or_default();
-    args.store.insert_event(&TaskEvent {
-        task_id: args.task.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: format!(
+    args.store.insert_event(&TaskEvent::new(
+        args.task.clone(),
+        EventKind::Milestone,
+        format!(
             "Codex app-server startup failed; falling back to exec{}: {reason}",
             if reason.contains("Codex thread/resume:") {
                 " with a fresh session"
@@ -74,10 +73,9 @@ fn fallback(args: &Run<'_>, reason: &str) -> Result<()> {
                 ""
             }
         ),
-        metadata: Some(
+    ).with_metadata(Some(
             serde_json::json!({"codex_app_server_fallback":true,"reason":reason,"stderr":stderr}),
-        ),
-    })?;
+        )))?;
     Ok(())
 }
 
@@ -96,13 +94,7 @@ fn failed(args: &Run<'_>, reason: &str) -> Result<CompletionInfo> {
         "{}",
         serde_json::json!({"type":"error","message":message})
     )?;
-    args.store.insert_agent_event(&TaskEvent {
-        task_id: args.task.clone(),
-        timestamp: chrono::Local::now(),
-        event_kind: EventKind::Error,
-        detail,
-        metadata,
-    })?;
+    args.store.insert_agent_event(&TaskEvent::new(args.task.clone(), EventKind::Error, detail).with_metadata(metadata))?;
     for message in args.store.pending_inbound_for_task(args.task.as_str())? {
         if matches!(
             receipt(args.store, args.task.as_str(), message.id),

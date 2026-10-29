@@ -79,13 +79,7 @@ fn stop_wins_deadline_before_pty_failure_finalization() {
                     cost_usd: None,
                     exit_code: Some(1),
                 },
-                Some(&TaskEvent {
-                    task_id: id.clone(),
-                    timestamp: Local::now(),
-                    event_kind: EventKind::Error,
-                    detail: "losing deadline".into(),
-                    metadata: None,
-                })
+                Some(&TaskEvent::new(id.clone(), EventKind::Error, "losing deadline".into()))
             )
             .expect("late settlement")
     );

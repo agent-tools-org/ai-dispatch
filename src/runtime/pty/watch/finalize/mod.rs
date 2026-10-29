@@ -161,22 +161,20 @@ fn record_streaming_exit(
     state: &MonitorState,
     status: TaskStatus,
 ) -> Result<()> {
-    store.insert_agent_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: if status == TaskStatus::Done {
+    store.insert_agent_event(&TaskEvent::new(
+        task_id.clone(),
+        if status == TaskStatus::Done {
             EventKind::Completion
         } else {
             EventKind::Error
         },
-        detail: format!(
+        format!(
             "{} — {} events, exit code {}",
             status.label(),
             state.event_count,
             exit_status.exit_code()
         ),
-        metadata: None,
-    })?;
+    ))?;
     Ok(())
 }
 

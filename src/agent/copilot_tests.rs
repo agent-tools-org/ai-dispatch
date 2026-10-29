@@ -19,10 +19,7 @@ fn opts() -> RunOpts {
 #[test]
 fn build_command_uses_copilot_prompt_mode() {
     let cmd = CopilotAgent.build_command("ship it", &opts()).unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert_eq!(cmd.get_program().to_string_lossy(), "copilot");
     assert!(args.windows(2).any(|pair| pair == ["-p", "ship it"]));
     assert!(

@@ -16,7 +16,7 @@ fn build_command_uses_stream_json_and_verbose() {
         ..Default::default()
     };
     let cmd = ClaudeAgent.build_command("test prompt", &opts).unwrap();
-    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert_eq!(cmd.get_program().to_string_lossy(), "claude");
     assert!(args.windows(2).any(|pair| pair == ["--output-format", "stream-json"]));
     assert!(args.iter().any(|arg| arg == "--verbose"));
@@ -33,7 +33,7 @@ fn build_command_read_only_restricts_tools() {
         ..Default::default()
     };
     let cmd = ClaudeAgent.build_command("inspect", &opts).unwrap();
-    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert_read_only_flags(&args, "dontAsk", "Read,Glob,Grep,Bash,Write", "Edit,MultiEdit,NotebookEdit");
     assert!(args[1].contains("EXCEPT the result file"));
 }
@@ -45,7 +45,7 @@ fn build_command_read_only_without_result_file_keeps_strict_tools() {
         ..Default::default()
     };
     let cmd = ClaudeAgent.build_command("inspect", &opts).unwrap();
-    let args: Vec<String> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
     assert_read_only_flags(&args, "plan", "Read,Glob,Grep,Bash", "Edit,Write,MultiEdit,NotebookEdit");
     assert!(args[1].contains("Do NOT modify, create, or delete any files."));
 }

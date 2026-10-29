@@ -118,13 +118,7 @@ impl Store {
     }
 
     pub fn fail_waiting_with_reason(&self, id: &str, detail: &str) -> Result<bool> {
-        let event = TaskEvent {
-            task_id: TaskId(id.to_string()),
-            timestamp: Local::now(),
-            event_kind: EventKind::Error,
-            detail: detail.to_string(),
-            metadata: Some(serde_json::json!({ "failure_kind": "wait_timeout" })),
-        };
+        let event = TaskEvent::new(TaskId(id.to_string()), EventKind::Error, detail.to_string()).with_metadata(Some(serde_json::json!({ "failure_kind": "wait_timeout" })));
         self.settle_task_status(id, TaskStatus::Failed, Some(&[TaskStatus::Waiting]),
             Some(PendingReason::WaitTimeout), Some(&event))
     }
@@ -189,20 +183,18 @@ impl Store {
         current: TaskStatus,
         next: TaskStatus,
     ) -> Result<()> {
-        self.insert_event(&TaskEvent {
-            task_id: TaskId(id.to_string()),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: format!(
+        self.insert_event(&TaskEvent::new(
+            TaskId(id.to_string()),
+            EventKind::Milestone,
+            format!(
                 "rejected illegal status transition: {} -> {}",
                 current.as_str(),
                 next.as_str()
             ),
-            metadata: Some(serde_json::json!({
+        ).with_metadata(Some(serde_json::json!({
                 "from": current.as_str(),
                 "to": next.as_str(),
-            })),
-        })
+            }))))
     }
 
     fn provisional_done(&self, id: &str) -> Result<bool> {

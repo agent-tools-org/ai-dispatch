@@ -11,11 +11,5 @@ pub fn make_completion_event(task_id: &TaskId, info: &CompletionInfo) -> TaskEve
         None => "completed".to_string(),
     };
     let metadata = info.tokens.map(|tokens| json!({ "tokens": tokens }));
-    TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Completion,
-        detail,
-        metadata,
-    }
+    TaskEvent::new(task_id.clone(), EventKind::Completion, detail).with_metadata(metadata)
 }

@@ -34,35 +34,25 @@ pub(crate) fn insert_hung_detected_events(
         "last_event_detail": last_event_detail,
         "transient": transient,
     });
-    store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: "hung_detected".to_string(),
-        metadata: Some(metadata.clone()),
-    })?;
-    store.insert_agent_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: if transient {
+    store.insert_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Milestone,
+        "hung_detected".to_string(),
+    ).with_metadata(Some(metadata.clone())))?;
+    store.insert_agent_event(&TaskEvent::new(
+        task_id.clone(),
+        EventKind::Error,
+        if transient {
             format!("Agent hung: no first output for {hung_duration_secs} seconds")
         } else {
             format!("Agent hung: no output or descendant progress for {hung_duration_secs} seconds")
         },
-        metadata: Some(metadata),
-    })?;
+    ).with_metadata(Some(metadata)))?;
     Ok(())
 }
 
 pub(crate) fn insert_hung_retry_event(store: &Store, task_id: &TaskId) -> Result<()> {
-    store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: "HUNG → retry".to_string(),
-        metadata: Some(json!({ "hung_auto_retried": true })),
-    })?;
+    store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Milestone, "HUNG → retry".to_string()).with_metadata(Some(json!({ "hung_auto_retried": true }))))?;
     Ok(())
 }
 
@@ -114,13 +104,7 @@ mod tests {
     use super::*;
 
     fn event(metadata: serde_json::Value) -> TaskEvent {
-        TaskEvent {
-            task_id: TaskId("t-hung".to_string()),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "hung_detected".to_string(),
-            metadata: Some(metadata),
-        }
+        TaskEvent::new(TaskId("t-hung".to_string()), EventKind::Milestone, "hung_detected".to_string()).with_metadata(Some(metadata))
     }
 
     #[test]

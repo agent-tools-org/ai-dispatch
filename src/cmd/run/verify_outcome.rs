@@ -27,13 +27,7 @@ pub(super) fn record_verify_timed_out(store: &Store, task_id: &TaskId, result: &
         ),
         None => format!("Verification did not finish: {}", result.command),
     };
-    let _ = store.insert_event(&TaskEvent {
-        task_id: task_id.clone(),
-        timestamp: Local::now(),
-        event_kind: EventKind::Milestone,
-        detail,
-        metadata: None,
-    });
+    let _ = store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Milestone, detail));
     aid_warn!(
         "[aid] Verification timed out for {task_id}; task not failed (inconclusive)"
     );

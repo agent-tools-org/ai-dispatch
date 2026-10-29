@@ -185,26 +185,22 @@ fn loads_running_task_milestone() {
     task.status = TaskStatus::Running;
     store.insert_task(&task).unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: crate::types::EventKind::Milestone,
-            detail: "types defined".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(
+            task.id.clone(),
+            crate::types::EventKind::Milestone,
+            "types defined".to_string(),
+        ))
         .unwrap();
 
     let mut completed_task = make_task("t-1003", Some("wg-a"));
     completed_task.status = TaskStatus::Done;
     store.insert_task(&completed_task).unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: completed_task.id.clone(),
-            timestamp: Local::now(),
-            event_kind: crate::types::EventKind::Milestone,
-            detail: "finished milestone".to_string(),
-            metadata: None,
-        })
+        .insert_event(&TaskEvent::new(
+            completed_task.id.clone(),
+            crate::types::EventKind::Milestone,
+            "finished milestone".to_string(),
+        ))
         .unwrap();
     let completed_task_id = completed_task.id.clone();
 

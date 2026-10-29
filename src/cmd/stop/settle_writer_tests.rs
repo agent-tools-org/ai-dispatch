@@ -22,13 +22,7 @@ fn payload(id: &str, status: TaskStatus) -> TaskCompletionUpdate<'_> {
 }
 
 fn event(id: &str) -> TaskEvent {
-    TaskEvent {
-        task_id: TaskId(id.into()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Error,
-        detail: "worker failure".into(),
-        metadata: None,
-    }
+    TaskEvent::new(TaskId(id.into()), EventKind::Error, "worker failure".into())
 }
 
 #[test]

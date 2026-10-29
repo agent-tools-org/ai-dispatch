@@ -88,13 +88,7 @@ fn task_response_keeps_unmeasured_values_null() {
 
 #[test]
 fn task_event_response_serializes_timestamp() {
-    let event = TaskEvent {
-        task_id: TaskId("t-1".to_string()),
-        timestamp: Local::now(),
-        event_kind: EventKind::Milestone,
-        detail: "done".to_string(),
-        metadata: None,
-    };
+    let event = TaskEvent::new(TaskId("t-1".to_string()), EventKind::Milestone, "done".to_string());
     let json = serde_json::to_value(TaskEventResponse::from(event)).unwrap();
     assert!(json["timestamp"].as_str().unwrap().contains('T'));
     assert_eq!(json["event_kind"], "milestone");
@@ -185,13 +179,11 @@ async fn get_task_events_returns_serialized_events() {
     let store = Arc::new(Store::open_memory().unwrap());
     store.insert_task(&make_task("t-1")).unwrap();
     store
-        .insert_event(&TaskEvent {
-            task_id: TaskId("t-1".to_string()),
-            timestamp: Local::now(),
-            event_kind: EventKind::Milestone,
-            detail: "built".to_string(),
-            metadata: Some(serde_json::json!({"step": 1})),
-        })
+        .insert_event(&TaskEvent::new(
+            TaskId("t-1".to_string()),
+            EventKind::Milestone,
+            "built".to_string(),
+        ).with_metadata(Some(serde_json::json!({"step": 1}))))
         .unwrap();
     let Json(events) = get_task_events(Path("t-1".to_string()), State(store)).await.unwrap();
     assert_eq!(events.len(), 1);

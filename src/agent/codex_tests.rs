@@ -114,10 +114,7 @@ fn sandboxed_resume_skips_host_rollout_precheck() {
             },
         )
         .unwrap();
-    let args: Vec<String> = cmd
-        .get_args()
-        .map(|arg| arg.to_string_lossy().to_string())
-        .collect();
+    let args: Vec<String> = crate::support::test_command::args(&cmd);
 
     assert_eq!(&args[..3], ["exec", "resume", "--json"]);
     assert!(args.contains(&"not-a-uuid-session".to_string()));

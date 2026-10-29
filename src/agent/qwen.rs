@@ -112,8 +112,8 @@ impl super::Agent for QwenAgent {
         }
 
         CompletionInfo {
-            tokens: tokens,
-            model: model,
+            tokens,
+            model,
             ..CompletionInfo::new(status)
         }
     }

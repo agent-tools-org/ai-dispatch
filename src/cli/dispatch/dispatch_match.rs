@@ -17,6 +17,10 @@ pub(crate) async fn dispatch(
     command: Commands,
 ) -> Result<DispatchOutcome> {
     let completed = match command {
+        Commands::Capabilities { .. } => {
+            println!("{}", crate::execution::capabilities());
+            Ok(())
+        }
         Commands::Errors(args) => crate::cli::diagnostics::show(&args),
         Commands::Run(args) => return dispatch_run(store, args).await.map(DispatchOutcome::Run),
         Commands::Classify(args) => std::process::exit(crate::cmd::classify::run(args)),
@@ -24,7 +28,10 @@ pub(crate) async fn dispatch(
         Commands::Batch(run_args::BatchArgs { action, file, vars, group, repo_root, parallel, analyze, wait, dry_run, no_prompt, yes, force, max_concurrent, output }) => run_batch::batch(store, action, file, vars, parallel, analyze, wait, dry_run, no_prompt, yes, force, max_concurrent, output, group, repo_root).await,
         Commands::Benchmark(run_args::BenchmarkArgs { prompt, agents, dir, verify }) => display::benchmark(store, prompt, agents, dir, verify).await,
         Commands::Watch(inspect_args::WatchArgs { task_ids, group, tui, stream, exit_on_await, timeout }) => display::watch(store, task_ids, group, tui, stream, exit_on_await, timeout).await,
-        Commands::Wait(inspect_args::WaitArgs { task_ids, group, exit_on_await, timeout }) => {
+        Commands::Wait(inspect_args::WaitArgs { task_ids, group, exit_on_await, timeout, json }) => {
+            if json {
+                std::process::exit(crate::cmd::wait::run_json(&store, &task_ids, timeout).await?);
+            }
             display::wait(store, task_ids, group, exit_on_await, timeout).await
         }
         Commands::Board(inspect_args::BoardArgs { running, today, mine, group, all, limit, force, stream, json }) => {
@@ -82,7 +89,10 @@ pub(crate) async fn dispatch(
         Commands::Reply(task_control_args::ReplyArgs { task_id, message, file, async_mode, timeout_secs }) => {
             task_ops::reply(store, task_id, message, file, async_mode, timeout_secs)
         }
-        Commands::Stop(task_control_args::StopArgs { task_id, force, retry_tree }) => {
+        Commands::Stop(task_control_args::StopArgs { task_id, force, retry_tree, json }) => {
+            if json {
+                std::process::exit(crate::cmd::stop::stop_json(&store, &task_id, force)?);
+            }
             task_ops::stop(store, task_id, force, retry_tree)
         }
         Commands::Steer(task_control_args::SteerArgs { task_id, message }) => task_ops::steer(store, task_id, message),
@@ -129,7 +139,7 @@ async fn dispatch_run(
     store: Arc<crate::store::Store>,
     args: run_args::RunArgs,
 ) -> Result<RunDispatch> {
-    let (bg, dry_run) = (args.bg, args.dry_run);
+    let (bg, dry_run) = (args.bg || args.policy.is_some(), args.dry_run);
     let task_id = run_batch::run(store, args).await?;
     Ok(RunDispatch::new(task_id, bg, dry_run))
 }

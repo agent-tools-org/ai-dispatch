@@ -102,3 +102,40 @@ pub(super) async fn settle_remaining_dirty_files(
         None => DirtyWorktreeAction::Continue,
     })
 }
+
+#[cfg(test)]
+mod caller_owned_tests {
+    use super::*;
+
+    #[test]
+    fn caller_owned_preserves_dirty_files_with_a_rescue_commit() {
+        let (store, id, _) = crate::cmd::run::caller_owned_tests::setup();
+        let dir = tempfile::tempdir().expect("checkout");
+        assert!(std::process::Command::new("git").args(["init", "-q"])
+            .current_dir(dir.path()).status().expect("git init").success());
+        for args in [["config", "user.email", "test@example.com"], ["config", "user.name", "Test"]] {
+            assert!(std::process::Command::new("git").args(args).current_dir(dir.path()).status().expect("config").success());
+        }
+        std::fs::write(dir.path().join("main.rs"), "fn main() {}\n").expect("source");
+        rescue_dirty_worktree(&store, &id, dir.path().to_str().expect("path"), None, None);
+        let status = std::process::Command::new("git").args(["status", "--porcelain"])
+            .current_dir(dir.path()).output().expect("git status");
+        assert!(status.stdout.is_empty(), "rescue must commit the file");
+    }
+}
+
+#[cfg(test)]
+#[tokio::test]
+async fn caller_owned_full_dirty_cleanup_preserves_a_rescue_commit_and_done_status() {
+    let (store,id,mut args)=crate::cmd::run::caller_owned_tests::setup();
+    let repo=crate::support::test_repo::repo_with_file("base.txt","base\n","base");
+    store.db().execute("UPDATE tasks SET status='done',tokens=0,worktree_path=?2 WHERE id=?1",
+        rusqlite::params![id.as_str(),repo.path().display().to_string()]).expect("worktree");
+    std::fs::write(repo.path().join("main.rs"),"fn main() {}\n").expect("dirty source");
+    args.read_only=false;
+    assert_eq!(super::post_agent_dirty_worktree_cleanup(&store,&id,&args,repo.path().to_str().expect("path"),None)
+        .await.expect("cleanup"),DirtyWorktreeAction::Continue);
+    assert_eq!(store.get_task(id.as_str()).expect("task").expect("row").status,TaskStatus::Done);
+    assert!(!crate::workspace::commit::has_uncommitted_changes(repo.path().to_str().expect("path")).expect("clean"));
+    assert_eq!(store.list_tasks(crate::types::TaskFilter::All).expect("tasks").len(),1);
+}

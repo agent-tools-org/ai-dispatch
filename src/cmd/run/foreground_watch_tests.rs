@@ -56,7 +56,7 @@ async fn foreground_watcher_follows_a_retry_created_after_the_original_task() {
             .expect("complete retry");
     });
 
-    let final_id = wait_for_task(&store, &TaskId("t-watch-root".to_string()))
+    let final_id = wait_for_task(&store, &TaskId("t-watch-root".to_string()), false)
         .await
         .expect("watcher result");
     assert_eq!(final_id.as_str(), "t-watch-retry");
@@ -68,20 +68,7 @@ async fn foreground_watcher_observes_a_real_background_worker() {
     let (repo, baseline) = read_only_repo();
     let _aid_home = paths::AidHomeGuard::set(home.path());
     paths::ensure_dirs().expect("aid dirs");
-    let agents_dir = paths::aid_dir().join("agents");
-    fs::create_dir_all(&agents_dir).expect("agents dir");
-    fs::write(
-        agents_dir.join("watch-test.toml"),
-        r#"[agent]
-id = "watch-test"
-display_name = "Watcher Test"
-command = "/bin/sh"
-prompt_mode = "arg"
-fixed_args = ["-c", "printf 'real worker progress\\n'"]
-interactive_input = false
-"#,
-    )
-    .expect("agent config");
+    install_watch_agent();
 
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut real_task = task("t-watch-real", TaskStatus::Running, None);
@@ -117,11 +104,15 @@ interactive_input = false
     let worker = tokio::spawn(async move {
         background::run_task(worker_store, "t-watch-real").await
     });
-    let final_id = wait_for_task(&store, &TaskId("t-watch-real".to_string()))
+    let final_id = wait_for_task(&store, &TaskId("t-watch-real".to_string()), false)
         .await
         .expect("watcher result");
     worker.await.expect("worker join").expect("worker result");
 
+    assert_real_worker(&store, &final_id);
+}
+
+fn assert_real_worker(store: &Store, final_id: &TaskId) {
     assert_eq!(final_id.as_str(), "t-watch-real");
     assert_eq!(store.get_task("t-watch-real").expect("get").expect("task").status, TaskStatus::Done);
     assert!(
@@ -129,6 +120,23 @@ interactive_input = false
             .expect("worker log")
             .contains("real worker progress")
     );
+}
+
+fn install_watch_agent() {
+    let agents_dir = paths::aid_dir().join("agents");
+    fs::create_dir_all(&agents_dir).expect("agents dir");
+    fs::write(
+        agents_dir.join("watch-test.toml"),
+        r#"[agent]
+id = "watch-test"
+display_name = "Watcher Test"
+command = "/bin/sh"
+prompt_mode = "arg"
+fixed_args = ["-c", "printf 'real worker progress\\n'"]
+interactive_input = false
+"#,
+    )
+    .expect("agent config");
 }
 
 fn read_only_repo() -> (tempfile::TempDir, Vec<String>) {

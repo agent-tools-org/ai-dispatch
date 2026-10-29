@@ -32,6 +32,9 @@ pub async fn run(store: Arc<Store>, args: RetryArgs) -> Result<TaskId> {
 }
 
 pub async fn retry_task(store: Arc<Store>, args: RetryArgs, announce: bool) -> Result<TaskId> {
+    if store.is_caller_owned(&args.task_id)? {
+        anyhow::bail!("caller-owned task refuses explicit retry");
+    }
     let task = store
         .get_task(&args.task_id)?
         .ok_or_else(|| anyhow::anyhow!("Task '{}' not found", args.task_id))?;

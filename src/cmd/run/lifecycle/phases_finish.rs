@@ -4,6 +4,9 @@ use super::*;
 
 impl LifecycleRun<'_> {
     async fn peer_review(&mut self) -> Result<()> {
+        if self.args.policy.is_some() {
+            return Ok(());
+        }
         if let Some(ref reviewer_agent) = self.args.peer_review
             && let Some(task) = self.store.get_task(self.task_id.as_str())?
             && task.status == TaskStatus::Done
@@ -152,6 +155,7 @@ impl LifecycleRun<'_> {
         }
         if let Some(task) = self.store.get_task(self.task_id.as_str())?
             && task.status == TaskStatus::Failed
+            && !self.args.policy.is_some()
             && self.args.cascade.is_empty()
             && self.quota_error_message.is_some()
         {
@@ -167,3 +171,7 @@ impl LifecycleRun<'_> {
         Ok(None)
     }
 }
+
+#[cfg(test)]
+#[path = "phases_finish_tests.rs"]
+mod tests;

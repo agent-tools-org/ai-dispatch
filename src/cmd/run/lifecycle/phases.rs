@@ -127,6 +127,9 @@ impl<'a> LifecycleRun<'a> {
         let repo_path = self.repo_path;
         run_teardown_phase(task_id, args, wt_path);
         run_escape_checks_phase(args, effective_dir, repo_path, wt_path);
+        if args.policy.is_some() {
+            return Ok(ControlFlow::Continue(()));
+        }
         if let Some(task) = store.get_task(task_id.as_str())?
             && task.status == TaskStatus::Failed
             && crate::routing::capacity::read(store, task_id, task.agent).is_some()
@@ -255,6 +258,9 @@ pub(in crate::cmd::run) async fn retry_or_cascade(
     args: &RunArgs,
     task_id: &TaskId,
 ) -> Result<Option<TaskId>> {
+    if args.policy.is_some() {
+        return Ok(None);
+    }
     if let Some(mut retry_args) = retry_logic::prepare_retry(store.clone(), task_id, args).await? {
         if let Some(task) = store.get_task(task_id.as_str())? {
             inherit_retry_base_branch(args.dir.as_deref(), &task, &mut retry_args);
@@ -278,3 +284,7 @@ pub(in crate::cmd::run) async fn retry_or_cascade(
     }
     Ok(None)
 }
+
+#[cfg(test)]
+#[path = "phases_tests.rs"]
+mod tests;

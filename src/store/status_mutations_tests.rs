@@ -94,7 +94,7 @@ fn stop_waits_for_launch_guard_then_signals_published_child() {
         let launch_thread = scope.spawn(move || {
             let _guard = paths::AidHomeGuard::set(home);
             launch
-                .with_running_task("t-launch", || {
+                .with_running_task(false, "t-launch", |_pid| {
                     let child = child();
                     entered.send(()).expect("guard entered");
                     resume.recv_timeout(DEADLINE).expect("release guard");
@@ -151,12 +151,12 @@ fn parent_stopped_after_worker_guard_refuses_agent_guard() {
         )
         .expect("child parent");
     launch
-        .with_worker_launch("t-launch", || Ok(()))
+        .with_worker_launch(false, "t-launch", || Ok(()))
         .expect("worker launched");
     stop.update_task_status("t-parent", TaskStatus::Stopped)
         .expect("stop parent");
     let error = launch
-        .with_running_task("t-launch", || -> Result<()> {
+        .with_running_task(false, "t-launch", |_pid| -> Result<()> {
             panic!("agent must not spawn after parent stop")
         })
         .expect_err("refused agent launch");
@@ -177,7 +177,7 @@ fn stalled_handoff(
         let mut cmd = Command::new("cat");
         cmd.stdin(Stdio::piped()).stdout(Stdio::piped());
         let (result, mut child) = launch
-            .with_worker_launch("t-launch", || {
+            .with_worker_launch(false, "t-launch", || {
                 BackgroundRunSpec::test_worker_handoff(&mut cmd, || {
                     entered.send(()).expect("inside handoff guard");
                     resume.recv_timeout(DEADLINE).expect("resume PID wait");

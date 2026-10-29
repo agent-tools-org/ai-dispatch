@@ -32,8 +32,9 @@ fn setup() -> (
     store
         .db()
         .execute(
-            "INSERT INTO tasks (id, agent, prompt, status, created_at)
-         VALUES ('t-launch', 'codex', 'launch', 'running', '2026-10-23T00:00:00Z')",
+            "INSERT INTO tasks (id, agent, prompt, status, created_at, agent_process)
+         VALUES ('t-launch', 'codex', 'launch', 'running', '2026-10-23T00:00:00Z',
+                 json_object('state','not_started'))",
             [],
         )
         .expect("task");
@@ -87,7 +88,7 @@ fn slow_spec_preparation_does_not_block_unrelated_writer() {
                 ready.send(()).expect("ready");
                 resume.recv_timeout(Duration::from_secs(5)).expect("resume");
             });
-            launch_background_worker(&store, &prepared, &spec)
+            launch_background_worker(&store, &prepared, &spec, false)
         });
         entered
             .recv_timeout(Duration::from_secs(5))
@@ -118,7 +119,7 @@ fn stopped_task_refuses_prepared_worker_and_removes_spec() {
         .update_task_status("t-launch", TaskStatus::Stopped)
         .expect("stop");
     SPAWN.with(|slot| *slot.borrow_mut() = Some(Box::new(|| panic!("must not spawn"))));
-    assert!(launch_background_worker(&store, &prepared, &spec).is_err());
+    assert!(launch_background_worker(&store, &prepared, &spec, false).is_err());
     SPAWN.with(|slot| slot.borrow_mut().take());
     assert!(!paths::job_path("t-launch").exists());
     assert_eq!(
@@ -131,12 +132,15 @@ fn stopped_task_refuses_prepared_worker_and_removes_spec() {
 fn spawn_failure_marks_failed_and_removes_prepared_spec() {
     let (_home, _guard, store, prepared, spec) = setup();
     SPAWN.with(|slot| *slot.borrow_mut() = Some(Box::new(|| anyhow::bail!("spawn failed"))));
-    assert!(launch_background_worker(&store, &prepared, &spec).is_err());
+    assert!(launch_background_worker(&store, &prepared, &spec, false).is_err());
     assert!(!paths::job_path("t-launch").exists());
     assert_eq!(
         store.get_task("t-launch").unwrap().unwrap().status,
         TaskStatus::Failed
     );
+    let receipt = crate::cmd::execution_receipt::receipt(&store, "t-launch").expect("default receipt");
+    assert_eq!(receipt["worker"]["state"], "unconfirmed");
+    assert!(store.execution_facts("t-launch").expect("facts").expect("row").settlement.is_none());
 }
 
 #[test]
@@ -158,7 +162,7 @@ fn pid_persistence_failure_kills_child_and_marks_failed() {
             Ok(pid)
         }))
     });
-    assert!(launch_background_worker(&store, &prepared, &spec).is_err());
+    assert!(launch_background_worker(&store, &prepared, &spec, false).is_err());
     assert!(!child.wait().expect("reap killed child").success());
     assert!(!background::is_process_running(pid));
     assert!(!paths::job_path("t-launch").exists());
@@ -171,3 +175,6 @@ fn pid_persistence_failure_kills_child_and_marks_failed() {
 #[cfg(unix)]
 #[path = "dispatch_execute_ordering_tests.rs"]
 mod ordering;
+
+#[path = "dispatch_execute_settlement_tests.rs"]
+mod settlement;

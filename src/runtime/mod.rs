@@ -2,6 +2,7 @@
 // Groups background workers, PTYs, processes, and launch environments.
 
 pub(crate) mod background;
+pub(crate) mod execution_probe;
 pub(crate) mod codex_app_server;
 pub(crate) mod claude_input;
 pub(crate) mod read_only_launch;

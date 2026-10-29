@@ -148,7 +148,7 @@ fn descendants(root: u32) -> Vec<ProcessEntry> {
 
 #[cfg(unix)]
 fn process_table() -> Vec<ProcessEntry> {
-    std::process::Command::new("ps")
+    crate::runtime::process::monitor::activity::ps_command()
         .args(["-A", "-o", "pid=", "-o", "ppid=", "-o", "lstart="])
         .output()
         .ok()

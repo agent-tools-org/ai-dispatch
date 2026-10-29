@@ -18,6 +18,7 @@ pub(crate) async fn maybe_auto_retry_after_model_unavailable(
     task_id: &TaskId,
     args: &RunArgs,
 ) -> Result<Option<TaskId>> {
+    if args.policy.is_some() { return Ok(None); }
     let Some(task) = store.get_task(task_id.as_str())? else {
         return Ok(None);
     };

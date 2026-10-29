@@ -21,6 +21,11 @@ use super::{RunArgs, preview_prompt};
 mod billing;
 
 pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
+    crate::execution::validate(&args)?;
+    if let Some(id) = super::caller_owned::existing(&store, &args)? {
+        super::caller_owned::emit(&store, &args, &id, "existing")?;
+        return Ok(id);
+    }
     if let Some(n) = args.best_of {
         return Box::pin(run_bestof::run_best_of(store, args, n)).await;
     }
@@ -28,28 +33,39 @@ pub async fn run(store: Arc<Store>, mut args: RunArgs) -> Result<TaskId> {
         && !args.suppress_nested_repo_warning
         && args.worktree.is_some()
     {
-        crate::support::repo_root::warn_if_nested_repo(args.repo.as_deref().or(args.dir.as_deref()).unwrap_or("."));
+        crate::support::repo_root::warn_if_nested_repo(
+            args.repo.as_deref().or(args.dir.as_deref()).unwrap_or("."),
+        );
     }
-    let prepared = prepare_dispatch(&store, &mut args).inspect_err(|error| {
-        if let Some(id) = args.existing_task_id.as_ref() {
-            let _ = crate::task::lifecycle::fail_waiting_with_reason(&store, id.as_str(), &error.to_string());
+    let prepared = match prepare_dispatch(&store, &mut args) {
+        Ok(prepared) => prepared,
+        Err(error) => return super::caller_owned::preparation_error(&store, &args, error),
+    };
+    let task_id = prepared.task_id.clone();
+    let result = execute_prepared(&store, &args, &prepared).await;
+    if args.policy.is_some() {
+        if let Err(error) = result {
+            aid_warn!("[aid] Dispatch observation failed for {task_id}: {error}");
         }
-    })?;
-    let prompt_bundle = prepare_prompt(&store, &prepared, &args)?;
-    if args.dry_run { return dry_run(&store, &prepared, &args, &prompt_bundle); }
+        super::caller_owned::emit(&store, &args, &task_id, "launched")?;
+        return Ok(task_id);
+    }
+    result
+}
+
+async fn execute_prepared(
+    store: &Arc<Store>,
+    args: &RunArgs,
+    prepared: &PreparedDispatch,
+) -> Result<TaskId> {
+    let prompt_bundle = prepare_prompt(store, prepared, args)?;
+    if args.dry_run { return dry_run(store, prepared, args, &prompt_bundle); }
     if args.background {
-        run_background_task(&store, &args, &prepared, &prompt_bundle)?;
-    } else if let Some(retry_id) = run_foreground_task(
-        &store,
-        &args,
-        &prepared,
-        &prompt_bundle,
-    )
-    .await?
-    {
+        run_background_task(store, args, prepared, &prompt_bundle)?;
+    } else if let Some(retry_id) = run_foreground_task(store, args, prepared, &prompt_bundle).await? {
         return Ok(retry_id);
     }
-    Ok(prepared.task_id)
+    Ok(prepared.task_id.clone())
 }
 
 fn prepare_prompt(

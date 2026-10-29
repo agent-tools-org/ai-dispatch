@@ -1,5 +1,7 @@
 # Dispatch and Execution
 
+See [caller-owned execution](caller-owned.md) for `aid.execution/1`, hook/container refusals and read-only show receipts.
+
 ## Tools and skills are the caller's choice
 
 aid does not choose either on the caller's behalf.

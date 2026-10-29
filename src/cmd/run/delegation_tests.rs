@@ -111,3 +111,32 @@ fn task_depth_counts_ancestors() {
     assert_eq!(task_depth(&store, "t-root").expect("depth"), 0);
     assert_eq!(task_depth(&store, "t-child").expect("depth"), 1);
 }
+
+#[test]
+fn caller_owned_gates_nested_delegation_before_parent_assignment() {
+    let store = Store::open_memory().expect("store");
+    let task = make_task("t-owned-parent", None);
+    let policy = crate::store::execution_protocol::ExecutionPolicy {
+        name: "caller-owned".into(),
+        version: 1,
+        agent: "codex".into(),
+        model: "exact".into(),
+        accepted_at: "2026-10-29T10:00:00Z".into(),
+    };
+    store
+        .insert_task_with_policy(
+            &task,
+            crate::types::DispatchOrigin::Automatic,
+            Some(&policy),
+        )
+        .expect("parent");
+    let _id = EnvGuard::set("AID_TASK_ID", "t-owned-parent");
+    let mut args = RunArgs::default();
+    assert!(
+        apply_nested_delegation(&store, &mut args)
+            .expect_err("policy refuses nesting")
+            .to_string()
+            .contains("caller-owned")
+    );
+    assert!(args.parent_task_id.is_none());
+}

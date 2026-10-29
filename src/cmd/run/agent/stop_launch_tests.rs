@@ -23,7 +23,7 @@ async fn settle_first_stopped_task_never_spawns_timeout_agent() {
     let mut cmd = tokio::process::Command::new("sh");
     cmd.args(["-c", "touch \"$1\"", "stop-test"]).arg(&marker);
     let result = super::run_agent_process_with_timeout(
-        &TimeoutTestAgent,
+        false, &TimeoutTestAgent,
         cmd,
         &id,
         &store,

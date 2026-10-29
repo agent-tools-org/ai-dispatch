@@ -128,6 +128,8 @@ pub(super) fn every_field_set() -> RunArgs {
         suppress_nested_repo_warning: true,
         link_deps: false,
         force_default_model: true,
+        policy: Some("caller-owned".into()),
+        execution_json: true,
     }
 }
 

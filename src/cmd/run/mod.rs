@@ -18,6 +18,7 @@ mod run_prompt;
 #[path = "agent.rs"]
 mod run_agent;
 pub(crate) mod advice_route;
+pub(crate) mod caller_owned;
 #[path = "bestof.rs"]
 mod run_bestof;
 #[path = "lifecycle.rs"]
@@ -143,6 +144,7 @@ pub(crate) fn apply_retry_target(task: &Task, retry_args: &mut RunArgs) -> Resul
 pub(crate) fn switch_agent(args: &mut RunArgs, next_agent: String) { run_post::switch_agent(args, next_agent) }
 
 pub(crate) async fn maybe_judge_retry(store: &Arc<Store>, args: &RunArgs, task_id: &TaskId) -> Result<Option<TaskId>> {
+    if args.policy.is_some() { return Ok(None); }
     if args.judge_retry {
         return Ok(None);
     }
@@ -201,3 +203,11 @@ use run_post::{
 pub(crate) use run_post::read_quota_error_message;
 #[cfg(test)]
 use run_dirty::final_dirty_assertion;
+
+#[cfg(test)]
+#[path = "caller_owned_tests.rs"]
+mod caller_owned_tests;
+
+#[cfg(test)]
+#[path = "default_launch_round7_tests.rs"]
+mod default_launch_round7_tests;

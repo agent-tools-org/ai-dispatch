@@ -51,6 +51,7 @@ pub async fn maybe_iterate(
     args: &RunArgs,
     iterate_config: &IterateConfig,
 ) -> Result<Option<TaskId>> {
+    if args.policy.is_some() { return Ok(None); }
     let Some(task) = store.get_task(task_id.as_str())? else { return Ok(None) };
     if task.status != TaskStatus::Done {
         return Ok(None);

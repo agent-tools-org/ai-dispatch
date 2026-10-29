@@ -25,11 +25,50 @@ pub fn update_agent_pid(task_id: &str, agent_pid: u32) -> Result<()> {
     result
 }
 
+pub(crate) fn publish_agent_pid(caller_owned: bool, task_id: &str, agent_pid: u32) -> Result<()> {
+    update_agent_pid(task_id, agent_pid).map_err(|error| {
+        if !caller_owned { return error; }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while crate::cmd::execution_receipt::group_gone(agent_pid).is_err()
+            && std::time::Instant::now() < deadline
+        {
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        AgentPublicationFailure { source: error,
+            confirmed_gone: crate::cmd::execution_receipt::group_gone(agent_pid).is_ok() }.into()
+    })
+}
+
+pub(crate) type AgentLaunchIdentity = (u32, Option<String>);
+
+pub(crate) fn abort_agent_publication(
+    identity: Option<AgentLaunchIdentity>, source: anyhow::Error,
+) -> anyhow::Error {
+    let confirmed_gone = identity.is_some_and(|(pid, started)| {
+        if pid <= 1 || pid > i32::MAX as u32 { return false; }
+        if crate::cmd::execution_receipt::group_gone(pid).is_ok() { return true; }
+        if !crate::runtime::process::monitor::activity::root_matches(pid, started.as_deref()) {
+            return false;
+        }
+        unsafe { libc::kill(-(pid as i32), libc::SIGKILL); }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while crate::cmd::execution_receipt::group_gone(pid).is_err()
+            && std::time::Instant::now() < deadline
+        {
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        crate::cmd::execution_receipt::group_gone(pid).is_ok()
+    });
+    AgentPublicationFailure { source, confirmed_gone }.into()
+}
+
 pub fn load_agent_pid(task_id: &str) -> Result<Option<u32>> {
     Ok(load_spec_if_exists(task_id)?.and_then(|spec| spec.agent_pid))
 }
 
 pub(crate) fn spawn_on_done_command(command: &str, task_id: &str, status: &str) -> Result<()> {
+    #[cfg(test)]
+    ON_DONE_CALLS.with(|calls| calls.set(calls.get() + 1));
     let mut cmd = build_on_done_command(command)?;
     cmd.env("AID_TASK_ID", task_id)
         .env("AID_TASK_STATUS", status);
@@ -153,3 +192,34 @@ mod tests {
         assert!(!is_process_running(pid));
     }
 }
+
+
+#[derive(Debug)]
+pub(crate) struct AgentSpawnFailure(pub anyhow::Error);
+impl std::fmt::Display for AgentSpawnFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.0, formatter)
+    }
+}
+impl std::error::Error for AgentSpawnFailure {}
+
+#[derive(Debug)]
+pub(crate) struct AgentPublicationFailure {
+    source: anyhow::Error,
+    pub confirmed_gone: bool,
+}
+impl std::fmt::Display for AgentPublicationFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.source, formatter)
+    }
+}
+impl std::error::Error for AgentPublicationFailure {}
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static ON_DONE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+#[path = "process_round7_tests.rs"]
+mod round7_tests;

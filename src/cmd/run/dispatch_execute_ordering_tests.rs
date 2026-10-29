@@ -125,7 +125,7 @@ fn no_detach_publications_preserve_worker_and_agent_pids_and_force_stop_both() {
         blocked,
         committed.try_clone().expect("clone"),
     );
-    let worker_pid = spawn_background_worker(&store, &spec).expect("worker launch");
+    let worker_pid = spawn_background_worker(&store, &spec, false).expect("worker launch");
     let mut worker = holder.borrow_mut().take().expect("worker handle");
     assert_eq!(worker_pid, worker.child.id());
     let mut agent = accept(&agents);

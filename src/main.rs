@@ -19,6 +19,7 @@
 #[macro_use]
 pub mod ui;
 mod agent;
+mod execution;
 mod batch;
 mod cmd;
 mod config;
@@ -41,6 +42,10 @@ use std::sync::Arc;
 fn main() -> Result<()> {
     let result = run_cli(cli::diagnostics::parse());
     if let Err(error) = &result {
+        if let Some(refusal) = error.downcast_ref::<execution::Refusal>() {
+            println!("{}", refusal.body());
+            std::process::exit(refusal.exit);
+        }
         cli::diagnostics::record_error(error);
     }
     result
@@ -78,21 +83,23 @@ async fn async_main(cli: Cli) -> Result<()> {
             cmd::advise::run(store.as_ref(), args)?;
             return Ok(());
         }
+        Some(Commands::Capabilities { .. }) => {
+            println!("{}", execution::capabilities());
+            return Ok(());
+        }
         // Needs no store, dirs, or update check; exit codes are part of its contract.
         Some(Commands::Classify(args)) => std::process::exit(cmd::classify::run(args)),
         other => other,
     };
 
-    support::paths::ensure_dirs()?;
-    let config = config::load_config().unwrap_or_default();
-    if config.updates.check {
-        support::update_check::maybe_check_update();
+    if let Some(Commands::Run(args)) = command.as_ref() {
+        execution::validate_cli(args)?;
+        if args.json {
+            ui::output::set_quiet(true);
+        }
     }
-    // Refresh the model price feed out of band: never on the dispatch path, so
-    // a cold or stale cache cannot delay or fail a run.
-    cost::maybe_refresh_prices();
-    let store = Arc::new(store::Store::open(&support::paths::db_path())?);
-    let _ = runtime::background::check_zombie_tasks(&store);
+    check_execution_policy(&command)?;
+    let store = command_store()?;
 
     let outcome = match command {
         Some(command) => cli::dispatch::dispatch(store.clone(), command).await?,
@@ -106,3 +113,36 @@ async fn async_main(cli: Cli) -> Result<()> {
     }
     Ok(())
 }
+
+fn check_execution_policy(command: &Option<Commands>) -> Result<()> {
+    let id = match command {
+        Some(Commands::Wait(args)) if args.json && args.task_ids.len() == 1 => &args.task_ids[0],
+        Some(Commands::Stop(args)) if args.json => &args.task_id,
+        _ => return Ok(()),
+    };
+    let store = store::Store::open_read_only(&support::paths::db_path())
+        .map_err(|_| execution::refuse("policy_unsupported", Some("schema_upgrade_required"), 3))?
+        .ok_or_else(|| execution::refuse("not_found", Some(id), 1))?;
+    cmd::execution_receipt::require_caller_owned(&store, id).map_err(|error| {
+        if error.downcast_ref::<execution::Refusal>().is_some() { error }
+        else { execution::refuse("policy_unsupported", Some("schema_upgrade_required"), 3) }
+    })
+}
+
+fn command_store() -> Result<Arc<store::Store>> {
+    support::paths::ensure_dirs()?;
+    let config = config::load_config().unwrap_or_default();
+    if config.updates.check {
+        support::update_check::maybe_check_update();
+    }
+    // Refresh the model price feed out of band: never on the dispatch path, so
+    // a cold or stale cache cannot delay or fail a run.
+    cost::maybe_refresh_prices();
+    let store = Arc::new(store::Store::open(&support::paths::db_path())?);
+    let _ = runtime::background::check_zombie_tasks(&store);
+    Ok(store)
+}
+
+#[cfg(test)]
+#[path = "main_observation_tests.rs"]
+mod observation_tests;

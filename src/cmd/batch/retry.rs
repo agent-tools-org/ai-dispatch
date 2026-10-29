@@ -70,6 +70,9 @@ pub(super) fn should_retry_task(status: TaskStatus, include_waiting: bool) -> bo
 }
 
 pub(crate) fn retry_task_to_run_args(store: &Store, task: &Task, group_id: &str, agent_override: Option<&str>) -> Result<RunArgs> {
+    if store.is_caller_owned(task.id.as_str())? {
+        return Err(crate::execution::refuse("policy_unsupported", Some("caller-owned retry"), 3));
+    }
     let mut run_args = RunArgs::retry_inputs(store, task)?;
     run_args.prompt = task.prompt.clone();
     if let Some(name) = agent_override {

@@ -86,6 +86,8 @@ pub struct ReplyArgs {
 
 #[derive(Args)]
 pub struct StopArgs {
+    #[arg(long, conflicts_with = "retry_tree")]
+    pub json: bool,
     pub task_id: String,
     #[arg(long)]
     pub force: bool,

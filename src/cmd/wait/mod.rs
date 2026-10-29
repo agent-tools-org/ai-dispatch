@@ -14,6 +14,9 @@ use crate::types::{Task, TaskFilter, TaskOutcome, TaskStatus, VerifyStatus, veri
 #[path = "../wait_settlement.rs"]
 mod settlement;
 use settlement::worker_is_settling;
+#[path = "../wait_json.rs"]
+mod json;
+pub(crate) use json::run_json;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum WaitOutcome {

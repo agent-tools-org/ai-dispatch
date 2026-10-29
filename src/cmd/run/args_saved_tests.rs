@@ -107,6 +107,7 @@ async fn worker_without_a_dispatched_dir_skips_verify() {
     assert!(!marker.exists(), "verify must not run without a dispatched working directory");
 }
 
+
 fn spec(task_id: &str) -> BackgroundRunSpec {
     serde_json::from_value(json!({
         "task_id": task_id, "worker_pid": null, "agent_name": "spec-agent",

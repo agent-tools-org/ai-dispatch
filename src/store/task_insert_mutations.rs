@@ -13,7 +13,18 @@ impl Store {
         self.insert_task_with_origin(task, DispatchOrigin::Automatic)
     }
 
-    pub(crate) fn insert_task_with_origin(&self, task: &Task, origin: DispatchOrigin) -> Result<()> {
+    pub(crate) fn insert_task_with_origin(&self, task: &Task, origin: DispatchOrigin,
+    ) -> Result<()> {
+        self.insert_task_with_policy(task, origin, None)
+    }
+
+    pub(crate) fn insert_task_with_policy(
+        &self,
+        task: &Task,
+        origin: DispatchOrigin,
+        policy: Option<&super::execution_protocol::ExecutionPolicy>,
+    ) -> Result<()> {
+        let policy = policy.map(serde_json::to_string).transpose()?;
         let agent_value = if task.agent == AgentKind::Custom {
             task.custom_agent_name.as_deref().unwrap_or("custom")
         } else {
@@ -26,14 +37,17 @@ impl Store {
              final_head_sha, final_branch, start_sha, log_path, output_path, tokens, prompt_tokens, duration_ms, model, cost_usd, exit_code,
              created_at, completed_at, verify, verify_status, read_only, budget, custom_agent_name,
              category, pending_reason, audit_verdict, audit_report_path, delivery_assessment,
-             observed_model, attribution_source, effective_dir, dispatch_args)
+             observed_model, attribution_source, effective_dir, dispatch_args,
+             execution_policy, worker_settlement, agent_process)
              SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
              ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34,
              ?35, ?36, ?37, ?38, ?39, ?40,
-             CASE WHEN ?41 THEN json_object('origin', 'explicit_retry') ELSE NULL END
+             CASE WHEN ?41 THEN json_object('origin', 'explicit_retry') ELSE NULL END, ?42,
+             json_object('state','pending','outcome',NULL,
+             'pid',NULL,'settled_at',NULL,'detail',NULL), json_object('state','not_started')
              WHERE ?41 OR NOT EXISTS (SELECT 1 FROM tasks WHERE id = ?6 AND status = 'stopped')",
         )?;
-        if insert_task_row(&mut statement, task, agent_value, origin)? == 0 {
+        if insert_task_row(&mut statement, task, agent_value, origin, policy.as_deref())? == 0 {
             anyhow::bail!(
                 "Parent task '{}' stopped; refusing child '{}'",
                 task.parent_task_id.as_deref().unwrap_or_default(),
@@ -61,8 +75,10 @@ impl Store {
         self.db().execute(
             "INSERT INTO tasks (
              id, agent, prompt, resolved_prompt, status, workgroup_id, repo_path,
-             worktree_branch, model, created_at, verify, verify_status, read_only, budget
-             ) VALUES (?1, ?2, ?3, ?4, 'waiting', ?5, ?6, ?7, ?8, ?9, ?10, 'skipped', ?11, ?12)",
+             worktree_branch, model, created_at, verify, verify_status, read_only, budget, worker_settlement, agent_process
+             ) VALUES (?1, ?2, ?3, ?4, 'waiting', ?5, ?6, ?7, ?8, ?9, ?10, 'skipped', ?11, ?12,
+             json_object('state','pending','outcome',NULL,
+             'pid',NULL,'settled_at',NULL,'detail',NULL), json_object('state','not_started'))",
             params![
                 id,
                 agent,
@@ -145,6 +161,7 @@ fn insert_task_row(
     task: &Task,
     agent_value: &str,
     origin: DispatchOrigin,
+    policy: Option<&str>,
 ) -> rusqlite::Result<usize> {
     statement.execute(params![
         task.id.as_str(),
@@ -188,5 +205,6 @@ fn insert_task_row(
         task.attribution_source.map(|value| value.as_str()),
         task.effective_dir,
         origin == DispatchOrigin::ExplicitRetry,
+        policy,
     ])
 }

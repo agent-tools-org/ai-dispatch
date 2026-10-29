@@ -3,13 +3,13 @@
 
 pub(crate) mod command;
 mod control;
+#[cfg(test)]
+#[path = "turn/fixture.rs"]
+mod fixture;
 mod home;
 mod io;
 mod resume;
 mod turn;
-#[cfg(test)]
-#[path = "turn/fixture.rs"]
-mod fixture;
 pub(crate) use command::available;
 pub(crate) use control::{active, receipt, wait_for_interrupt};
 pub(crate) use resume::exec_fallback;
@@ -22,6 +22,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 pub(crate) struct Run<'a> {
+    pub caller_owned: bool,
     pub start: std::time::Instant,
     pub agent: &'a dyn Agent,
     pub command: &'a std::process::Command,
@@ -40,7 +41,8 @@ pub(crate) fn run(args: Run<'_>) -> Result<Option<CompletionInfo>> {
     let info = match run_inner(&args) {
         Ok(info) => info,
         Err(error) => {
-            if started.elapsed() >= args.policy.max_duration.min(args.policy.hard_cap)
+            if args.caller_owned
+                || started.elapsed() >= args.policy.max_duration.min(args.policy.hard_cap)
                 || args
                     .store
                     .get_task(args.task.as_str())?
@@ -150,9 +152,19 @@ fn spawn(args: &Run<'_>, launch: &mut command::Launch) -> Result<io::Rpc> {
         &crate::support::paths::stderr_path(args.task.as_str()),
     )?;
     let mut publication_failed = false;
-    let child = args.store.with_running_task(args.task.as_str(), || {
-        let child = io::Rpc::spawn(&mut launch.command)?;
-        if let Err(error) = crate::runtime::background::update_agent_pid(args.task.as_str(), child.id()) {
+    let child = args.store.with_running_task(args.caller_owned, args.task.as_str(), |identity| {
+        let child = io::Rpc::spawn(&mut launch.command).map_err(|error| {
+            if args.caller_owned { crate::runtime::background::AgentSpawnFailure(error).into() }
+            else { error }
+        })?;
+        if args.caller_owned {
+            *identity = Some((child.id(),
+                crate::runtime::process::monitor::activity::root_started(child.id()),
+            ));
+        }
+        if let Err(error) = crate::runtime::background::publish_agent_pid(
+            args.caller_owned, args.task.as_str(), child.id(),
+        ) {
             publication_failed = true;
             return Err(error);
         }
@@ -198,3 +210,7 @@ mod tests;
 #[cfg(test)]
 #[path = "read_only_transport_tests.rs"]
 mod read_only_transport_tests;
+
+#[cfg(test)]
+#[path = "caller_owned_tests.rs"]
+mod caller_owned_tests;

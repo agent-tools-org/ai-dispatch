@@ -10,6 +10,9 @@ pub(super) async fn continue_quota(
     args: &RunArgs,
     task: &Task,
 ) -> Result<Option<TaskId>> {
+    if args.policy.is_some() {
+        return Ok(None);
+    }
     let mut child = args.clone();
     let Some(candidate) = advice_route::automatic_candidate(Some(store), &child) else {
         return Ok(None);
@@ -24,3 +27,7 @@ pub(super) async fn continue_quota(
     inherit_cascade_target(&mut child, task)?;
     Box::pin(run(store.clone(), child)).await.map(Some)
 }
+
+#[cfg(test)]
+#[path = "quota_continuation_tests.rs"]
+mod tests;

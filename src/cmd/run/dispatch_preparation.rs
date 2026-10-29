@@ -76,3 +76,7 @@ pub(super) fn prepared_dispatch(
         effective_dir: setup.effective_dir,
     }
 }
+
+#[cfg(test)]
+#[path = "dispatch_settlement_tests.rs"]
+mod settlement_tests;

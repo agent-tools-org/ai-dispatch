@@ -27,7 +27,7 @@ async fn run_capture(ceiling: f64) -> Task {
         CODEX_MESSAGE,
     ]);
     crate::cmd::run::run_agent_process_with_cost(
-        &CodexAgent,
+        false, &CodexAgent,
         cmd,
         &task.id,
         &store,

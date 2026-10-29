@@ -109,6 +109,7 @@ fn cli_run_conversion_keeps_default_model_resolution_and_optional_flags() {
     assert_eq!(args.declared_rigor, None);
     assert_eq!(args.declared_egress, TaskEgress::Any);
     assert_eq!(args.retry, 0);
+    assert!(args.policy.is_none() && !args.execution_json);
     assert!(!args.background && !args.dry_run && !args.read_only);
     assert!(args.announce && args.link_deps);
     let args = parsed_args(&["--no-skill", "--no-audit", "--backup", "gdrive:reports", "--sandbox"]);
@@ -140,6 +141,7 @@ fn cli_run_conversion_does_not_drop_any_configurable_field() {
     let defaults = serde_json::to_value(cmd::run::RunArgs::default()).expect("defaults");
     let fixtures = [
         configured_args(),
+        parsed_args(&["--policy", "caller-owned", "--json"]),
         parsed_args(&["--no-skill", "--no-audit", "--backup", "gdrive:x", "--sandbox"]),
         parsed_args(&["--container", "dev:latest"]),
         run_args(Cli::try_parse_from(["aid", "run", "kilo", "--prompt-file", "prompt.md"])
@@ -227,4 +229,12 @@ async fn cli_run_dry_run_persists_merged_checklist_prompt_and_budget_mode() {
         assert_eq!(args.prompt_file, None);
         assert_eq!(args.budget, expected_budget, "{budget}, config={configured_budget}");
     }
+}
+
+
+#[test]
+fn cli_run_conversion_keeps_protocol_fields_and_suppresses_only_json_announcements() {
+    let args = parsed_args(&["--policy", "caller-owned", "--json"]);
+    assert_eq!(args.policy.as_deref(), Some("caller-owned"));
+    assert!(args.execution_json && !args.announce);
 }

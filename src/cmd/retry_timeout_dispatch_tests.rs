@@ -17,7 +17,7 @@ fn explicit_retry_launch_claim_uses_persisted_origin_after_parent_stop() {
         assert!(crate::task::lifecycle::mark_stopped(&store, parent.id.as_str()).unwrap());
         let mut launched = false;
 
-        let result = store.with_worker_launch(child.id.as_str(), || {
+        let result = store.with_worker_launch(false, child.id.as_str(), || {
             launched = true;
             Ok(())
         });
@@ -55,7 +55,7 @@ fn explicit_retry_waiting_replacement_of_stopped_parent_launches() {
     assert!(crate::task::lifecycle::mark_running(&store, &child.id).unwrap());
     let mut launched = false;
     store
-        .with_worker_launch(child.id.as_str(), || {
+        .with_worker_launch(false, child.id.as_str(), || {
             launched = true;
             Ok(())
         })
@@ -85,7 +85,7 @@ fn explicit_retry_origin_does_not_bypass_child_own_stop() {
 
     assert!(
         store
-            .with_worker_launch(child.id.as_str(), || {
+            .with_worker_launch(false, child.id.as_str(), || {
                 launched = true;
                 Ok(())
             })

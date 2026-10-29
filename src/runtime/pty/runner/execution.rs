@@ -6,6 +6,7 @@ use crate::runtime::pty::bridge::PtyBridge;
 use std::time::Instant;
 
 pub(super) fn spawn_for_task(
+    caller_owned: bool,
     cmd: &std::process::Command,
     log_path: &Path,
     store: &Arc<Store>,
@@ -14,10 +15,17 @@ pub(super) fn spawn_for_task(
     control: Option<&PtyRunControl>,
 ) -> Result<PtyBridge> {
     let spawn = spawn_bridge(cmd);
-    let mut bridge = match store.with_running_task(task_id.as_str(), || {
-        let bridge = spawn()?;
+    let mut bridge = match store.with_running_task(caller_owned, task_id.as_str(), |identity| {
+        let bridge = spawn().map_err(|error| {
+            if caller_owned { crate::runtime::background::AgentSpawnFailure(error).into() }
+            else { error }
+        })?;
+        if caller_owned {
+            *identity = bridge.child_pid().map(|pid| (pid,
+                crate::runtime::process::monitor::activity::root_started(pid)));
+        }
         if let Some(pid) = bridge.child_pid() {
-            crate::runtime::background::update_agent_pid(task_id.as_str(), pid)?;
+            crate::runtime::background::publish_agent_pid(caller_owned, task_id.as_str(), pid)?;
         }
         Ok(bridge)
     }) {

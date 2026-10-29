@@ -14,6 +14,8 @@ pub const NO_SKILL_SENTINEL: &str = "__aid_no_skill__";
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RunArgs {
+    pub policy: Option<String>,
+    pub execution_json: bool,
     pub agent_name: String,
     pub prompt: String,
     pub prompt_file: Option<String>,
@@ -146,6 +148,8 @@ impl RunArgs {
 impl Default for RunArgs {
     fn default() -> Self {
         Self {
+            policy: None,
+            execution_json: false,
             agent_name: String::new(),
             prompt: String::new(),
             prompt_file: None,

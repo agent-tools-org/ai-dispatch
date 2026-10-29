@@ -19,6 +19,9 @@ pub(crate) fn apply_nested_delegation(store: &Store, args: &mut RunArgs) -> Resu
     if env_parent.trim().is_empty() {
         return Ok(());
     }
+    if store.is_caller_owned(&env_parent)? {
+        anyhow::bail!("caller-owned task refuses nested delegation");
+    }
     if args.parent_task_id.is_none() {
         args.parent_task_id = Some(env_parent.clone());
     }

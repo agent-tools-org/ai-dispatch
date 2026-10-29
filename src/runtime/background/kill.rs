@@ -54,6 +54,33 @@ fn signal_targets(worker_pid: Option<u32>, spec: &BackgroundRunSpec) {
     }
 }
 
+pub(crate) fn capture_descendants(worker: Option<u32>, spec: &BackgroundRunSpec, agent_children: bool)
+    -> Vec<(u32, Option<String>)> {
+    let agent = spec.agent_pid_for_signal();
+    let worker = worker.filter(|pid| BackgroundRunSpec::is_task_worker(*pid, &spec.task_id))
+        .filter(|_| spec.agent_pid.is_none() || agent.is_some());
+    let mut roots = worker.into_iter().collect::<Vec<_>>();
+    if agent_children { roots.extend(agent); }
+    let mut found = Vec::new();
+    #[cfg(unix)]
+    for root in roots {
+        for pid in crate::runtime::process::group::descendant_pids(root) {
+            if Some(pid) != spec.agent_pid && !found.iter().any(|(seen, _)| *seen == pid) {
+                found.push((pid, crate::runtime::process::monitor::activity::root_started(pid)));
+            }
+        }
+    }
+    found
+}
+
+pub(crate) fn signal_descendants(targets: &[(u32, Option<String>)], force: bool) {
+    for (pid, started) in targets {
+        if crate::runtime::process::monitor::activity::root_matches(*pid, started.as_deref()) {
+            if force { sigkill_process(*pid); } else { kill_process(*pid); }
+        }
+    }
+}
+
 impl BackgroundRunSpec {
     #[cfg(unix)]
     pub(crate) fn is_task_worker(pid: u32, task_id: &str) -> bool {

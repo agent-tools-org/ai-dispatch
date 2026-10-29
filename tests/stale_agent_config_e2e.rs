@@ -24,19 +24,18 @@ fn stale_config_warns_once_per_key_without_disabling_supported_agents() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
-    for key in ["gemini"] {
-        let warning = format!(
-            "Ignoring stale removed-agent config key [{key}] in {}",
-            path.display()
-        );
-        assert_eq!(stderr.matches(&warning).count(), 1, "{stderr}");
-        let explicit = aid_cmd_in(home.path())
-            .args(["run", key, "Review code", "--no-hint"])
-            .output()
-            .expect("explicit removed dispatch");
-        assert!(!explicit.status.success());
-        assert!(String::from_utf8_lossy(&explicit.stderr).contains("removed in this release"));
-    }
+    let key = "gemini";
+    let warning = format!(
+        "Ignoring stale removed-agent config key [{key}] in {}",
+        path.display()
+    );
+    assert_eq!(stderr.matches(&warning).count(), 1, "{stderr}");
+    let explicit = aid_cmd_in(home.path())
+        .args(["run", key, "Review code", "--no-hint"])
+        .output()
+        .expect("explicit removed dispatch");
+    assert!(!explicit.status.success());
+    assert!(String::from_utf8_lossy(&explicit.stderr).contains("removed in this release"));
     assert!(String::from_utf8_lossy(&output.stdout).contains("configured-codex"));
     assert!(!stderr.contains("config key [qwen]"));
     assert_eq!(

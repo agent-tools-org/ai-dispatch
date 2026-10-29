@@ -71,6 +71,9 @@ fn terminate(
     preserve_label: &'static str,
     print_label: Option<&'static str>,
 ) -> Result<()> {
+    if store.is_caller_owned(task_id)? {
+        return protocol::text(store, task_id, graceful, detail, preserve_label, print_label);
+    }
     let task = store.get_task(task_id)?.ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
     let recover_signal = task.status == TaskStatus::Stopped
         && background::load_worker_pid(task_id)?.is_some_and(background::is_process_running);
@@ -199,3 +202,27 @@ mod terminal_events_tests;
 #[cfg(all(test, unix))]
 #[path = "stop/worker_identity_tests.rs"]
 mod worker_identity_tests;
+
+#[path = "stop_protocol.rs"]
+mod protocol;
+#[path = "stop_json.rs"]
+mod json;
+pub(crate) use json::stop_json;
+
+#[cfg(test)]
+#[path = "stop/idle_terminal_tests.rs"]
+mod idle_terminal_tests;
+#[cfg(test)]
+#[path = "stop/unconfirmed_tests.rs"]
+mod unconfirmed_tests;
+#[cfg(test)]
+#[path = "stop/close_tests.rs"]
+mod close_tests;
+
+#[cfg(all(test, unix))]
+#[path = "stop/protocol_round6_tests.rs"]
+mod protocol_round6_tests;
+
+#[cfg(test)]
+#[path = "stop/default_probe_tests.rs"]
+mod default_probe_tests;

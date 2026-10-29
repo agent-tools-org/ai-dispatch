@@ -198,7 +198,7 @@ fn stop_followup_parent_stop_between_insert_and_launch_prevents_worker() {
     assert!(crate::task::lifecycle::mark_stopped(&store, parent.id.as_str()).unwrap());
     let mut launched = false;
 
-    let result = store.with_worker_launch(child.id.as_str(), || {
+    let result = store.with_worker_launch(false, child.id.as_str(), || {
         launched = true;
         Ok(())
     });
@@ -255,14 +255,14 @@ fn stop_followup_child_launched_before_parent_stop_is_unaffected() {
     store.insert_task(&child).unwrap();
     let mut launched = false;
     store
-        .with_worker_launch(child.id.as_str(), || {
+        .with_worker_launch(false, child.id.as_str(), || {
             launched = true;
             Ok(())
         })
         .unwrap();
 
     store
-        .with_running_task(child.id.as_str(), || Ok(()))
+        .with_running_task(false, child.id.as_str(), |_pid| Ok(()))
         .unwrap();
     assert!(crate::task::lifecycle::mark_stopped(&store, parent.id.as_str()).unwrap());
 

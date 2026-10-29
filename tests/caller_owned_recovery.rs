@@ -22,8 +22,11 @@ fn failed_once(body: &str, extra: &[&str]) {
 
 #[test]
 fn unavailable_model_fails_without_self_heal_or_model_substitution() {
-    // Explicit stderr prefix matches routing/model_health.rs and run/model_selfheal.rs.
-    let body = first_attempt("printf 'Error: unknown model caller-model\\n' >&2\nexit 1");
+    // PTY stderr joins the task log, where model_selfheal only accepts JSON error envelopes.
+    let body = first_attempt(concat!(
+        "printf '%s\\n' ",
+        "'{\"type\":\"error\",\"message\":\"Error: unknown model caller-model\"}'\nexit 1"
+    ));
     let control = Recovery::new(&body);
     control.start("t-model-control", false, &[]);
     control.assert_control("t-model-control", 2, 2);
@@ -119,7 +122,8 @@ fn dirty_worktree_does_not_launch_a_rescue_agent() {
         let id = if owned { "t-dirty-owned" } else { "t-dirty-control" };
         fixture.start(id, owned, &["--worktree", "test/caller-dirty"]);
         if owned {
-            fixture.assert_owned(id);
+            assert_eq!(fixture.assert_owned(id)["task"]["status"], "failed");
+            assert!(fixture.has_event(id, "FAIL: agent left uncommitted changes"));
         } else {
             fixture.assert_control(id, 1, 1);
             assert!(fixture.has_event(id, "Rescued 1 file(s)"));
@@ -129,6 +133,7 @@ fn dirty_worktree_does_not_launch_a_rescue_agent() {
         let subject = fixture.git(worktree, &["log", "-1", "--format=%s"]);
         assert_eq!(subject.contains("[aid] rescue:"), !owned, "{subject}");
         let status = fixture.git(worktree, &["status", "--porcelain", "--", "tracked.txt"]);
+        // Also catches failure_salvage committing caller-owned changes after mark_failed.
         assert_eq!(status.contains("tracked.txt"), owned, "{status}");
     }
 }

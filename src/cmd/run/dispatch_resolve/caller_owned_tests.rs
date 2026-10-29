@@ -60,3 +60,18 @@ fn caller_owned_model_not_served_is_structured_and_creates_no_row() {
             .is_empty()
     );
 }
+
+#[test]
+fn caller_owned_unknown_served_models_keep_the_explicit_model() {
+    let dir = tempfile::tempdir().expect("dir");
+    let _guard = AidHomeGuard::set(dir.path());
+    let _models = MockServedModelsGuard::set(AgentKind::Grok, None);
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut args = RunArgs {
+        policy: Some("caller-owned".into()), agent_name: "grok".into(),
+        model: Some("caller-selected-unknown".into()), ..Default::default()
+    };
+    let resolved = resolve_agent_setup(&store, &mut args, None).expect("unknown list is not refusal");
+    assert_eq!(resolved.effective_model.as_deref(), Some("caller-selected-unknown"));
+    assert_eq!(args.model, resolved.effective_model);
+}

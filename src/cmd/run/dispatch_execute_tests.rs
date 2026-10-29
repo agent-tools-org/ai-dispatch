@@ -137,6 +137,8 @@ fn spawn_failure_marks_failed_and_removes_prepared_spec() {
         store.get_task("t-launch").unwrap().unwrap().status,
         TaskStatus::Failed
     );
+    assert_eq!(store.execution_facts("t-launch").expect("facts").expect("row")
+        .settlement.expect("settled").outcome.as_deref(), Some("launch_failed"));
 }
 
 #[test]
@@ -171,3 +173,6 @@ fn pid_persistence_failure_kills_child_and_marks_failed() {
 #[cfg(unix)]
 #[path = "dispatch_execute_ordering_tests.rs"]
 mod ordering;
+
+#[path = "dispatch_execute_settlement_tests.rs"]
+mod settlement;

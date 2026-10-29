@@ -32,9 +32,9 @@ pub(crate) fn existing(store: &Store, args: &RunArgs) -> Result<Option<TaskId>> 
     if facts.policy.as_ref().is_some_and(|policy| {
         policy.name == "caller-owned"
             && policy.version == 1
-            && policy.agent == args.agent_name
+            && normalized_agent(&policy.agent) == normalized_agent(&args.agent_name)
             && Some(&policy.model) == args.model.as_ref()
-    }) && task.agent_display_name() == args.agent_name
+    }) && normalized_agent(task.agent_display_name()) == normalized_agent(&args.agent_name)
         && task.requested_model == args.model
     {
         return Ok(Some(id.clone()));
@@ -46,7 +46,7 @@ pub(super) fn claim(store: &Store, task: &Task, args: &RunArgs) -> Result<()> {
     let policy = ExecutionPolicy {
         name: "caller-owned".into(),
         version: 1,
-        agent: args.agent_name.clone(),
+        agent: normalized_agent(&args.agent_name),
         model: args
             .model
             .clone()
@@ -95,3 +95,14 @@ pub(super) fn preparation_error(store: &Store, args: &RunArgs, error: anyhow::Er
     }
     Err(error)
 }
+
+
+fn normalized_agent(name: &str) -> String {
+    crate::types::AgentKind::parse_str(name)
+        .map(|kind| kind.as_str().to_owned())
+        .unwrap_or_else(|| name.to_lowercase())
+}
+
+#[cfg(test)]
+#[path = "caller_owned_admission_tests.rs"]
+mod admission_tests;

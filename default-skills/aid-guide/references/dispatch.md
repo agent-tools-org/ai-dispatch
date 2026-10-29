@@ -19,10 +19,11 @@ transport fallback, and explicit `aid retry`. The store refuses every child of a
 Project/team defaults cannot enable these features. Verify and checklist still run without retries.
 Other execution flags, including worktrees, sandbox/container and remote builds, retain their behavior.
 
-Admission requires valid `--id` and nonempty `--model`. Unknown policies, unavailable models, and
+Admission requires valid `--id` and nonempty `--model`. Unknown policies, known unavailable models, and
 explicit positive `--retry`, `--cascade`, `--best-of`, `--iterate`, `--judge`, `--peer-review`,
-`--audit` or `--budget` are refused before task insertion (exit 3, structured JSON error).
-A same-ID submission with the same agent, model and policy returns `submission: existing`,
+`--audit`, `--budget` or `--dry-run` are refused before task insertion (exit 3, structured JSON error).
+An agent without a known served-model list receives the explicit model unchanged.
+A same-ID submission with the same agent (after alias/case normalization), model and policy returns `submission: existing`,
 launches nothing and exits 0; a different tuple returns `id_conflict` (exit 4). Concurrent identical
 submissions claim the ID once. Caller-owned IDs never receive an automatic suffix.
 
@@ -31,6 +32,9 @@ status and worker settlement are separate: a terminal task can still have a live
 `worker.state` is `pending`, `running`, `settled`, or `unconfirmed`; only `settled` makes
 `settled: true`. Settlement outcomes are `completed`, `stopped`, `lost`, or `launch_failed`.
 `policy` is null for default-mode tasks. Keep the receipt with the highest revision.
+`launch_failed` is recorded only when no worker was spawned. Errors after spawn leave settlement
+to the worker, stop, or a confirmed-dead observation. A failed settlement write warns and does not
+skip existing worker, reaper or preparation cleanup.
 
 `aid wait --json` accepts exactly one ID and uses the worker barrier. It exits 0 for settlement,
 124 for an unsettled timeout (still printing the receipt), and 1 for unknown IDs or read errors.

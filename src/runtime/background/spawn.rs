@@ -11,6 +11,16 @@ const HANDOFF_TIMEOUT: Duration = Duration::from_millis(500);
 #[cfg(unix)]
 const ACK_TIMEOUT_MS: i32 = 10_000;
 
+#[derive(Debug)]
+pub(crate) struct WorkerSpawned(pub anyhow::Error);
+
+impl std::fmt::Display for WorkerSpawned {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { std::fmt::Display::fmt(&self.0, f) }
+}
+impl std::error::Error for WorkerSpawned {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> { Some(self.0.as_ref()) }
+}
+
 #[cfg(not(test))]
 pub(crate) fn spawn_worker(task_id: &str) -> Result<impl FnOnce() -> Result<(Child, u32)>> {
     crate::support::sanitize::validate_task_id(task_id)?;
@@ -45,7 +55,7 @@ fn spawn_prepared(cmd: &mut Command, detached: bool) -> Result<(Child, u32)> {
             std::thread::spawn(move || {
                 let _ = launcher.wait();
             });
-            Err(error)
+            Err(WorkerSpawned(error).into())
         }
     }
 }

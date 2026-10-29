@@ -33,7 +33,9 @@ use crate::types::{AgentKind, TaskFilter, TaskId};
 /// Hard limit on concurrent background workers — prevents process exhaustion.
 const MAX_WORKERS: usize = 32;
 
-pub use self::process::{is_process_running, kill_process, load_agent_pid, sigkill_process, update_agent_pid};
+pub use self::process::{is_process_running, kill_process, load_agent_pid, sigkill_process};
+#[cfg(test)]
+pub use self::process::update_agent_pid;
 pub(crate) use self::spawn::{daemonize_worker_if_requested, WorkerSpawned};
 #[cfg(not(test))]
 pub(crate) use self::spawn::spawn_worker;

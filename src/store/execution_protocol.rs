@@ -24,6 +24,7 @@ pub(crate) struct WorkerSettlement {
 }
 
 pub(crate) struct ExecutionFacts {
+    #[cfg_attr(not(test), allow(dead_code))]
     pub revision: i64,
     pub policy: Option<ExecutionPolicy>,
     pub settlement: Option<WorkerSettlement>,

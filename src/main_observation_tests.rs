@@ -88,8 +88,9 @@ fn legacy_json_admission_returns_a_protocol_body_without_migrating() {
 
 #[test]
 fn run_json_requires_an_explicit_policy() {
-    let error = Cli::try_parse_from(["aid", "run", "codex", "prompt", "--json"])
-        .expect_err("policy required");
+    let Err(error) = Cli::try_parse_from(["aid", "run", "codex", "prompt", "--json"]) else {
+        panic!("policy required");
+    };
     assert_eq!(error.kind(), clap::error::ErrorKind::MissingRequiredArgument);
     assert!(Cli::try_parse_from(["aid", "run", "codex", "prompt"]).is_ok());
     assert!(Cli::try_parse_from(["aid", "run", "codex", "prompt", "--json",

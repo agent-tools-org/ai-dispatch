@@ -95,7 +95,7 @@ fn descendant_spec(
 fn finish_stop(store: &Store, id: &str, task: &Task, label: &str, signalled: bool) -> Result<()> {
     if signalled {
         crate::runtime::sandbox::kill_container(id);
-        preserve_worktree(id, &task, label);
+        preserve_worktree(id, task, label);
         capture_final_worktree_state(store, &task.id)?;
         if let Some(path) = &task.worktree_path {
             crate::workspace::worktree::clear_worktree_lock(Path::new(path), id)

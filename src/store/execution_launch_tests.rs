@@ -34,7 +34,7 @@ fn caller_owned_guard_refusal_restores_not_started_evidence() {
         .expect("stopped");
     assert!(
         store
-            .with_running_task(id.as_str(), || -> Result<()> {
+            .with_running_task(true, id.as_str(), || -> Result<()> {
                 panic!("guard must refuse");
             })
             .is_err()
@@ -56,7 +56,7 @@ fn caller_owned_guard_refusal_restores_not_started_evidence() {
 
 #[cfg(unix)]
 #[test]
-fn default_evidence_write_failure_warns_without_failing_a_live_launch() {
+fn default_launch_skips_evidence_writes_even_when_publication_would_fail() {
     let _permit = crate::support::test_subprocess::acquire();
     let (_home, store, id) = fixture(false);
     store
@@ -68,7 +68,7 @@ fn default_evidence_write_failure_warns_without_failing_a_live_launch() {
         )
         .expect("failure");
     let mut child = store
-        .with_running_task(id.as_str(), || {
+        .with_running_task(false, id.as_str(), || {
             let mut command = std::process::Command::new("sleep");
             command.arg("60");
             let child = crate::runtime::process::guard::ProcessGuard::spawn(&mut command)?;
@@ -84,7 +84,7 @@ fn default_evidence_write_failure_warns_without_failing_a_live_launch() {
             .0
             .expect("agent")
             .state,
-        "starting"
+        "not_started"
     );
 }
 
@@ -113,7 +113,7 @@ fn caller_owned_second_agent_launch_is_refused_without_overwriting_the_first_gro
     let _permit = crate::support::test_subprocess::acquire();
     let (_home, store, id) = fixture(true);
     let _child = store
-        .with_running_task(id.as_str(), || {
+        .with_running_task(true, id.as_str(), || {
             let mut command = std::process::Command::new("sleep");
             command.arg("60");
             let child = crate::runtime::process::guard::ProcessGuard::spawn(&mut command)?;
@@ -131,7 +131,7 @@ fn caller_owned_second_agent_launch_is_refused_without_overwriting_the_first_gro
         .expect("row");
     assert!(
         store
-            .with_running_task(id.as_str(), || -> Result<()> {
+            .with_running_task(true, id.as_str(), || -> Result<()> {
                 panic!("second launch");
             })
             .is_err()
@@ -162,13 +162,13 @@ fn caller_owned_confirmed_publication_kill_recovers_evidence_and_keeps_launch_co
         std::fs::create_dir(&blocked).expect("block publication");
     });
     let mut owner = None;
-    let result = store.with_running_task(id.as_str(), || {
+    let result = store.with_running_task(true, id.as_str(), || {
         let mut command = std::process::Command::new("sleep");
         command.arg("60");
         let child = crate::runtime::process::guard::ProcessGuard::spawn(&mut command)?;
         let pid = child.id();
         owner = Some(child);
-        background::update_agent_pid(id.as_str(), pid)
+        background::publish_agent_pid(true, id.as_str(), pid)
     });
     assert!(result.is_err());
     owner
@@ -189,7 +189,7 @@ fn caller_owned_confirmed_publication_kill_recovers_evidence_and_keeps_launch_co
     std::fs::remove_dir(&path).expect("unblock");
     assert!(
         store
-            .with_running_task(id.as_str(), || -> Result<()> {
+            .with_running_task(true, id.as_str(), || -> Result<()> {
                 panic!("launch already consumed");
             })
             .is_err()

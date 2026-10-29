@@ -87,7 +87,7 @@ async fn run_piped(agent: &FinalizingAgent, streaming: bool, ceiling: Option<f64
     let mut cmd = tokio::process::Command::new("sh");
     cmd.args(["-c", "printf 'delivered\\n'; exit 0"]);
     crate::cmd::run::run_agent_process_with_cost(
-        agent,
+        false, agent,
         cmd,
         &agent.id,
         &agent.store,
@@ -114,7 +114,7 @@ async fn assert_finalization(pty: bool, streaming: bool, status: TaskStatus) {
         let mut cmd = Command::new("sh");
         cmd.args(["-c", "printf 'delivered\\n'; exit 0"]);
         crate::runtime::pty::runner::run_agent_process_with_control(
-            &agent,
+            false, &agent,
             &cmd,
             &agent.id,
             &store,

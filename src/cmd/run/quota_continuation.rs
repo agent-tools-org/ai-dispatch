@@ -10,7 +10,7 @@ pub(super) async fn continue_quota(
     args: &RunArgs,
     task: &Task,
 ) -> Result<Option<TaskId>> {
-    if store.is_caller_owned(task.id.as_str())? {
+    if args.policy.is_some() {
         return Ok(None);
     }
     let mut child = args.clone();

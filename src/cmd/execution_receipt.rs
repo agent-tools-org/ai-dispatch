@@ -13,11 +13,7 @@ pub(crate) fn receipt(store: &Store, id: &str) -> Result<Value> {
 }
 
 pub(crate) fn read_only_receipt(store: &Store, id: &str) -> Result<Value> {
-    let mut receipt = snapshot(store, id)?;
-    if receipt["worker"]["state"] != "settled" {
-        receipt["worker"] = serde_json::to_value(observation(store, id)?)?;
-    }
-    decorate(store, id, receipt)
+    decorate(store, id, snapshot(store, id)?)
 }
 
 fn snapshot(store: &Store, id: &str) -> Result<Value> {

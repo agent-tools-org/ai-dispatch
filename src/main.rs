@@ -98,7 +98,7 @@ async fn async_main(cli: Cli) -> Result<()> {
             ui::output::set_quiet(true);
         }
     }
-    let store = command_store(&command)?;
+    let store = command_store()?;
 
     let outcome = match command {
         Some(command) => cli::dispatch::dispatch(store.clone(), command).await?,
@@ -113,13 +113,7 @@ async fn async_main(cli: Cli) -> Result<()> {
     Ok(())
 }
 
-fn command_store(command: &Option<Commands>) -> Result<Arc<store::Store>> {
-    if let Some(Commands::Show(args)) = command.as_ref() {
-        if args.json {
-            return store::Store::open_read_only(&support::paths::db_path())?.map(Arc::new)
-                .ok_or_else(|| execution::refuse("not_found", Some(&args.task_id), 1));
-        }
-    }
+fn command_store() -> Result<Arc<store::Store>> {
     support::paths::ensure_dirs()?;
     let config = config::load_config().unwrap_or_default();
     if config.updates.check {
@@ -129,9 +123,7 @@ fn command_store(command: &Option<Commands>) -> Result<Arc<store::Store>> {
     // a cold or stale cache cannot delay or fail a run.
     cost::maybe_refresh_prices();
     let store = Arc::new(store::Store::open(&support::paths::db_path())?);
-    if !matches!(command.as_ref(), Some(Commands::Run(args)) if args.policy.is_some()) {
-        let _ = runtime::background::check_zombie_tasks(&store);
-    }
+    let _ = runtime::background::check_zombie_tasks(&store);
     Ok(store)
 }
 

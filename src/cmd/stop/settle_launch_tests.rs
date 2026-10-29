@@ -44,7 +44,7 @@ fn settle_first_stopped_task_never_spawns_pty_agent() {
     let (home, _guard, store, id) = setup();
     let marker = home.path().join("launched");
     let result = crate::runtime::pty::runner::run_agent_process_with_control(
-        agent::get_agent(AgentKind::Codex).as_ref(),
+        false, agent::get_agent(AgentKind::Codex).as_ref(),
         &command(&marker),
         &id,
         &store,
@@ -65,7 +65,7 @@ async fn settle_first_stopped_task_never_spawns_buffered_agent() {
     let (home, _guard, store, id) = setup();
     let marker = home.path().join("launched");
     let result = crate::cmd::run::run_agent_process_with_cost(
-        agent::get_agent(AgentKind::Codex).as_ref(),
+        false, agent::get_agent(AgentKind::Codex).as_ref(),
         tokio::process::Command::from(command(&marker)),
         &id,
         &store,

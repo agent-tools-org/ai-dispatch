@@ -58,17 +58,23 @@ impl Store {
 
     pub(crate) fn with_running_task<T>(
         &self,
+        caller_owned: bool,
         id: &str,
         launch: impl FnOnce() -> Result<T>,
     ) -> Result<T> {
         crate::runtime::background::BackgroundRunSpec::prepare_agent(id)?;
-        let previous = self.begin_agent_launch(id)?;
-        let invoked = std::cell::Cell::new(false);
-        let result = self.with_launch_guard(id, || { invoked.set(true); launch() }, true);
-        if let Err(error) = &result {
+        let previous = if caller_owned { self.begin_agent_launch(id)? } else { None };
+        let returned = std::cell::Cell::new(false);
+        let result = self.with_launch_guard(id, || {
+            let result = launch();
+            returned.set(true);
+            result
+        }, true, caller_owned);
+        if caller_owned && let Err(error) = &result {
             let killed = error.downcast_ref::<crate::runtime::background::AgentPublicationFailure>()
                 .is_some_and(|failure| failure.confirmed_gone);
-            if !invoked.get() || killed {
+            let no_process = error.is::<crate::runtime::background::AgentSpawnFailure>();
+            if !returned.get() || killed || no_process {
                 if let Err(error) = self.recover_agent_launch(id, previous, killed) {
                     aid_warn!("[aid] Could not recover agent evidence for {id}: {error}");
                 }
@@ -78,7 +84,7 @@ impl Store {
         if result.is_ok() {
             tests::agent_committed();
         }
-        if result.is_err() {
+        if !caller_owned && result.is_err() {
             let _ = crate::runtime::background::clear_spec(id);
         }
         result
@@ -86,10 +92,11 @@ impl Store {
 
     pub(crate) fn with_worker_launch<T>(
         &self,
+        caller_owned: bool,
         id: &str,
         launch: impl FnOnce() -> Result<T>,
     ) -> Result<T> {
-        self.with_launch_guard(id, launch, false)
+        self.with_launch_guard(id, launch, false, caller_owned)
     }
 
     fn with_launch_guard<T>(
@@ -97,6 +104,7 @@ impl Store {
         id: &str,
         launch: impl FnOnce() -> Result<T>,
         agent: bool,
+        caller_owned: bool,
     ) -> Result<T> {
         let conn = self.db();
         let tx = conn.unchecked_transaction()?;
@@ -117,11 +125,11 @@ impl Store {
             anyhow::bail!("Task '{id}' is no longer running; refusing launch");
         }
         let result = launch()?;
-        if agent {
+        if caller_owned && agent {
             if let Err(error) = super::execution_protocol::record_agent_on(&tx, id) {
                 aid_warn!("[aid] Could not record agent launch for {id}: {error}");
             }
-        } else {
+        } else if caller_owned {
             tx.execute("UPDATE tasks SET worker_spawned = 1 WHERE id = ?1 AND worker_spawned = 0", [id])?;
         }
         tx.commit()?;

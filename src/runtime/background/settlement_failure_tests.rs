@@ -111,6 +111,10 @@ async fn caller_owned_background_never_runs_a_saved_completion_callback() {
     store.db().execute("UPDATE tasks SET execution_policy=?2 WHERE id=?1",rusqlite::params![task.id.as_str(),
         serde_json::json!({"name":"caller-owned","version":1,"agent":"codex","model":"test","accepted_at":"now"}).to_string()]).expect("policy");
     save_spec(&BackgroundRunSpec {task_id:task.id.to_string(),on_done:Some("true".into()),..Default::default()}).expect("saved callback");
+    let args = RunArgs { policy: Some("caller-owned".into()),
+        agent_name: "missing-agent".into(), ..Default::default() };
+    store.update_task_dispatch_args(task.id.as_str(), &args.dispatch_args_json().expect("args"))
+        .expect("saved args");
     process::ON_DONE_CALLS.with(|calls|calls.set(0));
     assert!(run_task(store,task.id.as_str()).await.is_err(),"no saved dispatch args");
     assert_eq!(process::ON_DONE_CALLS.with(|calls|calls.get()),0);

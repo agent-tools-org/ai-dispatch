@@ -62,7 +62,7 @@ async fn assert_worker_timeout(script: &str) {
     let mut cmd = Command::new("sh");
     cmd.args(["-c", script]);
     run_agent_process_with_timeout(
-        &TimeoutTestAgent,
+        false, &TimeoutTestAgent,
         cmd,
         &task_id,
         &store,
@@ -100,7 +100,7 @@ async fn max_duration_timeout_reaches_on_fail_lifecycle() {
     let policy = tiny_timeout_policy();
 
     run_agent_process_with_timeout(
-        &TimeoutTestAgent,
+        false, &TimeoutTestAgent,
         cmd,
         &task_id,
         &store,
@@ -160,7 +160,7 @@ async fn spawn_failure_marks_task_failed_not_running() {
     let policy = crate::config::timeout_policy::TimeoutPolicy::default();
 
     let err = run_agent_process_with_timeout(
-        &TimeoutTestAgent,
+        false, &TimeoutTestAgent,
         cmd,
         &task_id,
         &store,
@@ -225,6 +225,7 @@ fn process_foreground_completion_records_component_usage() {
     };
     let context = run_prompt::capture_failure_context(&store, &task.id, &Command::new("true"));
     let args = RunProcessArgs {
+        caller_owned: false,
         agent: &agent,
         cmd: Command::new("true"),
         task_id: &task.id,

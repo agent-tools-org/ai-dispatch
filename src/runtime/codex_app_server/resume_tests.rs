@@ -184,7 +184,7 @@ async fn foreground_rejected_resume_also_dispatches_fresh_exec() {
     fixture.command.env("AID_FAKE_MODE", "reject-resume");
     let _permit = crate::support::test_subprocess::acquire();
     crate::cmd::run::run_agent_process_with_cost(
-        &crate::agent::codex::CodexAgent,
+        false, &crate::agent::codex::CodexAgent,
         tokio::process::Command::from(clone_command(&fixture.command, false)),
         &fixture.task,
         &fixture.store,

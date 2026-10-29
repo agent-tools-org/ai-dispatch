@@ -28,13 +28,13 @@ async fn assert_deadline(pty: bool, streaming: bool, script: &str, default_max: 
     let agent = crate::runtime::watcher::idle_tests::FakeAgent;
     if pty {
         run_agent_process_with_control(
-            &agent, &cmd, &id, &store, &log, None, None, streaming, policy, None, None,
+            false, &agent, &cmd, &id, &store, &log, None, None, streaming, policy, None, None,
             std::time::Instant::now(),
         )
         .expect("PTY worker");
     } else {
         crate::cmd::run::run_agent_process_with_cost(
-            &agent,
+            false, &agent,
             cmd.into(),
             &id,
             &store,

@@ -19,10 +19,19 @@ pub fn update_agent_pid(task_id: &str, agent_pid: u32) -> Result<()> {
         spec.agent_started = crate::runtime::process::monitor::activity::root_started(agent_pid);
         save_spec(&spec)
     })();
-    result.map_err(|error| {
+    if result.is_err() {
         sigkill_process(agent_pid);
+    }
+    result
+}
+
+pub(crate) fn publish_agent_pid(caller_owned: bool, task_id: &str, agent_pid: u32) -> Result<()> {
+    update_agent_pid(task_id, agent_pid).map_err(|error| {
+        if !caller_owned { return error; }
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        while crate::cmd::execution_receipt::group_gone(agent_pid).is_err() && std::time::Instant::now() < deadline {
+        while crate::cmd::execution_receipt::group_gone(agent_pid).is_err()
+            && std::time::Instant::now() < deadline
+        {
             std::thread::sleep(std::time::Duration::from_millis(25));
         }
         AgentPublicationFailure { source: error,
@@ -163,6 +172,15 @@ mod tests {
 
 
 #[derive(Debug)]
+pub(crate) struct AgentSpawnFailure(pub anyhow::Error);
+impl std::fmt::Display for AgentSpawnFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.0, formatter)
+    }
+}
+impl std::error::Error for AgentSpawnFailure {}
+
+#[derive(Debug)]
 pub(crate) struct AgentPublicationFailure {
     source: anyhow::Error,
     pub confirmed_gone: bool,
@@ -178,3 +196,7 @@ impl std::error::Error for AgentPublicationFailure {}
 thread_local! {
     pub(super) static ON_DONE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
+
+#[cfg(test)]
+#[path = "process_round7_tests.rs"]
+mod round7_tests;

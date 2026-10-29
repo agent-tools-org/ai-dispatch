@@ -103,7 +103,7 @@ fn caller_owned_stop_signals_agent_descendants_in_separate_sessions_before_the_g
     let task = Task::test_fixture(TaskId("t-agent-tools".into()), TaskStatus::Running);
     store.insert_task(&task).expect("task");
     let mut agent = store
-        .with_running_task(task.id.as_str(), || {
+        .with_running_task(true, task.id.as_str(), || {
             let mut command = std::process::Command::new("sh");
             command
                 .args([

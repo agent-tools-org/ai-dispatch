@@ -53,6 +53,7 @@ fn timeout_args<'a>(
 ) -> RunProcessArgs<'a> {
     let cmd = Command::new("sh");
     RunProcessArgs {
+        caller_owned: false,
         agent: &ClaudeAgent,
         cmd,
         task_id: id,

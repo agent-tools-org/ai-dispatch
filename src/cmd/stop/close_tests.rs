@@ -8,7 +8,7 @@ pub(super) fn agent_fixture() -> (TestHome, Arc<Store>, Task, ProcessGuard) {
     let task = Task::test_fixture(TaskId("t-protocol-stop".into()), TaskStatus::Running);
     store.insert_task(&task).expect("task");
     let agent = store
-        .with_running_task(task.id.as_str(), || {
+        .with_running_task(true, task.id.as_str(), || {
             let mut command = std::process::Command::new("sleep");
             command.arg("60");
             let agent = ProcessGuard::spawn(&mut command)?;

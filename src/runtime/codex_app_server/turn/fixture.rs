@@ -65,7 +65,7 @@ impl Fixture {
         let task = self.store.get_task(self.task.as_str()).unwrap().unwrap();
         let adapter = crate::agent::codex::routed(task.custom_agent_name);
         crate::runtime::pty::runner::run_agent_process_with_control(
-            adapter.as_ref(),
+            self.store.is_caller_owned(self.task.as_str()).expect("fixture policy"), adapter.as_ref(),
             &self.command,
             &self.task,
             &self.store,

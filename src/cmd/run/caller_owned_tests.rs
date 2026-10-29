@@ -27,6 +27,7 @@ pub(super) fn setup() -> (Arc<Store>, TaskId, RunArgs) {
         )
         .expect("unreadable execution data");
     let args = RunArgs {
+        policy: Some("caller-owned".into()),
         retry: 1,
         verify: Some("false".into()),
         checklist: vec!["required".into()],
@@ -280,3 +281,6 @@ async fn caller_owned_gates_best_of_before_claiming_any_row() {
             .is_empty()
     );
 }
+
+#[path = "caller_owned_policy_read_tests.rs"]
+mod policy_read_tests;

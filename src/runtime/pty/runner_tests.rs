@@ -17,7 +17,7 @@ fn run_agent_process_marks_task_failed_when_spawn_fails() {
     let cmd = std::process::Command::new("/definitely/missing/kilo");
 
     let err = run_agent_process_with_control(
-        get_agent(AgentKind::Kilo).as_ref(),
+        false, get_agent(AgentKind::Kilo).as_ref(),
         &cmd,
         &task_id,
         &store,

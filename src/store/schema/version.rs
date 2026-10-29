@@ -3,7 +3,7 @@
 use anyhow::{Result, bail};
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
-pub(in crate::store) const CURRENT_VERSION: i64 = 6;
+pub(in crate::store) const CURRENT_VERSION: i64 = 7;
 
 pub(in crate::store) fn ensure_current(conn: &Connection) -> Result<()> {
     let version = schema_version(conn)?;
@@ -35,6 +35,11 @@ pub(in crate::store) fn ensure_current(conn: &Connection) -> Result<()> {
         super::execution::sequence(&tx)?;
     }
     if version < 6 {
+        super::execution::agent_evidence(&tx)?;
+    }
+    if version < 7 {
+        super::execution::sequence(&tx)?;
+        tx.execute_batch("DROP TRIGGER IF EXISTS execution_evidence_revision;")?;
         super::execution::agent_evidence(&tx)?;
     }
     if !has_private_launch_table(&tx)? {

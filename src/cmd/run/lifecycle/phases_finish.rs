@@ -4,7 +4,7 @@ use super::*;
 
 impl LifecycleRun<'_> {
     async fn peer_review(&mut self) -> Result<()> {
-        if self.store.is_caller_owned(self.task_id.as_str())? {
+        if self.args.policy.is_some() {
             return Ok(());
         }
         if let Some(ref reviewer_agent) = self.args.peer_review
@@ -155,7 +155,7 @@ impl LifecycleRun<'_> {
         }
         if let Some(task) = self.store.get_task(self.task_id.as_str())?
             && task.status == TaskStatus::Failed
-            && !self.store.is_caller_owned(self.task_id.as_str())?
+            && !self.args.policy.is_some()
             && self.args.cascade.is_empty()
             && self.quota_error_message.is_some()
         {

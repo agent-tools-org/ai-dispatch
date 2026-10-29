@@ -83,14 +83,15 @@ impl Store {
     }
 
     pub(crate) fn is_caller_owned(&self, id: &str) -> Result<bool> {
-        Ok(self
-            .execution_facts(id)?
-            .is_some_and(|facts| facts.policy.is_some()))
+        Ok(self.db().query_row(
+            "SELECT EXISTS(SELECT 1 FROM tasks WHERE id=?1 AND execution_policy IS NOT NULL)",
+            [id], |row| row.get(0),
+        )?)
     }
 
     pub(crate) fn begin_agent_launch(&self, id: &str) -> Result<Option<String>> {
         let conn = self.db();
-        let tx = conn.unchecked_transaction()?;
+        let tx = rusqlite::Transaction::new_unchecked(&conn, rusqlite::TransactionBehavior::Immediate)?;
         let previous: Option<String> = tx.query_row("SELECT agent_process FROM tasks WHERE id = ?1", [id], |r| r.get(0))?;
         let changed = tx.execute(r#"UPDATE tasks SET agent_process = '{"state":"starting"}' WHERE id = ?1
             AND (execution_policy IS NULL OR (json_extract(agent_process, '$.state') = 'not_started'
@@ -127,6 +128,11 @@ impl Store {
             "UPDATE tasks SET execution_stop = 1 WHERE id = ?1 AND execution_stop = 0",
             [id],
         )?;
+        Ok(())
+    }
+
+    pub(crate) fn clear_execution_stop(&self, id: &str) -> Result<()> {
+        self.db().execute("UPDATE tasks SET execution_stop = 0 WHERE id = ?1 AND execution_stop = 1", [id])?;
         Ok(())
     }
 
@@ -221,3 +227,7 @@ pub(super) fn record_agent_on(conn: &rusqlite::Connection, id: &str) -> Result<(
 #[cfg(test)]
 #[path = "execution_launch_tests.rs"]
 mod launch_tests;
+
+#[cfg(test)]
+#[path = "execution_round7_tests.rs"]
+mod round7_tests;

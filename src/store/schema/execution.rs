@@ -74,6 +74,13 @@ pub(super) fn sequence(conn: &Connection) -> Result<()> {
          CREATE TRIGGER execution_change_revision
          AFTER UPDATE OF status, agent, custom_agent_name, execution_policy, worker_settlement,
                          model, observed_model, attribution_source, exit_code, completed_at ON tasks
+         WHEN OLD.status IS NOT NEW.status OR OLD.agent IS NOT NEW.agent
+           OR OLD.custom_agent_name IS NOT NEW.custom_agent_name
+           OR OLD.execution_policy IS NOT NEW.execution_policy
+           OR OLD.worker_settlement IS NOT NEW.worker_settlement
+           OR OLD.model IS NOT NEW.model OR OLD.observed_model IS NOT NEW.observed_model
+           OR OLD.attribution_source IS NOT NEW.attribution_source
+           OR OLD.exit_code IS NOT NEW.exit_code OR OLD.completed_at IS NOT NEW.completed_at
          BEGIN
            INSERT INTO execution_revisions(id) VALUES(NULL);
            UPDATE tasks SET revision = last_insert_rowid() WHERE id = NEW.id;
@@ -90,7 +97,11 @@ pub(super) fn agent_evidence(conn: &Connection) -> Result<()> {
         super::version::add_column(conn, "tasks", definition)?;
     }
     conn.execute_batch("CREATE TRIGGER IF NOT EXISTS execution_evidence_revision
-        AFTER UPDATE OF agent_process, worker_spawned, execution_stop ON tasks BEGIN
+        AFTER UPDATE OF agent_process, worker_spawned, execution_stop ON tasks
+        WHEN OLD.agent_process IS NOT NEW.agent_process
+          OR OLD.worker_spawned IS NOT NEW.worker_spawned
+          OR OLD.execution_stop IS NOT NEW.execution_stop
+        BEGIN
           INSERT INTO execution_revisions(id) VALUES(NULL);
           UPDATE tasks SET revision = last_insert_rowid() WHERE id = NEW.id;
           DELETE FROM execution_revisions;

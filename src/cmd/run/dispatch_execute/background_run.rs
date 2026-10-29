@@ -56,7 +56,7 @@ impl<'a> BackgroundRun<'a> {
     pub(super) fn launch(&self) -> Result<()> {
         let store = self.store;
         let prepared = self.prepared;
-        launch_background_worker(store, prepared, &self.spec)?;
+        launch_background_worker(store, prepared, &self.spec, self.args.policy.is_some())?;
         #[cfg(test)]
         {
             let worker_store = Arc::clone(store);

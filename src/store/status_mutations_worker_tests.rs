@@ -67,7 +67,7 @@ fn worker(home: &Path, mode: &str, store: &Store) -> Worker {
         .stdout(Stdio::null())
         .process_group(0);
     store
-        .with_worker_launch("t-launch", || {
+        .with_worker_launch(false, "t-launch", || {
             let worker = Worker {
                 child: cmd.spawn()?,
                 stopped: false,
@@ -163,7 +163,7 @@ async fn worker_helper() {
 
 fn run_pty(agent: &dyn crate::agent::Agent, id: &TaskId, store: &Arc<Store>) {
     crate::runtime::pty::runner::run_agent_process_with_control(
-        agent,
+        false, agent,
         &command(),
         id,
         store,
@@ -181,7 +181,7 @@ fn run_pty(agent: &dyn crate::agent::Agent, id: &TaskId, store: &Arc<Store>) {
 
 async fn run_piped(agent: &dyn crate::agent::Agent, id: &TaskId, store: &Arc<Store>) {
     crate::cmd::run::run_agent_process_with_cost(
-        agent,
+        false, agent,
         tokio::process::Command::from(command()),
         id,
         store,
@@ -234,6 +234,7 @@ fn run_codex(id: &TaskId, store: &Arc<Store>) {
         .env("AID_LAUNCH_TEST_HOME", home());
     let agent = crate::agent::get_agent(AgentKind::Codex);
     crate::runtime::codex_app_server::run(crate::runtime::codex_app_server::Run {
+        caller_owned: false,
         start: std::time::Instant::now(),
         agent: agent.as_ref(),
         command: &command,

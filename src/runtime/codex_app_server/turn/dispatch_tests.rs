@@ -180,7 +180,7 @@ fn piped_dispatch_uses_the_same_transport_and_completion_pipeline() {
     tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(crate::cmd::run::run_agent_process_with_cost(
-            &crate::agent::codex::CodexAgent,
+            false, &crate::agent::codex::CodexAgent,
             command,
             &fixture.task,
             &fixture.store,

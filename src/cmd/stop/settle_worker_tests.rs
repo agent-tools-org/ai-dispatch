@@ -56,7 +56,7 @@ async fn settle_worker_failure_after_stop_records_no_failure_event() {
     let mut cmd = tokio::process::Command::new("sh");
     cmd.args(["-c", "exit 1"]);
     crate::cmd::run::run_agent_process_with_cost(
-        &agent,
+        false, &agent,
         cmd,
         &id,
         &store,

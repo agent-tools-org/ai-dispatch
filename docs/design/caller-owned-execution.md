@@ -87,8 +87,8 @@ Codes: `policy_unsupported`, `id_required`, `model_required`, `model_not_served`
 ## 3. Execution receipt
 
 Printed by `aid run --json` (caller-owned), `aid wait <ID> --json`, `aid stop <ID> --json`, and
-embedded as `"execution"` in `aid show <ID> --json`. `aid show` derives the receipt without writing; the
-other three persist a newly derived settlement. Every task has a receipt; `policy` is `null` in
+embedded as `"execution"` in `aid show <ID> --json`. `aid show` embeds the last persisted receipt and
+observes no process; the other three observe and persist what they derive. Every task has a receipt; `policy` is `null` in
 default mode.
 
 ```json
@@ -131,7 +131,8 @@ aid wait <ID> --json [--timeout SECS]
 
 Exactly one task ID with `--json`. Uses the existing worker barrier: it returns when the worker is
 settled, not when the status turns terminal. An `unconfirmed` worker keeps the wait open until the
-timeout; `aid stop` resolves it. `--timeout 0` is a
+timeout; `aid stop` resolves it when the task has recorded agent evidence. A row created before this
+protocol has none and stays `unconfirmed`. `--timeout 0` is a
 single observation. Exit 0 when the printed receipt has `settled: true`; 124 when the timeout passed
 first (the receipt is still printed, `settled: false`); 1 for `not_found` or a read error.
 

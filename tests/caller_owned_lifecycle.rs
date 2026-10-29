@@ -138,11 +138,13 @@ fn unconfirmed_worker_waits_for_the_full_timeout() {
     assert_eq!(later["worker"]["state"], "unconfirmed");
     assert_eq!(later["settled"], false);
     assert!(later["policy"].is_null());
-    let stopped = json(h.aid().args(["stop", id, "--json"]), 0);
-    assert_eq!(stopped["settled"], true);
-    let observed = json(h.aid().args(["wait", id, "--json", "--timeout", "0"]), 0);
+    // A row without recorded agent evidence cannot prove the agent gone, so stop stays unconfirmed.
+    let stopped = json(h.aid().args(["stop", id, "--json"]), 5);
+    assert_eq!(stopped["stop"]["result"], "unconfirmed");
+    assert_eq!(stopped["settled"], false);
+    let observed = json(h.aid().args(["wait", id, "--json", "--timeout", "0"]), 124);
     assert_eq!(observed["task_id"], id);
-    assert_eq!(observed["revision"], stopped["revision"]);
+    assert_eq!(observed["settled"], false);
     assert_default_rows(&h, id, 0);
 }
 

@@ -1,6 +1,7 @@
 // JSON show opens no writable store or reaper path, even before command dispatch.
 // Other commands retain the default startup store path.
 use super::*;
+use clap::Parser;
 
 #[test]
 fn caller_owned_show_json_does_not_create_a_missing_store() {

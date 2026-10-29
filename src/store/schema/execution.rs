@@ -52,3 +52,29 @@ pub(super) fn migrate(conn: &Connection) -> Result<()> {
     )?;
     Ok(())
 }
+
+
+pub(super) fn sequence(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE execution_revisions (id INTEGER PRIMARY KEY AUTOINCREMENT);
+         INSERT INTO execution_revisions(id) SELECT MAX(revision) FROM tasks HAVING MAX(revision) > 0;
+         DROP TRIGGER execution_status_revision;
+         DROP TRIGGER execution_policy_revision;
+         DROP TRIGGER execution_worker_revision;
+         DROP TRIGGER execution_attribution_revision;
+         CREATE TRIGGER execution_insert_revision AFTER INSERT ON tasks BEGIN
+           INSERT INTO execution_revisions(id) VALUES(NULL);
+           UPDATE tasks SET revision = last_insert_rowid() WHERE id = NEW.id;
+           DELETE FROM execution_revisions;
+         END;
+         CREATE TRIGGER execution_change_revision
+         AFTER UPDATE OF status, agent, custom_agent_name, execution_policy, worker_settlement,
+                         model, observed_model, attribution_source, exit_code, completed_at ON tasks
+         BEGIN
+           INSERT INTO execution_revisions(id) VALUES(NULL);
+           UPDATE tasks SET revision = last_insert_rowid() WHERE id = NEW.id;
+           DELETE FROM execution_revisions;
+         END;",
+    )?;
+    Ok(())
+}

@@ -15,7 +15,7 @@ fn reject_settlement(store: &Store) {
 }
 
 #[tokio::test]
-async fn caller_owned_worker_settlement_failure_still_clears_spec_and_input_files() {
+async fn caller_owned_worker_settlement_failure_cleans_inputs_and_retains_identity_evidence() {
     let (_home, store) = TestHome::with_dirs().shared_store();
     let task = Task::test_fixture(TaskId("t-cleanup-settlement".into()), TaskStatus::Running);
     store.insert_task(&task).expect("task");
@@ -31,7 +31,7 @@ async fn caller_owned_worker_settlement_failure_still_clears_spec_and_input_file
         .await
         .expect_err("missing dispatch args");
     assert!(error.to_string().contains("no saved dispatch args"), "{error:#}");
-    assert!(load_spec_if_exists(task.id.as_str()).expect("spec").is_none());
+    assert!(load_spec_if_exists(task.id.as_str()).expect("identity evidence retained").is_some());
     assert!(
         crate::runtime::input_signal::take_response(task.id.as_str())
             .expect("response")

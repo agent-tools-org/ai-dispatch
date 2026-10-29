@@ -13,10 +13,7 @@ pub(crate) async fn run_json(store: &Store, ids: &[String], timeout: Option<u64>
             println!("{receipt}");
             return Ok(0);
         }
-        let unconfirmed_without_live =
-            receipt["worker"]["state"] == "unconfirmed" && receipt["worker"]["pid"].is_null();
-        if unconfirmed_without_live
-            || timeout.is_some_and(|seconds| start.elapsed() >= Duration::from_secs(seconds))
+        if timeout.is_some_and(|seconds| start.elapsed() >= Duration::from_secs(seconds))
         {
             println!("{receipt}");
             return Ok(124);
@@ -67,4 +64,14 @@ mod tests {
         );
         assert!(run_json(&store, &[], Some(0)).await.is_err());
     }
+    #[tokio::test]
+    async fn caller_owned_unconfirmed_wait_remains_open_until_timeout() {
+        let (_home, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
+        let task = Task::test_fixture(crate::types::TaskId("t-wait-unconfirmed".into()), TaskStatus::Failed);
+        store.insert_task(&task).expect("task");
+        let started = Instant::now();
+        assert_eq!(run_json(&store, &[task.id.to_string()], Some(1)).await.expect("wait"), 124);
+        assert!(started.elapsed() >= Duration::from_secs(1), "unconfirmed is not an early timeout");
+    }
+
 }

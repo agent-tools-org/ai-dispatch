@@ -3,7 +3,7 @@
 use anyhow::{Context, Result, bail};
 
 #[cfg(unix)]
-pub(super) fn alive(pid: u32) -> Result<bool> {
+pub(crate) fn alive(pid: u32) -> Result<bool> {
     if pid > i32::MAX as u32 {
         return Ok(false);
     }
@@ -32,11 +32,11 @@ fn exists(pid: u32) -> Result<bool> {
 }
 
 #[cfg(not(unix))]
-pub(super) fn alive(_pid: u32) -> Result<bool> {
+pub(crate) fn alive(_pid: u32) -> Result<bool> {
     bail!("Process liveness unverifiable on this platform")
 }
 
-pub(super) fn field(pid: u32, column: &str) -> Result<String> {
+pub(crate) fn field(pid: u32, column: &str) -> Result<String> {
     let output = std::process::Command::new("ps")
         .args(["-ww", "-p", &pid.to_string(), "-o", &format!("{column}=")])
         .output()

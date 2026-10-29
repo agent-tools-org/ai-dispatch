@@ -40,6 +40,10 @@ pub(crate) fn spawn_on_done_command(command: &str, task_id: &str, status: &str) 
     }
     // Reap the child in a background thread to prevent orphan/zombie processes.
     let child = cmd.spawn().context("failed to spawn on_done callback")?;
+    #[cfg(test)]
+    ON_DONE_SPAWN.with(|hook| {
+        if let Some(hook) = hook.borrow_mut().take() { hook(); }
+    });
     let command_name = command.to_string();
     std::thread::spawn(move || match child.wait_with_output() {
         Ok(output) if !output.status.success() => {
@@ -103,27 +107,7 @@ pub fn sigkill_process(_pid: u32) {}
 
 #[cfg(unix)]
 pub fn is_process_running(pid: u32) -> bool {
-    if pid > i32::MAX as u32 {
-        return false;
-    }
-    let result = unsafe { libc::kill(pid as i32, 0) };
-    if result != 0 && std::io::Error::last_os_error().raw_os_error() != Some(libc::EPERM) {
-        return false;
-    }
-    is_process_not_zombie(pid)
-}
-
-#[cfg(unix)]
-fn is_process_not_zombie(pid: u32) -> bool {
-    let mut status = 0;
-    let ret = unsafe { libc::waitpid(pid as i32, &mut status, libc::WNOHANG) };
-    // waitpid returns:
-    //   0: child exists, not yet exited -> alive
-    //  >0: child was zombie, now reaped -> dead
-    //  -1 ECHILD: not our child -> can't determine zombie status, trust kill(0)
-    ret == 0
-        || (ret == -1
-            && std::io::Error::last_os_error().raw_os_error() == Some(libc::ECHILD))
+    crate::runtime::execution_processes::probe::alive(pid).unwrap_or(true)
 }
 
 #[cfg(not(unix))]
@@ -152,4 +136,20 @@ mod tests {
         assert!(!child.wait().expect("reap failed launch").success());
         assert!(!is_process_running(pid));
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static ON_DONE_SPAWN: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(all(test, unix))]
+#[test]
+fn caller_owned_liveness_probe_does_not_reap_a_recorded_child() {
+    let _permit = crate::support::test_subprocess::acquire();
+    let mut child = std::process::Command::new("sh").args(["-c", "exit 7"]).spawn().expect("child");
+    assert!(crate::support::test_subprocess::wait_dead(child.id() as i32, std::time::Duration::from_secs(5)));
+    assert!(!is_process_running(child.id()));
+    assert_eq!(child.wait().expect("owner still owns wait").code(), Some(7));
 }

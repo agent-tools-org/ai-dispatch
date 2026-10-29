@@ -30,7 +30,7 @@ fn observe_worker(store: &Store, id: &str) -> Result<()> {
         .settlement
         .as_ref()
         .and_then(|worker| worker.pid)
-        .filter(|pid| background::is_process_running(*pid));
+        .filter(|pid| crate::runtime::execution_processes::probe::alive(*pid).unwrap_or(true));
     match background::load_spec_if_exists(id) {
         Ok(Some(spec)) => return observe_spec(store, id, &spec),
         Err(error) => return record(store, id, "unconfirmed", stored_pid, Some(error.to_string())),
@@ -46,22 +46,27 @@ fn observe_worker(store: &Store, id: &str) -> Result<()> {
     {
         return Ok(());
     }
-    record(
-        store,
-        id,
-        "unconfirmed",
-        stored_pid,
-        Some("no worker evidence".into()),
-    )
+    use crate::runtime::execution_close::{close_execution, Closed, Closer};
+    match close_execution(store, id, "lost", Closer::Observation, None)? {
+        Closed::Unconfirmed(reason) => record(store, id, "unconfirmed", stored_pid, Some(reason)),
+        _ => Ok(()),
+    }
 }
 
 fn observe_spec(store: &Store, id: &str, spec: &background::BackgroundRunSpec) -> Result<()> {
     let Some(pid) = spec.worker_pid else {
         return record(store, id, "pending", None, None);
     };
-    if !background::is_process_running(pid) {
-        store.settle_worker(id, "lost", Some("worker exited before lifecycle settlement"))?;
-        return Ok(());
+    let gone = match crate::runtime::execution_processes::worker_gone(pid, id) {
+        Ok(gone) => gone,
+        Err(error) => return record(store, id, "unconfirmed", Some(pid), Some(error.to_string())),
+    };
+    if gone {
+        use crate::runtime::execution_close::{close_execution, Closed, Closer};
+        return match close_execution(store, id, "lost", Closer::Observation, Some(spec))? {
+            Closed::Unconfirmed(reason) => record(store, id, "unconfirmed", None, Some(reason)),
+            _ => Ok(()),
+        };
     }
     if background::BackgroundRunSpec::is_task_worker(pid, id) {
         return record(store, id, "running", Some(pid), None);

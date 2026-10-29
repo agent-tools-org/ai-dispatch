@@ -128,6 +128,8 @@ fn wrap_command(
         let project_id = crate::config::project::detect_project_in(project_dir)
             .map(|project| project.id)
             .unwrap_or_else(|| spec.task_id.clone());
+        let name = crate::runtime::container::container_name(&project_id);
+        record_container(spec, &name)?;
         Some(crate::runtime::container::start_or_reuse(
             image,
             project_dir,
@@ -142,6 +144,7 @@ fn wrap_command(
         if !crate::runtime::sandbox::is_available() {
             anyhow::bail!("--sandbox requires container CLI");
         }
+        record_container(spec, &format!("aid-{}", spec.task_id))?;
         crate::runtime::sandbox::wrap_command(&cmd, &spec.task_id, agent_kind, args.read_only)
     } else {
         cmd
@@ -242,4 +245,27 @@ fn ensure_launch_binary(args: &RunArgs, std_cmd: &std::process::Command) -> Resu
         agent::ensure_resolved_binary_available(&args.agent_name, &program)?;
     }
     Ok(())
+}
+
+fn record_container(spec: &BackgroundRunSpec, name: &str) -> Result<()> {
+    let mut current = super::load_spec_if_exists(&spec.task_id)?.unwrap_or_else(|| spec.clone());
+    current.container_name = Some(name.into());
+    super::save_spec(&current)
+}
+
+#[cfg(test)]
+#[test]
+fn caller_owned_container_recording_preserves_agent_launch_evidence() {
+    let _home = crate::support::test_env::TestHome::with_dirs();
+    let spec = BackgroundRunSpec {
+        task_id: "t-record-container".into(), worker_pid: Some(123), agent_pid: Some(456),
+        agent_started: Some("recorded launch".into()), ..Default::default()
+    };
+    super::save_spec(&spec).expect("spec");
+    record_container(&spec, "aid-task-container").expect("record");
+    let stored = super::load_spec_if_exists(&spec.task_id).expect("load").expect("spec");
+    assert_eq!(stored.container_name.as_deref(), Some("aid-task-container"));
+    assert_eq!(stored.worker_pid, spec.worker_pid);
+    assert_eq!(stored.agent_pid, spec.agent_pid);
+    assert_eq!(stored.agent_started, spec.agent_started);
 }

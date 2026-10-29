@@ -31,27 +31,28 @@ thread_local! {
 /// descendants are captured before any signal: the agent's tool commands run in
 /// their own sessions and are untraceable once the worker and agent die.
 #[cfg_attr(test, allow(dead_code))]
-fn signal_targets(worker_pid: Option<u32>, spec: &BackgroundRunSpec) {
-    let agent_pid = spec.agent_pid_for_signal();
+pub(crate) fn signal_targets(worker_pid: Option<u32>, spec: &BackgroundRunSpec) {
+    let mut evidence = spec.clone();
+    crate::runtime::execution_processes::snapshot(&mut evidence);
+    signal_tree(worker_pid, &evidence, false);
+    signal_tree(worker_pid, &evidence, true);
+}
+
+pub(crate) fn signal_tree(worker_pid: Option<u32>, spec: &BackgroundRunSpec, force: bool) -> bool {
     let worker_pid = worker_pid.filter(|pid| {
         Some(*pid) != spec.agent_pid && BackgroundRunSpec::is_task_worker(*pid, &spec.task_id)
     });
     let mut pids = worker_pid.into_iter().collect::<Vec<_>>();
-    #[cfg(unix)]
-    if let Some(worker_pid) = worker_pid
-        && (spec.agent_pid.is_none() || agent_pid.is_some())
-    {
-        let descendants = crate::runtime::process::group::descendant_pids(worker_pid);
-        pids.extend(descendants.into_iter().filter(|pid| Some(*pid) != spec.agent_pid));
-    }
-    for signal in [kill_process, sigkill_process] {
-        for &pid in &pids {
-            signal(pid);
-        }
-        if let Some(pid) = spec.agent_pid_for_signal() {
-            signal(pid);
+    for process in &spec.tool_sessions {
+        if crate::runtime::execution_processes::confirmed_gone(process).is_ok_and(|gone| !gone) {
+            pids.push(process.pid);
         }
     }
+    let signal = if force { sigkill_process } else { kill_process };
+    let mut signalled = !pids.is_empty();
+    for pid in pids { signal(pid); }
+    if let Some(pid) = spec.agent_pid_for_signal() { signal(pid); signalled = true; }
+    signalled
 }
 
 impl BackgroundRunSpec {

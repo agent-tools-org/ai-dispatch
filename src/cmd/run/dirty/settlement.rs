@@ -42,9 +42,6 @@ pub(super) fn rescue_dirty_worktree(
     pre_task_dirty_paths: Option<&[String]>,
     start_sha: Option<&str>,
 ) {
-    if store.is_caller_owned(task_id.as_str()).unwrap_or(true) {
-        return;
-    }
     match crate::workspace::commit::rescue_dirty_worktree_with_baseline(
         dir,
         task_id.as_str(),
@@ -111,15 +108,18 @@ mod caller_owned_tests {
     use super::*;
 
     #[test]
-    fn caller_owned_gates_dirty_rescue_without_staging_files() {
+    fn caller_owned_preserves_dirty_files_with_a_rescue_commit() {
         let (store, id, _) = crate::cmd::run::caller_owned_tests::setup();
         let dir = tempfile::tempdir().expect("checkout");
         assert!(std::process::Command::new("git").args(["init", "-q"])
             .current_dir(dir.path()).status().expect("git init").success());
+        for args in [["config", "user.email", "test@example.com"], ["config", "user.name", "Test"]] {
+            assert!(std::process::Command::new("git").args(args).current_dir(dir.path()).status().expect("config").success());
+        }
         std::fs::write(dir.path().join("main.rs"), "fn main() {}\n").expect("source");
         rescue_dirty_worktree(&store, &id, dir.path().to_str().expect("path"), None, None);
         let status = std::process::Command::new("git").args(["status", "--porcelain"])
             .current_dir(dir.path()).output().expect("git status");
-        assert_eq!(String::from_utf8_lossy(&status.stdout), "?? main.rs\n");
+        assert!(status.stdout.is_empty(), "rescue must commit the file");
     }
 }

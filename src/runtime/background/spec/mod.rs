@@ -30,6 +30,10 @@ pub struct BackgroundRunSpec {
     pub pre_task_dirty_paths: Option<Vec<String>>,
     #[serde(default)]
     pub foreground: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tool_sessions: Vec<crate::runtime::execution_processes::RecordedProcess>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub container_name: Option<String>,
 }
 
 impl BackgroundRunSpec {
@@ -53,6 +57,8 @@ impl BackgroundRunSpec {
             audit_report_mode: false,
             pre_task_dirty_paths: None,
             foreground: false,
+            tool_sessions: Vec::new(),
+            container_name: None,
         })
     }
 

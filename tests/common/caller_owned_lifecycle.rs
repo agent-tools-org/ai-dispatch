@@ -55,11 +55,6 @@ impl AgentProcess {
         let state = String::from_utf8_lossy(&out.stdout);
         out.status.success() && !state.trim().is_empty() && !state.trim().starts_with('Z')
     }
-
-    pub fn kill(&mut self) {
-        assert_eq!(unsafe { libc::kill(self.pid, libc::SIGKILL) }, 0);
-        self.armed = false;
-    }
 }
 
 impl Drop for AgentProcess {
@@ -73,27 +68,78 @@ impl Drop for AgentProcess {
     }
 }
 
-fn assert_agent_unsettled(agent: &AgentProcess, receipt: &serde_json::Value, id: &str) {
-    assert!(
-        agent.is_alive(),
-        "fixture process {} died while observing: {receipt}",
-        agent.pid
-    );
+pub fn assert_settlement_safe(
+    receipt: &serde_json::Value,
+    id: &str,
+    agent: &AgentProcess,
+    child: &AgentProcess,
+    group: i32,
+) {
     identity(receipt, id);
-    assert_eq!(receipt["settled"], false, "agent survived the worker: {receipt}");
-    assert!(matches!(
-        receipt["worker"]["state"].as_str(),
-        Some("running" | "unconfirmed")
-    ));
+    if receipt["settled"] == true {
+        assert!(
+            !agent.is_alive(),
+            "settled receipt left agent {} alive: {receipt}",
+            agent.pid
+        );
+        assert!(
+            !child.is_alive(),
+            "settled receipt left child {} alive: {receipt}",
+            child.pid
+        );
+        assert!(
+            group_gone(group),
+            "settled receipt left group {group} alive: {receipt}"
+        );
+    } else {
+        assert!(matches!(
+            receipt["worker"]["state"].as_str(),
+            Some("running" | "unconfirmed")
+        ));
+    }
 }
 
-pub fn observe_unsettled(h: &Harness, process: &AgentProcess, id: &str) -> serde_json::Value {
+fn group_gone(group: i32) -> bool {
+    let out = bounded(std::process::Command::new("ps").args(["-A", "-o", "pgid=,stat="]));
+    assert!(out.status.success(), "could not inspect recorded process group");
+    !String::from_utf8(out.stdout).unwrap().lines().any(|line| {
+        let mut fields = line.split_whitespace();
+        fields.next().and_then(|field| field.parse::<i32>().ok()) == Some(group)
+            && fields
+                .next()
+                .is_some_and(|state| !state.starts_with('Z') && !state.starts_with('X'))
+    })
+}
+
+pub fn observe_after_worker_loss(
+    h: &Harness,
+    id: &str,
+    agent: &AgentProcess,
+    child: &AgentProcess,
+    group: i32,
+) -> serde_json::Value {
     for _ in 0..3 {
-        assert_agent_unsettled(process, &h.observe(id), id);
+        assert_settlement_safe(&h.observe(id), id, agent, child, group);
     }
     let shown = json(h.aid().args(["show", id, "--json"]), 0);
-    assert_agent_unsettled(process, &shown["execution"], id);
-    let waiting = json(h.aid().args(["wait", id, "--json", "--timeout", "1"]), 124);
-    assert_agent_unsettled(process, &waiting, id);
-    waiting
+    assert_settlement_safe(&shown["execution"], id, agent, child, group);
+    let (code, receipt) = crate::caller_owned::result(h.aid().args(["wait", id, "--json", "--timeout", "1"]));
+    assert!(code == 0 || code == 124, "exit {code}: {receipt}");
+    assert_eq!(code == 0, receipt["settled"] == true);
+    assert_settlement_safe(&receipt, id, agent, child, group);
+    receipt
+}
+
+pub fn complete_without_observation(h: &Harness, id: &str) {
+    let verifier = h.verifier();
+    h.launch(id, &["--verify", &verifier]);
+    h.wait_for(|| h.path("holding").exists());
+    let active = json(h.aid().args(["show", id, "--json"]), 0);
+    let worker = active["execution"]["worker"]["pid"]
+        .as_i64()
+        .expect("gated worker PID") as i32;
+    assert_eq!(active["execution"]["settled"], false);
+    h.release();
+    // No receipt observation: wait for process exit directly.
+    h.wait_for(|| unsafe { libc::kill(worker, 0) } == -1);
 }

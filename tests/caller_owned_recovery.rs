@@ -5,33 +5,56 @@
 #[path = "common/caller_owned.rs"]
 mod caller_owned;
 mod common;
-use caller_owned::{Harness, SUCCESS};
+#[path = "common/caller_owned_recovery.rs"]
+mod recovery;
+use caller_owned::SUCCESS;
+use recovery::{Recovery, first_attempt};
 
 fn failed_once(body: &str, extra: &[&str]) {
-    let h = Harness::new(body);
+    let fixture = Recovery::new(body);
     let id = "t-recovery";
-    h.launch(id, extra);
-    let receipt = h.settled(id);
+    fixture.start(id, true, extra);
+    let receipt = fixture.assert_owned(id);
     assert_eq!(receipt["task"]["status"], "failed");
     assert_eq!(receipt["task"]["terminal"], true);
     assert_eq!(receipt["worker"]["outcome"], "completed");
-    h.assert_rows(id, 1);
 }
 
 #[test]
 fn unavailable_model_fails_without_self_heal_or_model_substitution() {
     // Explicit stderr prefix matches routing/model_health.rs and run/model_selfheal.rs.
-    failed_once("printf 'Error: unknown model caller-model\\n' >&2\nexit 1", &[]);
+    let body = first_attempt("printf 'Error: unknown model caller-model\\n' >&2\nexit 1");
+    let control = Recovery::new(&body);
+    control.start("t-model-control", false, &[]);
+    control.assert_control("t-model-control", 2, 2);
+    assert!(control.has_event("t-model-control", "model unavailable → retry on default"));
+    failed_once(&body, &[]);
 }
 
 #[test]
 fn transient_no_first_output_hang_does_not_retry() {
-    // No parsed event before idle expiry is the monitor's transient-hang case.
-    failed_once("exec sleep 8", &["--idle-timeout", "1"]);
+    // AID_FIRST_TOKEN_TIMEOUT_SECS=1 is applied to both runs by Recovery::command.
+    // A silent first attempt must reach the transient watchdog, not the 15s hard cap.
+    let body = first_attempt("exec sleep 8");
+    let control = Recovery::new(&body);
+    control.start("t-hang-control", false, &["--idle-timeout", "1"]);
+    control.assert_control("t-hang-control", 2, 2);
+    assert!(control.has_event("t-hang-control", "HUNG → retry"));
+    let owned = Recovery::new(&body);
+    owned.start("t-hang-owned", true, &["--idle-timeout", "1"]);
+    assert_eq!(owned.assert_owned("t-hang-owned")["task"]["status"], "failed");
+    let events = owned.show("t-hang-owned")["events"].as_array().unwrap().clone();
+    assert!(
+        events.iter().any(|event| event["metadata"]["transient"] == true
+            && event["metadata"]["hung_recovery_eligible"] == true)
+    );
 }
 
 #[test]
 fn quota_error_does_not_continue_on_another_execution() {
+    // No custom-only positive control: advice_route::automatic_candidate reads candidates,
+    // while shell custom agents appear only in custom_candidates (selection_advice.rs).
+    // Built-in provider binaries are excluded from the fixture PATH; no network fallback.
     failed_once(
         concat!(
             "printf '%s\\n' '{\"type\":\"error\",\"message\":",
@@ -43,39 +66,69 @@ fn quota_error_does_not_continue_on_another_execution() {
 
 #[test]
 fn capacity_error_does_not_continue_on_another_execution() {
-    failed_once(
-        concat!(
-            "printf '%s\\n' '{\"type\":\"error\",\"message\":",
-            "\"Selected model is at capacity. Please try a different model.\"}'\nexit 1"
-        ),
-        &[],
-    );
+    let body = first_attempt(concat!(
+        "printf '%s\\n' '{\"type\":\"error\",\"message\":",
+        "\"Selected model is at capacity. Please try a different model.\"}'\nexit 1"
+    ));
+    let control = Recovery::new(&body);
+    // A different custom route avoids retrying the model that is now held for capacity.
+    let config = std::fs::read_to_string(control.h.path("aid/agents/controlled.toml")).unwrap();
+    std::fs::write(
+        control.h.path("aid/agents/controlled-peer.toml"),
+        config.replace("id = \"controlled\"", "id = \"controlled-peer\""),
+    )
+    .unwrap();
+    control.start("t-capacity-control", false, &["--cascade", "controlled-peer"]);
+    control.assert_control("t-capacity-control", 2, 2);
+    failed_once(&body, &[]);
 }
 
 #[test]
 fn failing_verification_does_not_retry() {
+    let control = Recovery::new(SUCCESS);
+    control.start("t-verify-control", false, &["--verify", "false", "--retry", "1"]);
+    control.assert_control("t-verify-control", 2, 2);
+    control.assert_child_prompt("t-verify-control", "Verification failed. Please fix");
+    // Caller-owned admission refuses retry > 0, so only the control enables it.
     failed_once(SUCCESS, &["--verify", "false"]);
 }
 
 #[test]
 fn missing_checklist_item_does_not_retry() {
-    let h = Harness::new(SUCCESS);
-    let id = "t-checklist";
-    h.launch(id, &["--checklist", "report CHECKLIST 1: confirmed"]);
+    let item = "report CHECKLIST 1: confirmed";
+    let control = Recovery::new(SUCCESS);
+    control.start(
+        "t-checklist-control",
+        false,
+        &["--retry", "1", "--checklist", item],
+    );
+    control.assert_control("t-checklist-control", 2, 2);
+    control.assert_child_prompt("t-checklist-control", "[Checklist items not addressed]");
+    let owned = Recovery::new(SUCCESS);
+    owned.start("t-checklist-owned", true, &["--checklist", item]);
     // The protocol disables checklist retries; it does not prescribe the final task status.
-    let receipt = h.settled(id);
-    assert_eq!(receipt["task"]["terminal"], true);
-    h.assert_rows(id, 1);
+    owned.assert_owned("t-checklist-owned");
 }
 
 #[test]
 fn dirty_worktree_does_not_launch_a_rescue_agent() {
     let body = format!("printf 'changed\\n' > tracked.txt\n{SUCCESS}");
-    let h = Harness::new(&body);
-    h.git_project();
-    let id = "t-dirty";
-    h.launch(id, &["--worktree", "test/caller-dirty"]);
-    let receipt = h.settled(id);
-    assert_eq!(receipt["task"]["terminal"], true);
-    h.assert_rows(id, 1);
+    for owned in [false, true] {
+        let fixture = Recovery::new(&body);
+        fixture.h.git_project();
+        let id = if owned { "t-dirty-owned" } else { "t-dirty-control" };
+        fixture.start(id, owned, &["--worktree", "test/caller-dirty"]);
+        if owned {
+            fixture.assert_owned(id);
+        } else {
+            fixture.assert_control(id, 1, 1);
+            assert!(fixture.has_event(id, "Rescued 1 file(s)"));
+        }
+        let shown = fixture.show(id);
+        let worktree = shown["worktree_path"].as_str().unwrap();
+        let subject = fixture.git(worktree, &["log", "-1", "--format=%s"]);
+        assert_eq!(subject.contains("[aid] rescue:"), !owned, "{subject}");
+        let status = fixture.git(worktree, &["status", "--porcelain", "--", "tracked.txt"]);
+        assert_eq!(status.contains("tracked.txt"), owned, "{status}");
+    }
 }

@@ -35,7 +35,8 @@ fn capabilities_are_read_only_and_advertise_the_frozen_policy() {
             "judge",
             "peer_review",
             "audit",
-            "budget"
+            "budget",
+            "dry_run"
         ])
     );
     assert_eq!(
@@ -121,3 +122,5 @@ refusal!(
 );
 refusal!(audit_is_refused, "audit", "--audit");
 refusal!(budget_is_refused, "budget", "--budget", "standard");
+
+refusal!(dry_run_is_refused, "dry_run", "--dry-run");

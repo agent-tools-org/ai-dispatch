@@ -113,3 +113,31 @@ fn existing_default_mode_id_conflicts_without_suffix_or_row_change() {
     assert_eq!(rows.as_array().unwrap().len(), 1);
     assert_eq!(rows[0]["id"], id);
 }
+
+#[test]
+#[ignore = "custom registry ids are case-sensitive; resolve_from_registry uses HashMap::get(name)"]
+fn different_case_agent_resubmission_returns_existing_when_custom_ids_allow_it() {
+    // registry.rs resolves custom ids exactly; no case alias exists for controlled.
+    let h = Harness::new(SUCCESS);
+    let id = "t-case-duplicate";
+    h.launch(id, &[]);
+    h.settled(id);
+    let mut cmd = h.aid();
+    cmd.args([
+        "run",
+        "CONTROLLED",
+        "exercise caller owned execution",
+        "--id",
+        id,
+        "--policy",
+        "caller-owned",
+        "--model",
+        MODEL,
+        "--json",
+        "--bg",
+    ]);
+    let existing = json(cmd, 0);
+    assert_eq!(existing["submission"], "existing");
+    identity(&existing, id);
+    h.assert_rows(id, 1);
+}

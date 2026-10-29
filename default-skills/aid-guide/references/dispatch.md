@@ -36,8 +36,15 @@ status and worker settlement are separate: a terminal task can still have a live
 124 for an unsettled timeout (still printing the receipt), and 1 for unknown IDs or read errors.
 `--timeout 0` observes once. `aid stop --json` targets exactly that worker, including one behind
 a terminal row; it exits 0 for `stopped`/`already_settled` and 5 for `unconfirmed`.
-Stop confirms process exit before recording settlement; unverifiable identity or a live process
-never counts as a successful stop. This worker-stop behavior applies in default mode too.
+Stop checks liveness without reaping recorded processes, verifies identity before every signal,
+and confirms exit before recording settlement. A readable identity mismatch means the original
+process is gone: the reused PID is never signalled and does not block settlement. A live process
+with missing or unreadable identity returns `unconfirmed`; non-terminal task rows still become
+`stopped`, but no settlement is written. In text mode the reason is a warning and an error.
+A terminal row with no live recorded task process keeps its status, artifacts, locks and final-state
+metadata untouched. Text mode retains `task already <status>: ...`; JSON acknowledges settlement
+with exit 0. Existing settlement is preserved. Worktree preservation runs only after signalling a
+verified live process. This worker-stop behavior applies in default mode too.
 
 
 ## Tools and skills are the caller's choice

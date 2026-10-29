@@ -62,16 +62,12 @@ fn worker(id: &str, on_term: &str) -> ProcessGuard {
 #[test]
 fn stop_and_force_leave_unrelated_worker_pid_alive() {
     for action in [stop, kill] {
-        with_task(TaskStatus::Running, false, |store, id| {
+        with_task(TaskStatus::Stopped, true, |store, id| {
             let mut command = Command::new("sleep");
             command.arg("60");
             let mut child = ProcessGuard::spawn(&mut command).expect("unrelated child");
             save_worker(id, child.id());
-            assert!(
-                action(store, id).expect_err("unconfirmed identity")
-                    .to_string()
-                    .contains("identity unverifiable")
-            );
+            action(store, id).expect("reused worker pid is confirmed gone");
             assert!(
                 child.child_mut().try_wait().expect("wait").is_none(),
                 "unrelated child survived"
@@ -97,14 +93,10 @@ fn stop_and_force_signal_matching_worker() {
 
 #[test]
 fn stop_rechecks_worker_identity_before_sigkill_escalation() {
-    with_task(TaskStatus::Stopped, false, |store, id| {
+    with_task(TaskStatus::Stopped, true, |store, id| {
         let mut child = worker(id, "exec sleep 60");
         save_worker(id, child.id());
-        assert!(
-            stop(store, id).expect_err("unconfirmed exit")
-                .to_string()
-                .contains("still alive")
-        );
+        stop(store, id).expect("worker replaced by a different identity is gone");
         assert!(
             child.child_mut().try_wait().expect("wait").is_none(),
             "replacement survived escalation"
@@ -114,36 +106,45 @@ fn stop_rechecks_worker_identity_before_sigkill_escalation() {
 
 #[test]
 fn caller_owned_stop_signals_live_workers_behind_every_terminal_status() {
-    for status in [
-        TaskStatus::Done,
-        TaskStatus::Failed,
-        TaskStatus::Stopped,
-        TaskStatus::Merged,
-        TaskStatus::Skipped,
-    ] {
-        with_task(status, true, |store, id| {
-            store
-                .db()
-                .execute(
-                    "UPDATE tasks SET status = ?2, completed_at = created_at WHERE id = ?1",
-                    rusqlite::params![id, status.as_str()],
-                )
-                .expect("terminal row");
-            let child = worker(id, "trap - TERM; kill -TERM $$");
-            save_worker(id, child.id());
-            stop(store, id).expect("stop terminal row worker");
-            assert!(!crate::support::test_subprocess::is_live(child.id() as i32));
-            assert_eq!(
+    for action in [stop, kill] {
+        for status in [
+            TaskStatus::Done,
+            TaskStatus::Failed,
+            TaskStatus::Stopped,
+            TaskStatus::Merged,
+            TaskStatus::Skipped,
+        ] {
+            with_task(status, true, |store, id| {
                 store
-                    .execution_facts(id)
-                    .expect("facts")
-                    .expect("row")
-                    .settlement
-                    .expect("settled")
-                    .outcome
-                    .as_deref(),
-                Some("stopped")
-            );
-        });
+                    .db()
+                    .execute(
+                        "UPDATE tasks SET status = ?2, completed_at = created_at WHERE id = ?1",
+                        rusqlite::params![id, status.as_str()],
+                    )
+                    .expect("terminal row");
+                let mut child = worker(id, "trap - TERM; kill -TERM $$");
+                save_worker(id, child.id());
+                action(store, id).expect("stop terminal row worker");
+                assert!(
+                    !child
+                        .child_mut()
+                        .wait()
+                        .expect("worker remains waitable by owner")
+                        .success()
+                );
+                assert!(!crate::support::test_subprocess::is_live(child.id() as i32));
+                assert_eq!(
+                    store
+                        .execution_facts(id)
+                        .expect("facts")
+                        .expect("row")
+                        .settlement
+                        .expect("settled")
+                        .outcome
+                        .as_deref(),
+                    Some("stopped")
+                );
+            });
+        }
     }
 }

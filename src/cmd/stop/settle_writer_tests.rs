@@ -156,7 +156,8 @@ fn settle_first_stop_preserves_winning_terminal_reason_without_event() {
     crate::runtime::background::record_failure(&store, "t-stop-lost", "worker died", "worker died")
         .expect("reaper wins");
     let before = store.get_events("t-stop-lost").expect("events");
-    stop(&store, "t-stop-lost").expect("terminal stop settles worker");
+    let error = stop(&store, "t-stop-lost").expect_err("terminal text refusal");
+    assert_eq!(error.to_string(), "task already failed: worker died");
     assert_eq!(
         store
             .get_task("t-stop-lost")

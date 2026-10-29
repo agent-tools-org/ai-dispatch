@@ -4,15 +4,11 @@
 use anyhow::{anyhow, bail, Result};
 use std::path::Path;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use crate::runtime::background;
 use crate::cmd::run::capture_final_worktree_state;
 use crate::store::Store;
 use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
-
-const WAIT_TIMEOUT: Duration = Duration::from_secs(5);
-const POLL_INTERVAL: Duration = Duration::from_millis(200);
 
 pub fn stop(store: &Arc<Store>, task_id: &str) -> Result<()> { terminate(store, task_id, true, "Task stopped by user", "stopped", Some("Stopped")) }
 
@@ -71,76 +67,55 @@ fn terminate(
     preserve_label: &'static str,
     print_label: Option<&'static str>,
 ) -> Result<()> {
+    let idle_terminal = terminate_task(store, task_id, graceful, detail, preserve_label)
+        .inspect_err(|error| aid_warn!("[aid] Stop unconfirmed for {task_id}: {error}"))?;
+    if idle_terminal { return already_terminal(store, task_id); }
+    if let Some(label) = print_label { println!("{label} {task_id}"); }
+    Ok(())
+}
+
+#[path = "stop_worker.rs"]
+mod worker;
+
+fn terminate_task(
+    store: &Arc<Store>, task_id: &str, graceful: bool,
+    detail: &'static str, preserve_label: &str,
+) -> Result<bool> {
     let task = store.get_task(task_id)?.ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
-    let spec = background::load_spec_if_exists(task_id)?;
-    validate_live_identity(task_id, spec.as_ref())?;
     let terminal = task.status.is_terminal()
         && !(task.status == TaskStatus::Done && task.completed_at.is_none());
     if !terminal {
         let event = TaskEvent::new(task.id.clone(), EventKind::Completion, detail.to_string());
         store.settle_task_status(task_id, TaskStatus::Stopped, None, None, Some(&event))?;
     }
-    if graceful && task.agent == crate::types::AgentKind::Codex {
+    let spec = background::load_spec_if_exists(task_id)?;
+    let targets = worker::Targets::load(task_id, spec.as_ref())?;
+    if graceful && targets.has_live() && task.agent == crate::types::AgentKind::Codex {
         crate::runtime::codex_app_server::wait_for_interrupt(task_id);
     }
-    signal_task(task_id, &task, graceful, preserve_label)?;
-    confirm_exit(task_id, spec.as_ref())?;
+    let signalled = targets.stop(graceful)?;
     store.settle_worker(task_id, "stopped", None)?;
+    if terminal && !signalled { return Ok(true); }
+    if signalled {
+        crate::runtime::sandbox::kill_container(task_id);
+        preserve_worktree(task_id, &task, preserve_label);
+    }
     capture_final_worktree_state(store.as_ref(), &TaskId(task_id.to_string()))?;
     if let Some(ref path) = task.worktree_path
-        && let Err(err) = crate::workspace::worktree::clear_worktree_lock(Path::new(path), task_id)
+        && let Err(error) = crate::workspace::worktree::clear_worktree_lock(Path::new(path), task_id)
     {
-        aid_warn!("[aid] Warning: failed to release worktree lock for task {task_id}: {err}");
+        aid_warn!("[aid] Warning: failed to release worktree lock for task {task_id}: {error}");
     }
     background::clear_spec(task_id)?;
-    if let Some(print_label) = print_label {
-        println!("{print_label} {task_id}");
-    }
-    Ok(())
+    Ok(false)
 }
 
-#[path = "stop_worker.rs"]
-mod worker;
-use worker::{validate_live_identity, confirm_exit};
-
-fn signal_task(task_id: &str, task: &Task, graceful: bool, preserve_label: &str) -> Result<()> {
-    let spec = background::load_spec_if_exists(task_id)?;
-    if let Some(pid) = spec.as_ref().and_then(|spec| {
-        spec.worker_pid.filter(|pid| {
-            Some(*pid) != spec.agent_pid && background::BackgroundRunSpec::is_task_worker(*pid, task_id)
-        })
-    }) {
-        if graceful {
-            background::kill_process(pid);
-            if wait_for_exit(pid) && background::BackgroundRunSpec::is_task_worker(pid, task_id) {
-                background::sigkill_process(pid);
-            }
-        } else {
-            background::sigkill_process(pid);
-            let _ = wait_for_exit(pid);
-        }
-    }
-    if let Some(pid) = spec.as_ref().and_then(|spec| spec.agent_pid_for_signal()) {
-        if graceful { background::kill_process(pid); } else { background::sigkill_process(pid); }
-    }
-    crate::runtime::sandbox::kill_container(task_id);
-    if matches!(task.status, TaskStatus::Running | TaskStatus::AwaitingInput
-        | TaskStatus::Stalled | TaskStatus::Stopped | TaskStatus::Done)
-    {
-        preserve_worktree(task_id, task, preserve_label);
-    }
-    Ok(())
-}
-
-fn wait_for_exit(pid: u32) -> bool {
-    let deadline = Instant::now() + WAIT_TIMEOUT;
-    while Instant::now() < deadline {
-        if !background::is_process_running(pid) {
-            return false;
-        }
-        std::thread::sleep(POLL_INTERVAL);
-    }
-    background::is_process_running(pid)
+fn already_terminal(store: &Store, task_id: &str) -> Result<()> {
+    let task = store.get_task(task_id)?.ok_or_else(|| anyhow!("Task '{task_id}' not found"))?;
+    let reason = store.get_events(task_id)?.into_iter().rev()
+        .find(|event| matches!(event.event_kind, EventKind::Completion | EventKind::Error))
+        .map(|event| event.detail).unwrap_or_else(|| "no terminal reason recorded".to_string());
+    bail!("task already {}: {}", task.status.as_str(), reason)
 }
 
 fn preserve_worktree(task_id: &str, task: &Task, action: &str) {
@@ -197,12 +172,21 @@ mod terminal_events_tests;
 mod worker_identity_tests;
 
 pub(crate) fn stop_json(store: &Arc<Store>, id: &str, force: bool) -> Result<i32> {
-    let before = crate::cmd::execution_receipt::receipt(store, id)?;
-    let was_settled = before["settled"] == true;
-    let result = terminate(store, id, !force, "Task stopped by user", "stopped", None);
-    let mut receipt = crate::cmd::execution_receipt::receipt(store, id)?;
+    let before = store.execution_snapshot(id)?
+        .ok_or_else(|| crate::execution::refuse("not_found", Some(id), 1))?;
+    let was_settled = before["worker"]["state"] == "settled";
+    let result = terminate_task(store, id, !force, "Task stopped by user", "stopped");
+    if let Err(error) = &result {
+        let pid = background::load_spec_if_exists(id).ok().flatten()
+            .and_then(|spec| spec.worker_pid.or(spec.agent_pid));
+        store.observe_worker_state(id, "unconfirmed", pid, Some(error.to_string()))?;
+    }
+    let mut receipt = store.execution_snapshot(id)?
+        .ok_or_else(|| crate::execution::refuse("not_found", Some(id), 1))?;
+    receipt["settled"] = serde_json::json!(receipt["worker"]["state"] == "settled");
+    receipt["observed_at"] = serde_json::json!(chrono::Utc::now().to_rfc3339());
     let (outcome, detail, code) = match result {
-        Ok(()) => (
+        Ok(_) => (
             if was_settled {
                 "already_settled"
             } else {
@@ -238,3 +222,11 @@ mod protocol_tests {
             .settlement.expect("worker").outcome.as_deref(), Some("stopped"));
     }
 }
+
+#[cfg(test)]
+#[path = "stop/idle_terminal_tests.rs"]
+mod idle_terminal_tests;
+
+#[cfg(all(test, unix))]
+#[path = "stop/unconfirmed_tests.rs"]
+mod unconfirmed_tests;

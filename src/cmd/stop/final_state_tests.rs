@@ -93,13 +93,28 @@ fn detached_stop_and_force_kill_reject_unverified_agent_identity() {
             spec.agent_pid = Some(root.id());
             spec.agent_started = started;
             crate::runtime::background::save_spec(&spec).expect("save spec");
-            action(&store, task.id.as_str()).expect("stop");
+            let result = action(&store, task.id.as_str());
+            assert_identity_result(&store, task.id.as_str(), result, spec.agent_started.is_some());
             std::thread::sleep(std::time::Duration::from_millis(100));
             let survived = root.child_mut().try_wait().expect("wait").is_none();
             root.force_kill();
             assert!(survived, "stop must reject a reused PID or missing launch identity");
         }
     }
+}
+
+#[cfg(unix)]
+fn assert_identity_result(store: &Store, id: &str, result: anyhow::Result<()>, recorded: bool) {
+    let worker = store.execution_facts(id).expect("facts").expect("row").settlement.expect("worker");
+    if recorded {
+        result.expect("recorded identity mismatch is confirmed gone");
+        assert_eq!(worker.outcome.as_deref(), Some("stopped"));
+    } else {
+        assert!(result.expect_err("missing identity is unconfirmed").to_string()
+            .contains("identity unverifiable"));
+        assert_ne!(worker.state, "settled");
+    }
+    assert_eq!(store.get_task(id).expect("task").expect("row").status, TaskStatus::Stopped);
 }
 
 #[cfg(unix)]

@@ -30,7 +30,8 @@ fn stop_done_task_settles_worker_without_changing_terminal_status() {
         let mut task = make_task("t-done", TaskStatus::Done);
         task.completed_at = Some(chrono::Local::now());
         store.insert_task(&task).unwrap();
-        stop(&store, "t-done").expect("terminal row is a valid stop target");
+        let error = stop(&store, "t-done").expect_err("text mode retains terminal refusal");
+        assert_eq!(error.to_string(), "task already done: no terminal reason recorded");
         assert_eq!(
             store
                 .execution_facts("t-done")

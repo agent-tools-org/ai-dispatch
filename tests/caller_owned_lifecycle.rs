@@ -5,7 +5,10 @@
 #[path = "common/caller_owned.rs"]
 mod caller_owned;
 mod common;
+#[path = "common/caller_owned_lifecycle.rs"]
+mod lifecycle;
 use caller_owned::{Harness, MODEL, SUCCESS, bounded, identity, json};
+use lifecycle::{AgentProcess, GROUP_AGENT_SCRIPT, observe_unsettled};
 use std::time::{Duration, Instant};
 
 #[test]
@@ -54,17 +57,15 @@ fn stop_signals_a_terminal_but_unsettled_worker() {
 
 #[test]
 fn killed_worker_is_lost_and_duplicate_submission_never_relaunches() {
-    let h = Harness::new(concat!(
-        "trap '' HUP\n",
-        "printf '%s\\n' \"$$\" > \"$AID_HOME/agent.pid.tmp\"\n",
-        "mv \"$AID_HOME/agent.pid.tmp\" \"$AID_HOME/agent.pid\"\n",
-        "printf '%s\\n' '{\"type\":\"message\",\"text\":\"holding\"}'\n",
-        "i=0\nwhile [ $i -lt 400 ]; do sleep 0.05; i=$((i+1)); done\n"
-    ));
+    let h = Harness::new(GROUP_AGENT_SCRIPT);
     let id = "t-lost-worker";
     h.launch(id, &[]);
     h.wait_for(|| h.path("aid/agent.pid").exists());
-    let mut agent = AgentProcess::from_marker(&h);
+    let mut agent = AgentProcess::from_marker(&h, "agent");
+    let mut child = AgentProcess::from_marker(&h, "agent-child");
+    let group = unsafe { libc::getpgid(agent.pid) };
+    assert!(group > 0);
+    assert_eq!(unsafe { libc::getpgid(child.pid) }, group);
     let mut running = h.observe(id);
     h.wait_for(|| {
         running = h.observe(id);
@@ -73,22 +74,21 @@ fn killed_worker_is_lost_and_duplicate_submission_never_relaunches() {
     let pid = running["worker"]["pid"].as_i64().unwrap() as i32;
     assert_ne!(pid, agent.pid);
     assert_eq!(unsafe { libc::kill(pid, libc::SIGKILL) }, 0);
-    for _ in 0..3 {
-        assert_agent_unsettled(&agent, &h.observe(id), id);
-    }
-    let shown = json(h.aid().args(["show", id, "--json"]), 0);
-    assert_agent_unsettled(&agent, &shown["execution"], id);
-    let waiting = json(h.aid().args(["wait", id, "--json", "--timeout", "1"]), 124);
-    assert_agent_unsettled(&agent, &waiting, id);
+    let waiting = observe_unsettled(&h, &agent, id);
     assert!(waiting["revision"].as_u64().unwrap() >= running["revision"].as_u64().unwrap());
-    assert_eq!(h.count(), 1);
     agent.kill();
+    h.wait_for(|| !agent.is_alive());
+    assert_eq!(unsafe { libc::getpgid(child.pid) }, group);
+    let child_waiting = observe_unsettled(&h, &child, id);
+    assert!(child_waiting["revision"].as_u64().unwrap() >= waiting["revision"].as_u64().unwrap());
+    assert_eq!(h.count(), 1);
+    child.kill();
     let lost = json(h.aid().args(["wait", id, "--json", "--timeout", "25"]), 0);
     identity(&lost, id);
     assert_eq!(lost["settled"], true);
     assert_eq!(lost["worker"]["state"], "settled");
     assert_eq!(lost["worker"]["outcome"], "lost");
-    assert!(lost["revision"].as_u64().unwrap() > waiting["revision"].as_u64().unwrap());
+    assert!(lost["revision"].as_u64().unwrap() > child_waiting["revision"].as_u64().unwrap());
     let existing = json(h.run(id, &[]), 0);
     assert_eq!(existing["submission"], "existing");
     identity(&existing, id);
@@ -96,59 +96,6 @@ fn killed_worker_is_lost_and_duplicate_submission_never_relaunches() {
     assert_eq!(existing["settled"], true);
     assert_eq!(existing["revision"], lost["revision"]);
     h.assert_rows(id, 1);
-}
-
-struct AgentProcess {
-    pid: i32,
-    armed: bool,
-}
-
-impl AgentProcess {
-    fn from_marker(h: &Harness) -> Self {
-        let pid = std::fs::read_to_string(h.path("aid/agent.pid"))
-            .unwrap()
-            .trim()
-            .parse()
-            .unwrap();
-        Self { pid, armed: true }
-    }
-
-    fn assert_alive(&self) {
-        assert_eq!(unsafe { libc::kill(self.pid, 0) }, 0, "agent must still be alive");
-        let out =
-            bounded(std::process::Command::new("ps").args(["-p", &self.pid.to_string(), "-o", "stat="]));
-        let state = String::from_utf8_lossy(&out.stdout);
-        assert!(
-            out.status.success() && !state.trim().is_empty() && !state.trim().starts_with('Z'),
-            "agent is not alive: {state}"
-        );
-    }
-
-    fn kill(&mut self) {
-        assert_eq!(unsafe { libc::kill(self.pid, libc::SIGKILL) }, 0);
-        self.armed = false;
-    }
-}
-
-impl Drop for AgentProcess {
-    fn drop(&mut self) {
-        // Stop the deliberately orphaned agent even if a receipt assertion fails.
-        if self.armed {
-            unsafe {
-                libc::kill(self.pid, libc::SIGKILL);
-            }
-        }
-    }
-}
-
-fn assert_agent_unsettled(agent: &AgentProcess, receipt: &serde_json::Value, id: &str) {
-    agent.assert_alive();
-    identity(receipt, id);
-    assert_eq!(receipt["settled"], false, "agent survived the worker: {receipt}");
-    assert!(matches!(
-        receipt["worker"]["state"].as_str(),
-        Some("running" | "unconfirmed")
-    ));
 }
 
 #[test]

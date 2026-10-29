@@ -2,6 +2,7 @@
 // Uses existing group fixtures without adding process ownership or settlement state.
 use super::*;
 use super::barrier_tests::{fixture, live_agent, record_agent};
+use crate::types::TaskStatus;
 
 #[test]
 fn caller_owned_normal_completion_race_rechecks_the_spec_before_labeling_lost() {

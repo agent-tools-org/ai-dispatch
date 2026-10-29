@@ -25,8 +25,9 @@ fn caller_owned_publication_kill_retains_the_live_worker_spec_through_lifecycle(
         .expect("spec"),
     )
     .expect("save");
+    store.test_caller_owned(id);
     store.mark_worker_spawned(id).expect("spawn evidence");
-    let result: Result<()> = store.with_running_task(true, id, || {
+    let result: Result<()> = store.with_running_task(true, id, |_pid| {
         let mut command = Command::new("sleep");
         command.arg("60");
         let mut agent = crate::runtime::process::guard::ProcessGuard::spawn(&mut command)?;
@@ -47,4 +48,17 @@ fn caller_owned_publication_kill_retains_the_live_worker_spec_through_lifecycle(
     let receipt = crate::cmd::execution_receipt::receipt(&store, id).expect("receipt");
     assert_eq!(receipt["worker"]["state"], "running");
     assert_eq!(receipt["settled"], false);
+}
+
+#[cfg(unix)]
+#[test]
+fn caller_owned_publication_cleanup_never_signals_a_mismatched_launch_identity() {
+    let _permit = crate::support::test_subprocess::acquire();
+    let mut command = Command::new("sleep");
+    command.arg("60");
+    let mut foreign = crate::runtime::process::guard::ProcessGuard::spawn(&mut command).expect("foreign");
+    let error = abort_agent_publication(Some((foreign.id(), Some("previous launch".into()))),
+        anyhow::anyhow!("publication failed"));
+    assert!(!error.downcast_ref::<AgentPublicationFailure>().expect("publication error").confirmed_gone);
+    assert!(foreign.child_mut().try_wait().expect("foreign remains alive").is_none());
 }

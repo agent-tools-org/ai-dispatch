@@ -7,11 +7,13 @@ pub(super) fn agent_fixture() -> (TestHome, Arc<Store>, Task, ProcessGuard) {
     let (home, store) = TestHome::with_dirs().shared_store();
     let task = Task::test_fixture(TaskId("t-protocol-stop".into()), TaskStatus::Running);
     store.insert_task(&task).expect("task");
+    store.test_caller_owned(task.id.as_str());
     let agent = store
-        .with_running_task(true, task.id.as_str(), || {
+        .with_running_task(true, task.id.as_str(), |_pid| {
             let mut command = std::process::Command::new("sleep");
             command.arg("60");
             let agent = ProcessGuard::spawn(&mut command)?;
+            *_pid = Some((agent.id(), crate::runtime::process::monitor::activity::root_started(agent.id())));
             background::update_agent_pid(task.id.as_str(), agent.id())?;
             Ok(agent)
         })
@@ -58,6 +60,8 @@ fn caller_owned_stop_cleanup_failure_never_writes_settlement() {
 fn default_text_stop_terminal_live_worker_is_untouched_as_on_main() {
     let _permit = crate::support::test_subprocess::acquire();
     let (_home, store, task, mut agent) = agent_fixture();
+    store.db().execute("UPDATE tasks SET execution_policy=NULL WHERE id=?1", [task.id.as_str()])
+        .expect("default task");
     store
         .db()
         .execute(
@@ -86,6 +90,7 @@ fn caller_owned_stop_json_keeps_existing_derived_settlement() {
     let (_home, store) = TestHome::with_dirs().shared_store();
     let task = Task::test_fixture(TaskId("t-stop-existing".into()), TaskStatus::Done);
     store.insert_task(&task).expect("task");
+    store.test_caller_owned(task.id.as_str());
     store
         .mark_worker_spawned(task.id.as_str())
         .expect("worker was spawned");
@@ -169,6 +174,7 @@ fn caller_owned_stop_does_not_discard_a_spawned_worker_with_no_published_pid() {
     let (_home, store) = TestHome::with_dirs().shared_store();
     let task = Task::test_fixture(TaskId("t-unpublished-worker".into()), TaskStatus::Running);
     store.insert_task(&task).expect("task");
+    store.test_caller_owned(task.id.as_str());
     store
         .mark_worker_spawned(task.id.as_str())
         .expect("worker spawned");

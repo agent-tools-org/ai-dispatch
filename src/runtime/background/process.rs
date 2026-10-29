@@ -39,6 +39,29 @@ pub(crate) fn publish_agent_pid(caller_owned: bool, task_id: &str, agent_pid: u3
     })
 }
 
+pub(crate) type AgentLaunchIdentity = (u32, Option<String>);
+
+pub(crate) fn abort_agent_publication(
+    identity: Option<AgentLaunchIdentity>, source: anyhow::Error,
+) -> anyhow::Error {
+    let confirmed_gone = identity.is_some_and(|(pid, started)| {
+        if pid <= 1 || pid > i32::MAX as u32 { return false; }
+        if crate::cmd::execution_receipt::group_gone(pid).is_ok() { return true; }
+        if !crate::runtime::process::monitor::activity::root_matches(pid, started.as_deref()) {
+            return false;
+        }
+        sigkill_process(pid);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while crate::cmd::execution_receipt::group_gone(pid).is_err()
+            && std::time::Instant::now() < deadline
+        {
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        crate::cmd::execution_receipt::group_gone(pid).is_ok()
+    });
+    AgentPublicationFailure { source, confirmed_gone }.into()
+}
+
 pub fn load_agent_pid(task_id: &str) -> Result<Option<u32>> {
     Ok(load_spec_if_exists(task_id)?.and_then(|spec| spec.agent_pid))
 }

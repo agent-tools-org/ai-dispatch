@@ -3,6 +3,7 @@
 use super::*;
 
 pub(crate) fn stop_json(store: &Arc<Store>, id: &str, force: bool) -> Result<i32> {
+    crate::cmd::execution_receipt::require_caller_owned(store, id)?;
     let before = store
         .execution_snapshot(id)?
         .ok_or_else(|| crate::execution::refuse("not_found", Some(id), 1))?;
@@ -34,11 +35,7 @@ pub(crate) fn stop_json(store: &Arc<Store>, id: &str, force: bool) -> Result<i32
             }
         }
         Err(error) => {
-            let pid = background::load_spec_if_exists(id)
-                .ok()
-                .flatten()
-                .and_then(|s| s.worker_pid.or(s.agent_pid));
-            store.observe_worker_state(id, "unconfirmed", pid, Some(error.to_string()))?;
+            record_unconfirmed(store, id, &error)?;
             let mut receipt = store
                 .execution_snapshot(id)?
                 .ok_or_else(|| anyhow!("Task disappeared"))?;
@@ -50,4 +47,15 @@ pub(crate) fn stop_json(store: &Arc<Store>, id: &str, force: bool) -> Result<i32
     receipt["stop"] = serde_json::json!({"result":label,"detail":detail});
     println!("{receipt}");
     Ok(code)
+}
+
+fn record_unconfirmed(store: &Store, id: &str, error: &anyhow::Error) -> Result<()> {
+            let pid = background::load_spec_if_exists(id)
+                .ok()
+                .flatten()
+                .and_then(|s| s.worker_pid)
+                .or(store.execution_facts(id)?.and_then(|facts| facts.settlement)
+                    .and_then(|worker| worker.pid));
+            store.observe_worker_state(id, "unconfirmed", pid, Some(error.to_string()))?;
+    Ok(())
 }

@@ -5,12 +5,18 @@ use super::*;
 pub(super) fn spawn_background_worker(
     store: &Store, spec: &BackgroundRunSpec, caller_owned: bool,
 ) -> Result<u32> {
-    let spawned = std::cell::Cell::new(false);
-    spawn_inner(store, spec, &spawned, caller_owned).map_err(|error| {
+    let spawned = std::cell::Cell::new(None);
+    let result = spawn_inner(store, spec, &spawned, caller_owned);
+    if caller_owned && let Some(pid) = spawned.get() {
+        if let Err(error) = store.observe_worker_state(&spec.task_id, "running", Some(pid), None) {
+            aid_warn!("[aid] Could not record worker PID {}: {error}", spec.task_id);
+        }
+    }
+    result.map_err(|error| {
         if !caller_owned {
             return error.downcast::<WorkerSpawned>().map_or_else(|error| error, |spawned| spawned.0);
         }
-        if spawned.get() || error.is::<WorkerSpawned>() {
+        if spawned.get().is_some() || error.is::<WorkerSpawned>() {
             if let Err(persist) = store.mark_worker_spawned(&spec.task_id) {
                 aid_warn!("[aid] Could not record worker spawn {}: {persist}", spec.task_id);
             }
@@ -22,7 +28,7 @@ pub(super) fn spawn_background_worker(
 }
 
 fn spawn_inner(
-    store: &Store, spec: &BackgroundRunSpec, spawned: &std::cell::Cell<bool>, caller_owned: bool,
+    store: &Store, spec: &BackgroundRunSpec, spawned: &std::cell::Cell<Option<u32>>, caller_owned: bool,
 ) -> Result<u32> {
     background::save_spec(spec)?;
     #[cfg(not(test))]
@@ -32,7 +38,7 @@ fn spawn_inner(
         let pid = tests::spawn_worker()?;
         #[cfg(not(test))]
         let (launcher, pid) = spawn()?;
-        spawned.set(true);
+        spawned.set(Some(pid));
         let published = background::update_worker_pid(spec.task_id.as_str(), pid);
         if published.is_err() {
             background::sigkill_process(pid);
@@ -53,11 +59,6 @@ fn spawn_inner(
     #[cfg(not(test))]
     acknowledge(launcher, worker_pid, published.is_ok())?;
     published?;
-    if caller_owned
-        && let Err(error) = store.observe_worker_state(spec.task_id.as_str(), "running", Some(worker_pid), None)
-    {
-        aid_warn!("[aid] Could not persist running worker {}: {error}", spec.task_id);
-    }
     Ok(worker_pid)
 }
 

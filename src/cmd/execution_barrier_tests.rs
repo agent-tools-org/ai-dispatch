@@ -13,6 +13,7 @@ pub(super) fn fixture() -> (TestHome, std::sync::Arc<Store>, TaskId) {
     store
         .insert_task(&Task::test_fixture(id.clone(), TaskStatus::Running))
         .expect("task");
+    store.test_caller_owned(id.as_str());
     (home, store, id)
 }
 

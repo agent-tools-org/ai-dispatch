@@ -23,9 +23,9 @@ fn stop_action(store: &Arc<Store>, id: &str, graceful: bool, detail: &str, label
         .get_task(id)?
         .ok_or_else(|| crate::execution::refuse("not_found", Some(id), 1))?;
     mark_stopped(store, &task, detail)?;
-    let spec = background::load_spec_if_exists(id)?;
+    let (spec, recorded_pid) = execution_receipt::worker_spec(store, id)?;
     let (agent, spawned, _) = store.execution_process(id)?;
-    let worker = spec.as_ref().and_then(|spec| spec.worker_pid);
+    let worker = spec.as_ref().and_then(|spec| spec.worker_pid).or(recorded_pid);
     anyhow::ensure!(
         spec.as_ref().is_none_or(|spec| spec.task_id == id),
         "Worker spec identity mismatch"
@@ -40,7 +40,8 @@ fn stop_action(store: &Arc<Store>, id: &str, graceful: bool, detail: &str, label
     if graceful && task.agent == crate::types::AgentKind::Codex {
         crate::runtime::codex_app_server::wait_for_interrupt(id);
     }
-    let targets = descendant_spec(id, spec.as_ref(), agent.as_ref())?;
+    let mut targets = descendant_spec(id, spec.as_ref(), agent.as_ref())?;
+    targets.worker_pid = worker;
     let descendants = background::capture_descendants(worker, &targets, true);
     let mut signalled = worker
         .map(|pid| signal_worker(pid, id, !graceful))
@@ -208,6 +209,7 @@ fn caller_owned_stop_marker_precedes_a_racing_settlement_observation() {
     let (_home, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let id = "t-stop-observation-race";
     store.insert_task(&Task::test_fixture(TaskId(id.into()), TaskStatus::Done)).expect("task");
+    store.test_caller_owned(id);
     STOP_HOOK.with(|hook| *hook.borrow_mut() = Some(Box::new(|store, id| {
         let receipt = execution_receipt::receipt(store, id).expect("racing receipt");
         assert_eq!(receipt["worker"]["outcome"], "stopped");

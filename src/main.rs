@@ -98,6 +98,7 @@ async fn async_main(cli: Cli) -> Result<()> {
             ui::output::set_quiet(true);
         }
     }
+    check_execution_policy(&command)?;
     let store = command_store()?;
 
     let outcome = match command {
@@ -111,6 +112,17 @@ async fn async_main(cli: Cli) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn check_execution_policy(command: &Option<Commands>) -> Result<()> {
+    let id = match command {
+        Some(Commands::Wait(args)) if args.json && args.task_ids.len() == 1 => &args.task_ids[0],
+        Some(Commands::Stop(args)) if args.json => &args.task_id,
+        _ => return Ok(()),
+    };
+    let store = store::Store::open_read_only(&support::paths::db_path())?
+        .ok_or_else(|| execution::refuse("not_found", Some(id), 1))?;
+    cmd::execution_receipt::require_caller_owned(&store, id)
 }
 
 fn command_store() -> Result<Arc<store::Store>> {

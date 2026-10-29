@@ -24,6 +24,7 @@ pub(crate) struct Refusal {
     pub code: &'static str,
     pub detail: Option<String>,
     pub exit: i32,
+    pub receipt: Option<Value>,
 }
 
 impl std::fmt::Display for Refusal {
@@ -43,15 +44,20 @@ pub(crate) fn refuse(code: &'static str, detail: Option<&str>, exit: i32) -> any
         code,
         detail: detail.map(str::to_owned),
         exit,
+        receipt: None,
     }
     .into()
 }
 
 impl Refusal {
     pub(crate) fn body(&self) -> Value {
-        json!({"protocol": PROTOCOL, "error": {
+        let error = json!({"protocol": PROTOCOL, "error": {
             "code": self.code, "message": self.to_string(), "detail": self.detail,
-        }})
+        }});
+        if let Some(mut receipt) = self.receipt.clone() {
+            receipt["error"] = error["error"].clone();
+            receipt
+        } else { error }
     }
 }
 

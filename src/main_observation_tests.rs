@@ -46,3 +46,23 @@ fn show_json_opens_a_writable_store_and_runs_normal_startup() {
         types::TaskStatus::Failed
     );
 }
+
+#[test]
+fn default_json_admission_refuses_before_startup_reaping_or_store_writes() {
+    let _home = crate::support::test_env::TestHome::with_dirs();
+    let store = store::Store::open(&support::paths::db_path()).expect("store");
+    let id = "t-default-admission";
+    store.insert_task(&types::Task::test_fixture(types::TaskId(id.into()), types::TaskStatus::Running))
+        .expect("task");
+    runtime::background::save_spec(&serde_json::from_value(serde_json::json!({
+        "task_id":id, "worker_pid":u32::MAX
+    })).expect("dead worker")).expect("spec");
+    let before = store.execution_snapshot(id).expect("snapshot");
+    for command in ["wait", "stop"] {
+        let cli = Cli::try_parse_from(["aid", command, id, "--json"]).expect("parse");
+        let error = check_execution_policy(&cli.command).expect_err("default policy refusal");
+        assert_eq!(error.downcast_ref::<execution::Refusal>().expect("refusal").exit, 3);
+    }
+    assert_eq!(store.execution_snapshot(id).expect("snapshot"), before);
+    assert_eq!(store.get_task(id).expect("task").expect("row").status, types::TaskStatus::Running);
+}

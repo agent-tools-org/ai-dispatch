@@ -196,6 +196,7 @@ fn caller_owned_show_json_embeds_the_persisted_execution_without_probing() {
     let (_home,store)=crate::support::test_env::TestHome::with_dirs().shared_store();
     let task=crate::types::Task::test_fixture(crate::types::TaskId("t-show-no-write".into()),crate::types::TaskStatus::Done);
     store.insert_task(&task).expect("task");
+    store.test_caller_owned(task.id.as_str());
     store.mark_worker_spawned(task.id.as_str()).expect("spawn");
     let before=store.execution_snapshot(task.id.as_str()).expect("before");
     let changes=store.db().total_changes();

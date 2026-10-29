@@ -208,3 +208,25 @@ fn batch_retry_same_agent_resumes_current_session_and_keeps_saved_budget() {
 
 #[path = "retry_explicit_tests.rs"]
 mod explicit_tests;
+
+#[tokio::test]
+async fn batch_retry_counts_a_caller_owned_refusal_and_continues_the_group() {
+    let _home = crate::support::test_env::TestHome::with_dirs();
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let owned = make_task("t-owned-batch", AgentKind::Codex);
+    let mut ordinary = make_task("t-default-batch", AgentKind::Grok);
+    let repo = crate::support::test_repo::repo_with_file("file.txt", "base", "base");
+    ordinary.repo_path = Some(repo.path().display().to_string());
+    store.insert_task(&owned).expect("owned row");
+    store.test_caller_owned(owned.id.as_str());
+    store.insert_task(&ordinary).expect("default row");
+    let mut attempted = Vec::new();
+    let failures = retry_tasks_serially(vec![owned, ordinary], |task| {
+        attempted.push(task.id.to_string());
+        let result = retry_task_to_run_args(&store, &task, "wg-mixed", None);
+        async move { result.map(|_| ()) }
+    }).await;
+    assert_eq!(attempted, ["t-owned-batch", "t-default-batch"]);
+    assert_eq!(failures, ["t-owned-batch"]);
+    assert_eq!(store.list_tasks(crate::types::TaskFilter::All).expect("unchanged rows").len(), 2);
+}

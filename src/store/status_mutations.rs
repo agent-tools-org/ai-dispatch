@@ -6,6 +6,7 @@ use chrono::Local;
 use rusqlite::{params, OptionalExtension};
 
 use super::Store;
+use crate::runtime::background::AgentLaunchIdentity;
 use crate::types::*;
 
 impl Store {
@@ -60,16 +61,19 @@ impl Store {
         &self,
         caller_owned: bool,
         id: &str,
-        launch: impl FnOnce() -> Result<T>,
+        launch: impl FnOnce(&mut Option<AgentLaunchIdentity>) -> Result<T>,
     ) -> Result<T> {
         crate::runtime::background::BackgroundRunSpec::prepare_agent(id)?;
         let previous = if caller_owned { self.begin_agent_launch(id)? } else { None };
         let returned = std::cell::Cell::new(false);
+        let pid = std::cell::RefCell::new(None);
         let result = self.with_launch_guard(id, || {
-            let result = launch();
+            let mut spawned = None;
+            let result = launch(&mut spawned);
+            pid.replace(spawned);
             returned.set(true);
             result
-        }, true, caller_owned);
+        }, Some(&pid), caller_owned);
         if caller_owned && let Err(error) = &result {
             let killed = error.downcast_ref::<crate::runtime::background::AgentPublicationFailure>()
                 .is_some_and(|failure| failure.confirmed_gone);
@@ -96,14 +100,14 @@ impl Store {
         id: &str,
         launch: impl FnOnce() -> Result<T>,
     ) -> Result<T> {
-        self.with_launch_guard(id, launch, false, caller_owned)
+        self.with_launch_guard(id, launch, None, caller_owned)
     }
 
     fn with_launch_guard<T>(
         &self,
         id: &str,
         launch: impl FnOnce() -> Result<T>,
-        agent: bool,
+        agent: Option<&std::cell::RefCell<Option<AgentLaunchIdentity>>>,
         caller_owned: bool,
     ) -> Result<T> {
         let conn = self.db();
@@ -125,10 +129,11 @@ impl Store {
             anyhow::bail!("Task '{id}' is no longer running; refusing launch");
         }
         let result = launch()?;
-        if caller_owned && agent {
-            if let Err(error) = super::execution_protocol::record_agent_on(&tx, id) {
-                aid_warn!("[aid] Could not record agent launch for {id}: {error}");
-            }
+        if caller_owned && let Some(pid) = agent {
+            let expected = pid.borrow().as_ref().map(|(pid, _)| *pid);
+            super::execution_protocol::record_agent_on(&tx, id, expected).map_err(|error| {
+                crate::runtime::background::abort_agent_publication(pid.take(), error)
+            })?;
         } else if caller_owned {
             tx.execute("UPDATE tasks SET worker_spawned = 1 WHERE id = ?1 AND worker_spawned = 0", [id])?;
         }

@@ -25,6 +25,7 @@ async fn caller_owned_gates_quota_continuation() {
         .insert_task_with_policy(&task, DispatchOrigin::Automatic, Some(&policy))
         .expect("task");
     let args = RunArgs {
+        policy: Some("caller-owned".into()),
         agent_name: "codex".into(),
         prompt: "Refactor parser".into(),
         kind: Some(crate::agent::classifier::TaskCategory::Refactoring),

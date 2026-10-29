@@ -100,13 +100,16 @@ fn default_reaper_keeps_main_spec_and_never_derives_settlement() {
     reaper::cleanup_pid_task(&store, &task, &spec, u32::MAX, &mut cleaned, &|_| false, 60).expect("main cleanup");
     assert_eq!(cleaned, vec![task.id.to_string()]);
     assert!(load_spec_if_exists(task.id.as_str()).expect("main leaves spec").is_some());
-    assert_eq!(store.execution_snapshot(task.id.as_str()).expect("row").expect("snapshot")["worker"]["state"], "pending");
+    assert_eq!(store.execution_facts(task.id.as_str()).expect("row").expect("facts")
+        .settlement.expect("unchanged stored state").state, "pending");
 }
 
 #[tokio::test]
 async fn caller_owned_background_never_runs_a_saved_completion_callback() {
     let (_home,store)=TestHome::with_dirs().shared_store();
-    let task=Task::test_fixture(TaskId("t-ignore-saved-callback".into()),TaskStatus::Running);
+    let mut task=Task::test_fixture(TaskId("t-ignore-saved-callback".into()),TaskStatus::Running);
+    task.agent = crate::types::AgentKind::Custom;
+    task.custom_agent_name = Some("missing-agent".into());
     store.insert_task(&task).expect("task");
     store.db().execute("UPDATE tasks SET execution_policy=?2 WHERE id=?1",rusqlite::params![task.id.as_str(),
         serde_json::json!({"name":"caller-owned","version":1,"agent":"codex","model":"test","accepted_at":"now"}).to_string()]).expect("policy");
@@ -116,6 +119,6 @@ async fn caller_owned_background_never_runs_a_saved_completion_callback() {
     store.update_task_dispatch_args(task.id.as_str(), &args.dispatch_args_json().expect("args"))
         .expect("saved args");
     process::ON_DONE_CALLS.with(|calls|calls.set(0));
-    assert!(run_task(store,task.id.as_str()).await.is_err(),"no saved dispatch args");
+    assert!(run_task(store,task.id.as_str()).await.is_err(),"invalid saved launch agent");
     assert_eq!(process::ON_DONE_CALLS.with(|calls|calls.get()),0);
 }

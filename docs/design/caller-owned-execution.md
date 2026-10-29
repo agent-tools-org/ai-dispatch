@@ -88,8 +88,8 @@ Codes: `policy_unsupported`, `id_required`, `model_required`, `model_not_served`
 
 Printed by `aid run --json` (caller-owned), `aid wait <ID> --json`, `aid stop <ID> --json`, and
 embedded as `"execution"` in `aid show <ID> --json`. `aid show` embeds the last persisted receipt and
-observes no process; the other three observe and persist what they derive. Every task has a receipt; `policy` is `null` in
-default mode.
+observes no process; the other three observe and persist what they derive. Every task has a receipt. aid records settlement evidence only for
+caller-owned tasks: a default-mode receipt has `policy: null` and `worker.state: "unconfirmed"`.
 
 ```json
 {
@@ -129,7 +129,8 @@ default mode.
 aid wait <ID> --json [--timeout SECS]
 ```
 
-Exactly one task ID with `--json`. Uses the existing worker barrier: it returns when the worker is
+Exactly one caller-owned task ID with `--json`; a default-mode task is refused with exit 3
+(`policy_unsupported`) and nothing is observed. Uses the existing worker barrier: it returns when the worker is
 settled, not when the status turns terminal. An `unconfirmed` worker keeps the wait open until the
 timeout; `aid stop` resolves it when the task has recorded agent evidence. A row created before this
 protocol has none and stays `unconfirmed`. `--timeout 0` is a
@@ -142,8 +143,9 @@ first (the receipt is still printed, `settled: false`); 1 for `not_found` or a r
 aid stop <ID> --json [--force]
 ```
 
-Targets the worker of exactly that ID, in any task status, for caller-owned tasks and for any task
-with `--json`. Text mode on a default-mode task keeps the earlier behaviour. A terminal row whose worker
+Targets the worker of exactly that caller-owned ID, in any task status. `--json` on a default-mode task
+is refused with exit 3 (`policy_unsupported`) and nothing is signalled or written; text mode on a
+default-mode task keeps the earlier behaviour. A terminal row whose worker
 is alive is a valid target: aid signals the verified worker and agent processes, waits for exit, then persists
 settlement `stopped`. A row with no live process for it is settled as `stopped` (or keeps its existing
 settlement). Output is the receipt plus:
@@ -171,7 +173,8 @@ observes the same ID afterwards.
   identity check says. Stop also signals the descendants of the worker and agent, including tool
   commands an agent runs in their own sessions (Codex does this for each command). A process outside the
   group that is no longer a descendant when it is observed, such as a tool command orphaned by an agent
-  that exited, is outside settlement.
+  that exited, is outside settlement, as is a child the worker itself started (for example a verify
+  command) when the worker crashes.
 - aid's own preservation of the agent's changes (failure salvage, auto-commit) is not an execution and
   still applies.
 - The Codex app-server to `codex exec` transport fallback is disabled; an app-server failure is the

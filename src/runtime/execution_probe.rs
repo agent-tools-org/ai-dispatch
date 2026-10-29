@@ -59,8 +59,7 @@ pub(crate) fn field(pid: u32, column: &str) -> Result<String> {
         anyhow::ensure!(!args.is_empty(), "Process identity unreadable for pid {pid}");
         return Ok(args);
     }
-    let output = std::process::Command::new("ps")
-        .env("TZ", "UTC0").env("LC_ALL", "C")
+    let output = crate::runtime::process::monitor::activity::ps_command()
         .args(["-ww", "-p", &pid.to_string(), "-o", &format!("{column}=")])
         .output()
         .context("Process identity unreadable")?;

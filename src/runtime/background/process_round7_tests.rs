@@ -62,3 +62,22 @@ fn caller_owned_publication_cleanup_never_signals_a_mismatched_launch_identity()
     assert!(!error.downcast_ref::<AgentPublicationFailure>().expect("publication error").confirmed_gone);
     assert!(foreign.child_mut().try_wait().expect("foreign remains alive").is_none());
 }
+
+#[cfg(unix)]
+#[test]
+fn publication_abort_kills_verified_group_including_another_member() {
+    use std::os::unix::process::CommandExt;
+    let _permit = crate::support::test_subprocess::acquire();
+    let mut leader_command = Command::new("sleep");
+    leader_command.arg("60");
+    let mut leader = crate::runtime::process::guard::ProcessGuard::spawn(&mut leader_command)
+        .expect("leader");
+    let pid = leader.id();
+    let started = crate::runtime::process::monitor::activity::root_started(pid).expect("identity");
+    let mut member = Command::new("sleep").arg("60").process_group(pid as i32)
+        .spawn().expect("group member");
+    let error = abort_agent_publication(Some((pid, Some(started))), anyhow::anyhow!("publication"));
+    assert!(error.downcast_ref::<AgentPublicationFailure>().expect("failure").confirmed_gone);
+    assert!(!leader.child_mut().wait().expect("leader wait").success());
+    assert!(!member.wait().expect("member wait").success());
+}

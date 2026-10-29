@@ -18,7 +18,7 @@ Hint: If passing file paths, use --context <path> not positional args"#)]
 pub struct RunArgs {
     #[arg(long)]
     pub policy: Option<String>,
-    #[arg(long)]
+    #[arg(long, requires = "policy")]
     pub json: bool,
     pub agent: String,
     pub prompt: Option<String>,

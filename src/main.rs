@@ -120,9 +120,13 @@ fn check_execution_policy(command: &Option<Commands>) -> Result<()> {
         Some(Commands::Stop(args)) if args.json => &args.task_id,
         _ => return Ok(()),
     };
-    let store = store::Store::open_read_only(&support::paths::db_path())?
+    let store = store::Store::open_read_only(&support::paths::db_path())
+        .map_err(|_| execution::refuse("policy_unsupported", Some("schema_upgrade_required"), 3))?
         .ok_or_else(|| execution::refuse("not_found", Some(id), 1))?;
-    cmd::execution_receipt::require_caller_owned(&store, id)
+    cmd::execution_receipt::require_caller_owned(&store, id).map_err(|error| {
+        if error.downcast_ref::<execution::Refusal>().is_some() { error }
+        else { execution::refuse("policy_unsupported", Some("schema_upgrade_required"), 3) }
+    })
 }
 
 fn command_store() -> Result<Arc<store::Store>> {

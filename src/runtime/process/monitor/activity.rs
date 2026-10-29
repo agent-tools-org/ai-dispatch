@@ -95,9 +95,8 @@ pub(crate) fn root_started(pid: u32) -> Option<String> {
 
 #[cfg(any(not(target_os = "linux"), test))]
 fn identity_command(pid: u32) -> std::process::Command {
-    let mut command = std::process::Command::new("ps");
-    command.env("TZ", "UTC0").env("LC_ALL", "C")
-        .args(["-p", &pid.to_string(), "-o", "lstart="]);
+    let mut command = ps_command();
+    command.args(["-p", &pid.to_string(), "-o", "lstart="]);
     command
 }
 
@@ -145,15 +144,23 @@ fn persist(path: &std::path::Path, sample: &Sample) -> Option<()> {
     result.ok()
 }
 
+pub(crate) fn ps_command() -> std::process::Command {
+    let mut command = std::process::Command::new("ps");
+    command.env("TZ", "UTC0").env("LC_ALL", "C");
+    command
+}
+
+fn table_command() -> std::process::Command {
+    let mut command = ps_command();
+    command.args([
+        "-A", "-o", "pid=", "-o", "ppid=", "-o", "pgid=", "-o", "time=", "-o", "lstart=", "-o",
+        "stat=", "-o", "args=",
+    ]);
+    command
+}
+
 fn process_table() -> Option<Vec<Process>> {
-    let output = std::process::Command::new("ps")
-        .args([
-            "-A", "-o", "pid=", "-o", "ppid=", "-o", "pgid=", "-o", "time=", "-o", "lstart=", "-o",
-            "stat=", "-o", "args=",
-        ])
-        .output()
-        .ok()
-        .filter(|output| output.status.success())?;
+    let output = table_command().output().ok().filter(|output| output.status.success())?;
     Some(
         String::from_utf8_lossy(&output.stdout)
             .lines()

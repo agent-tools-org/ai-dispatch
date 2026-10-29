@@ -37,7 +37,9 @@ fn capabilities_are_read_only_and_advertise_the_frozen_policy() {
             "audit",
             "budget",
             "dry_run",
-            "container"
+            "container",
+            "on_done",
+            "hook"
         ])
     );
     assert_disabled_recoveries(policy);
@@ -130,3 +132,5 @@ refusal!(budget_is_refused, "budget", "--budget", "standard");
 
 refusal!(dry_run_is_refused, "dry_run", "--dry-run");
 refusal!(container_is_refused, "container", "--container", "fixture-image");
+refusal!(on_done_is_refused, "on_done", "--on-done", "true");
+refusal!(hook_is_refused, "hook", "--hook", "on_done:true");

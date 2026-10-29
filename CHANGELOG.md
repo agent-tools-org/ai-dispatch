@@ -1,3 +1,7 @@
+## v11.7.2 (2026-10-29)
+- Use shorthand Qwen completion fields so default and web builds pass strict Clippy checks.
+
+
 ## v11.7.1 (2026-10-29)
 - Reduce duplicate code and simplify test setup.
 - Share task event and completion construction, adapter text and metadata parsing, and enum string mappings.

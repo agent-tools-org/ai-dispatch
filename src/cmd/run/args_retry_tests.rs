@@ -107,7 +107,7 @@ pub(super) fn every_field_set() -> RunArgs {
         background: true, dry_run: true, announce: true, foreground: true,
         parent_task_id: Some("t-parent".into()), on_done: Some("echo done".into()),
         origin: DispatchOrigin::ExplicitRetry,
-        cascade: vec!["opencode".into()], read_only: true, audit_report_mode: true, sandbox: true,
+        cascade: vec!["opencode".into()], read_only: true, network: true, audit_report_mode: true, sandbox: true,
         container: Some("ubuntu:latest".into()), remote_build: Some("chosen-box".into()),
         remote_build_auto_picked: true,
         backup: Some("gdrive:x".into()), no_backup: true, budget: true, best_of: Some(2),

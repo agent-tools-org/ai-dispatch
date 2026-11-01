@@ -11,6 +11,8 @@ pub(crate) struct ExecutionPolicy {
     pub version: u32,
     pub agent: String,
     pub model: String,
+    #[serde(default)]
+    pub network: bool,
     pub accepted_at: String,
 }
 

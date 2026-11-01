@@ -19,6 +19,7 @@ async fn caller_owned_gates_quota_continuation() {
         version: 1,
         agent: "codex".into(),
         model: "exact".into(),
+        network: false,
         accepted_at: "2026-10-29T10:00:00Z".into(),
     };
     store

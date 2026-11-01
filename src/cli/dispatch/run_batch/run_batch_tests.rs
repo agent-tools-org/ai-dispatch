@@ -142,7 +142,7 @@ fn cli_run_conversion_does_not_drop_any_configurable_field() {
     let fixtures = [
         configured_args(),
         parsed_args(&["--policy", "caller-owned", "--json"]),
-        parsed_args(&["--no-skill", "--no-audit", "--backup", "gdrive:x", "--sandbox"]),
+        parsed_args(&["--no-skill", "--no-audit", "--backup", "gdrive:x", "--sandbox", "--network"]),
         parsed_args(&["--container", "dev:latest"]),
         run_args(Cli::try_parse_from(["aid", "run", "kilo", "--prompt-file", "prompt.md"])
             .expect("parse prompt file").command.and_then(|command| match command {

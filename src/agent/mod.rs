@@ -174,6 +174,8 @@ pub struct RunOpts {
     pub model: Option<String>,
     pub budget: bool,
     pub read_only: bool,
+    /// Grants network access to agents whose launch has an OS network sandbox.
+    pub network: bool,
     pub sandbox: bool,
     pub context_files: Vec<String>,
     pub session_id: Option<String>,

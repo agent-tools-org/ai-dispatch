@@ -68,6 +68,7 @@ fn run_opts(
         model: args.model.clone(),
         budget: args.budget,
         read_only: args.read_only,
+        network: args.network,
         sandbox: args.sandbox,
         context_files: vec![],
         session_id: args.session_id.clone(),

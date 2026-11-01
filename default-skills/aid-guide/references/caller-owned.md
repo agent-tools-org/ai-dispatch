@@ -58,6 +58,8 @@ submission that never spawned a worker or agent, `lost` for a dead worker's rema
 otherwise `completed`. Worker, stop and reaper cleanup never write settlement directly.
 `--container` is refused because its shared project container cannot be attributed to one task.
 `--sandbox` retains its task-specific container behavior.
+`--network` (capability `agent_network`) is part of the accepted policy, recorded as `policy.network`;
+reusing an ID with a different `--network` value is `id_conflict`.
 
 `aid wait --json` accepts exactly one caller-owned ID and uses the worker barrier. It exits 0 for settlement,
 124 for an unsettled timeout (still printing the receipt), and 1 for unknown IDs or read errors.

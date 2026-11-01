@@ -48,7 +48,7 @@ fn run_args(cli: run_args::RunArgs) -> cmd::run::RunArgs {
         difficulty, budget, urgency, rigor, egress, kind, no_hint: _, worktree, team,
         group, verify, iterate, eval, eval_feedback_template, judge, peer_review, retry,
         context, checklist, checklist_file: _, scope, run_extras, no_skill, bg, dry_run,
-        read_only, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout,
+        read_only, network, sandbox, container, best_of, metric, parent, id, timeout, idle_timeout,
         audit, no_audit, no_link_deps,
     } = cli;
     let RunExtrasArgs {
@@ -73,7 +73,7 @@ fn run_args(cli: run_args::RunArgs) -> cmd::run::RunArgs {
         worktree, group: super::resolve_group(group), verify, iterate, eval,
         eval_feedback_template, judge, peer_review, retry, context, checklist, scope, skills,
         remote_build, backup, no_backup, hooks: hook, template,
-        background: bg, dry_run, announce: !json, on_done, cascade, read_only, sandbox, container,
+        background: bg, dry_run, announce: !json, on_done, cascade, read_only, network, sandbox, container,
         best_of, metric, team, context_from, parent_task_id: parent,
         idle_timeout_secs: idle_timeout, existing_task_id: id.map(TaskId), timeout,
         audit, audit_explicit: audit, no_audit, link_deps: !no_link_deps,

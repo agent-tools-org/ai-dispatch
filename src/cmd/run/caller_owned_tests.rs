@@ -14,6 +14,7 @@ pub(super) fn setup() -> (Arc<Store>, TaskId, RunArgs) {
         version: 1,
         agent: "codex".into(),
         model: "exact-model".into(),
+        network: false,
         accepted_at: "2026-10-29T10:00:00Z".into(),
     };
     store

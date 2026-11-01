@@ -94,6 +94,8 @@ pub struct RunArgs {
     pub dry_run: bool,
     #[arg(long, help = "Read-only task; use --dir <checkout-path> to inspect an existing worktree")]
     pub read_only: bool,
+    #[arg(long, help = "Grant the agent network access, including loopback, where aid's launch sandboxes it (codex)")]
+    pub network: bool,
     #[arg(long)]
     pub sandbox: bool,
     #[arg(long, value_name = "IMAGE", conflicts_with = "sandbox")]

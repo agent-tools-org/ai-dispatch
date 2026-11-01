@@ -51,6 +51,7 @@ where
         model: effective_model.map(str::to_string),
         budget: args.budget,
         read_only: args.read_only,
+        network: args.network,
         sandbox: args.sandbox,
         context_files: Vec::new(),
         session_id: None,

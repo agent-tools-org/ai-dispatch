@@ -19,7 +19,8 @@ fn capabilities_are_read_only_and_advertise_the_frozen_policy() {
             "caller_owned_policy",
             "settlement_receipt",
             "worker_stop",
-            "idempotent_submit"
+            "idempotent_submit",
+            "agent_network"
         ])
     );
     let policy = &value["policies"]["caller-owned"];

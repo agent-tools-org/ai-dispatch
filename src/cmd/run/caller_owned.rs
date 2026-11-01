@@ -34,6 +34,7 @@ pub(crate) fn existing(store: &Store, args: &RunArgs) -> Result<Option<TaskId>> 
             && policy.version == 1
             && normalized_agent(&policy.agent) == normalized_agent(&args.agent_name)
             && Some(&policy.model) == args.model.as_ref()
+            && policy.network == args.network
     }) && normalized_agent(task.agent_display_name()) == normalized_agent(&args.agent_name)
         && task.requested_model == args.model
     {
@@ -51,6 +52,7 @@ pub(super) fn claim(store: &Store, task: &Task, args: &RunArgs) -> Result<()> {
             .model
             .clone()
             .ok_or_else(|| crate::execution::refuse("model_required", None, 3))?,
+        network: args.network,
         accepted_at: chrono::Utc::now().to_rfc3339(),
     };
     match store.insert_task_with_policy(task, DispatchOrigin::Automatic, Some(&policy)) {

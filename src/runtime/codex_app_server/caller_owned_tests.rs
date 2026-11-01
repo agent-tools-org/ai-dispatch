@@ -11,6 +11,7 @@ fn caller_owned_gates_app_server_exec_fallback() {
         version: 1,
         agent: "codex".into(),
         model: "exact".into(),
+        network: false,
         accepted_at: "2026-10-29T10:00:00Z".into(),
     };
     fixture

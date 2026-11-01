@@ -19,7 +19,8 @@ Read-only: opens no task, writes nothing. Exit 0. Output:
 {
   "protocol": "aid.execution/1",
   "aid_version": "11.8.0",
-  "capabilities": ["caller_owned_policy", "settlement_receipt", "worker_stop", "idempotent_submit"],
+  "capabilities": ["caller_owned_policy", "settlement_receipt", "worker_stop", "idempotent_submit",
+                   "agent_network"],
   "policies": {
     "caller-owned": {
       "version": 1,
@@ -61,6 +62,13 @@ this policy.
 `--verify`, `--checklist`, `--worktree`, `--dir`, `--timeout`, `--bg`, `--context`, `--skill`,
 `--sandbox` and `--remote-build` keep their behaviour; they never start another agent.
 
+`--network` (capability `agent_network`) grants the agent network access, including loopback, where
+aid's launch applies an OS network sandbox: for Codex it adds `network = { enabled = true }` to the
+emitted `aid-write` or `aid-read-only` permission profile, fresh and resumed. Filesystem roots,
+approval policy and `--ignore-user-config` are unchanged. Agents whose launch has no OS network
+sandbox receive no extra arguments. Without the flag the profile carries no network grant.
+The grant is part of the accepted policy and is recorded as `policy.network`.
+
 On acceptance aid writes the task row and the policy record in one transaction before launch, then
 launches the exact agent/model. No route hold, rate-limit group or model resolution substitutes either.
 
@@ -68,10 +76,10 @@ Exit 0 with a receipt (section 3) plus `"submission": "launched"`.
 
 ### Same ID again
 
-- Existing row with the same agent (after alias and case normalisation), model and policy: nothing is launched, exit 0, the current
+- Existing row with the same agent (after alias and case normalisation), model, network grant and policy: nothing is launched, exit 0, the current
   receipt with `"submission": "existing"`. This covers lost responses and concurrent duplicates: of two
   racing identical submits exactly one launches.
-- Existing row with a different agent, model or policy (including a default-mode row): exit 4,
+- Existing row with a different agent, model, network grant or policy (including a default-mode row): exit 4,
   `id_conflict`, nothing launched, the existing row unchanged.
 - The default-mode auto-suffix (`<id>-2`) never applies to caller-owned submissions.
 
@@ -97,7 +105,7 @@ caller-owned tasks: a default-mode receipt has `policy: null` and `worker.state:
   "task_id": "t-aich-0001",
   "revision": 6,
   "policy": {"name": "caller-owned", "version": 1, "agent": "codex", "model": "gpt-5.5",
-             "accepted_at": "2026-10-29T10:00:00Z"},
+             "network": false, "accepted_at": "2026-10-29T10:00:00Z"},
   "task": {"status": "done", "terminal": true, "agent": "codex", "requested_model": "gpt-5.5",
            "observed_model": "gpt-5.5", "attribution_source": "...", "exit_code": 0,
            "completed_at": "2026-10-29T10:12:00Z"},

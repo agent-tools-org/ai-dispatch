@@ -8,6 +8,7 @@ fn persist_policy(store: &Store) {
         version: 1,
         agent: "codex".into(),
         model: "exact".into(),
+        network: false,
         accepted_at: "2026-10-29T10:00:00Z".into(),
     };
     store

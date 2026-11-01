@@ -97,6 +97,7 @@ fn caller_owned_gates_nested_delegation_before_parent_assignment() {
         version: 1,
         agent: "codex".into(),
         model: "exact".into(),
+        network: false,
         accepted_at: "2026-10-29T10:00:00Z".into(),
     };
     store

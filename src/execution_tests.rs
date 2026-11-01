@@ -24,6 +24,9 @@ fn caller_owned_capability_contract() {
     assert_eq!(caps["policies"]["caller-owned"]["version"], 1);
     assert_eq!(caps["policies"]["caller-owned"]["refused_flags"], json!(REFUSED));
     assert!(Cli::try_parse_from(["aid", "capabilities", "--json"]).is_ok());
+    assert!(caps["capabilities"].as_array().expect("capabilities").contains(&json!("agent_network")));
+    assert!(args(&["--network", "--id", "t-net", "--model", "m"]).network);
+    assert!(!args(&["--id", "t-net", "--model", "m"]).network);
 }
 
 #[test]

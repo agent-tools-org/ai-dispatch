@@ -10,6 +10,7 @@ use crate::agent::CliCommandRunner;
 fn configure_permissions(
     cmd: &mut std::process::Command,
     read_only: bool,
+    network: bool,
     roots: &[std::path::PathBuf],
 ) -> Result<()> {
     let mut filesystem = toml::Table::new();
@@ -20,10 +21,15 @@ fn configure_permissions(
     }
     let (name, base) = if read_only { ("aid-read-only", ":read-only") }
         else { ("aid-write", ":workspace") };
-    let profile = toml::Value::Table(toml::Table::from_iter([
+    let mut profile = toml::Table::from_iter([
         ("extends".into(), toml::Value::String(base.into())),
         ("filesystem".into(), toml::Value::Table(filesystem)),
-    ]));
+    ]);
+    if network {
+        let enabled = toml::Table::from_iter([("enabled".into(), toml::Value::Boolean(true))]);
+        profile.insert("network".into(), toml::Value::Table(enabled));
+    }
+    let profile = toml::Value::Table(profile);
     let permissions = toml::Value::Table(toml::Table::from_iter([(name.into(), profile)]));
     cmd.arg("--ignore-user-config");
     cmd.args(["-c", &format!("permissions={permissions}")]);
@@ -63,11 +69,11 @@ pub(super) fn configure_options(
     }
     if opts.read_only {
         let roots = crate::agent::scratch::validate_read_only_roots(opts.dir.as_deref(), roots)?;
-        configure_permissions(cmd, true, &roots)?;
+        configure_permissions(cmd, true, opts.network, &roots)?;
         cmd.env("AID_NATIVE_READ_ONLY_PROFILE", "aid-read-only");
         Ok(())
     } else {
-        configure_permissions(cmd, false, roots)
+        configure_permissions(cmd, false, opts.network, roots)
     }
 }
 

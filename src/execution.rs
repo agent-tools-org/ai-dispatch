@@ -64,7 +64,7 @@ impl Refusal {
 pub(crate) fn capabilities() -> Value {
     json!({
         "protocol": PROTOCOL, "aid_version": env!("CARGO_PKG_VERSION"),
-        "capabilities": ["caller_owned_policy", "settlement_receipt", "worker_stop", "idempotent_submit"],
+        "capabilities": ["caller_owned_policy", "settlement_receipt", "worker_stop", "idempotent_submit", "agent_network"],
         "policies": {"caller-owned": {"version": 1, "requires": ["id", "model"],
             "refused_flags": REFUSED,
             "disabled": ["retry", "cascade", "model_substitution", "route_substitution", "model_self_heal",

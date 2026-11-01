@@ -63,6 +63,9 @@ Fresh and resumed Codex sessions explicitly select a permissions profile. Read-o
 `:read-only` and disable approval escalation; write runs extend `:workspace` and use automatic
 approval review. The adapter uses `permissions` and `default_permissions`, without legacy
 `sandbox_mode`, `sandbox_workspace_write`, `--sandbox`, or write approval shortcut flags.
+Both profiles block network, including loopback, unless `aid run --network` adds
+`network = { enabled = true }` to the profile; nothing else in the profile changes. Agents
+whose launch has no OS network sandbox get no extra arguments from `--network`.
 
 Aid keeps the executed read-only attempt's native profile identity, canonical writable roots,
 approval policy and transport in a private database record, outside the task event stream.

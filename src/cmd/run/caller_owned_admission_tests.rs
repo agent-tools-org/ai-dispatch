@@ -109,3 +109,29 @@ async fn caller_owned_hook_refusals_do_not_consume_task_ids() {
         assert!(store.get_task("t-no-hooks").expect("query").is_none());
     }
 }
+
+#[test]
+fn caller_owned_network_grant_is_part_of_the_accepted_policy() {
+    for network in [false, true] {
+        let store = Store::open_memory().expect("store");
+        let mut task = Task::test_fixture(TaskId("t-network".into()), crate::types::TaskStatus::Pending);
+        task.agent = AgentKind::Codex;
+        task.requested_model = Some("exact-model".into());
+        let mut args = RunArgs {
+            policy: Some("caller-owned".into()),
+            agent_name: "codex".into(),
+            model: task.requested_model.clone(),
+            existing_task_id: Some(task.id.clone()),
+            network,
+            ..Default::default()
+        };
+        claim(&store, &task, &args).expect("claim");
+        let snapshot = store.execution_snapshot(task.id.as_str()).expect("snapshot").expect("row");
+        assert_eq!(snapshot["policy"]["network"], serde_json::json!(network));
+        assert_eq!(existing(&store, &args).expect("same policy"), Some(task.id.clone()));
+        args.network = !network;
+        let error = existing(&store, &args).expect_err("differing network");
+        let refusal = error.downcast_ref::<crate::execution::Refusal>().expect("refusal");
+        assert_eq!((refusal.code, refusal.exit), ("id_conflict", 4));
+    }
+}

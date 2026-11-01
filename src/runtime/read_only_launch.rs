@@ -30,7 +30,12 @@ fn profile(cmd: &Command) -> Option<Profile> {
         return None;
     }
     let policy = permissions.get("aid-read-only")?.as_object()?;
-    if policy.len() != 2 || policy.get("extends")? != ":read-only" {
+    let keys = match policy.get("network") {
+        None => 2,
+        Some(network) if *network == serde_json::json!({"enabled": true}) => 3,
+        Some(_) => return None,
+    };
+    if policy.len() != keys || policy.get("extends")? != ":read-only" {
         return None;
     }
     let filesystem = policy.get("filesystem")?.as_object()?;

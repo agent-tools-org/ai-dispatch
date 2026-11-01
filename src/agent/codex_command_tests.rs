@@ -115,3 +115,35 @@ fn build_command_starts_fresh_when_saved_rollout_is_missing() {
     assert_eq!(&args[..3], ["exec", "--json", "--skip-git-repo-check"]);
     assert!(args.iter().any(|arg| arg.contains("write the final report")));
 }
+
+fn permission_profile(read_only: bool, network: bool, session: Option<&str>) -> toml::Table {
+    let opts = RunOpts {
+        read_only,
+        network,
+        session_id: session.map(str::to_string),
+        ..RunOpts::default()
+    };
+    let cmd = CodexAgent.build_command_with_context("net", &opts,
+        crate::agent::CommandContext { durable_codex_home: false, writable_roots: vec![] }).unwrap();
+    let args = crate::support::test_command::args(&cmd);
+    assert!(args.contains(&"--ignore-user-config".to_string()));
+    let config = args.iter().find_map(|arg| arg.strip_prefix("permissions=")).unwrap();
+    let parsed: toml::Table = format!("permissions={config}").parse().unwrap();
+    let name = if read_only { "aid-read-only" } else { "aid-write" };
+    parsed["permissions"][name].as_table().unwrap().clone()
+}
+
+#[test]
+fn network_flag_enables_profile_network_for_fresh_and_resume() {
+    for (read_only, base) in [(false, ":workspace"), (true, ":read-only")] {
+        for session in [None, Some("saved-session")] {
+            let granted = permission_profile(read_only, true, session);
+            assert_eq!(granted["extends"].as_str(), Some(base));
+            assert_eq!(granted["network"]["enabled"].as_bool(), Some(true));
+            assert!(granted.contains_key("filesystem"));
+            let default = permission_profile(read_only, false, session);
+            assert!(!default.contains_key("network"), "{default:?}");
+            assert_eq!(default.len(), 2);
+        }
+    }
+}

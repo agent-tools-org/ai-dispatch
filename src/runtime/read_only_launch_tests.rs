@@ -169,3 +169,21 @@ fn native_read_only_provenance_requires_ignore_user_config() {
     }
     assert!(profile(&cmd).is_none());
 }
+
+#[test]
+fn native_read_only_provenance_accepts_network_grant_and_rejects_other_network_values() {
+    let repo = tempfile::tempdir().unwrap();
+    let scratch = tempfile::tempdir().unwrap();
+    let opts = RunOpts {
+        dir: Some(repo.path().display().to_string()),
+        read_only: true,
+        network: true,
+        ..Default::default()
+    };
+    let context = || CommandContext { durable_codex_home: false, writable_roots: vec![scratch.path().to_path_buf()] };
+    let cmd = CodexAgent.build_command_with_context("audit", &opts, context()).unwrap();
+    assert!(profile(&cmd).is_some());
+    let mut tampered = CodexAgent.build_command_with_context("audit", &opts, context()).unwrap();
+    tampered.args(["-c", "permissions.aid-read-only.network.enabled=false"]);
+    assert!(profile(&tampered).is_none());
+}

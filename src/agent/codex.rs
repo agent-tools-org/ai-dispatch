@@ -233,3 +233,7 @@ mod codex_nudge_tests;
 #[cfg(test)]
 #[path = "codex_native_policy_tests.rs"]
 mod native_policy_tests;
+
+#[cfg(test)]
+#[path = "codex_native_network_tests.rs"]
+mod native_network_tests;

@@ -3,6 +3,23 @@
 use super::*;
 use crate::agent::model_validation::MockServedModelsGuard;
 
+fn assert_checked_family_command(setup: &AgentSetup) {
+    assert_eq!(
+        setup.effective_model.as_deref(),
+        Some("claude-opus-5-5-high")
+    );
+    let opts = agent::RunOpts {
+        model: setup.effective_model.clone(),
+        ..Default::default()
+    };
+    let command = setup.agent.build_command("say hi", &opts).expect("command");
+    let args = crate::support::test_command::args(&command);
+    assert!(
+        args.windows(2)
+            .any(|pair| pair == ["--model", "claude-opus-5-5-high"])
+    );
+}
+
 #[test]
 fn agy_no_model_escapes_spent_probe_and_untrusted_marker() {
     let home = crate::support::test_env::TestHome::new();
@@ -34,10 +51,7 @@ fn agy_no_model_escapes_spent_probe_and_untrusted_marker() {
         ..Default::default()
     };
     let setup = resolve_agent_setup(&store, &mut args, None).expect("healthy family");
-    assert_eq!(
-        setup.effective_model.as_deref(),
-        Some("claude-opus-5-5-high")
-    );
+    assert_checked_family_command(&setup);
     std::fs::remove_file(cache.path().join("agy.json")).expect("remove probe");
     std::fs::write(
         crate::support::paths::aid_dir().join("rate-limit-agy--gemini"),
@@ -45,10 +59,7 @@ fn agy_no_model_escapes_spent_probe_and_untrusted_marker() {
     )
     .expect("marker");
     let setup = resolve_agent_setup(&store, &mut args, None).expect("marker family");
-    assert_eq!(
-        setup.effective_model.as_deref(),
-        Some("claude-opus-5-5-high")
-    );
+    assert_checked_family_command(&setup);
     drop(home);
 }
 

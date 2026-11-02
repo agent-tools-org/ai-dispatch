@@ -70,7 +70,7 @@ impl super::Agent for AntigravityAgent {
         if use_plan && let Some(flag) = plan_flag {
             cmd.args([flag, "plan"]);
         }
-        configure_model(&mut cmd, opts, caps.has_model_flag);
+        configure_model(&mut cmd, opts);
         cmd.arg("-p");
         cmd.arg(&effective_prompt);
         cmd.args(["--print-timeout", "24h"]);
@@ -262,15 +262,8 @@ fn configure_log_file(cmd: &mut Command, opts: &RunOpts) {
     }
 }
 
-fn configure_model(cmd: &mut Command, opts: &RunOpts, has_model_flag: bool) {
+fn configure_model(cmd: &mut Command, opts: &RunOpts) {
     if let Some(ref model) = opts.model {
-        if has_model_flag {
-            cmd.args(["--model", model]);
-        } else {
-            aid_warn!(
-                "[aid] agy {} has no model flag; ignoring --model {model}",
-                agy_version_string().unwrap_or_else(|| "1.0".into())
-            );
-        }
+        cmd.args(["--model", model]);
     }
 }

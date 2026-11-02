@@ -225,6 +225,7 @@ pub(crate) fn mark_untrusted_for_model(
     }
     let excerpt = message.lines().take(1).collect::<String>();
     let recovery = super::signatures::recovery_for_agent(message, *agent)
+        .filter(|_| crate::agent::family_route::per_family(*agent))
         .map(|at| format!("recovery_at: {}\n", format_recovery(at)))
         .unwrap_or_default();
     let _ = fs::write(path, format!("source: untrusted\n{recovery}message: {excerpt}\n"));

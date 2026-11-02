@@ -1,3 +1,11 @@
+## v11.10.0 (2026-11-03)
+- agy dispatches never land on a spent quota pool. agy meters three pools (Gemini 4 Argon, other Gemini models, Claude+GPT shared); every dispatch path (run, retry, cascade, quota continuation, self-heal, batch, best-of, held substitution, post-wait launch) now resolves a concrete model whose pool is not spent, using held markers, live probe windows and fresh untrusted refusals as one predicate. A run without `--model` previously went to agy's default Gemini 4 Argon while its weekly window was at 100%.
+- agy refusals are recorded against the pool that refused, with the stated `Resets in` time, instead of holding the whole agent; quota continuation tries another unspent agy pool of the same or higher class before moving to another agent, and never stops silently.
+- When every agy pool is spent, `--cascade` is walked; model self-heal excludes the model that failed; a replacement keeps the requested effort level (medium by default).
+- The agy adapter always passes the checked model to `--model`; agy model candidates come from the served-model cache, and the static fallback table uses current model ids.
+- A served-model list with no recognizable agy model falls back to the static model table instead of reading as every pool spent.
+
+
 ## v11.9.0 (2026-11-02)
 - Add `aid run --network`: grants sandboxed agents network access. For Codex it adds `network = { enabled = true }` to the emitted `aid-write`/`aid-read-only` permission profile (fresh and resumed runs); filesystem roots, approval policy and user-config isolation are unchanged. Agents launched without an OS sandbox are unaffected.
 - Caller-owned execution records `network` in the accepted policy; resubmitting an ID with a different `--network` value is refused with `id_conflict`. `aid capabilities --json` lists the new `agent_network` capability (protocol remains `aid.execution/1`).

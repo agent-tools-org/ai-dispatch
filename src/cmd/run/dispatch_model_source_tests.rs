@@ -231,3 +231,20 @@ fn agy_selfheal_excludes_the_failed_default_model() {
     let setup = resolve_agent_setup(&store, &mut args, None).expect("selfheal replacement");
     assert_eq!(setup.effective_model.as_deref(), Some("claude-opus-5-5-medium"));
 }
+
+#[test]
+fn agy_replacement_does_not_change_requested_medium_effort() {
+    let home = crate::support::test_env::TestHome::new();
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
+    let _models = MockServedModelsGuard::set(AgentKind::Antigravity, Some(vec![
+        "gemini-4-argon-medium".into(), "claude-opus-5-5-low".into(),
+    ]));
+    crate::routing::rate_limit::mark_untrusted_for_model(&AgentKind::Antigravity, None,
+        Some("gemini-4-argon-medium"), "Individual quota reached. Resets in 36h.");
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut args = RunArgs {
+        agent_name: "agy".into(), model: Some("gemini-4-argon-medium".into()),
+        ..Default::default()
+    };
+    assert!(resolve_agent_setup(&store, &mut args, None).is_err(), "medium effort is unavailable");
+}

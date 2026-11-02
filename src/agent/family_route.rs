@@ -71,13 +71,12 @@ fn select_model(
 ) -> Option<String> {
     let effort = current.map(strength).map_or(2, |rank| rank.1);
     let mut models = candidates(kind);
-    models.sort_by_key(|model| std::cmp::Reverse((strength(model).1 == effort, strength(model))));
     if budget {
         models.sort_by_key(|model| (strength(model).0, std::cmp::Reverse(strength(model).1)));
     }
     models.into_iter().find(|model| {
         Some(model.as_str()) != excluded
-            && strength(model).1 <= effort
+            && strength(model).1 == effort
             && !family_is_spent(kind, custom, unit(kind, model))
     })
 }

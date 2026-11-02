@@ -26,16 +26,6 @@ pub(super) async fn continue_quota(
         child.session_id = None;
         child.force_default_model = false;
     } else {
-        if crate::agent::family_route::per_family(task.agent)
-            && crate::agent::family_route::healthy_model(
-                task.agent,
-                task.custom_agent_name.as_deref(),
-                None,
-            )
-            .is_some()
-        {
-            return Ok(None);
-        }
         let Some(candidate) = advice_route::automatic_candidate(Some(store), &child) else {
             return Ok(None);
         };

@@ -160,6 +160,9 @@ async fn run_task_inner(
     crate::routing::rate_limit::wait::wait_for_declared_reset(
         store.as_ref(), &spec.task_id, agent.kind(), agent.rate_limit_name(),
     ).await?;
+    let mut launch_args = args.clone();
+    launch::refresh_family_route(store, &spec.task_id, &mut launch_args, agent.as_ref())?;
+    let args = &launch_args;
     ensure_agent_binary_available(args)?;
     let _workspace_symlink = crate::cmd::run::WorkspaceSymlinkGuard::create(
         agent.kind(), args.group.as_deref(), args.dir.as_deref(),

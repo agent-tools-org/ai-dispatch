@@ -71,9 +71,24 @@ pub(super) fn resolve_agent_setup(
     } else {
         PinPolicy::Automatic
     };
+    let failed = if args.force_default_model {
+        args.parent_task_id
+            .as_deref()
+            .map(|id| store.get_task(id))
+            .transpose()?
+            .flatten()
+            .and_then(|task| task.requested_model.or(task.observed_model))
+    } else {
+        None
+    };
     let previous = setup.effective_model.clone();
     setup.effective_model = agent::family_route::resolve(
-        setup.agent_kind, setup.custom_agent_name.as_deref(), setup.effective_model.as_deref(), policy,
+        setup.agent_kind,
+        setup.custom_agent_name.as_deref(),
+        setup.effective_model.as_deref(),
+        policy,
+        setup.budget_active,
+        failed.as_deref(),
     )?;
     if policy == PinPolicy::WarnOnReplacement && previous != setup.effective_model {
         args.model_source = agent::model_validation::ModelSource::AidResolved;

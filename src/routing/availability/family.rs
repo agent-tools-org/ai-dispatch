@@ -40,9 +40,7 @@ fn probe_is_spent(probe: &ProbeEvidence, agent: AgentKind, family: &str) -> bool
     probe.ok
         && !probe.stale
         && probe.windows.iter().any(|window| {
-            let named = window.group.is_none()
-                && crate::types::model_family(&window.label.to_ascii_lowercase()) == family;
-            (named || relevant.contains(window))
+            relevant.contains(window)
                 && window.used_percent >= 100.0
                 && window.resets_at.is_some_and(|at| at > chrono::Utc::now())
         })

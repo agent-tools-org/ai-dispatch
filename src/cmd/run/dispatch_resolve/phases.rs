@@ -151,6 +151,7 @@ pub(super) fn resolve_held_route(
         );
     } else if let Some(hold) = api_hold
         .or_else(|| rate_limit::dispatch_blocking_hold(&agent_kind, custom_agent_name.as_deref()))
+        .or_else(|| held::family_hold(agent_kind, custom_agent_name.as_deref()))
     {
         let original = custom_agent_name
             .as_deref()

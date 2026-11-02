@@ -43,7 +43,7 @@ const DROID_CORE: &[&str] = &[
 /// Agents whose quota is metered per model family rather than per account.
 ///
 /// agy is the case that forced this: `agy models` serves gemini-*, claude-* and
-/// gpt-oss-* families, and each is metered on its own allowance. Captured
+/// gpt-oss-* models across Gemini, Argon and shared Claude/GPT allowances. Captured
 /// 2026-08-05 within one minute of each other:
 ///
 /// ```text
@@ -102,7 +102,7 @@ pub(crate) fn model_group(agent: AgentKind, model: Option<&str>) -> Option<&str>
         // already gone.
         return Some(if model.starts_with("auto") { AUTO_GROUP } else { PREMIUM_GROUP });
     }
-    Some(family_of(&model))
+    Some(if agent == AgentKind::Antigravity { agy_unit(&model) } else { family_of(&model) })
 }
 
 fn droid_group(model: Option<&str>) -> &'static str {
@@ -195,9 +195,19 @@ fn value_after_key<'a>(message: &'a str, lower: &str, key: &str) -> Option<&'a s
     (!value[..end].is_empty()).then_some(&value[..end])
 }
 
-/// Delegates to the types layer: how a provider partitions its allowance is a
-/// fact about the provider, and keeping a second copy here had already produced
-/// two different answers for `gpt-*`.
+pub(crate) fn agy_unit(model: &str) -> &'static str {
+    let lower = model.to_ascii_lowercase();
+    if lower.contains("argon") {
+        "gemini-4-argon"
+    } else {
+        match crate::types::model_family(&lower) {
+            "claude" | "gpt-oss" => "claude-gpt",
+            family => family,
+        }
+    }
+}
+
+/// Delegates the generic model family to the types layer.
 fn family_of(model: &str) -> &'static str {
     crate::types::model_family(model)
 }
@@ -208,15 +218,17 @@ pub(crate) fn groups_for_agent(agent: AgentKind) -> &'static [(&'static str, &'s
     match agent {
         // Fallback when no served-model list is available.
         AgentKind::Antigravity => &[
-            ("gemini", &[
+            ("gemini-4-argon", &[
                 "gemini-4-argon-high", "gemini-4-argon-medium", "gemini-4-argon-low",
+            ]),
+            ("gemini", &[
                 "gemini-3.8-flash-high", "gemini-3.8-flash-medium", "gemini-3.8-flash-low",
             ]),
-            ("claude", &[
+            ("claude-gpt", &[
                 "claude-opus-5-5-high", "claude-opus-5-5-medium", "claude-opus-5-5-low",
                 "claude-sonnet-5-5-high", "claude-sonnet-5-5-medium", "claude-sonnet-5-5-low",
+                "gpt-oss-120b-medium",
             ]),
-            ("gpt-oss", &["gpt-oss-120b-medium"]),
         ],
         // Cursor's two tiers. The model lists are a preference order for
         // picking a replacement, not the membership test — `model_group`

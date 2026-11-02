@@ -102,18 +102,22 @@ or a budget-picked model arrives as aid-resolved too, and the same trade
 applies. A served-list miss is cache lag, not proof the CLI will reject the
 model.
 
-Family-metered routes use the 24-hour cached served list as their candidate set,
-grouped by model family, strongest first; static models are a fallback only when
-no served list exists. Held group markers, live windows at 100% with a future
-reset, and untrusted family refusals within their stated reset duration exclude
-a family. Ordinary `--model` requests keep the existing warned family substitution:
-when the requested family is spent, aid names both models before switching to an
-unspent family. Advised and caller-owned exact pins are refused instead. If every
-served family is spent, the route is skipped or refused; an absent model is never
-kept as a way to bypass that check. Quota continuation first tries another family
-of the same agent with equal or better capability, clearing the old session. If
-only lower-class models remain, automatic continuation stops rather than
-downgrading or leaving an agent that still has an unspent family.
+Family-metered routes use the 24-hour cached served list as their candidate set;
+static models are a fallback only when no served list exists. Agy quota units are
+`gemini-4-argon`, other `gemini` models, and shared `claude-gpt` models. An Argon
+window applies only to Argon; general Gemini windows apply to both Gemini units.
+Held unit markers, live windows at 100% with a future reset, and untrusted refusals
+within their stated reset duration exclude a unit. Replacements retain the requested
+effort (medium by default), and budget routing prefers the cheapest available line.
+Ordinary `--model` requests warn with both models before replacing a spent unit.
+Advised and caller-owned exact pins are refused instead. If every served unit is
+spent, explicit cascades walk to the next available agent; otherwise dispatch refuses.
+Quota continuation excludes the refusing unit even without a trusted marker, then
+tries another unit of the same agent with equal or better capability. If none exists,
+it falls through to the automatic advice candidate. Model self-heal excludes the
+failed model when pinning a replacement. Background workers recheck units after
+waiting for a reset. Completion attribution maps log labels through the cached
+served list without running a live model probe.
 
 The served list is cached on disk for 24 hours, so a slow CLI is asked once
 rather than on every dispatch. When the model you asked for is absent from the

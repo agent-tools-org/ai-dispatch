@@ -5,8 +5,17 @@ use crate::types::TaskId;
 pub(crate) fn observed_model(task: &TaskId) -> Option<String> {
     let log = std::fs::read_to_string(crate::support::paths::agent_log_path(task.as_str())).ok()?;
     let label = selected_label(&log)?;
-    let output = super::model_validation::run_probe_cmd("agy", &["models"])?;
-    model_for_label(&output.stdout, label)
+    let models =
+        super::model_validation::load_from_disk_cache(crate::types::AgentKind::Antigravity)?;
+    model_for_label(&models, label)
+}
+
+fn normalized_label(label: &str) -> String {
+    label
+        .to_ascii_lowercase()
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .collect()
 }
 
 fn selected_label(log: &str) -> Option<&str> {
@@ -21,12 +30,9 @@ fn selected_label(log: &str) -> Option<&str> {
     })
 }
 
-fn model_for_label(models: &str, label: &str) -> Option<String> {
-    models.lines().find_map(|line| {
-        let line = line.trim();
-        let end = line.find(char::is_whitespace)?;
-        (line[end..].trim() == label).then(|| line[..end].to_string())
-    })
+fn model_for_label(models: &[String], label: &str) -> Option<String> {
+    let id = normalized_label(label);
+    models.iter().find(|model| normalized_label(model) == id).cloned()
 }
 
 #[cfg(test)]

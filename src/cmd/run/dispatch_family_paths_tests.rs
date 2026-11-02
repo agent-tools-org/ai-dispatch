@@ -17,14 +17,14 @@ impl Fixture {
         let models = agent::model_validation::MockServedModelsGuard::set(
             AgentKind::Antigravity,
             Some(vec![
-                "gemini-4-argon-high".into(),
-                "claude-opus-5-5-high".into(),
+                "gemini-4-argon-medium".into(),
+                "claude-opus-5-5-medium".into(),
             ]),
         );
         rate_limit::mark_untrusted_for_model(
             &AgentKind::Antigravity,
             None,
-            Some("gemini-4-argon-high"),
+            Some("gemini-4-argon-medium"),
             "Individual quota reached. Resets in 36h29m20s.",
         );
         Self {
@@ -55,7 +55,7 @@ impl Fixture {
         assert_eq!(task.agent, AgentKind::Antigravity);
         assert_eq!(
             task.requested_model.as_deref(),
-            Some("claude-opus-5-5-high")
+            Some("claude-opus-5-5-medium")
         );
     }
 }
@@ -69,7 +69,7 @@ async fn agy_family_run_retry_and_cascade_check_the_same_boundary() {
     f.assert_child(&id);
     let mut parent = Task::test_fixture(TaskId("t-family-parent".into()), TaskStatus::Failed);
     parent.agent = AgentKind::Antigravity;
-    parent.requested_model = Some("gemini-4-argon-high".into());
+    parent.requested_model = Some("gemini-4-argon-medium".into());
     f.store.insert_task(&parent).expect("parent");
     f.store
         .update_task_dispatch_args(

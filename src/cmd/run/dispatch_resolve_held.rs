@@ -147,6 +147,12 @@ pub(super) fn degraded_dispatch_warning(
     ))
 }
 
+pub(super) fn family_hold(kind: AgentKind, custom: Option<&str>) -> Option<String> {
+    (agent::family_route::per_family(kind)
+        && agent::family_route::healthy_model(kind, custom, None).is_none())
+        .then(|| "no unspent model family".to_string())
+}
+
 /// Whether a fallback candidate can actually take the work. An agent-level
 /// hold blocks outright; a candidate with a static family table (agy, cursor)
 /// is blocked when every group it can draw on is held — the agent-level

@@ -174,6 +174,24 @@ pub(crate) fn relevant_windows(
     match group {
         None => snapshot.windows.clone(),
         Some(group) => {
+            if *agent == AgentKind::Antigravity {
+                return snapshot
+                    .windows
+                    .iter()
+                    .filter(|window| {
+                        let named = crate::agent::model_group::agy_unit(&window.label);
+                        if named == "gemini-4-argon" {
+                            return group == named;
+                        }
+                        match window.group.as_deref() {
+                            Some("gemini") => matches!(group, "gemini" | "gemini-4-argon"),
+                            Some(pool) => pool == group,
+                            None => false,
+                        }
+                    })
+                    .cloned()
+                    .collect();
+            }
             let by_field: Vec<_> = snapshot
                 .windows
                 .iter()

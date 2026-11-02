@@ -97,7 +97,7 @@ async fn agy_family_quota_continuation_stays_on_same_agent() {
 }
 
 #[tokio::test]
-async fn agy_family_continuation_does_not_downgrade_or_leave_an_unspent_family() {
+async fn agy_family_continuation_uses_advice_when_only_lower_class_remains() {
     let home = crate::support::test_env::TestHome::new();
     let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
     let _models = crate::agent::model_validation::MockServedModelsGuard::set(
@@ -107,10 +107,27 @@ async fn agy_family_continuation_does_not_downgrade_or_leave_an_unspent_family()
     let store = Arc::new(Store::open_memory().expect("store"));
     let mut task = crate::cost::test_support::task(AgentKind::Antigravity, 0, None);
     task.requested_model = Some("gemini-4-argon-high".into());
+    task.status = TaskStatus::Failed;
+    store.insert_task(&task).expect("parent");
+    let _fleet = DetectAgentsGuard::set(vec![AgentKind::Codex, AgentKind::Droid, AgentKind::Oz]);
+    crate::routing::scores::test_support::seed_live();
+    let args = RunArgs {
+        agent_name: "agy".into(),
+        prompt: "Refactor parser".into(),
+        dry_run: true,
+        dir: Some(home.path().display().to_string()),
+        declared_difficulty: Some(TaskDifficulty::Complex),
+        declared_budget: Some(TaskBudget::Premium),
+        ..Default::default()
+    };
     assert!(
-        continue_quota(&store, &RunArgs::default(), &task)
-            .await
-            .expect("no downgrade")
-            .is_none()
+        advice_route::automatic_candidate(Some(&store), &args).is_some(),
+        "advice peer"
     );
+    let id = continue_quota(&store, &args, &task)
+        .await
+        .expect("advice")
+        .expect("child");
+    let child = store.get_task(id.as_str()).expect("get").expect("child");
+    assert_ne!(child.agent, AgentKind::Antigravity);
 }

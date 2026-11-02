@@ -113,7 +113,7 @@ fn assert_default_route(store: &Arc<Store>, args: &mut RunArgs) {
     let setup = resolve_agent_setup(store, args, None);
     crate::agent::codex::cli_config::set_test_codex_home(None);
     let setup = setup.expect("healthy default dispatch");
-    let expected = (args.agent_name == "agy").then_some("gemini-4-argon-high");
+    let expected = (args.agent_name == "agy").then_some("gemini-4-argon-medium");
     assert_eq!(setup.effective_model.as_deref(), expected);
     let unpinned = crate::agent::run_model::RunModel {
         model: None, pinned: false, source: crate::agent::run_model::RunModelSource::AgentDefault,
@@ -210,4 +210,24 @@ fn model_info_reports_existing_adapter_defaults_accurately() {
             "[aid] {} model: {model}; source: adapter default (no caller -m)", kind.as_str(),
         ));
     }
+}
+
+#[test]
+fn agy_selfheal_excludes_the_failed_default_model() {
+    let home = crate::support::test_env::TestHome::new();
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
+    let _models = MockServedModelsGuard::set(AgentKind::Antigravity, Some(vec![
+        "gemini-4-argon-high".into(), "gemini-4-argon-medium".into(),
+        "claude-opus-5-5-medium".into(),
+    ]));
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut parent = crate::cost::test_support::task(AgentKind::Antigravity, 0, None);
+    parent.requested_model = Some("gemini-4-argon-medium".into());
+    store.insert_task(&parent).expect("parent");
+    let mut args = RunArgs {
+        agent_name: "agy".into(), force_default_model: true,
+        parent_task_id: Some(parent.id.to_string()), ..Default::default()
+    };
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("selfheal replacement");
+    assert_eq!(setup.effective_model.as_deref(), Some("claude-opus-5-5-medium"));
 }

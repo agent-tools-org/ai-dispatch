@@ -184,7 +184,12 @@ pub(super) fn resolve_model_hold(
     Option<String>,
     Option<(String, String)>,
 )> {
-    if agent::family_route::per_family(agent_kind) {
+    if agent::family_route::per_family(agent_kind)
+        && crate::routing::availability::availability_for_group(
+            &agent_kind, custom_agent_name.as_deref(),
+            &crate::routing::capacity::group(effective_model.as_deref()),
+        ).status != crate::routing::availability::RouteStatus::Held
+    {
         return Ok((agent_kind, custom_agent_name, effective_model, substituted_from));
     }
     // No-group for_model is agent-level; skip it or background keep is undone.

@@ -7,14 +7,7 @@ pub(crate) fn family_is_spent(agent: AgentKind, custom: Option<&str>, family: &s
         return true;
     }
     if let Some(probe) = live_quota::snapshot(&agent)
-        && probe.ok
-        && !probe.stale
-        && relevant_windows(&probe, &agent, Some(family))
-            .iter()
-            .any(|window| {
-                window.used_percent >= 100.0
-                    && window.resets_at.is_some_and(|at| at > chrono::Utc::now())
-            })
+        && probe_is_spent(&probe, agent, family)
     {
         return true;
     }
@@ -40,4 +33,17 @@ pub(crate) fn family_is_spent(agent: AgentKind, custom: Option<&str>, family: &s
         .ok()
         .and_then(|mtime| mtime.elapsed().ok())
         .is_some_and(|age| age.as_secs() < duration.num_seconds().max(0) as u64)
+}
+
+fn probe_is_spent(probe: &ProbeEvidence, agent: AgentKind, family: &str) -> bool {
+    let relevant = relevant_windows(probe, &agent, Some(family));
+    probe.ok
+        && !probe.stale
+        && probe.windows.iter().any(|window| {
+            let named = window.group.is_none()
+                && crate::types::model_family(&window.label.to_ascii_lowercase()) == family;
+            (named || relevant.contains(window))
+                && window.used_percent >= 100.0
+                && window.resets_at.is_some_and(|at| at > chrono::Utc::now())
+        })
 }

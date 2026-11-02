@@ -104,7 +104,7 @@ async fn agy_family_batch_preview_checks_the_same_boundary() {
     let f = Fixture::new();
     let file = f.home.path().join("batch.toml");
     std::fs::write(&file, format!(
-        "[defaults]\ndir = {:?}\n[[tasks]]\nname = 'family'\nagent = 'agy'\nprompt = 'say hi'\n",
+        "[defaults]\ndir = {:?}\ndifficulty = 'moderate'\nbudget = 'standard'\nurgency = 'normal'\nrigor = 'standard'\n[[tasks]]\nname = 'family'\nagent = 'agy'\nprompt = 'say hi'\n",
         f.home.path().display().to_string())).expect("batch");
     crate::cmd::batch::run(
         f.store.clone(),

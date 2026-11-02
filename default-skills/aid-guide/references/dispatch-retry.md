@@ -105,7 +105,9 @@ model.
 Family-metered fallback routes use the served list as their candidate set. If every
 served family is spent, the route is skipped or refused; an absent model is never
 kept as a way to bypass that check. Quota continuation first tries another family
-of the same agent with equal or better capability, clearing the old session.
+of the same agent with equal or better capability, clearing the old session. If
+only lower-class models remain, automatic continuation stops rather than
+downgrading or leaving an agent that still has an unspent family.
 
 The served list is cached on disk for 24 hours, so a slow CLI is asked once
 rather than on every dispatch. When the model you asked for is absent from the

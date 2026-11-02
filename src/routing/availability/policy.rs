@@ -183,14 +183,6 @@ pub(crate) fn relevant_windows(
             if !by_field.is_empty() {
                 return by_field;
             }
-            if matches!(crate::types::provider_for_cli(*agent).1,
-                crate::types::MeteringShape::PerModelFamily)
-            {
-                return snapshot.windows.iter().filter(|window| {
-                    window.group.is_none()
-                        && crate::types::model_family(&window.label.to_ascii_lowercase()) == group
-                }).cloned().collect();
-            }
             if *agent == AgentKind::Cursor && group.eq_ignore_ascii_case("premium") {
                 return snapshot
                     .windows

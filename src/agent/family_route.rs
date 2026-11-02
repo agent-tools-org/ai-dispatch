@@ -93,11 +93,11 @@ pub(crate) fn continuation_model(
     if !per_family(kind) {
         return None;
     }
-    let current = current?;
-    let family = crate::types::model_family(current);
+    let family = current.map(crate::types::model_family);
+    let minimum_class = current.map(strength).map_or(0, |rank| rank.0);
     candidates(kind).into_iter().find(|model| {
-        crate::types::model_family(model) != family
-            && strength(model).0 >= strength(current).0
+        Some(crate::types::model_family(model)) != family
+            && strength(model).0 >= minimum_class
             && !family_is_spent(kind, custom, crate::types::model_family(model))
     })
 }

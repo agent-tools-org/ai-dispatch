@@ -88,7 +88,7 @@ fn substituted_model_is_persisted_as_aid_resolved() {
 }
 
 #[test]
-fn declared_standard_and_premium_reach_cli_default() {
+fn declared_standard_and_premium_reach_checked_defaults() {
     let _home = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
     for agent_name in ["codex", "agy"] {
@@ -100,12 +100,12 @@ fn declared_standard_and_premium_reach_cli_default() {
                 declared_budget: Some(budget),
                 ..Default::default()
             };
-            assert_cli_default(&store, &mut run_args);
+            assert_default_route(&store, &mut run_args);
         }
     }
 }
 
-fn assert_cli_default(store: &Arc<Store>, args: &mut RunArgs) {
+fn assert_default_route(store: &Arc<Store>, args: &mut RunArgs) {
     assert_eq!(crate::config::agent::get_default_model(&args.agent_name), None);
     assert_eq!(args.model, None);
     let codex_home = tempfile::tempdir().expect("empty codex home");
@@ -113,26 +113,31 @@ fn assert_cli_default(store: &Arc<Store>, args: &mut RunArgs) {
     let setup = resolve_agent_setup(store, args, None);
     crate::agent::codex::cli_config::set_test_codex_home(None);
     let setup = setup.expect("healthy default dispatch");
-    assert_eq!(setup.effective_model, None);
+    let expected = (args.agent_name == "agy").then_some("gemini-4-argon-high");
+    assert_eq!(setup.effective_model.as_deref(), expected);
     let unpinned = crate::agent::run_model::RunModel {
         model: None, pinned: false, source: crate::agent::run_model::RunModelSource::AgentDefault,
     };
     let info = super::super::model_info::model_selection_info(
         args, &unpinned, setup.effective_model.as_deref(), setup.agent.as_ref(),
     );
-    assert_eq!(info, format!(
-        "[aid] {} model: CLI default (no -m); source: CLI default (no -m)", args.agent_name,
-    ));
+    let expected_info = match expected {
+        Some(model) => format!("[aid] agy model: {model}; source: quota/budget routing"),
+        None => format!("[aid] {} model: CLI default (no -m); source: CLI default (no -m)",
+            args.agent_name),
+    };
+    assert_eq!(info, expected_info);
 }
 
 #[test]
 fn healthy_defaults_emit_source_without_exhausted_warning() {
     let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
-        .args(["declared_standard_and_premium_reach_cli_default", "--nocapture"])
+        .args(["declared_standard_and_premium_reach_checked_defaults", "--nocapture"])
         .output().expect("run isolated resolver test");
     assert!(output.status.success(), "{output:?}");
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(stderr.matches("source: CLI default (no -m)").count(), 4, "{stderr}");
+    assert_eq!(stderr.matches("source: CLI default (no -m)").count(), 2, "{stderr}");
+    assert_eq!(stderr.matches("source: checked family route").count(), 2, "{stderr}");
     assert!(!stderr.contains("exhausted"), "{stderr}");
 }
 
@@ -149,7 +154,7 @@ fn declared_standard_and_premium_do_not_trigger_simple_task_smart_routing() {
                 declared_budget: Some(budget),
                 ..Default::default()
             };
-            assert_cli_default(&store, &mut args);
+            assert_default_route(&store, &mut args);
         }
     }
 }

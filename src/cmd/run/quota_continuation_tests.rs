@@ -95,3 +95,22 @@ async fn agy_family_quota_continuation_stays_on_same_agent() {
         Some("claude-opus-5-5-high")
     );
 }
+
+#[tokio::test]
+async fn agy_family_continuation_does_not_downgrade_or_leave_an_unspent_family() {
+    let home = crate::support::test_env::TestHome::new();
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
+    let _models = crate::agent::model_validation::MockServedModelsGuard::set(
+        AgentKind::Antigravity,
+        Some(vec!["claude-sonnet-5-5-high".into()]),
+    );
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut task = crate::cost::test_support::task(AgentKind::Antigravity, 0, None);
+    task.requested_model = Some("gemini-4-argon-high".into());
+    assert!(
+        continue_quota(&store, &RunArgs::default(), &task)
+            .await
+            .expect("no downgrade")
+            .is_none()
+    );
+}

@@ -98,7 +98,7 @@ fn group_hold_without_window_group_stays_held() {
     assert!(limited && blocked && listed);
     assert_eq!(
         healthy,
-        Some("gemini-3.1-pro-high"),
+        Some("gemini-4-argon-high"),
         "fail-closed claude must yield the next healthy family"
     );
 }

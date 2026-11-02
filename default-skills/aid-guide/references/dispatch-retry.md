@@ -102,7 +102,11 @@ or a budget-picked model arrives as aid-resolved too, and the same trade
 applies. A served-list miss is cache lag, not proof the CLI will reject the
 model.
 
-Family-metered fallback routes use the served list as their candidate set. If every
+Family-metered routes use the 24-hour cached served list as their candidate set,
+grouped by model family, strongest first; static models are a fallback only when
+no served list exists. Held group markers, live windows at 100% with a future
+reset, and untrusted family refusals within their stated reset duration exclude
+a family. Explicit spent pins are refused without changing the requested model. If every
 served family is spent, the route is skipped or refused; an absent model is never
 kept as a way to bypass that check. Quota continuation first tries another family
 of the same agent with equal or better capability, clearing the old session. If

@@ -119,12 +119,8 @@ Important controls:
   Every dispatch reports its effective model and source (`--model`, agent config,
   budget route, `CLI config (no -m)`, or `CLI default (no -m)`). Quota/budget
   routing overrides and existing adapter defaults (Cursor, MiMoCode) are
-  labeled separately. Family-metered routes always pin a concrete model from the
-  cached served list (static models only when no list exists). Held markers,
-  dated live windows at 100%, and untrusted family refusals within their stated
-  reset duration exclude that family. Explicit pins to spent families are refused.
-  Quota continuation tries another healthy family of equal or better capability
-  before selecting another agent.
+  labeled separately. Family-metered routes pin a checked, unspent model; spent
+  explicit pins are refused. See `dispatch-retry.md` for family quota routing.
 - `--urgency` declares `background`, `normal`, or `urgent` rate-limit handling. `background` may wait out a clock or Windowed hold; a NeedsHuman hold still blocks.
 - `--rigor` declares `draft`, `standard`, or `critical` proof level (compiles / path exercised /
   cross-audit). `critical` forces `--verify` and `--audit`; it does **not** restrict which agent

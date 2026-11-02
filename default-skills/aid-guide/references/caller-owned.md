@@ -3,6 +3,14 @@
 `aid run --json` requires an explicit `--policy`. JSON wait/stop against an older schema
 return `policy_unsupported` with `schema_upgrade_required`; open a normal command to migrate first.
 
+Caller-owned Codex runs require `sessions/` and `state_5.sqlite` in the real `CODEX_HOME`.
+If missing, start `codex app-server` once (or run Codex once) with `CODEX_HOME=<real>`.
+The aid Codex mirror must contain no local non-symlink state outside `config.toml*`.
+A refusal lists all such entries and the actual mirror and real home paths. With no aid Codex
+run active, move those entries from the mirror into the real `CODEX_HOME`, or run Codex once
+directly with that `CODEX_HOME` before using aid. aid never moves, deletes or adopts local
+state automatically; regular mirror `config.toml*` files are removed as before.
+
 Discover support with `aid capabilities --json`; require protocol `aid.execution/1` and
 `policies.caller-owned.version` equal to 1 before submitting:
 

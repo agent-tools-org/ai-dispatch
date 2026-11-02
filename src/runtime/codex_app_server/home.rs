@@ -14,7 +14,9 @@ impl Home {
         let real = real.canonicalize().context("Resolve real Codex home")?;
         anyhow::ensure!(
             real.join("sessions").is_dir() && real.join("state_5.sqlite").is_file(),
-            "Codex app-server requires existing sessions and state_5.sqlite in the real home"
+            "Codex app-server requires existing sessions and state_5.sqlite in the real home; \
+             start `codex app-server` once (or run Codex once) with CODEX_HOME={}",
+            real.display()
         );
         let path = aid_dir.join("codex-home");
         std::fs::create_dir_all(&path).context("Create stable Codex home")?;
@@ -51,7 +53,36 @@ impl Home {
         Ok(home)
     }
 
+    fn refuse_local_state(&self, real: &Path) -> Result<()> {
+        let mut local = Vec::new();
+        for entry in std::fs::read_dir(&self.path)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            if !name.to_string_lossy().starts_with("config.toml")
+                && !entry.file_type()?.is_symlink()
+            {
+                local.push(name);
+            }
+        }
+        local.sort();
+        anyhow::ensure!(
+            local.is_empty(),
+            "Codex mirror contains local state invisible to the real home: {}. \
+             With no aid Codex run active, move these entries from {} into {}, \
+             or run Codex once directly with that CODEX_HOME before using aid.",
+            local
+                .iter()
+                .map(|name| name.to_string_lossy())
+                .collect::<Vec<_>>()
+                .join(", "),
+            self.path.display(),
+            real.display()
+        );
+        Ok(())
+    }
+
     fn refresh(&self, real: &Path) -> Result<()> {
+        self.refuse_local_state(real)?;
         for entry in std::fs::read_dir(&self.path)? {
             let entry = entry?;
             let name = entry.file_name();

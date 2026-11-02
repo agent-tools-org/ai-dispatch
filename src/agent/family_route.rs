@@ -60,25 +60,43 @@ pub(crate) fn healthy_model(
         .find(|model| !family_is_spent(kind, custom, crate::types::model_family(model)))
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PinPolicy {
+    Automatic,
+    WarnOnReplacement,
+    Exact,
+}
+
 pub(crate) fn resolve(
     kind: AgentKind,
     custom: Option<&str>,
     model: Option<&str>,
-    pinned: bool,
+    policy: PinPolicy,
 ) -> anyhow::Result<Option<String>> {
     if !per_family(kind) {
         return Ok(model.map(str::to_string));
     }
-    if pinned {
+    if policy != PinPolicy::Automatic {
         let name = model.ok_or_else(|| anyhow::anyhow!("{} requires a model", kind.as_str()))?;
         let family = crate::types::model_family(name);
         anyhow::ensure!(family != "other", "Unknown quota family for model {name}");
+        if !family_is_spent(kind, custom, family) {
+            return Ok(Some(name.to_string()));
+        }
         anyhow::ensure!(
-            !family_is_spent(kind, custom, family),
-            "{} model is held (family {family} spent); explicit pin retained",
+            policy != PinPolicy::Exact,
+            "{} model is held (family {family} spent); exact pin retained",
             kind.as_str()
         );
-        return Ok(Some(name.to_string()));
+        let replacement = healthy_model(kind, custom, None)
+            .ok_or_else(|| anyhow::anyhow!("{} has no unspent model family", kind.as_str()))?;
+        aid_warn!(
+            "[aid] {} model group exhausted; switching {} -> {}",
+            kind.as_str(),
+            name,
+            replacement
+        );
+        return Ok(Some(replacement));
     }
     healthy_model(kind, custom, model)
         .map(Some)

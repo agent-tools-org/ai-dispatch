@@ -254,3 +254,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "bestof_family_tests.rs"]
+mod family_tests;

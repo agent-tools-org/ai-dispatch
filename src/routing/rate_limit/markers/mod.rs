@@ -224,7 +224,10 @@ pub(crate) fn mark_untrusted_for_model(
         let _ = fs::create_dir_all(parent);
     }
     let excerpt = message.lines().take(1).collect::<String>();
-    let _ = fs::write(path, format!("source: untrusted\nmessage: {excerpt}\n"));
+    let recovery = super::signatures::recovery_for_agent(message, *agent)
+        .map(|at| format!("recovery_at: {}\n", format_recovery(at)))
+        .unwrap_or_default();
+    let _ = fs::write(path, format!("source: untrusted\n{recovery}message: {excerpt}\n"));
 }
 
 fn preserves_dated_hold(

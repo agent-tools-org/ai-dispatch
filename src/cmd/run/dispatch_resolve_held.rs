@@ -157,6 +157,9 @@ fn candidate_is_blocked(kind: &AgentKind, custom_name: Option<&str>) -> bool {
     if rate_limit::dispatch_blocking_hold(kind, custom_name).is_some() {
         return true;
     }
+    if agent::family_route::per_family(*kind) {
+        return agent::family_route::healthy_model(*kind, custom_name, None).is_none();
+    }
     let groups = crate::agent::model_group::groups_for_agent(*kind);
     if groups.is_empty() {
         return false;

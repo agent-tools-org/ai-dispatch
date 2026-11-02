@@ -150,7 +150,11 @@ pub(super) fn record_failed_quota(task: &Task, agent: AgentKind) -> Option<Strin
     if task.status != TaskStatus::Failed {
         return None;
     }
-    let model = task.requested_model.as_deref().or(task.observed_model.as_deref());
+    let reported = (agent == AgentKind::Antigravity
+        && task.requested_model.is_none() && task.observed_model.is_none())
+        .then(|| crate::agent::antigravity_observation::observed_model(&task.id)).flatten();
+    let model = task.requested_model.as_deref().or(task.observed_model.as_deref())
+        .or(reported.as_deref());
     if let Some(message) = read_quota_error_message(&task.id, &agent) {
         rate_limit::mark_rate_limited_for_model(
             &agent, task.custom_agent_name.as_deref(), model, &message,

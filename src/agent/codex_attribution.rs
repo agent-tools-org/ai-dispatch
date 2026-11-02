@@ -25,6 +25,11 @@ pub(crate) fn grade_completion_observation(
     if info.model.is_some() {
         return grade_observation(info.model.as_deref(), requested, succeeded);
     }
+    if agent.kind() == AgentKind::Antigravity
+        && let Some(model) = crate::agent::antigravity_observation::observed_model(task_id)
+    {
+        return (Some(model), Some(AttributionSource::RecordedByCli));
+    }
     if agent.kind() == AgentKind::Codex {
         return observed_model_for_task(store, task_id)
             .map_or((None, None), |model| {

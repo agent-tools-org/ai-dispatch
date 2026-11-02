@@ -53,3 +53,45 @@ async fn caller_owned_gates_quota_continuation() {
             .is_empty()
     );
 }
+
+#[tokio::test]
+async fn agy_family_quota_continuation_stays_on_same_agent() {
+    let home = crate::support::test_env::TestHome::new();
+    let cache = tempfile::tempdir().expect("cache");
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(cache.path());
+    let _served = crate::agent::model_validation::MockServedModelsGuard::set(
+        AgentKind::Antigravity,
+        Some(vec![
+            "gemini-4-argon-high".into(),
+            "claude-opus-5-5-high".into(),
+        ]),
+    );
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut task = crate::cost::test_support::task(AgentKind::Antigravity, 0, None);
+    task.status = crate::types::TaskStatus::Failed;
+    task.requested_model = Some("gemini-4-argon-high".into());
+    store.insert_task(&task).expect("parent");
+    crate::routing::rate_limit::mark_untrusted_for_model(
+        &task.agent,
+        None,
+        task.requested_model.as_deref(),
+        "Individual quota reached. Resets in 36h29m20s.",
+    );
+    let args = RunArgs {
+        agent_name: "agy".into(),
+        prompt: "say hi".into(),
+        dry_run: true,
+        dir: Some(home.path().display().to_string()),
+        ..Default::default()
+    };
+    let id = continue_quota(&store, &args, &task)
+        .await
+        .expect("continuation")
+        .expect("same agent child");
+    let child = store.get_task(id.as_str()).expect("get").expect("child");
+    assert_eq!(child.agent, AgentKind::Antigravity);
+    assert_eq!(
+        child.requested_model.as_deref(),
+        Some("claude-opus-5-5-high")
+    );
+}

@@ -17,6 +17,8 @@ pub(crate) mod removed;
 pub mod grok;
 pub mod kilo;
 pub(crate) mod model_group;
+pub(crate) mod family_route;
+pub(crate) mod antigravity_observation;
 pub(crate) mod model_validation;
 pub mod mimocode;
 pub mod opencode;

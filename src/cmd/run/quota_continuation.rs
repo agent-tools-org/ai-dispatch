@@ -14,15 +14,29 @@ pub(super) async fn continue_quota(
         return Ok(None);
     }
     let mut child = args.clone();
-    let Some(candidate) = advice_route::automatic_candidate(Some(store), &child) else {
-        return Ok(None);
-    };
+    if let Some(model) = crate::agent::family_route::continuation_model(
+        task.agent,
+        task.custom_agent_name.as_deref(),
+        task.requested_model
+            .as_deref()
+            .or(task.observed_model.as_deref()),
+    ) {
+        child.model = Some(model);
+        child.model_source = crate::agent::model_validation::ModelSource::AidResolved;
+        child.session_id = None;
+        child.force_default_model = false;
+    } else {
+        let Some(candidate) = advice_route::automatic_candidate(Some(store), &child) else {
+            return Ok(None);
+        };
+        advice_route::apply_candidate(&mut child, &candidate);
+    }
     aid_info!(
-        "[aid] Quota exhausted for {}, auto-cascading to {}",
+        "[aid] Quota exhausted for {}, continuing with {} model {}",
         task.agent_display_name(),
-        candidate.agent
+        child.agent_name,
+        child.model.as_deref().unwrap_or("(default)")
     );
-    advice_route::apply_candidate(&mut child, &candidate);
     child.parent_task_id = Some(task.id.as_str().to_string());
     inherit_cascade_target(&mut child, task)?;
     Box::pin(run(store.clone(), child)).await.map(Some)

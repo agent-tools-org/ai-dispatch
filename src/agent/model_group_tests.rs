@@ -109,7 +109,7 @@ fn exhausted_gemini_group_switches_to_claude() {
         Some("gemini-3.6-flash-low"),
         |group| group == "gemini",
     );
-    assert_eq!(got, Some("claude-opus-4-6-thinking"));
+    assert_eq!(got, Some("claude-opus-5-5-high"));
 }
 
 #[test]
@@ -133,7 +133,7 @@ fn every_group_exhausted_yields_nothing_to_switch_to() {
 #[test]
 fn no_current_model_still_finds_a_healthy_group() {
     let got = healthy_model_for(AgentKind::Antigravity, None, |group| group == "gemini");
-    assert_eq!(got, Some("claude-opus-4-6-thinking"));
+    assert_eq!(got, Some("claude-opus-5-5-high"));
 }
 
 #[test]

@@ -51,3 +51,49 @@ fn agy_no_model_escapes_spent_probe_and_untrusted_marker() {
     );
     drop(home);
 }
+
+#[test]
+fn agy_family_explicit_pin_is_refused_and_all_spent_routes_are_blocked() {
+    let _home = crate::support::test_env::TestHome::new();
+    let cache = tempfile::tempdir().expect("cache");
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(cache.path());
+    let _served = MockServedModelsGuard::set(
+        AgentKind::Antigravity,
+        Some(vec![
+            "gemini-4-argon-high".into(),
+            "claude-opus-5-5-high".into(),
+        ]),
+    );
+    for family in ["gemini", "claude"] {
+        rate_limit::mark_untrusted_for_model(
+            &AgentKind::Antigravity,
+            None,
+            Some(if family == "gemini" {
+                "gemini-4-argon-high"
+            } else {
+                "claude-opus-5-5-high"
+            }),
+            "Individual quota reached. Resets in 36h29m20s.",
+        );
+    }
+    let marker =
+        std::fs::read_to_string(crate::support::paths::aid_dir().join("rate-limit-agy--gemini"))
+            .expect("marker");
+    assert!(marker.contains("recovery_at:"));
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut args = RunArgs {
+        agent_name: "agy".into(),
+        prompt: "say hi".into(),
+        model: Some("gemini-4-argon-high".into()),
+        model_source: agent::model_validation::ModelSource::UserSupplied,
+        ..Default::default()
+    };
+    assert!(resolve_agent_setup(&store, &mut args, None).is_err());
+    assert_eq!(args.model.as_deref(), Some("gemini-4-argon-high"));
+    assert!(agent::family_route::healthy_model(AgentKind::Antigravity, None, None).is_none());
+    assert!(
+        !crate::support::paths::aid_dir()
+            .join("rate-limit-agy")
+            .exists()
+    );
+}

@@ -12,6 +12,8 @@ use policy::{cooldown_active, stated_clock_why};
 use crate::types::AgentKind;
 
 mod policy;
+mod family;
+pub(crate) use family::family_is_spent;
 
 pub(crate) use policy::{
     classify_hold, format_hold_end_for, relevant_windows, snapshot_overrides,

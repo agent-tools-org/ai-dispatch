@@ -206,10 +206,10 @@ fn family_of(model: &str) -> &'static str {
 /// Used to pick a replacement when the group in use is exhausted.
 pub(crate) fn groups_for_agent(agent: AgentKind) -> &'static [(&'static str, &'static [&'static str])] {
     match agent {
-        // Captured from `agy models`, 2026-08-05.
+        // Fallback when no served-model list is available.
         AgentKind::Antigravity => &[
-            ("gemini", &["gemini-3.1-pro-high", "gemini-3.6-flash-high", "gemini-3.6-flash-low"]),
-            ("claude", &["claude-opus-4-6-thinking", "claude-sonnet-4-6"]),
+            ("gemini", &["gemini-4-argon-high", "gemini-3.8-flash-high", "gemini-3.8-flash-low"]),
+            ("claude", &["claude-opus-5-5-high", "claude-sonnet-5-5-high"]),
             ("gpt-oss", &["gpt-oss-120b-medium"]),
         ],
         // Cursor's two tiers. The model lists are a preference order for

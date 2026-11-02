@@ -90,7 +90,7 @@ default runs instead, because a stale catalog entry is aid's problem to absorb,
 not a reason to refuse your dispatch. Where the CLI cannot be asked what it
 serves, dispatch proceeds unvalidated and says so.
 
-For explicit fallback substitution — where a held agent was replaced by a
+For agents without per-family metering, explicit fallback substitution — where a held agent was replaced by a
 caller-listed fallback before dispatch — an aid-resolved model survives a served-list miss
 rather than being dropped. The substitution already proved the requested
 family spent, and the fallback's own default can re-enter that exhausted
@@ -101,6 +101,11 @@ family pin: `switch_agent` clears `--model`, so a fallback's per-agent default
 or a budget-picked model arrives as aid-resolved too, and the same trade
 applies. A served-list miss is cache lag, not proof the CLI will reject the
 model.
+
+Family-metered fallback routes use the served list as their candidate set. If every
+served family is spent, the route is skipped or refused; an absent model is never
+kept as a way to bypass that check. Quota continuation first tries another family
+of the same agent with equal or better capability, clearing the old session.
 
 The served list is cached on disk for 24 hours, so a slow CLI is asked once
 rather than on every dispatch. When the model you asked for is absent from the

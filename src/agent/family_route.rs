@@ -14,18 +14,30 @@ fn unit(kind: AgentKind, model: &str) -> &str {
     super::model_group::model_group(kind, Some(model)).unwrap_or("other")
 }
 
+/// Served models with a known quota unit, strongest first. A served list with no
+/// recognizable model (missing, or a CLI that answers `models` with something else)
+/// falls back to the static table rather than reading as "every unit spent".
 pub(crate) fn candidates(kind: AgentKind) -> Vec<String> {
     let agent = super::get_agent(kind);
-    let mut models = super::model_validation::get_served_models_cached(agent.as_ref())
-        .unwrap_or_else(|| {
-            super::model_group::groups_for_agent(kind)
-                .iter()
-                .flat_map(|(_, models)| models.iter().map(|model| (*model).to_string()))
-                .collect()
-        });
-    models.retain(|model| unit(kind, model) != "other");
+    let served = super::model_validation::get_served_models_cached(agent.as_ref());
+    let mut models = known_units(kind, served.unwrap_or_default());
+    if models.is_empty() {
+        models = known_units(kind, static_models(kind));
+    }
     models.sort_by_key(|model| std::cmp::Reverse(strength(model)));
     models
+}
+
+fn known_units(kind: AgentKind, mut models: Vec<String>) -> Vec<String> {
+    models.retain(|model| unit(kind, model) != "other");
+    models
+}
+
+fn static_models(kind: AgentKind) -> Vec<String> {
+    super::model_group::groups_for_agent(kind)
+        .iter()
+        .flat_map(|(_, models)| models.iter().map(|model| (*model).to_string()))
+        .collect()
 }
 
 fn strength(model: &str) -> (u8, u8) {

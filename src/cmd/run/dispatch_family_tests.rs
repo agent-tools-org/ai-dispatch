@@ -97,3 +97,34 @@ fn agy_family_explicit_pin_is_refused_and_all_spent_routes_are_blocked() {
             .exists()
     );
 }
+
+#[test]
+fn agy_family_caller_owned_keeps_exact_route_and_refuses_spent_family() {
+    let home = crate::support::test_env::TestHome::new();
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
+    let _models = MockServedModelsGuard::set(
+        AgentKind::Antigravity,
+        Some(vec![
+            "gemini-4-argon-high".into(),
+            "claude-opus-5-5-high".into(),
+        ]),
+    );
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut args = RunArgs {
+        agent_name: "agy".into(),
+        model: Some("gemini-4-argon-high".into()),
+        model_source: agent::model_validation::ModelSource::AidResolved,
+        policy: Some("caller-owned".into()),
+        ..Default::default()
+    };
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("exact route");
+    assert_eq!(setup.effective_model, args.model);
+    rate_limit::mark_untrusted_for_model(
+        &AgentKind::Antigravity,
+        None,
+        args.model.as_deref(),
+        "Individual quota reached. Resets in 36h29m20s.",
+    );
+    assert!(resolve_agent_setup(&store, &mut args, None).is_err());
+    assert_eq!(args.model.as_deref(), Some("gemini-4-argon-high"));
+}

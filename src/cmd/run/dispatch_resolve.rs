@@ -60,7 +60,8 @@ pub(super) fn resolve_agent_setup(
     let mut setup = resolve_agent_setup_inner(store, args, project_id)?;
     setup.effective_model = agent::family_route::resolve(
         setup.agent_kind, setup.custom_agent_name.as_deref(), setup.effective_model.as_deref(),
-        args.model.is_some() && args.model_source != agent::model_validation::ModelSource::AidResolved,
+        args.model.is_some() && (args.policy.is_some()
+            || args.model_source != agent::model_validation::ModelSource::AidResolved),
     )?;
     if agent::family_route::per_family(setup.agent_kind) {
         aid_info!("[aid] {} model: {}; source: checked family route", setup.agent_display_name,

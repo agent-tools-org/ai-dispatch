@@ -47,3 +47,7 @@ fn probe_is_spent(probe: &ProbeEvidence, agent: AgentKind, family: &str) -> bool
                 && window.resets_at.is_some_and(|at| at > chrono::Utc::now())
         })
 }
+
+#[cfg(test)]
+#[path = "family_tests.rs"]
+mod tests;

@@ -125,3 +125,7 @@ mod caller_owned;
 #[cfg(test)]
 #[path = "dispatch_resolve/caller_owned_tests.rs"]
 mod caller_owned_tests;
+
+#[cfg(test)]
+#[path = "dispatch_family_tests.rs"]
+mod family_tests;

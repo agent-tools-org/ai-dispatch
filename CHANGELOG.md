@@ -1,3 +1,9 @@
+## v11.9.0 (2026-11-02)
+- Add `aid run --network`: grants sandboxed agents network access. For Codex it adds `network = { enabled = true }` to the emitted `aid-write`/`aid-read-only` permission profile (fresh and resumed runs); filesystem roots, approval policy and user-config isolation are unchanged. Agents launched without an OS sandbox are unaffected.
+- Caller-owned execution records `network` in the accepted policy; resubmitting an ID with a different `--network` value is refused with `id_conflict`. `aid capabilities --json` lists the new `agent_network` capability (protocol remains `aid.execution/1`).
+- Codex app-server refusals are actionable: a missing state database names the real `CODEX_HOME` to initialize, and local state in the aid mirror is listed in full with the mirror and real paths and how to move it. Nothing is moved or adopted automatically.
+
+
 ## v11.8.0 (2026-10-29)
 - Add caller-owned execution (`aid run --policy caller-owned --id ID --model M --json`, protocol `aid.execution/1`): exactly one execution of the given agent and model, with retries, cascades, model or route substitution, recovery children, judge, peer review, best-of, audit, hooks and nested dispatch refused or disabled.
 - Add `aid capabilities --json` for machine-readable protocol version, capabilities and accepted policy; unsupported policies and flags are refused before launch.

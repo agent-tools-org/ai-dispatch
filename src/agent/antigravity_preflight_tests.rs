@@ -58,13 +58,13 @@ fn unsuccessful_help_soft_skips_requested_model_check() {
 }
 
 #[test]
-fn fallback_command_drops_model_when_flags_are_unavailable() {
+fn fallback_command_keeps_checked_model_when_flags_are_unavailable() {
     let opts = RunOpts {
         model: Some("gemini-3-pro".into()),
         ..Default::default()
     };
     let command = AntigravityAgent.build_command("Inspect the module", &opts).unwrap();
     let args: Vec<_> = crate::support::test_command::args(&command);
-    assert!(!args.iter().any(|arg| arg == "--model" || arg == "-m" || arg == "gemini-3-pro"));
+    assert!(args.windows(2).any(|pair| pair == ["--model", "gemini-3-pro"]));
     assert!(args.windows(2).any(|pair| pair == ["-p", "Inspect the module"]));
 }

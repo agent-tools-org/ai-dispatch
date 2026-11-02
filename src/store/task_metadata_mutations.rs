@@ -24,6 +24,19 @@ impl Store {
         Ok(())
     }
 
+    pub(crate) fn update_task_launch_model(
+        &self,
+        id: &str,
+        model: Option<&str>,
+        dispatch_args: &str,
+    ) -> Result<()> {
+        self.db().execute(
+            "UPDATE tasks SET model = ?1, dispatch_args = ?2 WHERE id = ?3",
+            params![model, dispatch_args, id],
+        )?;
+        Ok(())
+    }
+
     pub fn update_prompt_tokens(&self, id: &str, tokens: i64) -> Result<()> {
         self.db().execute(
             "UPDATE tasks SET prompt_tokens = ?1 WHERE id = ?2",

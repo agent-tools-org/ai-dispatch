@@ -33,7 +33,9 @@ Other execution flags, including worktrees, sandbox and remote builds, retain th
 Admission requires valid `--id` and nonempty `--model`. Unknown policies, known unavailable models, and
 explicit positive `--retry`, `--cascade`, `--best-of`, `--iterate`, `--judge`, `--peer-review`,
 `--audit`, `--budget`, `--dry-run`, `--container`, `--on-done` or `--hook` are refused before task insertion (exit 3, structured JSON error).
-An agent without a known served-model list receives the explicit model unchanged.
+An agent without a known served-model list receives the explicit model unchanged. Family-metered
+agents additionally require a known, unspent model family; a spent explicit pin
+is refused and never replaced by a different family.
 A same-ID submission with the same agent (after alias/case normalization), model and policy returns `submission: existing`,
 launches nothing and exits 0; a different tuple returns `id_conflict` (exit 4). Concurrent identical
 submissions claim the ID once. Caller-owned IDs never receive an automatic suffix.

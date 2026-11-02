@@ -81,3 +81,54 @@ fn fix_round_one_read_only_launch_stages_explicit_report_and_output_separately()
     assert_eq!(args.result_file.as_deref(), Some("reports/explicit.md"));
     assert_eq!(args.output.as_deref(), Some("/outside/final.txt"));
 }
+
+#[test]
+fn agy_post_wait_resolution_refreshes_saved_launch_pin() {
+    use crate::types::AgentKind;
+    let home = crate::support::test_env::TestHome::new();
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
+    let _models = agent::model_validation::MockServedModelsGuard::set(
+        AgentKind::Antigravity,
+        Some(vec![
+            "gemini-4-argon-medium".into(),
+            "claude-opus-5-5-medium".into(),
+        ]),
+    );
+    let store = Store::open_memory().expect("store");
+    let mut task = crate::cost::test_support::task(AgentKind::Antigravity, 0, None);
+    task.requested_model = Some("gemini-4-argon-medium".into());
+    store.insert_task(&task).expect("task");
+    let mut args = RunArgs {
+        agent_name: "agy".into(),
+        model: task.requested_model.clone(),
+        model_source: agent::model_validation::ModelSource::AidResolved,
+        ..Default::default()
+    };
+    crate::routing::rate_limit::mark_untrusted_for_model(
+        &task.agent,
+        None,
+        args.model.as_deref(),
+        "Individual quota reached. Resets in 36h.",
+    );
+    refresh_family_route(
+        &store,
+        task.id.as_str(),
+        &mut args,
+        agent::get_agent(task.agent).as_ref(),
+    )
+    .expect("post wait route");
+    assert_eq!(args.model.as_deref(), Some("claude-opus-5-5-medium"));
+    let saved = store
+        .get_task(task.id.as_str())
+        .expect("get")
+        .expect("task");
+    assert_eq!(saved.requested_model, args.model);
+    let saved_args = RunArgs::from_dispatch_args_json(
+        &store
+            .get_task_dispatch_args(task.id.as_str())
+            .expect("get args")
+            .expect("args"),
+    )
+    .expect("decode");
+    assert_eq!(saved_args.model, args.model);
+}

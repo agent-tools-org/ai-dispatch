@@ -82,7 +82,8 @@ pub(super) fn resolve_healthy_model(
     custom_agent_name: &Option<String>,
     effective_model: Option<String>,
 ) -> Option<String> {
-    if args.model_source == agent::model_validation::ModelSource::Advised {
+    if agent::family_route::per_family(agent_kind)
+        || args.model_source == agent::model_validation::ModelSource::Advised {
         effective_model
     } else {
         match agent::model_group::healthy_model_for(
@@ -150,6 +151,7 @@ pub(super) fn resolve_held_route(
         );
     } else if let Some(hold) = api_hold
         .or_else(|| rate_limit::dispatch_blocking_hold(&agent_kind, custom_agent_name.as_deref()))
+        .or_else(|| held::family_hold(agent_kind, custom_agent_name.as_deref()))
     {
         let original = custom_agent_name
             .as_deref()
@@ -183,6 +185,14 @@ pub(super) fn resolve_model_hold(
     Option<String>,
     Option<(String, String)>,
 )> {
+    if agent::family_route::per_family(agent_kind)
+        && crate::routing::availability::availability_for_group(
+            &agent_kind, custom_agent_name.as_deref(),
+            &crate::routing::capacity::group(effective_model.as_deref()),
+        ).status != crate::routing::availability::RouteStatus::Held
+    {
+        return Ok((agent_kind, custom_agent_name, effective_model, substituted_from));
+    }
     // No-group for_model is agent-level; skip it or background keep is undone.
     if (agent::model_group::model_group(agent_kind, effective_model.as_deref()).is_some()
         || !crate::routing::capacity::notes(&agent_kind, custom_agent_name.as_deref()).is_empty())
@@ -244,15 +254,17 @@ pub(super) fn finish_agent_setup(
     {
         effective_model = None;
     }
-    aid_info!(
-        "{}",
-        model_info::model_selection_info(
-            args,
-            &run_model,
-            effective_model.as_deref(),
-            agent.as_ref()
-        )
-    );
+    if !agent::family_route::per_family(agent_kind) {
+        aid_info!(
+            "{}",
+            model_info::model_selection_info(
+                args,
+                &run_model,
+                effective_model.as_deref(),
+                agent.as_ref()
+            )
+        );
+    }
     Ok(AgentSetup {
         agent_kind,
         custom_agent_name: custom_agent_name.clone(),

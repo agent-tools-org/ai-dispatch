@@ -1,10 +1,10 @@
 // Held-route dispatch regressions for model and provider quota markers.
 // Exports: resolver tests for Cursor and OpenCode held routes.
 // Deps: run resolver, rate_limit, Store, AgentKind.
-use super::*;
 use super::super::held::{
     held_substitution_detail, held_substitution_metadata, model_class_preserved,
 };
+use super::*;
 
 #[test]
 fn held_opencode_provider_switches_before_dispatch() {
@@ -172,13 +172,13 @@ fn group_held_fallback_is_skipped_when_cascade_steps_over_held_route() {
     crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::Antigravity,
         None,
-        "claude",
+        "claude-gpt",
         "Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 59m21s.",
     );
     crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::Antigravity,
         None,
-        "gpt-oss",
+        "gemini-4-argon",
         "Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 59m21s.",
     );
     let store = Arc::new(Store::open_memory().expect("store"));

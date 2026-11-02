@@ -64,17 +64,17 @@ fn agy_group_answers(group: &str, model: &str) -> (RouteStatus, bool, bool, bool
 fn claude_gpt_window_agrees_across_every_hold_reader() {
     let (temp, _home, _cache) = isolated();
     let agy = AgentKind::Antigravity;
-    mark_group_rate_limited(&agy, None, "claude", AGY_CLOCK);
-    mark_group_rate_limited(&agy, None, "gpt-oss", AGY_CLOCK);
+    mark_group_rate_limited(&agy, None, "claude-gpt", AGY_CLOCK);
+    mark_group_rate_limited(&agy, None, "claude-gpt", AGY_CLOCK);
     write_agy_snapshot(
         &temp.path().join("aidbar"),
         &format!("{},{}", claude_gpt_window(), gemini_window()),
     );
 
     let (claude_status, claude_lim, claude_block, claude_listed, claude_healthy) =
-        agy_group_answers("claude", "claude-sonnet-4-6");
+        agy_group_answers("claude-gpt", "claude-sonnet-4-6");
     let (gpt_status, gpt_lim, gpt_block, gpt_listed, gpt_healthy) =
-        agy_group_answers("gpt-oss", "gpt-oss-120b-medium");
+        agy_group_answers("claude-gpt", "gpt-oss-120b-medium");
 
     assert_eq!(claude_status, RouteStatus::Dispatchable);
     assert!(!claude_lim && !claude_block && !claude_listed);
@@ -89,16 +89,16 @@ fn claude_gpt_window_agrees_across_every_hold_reader() {
 fn group_hold_without_window_group_stays_held() {
     let (temp, _home, _cache) = isolated();
     let agy = AgentKind::Antigravity;
-    mark_group_rate_limited(&agy, None, "claude", AGY_CLOCK);
+    mark_group_rate_limited(&agy, None, "claude-gpt", AGY_CLOCK);
     write_agy_snapshot(&temp.path().join("aidbar"), ungrouped_window());
 
     let (status, limited, blocked, listed, healthy) =
-        agy_group_answers("claude", "claude-sonnet-4-6");
+        agy_group_answers("claude-gpt", "claude-sonnet-4-6");
     assert_eq!(status, RouteStatus::Held);
     assert!(limited && blocked && listed);
     assert_eq!(
         healthy,
-        Some("gemini-3.1-pro-high"),
+        Some("gemini-4-argon-high"),
         "fail-closed claude must yield the next healthy family"
     );
 }
@@ -107,11 +107,11 @@ fn group_hold_without_window_group_stays_held() {
 fn gemini_window_does_not_release_claude() {
     let (temp, _home, _cache) = isolated();
     let agy = AgentKind::Antigravity;
-    mark_group_rate_limited(&agy, None, "claude", AGY_CLOCK);
+    mark_group_rate_limited(&agy, None, "claude-gpt", AGY_CLOCK);
     mark_group_rate_limited(&agy, None, "gemini", AGY_CLOCK);
     write_agy_snapshot(&temp.path().join("aidbar"), gemini_window());
 
-    let (claude_status, claude_lim, _, _, _) = agy_group_answers("claude", "claude-sonnet-4-6");
+    let (claude_status, claude_lim, _, _, _) = agy_group_answers("claude-gpt", "claude-sonnet-4-6");
     let (gemini_status, gemini_lim, gemini_block, gemini_listed, _) =
         agy_group_answers("gemini", "gemini-3.6-flash-low");
     assert_eq!(claude_status, RouteStatus::Held);
@@ -136,8 +136,8 @@ fn claude_gpt_window_matches_both_families_without_splitting() {
             group: Some("claude-gpt".into()),
         }],
     };
-    let claude = super::policy::relevant_windows(&snap, &AgentKind::Antigravity, Some("claude"));
-    let gpt = super::policy::relevant_windows(&snap, &AgentKind::Antigravity, Some("gpt-oss"));
+    let claude = super::policy::relevant_windows(&snap, &AgentKind::Antigravity, Some("claude-gpt"));
+    let gpt = super::policy::relevant_windows(&snap, &AgentKind::Antigravity, Some("claude-gpt"));
     let gemini = super::policy::relevant_windows(&snap, &AgentKind::Antigravity, Some("gemini"));
     assert_eq!(claude.len(), 1);
     assert_eq!(gpt.len(), 1);

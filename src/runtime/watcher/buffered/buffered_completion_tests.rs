@@ -53,7 +53,7 @@ async fn agy_exit_zero_with_terminal_agent_error_fails_completion() {
     assert!(rate_limit::is_group_rate_limited(
         &AgentKind::Antigravity,
         None,
-        "claude"
+        "claude-gpt"
     ));
 }
 

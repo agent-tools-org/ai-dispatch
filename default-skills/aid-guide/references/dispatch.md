@@ -119,8 +119,8 @@ Important controls:
   Every dispatch reports its effective model and source (`--model`, agent config,
   budget route, `CLI config (no -m)`, or `CLI default (no -m)`). Quota/budget
   routing overrides and existing adapter defaults (Cursor, MiMoCode) are
-  labeled separately. A healthy default quota group keeps the model
-  unset; a held default group pins the first healthy alternative family.
+  labeled separately. Family-metered routes pin a checked, unspent model.
+  See `dispatch-retry.md` for explicit-pin and family quota routing behavior.
 - `--urgency` declares `background`, `normal`, or `urgent` rate-limit handling. `background` may wait out a clock or Windowed hold; a NeedsHuman hold still blocks.
 - `--rigor` declares `draft`, `standard`, or `critical` proof level (compiles / path exercised /
   cross-audit). `critical` forces `--verify` and `--audit`; it does **not** restrict which agent

@@ -147,6 +147,12 @@ pub(super) fn degraded_dispatch_warning(
     ))
 }
 
+pub(super) fn family_hold(kind: AgentKind, custom: Option<&str>) -> Option<String> {
+    (agent::family_route::per_family(kind)
+        && agent::family_route::healthy_model(kind, custom, None).is_none())
+        .then(|| "no unspent model family".to_string())
+}
+
 /// Whether a fallback candidate can actually take the work. An agent-level
 /// hold blocks outright; a candidate with a static family table (agy, cursor)
 /// is blocked when every group it can draw on is held — the agent-level
@@ -156,6 +162,9 @@ pub(super) fn degraded_dispatch_warning(
 fn candidate_is_blocked(kind: &AgentKind, custom_name: Option<&str>) -> bool {
     if rate_limit::dispatch_blocking_hold(kind, custom_name).is_some() {
         return true;
+    }
+    if agent::family_route::per_family(*kind) {
+        return agent::family_route::healthy_model(*kind, custom_name, None).is_none();
     }
     let groups = crate::agent::model_group::groups_for_agent(*kind);
     if groups.is_empty() {

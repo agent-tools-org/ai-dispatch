@@ -47,16 +47,9 @@ fn substituted_fallback_is_pinned_to_a_group_that_can_serve() {
     assert!(setup.substituted_from.is_some());
 }
 
-/// The pin from `substituted_fallback_is_pinned_to_a_group_that_can_serve` is
-/// `ModelSource::AidResolved`, and `validate_model_for_agent` drops an
-/// aid-resolved model that is not in the served list — setting
-/// `effective_model = None`, after which agy runs its own default, a gemini
-/// model: the exact family the substitution just avoided. The served-list
-/// snapshot can lag the catalog (a partial probe, or a cache written before the
-/// claude family was discovered), so this must reproduce through the
-/// substitution path, not by calling the validator directly.
+/// Served evidence is authoritative: a fallback with only spent models must be refused.
 #[test]
-fn substituted_aid_resolved_pin_survives_served_list_miss() {
+fn substituted_route_rejects_served_list_with_only_spent_models() {
     let _dir = crate::support::test_env::TestHome::new();
     crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::OpenCode,
@@ -89,18 +82,9 @@ fn substituted_aid_resolved_pin_survives_served_list_miss() {
         ..Default::default()
     };
 
-    let setup = resolve_agent_setup(&store, &mut args, None).expect("should substitute opencode to agy");
+    let result = resolve_agent_setup(&store, &mut args, None);
+    assert!(result.is_err(), "a served list with only spent models cannot be dispatched");
 
-    assert_eq!(setup.agent_kind, AgentKind::Antigravity);
-    let model = setup
-        .effective_model
-        .expect("aid-resolved pin must survive a served-list miss on a substituted route");
-    assert_ne!(
-        crate::agent::model_group::model_group(AgentKind::Antigravity, Some(&model)),
-        Some("gemini"),
-        "the exhausted gemini family must not be dispatched"
-    );
-    assert!(setup.substituted_from.is_some());
 }
 
 /// The `keep_aid_resolved_pin` guard is deliberately wider than the family pin

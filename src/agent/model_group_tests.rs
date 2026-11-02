@@ -7,8 +7,8 @@ use super::*;
 fn agy_models_map_to_their_families() {
     let agy = AgentKind::Antigravity;
     assert_eq!(model_group(agy, Some("gemini-3.6-flash-low")), Some("gemini"));
-    assert_eq!(model_group(agy, Some("claude-sonnet-4-6")), Some("claude"));
-    assert_eq!(model_group(agy, Some("gpt-oss-120b-medium")), Some("gpt-oss"));
+    assert_eq!(model_group(agy, Some("claude-sonnet-4-6")), Some("claude-gpt"));
+    assert_eq!(model_group(agy, Some("gpt-oss-120b-medium")), Some("claude-gpt"));
 }
 
 /// Cursor meters one premium pool. Enumerating the premium models left every
@@ -107,9 +107,9 @@ fn exhausted_gemini_group_switches_to_claude() {
     let got = healthy_model_for(
         AgentKind::Antigravity,
         Some("gemini-3.6-flash-low"),
-        |group| group == "gemini",
+        |group| matches!(group, "gemini" | "gemini-4-argon"),
     );
-    assert_eq!(got, Some("claude-opus-4-6-thinking"));
+    assert_eq!(got, Some("claude-opus-5-5-high"));
 }
 
 #[test]
@@ -119,7 +119,7 @@ fn a_healthy_current_group_is_left_alone() {
     let got = healthy_model_for(
         AgentKind::Antigravity,
         Some("claude-sonnet-4-6"),
-        |group| group == "gemini",
+        |group| matches!(group, "gemini" | "gemini-4-argon"),
     );
     assert_eq!(got, None);
 }
@@ -132,14 +132,16 @@ fn every_group_exhausted_yields_nothing_to_switch_to() {
 
 #[test]
 fn no_current_model_still_finds_a_healthy_group() {
-    let got = healthy_model_for(AgentKind::Antigravity, None, |group| group == "gemini");
-    assert_eq!(got, Some("claude-opus-4-6-thinking"));
+    let got = healthy_model_for(AgentKind::Antigravity, None, |group| {
+        matches!(group, "gemini" | "gemini-4-argon")
+    });
+    assert_eq!(got, Some("claude-opus-5-5-high"));
 }
 
 #[test]
 fn healthy_default_group_preserves_unspecified_model() {
     for (agent, default) in [
-        (AgentKind::Antigravity, "gemini"),
+        (AgentKind::Antigravity, "gemini-4-argon"),
         (AgentKind::Cursor, "premium"),
         (AgentKind::Droid, "standard"),
     ] {

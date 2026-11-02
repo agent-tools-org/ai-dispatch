@@ -57,6 +57,52 @@ pub(super) fn resolve_agent_setup(
     args: &mut RunArgs,
     project_id: Option<&str>,
 ) -> Result<AgentSetup> {
+    let mut setup = resolve_agent_setup_inner(store, args, project_id)?;
+    use agent::family_route::PinPolicy;
+    let policy = if args.policy.is_some()
+        || (args.model.is_some()
+            && args.model_source == agent::model_validation::ModelSource::Advised)
+    {
+        PinPolicy::Exact
+    } else if args.model.is_some()
+        && args.model_source == agent::model_validation::ModelSource::UserSupplied
+    {
+        PinPolicy::WarnOnReplacement
+    } else {
+        PinPolicy::Automatic
+    };
+    let failed = if args.force_default_model {
+        args.parent_task_id
+            .as_deref()
+            .map(|id| store.get_task(id))
+            .transpose()?
+            .flatten()
+            .and_then(|task| task.requested_model.or(task.observed_model))
+    } else {
+        None
+    };
+    let previous = setup.effective_model.clone();
+    setup.effective_model = agent::family_route::resolve(
+        setup.agent_kind,
+        setup.custom_agent_name.as_deref(),
+        setup.effective_model.as_deref(),
+        policy,
+        setup.budget_active,
+        failed.as_deref(),
+    )?;
+    if policy == PinPolicy::WarnOnReplacement && previous != setup.effective_model {
+        args.model_source = agent::model_validation::ModelSource::AidResolved;
+    }
+    if agent::family_route::per_family(setup.agent_kind) {
+        aid_info!("[aid] {} model: {}; source: checked family route", setup.agent_display_name,
+            setup.effective_model.as_deref().unwrap_or("(unresolved)"));
+    }
+    Ok(setup)
+}
+
+fn resolve_agent_setup_inner(
+    store: &Arc<Store>, args: &mut RunArgs, project_id: Option<&str>,
+) -> Result<AgentSetup> {
     agent::removed::validate_run(args)?;
     if args.policy.is_some() {
         return caller_owned::caller_owned_setup(args);
@@ -125,3 +171,11 @@ mod caller_owned;
 #[cfg(test)]
 #[path = "dispatch_resolve/caller_owned_tests.rs"]
 mod caller_owned_tests;
+
+#[cfg(test)]
+#[path = "dispatch_family_tests.rs"]
+mod family_tests;
+
+#[cfg(test)]
+#[path = "dispatch_family_paths_tests.rs"]
+mod family_paths_tests;

@@ -230,7 +230,7 @@ fn agy_group_hold_without_group_field_fails_closed() {
     crate::routing::rate_limit::mark_group_rate_limited(
         &AgentKind::Antigravity,
         None,
-        "claude",
+        "claude-gpt",
         "Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 59m21s.",
     );
     write_cache(
@@ -241,7 +241,7 @@ fn agy_group_hold_without_group_field_fails_closed() {
     assert!(is_group_rate_limited(
         &AgentKind::Antigravity,
         None,
-        "claude"
+        "claude-gpt"
     ));
     assert!(
         dispatch_blocking_hold_for_model(&AgentKind::Antigravity, None, Some("claude-sonnet-4-6"))

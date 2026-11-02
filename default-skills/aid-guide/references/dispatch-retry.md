@@ -90,7 +90,7 @@ default runs instead, because a stale catalog entry is aid's problem to absorb,
 not a reason to refuse your dispatch. Where the CLI cannot be asked what it
 serves, dispatch proceeds unvalidated and says so.
 
-For explicit fallback substitution — where a held agent was replaced by a
+For agents without per-family metering, explicit fallback substitution — where a held agent was replaced by a
 caller-listed fallback before dispatch — an aid-resolved model survives a served-list miss
 rather than being dropped. The substitution already proved the requested
 family spent, and the fallback's own default can re-enter that exhausted
@@ -101,6 +101,23 @@ family pin: `switch_agent` clears `--model`, so a fallback's per-agent default
 or a budget-picked model arrives as aid-resolved too, and the same trade
 applies. A served-list miss is cache lag, not proof the CLI will reject the
 model.
+
+Family-metered routes use the 24-hour cached served list as their candidate set;
+static models are a fallback only when no served list exists. Agy quota units are
+`gemini-4-argon`, other `gemini` models, and shared `claude-gpt` models. An Argon
+window applies only to Argon; general Gemini windows apply to both Gemini units.
+Held unit markers, live windows at 100% with a future reset, and untrusted refusals
+within their stated reset duration exclude a unit. Replacements retain the requested
+effort (medium by default), and budget routing prefers the cheapest available line.
+Ordinary `--model` requests warn with both models before replacing a spent unit.
+Advised and caller-owned exact pins are refused instead. If every served unit is
+spent, explicit cascades walk to the next available agent; otherwise dispatch refuses.
+Quota continuation excludes the refusing unit even without a trusted marker, then
+tries another unit of the same agent with equal or better capability. If none exists,
+it falls through to the automatic advice candidate. Model self-heal excludes the
+failed model when pinning a replacement. Background workers recheck units after
+waiting for a reset. Completion attribution maps log labels through the cached
+served list without running a live model probe.
 
 The served list is cached on disk for 24 hours, so a slow CLI is asked once
 rather than on every dispatch. When the model you asked for is absent from the

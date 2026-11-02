@@ -46,14 +46,87 @@ fn mirrors_entries_idempotently_without_deleting_shared_paths() {
 fn refuses_local_state_without_deleting_it() {
     let temp = tempfile::tempdir().unwrap();
     let task = temp.path().join("task");
-    std::fs::create_dir_all(task.join("codex-home")).unwrap();
-    std::fs::write(task.join("codex-home/keep"), "keep").unwrap();
+    let mirror = task.join("codex-home");
     let real = temp.path().join("real");
-    std::fs::create_dir(&real).unwrap();
-    std::fs::create_dir(real.join("sessions")).unwrap();
+    std::fs::create_dir_all(real.join("sessions")).unwrap();
     std::fs::write(real.join("state_5.sqlite"), "synthetic state").unwrap();
-    assert!(Home::create(&real, &task).is_err());
-    assert!(task.join("codex-home/keep").exists());
+    let home = Home::create(&real, &task).unwrap();
+    std::fs::create_dir(home.path.join("cache")).unwrap();
+    std::fs::write(home.path.join("cache/nested"), "cached").unwrap();
+    for name in [
+        "thread_history_1.sqlite-wal",
+        "models_cache.json",
+        "thread_history_1.sqlite",
+    ] {
+        std::fs::write(home.path.join(name), name).unwrap();
+    }
+    std::fs::write(home.path.join("config.toml.bak"), "mirror config").unwrap();
+    std::os::unix::fs::symlink(real.join("missing"), home.path.join("stale")).unwrap();
+    let before = tree_snapshot(temp.path());
+    let error = Home::create(&real, &task).err().unwrap().to_string();
+    assert_eq!(
+        error,
+        format!(
+            "Codex mirror contains local state invisible to the real home: \
+         cache, models_cache.json, thread_history_1.sqlite, thread_history_1.sqlite-wal. \
+         With no aid Codex run active, move these entries from {} into {}, \
+         or run Codex once directly with that CODEX_HOME before using aid.",
+            mirror.display(),
+            real.canonicalize().unwrap().display()
+        )
+    );
+    assert_eq!(tree_snapshot(temp.path()), before);
+}
+
+fn tree_snapshot(root: &Path) -> Vec<(PathBuf, std::fs::FileType, Vec<u8>)> {
+    let mut snapshot = Vec::new();
+    for entry in std::fs::read_dir(root).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        let kind = entry.file_type().unwrap();
+        let data = if kind.is_symlink() {
+            std::fs::read_link(&path)
+                .unwrap()
+                .as_os_str()
+                .as_encoded_bytes()
+                .to_vec()
+        } else if kind.is_file() {
+            std::fs::read(&path).unwrap()
+        } else {
+            Vec::new()
+        };
+        if kind.is_dir() {
+            snapshot.extend(tree_snapshot(&path));
+        }
+        snapshot.push((path, kind, data));
+    }
+    snapshot.sort_by(|left, right| left.0.cmp(&right.0));
+    snapshot
+}
+
+#[test]
+fn missing_real_state_names_initialization_command_without_changing_home() {
+    for missing in ["sessions", "state_5.sqlite"] {
+        let temp = tempfile::tempdir().unwrap();
+        let real = temp.path().join("real");
+        std::fs::create_dir_all(real.join("sessions")).unwrap();
+        std::fs::write(real.join("state_5.sqlite"), "synthetic state").unwrap();
+        let task = temp.path().join("task");
+        std::fs::create_dir(&task).unwrap();
+        if missing == "sessions" {
+            std::fs::remove_dir(real.join(missing)).unwrap();
+        } else {
+            std::fs::remove_file(real.join(missing)).unwrap();
+        }
+        let before = tree_snapshot(temp.path());
+        let error = Home::create(&real, &task).err().unwrap().to_string();
+        assert!(error.contains("requires existing sessions and state_5.sqlite"));
+        assert!(error.contains(&format!(
+            "start `codex app-server` once (or run Codex once) with CODEX_HOME={}",
+            real.canonicalize().unwrap().display()
+        )));
+        assert_eq!(tree_snapshot(temp.path()), before);
+    }
 }
 
 fn assert_mirrors(path: &Path, real: &Path) {

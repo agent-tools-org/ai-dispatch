@@ -24,15 +24,7 @@ pub(crate) fn family_is_spent(agent: AgentKind, custom: Option<&str>, family: &s
     {
         return at > Local::now().naive_local();
     }
-    let Some(at) = crate::routing::rate_limit::signatures::recovery_for_agent(&text, agent) else {
-        return false;
-    };
-    let duration = at - Local::now().naive_local();
-    std::fs::metadata(path)
-        .and_then(|meta| meta.modified())
-        .ok()
-        .and_then(|mtime| mtime.elapsed().ok())
-        .is_some_and(|age| age.as_secs() < duration.num_seconds().max(0) as u64)
+    false
 }
 
 fn probe_is_spent(probe: &ProbeEvidence, agent: AgentKind, family: &str) -> bool {

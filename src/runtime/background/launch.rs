@@ -69,13 +69,19 @@ pub(super) fn refresh_family_route(
         || args.model_source == agent::model_validation::ModelSource::Advised
     {
         PinPolicy::Exact
+    } else if args.parent_task_id.is_some() && args.model.is_some()
+        && args.model_source == agent::model_validation::ModelSource::AidResolved
+    {
+        PinPolicy::Continuation
     } else if args.model_source == agent::model_validation::ModelSource::UserSupplied {
         PinPolicy::WarnOnReplacement
     } else {
         PinPolicy::Automatic
     };
-    let failed = if args.force_default_model {
+    let failed = if args.force_default_model || policy == PinPolicy::Continuation {
         args.parent_task_id.as_deref().map(|id| store.get_task(id)).transpose()?.flatten()
+            .filter(|task| task.agent == agent.kind()
+                && task.custom_agent_name.as_deref() == agent.rate_limit_name())
             .and_then(|task| task.requested_model.or(task.observed_model))
     } else { None };
     let model = family_route::resolve(

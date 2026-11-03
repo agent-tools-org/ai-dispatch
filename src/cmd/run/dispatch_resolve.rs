@@ -12,6 +12,8 @@ use crate::types::AgentKind;
 use anyhow::Result;
 use std::sync::Arc;
 
+#[path = "dispatch_degraded.rs"]
+mod degraded;
 #[path = "dispatch_resolve_held.rs"]
 mod held;
 #[path = "dispatch_model_info.rs"]
@@ -52,6 +54,52 @@ pub(super) fn route_custom_name(kind: AgentKind, name: &str) -> Result<Option<St
     }
 }
 
+fn family_pin_policy(args: &RunArgs) -> agent::family_route::PinPolicy {
+    use agent::family_route::PinPolicy;
+    if args.policy.is_some()
+        || (args.model.is_some()
+            && args.model_source == agent::model_validation::ModelSource::Advised)
+    {
+        PinPolicy::Exact
+    } else if args.parent_task_id.is_some()
+        && args.model.is_some()
+        && args.model_source == agent::model_validation::ModelSource::AidResolved
+    {
+        PinPolicy::Continuation
+    } else if args.model.is_some()
+        && args.model_source == agent::model_validation::ModelSource::UserSupplied
+    {
+        PinPolicy::WarnOnReplacement
+    } else {
+        PinPolicy::Automatic
+    }
+}
+
+fn refused_parent_model(
+    store: &Store,
+    args: &RunArgs,
+    setup: &AgentSetup,
+) -> Result<Option<String>> {
+    Ok(
+        if args.force_default_model
+            || args.model_source == agent::model_validation::ModelSource::AidResolved
+        {
+            args.parent_task_id
+                .as_deref()
+                .map(|id| store.get_task(id))
+                .transpose()?
+                .flatten()
+                .filter(|task| {
+                    task.agent == setup.agent_kind
+                        && task.custom_agent_name == setup.custom_agent_name
+                })
+                .and_then(|task| task.requested_model.or(task.observed_model))
+        } else {
+            None
+        },
+    )
+}
+
 pub(super) fn resolve_agent_setup(
     store: &Arc<Store>,
     args: &mut RunArgs,
@@ -59,28 +107,8 @@ pub(super) fn resolve_agent_setup(
 ) -> Result<AgentSetup> {
     let mut setup = resolve_agent_setup_inner(store, args, project_id)?;
     use agent::family_route::PinPolicy;
-    let policy = if args.policy.is_some()
-        || (args.model.is_some()
-            && args.model_source == agent::model_validation::ModelSource::Advised)
-    {
-        PinPolicy::Exact
-    } else if args.model.is_some()
-        && args.model_source == agent::model_validation::ModelSource::UserSupplied
-    {
-        PinPolicy::WarnOnReplacement
-    } else {
-        PinPolicy::Automatic
-    };
-    let failed = if args.force_default_model {
-        args.parent_task_id
-            .as_deref()
-            .map(|id| store.get_task(id))
-            .transpose()?
-            .flatten()
-            .and_then(|task| task.requested_model.or(task.observed_model))
-    } else {
-        None
-    };
+    let policy = family_pin_policy(args);
+    let failed = refused_parent_model(store, args, &setup)?;
     let previous = setup.effective_model.clone();
     setup.effective_model = agent::family_route::resolve(
         setup.agent_kind,
@@ -94,9 +122,17 @@ pub(super) fn resolve_agent_setup(
         args.model_source = agent::model_validation::ModelSource::AidResolved;
     }
     if agent::family_route::per_family(setup.agent_kind) {
-        aid_info!("[aid] {} model: {}; source: checked family route", setup.agent_display_name,
-            setup.effective_model.as_deref().unwrap_or("(unresolved)"));
+        aid_info!(
+            "[aid] {} model: {}; source: checked family route",
+            setup.agent_display_name,
+            setup.effective_model.as_deref().unwrap_or("(unresolved)")
+        );
     }
+    degraded::warn_if_degraded(
+        setup.agent_kind,
+        setup.custom_agent_name.as_deref(),
+        setup.effective_model.as_deref(),
+    );
     Ok(setup)
 }
 

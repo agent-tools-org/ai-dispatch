@@ -1,9 +1,9 @@
-// Family refusal expiry is measured from marker creation, never rebased on reads.
-// Uses isolated homes and filesystem timestamps for legacy untrusted markers.
+// Family refusals use explicit recovery dates and ignore undated markers.
+// Uses isolated homes for untrusted marker and live-window evidence.
 use super::*;
 
 #[test]
-fn agy_family_legacy_untrusted_duration_expires_from_marker_time() {
+fn agy_family_requires_dated_untrusted_recovery() {
     let home = crate::support::test_env::TestHome::new();
     let _cache = live_quota::CacheDirGuard::set(home.path());
     let path = group_marker_path(&AgentKind::Antigravity, None, "gemini");
@@ -13,15 +13,22 @@ fn agy_family_legacy_untrusted_duration_expires_from_marker_time() {
         "source: untrusted\nmessage: Individual quota reached. Resets in 36h29m20s.\n",
     )
     .expect("legacy marker");
-    assert!(family_is_spent(AgentKind::Antigravity, None, "gemini"));
-    let file = std::fs::OpenOptions::new()
-        .write(true)
-        .open(path)
-        .expect("file");
-    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(37 * 3600);
-    file.set_times(std::fs::FileTimes::new().set_modified(old))
-        .expect("mtime");
     assert!(!family_is_spent(AgentKind::Antigravity, None, "gemini"));
+    for (hours, spent) in [(36, true), (-1, false)] {
+        let at = Local::now().naive_local() + chrono::Duration::hours(hours);
+        std::fs::write(
+            &path,
+            format!(
+                "source: untrusted\nrecovery_at: {}\n",
+                crate::routing::rate_limit::format_recovery(at)
+            ),
+        )
+        .expect("dated marker");
+        assert_eq!(
+            family_is_spent(AgentKind::Antigravity, None, "gemini"),
+            spent
+        );
+    }
     assert!(!family_is_spent(AgentKind::Antigravity, None, "claude"));
 }
 

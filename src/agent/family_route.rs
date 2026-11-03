@@ -98,6 +98,7 @@ pub(crate) enum PinPolicy {
     Automatic,
     WarnOnReplacement,
     Exact,
+    Continuation,
 }
 
 pub(crate) fn resolve(
@@ -115,11 +116,14 @@ pub(crate) fn resolve(
         let name = model.ok_or_else(|| anyhow::anyhow!("{} requires a model", kind.as_str()))?;
         let family = unit(kind, name);
         anyhow::ensure!(family != "other", "Unknown quota family for model {name}");
-        if Some(name) != excluded && !family_is_spent(kind, custom, family) {
+        let excluded_pin = excluded.is_some_and(|failed| {
+            name == failed || (policy == PinPolicy::Continuation && family == unit(kind, failed))
+        });
+        if !excluded_pin && !family_is_spent(kind, custom, family) {
             return Ok(Some(name.to_string()));
         }
         anyhow::ensure!(
-            policy != PinPolicy::Exact,
+            !matches!(policy, PinPolicy::Exact | PinPolicy::Continuation),
             "{} model is held (family {family} spent); exact pin retained",
             kind.as_str()
         );
@@ -160,4 +164,34 @@ pub(crate) fn continuation_model(
             && strength(model).1 <= current.map(strength).map_or(2, |rank| rank.1)
             && !family_is_spent(kind, custom, unit(kind, model))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn agy_continuation_excludes_sibling_model_in_refused_pool() {
+        let home = crate::support::test_env::TestHome::new();
+        let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
+        let _models = super::super::model_validation::MockServedModelsGuard::set(
+            AgentKind::Antigravity,
+            Some(vec![
+                "gpt-oss-120b-medium".into(),
+                "gemini-4-argon-medium".into(),
+            ]),
+        );
+        let result = resolve(
+            AgentKind::Antigravity,
+            None,
+            Some("gpt-oss-120b-medium"),
+            PinPolicy::Continuation,
+            true,
+            Some("claude-opus-5-5-medium"),
+        );
+        assert!(
+            result.is_err(),
+            "a sibling model shares the refused allowance"
+        );
+    }
 }

@@ -108,45 +108,6 @@ fn cascade_routes(cascade: &[String]) -> Result<Vec<(AgentKind, String)>> {
         .collect()
 }
 
-pub(super) fn warn_if_degraded(kind: AgentKind, custom_name: Option<&str>) {
-    if let Some(line) = degraded_dispatch_warning(kind, custom_name) {
-        aid_warn!("{line}");
-    }
-}
-
-pub(super) fn degraded_dispatch_warning(
-    kind: AgentKind,
-    custom_name: Option<&str>,
-) -> Option<String> {
-    let avail = crate::routing::availability::availability(&kind, custom_name);
-    if avail.status != crate::routing::availability::RouteStatus::Degraded {
-        return None;
-    }
-    let name = custom_name.unwrap_or_else(|| kind.as_str());
-    let window = avail
-        .probe
-        .as_ref()
-        .and_then(|probe| crate::agent::selection::tightest_window(&probe.windows));
-    let detail = match window {
-        Some(item) => {
-            let label = if item.label.is_empty() {
-                "live"
-            } else {
-                item.label.as_str()
-            };
-            let resets = item
-                .resets_at
-                .map(|at| format!(" (resets {})", at.format("%Y-%m-%dT%H:%MZ")))
-                .unwrap_or_default();
-            format!(": {:.0}% of {label} window used{resets}", item.used_percent)
-        }
-        None => String::new(),
-    };
-    Some(format!(
-        "[aid] {name} route degraded{detail} — dispatching anyway"
-    ))
-}
-
 pub(super) fn family_hold(kind: AgentKind, custom: Option<&str>) -> Option<String> {
     (agent::family_route::per_family(kind)
         && agent::family_route::healthy_model(kind, custom, None).is_none())

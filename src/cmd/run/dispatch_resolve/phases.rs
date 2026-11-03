@@ -169,7 +169,6 @@ pub(super) fn resolve_held_route(
         custom_agent_name = route_custom_name(next_kind, &next_name)?;
         substituted_from = Some((original, hold));
     }
-    held::warn_if_degraded(agent_kind, custom_agent_name.as_deref());
     Ok((agent_kind, custom_agent_name, substituted_from))
 }
 

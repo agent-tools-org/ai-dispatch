@@ -126,10 +126,17 @@ pub(crate) fn parse_agy_models_output(output: &str) -> Vec<String> {
         {
             continue;
         }
-        let first = trimmed.split_whitespace().next().unwrap_or("");
-        let clean = first.trim_matches(|c: char| !c.is_alphanumeric() && c != '-' && c != '.');
-        if !clean.is_empty() && !models.contains(&clean.to_string()) {
-            models.push(clean.to_string());
+        let Some((id, display)) = trimmed.split_once('\t') else {
+            continue;
+        };
+        if id.contains('-')
+            && id
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b"-._".contains(&c))
+            && !display.trim().is_empty()
+            && !models.iter().any(|model| model == id)
+        {
+            models.push(id.to_string());
         }
     }
     models

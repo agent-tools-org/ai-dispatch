@@ -23,3 +23,17 @@ fn parses_captured_agy_models_output_exactly() {
     ];
     assert_eq!(models, expected.map(str::to_string));
 }
+
+#[test]
+fn agy_models_requires_tab_separated_model_id_and_display_name() {
+    let output = concat!(
+        "agy 1.1\nUsage: agy models\nmodel\tDisplay Name\n\tMissing ID\n",
+        "missing-name\t\nGemini 4 Argon\tHeading\n",
+        "gemini-4-argon-medium\tGemini 4 Argon\n",
+        "gemini-4-argon-medium\tDuplicate\n",
+    );
+    assert_eq!(
+        super::parse_agy_models_output(output),
+        vec!["gemini-4-argon-medium"]
+    );
+}

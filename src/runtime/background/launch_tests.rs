@@ -132,3 +132,35 @@ fn agy_post_wait_resolution_refreshes_saved_launch_pin() {
     .expect("decode");
     assert_eq!(saved_args.model, args.model);
 }
+
+#[test]
+fn agy_budget_worker_keeps_continuation_pin_and_excludes_refused_pool() {
+    use crate::types::AgentKind;
+    let home = crate::support::test_env::TestHome::new();
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
+    let _models = agent::model_validation::MockServedModelsGuard::set(
+        AgentKind::Antigravity,
+        Some(vec![
+            "gemini-4-argon-medium".into(),
+            "claude-opus-5-5-medium".into(),
+            "gemini-3.8-flash-medium".into(),
+        ]),
+    );
+    let store = Store::open_memory().expect("store");
+    let mut parent = crate::cost::test_support::task(AgentKind::Antigravity, 0, None);
+    parent.requested_model = Some("gemini-4-argon-medium".into());
+    store.insert_task(&parent).expect("parent");
+    let mut args = RunArgs {
+        agent_name: "agy".into(),
+        budget: true,
+        model: Some("claude-opus-5-5-medium".into()),
+        model_source: agent::model_validation::ModelSource::AidResolved,
+        parent_task_id: Some(parent.id.to_string()),
+        ..Default::default()
+    };
+    let agent = agent::get_agent(AgentKind::Antigravity);
+    refresh_family_route(&store, "unused", &mut args, agent.as_ref()).expect("retained pin");
+    assert_eq!(args.model.as_deref(), Some("claude-opus-5-5-medium"));
+    args.model = Some("gemini-4-argon-high".into());
+    assert!(refresh_family_route(&store, "unused", &mut args, agent.as_ref()).is_err());
+}

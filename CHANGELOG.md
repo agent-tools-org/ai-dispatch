@@ -1,3 +1,11 @@
+## v11.11.0 (2026-11-03)
+- `--audit` and `--rigor critical` are refused at dispatch when the `aic` binary is missing, instead of finishing with the audit silently skipped; an audit enabled only by the project default warns, and a critical task whose audit cannot run at settlement fails.
+- Score evidence reports `harness: measured` only when the selected score is the Terminal-Bench one.
+- A retry after an agent failure no longer inherits the original `on_done` hook and uses the running worker's environment and directory, like every other retry; `--context` paths are stored absolute so `aid retry` works from any directory.
+- The reaper re-checks each process's start time before signalling, so a recycled PID is never signalled; feed refresh reaps its background shell; a silent first command doing CPU work is no longer killed by the first-token budget, with the activity probe held to the idle probe's cadence.
+- agy: the degraded-quota warning names only the pool of the model actually dispatched; a quota continuation carries an explicit marker, keeps its pin in budget mode, excludes the refused pool, and re-selects another pool if its own runs out while waiting; `agy models` parsing accepts only model rows; the legacy marker-age inference is removed.
+
+
 ## v11.10.0 (2026-11-03)
 - agy dispatches never land on a spent quota pool. agy meters three pools (Gemini 4 Argon, other Gemini models, Claude+GPT shared); every dispatch path (run, retry, cascade, quota continuation, self-heal, batch, best-of, held substitution, post-wait launch) now resolves a concrete model whose pool is not spent, using held markers, live probe windows and fresh untrusted refusals as one predicate. A run without `--model` previously went to agy's default Gemini 4 Argon while its weekly window was at 100%.
 - agy refusals are recorded against the pool that refused, with the stated `Resets in` time, instead of holding the whole agent; quota continuation tries another unspent agy pool of the same or higher class before moving to another agent, and never stops silently.

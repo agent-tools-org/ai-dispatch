@@ -136,3 +136,73 @@ fn childless_activity_probe_is_throttled_across_output_lines() {
     );
     assert_eq!(calls, 4);
 }
+
+#[test]
+fn childless_first_token_activity_probe_is_throttled_across_output_lines() {
+    let (_home, _guard, store, task) = fixture();
+    for raw in [false, true] {
+        let mut watchdog = Watchdog::new(crate::config::timeout_policy::TimeoutPolicy::default());
+        watchdog.state.received_raw_bytes = raw;
+        let start = Instant::now();
+        let mut calls = 0;
+        for millis in [0, 0, 100, 200, 499, 500, 500, 600, 999, 1000] {
+            watchdog.observe(r#"{"type":"system"}"#, 1);
+            assert!(
+                !watchdog
+                    .tick_with_probe(
+                        &store,
+                        &task,
+                        Some(123),
+                        start + Duration::from_millis(millis),
+                        |_, _, _| {
+                            calls += 1;
+                            None
+                        },
+                    )
+                    .unwrap()
+            );
+        }
+        assert_eq!(calls, 3, "raw output received: {raw}");
+    }
+}
+
+#[test]
+fn first_token_activity_is_reused_between_probes() {
+    let (_home, _guard, store, task) = fixture();
+    let mut watchdog = Watchdog::new(crate::config::timeout_policy::TimeoutPolicy::default());
+    watchdog.state.last_raw_chunk_time =
+        Instant::now() - watchdog.policy.first_token - Duration::from_secs(1);
+    watchdog.state.last_progress_time = watchdog.state.last_raw_chunk_time;
+    watchdog.state.idle_warned = true;
+    watchdog.state.idle_nudged = true;
+    let now = Instant::now();
+    let first_token = watchdog.policy.first_token;
+    assert!(
+        !watchdog
+            .tick_with_probe(&store, &task, None, now, |_, _, timeout| {
+                assert_eq!(timeout, first_token);
+                Some(std::time::SystemTime::now())
+            })
+            .unwrap()
+    );
+    assert!(!watchdog.state.idle_warned);
+    assert!(!watchdog.state.idle_nudged);
+    assert!(
+        !watchdog
+            .tick_with_probe(&store, &task, None, now, |_, _, _| {
+                panic!("activity must be cached between probes")
+            })
+            .unwrap()
+    );
+    assert!(
+        watchdog
+            .tick_with_probe(
+                &store,
+                &task,
+                None,
+                now + Duration::from_millis(500),
+                |_, _, _| None,
+            )
+            .unwrap()
+    );
+}

@@ -173,6 +173,7 @@ Missing or unreadable launch identity fails closed: no descendant activity or st
 Reaper cleanup captures worker and descendant launch identities before sending
 signals and rechecks them before both TERM and KILL. Unreadable or changed
 identities are skipped; the stored agent root is also rechecked before each signal.
+Text `aid stop` signals the stored worker PID with a command-line check only, without a start-time identity check.
 Recognized rbox lock-queue time is excluded from a duration-based verification
 timeout, up to the lock notice's timeout. Remote verification's absolute task
 deadline still includes queue time.

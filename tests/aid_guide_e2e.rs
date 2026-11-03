@@ -75,6 +75,7 @@ const INVARIANTS: &[(&str /* reference file */, &str /* phrase */)] = &[
     ("task-operations.md", "also extends the first-token budget"),
     ("task-operations.md", "Sleeping children without CPU growth still exhaust that budget"),
     ("task-operations.md", "rechecks them before both TERM and KILL"),
+    ("task-operations.md", "command-line check only, without a start-time identity check"),
     ("task-operations.md", "Remote verification's absolute task\ndeadline still includes queue time"),
     ("task-operations.md", "Codex `respond` is refused"),
     ("task-operations.md", "Success is reported only after the `turn/steer` response"),

@@ -75,11 +75,10 @@ fn evidence_from(
         .find(|model| model.id == id)
         .map(|model| model.scores.clone())
         .unwrap_or_default();
-    let terminal = terminal_score(feed, &scores, cli, effort);
+    let terminal = terminal_score(feed, &scores, cli, effort).filter(|_| agentic(category));
     // Agentic (including simple edits): exact CLI+effort Terminal-Bench 4.0, else ECI.
     // Frontend: webdev only. Research/documentation: ECI only. Never blend sources.
     let selected = terminal
-        .filter(|_| agentic(category))
         .or_else(|| model_score(feed, &scores, effort, category))
         .cloned();
     let capability = selected.as_ref().and_then(|score| rescale(feed, score));

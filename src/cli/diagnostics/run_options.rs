@@ -26,6 +26,13 @@ pub(crate) fn validate_run_options(args: &RunArgs) -> anyhow::Result<()> {
             "--result-file and -o/--output resolve to the same destination.",
             "Choose separate report and output destinations, or request only one artifact."));
     }
+    if (args.audit || args.declared_rigor == Some(TaskRigor::Critical))
+        && !crate::task::aic::is_available()
+    {
+        issues.push(Issue::new("audit_unavailable",
+            "Cross-audit requires the 'aic' binary, but it is not available on PATH.",
+            "Install aic and ensure aic --version succeeds before dispatching with --audit or --rigor critical."));
+    }
     validate_rigor(args, &mut issues);
     validate_iteration(args, &mut issues);
     if issues.is_empty() { return Ok(()); }

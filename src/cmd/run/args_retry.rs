@@ -33,7 +33,7 @@ impl RunArgs {
             declared_urgency: profile.urgency,
             declared_rigor: profile.rigor,
             repo: task.repo_path.clone(),
-            dir: task.repo_path.clone(),
+            dir: task.effective_dir.clone().or_else(|| task.repo_path.clone()),
             output: task.output_path.clone(),
             model: task.requested_model.clone(),
             model_source: ModelSource::AidResolved,

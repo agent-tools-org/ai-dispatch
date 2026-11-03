@@ -147,6 +147,11 @@ dispatch an explicit agent.
 ## Context and instructions
 
 Use `--context <path>...` for source material, not extra positional arguments.
+Relative context paths are anchored to the caller's working directory at dispatch
+and saved as absolute paths, including any `:Item,OtherItem` selectors. Retries
+reuse those paths even when invoked from another directory. Legacy tasks without
+saved dispatch arguments have no recoverable context file list; their working
+directory defaults to the recorded effective directory, then the repository.
 
 The task brief is always delivered whole, including retry feedback before the
 original task on session resume. Shared context, file context, findings, peer

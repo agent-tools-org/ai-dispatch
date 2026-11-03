@@ -51,20 +51,21 @@ pub(crate) fn maybe_run_post_done_audit(
 }
 
 fn settle_unavailable_audit(store: &Store, task_id: &TaskId, args: &RunArgs) -> Result<()> {
+    let diagnostic = crate::task::aic::status().diagnostic();
     if args.declared_rigor == Some(TaskRigor::Critical) {
-        let reason = "critical cross-audit failed: aic unavailable on PATH at settlement";
+        let reason = format!("critical cross-audit failed at settlement: {diagnostic}");
         aid_warn!("[aid] {reason}");
         store.update_task_audit(task_id.as_str(), Some("error"), None)?;
-        store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Error, reason.into()))?;
+        store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Error, reason))?;
         crate::task::lifecycle::fail_completed_verify_gate(store, task_id)?;
         return Ok(());
     }
-    aid_warn!("[aid] --audit requested but 'aic' not found on PATH — skipping cross-audit");
+    aid_warn!("[aid] --audit requested but {diagnostic} — skipping cross-audit");
     store.update_task_audit(task_id.as_str(), Some("skipped"), None)?;
     store.insert_event(&TaskEvent::new(
         task_id.clone(),
         EventKind::Milestone,
-        "audit skipped: aic binary not found".to_string(),
+        format!("audit skipped: {diagnostic}"),
     ))?;
     Ok(())
 }

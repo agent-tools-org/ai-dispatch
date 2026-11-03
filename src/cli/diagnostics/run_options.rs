@@ -31,15 +31,15 @@ pub(crate) fn validate_run_options(args: &RunArgs) -> anyhow::Result<()> {
         && !crate::task::aic::is_available()
     {
         issues.push(Issue::new("audit_unavailable",
-            "Cross-audit requires the 'aic' binary, but it is not available on PATH.",
-            "Install aic and ensure aic --version succeeds before dispatching with --audit or --rigor critical."));
+            &format!("Cross-audit unavailable: {}", crate::task::aic::status().diagnostic()),
+            "Install the supported cross-auditor before dispatching with --audit or --rigor critical."));
     }
     if args.audit && !args.audit_explicit && args.declared_rigor != Some(TaskRigor::Critical)
         && !crate::task::aic::is_available()
     {
         aid_warn!(
-            "[aid] project audit default enabled but 'aic' is unavailable on PATH; \
-             continuing without cross-audit"
+            "[aid] project audit default enabled but {}; continuing without cross-audit",
+            crate::task::aic::status().diagnostic()
         );
     }
     validate_iteration(args, &mut issues);

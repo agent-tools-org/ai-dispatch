@@ -2,6 +2,12 @@
 // Exports: test-only coverage for post-DONE AIC execution and config wiring.
 // Deps: super, crate::{batch, project, store, types}, tempfile.
 
+#[path = "../../../tests/fixtures/aic_shim.rs"]
+mod aic_shim;
+
+#[path = "audit_identity_tests.rs"]
+mod identity_tests;
+
 use super::{RunArgs, maybe_run_post_done_audit};
 use crate::batch::parse_batch_file;
 use crate::config::project::{ProjectAuditConfig, ProjectConfig};
@@ -30,7 +36,7 @@ fn done_task(task_id: &str) -> Task {
 
 fn install_aic_shim(dir: &Path, body: &str) {
     let path = dir.join("aic");
-    crate::support::test_env::write_executable(&path, &format!("#!/bin/sh\n{body}\n"));
+    crate::support::test_env::write_executable(&path, &aic_shim::script(body));
 }
 
 fn set_env(key: &str, value: impl AsRef<std::ffi::OsStr>) {
@@ -68,7 +74,8 @@ fn audit_skipped_when_aic_not_found() {
     assert_eq!(task.audit_verdict.as_deref(), Some("skipped"));
     assert_eq!(task.audit_report_path, None);
     let events = store.get_events("t-audit-skip").unwrap();
-    assert!(events.iter().any(|event| event.detail == "audit skipped: aic binary not found"));
+    assert!(events.iter().any(|event| event.detail.contains("Missing: aic binary not found")
+        && event.detail.contains("https://aid.agent-tools.org/install.sh")));
     remove_env("AIC_TEST_PRESENT");
 }
 
@@ -101,7 +108,7 @@ fn audit_records_pass_verdict() {
     let temp = tempfile::tempdir().unwrap();
     install_aic_shim(
         temp.path(),
-        "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'report: /tmp/foo.md\\n'\nexit 0",
+        "printf 'report: /tmp/foo.md\\n'\nexit 0",
     );
     set_env("AIC_TEST_BINARY", temp.path().join("aic"));
     let store = Store::open_memory().unwrap();
@@ -117,26 +124,16 @@ fn audit_records_pass_verdict() {
 
 #[test]
 fn audit_records_failure_verdicts() {
-    for (case, script, task_id, detail) in [
-        (
-            "audit_records_fail_verdict",
-            "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'report: /tmp/fail.md\\n'\nexit 1",
-            "t-audit-fail",
-            "fail",
-        ),
-        (
-            "audit_records_error_verdict",
-            "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nexit 200",
-            "t-audit-error",
-            "error",
-        ),
-    ] {
-        eprintln!("case: {case}");
+    for (code, detail) in [(0, "pass"), (1, "fail"), (2, "advisory"),
+        (3, "inconclusive"), (4, "error"), (200, "error")]
+    {
+        let task_id = "t-audit-verdict";
+        let script = format!("printf 'report: /tmp/verdict.md\\n'\nexit {code}");
         let _guard = env_lock();
         let temp = tempfile::tempdir().unwrap();
         install_aic_shim(
             temp.path(),
-            script,
+            &script,
         );
         set_env("AIC_TEST_BINARY", temp.path().join("aic"));
         let store = Store::open_memory().unwrap();
@@ -146,6 +143,8 @@ fn audit_records_failure_verdicts() {
 
         let task = store.get_task(task_id).unwrap().unwrap();
         assert_eq!(task.audit_verdict.as_deref(), Some(detail));
+        assert_eq!(task.status, TaskStatus::Done);
+        assert_eq!(task.audit_report_path.as_deref(), Some("/tmp/verdict.md"));
         remove_env("AIC_TEST_BINARY");
     }
 }
@@ -156,7 +155,7 @@ fn audit_respects_timeout() {
     let temp = tempfile::tempdir().unwrap();
     install_aic_shim(
         temp.path(),
-        "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nsleep 2\nprintf 'report: /tmp/late.md\\n'\nexit 0",
+        "sleep 2\nprintf 'report: /tmp/late.md\\n'\nexit 0",
     );
     set_env("AIC_TEST_BINARY", temp.path().join("aic"));
     set_env("AID_AUDIT_TIMEOUT_SECS", "1");
@@ -177,7 +176,7 @@ fn project_audit_auto_triggers_without_cli_flag() {
     let temp = tempfile::tempdir().unwrap();
     install_aic_shim(
         temp.path(),
-        "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'report: /tmp/project.md\\n'\nexit 0",
+        "printf 'report: /tmp/project.md\\n'\nexit 0",
     );
     set_env("AIC_TEST_BINARY", temp.path().join("aic"));
     let store = Store::open_memory().unwrap();
@@ -199,7 +198,7 @@ fn no_audit_overrides_project_audit_auto() {
     let temp = tempfile::tempdir().unwrap();
     install_aic_shim(
         temp.path(),
-        "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'report: /tmp/no-audit.md\\n'\nexit 0",
+        "printf 'report: /tmp/no-audit.md\\n'\nexit 0",
     );
     set_env("AIC_TEST_BINARY", temp.path().join("aic"));
     let store = Store::open_memory().unwrap();
@@ -225,7 +224,7 @@ fn batch_task_level_audit_override_wins() {
     let temp = tempfile::tempdir().unwrap();
     install_aic_shim(
         temp.path(),
-        "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'report: /tmp/batch.md\\n'\nexit 0",
+        "printf 'report: /tmp/batch.md\\n'\nexit 0",
     );
     set_env("AIC_TEST_BINARY", temp.path().join("aic"));
     let batch_file = temp.path().join("tasks.toml");
@@ -261,14 +260,17 @@ fn batch_task_level_audit_override_wins() {
 #[test]
 fn show_header_includes_audit_verdict_when_present() {
     let store = Arc::new(Store::open_memory().unwrap());
-    let mut task = done_task("t-show-audit");
-    task.audit_verdict = Some("pass".to_string());
-    task.audit_report_path = Some("/tmp/report.md".to_string());
-    store.insert_task(&task).unwrap();
-
-    let summary = crate::cmd::show::summary_text(&store, task.id.as_str()).unwrap();
-
-    assert!(summary.contains("Audit: pass (report: /tmp/report.md)"));
+    for verdict in ["pass", "fail", "advisory", "inconclusive", "error", "skipped"] {
+        let mut task = done_task(&format!("t-show-{verdict}"));
+        task.audit_verdict = Some(verdict.to_string());
+        task.audit_report_path = Some("/tmp/report.md".to_string());
+        store.insert_task(&task).unwrap();
+        let summary = crate::cmd::show::summary_text(&store, task.id.as_str()).unwrap();
+        let expected = format!("Audit: {verdict} (report: /tmp/report.md)");
+        assert!(summary.contains(&expected));
+        let detail = crate::ui::board::render_task_detail(&task, &[], None);
+        assert!(detail.contains(&expected));
+    }
 }
 
 #[test]

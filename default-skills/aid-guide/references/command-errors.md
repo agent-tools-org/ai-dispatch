@@ -63,11 +63,20 @@ incompatible with `--read-only`.
 
 `--audit` schedules an additional post-task cross-audit using `aic`. It does not
 describe the task's purpose. Dispatch with `--audit` or `--rigor critical` requires
-the `aic` binary on PATH with a successful `aic --version`; otherwise validation
-rejects it. The install script installs `aic` unless told not to; after a Cargo install, follow the README,
-because `cargo install aic` installs an unrelated project. A non-critical audit enabled only by project defaults warns and
-continues when `aic` is unavailable. If `aic` becomes unavailable at settlement,
-critical tasks fail with an audit error; non-critical tasks record a skipped audit.
+the cross-auditor on PATH: `aic --help` must contain the exact line
+`Cross-audit aid agent outputs`, and `aic --version` must be `aic X.Y.Z` at
+version 0.3.1 or newer (compared numerically). Otherwise validation rejects it.
+Missing means the command cannot run or its version command fails; Foreign means
+its help does not identify the cross-auditor; TooOld includes older or malformed
+versions; Ready satisfies both checks. Fix unavailable installations with:
+`curl -fsSL https://aid.agent-tools.org/install.sh | sh`.
+For Foreign, `cargo install aic` installs an unrelated project.
+A non-critical audit enabled only by project defaults warns and continues when
+`aic` is unavailable. At settlement, critical tasks fail with an audit error;
+non-critical tasks record a skipped audit. Messages include the status and fix.
+Audit exit codes record `pass` (0), `fail` (1), `advisory` (2), `inconclusive` (3),
+and `error` (every other code or execution failure). These verdicts do not change
+the task status; `skipped` records an unavailable non-critical audit.
 `--rigor critical` requires enabled verification and
 post-task audit, supplied explicitly or through project defaults. Empty, `none`,
 `false`, and `skip` verification values do not satisfy this requirement. Do not

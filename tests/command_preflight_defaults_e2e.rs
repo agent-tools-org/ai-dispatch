@@ -2,6 +2,9 @@
 // Uses temporary Git projects and dry-run; never dispatches an external agent.
 // Deps: common subprocess helpers, tempfile, serde_json, rusqlite.
 
+#[path = "fixtures/aic_shim.rs"]
+mod aic_shim;
+
 mod common;
 use common::aid_cmd_in;
 use tempfile::TempDir;
@@ -37,7 +40,7 @@ fn critical_accepts_enabled_proof_from_project_defaults() {
     let dir = project(&home, "verify = 'true'\n[audit]\nauto = true\n");
     let bin = home.path().join("bin");
     std::fs::create_dir(&bin).unwrap();
-    common::write_executable(&bin.join("aic"), "#!/bin/sh\nexit 0\n");
+    common::write_executable(&bin.join("aic"), &aic_shim::script("exit 0"));
     let path = std::env::join_paths(std::iter::once(bin)
         .chain(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()))).unwrap();
     let output = aid_cmd_in(home.path()).env("PATH", path).args([
@@ -94,4 +97,41 @@ fn project_default_audit_without_aic_warns_and_allows_dry_run() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
     assert!(stderr.contains("project audit default") && stderr.contains("aic"), "{stderr}");
+}
+
+#[test]
+fn audit_identity_status_controls_dispatch_and_default_warnings() {
+    for (version, help, status) in [
+        ("aic 0.3.1", "AI-powered commit message generator", "Foreign"),
+        ("aic 0.3.0", "Cross-audit aid agent outputs", "TooOld(aic 0.3.0)"),
+        ("aic 0.10.0", "Cross-audit aid agent outputs", "Ready"),
+        ("aic 0.3.1", "Cross-audit aid agent outputs", "Ready"),
+    ] {
+        for explicit in [false, true] {
+            let home = TempDir::new().unwrap();
+            let dir = project(&home, "[audit]\nauto = true\n");
+            let bin = home.path().join("bin");
+            common::write_executable(
+                &bin.join("aic"), &aic_shim::identified_script(version, help, "exit 0"),
+            );
+            let path = std::env::join_paths(std::iter::once(bin)
+                .chain(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()))).unwrap();
+            let mut command = aid_cmd_in(home.path());
+            command.env("PATH", path).args([
+                "run", "codex", "Inspect the project", "--dry-run", "--no-hint", "--dir",
+            ]).arg(&dir);
+            if explicit { command.arg("--audit"); }
+            let output = command.output().unwrap();
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert_eq!(output.status.success(), !explicit || status == "Ready", "{stderr}");
+            if status != "Ready" {
+                assert!(stderr.contains(status), "{stderr}");
+                assert!(stderr.contains("curl -fsSL https://aid.agent-tools.org/install.sh | sh"));
+                if !explicit { assert!(stderr.contains("project audit default")); }
+                if status == "Foreign" {
+                    assert!(stderr.contains("cargo install aic installs an unrelated project"));
+                }
+            }
+        }
+    }
 }

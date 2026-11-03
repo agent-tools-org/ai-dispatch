@@ -9,7 +9,7 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 #[cfg(not(test))]
-static AIC_AVAILABLE: OnceLock<bool> = OnceLock::new();
+static AIC_STATUS: OnceLock<AicStatus> = OnceLock::new();
 const DEFAULT_AUDIT_TIMEOUT_SECS: u64 = 300;
 const MAX_AUDIT_TIMEOUT_SECS: u64 = 1_800;
 
@@ -32,13 +32,40 @@ pub struct AuditResult {
     pub exit_code: Option<i32>,
 }
 
-pub fn is_available() -> bool {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AicStatus {
+    Missing,
+    Foreign,
+    TooOld(String),
+    Ready,
+}
+
+impl AicStatus {
+    pub fn diagnostic(&self) -> String {
+        let description = match self {
+            Self::Missing => "Missing: aic binary not found or aic --version failed".to_string(),
+            Self::Foreign => "Foreign: aic --help does not identify the cross-auditor; \
+                cargo install aic installs an unrelated project".to_string(),
+            Self::TooOld(version) => format!("TooOld({version}): requires aic 0.3.1 or newer"),
+            Self::Ready => "Ready".to_string(),
+        };
+        format!("{description}; install: curl -fsSL https://aid.agent-tools.org/install.sh | sh")
+    }
+}
+
+pub fn status() -> AicStatus {
     #[cfg(test)]
     {
-        return detect_available();
+        detect_status()
     }
     #[cfg(not(test))]
-    *AIC_AVAILABLE.get_or_init(detect_available)
+    {
+        AIC_STATUS.get_or_init(detect_status).clone()
+    }
+}
+
+pub fn is_available() -> bool {
+    status() == AicStatus::Ready
 }
 
 pub fn audit_timeout_secs() -> u64 {
@@ -76,19 +103,43 @@ pub fn run_audit(task_id: &str, current_dir: Option<&Path>) -> AuditResult {
     collect_audit_result(child, timeout_secs)
 }
 
-fn detect_available() -> bool {
+fn detect_status() -> AicStatus {
     #[cfg(test)]
     if let Ok(value) = std::env::var("AIC_TEST_PRESENT") {
-        return matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes");
+        return if matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes") {
+            AicStatus::Ready
+        } else {
+            AicStatus::Missing
+        };
     }
+    let Ok(version) = Command::new(aic_binary_path()).arg("--version").output() else {
+        return AicStatus::Missing;
+    };
+    if !version.status.success() {
+        return AicStatus::Missing;
+    }
+    let help = Command::new(aic_binary_path()).arg("--help").output();
+    if !help.is_ok_and(|output| String::from_utf8_lossy(&output.stdout)
+        .lines().any(|line| line == "Cross-audit aid agent outputs"))
+    {
+        return AicStatus::Foreign;
+    }
+    let version = String::from_utf8_lossy(&version.stdout).trim().to_string();
+    if !supported_version(&version) {
+        return AicStatus::TooOld(version);
+    }
+    AicStatus::Ready
+}
 
-    Command::new(aic_binary_path())
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+fn supported_version(version: &str) -> bool {
+    let Some(version) = version.strip_prefix("aic ") else { return false; };
+    let parts: Vec<_> = version.split('.').collect();
+    if parts.len() != 3 || parts.iter().any(|part| part.is_empty()
+        || !part.bytes().all(|byte| byte.is_ascii_digit())) {
+        return false;
+    }
+    let numbers: Option<Vec<u64>> = parts.iter().map(|part| part.parse().ok()).collect();
+    numbers.is_some_and(|parts| (parts[0], parts[1], parts[2]) >= (0, 3, 1))
 }
 
 fn aic_binary_path() -> String {
@@ -102,12 +153,12 @@ fn aic_binary_path() -> String {
 }
 
 fn verdict_for_exit_code(code: i32) -> &'static str {
-    if code == 0 {
-        "pass"
-    } else if (1..=99).contains(&code) {
-        "fail"
-    } else {
-        "error"
+    match code {
+        0 => "pass",
+        1 => "fail",
+        2 => "advisory",
+        3 => "inconclusive",
+        _ => "error",
     }
 }
 
@@ -150,81 +201,8 @@ fn append_message(base: String, message: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::env;
-
-    fn set_env(key: &str, value: impl AsRef<std::ffi::OsStr>) {
-        unsafe { env::set_var(key, value) }
-    }
-
-    fn remove_env(key: &str) {
-        unsafe { env::remove_var(key) }
-    }
-
-    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
-        crate::task::aic::test_env_lock()
-    }
-
-    fn install_aic_shim(dir: &Path, body: &str) {
-        let path = dir.join("aic");
-        crate::support::test_env::write_executable(&path, &format!("#!/bin/sh\n{body}\n"));
-    }
-
-    #[test]
-    fn is_available_caches_result() {
-        let _guard = env_lock();
-        set_env("AIC_TEST_PRESENT", "1");
-        assert_eq!(is_available(), is_available());
-        remove_env("AIC_TEST_PRESENT");
-    }
-
-    #[test]
-    fn run_audit_parses_pass_report_path() {
-        let _guard = env_lock();
-        let temp = tempfile::tempdir().unwrap();
-        install_aic_shim(
-            temp.path(),
-            "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nprintf 'ok\\nreport: \
-            /tmp/report.md\\n'\nexit 0",
-        );
-        set_env("AIC_TEST_BINARY", temp.path().join("aic"));
-
-        let result = run_audit("t-audit", Some(temp.path()));
-
-        assert_eq!(result.verdict, "pass");
-        assert_eq!(result.report_path.as_deref(), Some("/tmp/report.md"));
-        remove_env("AIC_TEST_BINARY");
-    }
-
-    #[test]
-    fn report_path_requires_terminal_stdout_line() {
-        assert_eq!(
-            report_path_from_stdout("report: /tmp/report.md\nsummary: complete\n"),
-            None
-        );
-    }
-
-    #[test]
-    fn run_audit_times_out() {
-        let _guard = env_lock();
-        let temp = tempfile::tempdir().unwrap();
-        install_aic_shim(
-            temp.path(),
-            "if [ \"$1\" = \"--version\" ]; then exit 0; fi\nsleep 2\nprintf 'report: \
-            /tmp/late.md\\n'\nexit 0",
-        );
-        set_env("AIC_TEST_BINARY", temp.path().join("aic"));
-        set_env("AID_AUDIT_TIMEOUT_SECS", "1");
-
-        let result = run_audit("t-audit", Some(temp.path()));
-
-        assert_eq!(result.verdict, "error");
-        assert_eq!(result.report_path, None);
-        remove_env("AID_AUDIT_TIMEOUT_SECS");
-        remove_env("AIC_TEST_BINARY");
-    }
-}
+#[path = "aic_tests.rs"]
+mod tests;
 
 fn collect_audit_result(mut child: std::process::Child, timeout_secs: u64) -> AuditResult {
     let stdout_handle = child.stdout.take().map(read_pipe);

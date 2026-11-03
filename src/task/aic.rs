@@ -1,21 +1,19 @@
 // AIC cross-audit integration helpers.
 // Exports: availability detection, timeout parsing, and `aic audit` execution.
-// Deps: std::{env, io, process, sync::OnceLock, thread, time}.
+// Deps: std::{env, io, process, thread, time}.
 
 use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
-#[cfg(not(test))]
-static AIC_STATUS: OnceLock<AicStatus> = OnceLock::new();
+const PROBE_TIMEOUT_MS: u64 = 10_000;
 const DEFAULT_AUDIT_TIMEOUT_SECS: u64 = 300;
 const MAX_AUDIT_TIMEOUT_SECS: u64 = 1_800;
 
 #[cfg(test)]
 pub(crate) fn test_env_lock() -> std::sync::MutexGuard<'static, ()> {
-    use std::sync::Mutex;
+    use std::sync::{Mutex, OnceLock};
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     match LOCK.get_or_init(|| Mutex::new(())).lock() {
         Ok(guard) => guard,
@@ -54,14 +52,7 @@ impl AicStatus {
 }
 
 pub fn status() -> AicStatus {
-    #[cfg(test)]
-    {
-        detect_status()
-    }
-    #[cfg(not(test))]
-    {
-        AIC_STATUS.get_or_init(detect_status).clone()
-    }
+    detect_status()
 }
 
 pub fn is_available() -> bool {
@@ -112,23 +103,51 @@ fn detect_status() -> AicStatus {
             AicStatus::Missing
         };
     }
-    let Ok(version) = Command::new(aic_binary_path()).arg("--version").output() else {
+    let Some((success, version)) = probe("--version") else {
         return AicStatus::Missing;
     };
-    if !version.status.success() {
+    if !success {
         return AicStatus::Missing;
     }
-    let help = Command::new(aic_binary_path()).arg("--help").output();
-    if !help.is_ok_and(|output| String::from_utf8_lossy(&output.stdout)
+    if !probe("--help").is_some_and(|(_, help)| help
         .lines().any(|line| line == "Cross-audit aid agent outputs"))
     {
         return AicStatus::Foreign;
     }
-    let version = String::from_utf8_lossy(&version.stdout).trim().to_string();
+    let version = version.trim().to_string();
     if !supported_version(&version) {
         return AicStatus::TooOld(version);
     }
     AicStatus::Ready
+}
+
+fn probe_timeout() -> Duration {
+    #[cfg(test)]
+    if let Ok(value) = std::env::var("AIC_TEST_PROBE_TIMEOUT_MS") {
+        if let Ok(millis) = value.parse::<u64>() {
+            return Duration::from_millis(millis.clamp(1, PROBE_TIMEOUT_MS));
+        }
+    }
+    Duration::from_millis(PROBE_TIMEOUT_MS)
+}
+
+fn probe(flag: &str) -> Option<(bool, String)> {
+    let mut child = Command::new(aic_binary_path()).arg(flag)
+        .stdout(Stdio::piped()).stderr(Stdio::null()).spawn().ok()?;
+    let stdout = child.stdout.take().map(read_pipe);
+    let deadline = Instant::now() + probe_timeout();
+    while Instant::now() < deadline {
+        match child.try_wait() {
+            Ok(Some(status)) if stdout.as_ref().is_some_and(|reader| reader.is_finished()) => {
+                return Some((status.success(), join_reader(stdout)));
+            }
+            Ok(_) => std::thread::sleep(Duration::from_millis(10)),
+            Err(_) => break,
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    None
 }
 
 fn supported_version(version: &str) -> bool {

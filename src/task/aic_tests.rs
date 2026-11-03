@@ -25,11 +25,22 @@ fn install_aic_shim(dir: &Path, body: &str) {
 }
 
 #[test]
-fn is_available_caches_result() {
+fn status_tracks_binary_changes_within_one_process() {
     let _guard = env_lock();
-    set_env("AIC_TEST_PRESENT", "1");
-    assert_eq!(is_available(), is_available());
-    remove_env("AIC_TEST_PRESENT");
+    let temp = tempfile::tempdir().unwrap();
+    let binary = temp.path().join("aic");
+    set_env("AIC_TEST_BINARY", &binary);
+    install_aic_shim(temp.path(), "exit 0");
+    assert_eq!(status(), AicStatus::Ready);
+    std::fs::remove_file(&binary).unwrap();
+    assert_eq!(status(), AicStatus::Missing);
+    crate::support::test_env::write_executable(
+        &binary, &aic_shim::identified_script("aic 0.3.0", "Cross-audit aid agent outputs", "exit 0"),
+    );
+    assert_eq!(status(), AicStatus::TooOld("aic 0.3.0".into()));
+    install_aic_shim(temp.path(), "exit 0");
+    assert_eq!(status(), AicStatus::Ready);
+    remove_env("AIC_TEST_BINARY");
 }
 
 #[test]
@@ -115,4 +126,38 @@ fn supported_versions_require_three_numeric_components() {
     {
         assert!(!supported_version(version), "{version}");
     }
+}
+
+#[test]
+fn hanging_identity_probes_return_promptly() {
+    let _guard = env_lock();
+    let temp = tempfile::tempdir().unwrap();
+    let binary = temp.path().join("aic");
+    set_env("AIC_TEST_BINARY", &binary);
+    set_env("AIC_TEST_PROBE_TIMEOUT_MS", "100");
+    for (flag, expected) in [("--version", AicStatus::Missing), ("--help", AicStatus::Foreign)] {
+        let body = format!("if [ \"$1\" = \"{flag}\" ]; then exec sleep 5; fi\n");
+        let script = aic_shim::script("exit 0").replacen("case", &format!("{body}case"), 1);
+        crate::support::test_env::write_executable(&binary, &script);
+        let started = Instant::now();
+        assert_eq!(status(), expected);
+        assert!(started.elapsed() < Duration::from_secs(2));
+    }
+    remove_env("AIC_TEST_PROBE_TIMEOUT_MS");
+    remove_env("AIC_TEST_BINARY");
+}
+
+#[test]
+fn identity_probe_drains_large_stdout() {
+    let _guard = env_lock();
+    let temp = tempfile::tempdir().unwrap();
+    let binary = temp.path().join("aic");
+    let body = "if [ \"$1\" = \"--help\" ]; then\n\
+        i=0; while [ \"$i\" -lt 10000 ]; do\n\
+        printf 'padding padding padding\\n'; i=$((i+1)); done\nfi\n";
+    let script = aic_shim::script("exit 0").replacen("case", &format!("{body}case"), 1);
+    crate::support::test_env::write_executable(&binary, &script);
+    set_env("AIC_TEST_BINARY", &binary);
+    assert_eq!(status(), AicStatus::Ready);
+    remove_env("AIC_TEST_BINARY");
 }

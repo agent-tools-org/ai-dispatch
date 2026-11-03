@@ -60,18 +60,16 @@ fn unrelated_recorded_starts_fail_instead_of_omitting_changes() {
 }
 
 #[test]
-fn missing_start_requires_a_branch_base_strictly_before_head() {
+fn missing_start_fails_instead_of_guessing_from_the_branch() {
     let f = Fixture::new();
     let wt = f.worktree();
     f.task("t-no-start", &wt, true, None, None);
     fs::write(wt.join("delivery.txt"), "task delivery\n").unwrap();
     commit(&wt, "task delivery");
-    assert!(contains(&f.bytes("t-no-start"), "b/delivery.txt"));
-    git(&f.repo, &["merge", "--ff-only", "delivery"]);
     let output = f.patch("t-no-start");
     assert!(!output.status.success());
     assert!(output.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("No safe base"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("No base"));
 }
 
 #[test]
@@ -157,36 +155,49 @@ fn missing_ancestor_rows_and_checkouts_stop_the_retry_walk() {
 }
 
 #[test]
-fn untracked_nested_repository_warns_without_failing_the_patch() {
+fn removed_ancestor_checkout_still_bounds_the_delivery() {
+    let f = Fixture::new();
+    f.task("t-parent", &f.home.path().join("removed"), true, None, Some(&f.base));
+    fs::write(f.repo.join("attempt-one.txt"), "first attempt\n").unwrap();
+    commit(&f.repo, "first attempt");
+    let head = git(&f.repo, &["rev-parse", "HEAD"]);
+    let head = String::from_utf8_lossy(&head).trim().to_string();
+    f.task("t-child", &f.repo, false, Some("t-parent"), Some(&head));
+    assert!(contains(&f.bytes("t-child"), "b/attempt-one.txt"));
+}
+
+#[test]
+fn untracked_nested_repository_fails_instead_of_looking_unchanged() {
     let f = Fixture::new();
     f.task("t-nested", &f.repo, false, None, Some(&f.base));
     let nested = f.repo.join("nested-repository");
     fs::create_dir(&nested).unwrap();
     git(&nested, &["init", "-q"]);
     fs::write(nested.join("content.txt"), "nested content\n").unwrap();
-    let listed = git(&f.repo, &["ls-files", "--others", "--exclude-per-directory=.gitignore", "-z"]);
-    assert!(listed.split(|byte| *byte == 0).any(|file| file == b"nested-repository/"));
-    let raw = std::process::Command::new("git").arg("-C").arg(&f.repo)
-        .args(["diff", "--no-index", "--", "/dev/null", "nested-repository/"])
-        .output().unwrap();
-    assert_eq!(raw.status.code(), Some(1));
-    assert!(raw.stdout.is_empty());
-    assert!(!raw.stderr.is_empty());
-    fs::write(f.repo.join("delivery.txt"), "representable delivery\n").unwrap();
     let output = f.patch("t-nested");
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-    assert!(contains(&output.stdout, "b/delivery.txt"));
-    assert!(!contains(&output.stdout, "nested-repository"));
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
     let diagnostic = String::from_utf8_lossy(&output.stderr);
     assert!(diagnostic.contains("untracked directory") && diagnostic.contains("nested-repository"));
 }
 
 #[test]
-fn untracked_directory_symlink_is_represented_as_a_patch() {
+fn untracked_directory_symlink_fails_instead_of_looking_unchanged() {
     let f = Fixture::new();
     f.task("t-link", &f.repo, false, None, Some(&f.base));
     std::os::unix::fs::symlink(f.home.path(), f.repo.join("directory-link")).unwrap();
-    let patch = f.bytes("t-link");
-    assert!(contains(&patch, "b/directory-link"));
-    assert!(contains(&patch, "new file mode 120000"));
+    let output = f.patch("t-link");
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("directory-link"));
+}
+
+#[test]
+fn untracked_file_symlink_appears_in_the_patch() {
+    let f = Fixture::new();
+    f.task("t-file-link", &f.repo, false, None, Some(&f.base));
+    fs::write(f.repo.join("target.txt"), "target\n").unwrap();
+    std::os::unix::fs::symlink("target.txt", f.repo.join("file-link")).unwrap();
+    let patch = f.bytes("t-file-link");
+    assert!(contains(&patch, "b/file-link"));
 }

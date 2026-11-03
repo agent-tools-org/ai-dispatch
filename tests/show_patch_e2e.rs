@@ -177,7 +177,7 @@ fn worktree_without_resolvable_base_ref_uses_retry_chain() {
 }
 
 #[test]
-fn retry_chain_stops_at_a_different_checkout() {
+fn retry_chain_stops_at_an_ancestor_start_this_repository_cannot_name() {
     let f = Fixture::new();
     f.task("t-parent", &f.repo, false, None, Some("unresolvable-parent-base"));
     let wt = f.worktree();

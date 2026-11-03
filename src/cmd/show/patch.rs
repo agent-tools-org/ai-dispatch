@@ -42,14 +42,16 @@ fn collect(store: &Store, task_id: &str) -> Result<Vec<u8>> {
         if root.join(OsStr::from_bytes(file)).symlink_metadata()
             .context("inspect untracked patch path")?.is_dir()
         {
-            aid_warn!("[aid] Cannot represent untracked directory as a patch: {}",
+            // An empty patch reads as "no change", so what cannot be shown must not be skipped.
+            bail!("Cannot represent untracked directory as a patch: {}; ignore or remove it",
                 Path::new(OsStr::from_bytes(file)).display());
-            continue;
         }
         let output = git(&root).args(DIFF).args(["--no-index", "--", "/dev/null"])
             .arg(OsStr::from_bytes(file)).output().context("generate untracked patch")?;
-        if !output.status.success() && output.status.code() != Some(1) {
-            bail!("git untracked patch failed: {}", String::from_utf8_lossy(&output.stderr));
+        // Exit 1 means "differs", but a path git cannot read also exits 1, with no patch.
+        if !output.status.success() && (output.status.code() != Some(1) || output.stdout.is_empty()) {
+            bail!("Cannot represent untracked path as a patch: {}: {}; ignore or remove it",
+                Path::new(OsStr::from_bytes(file)).display(), String::from_utf8_lossy(&output.stderr).trim());
         }
         patch.extend(output.stdout);
     }
@@ -57,23 +59,18 @@ fn collect(store: &Store, task_id: &str) -> Result<Vec<u8>> {
 }
 
 fn patch_base(store: &Store, task: &Task, root: &Path) -> Result<String> {
-    let mut base = retry_base(store, task, root)?;
+    let base = retry_base(store, task, root)?
+        .context("No base can be determined for task patch: retry chain has no start_sha")?;
     if task.worktree_path.is_some()
         && let Some(base_ref) = branch_base_ref_using(|args| git_text(root, args).ok())
     {
-        let branch_base = common_base(root, &base_ref, "HEAD")?;
-        base = Some(if let Some(start) = base {
-            common_base(root, &start, &branch_base)?
-        } else {
-            if branch_base == git_text(root, &["rev-parse", "HEAD"])? {
-                bail!("No safe base for task patch: branch base is HEAD and retry chain has no start_sha");
-            }
-            branch_base
-        });
+        return common_base(root, &base, &common_base(root, &base_ref, "HEAD")?);
     }
-    base.context("No base can be determined for task patch: retry chain has no start_sha")
+    Ok(base)
 }
 
+/// Fold every recorded start in the chain. An ancestor's checkout may be gone, but its
+/// start still bounds the delivery as long as this repository can name that commit.
 fn retry_base(store: &Store, task: &Task, root: &Path) -> Result<Option<String>> {
     let mut current = task.clone();
     let mut base: Option<String> = None;
@@ -81,8 +78,13 @@ fn retry_base(store: &Store, task: &Task, root: &Path) -> Result<Option<String>>
     loop {
         if !seen.insert(current.id.to_string()) { bail!("Cycle in task retry chain"); }
         if let Some(start) = current.start_sha.as_deref() {
-            let start = git_text(root, &["rev-parse", "--verify", &format!("{start}^{{commit}}")])
-                .with_context(|| format!("Cannot resolve recorded task patch base {start}"))?;
+            let resolved = git_text(root, &["rev-parse", "--verify", &format!("{start}^{{commit}}")])
+                .with_context(|| format!("Cannot resolve recorded task patch base {start}"));
+            let start = match resolved {
+                Ok(start) => start,
+                Err(_) if current.id != task.id => break,
+                Err(error) => return Err(error),
+            };
             base = Some(match base {
                 Some(previous) => common_base(root, &previous, &start)?,
                 None => start,
@@ -90,7 +92,6 @@ fn retry_base(store: &Store, task: &Task, root: &Path) -> Result<Option<String>>
         }
         let Some(parent_id) = current.parent_task_id.as_deref() else { break; };
         let Some(parent) = store.get_task(parent_id)? else { break; };
-        if checkout_root(&parent).ok().as_deref() != Some(root) { break; }
         current = parent;
     }
     Ok(base)

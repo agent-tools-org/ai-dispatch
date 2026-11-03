@@ -150,16 +150,17 @@ The base folds all known retry-chain `start_sha` commits through their common
 ancestors, so a reset or divergent retry cannot move the base above earlier work.
 For worktree tasks the default branch's merge base with HEAD is folded in too.
 Merging a finished task into the default branch therefore does not erase its
-recorded delivery. With no recorded start, a worktree's branch base is usable only
-when it is older than HEAD; otherwise the command fails rather than guessing.
-Unrelated recorded histories also fail.
+recorded delivery. With no recorded start in the chain the command fails rather
+than guessing. Unrelated recorded histories also fail.
 
-The retry walk stops when an ancestor ran in a different checkout, its checkout
-is gone or its row is missing. The task's own checkout must still exist.
+The retry walk stops when an ancestor's row is missing or this repository cannot
+resolve its start. An ancestor whose checkout is gone still contributes its start.
+The task's own checkout must still exist.
 For an in-place task, the patch also includes anything else changed in that
 checkout since the task started. Commits made after the task finished count too.
-Untracked nested repositories cannot be represented as file patches: directories
-are omitted from stdout with a warning naming each directory on stderr.
+Untracked nested repositories and symlinks to directories cannot be represented as
+file patches, so the command fails and names the path: ignore or remove it. An empty
+patch means no change.
 
 `--patch` conflicts with the other show modes and their modifiers. A missing task,
 checkout, repository or base, or a Git failure, produces a non-zero exit; no changes

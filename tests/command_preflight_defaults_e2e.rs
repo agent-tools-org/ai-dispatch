@@ -35,7 +35,12 @@ fn project_container_conflict_is_rejected_before_task_creation() {
 fn critical_accepts_enabled_proof_from_project_defaults() {
     let home = TempDir::new().unwrap();
     let dir = project(&home, "verify = 'true'\n[audit]\nauto = true\n");
-    let output = aid_cmd_in(home.path()).args([
+    let bin = home.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    common::write_executable(&bin.join("aic"), "#!/bin/sh\nexit 0\n");
+    let path = std::env::join_paths(std::iter::once(bin)
+        .chain(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()))).unwrap();
+    let output = aid_cmd_in(home.path()).env("PATH", path).args([
         "run", "codex", "Inspect the verification pipeline", "--rigor", "critical",
         "--no-hint", "--dry-run", "--dir",
     ]).arg(&dir).output().unwrap();

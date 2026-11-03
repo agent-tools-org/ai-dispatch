@@ -11,19 +11,29 @@ const DIFF_EXCLUDE: &[&str] = &[":(exclude)*.lock", ":(exclude)package-lock.json
 /// `main`, and `git merge-base main HEAD` then exits 128. Returning None is the honest
 /// answer when no base can be found — callers must not print a guess as the branch.
 pub(crate) fn branch_base_ref(wt_path: &str) -> Option<String> {
-    if let Some(name) = git_line(wt_path, &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
-        && ref_exists(wt_path, &name)
+    branch_base_ref_using(|args| git_line(wt_path, args))
+}
+
+pub(crate) fn branch_base_ref_using(mut run: impl FnMut(&[&str]) -> Option<String>) -> Option<String> {
+    if let Some(name) = run(&["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+        && run(&["rev-parse", "--verify", "--quiet", &format!("{name}^{{commit}}")]).is_some()
     {
         return Some(name);
     }
     ["main", "master", "origin/main", "origin/master"]
         .into_iter()
-        .find(|name| ref_exists(wt_path, name))
+        .find(|name| run(&["rev-parse", "--verify", "--quiet", &format!("{name}^{{commit}}")]).is_some())
         .map(str::to_string)
 }
 
 pub(crate) fn merge_base(wt_path: &str, base_ref: &str) -> Option<String> {
-    git_line(wt_path, &["merge-base", base_ref, "HEAD"])
+    merge_base_using(|args| git_line(wt_path, args), base_ref, "HEAD")
+}
+
+pub(crate) fn merge_base_using(
+    mut run: impl FnMut(&[&str]) -> Option<String>, left: &str, right: &str,
+) -> Option<String> {
+    run(&["merge-base", left, right])
 }
 
 /// A task dispatched into a worktree that already carries commits gets a baseline
@@ -123,14 +133,6 @@ fn run_git_diff(wt_path: &str, args: &[String]) -> Option<String> {
         return None;
     }
     Some(String::from_utf8_lossy(&output.stdout).into())
-}
-
-fn ref_exists(wt_path: &str, name: &str) -> bool {
-    Command::new("git")
-        .args(["-C", wt_path, "rev-parse", "--verify", "--quiet"])
-        .arg(format!("{name}^{{commit}}"))
-        .output()
-        .is_ok_and(|output| output.status.success())
 }
 
 fn git_line(wt_path: &str, args: &[&str]) -> Option<String> {

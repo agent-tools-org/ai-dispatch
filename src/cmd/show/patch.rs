@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use crate::{store::Store, types::Task};
-use super::{branch_base_ref, show_output::merge_base};
+use super::show_output::{branch_base_ref_using, merge_base_using};
 
 const CONFIG: &[&str] = &[
     "-c", "diff.noprefix=false", "-c", "diff.mnemonicPrefix=false",
@@ -18,7 +18,7 @@ const CONFIG: &[&str] = &[
 ];
 const DIFF: &[&str] = &[
     "diff", "--no-ext-diff", "--no-color", "--no-textconv", "--no-relative",
-    "--src-prefix=a/", "--dst-prefix=b/", "--submodule=diff",
+    "--src-prefix=a/", "--dst-prefix=b/", "--submodule=diff", "--ignore-submodules=none",
 ];
 
 pub(super) fn run(store: &Store, task_id: &str) -> Result<()> {
@@ -32,11 +32,20 @@ fn collect(store: &Store, task_id: &str) -> Result<Vec<u8>> {
     let base = patch_base(store, &task, &root)?;
     let output = git(&root).args(DIFF).arg(base).arg("--").output().context("run git tracked patch")?;
     let mut patch = checked(output, "tracked patch")?;
-    let files = checked(git(&root).args(["ls-files", "--others", "--exclude-standard", "-z"])
+    let files = checked(git(&root).args(["ls-files", "--others", "--exclude-per-directory=.gitignore", "-z"])
         .output().context("list untracked files")?, "untracked file list")?;
     for file in files.split(|byte| *byte == 0).filter(|file| !file.is_empty()) {
-        // aic writes its reports into a .aic directory wherever it runs.
-        if file.split(|byte| *byte == b'/').any(|part| part == b".aic") { continue; }
+        let parts: Vec<_> = file.split(|byte| *byte == b'/').collect();
+        if parts.windows(3).any(|parts| parts[0] == b".aic" && parts[1] == b"audits") {
+            continue;
+        }
+        if root.join(OsStr::from_bytes(file)).symlink_metadata()
+            .context("inspect untracked patch path")?.is_dir()
+        {
+            aid_warn!("[aid] Cannot represent untracked directory as a patch: {}",
+                Path::new(OsStr::from_bytes(file)).display());
+            continue;
+        }
         let output = git(&root).args(DIFF).args(["--no-index", "--", "/dev/null"])
             .arg(OsStr::from_bytes(file)).output().context("generate untracked patch")?;
         if !output.status.success() && output.status.code() != Some(1) {
@@ -48,29 +57,53 @@ fn collect(store: &Store, task_id: &str) -> Result<Vec<u8>> {
 }
 
 fn patch_base(store: &Store, task: &Task, root: &Path) -> Result<String> {
-    if task.worktree_path.is_some() {
-        let path = root.to_str().context("checkout path is not UTF-8")?;
-        if let Some(base_ref) = branch_base_ref(path) {
-            return merge_base(path, &base_ref).context("git merge-base failed for task patch");
-        }
+    let mut base = retry_base(store, task, root)?;
+    if task.worktree_path.is_some()
+        && let Some(base_ref) = branch_base_ref_using(|args| git_text(root, args).ok())
+    {
+        let branch_base = common_base(root, &base_ref, "HEAD")?;
+        base = Some(if let Some(start) = base {
+            common_base(root, &start, &branch_base)?
+        } else {
+            if branch_base == git_text(root, &["rev-parse", "HEAD"])? {
+                bail!("No safe base for task patch: branch base is HEAD and retry chain has no start_sha");
+            }
+            branch_base
+        });
     }
+    base.context("No base can be determined for task patch: retry chain has no start_sha")
+}
+
+fn retry_base(store: &Store, task: &Task, root: &Path) -> Result<Option<String>> {
     let mut current = task.clone();
-    let mut base = current.start_sha.clone();
+    let mut base: Option<String> = None;
     let mut seen = HashSet::new();
-    seen.insert(current.id.to_string());
-    while let Some(parent_id) = current.parent_task_id.as_deref() {
-        if !seen.insert(parent_id.to_string()) { bail!("Cycle in task retry chain"); }
-        let parent = store.get_task(parent_id)?
-            .with_context(|| format!("Retry ancestor not found: {parent_id}"))?;
-        if checkout_root(&parent)? != root { break; }
-        if parent.start_sha.is_some() { base = parent.start_sha.clone(); }
+    loop {
+        if !seen.insert(current.id.to_string()) { bail!("Cycle in task retry chain"); }
+        if let Some(start) = current.start_sha.as_deref() {
+            let start = git_text(root, &["rev-parse", "--verify", &format!("{start}^{{commit}}")])
+                .with_context(|| format!("Cannot resolve recorded task patch base {start}"))?;
+            base = Some(match base {
+                Some(previous) => common_base(root, &previous, &start)?,
+                None => start,
+            });
+        }
+        let Some(parent_id) = current.parent_task_id.as_deref() else { break; };
+        let Some(parent) = store.get_task(parent_id)? else { break; };
+        if checkout_root(&parent).ok().as_deref() != Some(root) { break; }
         current = parent;
     }
-    let base = base.context("No base can be determined for task patch: retry chain has no start_sha")?;
-    let resolved = checked(git(root).args(["rev-parse", "--verify"])
-        .arg(format!("{base}^{{commit}}")).output().context("resolve git patch base")?,
-        "patch base resolution")?;
-    Ok(String::from_utf8(resolved).context("git base is not UTF-8")?.trim().to_string())
+    Ok(base)
+}
+
+fn common_base(root: &Path, left: &str, right: &str) -> Result<String> {
+    merge_base_using(|args| git_text(root, args).ok(), left, right)
+        .with_context(|| format!("No common ancestor for task patch bases {left} and {right}"))
+}
+
+fn git_text(root: &Path, args: &[&str]) -> Result<String> {
+    let bytes = checked(git(root).args(args).output().context("run git patch query")?, "patch query")?;
+    Ok(String::from_utf8(bytes).context("git patch query is not UTF-8")?.trim().to_string())
 }
 
 fn checkout_root(task: &Task) -> Result<PathBuf> {
@@ -87,7 +120,12 @@ fn checkout_root(task: &Task) -> Result<PathBuf> {
 
 fn git(root: &Path) -> Command {
     let mut command = Command::new("git");
-    command.arg("--literal-pathspecs").arg("-C").arg(root).args(CONFIG);
+    for key in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_CONFIG_PARAMETERS",
+        "GIT_CONFIG_COUNT", "GIT_PREFIX"]
+    {
+        command.env_remove(key);
+    }
+    command.arg("-C").arg(root).args(CONFIG);
     command
 }
 

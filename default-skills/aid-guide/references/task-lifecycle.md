@@ -139,15 +139,27 @@ branch. Read it before concluding a task produced nothing.
 `aid show <task-id> --patch` writes only raw patch bytes to stdout, with diagnostics
 on stderr. It includes the whole repository, even when the task ran in a
 sub-directory, and includes committed, staged, unstaged and untracked changes
-through the checkout's current working tree. Lock files count; untracked `.aic/`
-audit reports are excluded. The index is never changed.
+through the checkout's current working tree. Lock files and auditor configuration
+count; only untracked paths beneath `.aic/audits/` (at any depth) are excluded.
+Untracked discovery uses repository `.gitignore` files, ignoring personal/global
+ignore lists. Submodule changes are included regardless of ignore configuration.
+The index is never changed, and inherited Git directory, index and inline-config
+environment overrides are cleared for patch queries.
 
-For a worktree task the base is the merge base of the default branch and HEAD;
-if no default-branch ref resolves, the earliest retry-chain `start_sha` is used.
-For an in-place task the base is the earliest `start_sha` in its retry chain,
-following ancestors only while they ran in the same checkout. For an in-place
-task, the patch also includes anything else changed in that checkout since the
-task started. Commits made after the task finished are included too.
+The base folds all known retry-chain `start_sha` commits through their common
+ancestors, so a reset or divergent retry cannot move the base above earlier work.
+For worktree tasks the default branch's merge base with HEAD is folded in too.
+Merging a finished task into the default branch therefore does not erase its
+recorded delivery. With no recorded start, a worktree's branch base is usable only
+when it is older than HEAD; otherwise the command fails rather than guessing.
+Unrelated recorded histories also fail.
+
+The retry walk stops when an ancestor ran in a different checkout, its checkout
+is gone or its row is missing. The task's own checkout must still exist.
+For an in-place task, the patch also includes anything else changed in that
+checkout since the task started. Commits made after the task finished count too.
+Untracked nested repositories cannot be represented as file patches: directories
+are omitted from stdout with a warning naming each directory on stderr.
 
 `--patch` conflicts with the other show modes and their modifiers. A missing task,
 checkout, repository or base, or a Git failure, produces a non-zero exit; no changes

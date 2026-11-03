@@ -16,7 +16,7 @@ mod show_output_owned;
 #[path = "worktree_state.rs"]
 mod show_worktree_state;
 
-pub(crate) use show_output_diff_base::merge_base;
+pub(crate) use show_output_diff_base::{branch_base_ref_using, merge_base_using};
 
 pub use show_output_diff::{diff_text, diff_text_branch, diff_text_file};
 pub use show_output_messages::{

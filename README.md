@@ -22,6 +22,9 @@ curl -fsSL https://aid.agent-tools.org/install.sh | sh
 ```
 
 You can [read the installer](https://aid.agent-tools.org/install.sh) first.
+It also installs [`aic`](https://github.com/agent-tools-org/aic), the cross-audit CLI used by
+`--audit` and `--rigor critical`. Type `n` at its prompt, or set `AID_INSTALL_AIC=0`, to leave it out.
+
 Alternatively, install from crates.io with a Rust toolchain:
 
 ```sh
@@ -35,6 +38,10 @@ git clone https://github.com/agent-tools-org/ai-dispatch.git
 cd ai-dispatch
 cargo install --path . --locked
 ```
+
+These two routes do not install `aic`. Add it with
+`cargo install --git https://github.com/agent-tools-org/aic --tag v0.3.0 --locked`:
+the crates.io package named `aic` is an unrelated project.
 
 Run the setup wizard:
 

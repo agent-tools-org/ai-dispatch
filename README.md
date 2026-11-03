@@ -40,7 +40,7 @@ cargo install --path . --locked
 ```
 
 These two routes do not install `aic`. Add it with
-`cargo install --git https://github.com/agent-tools-org/aic --tag v0.3.0 --locked`:
+`cargo install --git https://github.com/agent-tools-org/aic --tag v0.3.1 --locked`:
 the crates.io package named `aic` is an unrelated project.
 
 Run the setup wizard:

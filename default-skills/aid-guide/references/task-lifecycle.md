@@ -121,6 +121,7 @@ Before deciding:
 aid show <task-id> --summary
 aid show <task-id> --diff
 aid show <task-id> --diff --branch
+aid show <task-id> --patch
 aid show <task-id> --result
 aid show <task-id> --events
 ```
@@ -134,6 +135,23 @@ branch — gets a baseline above them, so that scope can be a truthful but tiny 
 while the branch holds the delivered work. The diff stat says so when it happens;
 `--diff --branch` widens the view to every commit since the branch left the default
 branch. Read it before concluding a task produced nothing.
+
+`aid show <task-id> --patch` writes only raw patch bytes to stdout, with diagnostics
+on stderr. It includes the whole repository, even when the task ran in a
+sub-directory, and includes committed, staged, unstaged and untracked changes
+through the checkout's current working tree. Lock files count; untracked `.aic/`
+audit reports are excluded. The index is never changed.
+
+For a worktree task the base is the merge base of the default branch and HEAD;
+if no default-branch ref resolves, the earliest retry-chain `start_sha` is used.
+For an in-place task the base is the earliest `start_sha` in its retry chain,
+following ancestors only while they ran in the same checkout. For an in-place
+task, the patch also includes anything else changed in that checkout since the
+task started. Commits made after the task finished are included too.
+
+`--patch` conflicts with the other show modes and their modifiers. A missing task,
+checkout, repository or base, or a Git failure, produces a non-zero exit; no changes
+produces empty stdout and exit 0. Use this mode to supply task delivery to aic.
 
 ## Accept
 

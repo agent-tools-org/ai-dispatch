@@ -24,3 +24,20 @@ fn conflicting_show_modes_are_rejected() {
     };
     assert!(err.to_string().contains("cannot be used with"));
 }
+
+#[test]
+fn show_patch_parses_and_conflicts_with_other_modes() {
+    let cli = Cli::try_parse_from(["aid", "show", "t-1234", "--patch"]).unwrap();
+    assert!(matches!(cli.command,
+        Some(Commands::Show(inspect_args::ShowArgs { patch: true, .. }))));
+    for flag in ["--events", "--context", "--diff", "--summary", "--branch", "--output",
+        "--result", "--transcript", "--full", "--brief", "--explain", "--log", "--json"]
+    {
+        let error = Cli::try_parse_from(["aid", "show", "t-1234", "--patch", flag])
+            .err().expect("patch mode must conflict");
+        assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict, "{flag}: {error}");
+    }
+    for flag in ["--file", "--agent", "--model"] {
+        assert!(Cli::try_parse_from(["aid", "show", "t-1234", "--patch", flag, "value"]).is_err());
+    }
+}

@@ -22,7 +22,7 @@ pub(crate) fn branch_base_ref(wt_path: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-pub(super) fn merge_base(wt_path: &str, base_ref: &str) -> Option<String> {
+pub(crate) fn merge_base(wt_path: &str, base_ref: &str) -> Option<String> {
     git_line(wt_path, &["merge-base", base_ref, "HEAD"])
 }
 

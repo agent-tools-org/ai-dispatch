@@ -24,6 +24,7 @@ pub use show_output::{
 };
 pub(crate) use show_output::{missing_owned_output_absence, owned_output_path};
 
+mod patch;
 mod text;
 use text::*;
 pub use text::{context_text, summary_text};
@@ -47,6 +48,7 @@ pub struct ShowArgs {
     pub events: bool,
     pub context: bool,
     pub diff: bool,
+    pub patch: bool,
     pub summary: bool,
     pub file: Option<String>,
     pub branch: bool,
@@ -75,6 +77,9 @@ pub enum ShowMode {
 }
 
 pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
+    if args.patch {
+        return patch::run(&store, &args.task_id);
+    }
     if args.result {
         print!("{}", result_text(&store, &args.task_id)?);
         return Ok(());

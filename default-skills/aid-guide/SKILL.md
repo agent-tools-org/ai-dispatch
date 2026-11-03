@@ -104,6 +104,7 @@ aid run codex "Implement the change" --worktree feat/change --dir . --verify --b
 aid watch <task-id>
 aid show <task-id> --summary
 aid show <task-id> --diff
+aid show <task-id> --patch
 aid accept <task-id>
 aid gc --task <task-id>
 ```

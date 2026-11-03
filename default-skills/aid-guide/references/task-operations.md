@@ -10,6 +10,7 @@ aid watch <task-id>
 aid watch --tui
 aid wait <task-id>
 aid show <task-id> --summary
+aid show <task-id> --patch
 aid show <task-id> --events
 aid show <task-id> --output --full
 aid tree <task-id>

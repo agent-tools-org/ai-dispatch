@@ -28,6 +28,10 @@ pub struct ShowArgs {
     pub context: bool,
     #[arg(long)]
     pub diff: bool,
+    #[arg(long, help = "Emit only the raw patch of the task checkout, including retry history",
+        conflicts_with_all = ["events", "context", "diff", "summary", "file", "branch",
+            "output", "result", "transcript", "full", "brief", "explain", "log", "json", "agent", "model"])]
+    pub patch: bool,
     #[arg(long)]
     pub summary: bool,
     #[arg(long, requires = "diff")]

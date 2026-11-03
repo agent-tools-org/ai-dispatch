@@ -55,50 +55,9 @@ pub(super) fn prepare_launch(
     wrap_command(spec, args, agent.kind(), std_cmd)
 }
 
-pub(super) fn refresh_family_route(
-    store: &Store,
-    id: &str,
-    args: &mut RunArgs,
-    agent: &dyn agent::Agent,
-) -> Result<()> {
-    use agent::family_route::{self, PinPolicy};
-    if !family_route::per_family(agent.kind()) {
-        return Ok(());
-    }
-    let policy = if args.policy.is_some()
-        || args.model_source == agent::model_validation::ModelSource::Advised
-    {
-        PinPolicy::Exact
-    } else if args.parent_task_id.is_some() && args.model.is_some()
-        && args.model_source == agent::model_validation::ModelSource::AidResolved
-    {
-        PinPolicy::Continuation
-    } else if args.model_source == agent::model_validation::ModelSource::UserSupplied {
-        PinPolicy::WarnOnReplacement
-    } else {
-        PinPolicy::Automatic
-    };
-    let failed = if args.force_default_model || policy == PinPolicy::Continuation {
-        args.parent_task_id.as_deref().map(|id| store.get_task(id)).transpose()?.flatten()
-            .filter(|task| task.agent == agent.kind()
-                && task.custom_agent_name.as_deref() == agent.rate_limit_name())
-            .and_then(|task| task.requested_model.or(task.observed_model))
-    } else { None };
-    let model = family_route::resolve(
-        agent.kind(),
-        agent.rate_limit_name(),
-        args.model.as_deref(),
-        policy,
-        args.budget && !args.force_default_model,
-        failed.as_deref(),
-    )?;
-    if args.model != model {
-        args.model = model;
-        args.model_source = agent::model_validation::ModelSource::AidResolved;
-        store.update_task_launch_model(id, args.model.as_deref(), &args.dispatch_args_json()?)?;
-    }
-    Ok(())
-}
+#[path = "launch_family.rs"]
+mod family;
+pub(super) use family::refresh_family_route;
 
 fn run_opts(
     spec: &BackgroundRunSpec,

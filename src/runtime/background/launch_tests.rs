@@ -161,6 +161,10 @@ fn agy_budget_worker_keeps_continuation_pin_and_excludes_refused_pool() {
     let agent = agent::get_agent(AgentKind::Antigravity);
     refresh_family_route(&store, "unused", &mut args, agent.as_ref()).expect("retained pin");
     assert_eq!(args.model.as_deref(), Some("claude-opus-5-5-medium"));
+    args.model = parent.requested_model.clone();
+    args.budget = false;
+    refresh_family_route(&store, "unused", &mut args, agent.as_ref()).expect("ordinary retry");
+    assert_eq!(args.model, parent.requested_model);
     args.model = Some("gemini-4-argon-high".into());
     assert!(refresh_family_route(&store, "unused", &mut args, agent.as_ref()).is_err());
 }

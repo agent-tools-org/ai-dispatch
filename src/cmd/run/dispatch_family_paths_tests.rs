@@ -132,3 +132,27 @@ async fn agy_family_batch_preview_checks_the_same_boundary() {
     assert_eq!(tasks.len(), 1);
     f.assert_child(&tasks[0].id);
 }
+
+#[test]
+fn agy_ordinary_aid_resolved_retry_keeps_healthy_parent_model() {
+    let home = crate::support::test_env::TestHome::new();
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
+    let _models = agent::model_validation::MockServedModelsGuard::set(
+        AgentKind::Antigravity,
+        Some(vec!["claude-opus-5-5-medium".into()]),
+    );
+    let store = Arc::new(Store::open_memory().expect("store"));
+    let mut parent = Task::test_fixture(TaskId("t-ordinary-parent".into()), TaskStatus::Failed);
+    parent.agent = AgentKind::Antigravity;
+    parent.requested_model = Some("claude-opus-5-5-medium".into());
+    store.insert_task(&parent).expect("parent");
+    let mut args = RunArgs {
+        agent_name: "agy".into(),
+        model: parent.requested_model.clone(),
+        model_source: agent::model_validation::ModelSource::AidResolved,
+        parent_task_id: Some(parent.id.to_string()),
+        ..Default::default()
+    };
+    let setup = resolve_agent_setup(&store, &mut args, None).expect("ordinary retry");
+    assert_eq!(setup.effective_model, parent.requested_model);
+}

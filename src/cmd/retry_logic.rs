@@ -51,6 +51,11 @@ fn build_failed_retry_args(
 ) -> Result<RunArgs> {
     let prompt = &task.prompt;
     let mut retry_args = RunArgs::for_retry(store, task)?;
+    retry_args.dir = args.dir.clone();
+    retry_args.env = args.env.clone();
+    retry_args.foreground = args.foreground;
+    retry_args.announce = args.announce;
+    retry_args.on_done = None;
     retry_args.prompt =
         format!("[Previous attempt failed]\nError: {stderr_tail}\n\n[Original task]\n{prompt}");
     retry_args.retry = args.retry.saturating_sub(1);

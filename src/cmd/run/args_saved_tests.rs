@@ -121,3 +121,36 @@ fn spec(task_id: &str) -> BackgroundRunSpec {
 fn task(task_id: &str) -> Task {
     crate::types::Task::test_fixture(TaskId(task_id.to_string()), TaskStatus::Running)
 }
+
+#[test]
+fn dispatch_pins_relative_context_before_saving_retry_inputs() {
+    let _home = crate::support::test_env::TestHome::with_dirs();
+    let dir = tempfile::tempdir().unwrap();
+    let store = Arc::new(Store::open_memory().unwrap());
+    let mut args = RunArgs {
+        agent_name: "codex".into(), prompt: "Inspect context".into(),
+        dir: Some(dir.path().display().to_string()),
+        context: vec!["src/types.rs:Task,TaskId".into(), "missing-context.md".into()],
+        ..Default::default()
+    };
+    let expected = crate::prompt::context::parse_context_specs(&args.context).unwrap();
+    let prepared = super::super::run_dispatch_prepare::prepare_dispatch_with(
+        &store, &mut args, |_| true,
+    ).unwrap();
+    let retry = RunArgs::for_retry(&store, &prepared.task).unwrap();
+    assert_eq!(retry.context[0], format!("{}:Task,TaskId", expected[0].file));
+    assert_eq!(retry.context[1], expected[1].file);
+    assert!(retry.context.iter().all(|spec| std::path::Path::new(spec).is_absolute()));
+}
+
+#[test]
+fn legacy_retry_uses_recorded_effective_dir_without_context() {
+    let store = Store::open_memory().unwrap();
+    let mut row = task("t-legacy-effective-dir");
+    row.repo_path = Some("/repo".into());
+    row.effective_dir = Some("/repo/subdir".into());
+    store.insert_task(&row).unwrap();
+    let retry = RunArgs::for_retry(&store, &row).unwrap();
+    assert_eq!(retry.dir, row.effective_dir);
+    assert!(retry.context.is_empty());
+}

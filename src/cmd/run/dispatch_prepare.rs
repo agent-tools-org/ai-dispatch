@@ -68,6 +68,13 @@ where
     super::run_delegation::apply_nested_delegation(store, args)?;
     args.prompt = resolve_prompt_input(&args.prompt, args.prompt_file.as_deref())?;
     args.prompt_file = None;
+    args.context = crate::prompt::context::parse_context_specs(&args.context)?
+        .into_iter()
+        .map(|spec| match spec.items {
+            Some(items) => format!("{}:{}", spec.file, items.join(",")),
+            None => spec.file,
+        })
+        .collect();
     args.max_duration_mins = resolve_max_duration_mins(args.timeout, args.max_duration_mins);
     let context = resolve_dispatch_context(store, args)?;
     let claimed = claim_dispatch(store, args, &context, which)?;

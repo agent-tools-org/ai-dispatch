@@ -202,6 +202,7 @@ fn retry_cleaned_worktree_preserves_saved_dir_and_recreates_branch() {
 fn retry_without_saved_args_uses_task_repo_path() {
     let store = Store::open_memory().unwrap();
     let mut task = failed_task("t-legacy-task");
+    task.effective_dir = None;
     task.repo_path = Some("/tmp/recorded-repo".to_string());
     store.insert_task(&task).unwrap();
 

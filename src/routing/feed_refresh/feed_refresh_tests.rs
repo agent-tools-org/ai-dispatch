@@ -80,3 +80,78 @@ fn missing_ready_preserves_cache() {
     );
     assert_eq!(fs::read(cache).expect("cache"), b"old cache");
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn process_safety_refresh_reaps_shell_without_blocking_caller() {
+    let _permit = crate::support::test_subprocess::acquire();
+    let dir = tempfile::tempdir().expect("dir");
+    let pid_file = dir.path().join("pid");
+    let release = dir.path().join("release");
+    let mut command = Command::new("sh");
+    command
+        .args([
+            "-c",
+            "echo $$ > \"$1\"; while [ ! -e \"$2\" ]; do sleep 0.01; done",
+            "refresh",
+        ])
+        .arg(&pid_file)
+        .arg(&release);
+    spawn_refresh(command, dir.path().join("cache.part"));
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while !pid_file.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let pid = fs::read_to_string(pid_file).expect("caller returned while shell was running");
+    let proc = PathBuf::from(format!("/proc/{}", pid.trim()));
+    fs::write(release, b"").expect("release shell");
+    while proc.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(
+        !proc.exists(),
+        "exited refresh shell must be reaped, not left as a zombie"
+    );
+}
+
+#[test]
+fn process_safety_refresh_download_handles_leading_dash_cache_names() {
+    let dir = tempfile::tempdir().expect("dir");
+    let source = dir.path().join("source.json");
+    fs::write(&source, b"{}").expect("source");
+    let status = Command::new("sh")
+        .current_dir(dir.path())
+        .args(["-c", DOWNLOAD, "refresh", "-cache"])
+        .arg(format!("file://{}", source.display()))
+        .status()
+        .expect("download");
+    assert!(
+        status.success(),
+        "mv must treat the cache name as an operand"
+    );
+    assert_eq!(
+        fs::read(dir.path().join("-cache.ready")).expect("ready"),
+        b"{}"
+    );
+}
+
+#[test]
+fn process_safety_refresh_download_rejects_oversized_feed() {
+    let dir = tempfile::tempdir().expect("dir");
+    let source = dir.path().join("large.json");
+    fs::File::create(&source)
+        .expect("source")
+        .set_len(10485761)
+        .expect("size");
+    let status = Command::new("sh")
+        .current_dir(dir.path())
+        .args(["-c", DOWNLOAD, "refresh", "cache"])
+        .arg(format!("file://{}", source.display()))
+        .status()
+        .expect("download");
+    assert!(
+        !status.success(),
+        "curl must reject feeds larger than 10 MiB"
+    );
+    assert!(!dir.path().join("cache.ready").exists());
+}

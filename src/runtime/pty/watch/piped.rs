@@ -18,6 +18,7 @@ pub(crate) struct Watchdog {
     policy: crate::config::timeout_policy::TimeoutPolicy,
     first_token: bool,
     last_activity_probe: Option<Instant>,
+    child_activity: Option<std::time::SystemTime>,
 }
 
 impl Watchdog {
@@ -28,6 +29,7 @@ impl Watchdog {
             policy,
             first_token: false,
             last_activity_probe: None,
+            child_activity: None,
         }
     }
 
@@ -60,6 +62,23 @@ impl Watchdog {
         task: &TaskId,
         pid: Option<u32>,
     ) -> Result<bool> {
+        self.tick_with_probe(
+            store,
+            task,
+            pid,
+            Instant::now(),
+            process::monitor::activity::latest,
+        )
+    }
+
+    fn tick_with_probe(
+        &mut self,
+        store: &Arc<Store>,
+        task: &TaskId,
+        pid: Option<u32>,
+        now: Instant,
+        probe: impl FnOnce(&str, Option<u32>, Duration) -> Option<std::time::SystemTime>,
+    ) -> Result<bool> {
         {
             let activity = self
                 .raw
@@ -76,18 +95,16 @@ impl Watchdog {
                 self.state.last_progress_time = progress;
             }
         }
+        self.refresh_descendant_activity(task, pid, now, probe);
         self.first_token =
             self.state
-                .first_token_hang_elapsed(true, self.policy.first_token, task.as_str());
+                .first_token_hang_elapsed(true, self.policy.first_token, task.as_str())
+                && !self.child_activity.is_some_and(|activity| {
+                    activity.elapsed().unwrap_or_default() <= self.policy.first_token
+                });
         if self.first_token {
             return Ok(true);
         }
-        self.refresh_descendant_activity(
-            task,
-            pid,
-            Instant::now(),
-            process::monitor::activity::latest,
-        );
         if self
             .state
             .idle_hang_elapsed(true, self.policy.idle, task.as_str())
@@ -106,7 +123,7 @@ impl Watchdog {
         probe: impl FnOnce(&str, Option<u32>, Duration) -> Option<std::time::SystemTime>,
     ) {
         let cadence = (self.policy.idle / 4).min(Duration::from_millis(500));
-        if !self.state.received_raw_bytes
+        if (!self.state.received_raw_bytes && self.state.progress_count() > 1)
             || self
                 .last_activity_probe
                 .is_some_and(|last| now.saturating_duration_since(last) < cadence)
@@ -114,7 +131,13 @@ impl Watchdog {
             return;
         }
         self.last_activity_probe = Some(now);
-        if let Some(activity) = probe(task.as_str(), pid, self.policy.idle) {
+        let timeout = if self.state.progress_count() <= 1 {
+            self.policy.first_token
+        } else {
+            self.policy.idle
+        };
+        self.child_activity = probe(task.as_str(), pid, timeout);
+        if let Some(activity) = self.child_activity {
             let age = activity.elapsed().unwrap_or_default();
             if age < self.state.last_progress_time.elapsed() {
                 self.state.last_progress_time = Instant::now() - age;

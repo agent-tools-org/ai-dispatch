@@ -154,6 +154,7 @@ fn cli_run_conversion_does_not_drop_any_configurable_field() {
         "foreground", "audit_report_mode", "budget", "session_id", "batch_siblings", "env",
         "env_forward", "judge_retry", "timeout_policy", "suppress_nested_repo_warning",
         "force_default_model", "origin", "artifact_staging", "remote_build_auto_picked",
+        "quota_continuation_of",
     ];
     for key in internal {
         let default = defaults.get(key).expect("allowlisted field exists");

@@ -107,17 +107,24 @@ static models are a fallback only when no served list exists. Agy quota units ar
 `gemini-4-argon`, other `gemini` models, and shared `claude-gpt` models. An Argon
 window applies only to Argon; general Gemini windows apply to both Gemini units.
 Held unit markers, live windows at 100% with a future reset, and untrusted refusals
-within their stated reset duration exclude a unit. Replacements retain the requested
-effort (medium by default), and budget routing prefers the cheapest available line.
+with a future `recovery_at` exclude a unit; undated untrusted markers do not.
+Replacements retain the requested effort (medium by default), and budget routing prefers the cheapest available line.
 Ordinary `--model` requests warn with both models before replacing a spent unit.
 Advised and caller-owned exact pins are refused instead. If every served unit is
 spent, explicit cascades walk to the next available agent; otherwise dispatch refuses.
 Quota continuation excludes the refusing unit even without a trusted marker, then
 tries another unit of the same agent with equal or better capability. If none exists,
-it falls through to the automatic advice candidate. Model self-heal excludes the
+it falls through to the automatic advice candidate. Budget mode retains this
+continuation pin. Degradation warnings are emitted after resolution and describe
+only the selected model’s pool. Model self-heal excludes the
 failed model when pinning a replacement. Background workers recheck units after
-waiting for a reset. Completion attribution maps log labels through the cached
+waiting for a reset. If a continuation’s selected pool becomes spent while waiting,
+they select another unspent pool, still excluding the original refusing pool, and
+fail only when no unspent pool remains. Completion attribution maps log labels through the cached
 served list without running a live model probe.
+
+Agy model-list rows must contain a model ID and display name separated by a tab;
+version banners and usage text are ignored.
 
 The served list is cached on disk for 24 hours, so a slow CLI is asked once
 rather than on every dispatch. When the model you asked for is absent from the

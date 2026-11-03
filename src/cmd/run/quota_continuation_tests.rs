@@ -64,6 +64,7 @@ async fn agy_family_quota_continuation_stays_on_same_agent() {
         Some(vec![
             "gemini-4-argon-high".into(),
             "claude-opus-5-5-high".into(),
+            "gemini-3.8-flash-high".into(),
         ]),
     );
     let store = Arc::new(Store::open_memory().expect("store"));
@@ -75,11 +76,12 @@ async fn agy_family_quota_continuation_stays_on_same_agent() {
         &task.agent,
         None,
         task.requested_model.as_deref(),
-        "Individual quota reached. Resets in 36h29m20s.",
+        "Individual quota reached.",
     );
     let args = RunArgs {
         agent_name: "agy".into(),
         prompt: "say hi".into(),
+        budget: true,
         dry_run: true,
         dir: Some(home.path().display().to_string()),
         ..Default::default()

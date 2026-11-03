@@ -53,11 +53,10 @@ fn agy_no_model_escapes_spent_probe_and_untrusted_marker() {
     let setup = resolve_agent_setup(&store, &mut args, None).expect("healthy family");
     assert_checked_family_command(&setup);
     std::fs::remove_file(cache.path().join("agy.json")).expect("remove probe");
-    std::fs::write(
-        crate::support::paths::aid_dir().join("rate-limit-agy--gemini-4-argon"),
-        "source: untrusted\nmessage: Individual quota reached. Resets in 36h29m20s.\n",
-    )
-    .expect("marker");
+    rate_limit::mark_untrusted_for_model(
+        &AgentKind::Antigravity, None, Some("gemini-4-argon-medium"),
+        "Individual quota reached. Resets in 36h29m20s.",
+    );
     let setup = resolve_agent_setup(&store, &mut args, None).expect("marker family");
     assert_checked_family_command(&setup);
     drop(home);

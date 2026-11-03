@@ -14,6 +14,7 @@ pub(super) async fn continue_quota(
         return Ok(None);
     }
     let mut child = args.clone();
+    child.quota_continuation_of = None;
     if let Some(model) = crate::agent::family_route::continuation_model(
         task.agent,
         task.custom_agent_name.as_deref(),
@@ -21,6 +22,7 @@ pub(super) async fn continue_quota(
             .as_deref()
             .or(task.observed_model.as_deref()),
     ) {
+        child.quota_continuation_of = task.requested_model.clone().or(task.observed_model.clone());
         child.model = Some(model);
         child.model_source = crate::agent::model_validation::ModelSource::AidResolved;
         child.session_id = None;

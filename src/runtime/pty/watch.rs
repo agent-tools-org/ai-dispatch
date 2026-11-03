@@ -191,6 +191,27 @@ impl MonitorState {
         awaiting_first_output && self.last_raw_chunk_time.elapsed() > first_token_timeout
     }
 
+    fn first_token_hang_with_activity(
+        &mut self,
+        agent_streaming: bool,
+        timeout: Duration,
+        task_id: &str,
+        pid: Option<u32>,
+    ) -> bool {
+        if self.progress_count() <= 1
+            && let Some(activity) = process::monitor::activity::latest(task_id, pid, timeout)
+        {
+            let age = activity.elapsed().unwrap_or_default();
+            if age < self.last_progress_time.elapsed() {
+                self.last_progress_time = Instant::now() - age;
+            }
+            if age <= timeout {
+                return false;
+            }
+        }
+        self.first_token_hang_elapsed(agent_streaming, timeout, task_id)
+    }
+
     /// Idle hang for the live PTY watcher. Streaming keeps the progress-event
     /// clock alone. Buffered agents write nothing to the PTY mid-run, so a quiet
     /// `last_progress_time` is not enough — also require that agent-owned logs

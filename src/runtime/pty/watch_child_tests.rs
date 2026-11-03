@@ -6,6 +6,10 @@ use super::*;
 use std::io::Read;
 
 fn monitor(script: &str) -> TaskStatus {
+    monitor_with_first_token(script, false)
+}
+
+fn monitor_with_first_token(script: &str, first_token: bool) -> TaskStatus {
     let _permit = crate::support::test_subprocess::acquire();
     let _temp = crate::support::test_env::TestHome::new();
     let store = Arc::new(Store::open_memory().expect("store"));
@@ -24,8 +28,8 @@ fn monitor(script: &str) -> TaskStatus {
         }
     });
     let mut state = MonitorState::new(true, None);
-    state.event_count = 2;
-    state.received_raw_bytes = true;
+    state.event_count = if first_token { 1 } else { 2 };
+    state.received_raw_bytes = !first_token;
     let mut log = tempfile::tempfile().expect("log");
     monitor_bridge(
         &crate::runtime::watcher::idle_tests::FakeAgent,
@@ -35,7 +39,7 @@ fn monitor(script: &str) -> TaskStatus {
         &rx,
         &mut log,
         &mut state,
-        None,
+        first_token.then_some(Duration::from_millis(600)),
         Some(Duration::from_millis(600)),
         None,
     )
@@ -59,4 +63,23 @@ fn pty_silent_cpu_descendant_survives_idle_window() {
 #[test]
 fn pty_sleeping_descendant_is_reaped_after_idle_window() {
     assert_eq!(monitor("sleep 10 & wait"), TaskStatus::Failed);
+}
+
+#[test]
+fn process_safety_pty_silent_first_cpu_command_survives_first_token_window() {
+    assert_eq!(
+        monitor_with_first_token(
+            "yes >/dev/null & tool=$!; sleep 2; kill $tool; exit 0",
+            true
+        ),
+        TaskStatus::Done
+    );
+}
+
+#[test]
+fn process_safety_pty_silent_first_sleeping_command_exhausts_first_token_window() {
+    assert_eq!(
+        monitor_with_first_token("sleep 10 & wait", true),
+        TaskStatus::Failed
+    );
 }

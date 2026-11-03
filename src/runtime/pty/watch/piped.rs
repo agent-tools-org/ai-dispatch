@@ -76,9 +76,12 @@ impl Watchdog {
                 self.state.last_progress_time = progress;
             }
         }
-        self.first_token =
-            self.state
-                .first_token_hang_elapsed(true, self.policy.first_token, task.as_str());
+        self.first_token = self.state.first_token_hang_with_activity(
+            true,
+            self.policy.first_token,
+            task.as_str(),
+            pid,
+        );
         if self.first_token {
             return Ok(true);
         }

@@ -162,7 +162,12 @@ fn handle_idle_timeout(
 ) -> Result<bool> {
     state.handle_timeout(store, task_id)?;
     if let Some(timeout) = first_token
-        && state.first_token_hang_elapsed(agent.streaming(), timeout, task_id.as_str())
+        && state.first_token_hang_with_activity(
+            agent.streaming(),
+            timeout,
+            task_id.as_str(),
+            bridge.child_pid(),
+        )
     {
         record_hang(state, store, task_id, timeout, true)?;
         return Ok(true);

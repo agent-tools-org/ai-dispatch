@@ -10,7 +10,8 @@ use std::{
 };
 
 const PART_TTL: Duration = Duration::from_secs(60);
-const DOWNLOAD: &str = r#"curl -sfL --max-time 15 -o "$1.part" "$2" && mv "$1.part" "$1.ready""#;
+const DOWNLOAD: &str = r#"curl -sfL --max-time 15 --max-filesize 10485760 -o "$1.part" "$2" &&
+mv -- "$1.part" "$1.ready""#;
 
 pub(crate) fn maybe_refresh(
     path: &Path,
@@ -47,8 +48,19 @@ pub(crate) fn maybe_refresh(
             });
         }
     }
-    if child.spawn().is_err() {
-        let _ = fs::remove_file(part);
+    spawn_refresh(child, part);
+}
+
+fn spawn_refresh(mut command: Command, part: PathBuf) {
+    match command.spawn() {
+        Ok(mut child) => {
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+        }
+        Err(_) => {
+            let _ = fs::remove_file(part);
+        }
     }
 }
 

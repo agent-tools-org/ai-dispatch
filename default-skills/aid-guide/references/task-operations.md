@@ -156,7 +156,9 @@ as agent progress, so a genuinely stalled or silent agent is still reaped after
 the idle window.
 
 Hung events distinguish `no first output` from `no output or descendant progress`.
-The first-token timeout still requires agent output; child activity does not extend it.
+For PTY and piped Claude runs, growing descendant CPU time or a live remote wait
+also extends the first-token budget, so a silent first command can finish.
+Sleeping children without CPU growth still exhaust that budget.
 
 `--timeout SECS` sets an absolute wall-clock cap, even during CPU work or remote waits.
 The detached worker enforces the smaller of maximum duration and hard cap without
@@ -168,9 +170,9 @@ until the pipes close, so a surviving descendant that keeps them open delays set
 Descendant activity requires the agent root's recorded launch identity; a reused
 root PID or an older job without that identity cannot extend reaper liveness.
 Missing or unreadable launch identity fails closed: no descendant activity or stored-agent signals.
-Only the stored agent root is checked against its launch identity before a signal;
-`aid stop` signals the stored worker PID, and reaper cleanup signals the descendant
-PIDs it listed, without that check.
+Reaper cleanup captures worker and descendant launch identities before sending
+signals and rechecks them before both TERM and KILL. Unreadable or changed
+identities are skipped; the stored agent root is also rechecked before each signal.
 Recognized rbox lock-queue time is excluded from a duration-based verification
 timeout, up to the lock notice's timeout. Remote verification's absolute task
 deadline still includes queue time.

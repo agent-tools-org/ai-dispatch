@@ -91,7 +91,7 @@ fn critical_audit_fails_when_aic_not_found() {
     assert_eq!(task.audit_verdict.as_deref(), Some("error"));
     assert_ne!(task.exit_code, Some(0));
     let events = store.get_events("t-critical-audit").unwrap();
-    assert!(events.iter().any(|event| event.kind == crate::types::EventKind::Error
+    assert!(events.iter().any(|event| event.event_kind == crate::types::EventKind::Error
         && event.detail.contains("critical") && event.detail.contains("aic")));
 }
 

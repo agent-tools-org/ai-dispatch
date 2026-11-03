@@ -34,6 +34,7 @@ fn retry_keeps_every_saved_field_except_resolved_task_facts() {
         ("session_id", Value::Null), ("existing_task_id", Value::Null),
         ("env", Value::Null), ("repo", json!("/tmp/repo")),
         ("origin", json!("automatic")),
+        ("quota_continuation_of", Value::Null),
     ] {
         expected[key] = value;
     }
@@ -94,6 +95,7 @@ pub(super) fn every_field_set() -> RunArgs {
         artifact_staging: Some("/tmp/staging".into()),
         result_file_required: Some(true), model: Some("effective-model".into()),
         model_source: ModelSource::AidResolved,
+        quota_continuation_of: Some("refused-model".into()),
         declared_difficulty: Some(TaskDifficulty::Complex), declared_budget: Some(TaskBudget::Premium),
         declared_urgency: Some(TaskUrgency::Urgent), declared_rigor: Some(TaskRigor::Critical),
         declared_egress: TaskEgress::Local, kind: Some(TaskCategory::ComplexImpl),

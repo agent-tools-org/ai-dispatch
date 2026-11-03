@@ -118,7 +118,9 @@ it falls through to the automatic advice candidate. Budget mode retains this
 continuation pin. Degradation warnings are emitted after resolution and describe
 only the selected model’s pool. Model self-heal excludes the
 failed model when pinning a replacement. Background workers recheck units after
-waiting for a reset. Completion attribution maps log labels through the cached
+waiting for a reset. If a continuation’s selected pool becomes spent while waiting,
+they select another unspent pool, still excluding the original refusing pool, and
+fail only when no unspent pool remains. Completion attribution maps log labels through the cached
 served list without running a live model probe.
 
 Agy model-list rows must contain a model ID and display name separated by a tab;

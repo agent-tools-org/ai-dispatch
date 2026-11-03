@@ -71,7 +71,9 @@ pub(crate) fn healthy_model(
     {
         return Some(model.to_string());
     }
-    models.into_iter().find(|model| !family_is_spent(kind, custom, unit(kind, model)))
+    models
+        .into_iter()
+        .find(|model| !family_is_spent(kind, custom, unit(kind, model)))
 }
 
 fn select_model(
@@ -80,6 +82,7 @@ fn select_model(
     current: Option<&str>,
     budget: bool,
     excluded: Option<&str>,
+    exclude_pool: bool,
 ) -> Option<String> {
     let effort = current.map(strength).map_or(2, |rank| rank.1);
     let mut models = candidates(kind);
@@ -87,8 +90,9 @@ fn select_model(
         models.sort_by_key(|model| (strength(model).0, std::cmp::Reverse(strength(model).1)));
     }
     models.into_iter().find(|model| {
-        Some(model.as_str()) != excluded
-            && strength(model).1 == effort
+        !excluded.is_some_and(|failed| {
+            model == failed || (exclude_pool && unit(kind, model) == unit(kind, failed))
+        }) && strength(model).1 == effort
             && !family_is_spent(kind, custom, unit(kind, model))
     })
 }
@@ -113,39 +117,59 @@ pub(crate) fn resolve(
         return Ok(model.map(str::to_string));
     }
     if policy != PinPolicy::Automatic {
-        let name = model.ok_or_else(|| anyhow::anyhow!("{} requires a model", kind.as_str()))?;
-        let family = unit(kind, name);
-        anyhow::ensure!(family != "other", "Unknown quota family for model {name}");
-        let excluded_pin = excluded.is_some_and(|failed| {
-            name == failed || (policy == PinPolicy::Continuation && family == unit(kind, failed))
-        });
-        if !excluded_pin && !family_is_spent(kind, custom, family) {
-            return Ok(Some(name.to_string()));
-        }
-        anyhow::ensure!(
-            !matches!(policy, PinPolicy::Exact | PinPolicy::Continuation),
-            "{} model is held (family {family} spent); exact pin retained",
-            kind.as_str()
-        );
-        let replacement = select_model(kind, custom, model, budget, excluded)
-            .ok_or_else(|| anyhow::anyhow!("{} has no unspent model family", kind.as_str()))?;
-        aid_warn!(
-            "[aid] {} model group exhausted; switching {} -> {}",
-            kind.as_str(),
-            name,
-            replacement
-        );
-        return Ok(Some(replacement));
+        return resolve_pin(kind, custom, model, policy, budget, excluded).map(Some);
     }
     let current = model.filter(|name| {
-        !budget && Some(*name) != excluded
+        !budget
+            && Some(*name) != excluded
             && candidates(kind).iter().any(|served| served == name)
             && !family_is_spent(kind, custom, unit(kind, name))
     });
-    current.map(str::to_string)
-        .or_else(|| select_model(kind, custom, model, budget, excluded))
+    current
+        .map(str::to_string)
+        .or_else(|| select_model(kind, custom, model, budget, excluded, false))
         .map(Some)
         .ok_or_else(|| anyhow::anyhow!("{} has no unspent model family", kind.as_str()))
+}
+
+fn resolve_pin(
+    kind: AgentKind,
+    custom: Option<&str>,
+    model: Option<&str>,
+    policy: PinPolicy,
+    budget: bool,
+    excluded: Option<&str>,
+) -> anyhow::Result<String> {
+    let name = model.ok_or_else(|| anyhow::anyhow!("{} requires a model", kind.as_str()))?;
+    let family = unit(kind, name);
+    anyhow::ensure!(family != "other", "Unknown quota family for model {name}");
+    let excluded_pin = excluded.is_some_and(|failed| {
+        name == failed || (policy == PinPolicy::Continuation && family == unit(kind, failed))
+    });
+    if !excluded_pin && !family_is_spent(kind, custom, family) {
+        return Ok(name.to_string());
+    }
+    anyhow::ensure!(
+        policy != PinPolicy::Exact,
+        "{} model is held (family {family} spent); exact pin retained",
+        kind.as_str()
+    );
+    let replacement = select_model(
+        kind,
+        custom,
+        model,
+        budget,
+        excluded,
+        policy == PinPolicy::Continuation,
+    )
+    .ok_or_else(|| anyhow::anyhow!("{} has no unspent model family", kind.as_str()))?;
+    aid_warn!(
+        "[aid] {} model group exhausted; switching {} -> {}",
+        kind.as_str(),
+        name,
+        replacement
+    );
+    Ok(replacement)
 }
 
 pub(crate) fn continuation_model(
@@ -189,9 +213,9 @@ mod tests {
             true,
             Some("claude-opus-5-5-medium"),
         );
-        assert!(
-            result.is_err(),
-            "a sibling model shares the refused allowance"
+        assert_eq!(
+            result.expect("another pool"),
+            Some("gemini-4-argon-medium".into())
         );
     }
 }

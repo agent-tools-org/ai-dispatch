@@ -53,6 +53,7 @@ impl RunArgs {
         } else {
             None
         };
+        args.quota_continuation_of = None;
         args.existing_task_id = None;
         args.origin = DispatchOrigin::Automatic;
         args.env = None;

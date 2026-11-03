@@ -153,6 +153,7 @@ fn agy_budget_worker_keeps_continuation_pin_and_excludes_refused_pool() {
     let mut args = RunArgs {
         agent_name: "agy".into(),
         budget: true,
+        quota_continuation_of: parent.requested_model.clone(),
         model: Some("claude-opus-5-5-medium".into()),
         model_source: agent::model_validation::ModelSource::AidResolved,
         parent_task_id: Some(parent.id.to_string()),
@@ -161,10 +162,106 @@ fn agy_budget_worker_keeps_continuation_pin_and_excludes_refused_pool() {
     let agent = agent::get_agent(AgentKind::Antigravity);
     refresh_family_route(&store, "unused", &mut args, agent.as_ref()).expect("retained pin");
     assert_eq!(args.model.as_deref(), Some("claude-opus-5-5-medium"));
+    args.quota_continuation_of = None;
     args.model = parent.requested_model.clone();
     args.budget = false;
     refresh_family_route(&store, "unused", &mut args, agent.as_ref()).expect("ordinary retry");
     assert_eq!(args.model, parent.requested_model);
+    args.quota_continuation_of = parent.requested_model.clone();
     args.model = Some("gemini-4-argon-high".into());
     assert!(refresh_family_route(&store, "unused", &mut args, agent.as_ref()).is_err());
+}
+
+#[test]
+fn agy_worker_selfheal_launches_same_pool_replacement() {
+    same_pool_worker_replacement(true);
+}
+
+#[test]
+fn agy_worker_replaced_retry_launches_same_pool_replacement() {
+    same_pool_worker_replacement(false);
+}
+
+fn same_pool_worker_replacement(selfheal: bool) {
+    use crate::types::AgentKind;
+    let home = crate::support::test_env::TestHome::new();
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
+    let _models = agent::model_validation::MockServedModelsGuard::set(
+        AgentKind::Antigravity,
+        Some(vec!["gpt-oss-120b-medium".into()]),
+    );
+    let store = Store::open_memory().expect("store");
+    let mut parent = crate::cost::test_support::task(AgentKind::Antigravity, 0, None);
+    parent.requested_model = Some("claude-opus-5-5-medium".into());
+    store.insert_task(&parent).expect("parent");
+    let args = RunArgs {
+        agent_name: "agy".into(),
+        model: Some("gpt-oss-120b-medium".into()),
+        model_source: agent::model_validation::ModelSource::AidResolved,
+        parent_task_id: Some(parent.id.to_string()),
+        force_default_model: selfheal,
+        ..Default::default()
+    };
+    let mut saved = RunArgs::from_dispatch_args_json(&args.dispatch_args_json().expect("encode"))
+        .expect("decode");
+    refresh_family_route(
+        &store,
+        "unused",
+        &mut saved,
+        agent::get_agent(parent.agent).as_ref(),
+    )
+    .expect("same pool replacement launches");
+    assert_eq!(saved.model, args.model);
+}
+
+#[test]
+fn agy_worker_continuation_reselects_after_wait_until_no_pool_remains() {
+    use crate::types::AgentKind;
+    let home = crate::support::test_env::TestHome::new();
+    let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
+    let _models = agent::model_validation::MockServedModelsGuard::set(
+        AgentKind::Antigravity,
+        Some(vec![
+            "gemini-4-argon-medium".into(),
+            "claude-opus-5-5-medium".into(),
+            "gemini-3.8-flash-medium".into(),
+        ]),
+    );
+    let store = Store::open_memory().expect("store");
+    let task = crate::cost::test_support::task(AgentKind::Antigravity, 0, None);
+    store.insert_task(&task).expect("task");
+    let args = RunArgs {
+        agent_name: "agy".into(),
+        model: Some("claude-opus-5-5-medium".into()),
+        quota_continuation_of: Some("gemini-4-argon-medium".into()),
+        model_source: agent::model_validation::ModelSource::AidResolved,
+        budget: true,
+        ..Default::default()
+    };
+    let mut args = args;
+    for model in ["claude-opus-5-5-medium", "gemini-3.8-flash-medium"] {
+        crate::routing::rate_limit::mark_untrusted_for_model(
+            &task.agent,
+            None,
+            Some(model),
+            "Individual quota reached. Resets in 36h.",
+        );
+        let result = refresh_family_route(
+            &store,
+            task.id.as_str(),
+            &mut args,
+            agent::get_agent(task.agent).as_ref(),
+        );
+        if model.contains("opus") {
+            result.expect("third pool remains");
+            assert_eq!(args.model.as_deref(), Some("gemini-3.8-flash-medium"));
+        } else {
+            assert!(
+                result
+                    .expect_err("all pools excluded")
+                    .to_string()
+                    .contains("no unspent model family")
+            );
+        }
+    }
 }

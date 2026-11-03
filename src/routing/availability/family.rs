@@ -1,5 +1,5 @@
 // Family quota evidence shared by dispatch, fallback selection and continuation.
-// Combines holds, dated live windows and duration-bearing untrusted markers.
+// Combines holds, dated live windows and dated untrusted recovery markers.
 use super::*;
 
 pub(crate) fn family_is_spent(agent: AgentKind, custom: Option<&str>, family: &str) -> bool {
@@ -18,13 +18,10 @@ pub(crate) fn family_is_spent(agent: AgentKind, custom: Option<&str>, family: &s
     if crate::routing::rate_limit::marker_field(&text, "source: ").as_deref() != Some("untrusted") {
         return false;
     }
-    if let Some(at) = crate::routing::rate_limit::marker_field(&text, "recovery_at: ")
+    crate::routing::rate_limit::marker_field(&text, "recovery_at: ")
         .as_deref()
         .and_then(crate::routing::rate_limit::parse_recovery_datetime)
-    {
-        return at > Local::now().naive_local();
-    }
-    false
+        .is_some_and(|at| at > Local::now().naive_local())
 }
 
 fn probe_is_spent(probe: &ProbeEvidence, agent: AgentKind, family: &str) -> bool {

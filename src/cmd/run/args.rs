@@ -30,6 +30,7 @@ pub struct RunArgs {
     pub result_file_required: Option<bool>,
     pub model: Option<String>,
     pub model_source: ModelSource,
+    pub(crate) quota_continuation_of: Option<String>,
     pub declared_difficulty: Option<TaskDifficulty>,
     pub declared_budget: Option<TaskBudget>,
     pub declared_urgency: Option<TaskUrgency>,
@@ -225,6 +226,7 @@ impl Default for RunArgs {
             suppress_nested_repo_warning: false,
             link_deps: true,
             force_default_model: false,
+            quota_continuation_of: None,
         }
     }
 }
@@ -270,3 +272,6 @@ mod args_retry_tests;
 #[cfg(test)]
 #[path = "args_retry_worker_tests.rs"]
 mod args_retry_worker_tests;
+
+#[path = "args_family.rs"]
+mod family;

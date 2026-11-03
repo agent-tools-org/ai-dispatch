@@ -54,53 +54,6 @@ pub(super) fn route_custom_name(kind: AgentKind, name: &str) -> Result<Option<St
     }
 }
 
-fn family_pin_policy(args: &RunArgs, parent_model: Option<&str>) -> agent::family_route::PinPolicy {
-    use agent::family_route::PinPolicy;
-    if args.policy.is_some()
-        || (args.model.is_some()
-            && args.model_source == agent::model_validation::ModelSource::Advised)
-    {
-        PinPolicy::Exact
-    } else if args.parent_task_id.is_some()
-        && args.model.is_some()
-        && args.model.as_deref() != parent_model
-        && args.model_source == agent::model_validation::ModelSource::AidResolved
-    {
-        PinPolicy::Continuation
-    } else if args.model.is_some()
-        && args.model_source == agent::model_validation::ModelSource::UserSupplied
-    {
-        PinPolicy::WarnOnReplacement
-    } else {
-        PinPolicy::Automatic
-    }
-}
-
-fn refused_parent_model(
-    store: &Store,
-    args: &RunArgs,
-    setup: &AgentSetup,
-) -> Result<Option<String>> {
-    Ok(
-        if args.force_default_model
-            || args.model_source == agent::model_validation::ModelSource::AidResolved
-        {
-            args.parent_task_id
-                .as_deref()
-                .map(|id| store.get_task(id))
-                .transpose()?
-                .flatten()
-                .filter(|task| {
-                    task.agent == setup.agent_kind
-                        && task.custom_agent_name == setup.custom_agent_name
-                })
-                .and_then(|task| task.requested_model.or(task.observed_model))
-        } else {
-            None
-        },
-    )
-}
-
 pub(super) fn resolve_agent_setup(
     store: &Arc<Store>,
     args: &mut RunArgs,
@@ -108,11 +61,9 @@ pub(super) fn resolve_agent_setup(
 ) -> Result<AgentSetup> {
     let mut setup = resolve_agent_setup_inner(store, args, project_id)?;
     use agent::family_route::PinPolicy;
-    let failed = refused_parent_model(store, args, &setup)?;
-    let policy = family_pin_policy(args, failed.as_deref());
-    let excluded = failed.as_deref().filter(|_| {
-        args.force_default_model || policy == PinPolicy::Continuation
-    });
+    let (policy, excluded) = args.family_route_inputs(
+        store, setup.agent_kind, setup.custom_agent_name.as_deref(),
+    )?;
     let previous = setup.effective_model.clone();
     setup.effective_model = agent::family_route::resolve(
         setup.agent_kind,
@@ -120,7 +71,7 @@ pub(super) fn resolve_agent_setup(
         setup.effective_model.as_deref(),
         policy,
         setup.budget_active,
-        excluded,
+        excluded.as_deref(),
     )?;
     if policy == PinPolicy::WarnOnReplacement && previous != setup.effective_model {
         args.model_source = agent::model_validation::ModelSource::AidResolved;

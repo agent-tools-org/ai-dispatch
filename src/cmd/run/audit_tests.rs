@@ -73,6 +73,29 @@ fn audit_skipped_when_aic_not_found() {
 }
 
 #[test]
+fn critical_audit_fails_when_aic_not_found() {
+    let _guard = env_lock();
+    set_env("AIC_TEST_PRESENT", "0");
+    let store = Store::open_memory().unwrap();
+    let mut pending = done_task("t-critical-audit");
+    pending.completed_at = None;
+    store.insert_task(&pending).unwrap();
+    let mut args = audit_args(true);
+    args.declared_rigor = Some(crate::types::TaskRigor::Critical);
+
+    run_audit_for_task(&store, "t-critical-audit", &args);
+    remove_env("AIC_TEST_PRESENT");
+
+    let task = store.get_task("t-critical-audit").unwrap().unwrap();
+    assert_eq!(task.status, TaskStatus::Failed);
+    assert_eq!(task.audit_verdict.as_deref(), Some("error"));
+    assert_ne!(task.exit_code, Some(0));
+    let events = store.get_events("t-critical-audit").unwrap();
+    assert!(events.iter().any(|event| event.event_kind == crate::types::EventKind::Error
+        && event.detail.contains("critical") && event.detail.contains("aic")));
+}
+
+#[test]
 fn audit_records_pass_verdict() {
     let _guard = env_lock();
     let temp = tempfile::tempdir().unwrap();

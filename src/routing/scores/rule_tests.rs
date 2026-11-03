@@ -27,10 +27,12 @@ fn category_rules_use_one_board_and_never_blend() {
     for category in [TaskCategory::Research, TaskCategory::Documentation] {
         let evidence = evidence_from(&feed, OPUS, "claude", Some("max"), category);
         assert_eq!(evidence.capability, Some(10.0), "{category:?}");
+        assert_eq!(evidence.harness, "harness unmeasured");
         assert_eq!(evidence.selected.expect("selected").board, "eci");
     }
     let frontend = evidence_from(&feed, OPUS, "claude", Some("max"), TaskCategory::Frontend);
     assert_eq!(frontend.capability, Some(10.0));
+    assert_eq!(frontend.harness, "harness unmeasured");
     assert_eq!(frontend.selected.expect("selected").source, "lmarena");
 }
 

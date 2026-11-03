@@ -27,6 +27,21 @@ pub(crate) fn validate_run_options(args: &RunArgs) -> anyhow::Result<()> {
             "Choose separate report and output destinations, or request only one artifact."));
     }
     validate_rigor(args, &mut issues);
+    if ((args.audit && args.audit_explicit) || args.declared_rigor == Some(TaskRigor::Critical))
+        && !crate::task::aic::is_available()
+    {
+        issues.push(Issue::new("audit_unavailable",
+            "Cross-audit requires the 'aic' binary, but it is not available on PATH.",
+            "Install aic and ensure aic --version succeeds before dispatching with --audit or --rigor critical."));
+    }
+    if args.audit && !args.audit_explicit && args.declared_rigor != Some(TaskRigor::Critical)
+        && !crate::task::aic::is_available()
+    {
+        aid_warn!(
+            "[aid] project audit default enabled but 'aic' is unavailable on PATH; \
+             continuing without cross-audit"
+        );
+    }
     validate_iteration(args, &mut issues);
     if issues.is_empty() { return Ok(()); }
     Err(Rejection(issues).into())

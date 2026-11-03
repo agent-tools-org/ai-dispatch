@@ -13,7 +13,7 @@ target=
 while [ "$#" -gt 0 ]; do
     case "$1" in
         -o) target="$2"; shift 2 ;;
-        --max-time) shift 2 ;;
+        --max-time|--max-filesize) shift 2 ;;
         *) url="$1"; shift ;;
     esac
 done
@@ -31,6 +31,7 @@ fi
 
 const MV: &str = r#"#!/bin/sh
 /bin/mv "$@" || exit 1
+if [ "$1" = -- ]; then shift; fi
 file=${2##*/}
 file=${file%.ready}
 printf done > "$AID_HOME/$file.done"

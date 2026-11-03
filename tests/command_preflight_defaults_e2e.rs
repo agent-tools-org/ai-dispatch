@@ -64,3 +64,34 @@ fn read_only_dir_keeps_the_explicit_checkout_as_the_task_target() {
     assert_eq!(std::path::Path::new(&effective_dir), dir);
     assert!(read_only);
 }
+
+#[test]
+fn explicit_audit_without_aic_is_refused_even_for_dry_run() {
+    let home = TempDir::new().unwrap();
+    let output = aid_cmd_in(home.path()).env("PATH", home.path()).args([
+        "run", "codex", "Inspect the project", "--audit", "--dry-run", "--no-hint",
+    ]).output().unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("audit_unavailable"), "{stderr}");
+    let db = rusqlite::Connection::open(home.path().join("aid.db")).unwrap();
+    let count: i64 = db.query_row("SELECT count(*) FROM tasks", [], |row| row.get(0)).unwrap();
+    assert_eq!(count, 0);
+}
+
+#[test]
+fn project_default_audit_without_aic_warns_and_allows_dry_run() {
+    let home = TempDir::new().unwrap();
+    let dir = project(&home, "[audit]\nauto = true\n");
+    let bin = home.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let git = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|dir| dir.join("git")).find(|path| path.is_file()).expect("git on PATH");
+    std::os::unix::fs::symlink(git, bin.join("git")).unwrap();
+    let output = aid_cmd_in(home.path()).env("PATH", &bin).args([
+        "run", "codex", "Inspect the project", "--dry-run", "--no-hint", "--dir",
+    ]).arg(&dir).output().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert!(stderr.contains("project audit default") && stderr.contains("aic"), "{stderr}");
+}

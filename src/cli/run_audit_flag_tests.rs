@@ -21,7 +21,10 @@ fn audit_validation_requires_available_aic() {
     let mut args = crate::cmd::run::RunArgs::default();
     assert!(super::diagnostics::validate_run_options(&args).is_ok());
     args.audit = true;
+    let default_audit = super::diagnostics::validate_run_options(&args);
+    args.audit_explicit = true;
     let explicit = super::diagnostics::validate_run_options(&args);
+    args.audit_explicit = false;
     args.declared_rigor = Some(crate::types::TaskRigor::Critical);
     args.verify = Some("true".into());
     let critical = super::diagnostics::validate_run_options(&args);
@@ -33,5 +36,6 @@ fn audit_validation_requires_available_aic() {
         assert!(message.contains("aic"), "{message}");
         assert!(message.contains("audit_unavailable"), "{message}");
     }
+    assert!(default_audit.is_ok(), "project audit defaults must not refuse dispatch");
     assert!(available.is_ok());
 }

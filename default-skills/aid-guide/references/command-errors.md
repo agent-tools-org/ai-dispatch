@@ -64,7 +64,10 @@ incompatible with `--read-only`.
 `--audit` schedules an additional post-task cross-audit using `aic`. It does not
 describe the task's purpose. Dispatch with `--audit` or `--rigor critical` requires
 the `aic` binary on PATH with a successful `aic --version`; otherwise validation
-rejects it. `--rigor critical` requires enabled verification and
+rejects it. A non-critical audit enabled only by project defaults warns and
+continues when `aic` is unavailable. If `aic` becomes unavailable at settlement,
+critical tasks fail with an audit error; non-critical tasks record a skipped audit.
+`--rigor critical` requires enabled verification and
 post-task audit, supplied explicitly or through project defaults. Empty, `none`,
 `false`, and `skip` verification values do not satisfy this requirement. Do not
 silently lower rigor to make a rejected request pass.

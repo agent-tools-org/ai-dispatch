@@ -44,7 +44,7 @@ impl AicStatus {
             Self::Missing => "Missing: aic binary not found or aic --version failed".to_string(),
             Self::Foreign => "Foreign: aic --help does not identify the cross-auditor; \
                 cargo install aic installs an unrelated project".to_string(),
-            Self::TooOld(version) => format!("TooOld({version}): requires aic 0.3.1 or newer"),
+            Self::TooOld(version) => format!("TooOld({version}): requires aic 0.3.2 or newer"),
             Self::Ready => "Ready".to_string(),
         };
         format!("{description}; install: curl -fsSL https://aid.agent-tools.org/install.sh | sh")
@@ -158,7 +158,7 @@ fn supported_version(version: &str) -> bool {
         return false;
     }
     let numbers: Option<Vec<u64>> = parts.iter().map(|part| part.parse().ok()).collect();
-    numbers.is_some_and(|parts| (parts[0], parts[1], parts[2]) >= (0, 3, 1))
+    numbers.is_some_and(|parts| (parts[0], parts[1], parts[2]) >= (0, 3, 2))
 }
 
 fn aic_binary_path() -> String {

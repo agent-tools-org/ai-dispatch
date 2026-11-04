@@ -2,7 +2,7 @@
 // Exports script builders used by unit and integration tests.
 
 pub fn script(body: &str) -> String {
-    identified_script("aic 0.3.1", "Cross-audit aid agent outputs", body)
+    identified_script("aic 0.3.2", "Cross-audit aid agent outputs", body)
 }
 
 pub fn identified_script(version: &str, help: &str, body: &str) -> String {

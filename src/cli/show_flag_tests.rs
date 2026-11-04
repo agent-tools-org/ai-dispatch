@@ -41,3 +41,20 @@ fn show_patch_parses_and_conflicts_with_other_modes() {
         assert!(Cli::try_parse_from(["aid", "show", "t-1234", "--patch", flag, "value"]).is_err());
     }
 }
+
+#[test]
+fn show_patch_base_has_patch_conflicts() {
+    let cli = Cli::try_parse_from(["aid", "show", "t-1234", "--patch-base"]).unwrap();
+    assert!(matches!(cli.command,
+        Some(Commands::Show(inspect_args::ShowArgs { patch_base: true, .. }))));
+    for flag in ["--patch", "--events", "--context", "--diff", "--summary", "--branch",
+        "--output", "--result", "--transcript", "--full", "--brief", "--explain", "--log", "--json"]
+    {
+        let error = Cli::try_parse_from(["aid", "show", "t-1234", "--patch-base", flag])
+            .err().expect("patch base mode must conflict");
+        assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+    for flag in ["--file", "--agent", "--model"] {
+        assert!(Cli::try_parse_from(["aid", "show", "t-1234", "--patch-base", flag, "value"]).is_err());
+    }
+}

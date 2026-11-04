@@ -47,6 +47,21 @@ pub(crate) fn maybe_run_post_done_audit(
         EventKind::Milestone,
         format!("Audit complete: {}", result.verdict),
     ))?;
+    if args.declared_rigor == Some(TaskRigor::Critical) {
+        let report = result.report_path.as_deref().unwrap_or("unavailable");
+        if result.verdict == "fail" {
+            let reason = format!("critical cross-audit verdict: fail (report: {report})");
+            aid_warn!("[aid] {reason}");
+            store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Error, reason))?;
+            crate::task::lifecycle::fail_completed_verify_gate(store, task_id)?;
+        } else if matches!(result.verdict.as_str(), "inconclusive" | "error") {
+            let warning = format!(
+                "No audit verdict for code: {} (report: {report})", result.verdict,
+            );
+            aid_warn!("[aid] Warning: {warning}");
+            store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Error, warning))?;
+        }
+    }
     Ok(())
 }
 

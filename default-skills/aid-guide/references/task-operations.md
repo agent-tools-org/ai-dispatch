@@ -11,10 +11,16 @@ aid watch --tui
 aid wait <task-id>
 aid show <task-id> --summary
 aid show <task-id> --patch
+aid show <task-id> --patch-base
 aid show <task-id> --events
 aid show <task-id> --output --full
 aid tree <task-id>
 ```
+
+`--patch-base` prints exactly one full commit id and newline: the repository-resolved
+base used by `--patch`. It shares that mode's conflicts and also conflicts with
+`--patch`. Missing recorded starts or an unresolvable base are errors. To read audit
+configuration, read it from this commit rather than the task's working tree.
 
 `aid board` defaults to the **current project** (the stable identity of the
 enclosing git main working tree — `.aid/project.toml` `id` when present). Tasks

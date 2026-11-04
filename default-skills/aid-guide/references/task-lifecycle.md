@@ -166,6 +166,17 @@ patch means no change.
 checkout, repository or base, or a Git failure, produces a non-zero exit; no changes
 produces empty stdout and exit 0. Use this mode to supply task delivery to aic.
 
+`aid show <task-id> --patch-base` prints exactly the full commit id of that same
+base followed by one newline. It uses the same retry and worktree resolution and
+refuses the same missing-base cases, without reading working-tree audit configuration.
+It conflicts with `--patch` and the same modes and modifiers.
+
+Critical audits require aic 0.3.2 or newer. An audit `fail` fails the completed task
+through the verification gate and records an Error event with the verdict and report.
+An `inconclusive` or `error` result leaves DONE, warns, and records that the code
+received no audit verdict. `pass`, `advisory`, and non-critical verdict status behavior
+are unchanged. An unavailable aic still fails critical tasks.
+
 ## Accept
 
 ```bash

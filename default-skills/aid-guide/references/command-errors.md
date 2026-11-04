@@ -65,7 +65,7 @@ incompatible with `--read-only`.
 describe the task's purpose. Dispatch with `--audit` or `--rigor critical` requires
 the cross-auditor on PATH: `aic --help` must contain the exact line
 `Cross-audit aid agent outputs`, and `aic --version` must be `aic X.Y.Z` at
-version 0.3.1 or newer (compared numerically). Otherwise validation rejects it.
+version 0.3.2 or newer (compared numerically). Otherwise validation rejects it.
 Missing means the command cannot run or its version command fails; Foreign means
 its help does not identify the cross-auditor; TooOld includes older or malformed
 versions; Ready satisfies both checks. Fix unavailable installations with:
@@ -75,8 +75,12 @@ A non-critical audit enabled only by project defaults warns and continues when
 `aic` is unavailable. At settlement, critical tasks fail with an audit error;
 non-critical tasks record a skipped audit. Messages include the status and fix.
 Audit exit codes record `pass` (0), `fail` (1), `advisory` (2), `inconclusive` (3),
-and `error` (every other code or execution failure). These verdicts do not change
-the task status; `skipped` records an unavailable non-critical audit.
+and `error` (every other code or execution failure). For `--rigor critical`, only
+`fail` fails the completed task through the verification gate; its Error event names
+the verdict and report. `inconclusive` and `error` keep DONE but warn and record an
+Error event stating that the code received no audit verdict. `pass` and `advisory`
+leave status unchanged. Non-critical verdicts leave status unchanged; `skipped`
+records an unavailable non-critical audit.
 `--rigor critical` requires enabled verification and
 post-task audit, supplied explicitly or through project defaults. Empty, `none`,
 `false`, and `skip` verification values do not satisfy this requirement. Do not
@@ -142,3 +146,7 @@ aid agent failures --json | aid classify --state-json \
 secret-like values before sending it. Its answer is a hint and changes nothing;
 it does not install rules or update holds or markers. Inspect the records and the
 hint before deciding whether a classification rule should be added.
+
+`aid show <task-id> --patch-base` fails when the shared patch-base resolution fails,
+including a retry chain with no recorded start. It does not infer a base from the
+working tree. It conflicts with `--patch` and all of that mode's conflicts.

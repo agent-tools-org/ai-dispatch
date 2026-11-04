@@ -97,13 +97,13 @@ fn detects_identity_and_numeric_minimum_version() {
     set_env("AIC_TEST_BINARY", &binary);
     assert_eq!(status(), AicStatus::Missing);
     for (version, help, expected) in [
-        ("aic 0.3.1", "AI-powered commit message generator", AicStatus::Foreign),
+        ("aic 0.3.2", "AI-powered commit message generator", AicStatus::Foreign),
         ("aic 0.3.0", "Cross-audit aid agent outputs", AicStatus::TooOld("aic 0.3.0".into())),
         ("aic 0.10.0", "Cross-audit aid agent outputs", AicStatus::Ready),
-        ("aic 0.3.1", "Cross-audit aid agent outputs", AicStatus::Ready),
+        ("aic 0.3.2", "Cross-audit aid agent outputs", AicStatus::Ready),
         ("aic invalid", "Cross-audit aid agent outputs", AicStatus::TooOld("aic invalid".into())),
-        ("aic 0.3.1", "prefix Cross-audit aid agent outputs", AicStatus::Foreign),
-        ("aic 0.3.1", "Cross-audit aid agent outputs suffix", AicStatus::Foreign),
+        ("aic 0.3.2", "prefix Cross-audit aid agent outputs", AicStatus::Foreign),
+        ("aic 0.3.2", "Cross-audit aid agent outputs suffix", AicStatus::Foreign),
     ] {
         crate::support::test_env::write_executable(
             &binary, &aic_shim::identified_script(version, help, "exit 0"),
@@ -118,11 +118,11 @@ fn detects_identity_and_numeric_minimum_version() {
 
 #[test]
 fn supported_versions_require_three_numeric_components() {
-    for version in ["aic 0.3.1", "aic 0.10.0", "aic 1.0.0"] {
+    for version in ["aic 0.3.2", "aic 0.10.0", "aic 1.0.0"] {
         assert!(supported_version(version), "{version}");
     }
-    for version in ["aic 0.3.0", "aic 0.2.99", "aic 0.3", "aic 0.3.1.0",
-        "aic 0.3.1-beta", "other 1.0.0", "aic +1.0.0", "aic 1..0"]
+    for version in ["aic 0.3.1", "aic 0.3.0", "aic 0.2.99", "aic 0.3", "aic 0.3.2.0",
+        "aic 0.3.2-beta", "other 1.0.0", "aic +1.0.0", "aic 1..0"]
     {
         assert!(!supported_version(version), "{version}");
     }

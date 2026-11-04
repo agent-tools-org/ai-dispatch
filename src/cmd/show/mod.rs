@@ -49,6 +49,7 @@ pub struct ShowArgs {
     pub context: bool,
     pub diff: bool,
     pub patch: bool,
+    pub patch_base: bool,
     pub summary: bool,
     pub file: Option<String>,
     pub branch: bool,
@@ -77,6 +78,9 @@ pub enum ShowMode {
 }
 
 pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
+    if args.patch_base {
+        return patch::run_base(&store, &args.task_id);
+    }
     if args.patch {
         return patch::run(&store, &args.task_id);
     }

@@ -26,6 +26,14 @@ pub(super) fn run(store: &Store, task_id: &str) -> Result<()> {
     std::io::stdout().lock().write_all(&patch).context("write task patch")
 }
 
+pub(super) fn run_base(store: &Store, task_id: &str) -> Result<()> {
+    let task = store.get_task(task_id)?.with_context(|| format!("Task not found: {task_id}"))?;
+    let root = checkout_root(&task)?;
+    let base = patch_base(store, &task, &root)?;
+    println!("{base}");
+    Ok(())
+}
+
 fn collect(store: &Store, task_id: &str) -> Result<Vec<u8>> {
     let task = store.get_task(task_id)?.with_context(|| format!("Task not found: {task_id}"))?;
     let root = checkout_root(&task)?;

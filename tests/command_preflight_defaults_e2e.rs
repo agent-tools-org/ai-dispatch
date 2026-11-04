@@ -102,10 +102,10 @@ fn project_default_audit_without_aic_warns_and_allows_dry_run() {
 #[test]
 fn audit_identity_status_controls_dispatch_and_default_warnings() {
     for (version, help, status) in [
-        ("aic 0.3.1", "AI-powered commit message generator", "Foreign"),
+        ("aic 0.3.2", "AI-powered commit message generator", "Foreign"),
         ("aic 0.3.0", "Cross-audit aid agent outputs", "TooOld(aic 0.3.0)"),
         ("aic 0.10.0", "Cross-audit aid agent outputs", "Ready"),
-        ("aic 0.3.1", "Cross-audit aid agent outputs", "Ready"),
+        ("aic 0.3.2", "Cross-audit aid agent outputs", "Ready"),
     ] {
         for explicit in [false, true] {
             let home = TempDir::new().unwrap();

@@ -10,7 +10,7 @@ fn settlement_explains_incompatible_binaries_without_changing_verdict_policy() {
     let binary = temp.path().join("aic");
     set_env("AIC_TEST_BINARY", &binary);
     for (version, help, expected) in [
-        ("aic 0.3.1", "AI-powered commit message generator", "Foreign"),
+        ("aic 0.3.2", "AI-powered commit message generator", "Foreign"),
         ("aic 0.3.0", "Cross-audit aid agent outputs", "TooOld(aic 0.3.0)"),
     ] {
         crate::support::test_env::write_executable(

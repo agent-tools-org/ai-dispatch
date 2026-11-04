@@ -37,11 +37,11 @@ fn setup(code: i32) -> (Fixture, std::ffi::OsString) {
     (f, path)
 }
 
-fn run_case(code: i32, verdict: &str, critical: bool) {
+fn run_case(code: i32, verdict: &str, critical: bool) -> (Fixture, std::ffi::OsString) {
     let (f, path) = setup(code);
     let mut command = common::aid_cmd_in(f.home.path());
     command
-        .env("PATH", path)
+        .env("PATH", &path)
         .args([
             "run",
             "audited",
@@ -75,6 +75,7 @@ fn run_case(code: i32, verdict: &str, critical: bool) {
     if failed || (critical && matches!(verdict, "inconclusive" | "error")) {
         assert_event(&f, verdict, failed);
     }
+    (f, path)
 }
 
 fn assert_event(f: &Fixture, verdict: &str, failed: bool) {
@@ -83,14 +84,15 @@ fn assert_event(f: &Fixture, verdict: &str, failed: bool) {
     } else {
         "No audit verdict for code"
     };
-    let detail: String =
+    let (detail, kind): (String, String) =
         f.db.query_row(
-            "SELECT detail FROM events WHERE task_id = 't-audited' AND event_type = 'error'
+            "SELECT detail, event_type FROM events WHERE task_id = 't-audited'
              AND detail LIKE ?1",
             [format!("{expected}%")],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .unwrap();
+    assert_eq!(kind, if failed { "error" } else { "milestone" });
     assert!(
         detail.contains(verdict) && detail.contains("/tmp/audit.md"),
         "{detail}"
@@ -102,15 +104,38 @@ fn assert_event(f: &Fixture, verdict: &str, failed: bool) {
     assert!(shown.status.success());
     assert!(String::from_utf8_lossy(&shown.stdout).contains(expected));
     if !failed {
-        let shown = common::aid_cmd_in(f.home.path())
-            .args(["show", "t-audited"])
-            .output()
-            .unwrap();
+        assert_done_warning(f, verdict);
+    }
+}
+
+fn assert_done_warning(f: &Fixture, verdict: &str) {
+    for mode in [None, Some("--summary")] {
+        let mut command = common::aid_cmd_in(f.home.path());
+        command.args(["show", "t-audited"]);
+        if let Some(mode) = mode {
+            command.arg(mode);
+        }
+        let shown = command.output().unwrap();
         assert!(shown.status.success());
         let text = String::from_utf8_lossy(&shown.stdout);
         assert!(text.contains("DONE"), "{text}");
-        assert!(text.contains(&format!("Audit: {verdict}")), "{text}");
-        assert!(text.contains(&format!("No audit verdict for code: {verdict}")), "{text}");
+        let audit = text.lines().find(|line| line.starts_with("Audit: ")).unwrap();
+        assert!(
+            audit.contains(verdict) && audit.contains("code received no audit verdict"),
+            "{audit}"
+        );
+    }
+    let stopped = common::aid_cmd_in(f.home.path())
+        .args(["stop", "t-audited"])
+        .output()
+        .unwrap();
+    assert!(!stopped.status.success());
+    let stderr = String::from_utf8_lossy(&stopped.stderr);
+    assert!(stderr.contains("task already done:"), "{stderr}");
+    for output in [&stopped.stdout, &stopped.stderr] {
+        let text = String::from_utf8_lossy(output);
+        assert!(!text.contains("No audit verdict for code"), "{text}");
+        assert!(!text.contains("code received no audit verdict"), "{text}");
     }
 }
 
@@ -134,4 +159,50 @@ fn critical_pass_and_advisory_and_noncritical_fail_stay_done() {
     run_case(0, "pass", true);
     run_case(2, "advisory", true);
     run_case(1, "fail", false);
+}
+
+#[test]
+fn noncritical_stored_verdicts_also_explain_absent_audit_verdict() {
+    for (code, verdict) in [(3, "inconclusive"), (4, "error")] {
+        let (f, _) = run_case(code, verdict, false);
+        assert_done_warning(&f, verdict);
+    }
+}
+
+#[test]
+fn retry_after_critical_fail_keeps_first_start_commit() {
+    let (f, path) = run_case(1, "fail", true);
+    fs::write(f.repo.join("followup.txt"), "followup\n").unwrap();
+    let later = fixture::commit(&f.repo, "followup");
+    common::write_executable(&f.home.path().join("bin/aic"), &aic_shim::script("exit 0"));
+    let output = common::aid_cmd_in(f.home.path())
+        .env("PATH", path)
+        .args(["retry", "t-audited", "--feedback", "Review the followup"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let (id, start, status): (String, String, String) =
+        f.db.query_row(
+            "SELECT id, start_sha, status FROM tasks WHERE parent_task_id = 't-audited'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(status, "done");
+    assert_eq!(start, later);
+    assert_ne!(start, f.base);
+    let output = common::aid_cmd_in(f.home.path())
+        .args(["show", &id, "--start-commit"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.stdout, format!("{}\n", f.base).as_bytes());
 }

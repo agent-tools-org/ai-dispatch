@@ -59,7 +59,7 @@ pub(crate) fn maybe_run_post_done_audit(
                 "No audit verdict for code: {} (report: {report})", result.verdict,
             );
             aid_warn!("[aid] Warning: {warning}");
-            store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Error, warning))?;
+            store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Milestone, warning))?;
         }
     }
     Ok(())

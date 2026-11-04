@@ -238,6 +238,9 @@ fn summary_header(task: &Task) -> String {
         if let Some(report_path) = task.audit_report_path.as_deref() {
             out.push_str(&format!(" (report: {report_path})"));
         }
+        if matches!(verdict, "inconclusive" | "error") {
+            out.push_str("; code received no audit verdict");
+        }
         out.push('\n');
     }
 

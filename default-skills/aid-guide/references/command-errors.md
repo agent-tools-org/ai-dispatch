@@ -77,8 +77,9 @@ non-critical tasks record a skipped audit. Messages include the status and fix.
 Audit exit codes record `pass` (0), `fail` (1), `advisory` (2), `inconclusive` (3),
 and `error` (every other code or execution failure). For `--rigor critical`, only
 `fail` fails the completed task through the verification gate; its Error event names
-the verdict and report. `inconclusive` and `error` keep DONE but warn and record an
-Error event stating that the code received no audit verdict. `pass` and `advisory`
+the verdict and report. `inconclusive` and `error` keep DONE but warn and record a
+Milestone event stating that the code received no audit verdict. The `Audit:` line
+also states this for either stored verdict, regardless of rigor. `pass` and `advisory`
 leave status unchanged. Non-critical verdicts leave status unchanged; `skipped`
 records an unavailable non-critical audit.
 `--rigor critical` requires enabled verification and
@@ -147,7 +148,9 @@ secret-like values before sending it. Its answer is a hint and changes nothing;
 it does not install rules or update holds or markers. Inspect the records and the
 hint before deciding whether a classification rule should be added.
 
-`aid show <task-id> --start-commit` refuses missing ancestor rows, a first attempt
-with no recorded `start_sha`, an unresolvable first start, and retry cycles. It never
+`aid show <task-id> --start-commit` follows every `parent_task_id` link to the root,
+including non-retry tasks dispatched with `--parent`; there is no retry marker.
+It refuses missing ancestor rows, a root with no recorded `start_sha`, a root start
+this repository cannot resolve, and parent-chain cycles. It never
 falls back to a later attempt, the patch base, or HEAD. The task checkout and Git
 repository must still exist. It conflicts with `--patch` and all of that mode's conflicts.

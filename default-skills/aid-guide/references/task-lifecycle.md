@@ -166,8 +166,10 @@ patch means no change.
 checkout, repository or base, or a Git failure, produces a non-zero exit; no changes
 produces empty stdout and exit 0. Use this mode to supply task delivery to aic.
 
-`aid show <task-id> --start-commit` walks to the first attempt in the retry chain
-and prints its recorded `start_sha` as one full commit id followed by one newline.
+`aid show <task-id> --start-commit` follows every `parent_task_id` link to the root
+of the chain and prints the root's recorded `start_sha` as one full commit id and
+newline. There is no retry marker, so a non-retry task dispatched with `--parent`
+also reads the root's start and refuses if this repository cannot resolve it.
 It resolves `rev-parse --verify <sha>^{commit}` in the task's repository, without
 merge-base calculations or consulting HEAD. Resets by any attempt cannot move this
 recorded start. Use this commit to read audit configuration from before the first
@@ -177,9 +179,10 @@ It conflicts with `--patch` and the same modes and modifiers.
 
 Critical audits require aic 0.3.2 or newer. An audit `fail` fails the completed task
 through the verification gate and records an Error event with the verdict and report.
-An `inconclusive` or `error` result leaves DONE, warns, and records that the code
-received no audit verdict. `pass`, `advisory`, and non-critical verdict status behavior
-are unchanged. An unavailable aic still fails critical tasks.
+An `inconclusive` or `error` result leaves DONE, warns, and records a Milestone event
+stating that the code received no audit verdict. The `Audit:` line includes this
+notice for either stored verdict, regardless of rigor. `pass`, `advisory`, and
+non-critical verdict status behavior are unchanged. An unavailable aic still fails critical tasks.
 
 ## Accept
 

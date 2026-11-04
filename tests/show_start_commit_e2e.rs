@@ -119,3 +119,41 @@ fn retry_cycle_refuses() {
     f.task("t-last", &f.repo, false, Some("t-first"), Some(&f.base));
     assert_refused(&f, "t-last", "Cycle in task retry chain");
 }
+
+#[test]
+fn non_retry_parent_child_reads_root_start_commit() {
+    let f = Fixture::new();
+    f.task("t-root", &f.repo, false, None, Some(&f.base));
+    fs::write(f.repo.join("later.txt"), "later work\n").unwrap();
+    commit(&f.repo, "later work");
+    let output = common::aid_cmd_in(f.home.path())
+        .args([
+            "run",
+            "codex",
+            "Inspect the code",
+            "--parent",
+            "t-root",
+            "--id",
+            "t-child",
+            "--dry-run",
+            "--no-hint",
+            "--dir",
+        ])
+        .arg(&f.repo)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let parent: String =
+        f.db.query_row(
+            "SELECT parent_task_id FROM tasks WHERE id = 't-child'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(parent, "t-root");
+    assert_start(&f, "t-child", &f.base);
+}

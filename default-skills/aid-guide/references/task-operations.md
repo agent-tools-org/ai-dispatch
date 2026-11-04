@@ -17,10 +17,12 @@ aid show <task-id> --output --full
 aid tree <task-id>
 ```
 
-`--start-commit` walks the retry chain to its first attempt and prints that attempt's
-recorded `start_sha` as exactly one full commit id and newline, resolved in the task's
-repository. Missing ancestor rows, a missing first start, or an unresolvable first
-start are errors. It never substitutes a later start, HEAD, or the patch base.
+`--start-commit` follows every `parent_task_id` link to the root of the chain and
+prints the root's recorded `start_sha` as exactly one full commit id and newline,
+resolved in this task's repository. There is no retry marker: a non-retry child
+dispatched with `--parent` also reads the root's start. Missing ancestor rows, a
+missing root start, or a root start this repository cannot resolve are errors.
+It never substitutes a later start, HEAD, or the patch base.
 It shares `--patch` conflicts and also conflicts with `--patch`. Read audit
 configuration from this commit, which was recorded before the first agent ran.
 

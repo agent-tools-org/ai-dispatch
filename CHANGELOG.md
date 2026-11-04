@@ -1,3 +1,10 @@
+## v11.12.0 (2026-11-04)
+- `aid show <task-id> --patch` prints the raw patch of everything a task delivered: all retry attempts, the whole repository, and committed, staged, unstaged and untracked changes. It fails rather than guessing when no recorded start exists or a path cannot be represented.
+- The audit verdict now records aic's real result: `pass`, `fail`, `advisory`, `inconclusive` or `error`, instead of `fail` for every non-zero exit.
+- `--audit` and `--rigor critical` identify aic by its help text and require version 0.3.1 or newer, so the unrelated crates.io package named `aic`, an older aic, or a hanging program is refused with a fix hint.
+- The README and guide describe the default aic install and how to opt out.
+
+
 ## v11.11.0 (2026-11-03)
 - `--audit` and `--rigor critical` are refused at dispatch when the `aic` binary is missing, instead of finishing with the audit silently skipped; an audit enabled only by the project default warns, and a critical task whose audit cannot run at settlement fails.
 - Score evidence reports `harness: measured` only when the selected score is the Terminal-Bench one.

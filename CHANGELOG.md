@@ -1,3 +1,9 @@
+## v11.13.0 (2026-11-04)
+- `--rigor critical` now fails a task when the audit verdict is `fail`. `inconclusive` and `error` keep the task DONE, and `aid show` states that the code received no audit verdict.
+- `aid show <task-id> --start-commit` prints the commit recorded before the first attempt started, following `parent_task_id` to the root and refusing when it cannot resolve it.
+- `--audit` and `--rigor critical` require aic 0.3.2 or newer, which reads its configuration from that commit, so a task's edits to repository content cannot change its own audit.
+
+
 ## v11.12.0 (2026-11-04)
 - `aid show <task-id> --patch` prints the raw patch of everything a task delivered: all retry attempts, the whole repository, and committed, staged, unstaged and untracked changes. It fails rather than guessing when no recorded start exists or a path cannot be represented.
 - The audit verdict now records aic's real result: `pass`, `fail`, `advisory`, `inconclusive` or `error`, instead of `fail` for every non-zero exit.

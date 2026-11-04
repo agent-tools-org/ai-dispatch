@@ -23,6 +23,8 @@ impl ProcessGuard {
             cmd.process_group(0);
         }
         let child = cmd.spawn().context("failed to spawn subprocess")?;
+        #[cfg(all(test, target_os = "linux"))]
+        crate::support::test_subprocess::wait_for_exec(child.id());
         Ok(Self {
             child,
             killed: false,

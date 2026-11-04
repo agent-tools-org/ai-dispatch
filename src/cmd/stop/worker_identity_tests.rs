@@ -83,7 +83,9 @@ fn stop_and_force_signal_matching_worker() {
 #[test]
 fn stop_rechecks_worker_identity_before_sigkill_escalation() {
     with_task(|store, id| {
-        let mut child = worker(id, "exec sleep 60");
+        // stop signals both the group and the pid. A pending or later SIGTERM would kill a
+        // replacement that keeps the default disposition, and an ignored one survives exec.
+        let mut child = worker(id, "trap '' TERM; exec sleep 60");
         save_worker(id, child.id());
         stop(store, id).expect("stop");
         assert!(

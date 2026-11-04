@@ -45,7 +45,6 @@ const UNDOCUMENTED_FLAGS: &[&str] = &[
     "--no-link-deps",
     "--note",
     "--package",
-    "--parent",
     "--project",
     "--prompt-file",
     "--reset",

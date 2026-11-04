@@ -13,7 +13,7 @@ fn setup(code: i32) -> (Fixture, std::ffi::OsString) {
     let f = Fixture::new();
     let bin = f.home.path().join("bin");
     common::write_executable(
-        &bin.join("agent"),
+        &bin.join("audited-agent"),
         "#!/bin/sh\nprintf '%s\n' '{\"type\":\"completion\",\"finalText\":\"done\"}'\n",
     );
     common::write_executable(
@@ -26,7 +26,7 @@ fn setup(code: i32) -> (Fixture, std::ffi::OsString) {
         format!(
             "[agent]\nid = 'audited'\ndisplay_name = 'audited'\ncommand = '{}'\n\
          trust_tier = 'local'\nstreaming = true\noutput_format = 'jsonl'\n",
-            bin.join("agent").display(),
+            bin.join("audited-agent").display(),
         ),
     )
     .unwrap();

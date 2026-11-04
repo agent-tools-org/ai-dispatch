@@ -43,10 +43,10 @@ pub(crate) async fn dispatch(
         Commands::Clean(project_args::CleanArgs { older_than, worktrees, dry_run, vacuum }) =>
             display::clean(store, older_than, worktrees, dry_run, vacuum),
         Commands::Show(inspect_args::ShowArgs {
-            task_id, events, context, diff, patch, patch_base, summary, file, branch, output, result,
+            task_id, events, context, diff, patch, start_commit, summary, file, branch, output, result,
             transcript, full, brief, explain, log, json, agent, model,
         }) => display::show(
-            store, task_id, events, context, diff, patch, patch_base, summary, file, branch, output, result,
+            store, task_id, events, context, diff, patch, start_commit, summary, file, branch, output, result,
             transcript, full, brief, explain, log, json, agent, model,
         ).await,
         Commands::Export(inspect_args::ExportArgs { task_id, format, sharegpt, output }) => {

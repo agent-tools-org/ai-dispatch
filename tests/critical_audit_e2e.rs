@@ -101,6 +101,17 @@ fn assert_event(f: &Fixture, verdict: &str, failed: bool) {
         .unwrap();
     assert!(shown.status.success());
     assert!(String::from_utf8_lossy(&shown.stdout).contains(expected));
+    if !failed {
+        let shown = common::aid_cmd_in(f.home.path())
+            .args(["show", "t-audited"])
+            .output()
+            .unwrap();
+        assert!(shown.status.success());
+        let text = String::from_utf8_lossy(&shown.stdout);
+        assert!(text.contains("DONE"), "{text}");
+        assert!(text.contains(&format!("Audit: {verdict}")), "{text}");
+        assert!(text.contains(&format!("No audit verdict for code: {verdict}")), "{text}");
+    }
 }
 
 #[test]

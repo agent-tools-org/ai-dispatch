@@ -166,9 +166,13 @@ patch means no change.
 checkout, repository or base, or a Git failure, produces a non-zero exit; no changes
 produces empty stdout and exit 0. Use this mode to supply task delivery to aic.
 
-`aid show <task-id> --patch-base` prints exactly the full commit id of that same
-base followed by one newline. It uses the same retry and worktree resolution and
-refuses the same missing-base cases, without reading working-tree audit configuration.
+`aid show <task-id> --start-commit` walks to the first attempt in the retry chain
+and prints its recorded `start_sha` as one full commit id followed by one newline.
+It resolves `rev-parse --verify <sha>^{commit}` in the task's repository, without
+merge-base calculations or consulting HEAD. Resets by any attempt cannot move this
+recorded start. Use this commit to read audit configuration from before the first
+agent ran. Missing ancestor rows, a missing first start, or an unresolvable first
+start are errors; no later attempt, HEAD, or patch base is substituted.
 It conflicts with `--patch` and the same modes and modifiers.
 
 Critical audits require aic 0.3.2 or newer. An audit `fail` fails the completed task

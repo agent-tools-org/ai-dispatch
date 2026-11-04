@@ -32,10 +32,10 @@ pub struct ShowArgs {
         conflicts_with_all = ["events", "context", "diff", "summary", "file", "branch",
             "output", "result", "transcript", "full", "brief", "explain", "log", "json", "agent", "model"])]
     pub patch: bool,
-    #[arg(long, help = "Print the full commit id used as the task patch base",
+    #[arg(long, help = "Print the first attempt's recorded start commit id",
         conflicts_with_all = ["patch", "events", "context", "diff", "summary", "file", "branch",
             "output", "result", "transcript", "full", "brief", "explain", "log", "json", "agent", "model"])]
-    pub patch_base: bool,
+    pub start_commit: bool,
     #[arg(long)]
     pub summary: bool,
     #[arg(long, requires = "diff")]

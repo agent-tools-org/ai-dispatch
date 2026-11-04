@@ -26,11 +26,22 @@ pub(super) fn run(store: &Store, task_id: &str) -> Result<()> {
     std::io::stdout().lock().write_all(&patch).context("write task patch")
 }
 
-pub(super) fn run_base(store: &Store, task_id: &str) -> Result<()> {
+pub(super) fn run_start_commit(store: &Store, task_id: &str) -> Result<()> {
     let task = store.get_task(task_id)?.with_context(|| format!("Task not found: {task_id}"))?;
     let root = checkout_root(&task)?;
-    let base = patch_base(store, &task, &root)?;
-    println!("{base}");
+    let mut first = task;
+    let mut seen = HashSet::new();
+    loop {
+        if !seen.insert(first.id.to_string()) { bail!("Cycle in task retry chain"); }
+        let Some(parent_id) = first.parent_task_id.as_deref() else { break; };
+        first = store.get_task(parent_id)?
+            .with_context(|| format!("Cannot determine start commit: missing ancestor task {parent_id}"))?;
+    }
+    let start = first.start_sha.as_deref()
+        .with_context(|| format!("First attempt {} has no recorded start_sha", first.id))?;
+    let commit = git_text(&root, &["rev-parse", "--verify", &format!("{start}^{{commit}}")])
+        .with_context(|| format!("Cannot resolve first attempt {} start commit {start}", first.id))?;
+    println!("{commit}");
     Ok(())
 }
 

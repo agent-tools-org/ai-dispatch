@@ -43,18 +43,18 @@ fn show_patch_parses_and_conflicts_with_other_modes() {
 }
 
 #[test]
-fn show_patch_base_has_patch_conflicts() {
-    let cli = Cli::try_parse_from(["aid", "show", "t-1234", "--patch-base"]).unwrap();
+fn show_start_commit_has_patch_conflicts() {
+    let cli = Cli::try_parse_from(["aid", "show", "t-1234", "--start-commit"]).unwrap();
     assert!(matches!(cli.command,
-        Some(Commands::Show(inspect_args::ShowArgs { patch_base: true, .. }))));
+        Some(Commands::Show(inspect_args::ShowArgs { start_commit: true, .. }))));
     for flag in ["--patch", "--events", "--context", "--diff", "--summary", "--branch",
         "--output", "--result", "--transcript", "--full", "--brief", "--explain", "--log", "--json"]
     {
-        let error = Cli::try_parse_from(["aid", "show", "t-1234", "--patch-base", flag])
-            .err().expect("patch base mode must conflict");
+        let error = Cli::try_parse_from(["aid", "show", "t-1234", "--start-commit", flag])
+            .err().expect("start commit mode must conflict");
         assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
     for flag in ["--file", "--agent", "--model"] {
-        assert!(Cli::try_parse_from(["aid", "show", "t-1234", "--patch-base", flag, "value"]).is_err());
+        assert!(Cli::try_parse_from(["aid", "show", "t-1234", "--start-commit", flag, "value"]).is_err());
     }
 }

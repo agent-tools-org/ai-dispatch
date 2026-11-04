@@ -11,16 +11,18 @@ aid watch --tui
 aid wait <task-id>
 aid show <task-id> --summary
 aid show <task-id> --patch
-aid show <task-id> --patch-base
+aid show <task-id> --start-commit
 aid show <task-id> --events
 aid show <task-id> --output --full
 aid tree <task-id>
 ```
 
-`--patch-base` prints exactly one full commit id and newline: the repository-resolved
-base used by `--patch`. It shares that mode's conflicts and also conflicts with
-`--patch`. Missing recorded starts or an unresolvable base are errors. To read audit
-configuration, read it from this commit rather than the task's working tree.
+`--start-commit` walks the retry chain to its first attempt and prints that attempt's
+recorded `start_sha` as exactly one full commit id and newline, resolved in the task's
+repository. Missing ancestor rows, a missing first start, or an unresolvable first
+start are errors. It never substitutes a later start, HEAD, or the patch base.
+It shares `--patch` conflicts and also conflicts with `--patch`. Read audit
+configuration from this commit, which was recorded before the first agent ran.
 
 `aid board` defaults to the **current project** (the stable identity of the
 enclosing git main working tree — `.aid/project.toml` `id` when present). Tasks

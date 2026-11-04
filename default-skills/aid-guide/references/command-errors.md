@@ -147,6 +147,7 @@ secret-like values before sending it. Its answer is a hint and changes nothing;
 it does not install rules or update holds or markers. Inspect the records and the
 hint before deciding whether a classification rule should be added.
 
-`aid show <task-id> --patch-base` fails when the shared patch-base resolution fails,
-including a retry chain with no recorded start. It does not infer a base from the
-working tree. It conflicts with `--patch` and all of that mode's conflicts.
+`aid show <task-id> --start-commit` refuses missing ancestor rows, a first attempt
+with no recorded `start_sha`, an unresolvable first start, and retry cycles. It never
+falls back to a later attempt, the patch base, or HEAD. The task checkout and Git
+repository must still exist. It conflicts with `--patch` and all of that mode's conflicts.

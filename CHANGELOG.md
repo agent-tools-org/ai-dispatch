@@ -1,3 +1,10 @@
+## v11.13.1 (2026-11-10)
+- Cursor's `on-demand` usage window is a spend budget, not quota capacity: a capped on-demand budget no longer shows the route as DEGRADED or blocks a dated snapshot from releasing a hold. Spend state still arrives through billing evidence.
+- Read-only dispatch treats Git's mount-boundary "not a git repository" message as a non-repository instead of failing the run.
+- Stopping a misbilled or over-ceiling API route reaps the child instead of blocking for a full 3 s grace, and the idle watchdog reads already-ready output before declaring a task hung after a host stall.
+- A background worker that is settling its own hang verdict is no longer reaped as wedged by a concurrent `aid wait`/`show`/`board`, so a HUNG → retry is no longer lost or orphaned; the exemption lasts 30 s after the verdict.
+
+
 ## v11.13.0 (2026-11-04)
 - `--rigor critical` now fails a task when the audit verdict is `fail`. `inconclusive` and `error` keep the task DONE, and `aid show` states that the code received no audit verdict.
 - `aid show <task-id> --start-commit` prints the commit recorded before the first attempt started, following `parent_task_id` to the root and refusing when it cannot resolve it.

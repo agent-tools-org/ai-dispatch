@@ -154,8 +154,7 @@ impl WatchRun<'_> {
                     current_cost, max_cost
                 ),
             ));
-            force_kill_process_group(self.child);
-            let _ = self.child.kill().await;
+            let _ = crate::runtime::process::group::terminate_child_group(self.child).await;
             self.info.status = TaskStatus::Failed;
             return Ok(ControlFlow::Break(()));
         }

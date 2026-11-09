@@ -40,6 +40,7 @@ async fn api_source_mismatch_kills_child_and_records_route_hold() {
             .all(|arg| !arg.to_string_lossy().contains('\0'))
     );
     let mut child = command.spawn().unwrap();
+    let started = std::time::Instant::now();
     let result = tokio::time::timeout(
         Duration::from_secs(5),
         watch_streaming(
@@ -57,6 +58,9 @@ async fn api_source_mismatch_kills_child_and_records_route_hold() {
     .unwrap()
     .unwrap();
     assert_eq!(result.status, TaskStatus::Failed);
+    // The leader dies on SIGTERM; a stop that waits out the 3 s kill grace
+    // never reaped it and mistook its zombie for a live group.
+    assert!(started.elapsed() < Duration::from_secs(3), "stop took {:?}", started.elapsed());
     assert!(!home.path().join("should-not-run").exists());
     let events = store.get_events(id.as_str()).unwrap();
     assert!(

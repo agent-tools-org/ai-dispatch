@@ -47,19 +47,27 @@ async fn stderr_drain_timeout_preserves_output_before_eof() {
     let task_id = TaskId("t-stderr-held-pipe".to_string());
     let mut child = tokio::process::Command::new("sh")
         .current_dir(temp.path())
-        .args(["-c", "printf 'No saved session found with ID abc' >&2; exec sleep 30"])
+        .args(["-c", "printf 'No saved session found with ID abc' >&2; exec sleep 600"])
         .stderr(Stdio::piped())
         .kill_on_drop(true)
         .spawn()
         .unwrap();
     let capture = spawn_stderr_capture(&mut child, &task_id, None, None).unwrap();
-    let drained = tokio::time::timeout(
-        std::time::Duration::from_secs(5), drain_stderr_capture(capture),
-    ).await;
+    let path = paths::stderr_path(task_id.as_str());
+    // Output written before the drain starts is the case under test, so wait for it rather
+    // than racing the 2 s drain deadline against the child's first write.
+    while std::fs::read(&path).map_or(true, |bytes| bytes.is_empty()) {
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    // The child holds the pipe open until it is killed: drain must return before EOF.
+    let drained = tokio::select! {
+        biased;
+        () = drain_stderr_capture(capture) => true,
+        _ = child.wait() => false,
+    };
     child.kill().await.unwrap();
-    assert!(drained.is_ok(), "stderr drain did not time out the retained pipe");
-    let stderr = std::fs::read_to_string(paths::stderr_path(task_id.as_str()));
-    assert_eq!(stderr.unwrap(), "No saved session found with ID abc");
+    assert!(drained, "stderr drain waited for the retained pipe to close");
+    assert_eq!(std::fs::read_to_string(path).unwrap(), "No saved session found with ID abc");
 }
 
 #[test]
@@ -111,8 +119,10 @@ async fn stderr_drain_times_out_continuously_ready_reader() {
         ReadyStderr, stderr_path.clone(), exited,
     ));
     let capture = super::StderrCapture { handle, child_exited };
+    // The reader never ends, so a starved deadline is a hang. Drain waits for every file write
+    // without a bound by design, so the guard bounds only the hang, not drain latency.
     let drained = tokio::time::timeout(
-        std::time::Duration::from_secs(5), drain_stderr_capture(capture),
+        std::time::Duration::from_secs(60), drain_stderr_capture(capture),
     ).await;
     assert!(drained.is_ok(), "ready stderr reads starved the drain deadline");
     assert!(std::fs::metadata(stderr_path).unwrap().len() > 0);

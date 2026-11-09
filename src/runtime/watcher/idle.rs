@@ -25,11 +25,12 @@ pub(super) async fn next_line<R: AsyncBufRead + Unpin>(
             );
         }
         let remaining = idle.saturating_sub(clock.last.elapsed());
-        if remaining.is_zero() {
-            return None;
-        }
-        if let Ok(result) = tokio::time::timeout(poll.min(remaining), lines.next_line()).await {
-            return Some(result);
+        // A closed window still polls the reader once: a process resumed after a stall can
+        // already hold the line or EOF that ends the wait, and must not be reported hung.
+        match tokio::time::timeout(poll.min(remaining), lines.next_line()).await {
+            Ok(result) => return Some(result),
+            Err(_) if remaining.is_zero() => return None,
+            Err(_) => {}
         }
     }
 }
@@ -63,6 +64,14 @@ impl IdleClock {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn closed_window_returns_output_that_is_already_ready() {
+        use tokio::io::AsyncBufReadExt;
+        let mut lines = tokio::io::BufReader::new(&b"done\n"[..]).lines();
+        let line = next_line(&mut lines, "t-ready", None, Duration::ZERO, false).await;
+        assert_eq!(line.expect("ready output").expect("read").as_deref(), Some("done"));
+    }
 
     #[test]
     fn slow_initial_probe_gets_a_full_idle_window_to_observe_growth() {

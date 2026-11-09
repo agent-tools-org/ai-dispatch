@@ -70,11 +70,13 @@ where
     agent.validate_cli(effective_model, run)
 }
 
+/// Test stand-in for every installed CLI's help: it must define each flag a `validate_cli`
+/// requires, because Codex validates whenever the host has a readable `codex --version`.
 #[cfg(test)]
 fn preflight_cli_command_runner(_program: &str, _args: &[&str]) -> Result<agent::CliCommandOutput> {
     Ok(agent::CliCommandOutput {
         success: true,
-        stdout: "--full-auto\n--approve-for-me\n".to_string(),
+        stdout: "--full-auto\n--approve-for-me\n--ignore-user-config\n".to_string(),
         stderr: String::new(),
     })
 }
@@ -153,5 +155,14 @@ pub(super) fn resolve_id_conflict(store: &Store, id: &str) -> Result<IdConflict>
             }
             anyhow::bail!("Too many tasks with ID prefix '{id}' (checked up to -99)");
         }
+    }
+}
+
+#[cfg(test)]
+mod runner_tests {
+    #[test]
+    fn test_cli_help_defines_flags_codex_requires() {
+        let help = super::preflight_cli_command_runner("codex", &["exec", "--help"]).unwrap();
+        assert!(crate::agent::env_identity::help_defines_flag(&help.stdout, "--ignore-user-config"));
     }
 }

@@ -20,13 +20,26 @@ pub(in crate::cmd::run) fn capture_baseline(store: &Store, task_id: &TaskId, dir
     Ok(Some(crate::workspace::worktree::capture_worktree_snapshot(Path::new(dir))?.read_only_state(Path::new(dir))?))
 }
 
+/// Only the "searched every parent and found none" forms; `fatal: not a git repository: <gitdir>`
+/// (a `.git` file naming a missing gitdir) is a broken checkout and must still fail.
+fn rev_parse_stderr_is_not_repository(stderr: &str) -> bool {
+    stderr.starts_with("fatal: not a git repository (or any ")
+}
+
+fn classify_rev_parse_stderr(stderr: &str) -> Result<bool> {
+    if rev_parse_stderr_is_not_repository(stderr) {
+        Ok(false)
+    } else {
+        anyhow::bail!("Git run directory resolution failed: {stderr}")
+    }
+}
+
 fn is_git_directory(dir: &str) -> Result<bool> {
     let output = std::process::Command::new("git").current_dir(dir).env("LC_ALL", "C")
         .args(["rev-parse", "--show-toplevel"]).output().context("Failed to resolve Git run directory")?;
     if output.status.success() { return Ok(true); }
     let reason = String::from_utf8_lossy(&output.stderr);
-    if reason.starts_with("fatal: not a git repository (or any of the parent directories)") { return Ok(false); }
-    anyhow::bail!("Git run directory resolution failed: {reason}")
+    classify_rev_parse_stderr(&reason)
 }
 
 pub(super) fn settle(
@@ -155,6 +168,10 @@ fn head_branches(baseline: &[String], current: &[String]) -> Result<BTreeSet<Str
     }
     Ok(branches)
 }
+
+#[cfg(test)]
+#[path = "read_only_git_directory_tests.rs"]
+mod git_directory_tests;
 
 #[cfg(test)]
 #[path = "read_only_ref_tests.rs"]

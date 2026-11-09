@@ -10,7 +10,7 @@ use super::spec::{load_spec_for_reaper, BackgroundRunSpec};
 use crate::config::idle_timeout::DEFAULT_IDLE_TIMEOUT_SECS;
 use crate::runtime::process::monitor;
 use crate::store::Store;
-use crate::types::{Task, TaskId, TaskStatus};
+use crate::types::{Task, TaskEvent, TaskId, TaskStatus};
 
 const LIVE_WORKER_IDLE_MARGIN: u64 = 2;
 
@@ -184,16 +184,36 @@ pub(super) fn cleanup_wedged_live_worker(
     if !is_stale(activity.timestamp, Local::now(), stale_after_secs) {
         return Ok(false);
     }
-    if monitor::hung_context(&store.get_events(task.id.as_str())?).is_some() {
-        // The monitor already ruled the agent hung, so it is not wedged: the worker is
-        // terminating the agent and settling, possibly dispatching a hang retry, with the
-        // row still running. A kill here loses that settlement and retry; the
-        // max-duration reap still bounds a worker that stalls after its verdict.
+    if is_settling_hang_verdict(&store.get_events(task.id.as_str())?, Local::now()) {
+        // The monitor just ruled the agent hung: the worker is terminating the agent and
+        // settling, possibly dispatching a hang retry, with the row still running. A kill
+        // here loses that settlement and retry. Past the grace the verdict is no longer
+        // evidence of settling (e.g. a Codex app-server verdict followed by exec fallback
+        // on the same row), so the normal wedge reap applies again.
         return Ok(false);
     }
     let detail = wedged_failure_detail(saw_progress, stale_after_secs, idle_secs);
     terminate_task_processes(Some(worker_pid), spec);
     record_hung_detected_failure(store, task.id.as_str(), stale_after_secs, &activity, &detail)
+}
+
+/// Settle window after a hung verdict: 6x the largest agent-kill grace
+/// (5s Codex interrupt; PTY and process-group kill grace is 3s).
+const HUNG_SETTLE_GRACE_SECS: i64 = 30;
+
+fn is_settling_hang_verdict(events: &[TaskEvent], now: DateTime<Local>) -> bool {
+    events
+        .iter()
+        .rev()
+        .find(|event| {
+            event
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("hung_recovery_eligible"))
+                .and_then(|value| value.as_bool())
+                .unwrap_or(false)
+        })
+        .is_some_and(|event| (now - event.timestamp).num_seconds() < HUNG_SETTLE_GRACE_SECS)
 }
 
 fn wedged_stale_after_secs(saw_progress: bool, idle_secs: u64, spec: &BackgroundRunSpec) -> u64 {

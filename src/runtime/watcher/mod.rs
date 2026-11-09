@@ -28,7 +28,6 @@ mod transcript_tests;
 
 use crate::agent::Agent;
 use crate::routing::rate_limit;
-use crate::runtime::process::group::force_kill_process_group;
 use crate::runtime::process::monitor;
 use crate::store::Store;
 use crate::task::delivery_guard::{DeliveryEvidence, DeliveryOutcome};

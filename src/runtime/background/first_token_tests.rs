@@ -166,3 +166,45 @@ fn keeps_silent_since_spawn_within_first_token_budget() {
         TaskStatus::Running
     );
 }
+
+/// A live worker whose own monitor recorded the hang verdict is settling, not wedged:
+/// it still owns the 3s agent-kill grace and any hang retry dispatch while the row
+/// is running. Reaping it there lost the retry (caller_owned_recovery hang control).
+#[test]
+fn keeps_live_worker_settling_its_own_hang_verdict() {
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
+    store
+        .insert_task(&make_task("t-verdict", TaskStatus::Running))
+        .unwrap();
+    save_spec(&BackgroundRunSpec {
+        worker_pid: Some(307),
+        idle_timeout_secs: Some(1),
+        ..make_spec("t-verdict")
+    })
+    .unwrap();
+    // The verdict counts as progress, so it is stale past 2× idle.
+    store
+        .insert_event(
+            &TaskEvent::at(
+                TaskId("t-verdict".to_string()),
+                EventKind::Milestone,
+                "hung_detected".to_string(),
+                Local::now() - Duration::seconds(3),
+            )
+            .with_metadata(Some(serde_json::json!({
+                "hung_recovery_eligible": true, "hung_duration_secs": 1, "event_count": 0,
+                "last_event_detail": null, "transient": true,
+            }))),
+        )
+        .unwrap();
+    kill::RECORDED_KILLS.with(|kills| kills.borrow_mut().clear());
+
+    let cleaned = check_zombie_tasks_with(&store, |pid| pid == 307).unwrap();
+
+    assert!(cleaned.is_empty(), "cleaned={cleaned:?}");
+    assert!(kill::RECORDED_KILLS.with(|kills| kills.borrow().is_empty()));
+    assert_eq!(
+        store.get_task("t-verdict").unwrap().unwrap().status,
+        TaskStatus::Running
+    );
+}

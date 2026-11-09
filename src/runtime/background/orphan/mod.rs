@@ -184,6 +184,13 @@ pub(super) fn cleanup_wedged_live_worker(
     if !is_stale(activity.timestamp, Local::now(), stale_after_secs) {
         return Ok(false);
     }
+    if monitor::hung_context(&store.get_events(task.id.as_str())?).is_some() {
+        // The monitor already ruled the agent hung, so it is not wedged: the worker is
+        // terminating the agent and settling, possibly dispatching a hang retry, with the
+        // row still running. A kill here loses that settlement and retry; the
+        // max-duration reap still bounds a worker that stalls after its verdict.
+        return Ok(false);
+    }
     let detail = wedged_failure_detail(saw_progress, stale_after_secs, idle_secs);
     terminate_task_processes(Some(worker_pid), spec);
     record_hung_detected_failure(store, task.id.as_str(), stale_after_secs, &activity, &detail)

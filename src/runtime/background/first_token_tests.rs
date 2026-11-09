@@ -166,3 +166,70 @@ fn keeps_silent_since_spawn_within_first_token_budget() {
         TaskStatus::Running
     );
 }
+
+/// A live worker whose own monitor recorded the hang verdict is settling, not wedged:
+/// it still owns the 3s agent-kill grace and any hang retry dispatch while the row
+/// is running. Reaping it there lost the retry (caller_owned_recovery hang control).
+#[test]
+fn keeps_live_worker_settling_its_own_hang_verdict() {
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
+    insert_running_with_verdict(&store, "t-verdict", 307, 3);
+
+    let cleaned = check_zombie_tasks_with(&store, |pid| pid == 307).unwrap();
+
+    assert!(cleaned.is_empty(), "cleaned={cleaned:?}");
+    assert!(kill::RECORDED_KILLS.with(|kills| kills.borrow().is_empty()));
+    assert_eq!(
+        store.get_task("t-verdict").unwrap().unwrap().status,
+        TaskStatus::Running
+    );
+}
+
+/// The settle exemption expires: a verdict older than the settle grace (e.g. a Codex
+/// app-server verdict followed by exec fallback on the same row) must not shield a
+/// wedged worker from the reap.
+#[test]
+fn reaps_live_worker_whose_hang_verdict_is_past_settle_grace() {
+    let (_temp, store) = crate::support::test_env::TestHome::with_dirs().store();
+    insert_running_with_verdict(&store, "t-oldverdict", 308, 60);
+
+    let cleaned = check_zombie_tasks_with(&store, |pid| pid == 308).unwrap();
+
+    assert_eq!(cleaned, vec!["t-oldverdict".to_string()]);
+    assert!(
+        kill::RECORDED_KILLS.with(|kills| kills.borrow().iter().any(|pids| pids.contains(&308)))
+    );
+    assert_eq!(
+        store.get_task("t-oldverdict").unwrap().unwrap().status,
+        TaskStatus::Failed
+    );
+}
+
+/// Running row, live worker with 1s idle, and a hung verdict `age_secs` old. The
+/// verdict counts as progress, so it is stale past 2× idle.
+fn insert_running_with_verdict(store: &Store, id: &str, worker_pid: u32, age_secs: i64) {
+    store
+        .insert_task(&make_task(id, TaskStatus::Running))
+        .unwrap();
+    save_spec(&BackgroundRunSpec {
+        worker_pid: Some(worker_pid),
+        idle_timeout_secs: Some(1),
+        ..make_spec(id)
+    })
+    .unwrap();
+    store
+        .insert_event(
+            &TaskEvent::at(
+                TaskId(id.to_string()),
+                EventKind::Milestone,
+                "hung_detected".to_string(),
+                Local::now() - Duration::seconds(age_secs),
+            )
+            .with_metadata(Some(serde_json::json!({
+                "hung_recovery_eligible": true, "hung_duration_secs": 1, "event_count": 0,
+                "last_event_detail": null, "transient": true,
+            }))),
+        )
+        .unwrap();
+    kill::RECORDED_KILLS.with(|kills| kills.borrow_mut().clear());
+}

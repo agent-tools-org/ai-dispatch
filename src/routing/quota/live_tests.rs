@@ -91,3 +91,48 @@ fn provider_mismatch_or_ok_false_is_not_a_snapshot() {
     let probe = probe_from_record(&record, "codex").expect("parsed");
     assert!(!probe.ok);
 }
+
+#[test]
+fn cursor_on_demand_spend_does_not_degrade_capacity_or_block_hold_release() {
+    use crate::routing::availability::{from_path, RouteStatus};
+
+    let temp = tempfile::tempdir().expect("temp directory");
+    let _cache = CacheDirGuard::set(temp.path());
+    let now = Utc::now();
+    let raw = serde_json::json!({"ok": true, "snapshot": {
+        "provider": "cursor", "plan": "pro", "fetched_at": now,
+        "windows": [
+            {"label": "Plan", "used_percent": 1.25, "group": "premium",
+             "resets_at": now + chrono::Duration::days(10)},
+            {"label": "On-demand", "used_percent": 100.0, "group": "on-demand",
+             "resets_at": now + chrono::Duration::days(10)}
+        ],
+        "billing": {"state": "overage", "credits": null}
+    }});
+    std::fs::write(temp.path().join("cursor.json"), raw.to_string()).expect("cache record");
+    let marker = temp.path().join("rate-limit-cursor");
+    let available = from_path(&AgentKind::Cursor, None, None, &marker);
+    assert_eq!(available.status, RouteStatus::Dispatchable);
+    let probe = available.probe.expect("probe");
+    assert_eq!(probe.windows.len(), 1);
+    assert_eq!(probe.windows[0].used_percent, 1.25);
+    assert_eq!(
+        billing(&AgentKind::Cursor).expect("billing").label(),
+        "overage"
+    );
+
+    std::fs::write(
+        &marker,
+        "recovery_at: \nhold: manual\nmessage: you're out of usage\n",
+    )
+    .expect("marker");
+    let file = std::fs::File::open(&marker).expect("marker file");
+    let before_snapshot = std::time::SystemTime::from(now) - Duration::from_secs(60);
+    file.set_times(std::fs::FileTimes::new().set_modified(before_snapshot))
+        .expect("marker time");
+    for group in [None, Some("premium")] {
+        let released = from_path(&AgentKind::Cursor, None, group, &marker);
+        assert_eq!(released.status, RouteStatus::Dispatchable);
+        assert!(released.why.contains("newer than marker"));
+    }
+}

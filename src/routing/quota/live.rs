@@ -84,6 +84,7 @@ fn probe_from_record(record: &CachedRecord, expected_provider: &str) -> Option<P
         windows: snap
             .windows
             .iter()
+            .filter(|window| window.group.as_deref() != Some("on-demand"))
             .map(|window| WindowView {
                 label: window.label.clone(),
                 used_percent: window.used_percent,

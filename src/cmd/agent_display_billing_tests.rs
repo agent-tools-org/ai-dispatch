@@ -27,3 +27,28 @@ fn billing_states_replace_ok_in_quota_rows() {
         }
     }
 }
+
+#[test]
+fn cursor_on_demand_spend_still_displays_overage_billing() {
+    let temp = crate::support::test_env::TestHome::new();
+    let _cache = CacheDirGuard::set(temp.path());
+    std::fs::write(
+        temp.path().join("cursor.json"),
+        serde_json::json!({"ok": true, "snapshot": {
+            "provider": "cursor", "fetched_at": "2099-01-01T00:00:00Z",
+            "windows": [
+                {"label": "Plan", "used_percent": 1.25, "group": "premium"},
+                {"label": "On-demand", "used_percent": 100.0, "group": "on-demand"}
+            ],
+            "billing": {"state": "overage", "credits": null}
+        }})
+        .to_string(),
+    )
+    .expect("cache");
+    assert_eq!(
+        quota_row(AgentKind::Cursor, None),
+        QuotaRow::Overage {
+            detail: "overage".to_string()
+        }
+    );
+}

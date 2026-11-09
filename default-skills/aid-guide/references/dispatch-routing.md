@@ -206,7 +206,9 @@ Balances retain provider credit units. Absent, stale, or failed billing evidence
 is unknown and preserves existing routing behavior. Malformed billing fields do
 not discard the quota snapshot or prevent a fresh probe from releasing a hold.
 Unknown billing adds no text or score term to candidate lines; JSON keeps its
-additive billing fields.
+additive billing fields. Windows in the `on-demand` group are spend budgets,
+not quota capacity: they do not degrade availability or prevent snapshot-based
+hold release. Their spend state is reported only through billing evidence.
 
 Overage routes are excluded from automatic selection for `free` and `cheap`
 budgets. A `standard` budget applies a separate −4.0 `billing` score term;

@@ -56,15 +56,25 @@ async fn stderr_drain_timeout_preserves_output_before_eof() {
     let path = paths::stderr_path(task_id.as_str());
     // Output written before the drain starts is the case under test, so wait for it rather
     // than racing the 2 s drain deadline against the child's first write.
-    while std::fs::read(&path).map_or(true, |bytes| bytes.is_empty()) {
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-    }
+    // Hang guards only: a stalled host cannot trip 60 s, a regression cannot hang the suite.
+    let hang_guard = std::time::Duration::from_secs(60);
+    tokio::time::timeout(hang_guard, async {
+        while std::fs::read(&path).map_or(true, |bytes| bytes.is_empty()) {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("stderr capture never wrote the child's output");
     // The child holds the pipe open until it is killed: drain must return before EOF.
-    let drained = tokio::select! {
-        biased;
-        () = drain_stderr_capture(capture) => true,
-        _ = child.wait() => false,
-    };
+    let drained = tokio::time::timeout(hang_guard, async {
+        tokio::select! {
+            biased;
+            () = drain_stderr_capture(capture) => true,
+            _ = child.wait() => false,
+        }
+    })
+    .await
+    .unwrap_or(false);
     child.kill().await.unwrap();
     assert!(drained, "stderr drain waited for the retained pipe to close");
     assert_eq!(std::fs::read_to_string(path).unwrap(), "No saved session found with ID abc");

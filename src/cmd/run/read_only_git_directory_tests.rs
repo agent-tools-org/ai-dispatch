@@ -25,3 +25,10 @@ fn read_only_git_other_rev_parse_errors_are_not_missing_repository() {
     assert!(!rev_parse_stderr_is_not_repository(stderr));
     assert!(classify_rev_parse_stderr(stderr).is_err());
 }
+
+#[test]
+fn read_only_git_missing_gitdir_is_a_broken_checkout() {
+    let stderr = "fatal: not a git repository: /repo/.git/worktrees/gone\n";
+    assert!(!rev_parse_stderr_is_not_repository(stderr));
+    assert!(classify_rev_parse_stderr(stderr).is_err());
+}

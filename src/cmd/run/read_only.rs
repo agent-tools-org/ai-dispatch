@@ -20,8 +20,10 @@ pub(in crate::cmd::run) fn capture_baseline(store: &Store, task_id: &TaskId, dir
     Ok(Some(crate::workspace::worktree::capture_worktree_snapshot(Path::new(dir))?.read_only_state(Path::new(dir))?))
 }
 
+/// Only the "searched every parent and found none" forms; `fatal: not a git repository: <gitdir>`
+/// (a `.git` file naming a missing gitdir) is a broken checkout and must still fail.
 fn rev_parse_stderr_is_not_repository(stderr: &str) -> bool {
-    stderr.contains("not a git repository")
+    stderr.starts_with("fatal: not a git repository (or any ")
 }
 
 fn classify_rev_parse_stderr(stderr: &str) -> Result<bool> {

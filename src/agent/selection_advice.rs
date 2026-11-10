@@ -33,13 +33,13 @@ mod gate;
 mod recommend;
 #[path = "selection_advice_profile.rs"]
 mod profile;
+#[path = "selection_advice_family.rs"]
+mod family;
 use profile::inferred_advice;
 pub(crate) use gate::{CallerAdvice, caller_advice};
 use gate::{Exclusions, PoolVerdict};
-
 pub(super) const ELIGIBILITY_PENALTY: f64 = 3.0;
 pub(super) const NOT_INSTALLED_PENALTY: f64 = 1_000.0;
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct AdviceReport {
     pub declared: DeclaredTaskProfile,
@@ -153,6 +153,7 @@ pub(crate) fn advise(
     };
     let selection = crate::config::load_config().map(|config| config.selection).unwrap_or_default();
     let mut ranked = builtin_candidates(&context, declared, &selection, caller.as_ref());
+    family::attribute_history(&mut ranked, store, inferred.kind, &avg_cost_map);
     ranked.extend(api::candidates(&context, declared, &selection, store));
     metering::apply(&mut ranked);
     ranked.sort_by(|left, right| {
@@ -218,9 +219,14 @@ fn builtin_candidates(
     let mut inventory = crate::agent::route_inventory();
     inventory.retain(|(kind, _)| !agent_config::is_agent_disabled(kind.as_str()));
     inventory.into_iter()
-        .map(|(kind, blocker)| {
-            let input = RunModelInput::declared(kind.as_str(), kind, None, declared, selection);
-            builtin_candidate(context, declared, caller, resolve_run_model(&input), (kind, blocker))
+        .flat_map(|(kind, blocker)| {
+            family::models(kind, context.profile.category).into_iter().map(move |model| {
+                let mut input = RunModelInput::declared(kind.as_str(), kind, None, declared, selection);
+                input.explicit_model = model.as_deref();
+                builtin_candidate(
+                    context, declared, caller, resolve_run_model(&input), (kind, blocker.clone()),
+                )
+            })
         })
         .collect()
 }
@@ -280,15 +286,15 @@ fn budget_allows(budget: TaskBudget, model: Option<&str>) -> bool {
         TaskBudget::Standard | TaskBudget::Premium => true,
     }
 }
-
 #[cfg(test)]
 #[path = "selection_advice_tests.rs"]
 mod tests;
-
 #[cfg(test)]
 #[path = "selection_advice_held_tests.rs"]
 mod held_tests;
-
 #[cfg(test)]
 #[path = "selection_advice_metering_tests.rs"]
 mod metering_tests;
+#[cfg(test)]
+#[path = "selection_advice_family_tests.rs"]
+mod family_tests;

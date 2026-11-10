@@ -150,7 +150,8 @@ row keeps `source: "served"`; `rated` reflects applicable leaderboard evidence, 
 displayed price (`input_per_m`/`output_per_m` in the JSON, `aid config pricing`,
 the `aid config agents` model lines) is the price cost estimation resolves below;
 with none known the JSON carries `null` and the text prints `unknown`. aid never
-invents ratings for models without leaderboard evidence, and routing never auto-selects one.
+invents ratings for models without leaderboard evidence. Per-model-family advice can pin an
+unrated served model using the family fallback preference; its capability remains unknown.
 Cost estimation prices a model only from an exact match, in this order: an
 explicit `pricing.json` override for the agent and model, subscription
 inclusion, its static catalog row, or an exact price-feed id or alias.

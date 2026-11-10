@@ -213,6 +213,7 @@ fn read_only_task_skips_configured_verify() {
     let task_id = TaskId("t-readonly-skip".to_string());
     let mut t = task(task_id.as_str(), TaskStatus::Done, Some(&dir_str), Some("false"));
     t.read_only = true;
+    t.verify_status = VerifyStatus::Pending;
     store.insert_task(&t).unwrap();
 
     maybe_verify(&store, &task_id, Some("false"), Some(&dir_str), None);

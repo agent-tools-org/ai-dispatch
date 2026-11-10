@@ -8,7 +8,7 @@ use tokio::time::{sleep, Duration};
 
 use crate::runtime::background;
 use crate::store::Store;
-use crate::types::{verify_required, EventKind, Task, TaskEvent, TaskId, TaskStatus, VerifyStatus};
+use crate::types::{EventKind, Task, TaskEvent, TaskId, TaskStatus};
 use crate::ui::format::format_duration_ms;
 
 #[cfg(unix)]
@@ -23,39 +23,33 @@ pub(super) async fn wait_for_task(
     let mut current_id = task_id.clone();
     let mut reported_status = None;
     let mut reported_events = 0;
-    let mut reported_terminal = false;
     let stdin_is_terminal = std::io::stdin().is_terminal();
     loop {
         let _ = background::check_zombie_tasks(store);
+        let settling = crate::cmd::wait::worker_is_settling(current_id.as_str())?;
         let task = store
             .get_task(current_id.as_str())?
             .ok_or_else(|| anyhow::anyhow!("Task '{}' disappeared while running", current_id))?;
         report_events(store, current_id.as_str(), &mut reported_events)?;
         report_progress(&task, &mut reported_status);
-        if task_is_complete(&task) {
-            if !reported_terminal {
-                if !caller_owned { print_completion(store, &task); }
-                reported_terminal = true;
-            }
+        if task_is_complete(&task) && !settling {
+            if !caller_owned { print_completion(store, &task); }
             if let Some(retry) = latest_retry(store, current_id.as_str())? {
                 current_id = retry.id;
                 reported_status = None;
                 reported_events = 0;
-                reported_terminal = false;
                 continue;
             }
-            if background::load_spec_if_exists(current_id.as_str())?.is_none() {
-                if matches!(task.status, TaskStatus::Done | TaskStatus::Failed) {
-                    if let Some(hint) = crate::cmd::run::foreground_status_hint(
-                        store.as_ref(),
-                        current_id.as_str(),
-                    )? {
-                        aid_hint!("{hint}");
-                    }
-                    aid_info!("[aid] View in TUI: aid board");
+            if matches!(task.status, TaskStatus::Done | TaskStatus::Failed) {
+                if let Some(hint) = crate::cmd::run::foreground_status_hint(
+                    store.as_ref(),
+                    current_id.as_str(),
+                )? {
+                    aid_hint!("{hint}");
                 }
-                return Ok(current_id);
+                aid_info!("[aid] View in TUI: aid board");
             }
+            return Ok(current_id);
         }
         tokio::select! {
             signal = signals.next() => handle_signal(store, &current_id, signal?, stdin_is_terminal),
@@ -92,11 +86,7 @@ fn report_progress(task: &Task, reported_status: &mut Option<TaskStatus>) {
 }
 
 fn task_is_complete(task: &Task) -> bool {
-    if !task.status.is_terminal() {
-        return false;
-    }
-    !(matches!(task.verify_status, VerifyStatus::Pending)
-        && verify_required(task.verify.as_deref()))
+    task.status.is_terminal()
 }
 
 fn latest_retry(store: &Store, parent_id: &str) -> Result<Option<Task>> {

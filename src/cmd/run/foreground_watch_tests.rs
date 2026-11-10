@@ -25,13 +25,13 @@ fn task(id: &str, status: TaskStatus, parent: Option<&str>) -> Task {
 }
 
 #[test]
-fn task_completion_requires_verification_to_settle() {
+fn task_completion_depends_on_terminal_status() {
     let mut entry = task("t-watch-verify", TaskStatus::Done, None);
     entry.verify = Some("aid build".to_string());
     entry.verify_status = VerifyStatus::Pending;
-    assert!(!task_is_complete(&entry));
-    entry.verify_status = VerifyStatus::Passed;
     assert!(task_is_complete(&entry));
+    entry.status = TaskStatus::Running;
+    assert!(!task_is_complete(&entry));
 }
 
 #[tokio::test]

@@ -48,7 +48,7 @@ async fn wait_for_task_ids_reports_failed_terminal_tasks() {
 }
 
 #[tokio::test]
-async fn wait_for_task_ids_times_out_when_pending_verification_never_answers() {
+async fn wait_for_task_ids_reports_settled_pending_verification_as_unverified() {
     let store = Arc::new(Store::open_memory().unwrap());
     let mut task = make_task("t-no-verify-result", TaskStatus::Done);
     task.verify = Some("cargo test".to_string());
@@ -67,17 +67,22 @@ async fn wait_for_task_ids_times_out_when_pending_verification_never_answers() {
 
     assert_eq!(
         outcome,
-        WaitOutcome::TimedOut(vec![String::from("t-no-verify-result")])
+        WaitOutcome::Failed(vec![String::from("t-no-verify-result")])
     );
 }
 
 #[tokio::test]
-async fn wait_for_task_ids_waits_for_done_task_verification_result() {
-    let store = Arc::new(Store::open_memory().unwrap());
+async fn wait_for_task_ids_waits_for_done_task_worker_settlement() {
+    let (_home, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
     let mut task = make_task("t-verifying", TaskStatus::Done);
     task.verify = Some("cargo test".to_string());
     task.verify_status = VerifyStatus::Pending;
     store.insert_task(&task).unwrap();
+    let spec = serde_json::from_value(serde_json::json!({
+        "task_id": "t-verifying", "worker_pid": std::process::id(),
+        "agent_name": "codex", "prompt": "verify", "retry": 0
+    })).expect("spec");
+    crate::runtime::background::save_spec(&spec).expect("save spec");
 
     let wait_store = store.clone();
     let handle = tokio::spawn(async move {
@@ -89,6 +94,8 @@ async fn wait_for_task_ids_waits_for_done_task_verification_result() {
     store
         .update_verify_status("t-verifying", VerifyStatus::Passed)
         .unwrap();
+    assert!(!handle.is_finished());
+    crate::runtime::background::clear_spec("t-verifying").expect("settle worker");
 
     let outcome = tokio::time::timeout(Duration::from_secs(3), handle)
         .await

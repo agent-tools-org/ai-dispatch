@@ -1,7 +1,7 @@
 // Worker specs act as a barrier between process completion and settled results.
 use super::*;
 
-pub(super) fn worker_is_settling(task_id: &str) -> Result<bool> {
+pub(in crate::cmd) fn worker_is_settling(task_id: &str) -> Result<bool> {
     let Some(spec) = crate::runtime::background::load_spec_if_exists(task_id)? else { return Ok(false); };
     if let Some(pid) = spec.worker_pid
         && !crate::runtime::background::is_process_running(pid)

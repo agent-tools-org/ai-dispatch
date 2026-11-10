@@ -36,6 +36,7 @@ pub(crate) fn maybe_verify(
     let worktree_branch = task.as_ref().and_then(|task| task.worktree_branch.clone());
     if let Some(reason) = outcome::nothing_to_verify_reason(task.as_ref()) {
         aid_info!("[aid] Verify skipped: {reason}");
+        record_verify_skipped(store, task_id, reason);
         return;
     }
     if !path.is_dir() {
@@ -57,6 +58,18 @@ pub(crate) fn maybe_verify(
             aid_error!("Verify error: {e}");
         }
     }
+}
+
+fn record_verify_skipped(store: &Store, task_id: &TaskId, reason: &str) {
+    crate::task::verify::record_verify_status(store, task_id, &crate::task::verify::VerifyResult {
+        success: true,
+        timed_out: false,
+        output: reason.to_string(),
+        command: "skip".to_string(),
+        infrastructure_failure: false,
+        rbox_result: None,
+        exit_code: None,
+    });
 }
 
 fn record_verify_infrastructure_failure(

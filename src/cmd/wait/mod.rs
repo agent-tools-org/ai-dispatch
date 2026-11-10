@@ -9,11 +9,10 @@ use tokio::time::{Duration, Instant, sleep};
 
 use crate::cost;
 use crate::store::Store;
-use crate::task::verify::VERIFY_TIMEOUT;
-use crate::types::{Task, TaskFilter, TaskOutcome, TaskStatus, VerifyStatus, verify_required};
+use crate::types::{Task, TaskFilter, TaskOutcome, TaskStatus};
 #[path = "../wait_settlement.rs"]
 mod settlement;
-use settlement::worker_is_settling;
+pub(super) use settlement::worker_is_settling;
 #[path = "../wait_json.rs"]
 mod json;
 pub(crate) use json::run_json;
@@ -92,7 +91,6 @@ async fn wait_for_task_ids_inner(
 ) -> Result<WaitOutcome> {
     let mut task_ids = task_ids.to_vec();
     let mut last_status: HashMap<String, String> = HashMap::new();
-    let mut pending_since: HashMap<String, Instant> = HashMap::new();
     let mut completed = 0usize;
 
     loop {
@@ -104,7 +102,6 @@ async fn wait_for_task_ids_inner(
             &task_ids,
             exit_on_await,
             &mut last_status,
-            &mut pending_since,
             &mut completed,
         )?;
         if awaiting {
@@ -158,10 +155,6 @@ fn still_running_task_ids(
             continue;
         }
         if let Some(task) = store.get_task(&task_id)? {
-            if verification_is_in_flight(&task) {
-                running.push(task_id);
-                continue;
-            }
             let outcome = task.outcome();
             if matches!(outcome, TaskOutcome::InProgress) {
                 running.push(task_id);
@@ -170,12 +163,6 @@ fn still_running_task_ids(
     }
     Ok(running)
 }
-fn verification_is_in_flight(task: &Task) -> bool {
-    matches!(task.status, TaskStatus::Done | TaskStatus::Merged)
-        && task.verify_status == VerifyStatus::Pending
-        && verify_required(task.verify.as_deref())
-}
-
 #[cfg(test)]
 #[path = "../wait_tests.rs"]
 mod tests;
@@ -215,7 +202,6 @@ fn poll_wait_tasks(
     task_ids: &[String],
     exit_on_await: bool,
     last_status: &mut HashMap<String, String>,
-    pending_since: &mut HashMap<String, Instant>,
     completed: &mut usize,
 ) -> Result<(usize, Vec<String>, bool)> {
     let mut remaining = 0usize;
@@ -248,7 +234,7 @@ fn poll_wait_tasks(
             return Ok((remaining, failed, true));
         }
 
-        if task_remains_pending(&task, task_id, pending_since, &mut failed) {
+        if task_remains_pending(&task, task_id, &mut failed) {
             remaining += 1;
         }
     }
@@ -259,27 +245,13 @@ fn poll_wait_tasks(
 fn task_remains_pending(
     task: &Task,
     task_id: &str,
-    pending_since: &mut HashMap<String, Instant>,
     failed: &mut Vec<String>,
 ) -> bool {
     let outcome = task.outcome();
-    if verification_is_in_flight(task) {
-        let started_at = pending_since
-            .entry(task_id.to_string())
-            .or_insert_with(Instant::now);
-        if started_at.elapsed() < VERIFY_TIMEOUT {
-            return true;
-        } else {
-            failed.push(task_id.to_string());
-        }
-    } else if matches!(outcome, TaskOutcome::InProgress) {
-        pending_since.remove(task_id);
+    if matches!(outcome, TaskOutcome::InProgress) {
         return true;
     } else if !outcome.is_success() {
-        pending_since.remove(task_id);
         failed.push(task_id.to_string());
-    } else {
-        pending_since.remove(task_id);
     }
     false
 }

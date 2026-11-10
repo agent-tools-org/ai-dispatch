@@ -1,6 +1,7 @@
 // Deterministic coverage of Done -> delivery failure during worker settlement.
 use super::*;
 use super::tests::make_task;
+use crate::types::VerifyStatus;
 use crate::{runtime::background, support::paths};
 
 fn pending_worker(id: &str, pid: u32) {
@@ -102,8 +103,9 @@ async fn settled_read_only_pending_verify_wait_completes() {
     task.verify = Some("cargo check --all-targets".to_string());
     task.verify_status = VerifyStatus::Pending;
     store.insert_task(&task).expect("task");
-    tokio::time::timeout(
+    let outcome = tokio::time::timeout(
         Duration::from_millis(500),
-        run(&store, &[task.id.to_string()], None, false, None),
+        wait_for_task_ids(&store, &[task.id.to_string()], None, false, None),
     ).await.expect("settled aid wait must return promptly").expect("wait result");
+    assert_eq!(outcome, WaitOutcome::Failed(vec![task.id.to_string()]));
 }

@@ -8,7 +8,7 @@ pub(in crate::agent::selection) fn candidate_quota(
     model: Option<&str>,
 ) -> CandidateQuota {
     let mut avail = availability_for_model(&kind, custom_name, model);
-    if let Some(group) = super::super::model_group::model_group(kind, model)
+    if let Some(group) = crate::agent::model_group::model_group(kind, model)
         && let Some(probe) = avail.probe.as_mut()
     {
         probe.windows = relevant_windows(probe, &kind, Some(group));

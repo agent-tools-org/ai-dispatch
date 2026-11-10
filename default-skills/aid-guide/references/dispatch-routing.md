@@ -279,3 +279,13 @@ messages identifying a credit-balance or billing refusal hold only that route
 until midnight on the first day of the next UTC month. Result prose and tool
 inputs never establish a monthly credit hold. The adapter retains the validated
 route selected at launch; later config edits do not reclassify its stream.
+
+Prepaid preference: advice applies a fixed `breakdown.metering` penalty of −20
+on pay-per-use routes (`spend_budget` or `none`) when another installed,
+non-excluded subscription, account-pool, or per-model-family candidate (including
+agy’s Google One subscription pools) is usable. Native Claude
+with unknown quota also counts as prepaid. Degraded, limited, and held routes
+never trigger this term. With no usable prepaid candidate, the term is zero.
+`metering_reason` names the prepaid routes; text advice shows the term and reason.
+Explicit `aid run <metered-route>` remains allowed and prints one notice naming
+usable prepaid routes with their used percentages (or `usage unknown`).

@@ -25,6 +25,8 @@ use crate::types::{AgentKind, DeclaredTaskProfile, TaskBudget, TaskUrgency};
 mod custom;
 #[path = "selection_advice_api.rs"]
 mod api;
+#[path = "selection_advice_metering.rs"]
+mod metering;
 #[path = "selection_advice_gate.rs"]
 mod gate;
 #[path = "selection_advice_recommend.rs"]
@@ -94,6 +96,8 @@ pub(crate) struct AdviceCandidate {
     pub quota: CandidateQuota,
     pub billing: Option<crate::routing::quota::billing::Billing>,
     #[serde(default)]
+    pub metering_reason: Option<String>,
+    #[serde(default)]
     pub auth: AuthStatus,
     /// Served, unrated models newer than `model` in its family; never auto-selected.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -150,6 +154,7 @@ pub(crate) fn advise(
     let selection = crate::config::load_config().map(|config| config.selection).unwrap_or_default();
     let mut ranked = builtin_candidates(&context, declared, &selection, caller.as_ref());
     ranked.extend(api::candidates(&context, declared, &selection, store));
+    metering::apply(&mut ranked);
     ranked.sort_by(|left, right| {
         rank_tier(left).cmp(&rank_tier(right))
             .then_with(|| ranking_score(right).partial_cmp(&ranking_score(left))
@@ -263,7 +268,7 @@ fn builtin_candidate(
         quota,
         capability_evidence: crate::routing::scores::evidence(kind, model.as_deref(), context.profile.category),
         score: breakdown.total, model, pinned, source, breakdown, exclusion_reason, exclusion_codes,
-        demotion_reason, auth, billing,
+        demotion_reason, auth, billing, metering_reason: None,
         unrated_served_models,
     };
     RankedCandidate { report, order, pool_excluded: verdict == PoolVerdict::Weaker, capability_note }
@@ -283,3 +288,7 @@ mod tests;
 #[cfg(test)]
 #[path = "selection_advice_held_tests.rs"]
 mod held_tests;
+
+#[cfg(test)]
+#[path = "selection_advice_metering_tests.rs"]
+mod metering_tests;

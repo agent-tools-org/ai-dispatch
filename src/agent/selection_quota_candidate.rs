@@ -7,6 +7,11 @@ pub(in crate::agent::selection) fn candidate_quota(
     custom_name: Option<&str>,
     model: Option<&str>,
 ) -> CandidateQuota {
+    // A family-pinned model reads only its family marker; an agent-wide hold still covers it.
+    let agent_wide = crate::routing::availability::availability(&kind, custom_name);
+    if agent_wide.status == RouteStatus::Held {
+        return quota_from(&agent_wide);
+    }
     let mut avail = availability_for_model(&kind, custom_name, model);
     if let Some(group) = crate::agent::model_group::model_group(kind, model)
         && let Some(probe) = avail.probe.as_mut()

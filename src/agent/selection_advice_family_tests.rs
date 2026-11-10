@@ -143,7 +143,7 @@ fn agy_history_does_not_cross_families_or_use_unobserved_requests() {
     store
         .db()
         .execute(
-            "UPDATE tasks SET requested_model = observed_model,
+            "UPDATE tasks SET model = observed_model,
         observed_model = NULL",
             [],
         )

@@ -1,3 +1,10 @@
+## v11.14.0 (2026-11-10)
+- Foreground `aid run` and in-worker retries no longer wait forever on a settled task: a follower returns once no live worker holds the task's job spec, whatever its verify status, and a spec whose worker is dead ends the follower with an error. `aid run` and `aid wait` share this settlement check.
+- Read-only tasks record a skipped verify instead of leaving it pending, and derive `Delivered` rather than `Unverified` when a verify command is configured, so `aid wait` reports a successful read-only audit as success.
+- `aid advise` ranks metered API routes (spend budget or own key) below any usable prepaid route (subscription, account pool, per-model-family, or the native Claude CLI) with a fixed `metering` term. Models with a known zero price are exempt. Naming a metered route explicitly still dispatches and prints the usable prepaid routes.
+- `aid advise` lists one agy candidate per served model family, pinned to the family's strongest served model, with headroom from that family's own pool and history from its observed models; agy's catalog now carries current model ids.
+
+
 ## v11.13.1 (2026-11-10)
 - Cursor's `on-demand` usage window is a spend budget, not quota capacity: a capped on-demand budget no longer shows the route as DEGRADED or blocks a dated snapshot from releasing a hold. Spend state still arrives through billing evidence.
 - Read-only dispatch treats Git's mount-boundary "not a git repository" message as a non-repository instead of failing the run.

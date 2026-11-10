@@ -120,7 +120,7 @@ fn zero_figure_on_a_paid_tier_row_is_unknown_not_free() {
 fn free_tier_and_subscription_rows_stay_zero() {
     let _guard = isolated();
     for (model, agent) in [
-        ("gemini-3.1-pro-high", AgentKind::Antigravity),
+        ("gemini-4-argon-high", AgentKind::Antigravity),
         ("coder-model", AgentKind::Qwen),
         ("opencode/deepseek-v4-flash-free", AgentKind::OpenCode),
         ("kilo/kilo-auto/free", AgentKind::Kilo),

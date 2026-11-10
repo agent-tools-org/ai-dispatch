@@ -42,6 +42,9 @@ pub(super) fn print_candidates(report: &AdviceReport) {
         for line in leaderboard_lines(&candidate.capability_evidence) {
             println!("{line}");
         }
+        if let Some(reason) = &candidate.metering_reason {
+            println!("     {:+.1} metering: {reason}", candidate.breakdown.metering);
+        }
         if let Some(line) = unrated_served_line(candidate) {
             println!("{line}");
         }

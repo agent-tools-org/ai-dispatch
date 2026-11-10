@@ -68,7 +68,7 @@ guess, and it appears for every provider whose metering aid has not seen.
 ## Choose the entry point
 
 - Use `aid run` for one accountable task with a stored lifecycle.
-- Use `aid advise` to inspect routing without dispatching or changing the store.
+- Use `aid advise` to inspect routing without dispatching or changing the store; per-model-family agents rank one candidate per family ([routing](dispatch-routing.md#per-model-family-candidates)).
 - Use `aid batch` for multiple dependent or parallel tasks.
 - Use `aid ask` for quick research with file context.
 - Use `aid query` for a direct model query that does not need a task worktree.

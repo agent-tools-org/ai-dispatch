@@ -88,9 +88,9 @@ impl Default for CandidateQuota {
     }
 }
 
-pub(super) fn candidate_quota(kind: AgentKind, custom_name: Option<&str>, model: Option<&str>) -> CandidateQuota {
-    quota_from(&availability_for_model(&kind, custom_name, model))
-}
+#[path = "selection_quota_candidate.rs"]
+mod candidate;
+pub(super) use candidate::candidate_quota;
 
 pub(crate) fn quota_from(avail: &RouteAvailability) -> CandidateQuota {
     let tight = avail.probe.as_ref().and_then(|probe| tightest_window(&probe.windows));

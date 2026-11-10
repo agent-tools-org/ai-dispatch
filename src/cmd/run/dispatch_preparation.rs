@@ -41,6 +41,11 @@ pub(super) fn finish_claim(
             &setup.agent_display_name,
             priced_model.as_deref(),
         );
+        let advice = crate::cmd::run::advice_route::report(Some(store), args);
+        if let Some(notice) = advice.metered_notice(&setup.agent_display_name, priced_model.as_deref()) {
+            aid_warn!("[aid] {notice}");
+            let _ = store.insert_event(&TaskEvent::new(task_id.clone(), EventKind::Setup, notice));
+        }
         persist_declaration(store, task_id, args)?;
         Ok(())
     })();

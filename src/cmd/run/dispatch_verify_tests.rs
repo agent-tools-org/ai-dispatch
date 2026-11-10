@@ -3,7 +3,7 @@
 // Deps: dispatch preparation, Store, and task outcome derivation.
 
 use super::*;
-use crate::types::{verify_required, TaskOutcome};
+use crate::types::TaskOutcome;
 
 #[test]
 fn configured_verification_is_pending_when_dispatch_inserts_task() {
@@ -22,7 +22,7 @@ fn configured_verification_is_pending_when_dispatch_inserts_task() {
     assert_eq!(prepared.task.verify_status, VerifyStatus::Pending);
     assert_eq!(task.status, TaskStatus::Pending);
     assert_eq!(
-        TaskOutcome::derive(task.status, task.verify_status, verify_required(task.verify.as_deref())),
+        task.outcome(),
         TaskOutcome::InProgress
     );
 }
@@ -59,4 +59,20 @@ fn auto_verify_prefers_project_command_and_preserves_explicit_commands() {
     };
     super::super::run_dispatch_resolve::apply_project_defaults(&mut args, None);
     assert_eq!(args.verify.as_deref(), Some("auto"));
+}
+
+#[test]
+fn read_only_dispatch_skips_configured_verification() {
+    let (_temp, store) = crate::support::test_env::TestHome::new().shared_store();
+    let mut args = RunArgs {
+        agent_name: "codex".to_string(),
+        prompt: "Audit the implementation.".to_string(),
+        verify: Some("cargo test".to_string()),
+        read_only: true,
+        ..Default::default()
+    };
+    let prepared = prepare_dispatch_with(&store, &mut args, |_| true).expect("dispatch");
+    let task = store.get_task(prepared.task_id.as_str()).expect("load").expect("task");
+    assert_eq!(task.verify_status, VerifyStatus::Skipped);
+    assert_eq!(prepared.task.verify_status, VerifyStatus::Skipped);
 }

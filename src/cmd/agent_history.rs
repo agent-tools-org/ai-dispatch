@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::cmd::agent_json_types::{CategoryHistoryJson, HistoryJson};
 use crate::store::Store;
-use crate::types::{DeliveryAssessment, TaskOutcome, TaskStatus, VerifyStatus, verify_required};
+use crate::types::{DeliveryAssessment, TaskOutcome, TaskStatus, VerifyStatus, verify_required_for};
 
 pub(crate) fn get_agent_histories(
     store: &Store,
@@ -36,7 +36,7 @@ fn load_history_samples(
         let conn = store.db();
         let mut statement = conn.prepare(
             "SELECT agent, custom_agent_name, category, status, verify_status, verify,
-                    duration_ms, cost_usd, delivery_assessment
+                    duration_ms, cost_usd, delivery_assessment, read_only
              FROM tasks
              WHERE status IN ('done', 'merged', 'failed') AND created_at >= ?1",
         )?;
@@ -168,6 +168,33 @@ mod tests {
         assert!((history.success_rate - 0.8).abs() < f64::EPSILON);
         Ok(())
     }
+
+    #[test]
+    fn read_only_history_counts_skipped_and_legacy_pending_verification() -> Result<()> {
+        let store = Store::open_memory()?;
+        for index in 0..5 {
+            let mut task = crate::types::Task::test_fixture(
+                crate::types::TaskId(format!("t-read-only-history-{index}")), TaskStatus::Done,
+            );
+            task.read_only = true;
+            task.verify = Some("cargo test".into());
+            task.verify_status = if index % 2 == 0 { VerifyStatus::Skipped } else { VerifyStatus::Pending };
+            task.repo_path = Some("/repo/read-only".into());
+            task.category = Some("testing".into());
+            store.insert_task(&task)?;
+        }
+        let rates = store.project_agent_success_rates("/repo/read-only")?;
+        assert_eq!(rates, vec![("codex".into(), 1.0, 5)]);
+        assert_eq!(store.agent_success_rates()?, vec![(crate::types::AgentKind::Codex, 1.0, 5)]);
+        let category_rates = store.agent_success_rates_by_category("testing")?;
+        assert_eq!(category_rates, vec![(crate::types::AgentKind::Codex, 1.0, 5)]);
+        let history = get_agent_histories(&store, &["codex"])?
+            .remove("codex").flatten().ok_or_else(|| anyhow!("expected read-only history"))?;
+        assert_eq!(history.tasks, 5);
+        assert_eq!(history.success_rate, 1.0);
+        assert_eq!(history.by_category["testing"].tasks, 5);
+        Ok(())
+    }
 }
 
 type HistoryRow = (
@@ -180,6 +207,7 @@ type HistoryRow = (
     Option<i64>,
     Option<f64>,
     Option<String>,
+    bool,
 );
 
 fn read_history_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<HistoryRow> {
@@ -193,6 +221,7 @@ fn read_history_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<HistoryRow> {
         row.get::<_, Option<i64>>(6)?,
         row.get::<_, Option<f64>>(7)?,
         row.get::<_, Option<String>>(8)?,
+        row.get::<_, bool>(9)?,
     ))
 }
 
@@ -201,7 +230,8 @@ fn add_history_sample(
     requested: &HashSet<&str>,
     row: HistoryRow,
 ) -> Result<()> {
-    let (agent, custom_name, category, status, verify_status, verify, duration_ms, cost_usd, delivery) = row;
+    let (agent, custom_name, category, status, verify_status, verify, duration_ms, cost_usd, delivery,
+        read_only) = row;
     let name = if agent == "custom" {
         custom_name.unwrap_or_else(|| "custom".to_string())
     } else {
@@ -219,7 +249,7 @@ fn add_history_sample(
         category,
         duration_ms,
         cost_usd,
-        outcome: TaskOutcome::derive(status, verify_status, verify_required(verify.as_deref()))
+        outcome: TaskOutcome::derive(status, verify_status, verify_required_for(verify.as_deref(), read_only))
             .with_delivery_assessment(delivery),
     });
     Ok(())

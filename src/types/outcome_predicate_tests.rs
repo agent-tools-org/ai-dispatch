@@ -110,3 +110,25 @@ fn verify_required_reads_the_verify_column_contract() {
     assert!(verify_required(Some(" auto ")));
     assert!(verify_required(Some(" cargo test ")));
 }
+
+#[test]
+fn read_only_tasks_with_configured_verify_are_delivered_without_a_verify_result() {
+    use crate::types::{Task, TaskId, TaskStatus, VerifyStatus};
+    for status in [VerifyStatus::Skipped, VerifyStatus::Pending] {
+        let mut task = Task::test_fixture(TaskId("t-read-only-outcome".into()), TaskStatus::Done);
+        task.verify = Some("cargo check --all-targets".into());
+        task.verify_status = status;
+        task.read_only = true;
+        assert_eq!(task.outcome(), TaskOutcome::Delivered);
+        task.read_only = false;
+        assert_eq!(task.outcome(), TaskOutcome::Unverified(UnverifiedReason::NoResult));
+    }
+}
+
+#[test]
+fn verification_requirement_respects_read_only_and_command_contract() {
+    for verify in [None, Some(""), Some("skip"), Some("false"), Some("auto"), Some("cargo test")] {
+        assert!(!crate::types::verify_required_for(verify, true));
+        assert_eq!(crate::types::verify_required_for(verify, false), verify_required(verify));
+    }
+}

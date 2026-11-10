@@ -35,7 +35,7 @@ pub use self::route::Route;
 pub use self::delivery::DeliveryAssessment;
 pub use self::message::{MessageDirection, MessageSource, TaskMessage};
 pub use self::memory::{Memory, MemoryId, MemoryTier, MemoryType};
-pub use self::outcome::{verify_required, TaskOutcome};
+pub use self::outcome::{verify_required, verify_required_for, TaskOutcome};
 pub use self::status::{EventKind, PendingReason, TaskStatus};
 pub use self::verify_status::VerifyStatus;
 pub use self::status_sets::ACTIVE_TASK_STATUSES;

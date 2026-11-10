@@ -133,6 +133,10 @@ pub fn verify_required(verify: Option<&str>) -> bool {
     )
 }
 
+pub fn verify_required_for(verify: Option<&str>, read_only: bool) -> bool {
+    !read_only && verify_required(verify)
+}
+
 #[cfg(test)]
 #[path = "outcome_predicate_tests.rs"]
 mod predicate_tests;

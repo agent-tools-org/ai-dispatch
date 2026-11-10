@@ -268,7 +268,12 @@ fn pending_task(
         log_path: Some(log_path.to_string_lossy().to_string()), output_path: args.output.clone(),
         tokens: None, prompt_tokens: None, duration_ms: None, requested_model: agent_setup.effective_model.clone(), observed_model: None, attribution_source: None,
         cost_usd: None, exit_code: None, created_at: Local::now(), completed_at: None,
-        verify: args.verify.clone(), verify_status: if verify_required(args.verify.as_deref()) { VerifyStatus::Pending } else { VerifyStatus::Skipped },
+        verify: args.verify.clone(),
+        verify_status: if verify_required_for(args.verify.as_deref(), args.read_only) {
+            VerifyStatus::Pending
+        } else {
+            VerifyStatus::Skipped
+        },
         pending_reason: None,
         read_only: args.read_only, budget: args.budget, audit_verdict: None, audit_report_path: None,
         delivery_assessment: None,

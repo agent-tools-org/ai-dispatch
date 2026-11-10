@@ -8,7 +8,7 @@ use rusqlite::{params, OptionalExtension};
 use super::super::schema::row_to_task;
 use super::super::Store;
 use crate::types::{
-    verify_required, DeliveryAssessment, Task, TaskOutcome, TaskStatus, VerifyStatus,
+    verify_required_for, DeliveryAssessment, Task, TaskOutcome, TaskStatus, VerifyStatus,
 };
 
 impl Store {
@@ -37,7 +37,7 @@ impl Store {
     pub fn project_agent_success_rates(&self, repo_path: &str) -> Result<Vec<(String, f64, usize)>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
-            "SELECT agent, status, verify_status, verify, delivery_assessment
+            "SELECT agent, status, verify_status, verify, delivery_assessment, read_only
              FROM tasks
              WHERE repo_path = ?1 AND status IN ('done', 'merged', 'failed')",
         )?;
@@ -47,11 +47,12 @@ impl Store {
             let verify_status: String = row.get(2)?;
             let verify: Option<String> = row.get(3)?;
             let delivery: Option<String> = row.get(4)?;
-            Ok((agent, status, verify_status, verify, delivery))
+            let read_only: bool = row.get(5)?;
+            Ok((agent, status, verify_status, verify, delivery, read_only))
         })?;
         let mut totals = std::collections::HashMap::<String, (usize, usize)>::new();
         for row in rows {
-            let (agent, status, verify_status, verify, delivery) = row?;
+            let (agent, status, verify_status, verify, delivery, read_only) = row?;
             let status = TaskStatus::parse_str(&status)
                 .ok_or_else(|| anyhow!("unknown task status in project metrics: {status}"))?;
             let verify_status = VerifyStatus::parse_str(&verify_status)
@@ -62,7 +63,7 @@ impl Store {
             let outcome = TaskOutcome::derive(
                 status,
                 verify_status,
-                verify_required(verify.as_deref()),
+                verify_required_for(verify.as_deref(), read_only),
             )
             .with_delivery_assessment(delivery);
             if outcome.is_unverified() {

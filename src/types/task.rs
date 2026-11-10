@@ -79,7 +79,7 @@ impl Task {
         TaskOutcome::derive(
             self.status,
             self.verify_status,
-            super::verify_required(self.verify.as_deref()),
+            super::verify_required_for(self.verify.as_deref(), self.read_only),
         )
         .with_delivery_assessment(self.delivery_assessment)
     }

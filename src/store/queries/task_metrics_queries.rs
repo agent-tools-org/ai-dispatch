@@ -8,7 +8,7 @@ use rusqlite::params;
 
 use super::super::Store;
 use crate::types::{
-    verify_required, AgentKind, DeliveryAssessment, TaskOutcome, TaskStatus, VerifyStatus,
+    verify_required_for, AgentKind, DeliveryAssessment, TaskOutcome, TaskStatus, VerifyStatus,
 };
 
 pub(crate) const STATS_TASK_QUERY: &str = "SELECT id, created_at, completed_at, repo_path, project_id, tokens FROM tasks WHERE (?1 IS NULL OR created_at >= ?1) AND created_at < ?2 ORDER BY created_at";
@@ -147,7 +147,7 @@ impl Store {
     ) -> Result<Vec<(String, TaskOutcome)>> {
         let conn = self.db();
         let mut stmt = conn.prepare(
-            "SELECT agent, status, verify_status, verify, delivery_assessment
+            "SELECT agent, status, verify_status, verify, delivery_assessment, read_only
              FROM tasks
              WHERE status IN ('done', 'merged', 'failed')
                AND (?1 IS NULL OR category = ?1)",
@@ -158,10 +158,11 @@ impl Store {
             let verify_status: String = row.get(2)?;
             let verify: Option<String> = row.get(3)?;
             let delivery: Option<String> = row.get(4)?;
-            Ok((agent_str, status, verify_status, verify, delivery))
+            let read_only: bool = row.get(5)?;
+            Ok((agent_str, status, verify_status, verify, delivery, read_only))
         })?;
         rows.map(|row| {
-            let (agent, status, verify_status, verify, delivery) = row?;
+            let (agent, status, verify_status, verify, delivery, read_only) = row?;
             let status = TaskStatus::parse_str(&status)
                 .ok_or_else(|| anyhow!("unknown task status in metrics: {status}"))?;
             let verify_status = VerifyStatus::parse_str(&verify_status)
@@ -172,7 +173,7 @@ impl Store {
             let outcome = TaskOutcome::derive(
                 status,
                 verify_status,
-                verify_required(verify.as_deref()),
+                verify_required_for(verify.as_deref(), read_only),
             )
             .with_delivery_assessment(delivery);
             Ok((agent, outcome))

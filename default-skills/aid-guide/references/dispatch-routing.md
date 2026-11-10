@@ -292,3 +292,9 @@ metered, including own-key (`none`) routes.
 `metering_reason` names the prepaid routes; text advice shows the term and reason.
 Explicit `aid run <metered-route>` remains allowed and prints one notice naming
 usable prepaid routes with their used percentages (or `usage unknown`).
+
+## Per-model-family candidates
+
+A per-model-family agent (agy) yields one advise candidate per served quota family, pinned to its strongest
+model (preference order when unrated; served-model cache before catalog). Each uses its own pool's headroom
+and observed-model history, keeps the prepaid preference, and launches as `aid run agy "task" --model <pin>`.

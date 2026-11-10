@@ -93,3 +93,17 @@ async fn wait_accepts_full_old_format_job_only_after_worker_settles() {
     assert_eq!(outcome, WaitOutcome::Completed);
     run(&store, &ids, None, false, None).await.unwrap();
 }
+
+#[tokio::test]
+async fn settled_read_only_pending_verify_wait_completes() {
+    let (_home, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
+    let mut task = make_task("t-wait-settled-read-only", TaskStatus::Done);
+    task.read_only = true;
+    task.verify = Some("cargo check --all-targets".to_string());
+    task.verify_status = VerifyStatus::Pending;
+    store.insert_task(&task).expect("task");
+    tokio::time::timeout(
+        Duration::from_millis(500),
+        run(&store, &[task.id.to_string()], None, false, None),
+    ).await.expect("settled aid wait must return promptly").expect("wait result");
+}

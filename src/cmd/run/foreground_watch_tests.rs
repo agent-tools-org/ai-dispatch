@@ -147,3 +147,39 @@ fn read_only_repo() -> (tempfile::TempDir, Vec<String>) {
         .expect("snapshot").read_only_state(repo.path()).expect("baseline");
     (repo, baseline)
 }
+
+#[tokio::test]
+async fn settled_read_only_pending_verify_without_spec_returns() {
+    let (_home, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
+    let entry = settled_read_only_task("t-watch-settled");
+    store.insert_task(&entry).expect("task");
+    let result = tokio::time::timeout(
+        Duration::from_millis(500), wait_for_task(&store, &entry.id, false),
+    ).await.expect("settled foreground follower must return promptly");
+    assert_eq!(result.expect("watcher result"), entry.id);
+}
+
+#[tokio::test]
+async fn settled_read_only_pending_verify_dead_worker_reports_error() {
+    let (_home, store) = crate::support::test_env::TestHome::with_dirs().shared_store();
+    let entry = settled_read_only_task("t-watch-dead-worker");
+    store.insert_task(&entry).expect("task");
+    let spec = serde_json::from_value(serde_json::json!({
+        "task_id": entry.id.as_str(), "worker_pid": u32::MAX,
+        "agent_name": "codex", "prompt": "read-only task", "retry": 0
+    })).expect("spec");
+    background::save_spec(&spec).expect("save spec");
+    let result = tokio::time::timeout(
+        Duration::from_millis(500), wait_for_task(&store, &entry.id, false),
+    ).await.expect("dead worker must end foreground following promptly");
+    assert!(result.expect_err("dead worker must be reported").to_string()
+        .contains("worker exited before settlement completed"));
+}
+
+fn settled_read_only_task(id: &str) -> Task {
+    let mut entry = task(id, TaskStatus::Done, None);
+    entry.read_only = true;
+    entry.verify = Some("cargo check --all-targets".to_string());
+    entry.verify_status = VerifyStatus::Pending;
+    entry
+}

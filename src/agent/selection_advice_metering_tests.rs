@@ -90,9 +90,9 @@ fn explicit_metered_notice_names_prepaid_usage() {
         None,
     );
     report.candidates = ranked.into_iter().map(|c| c.report).collect();
-    let notice = report.metered_notice("opencode").expect("notice");
+    let notice = report.metered_notice("opencode", None).expect("notice");
     assert!(notice.contains("cursor (8.6% used)"));
-    assert!(report.metered_notice("cursor").is_none());
+    assert!(report.metered_notice("cursor", None).is_none());
 }
 
 #[test]
@@ -171,4 +171,64 @@ fn agy_subscription_family_pool_counts_as_prepaid() {
             .expect("reason")
             .contains("agy")
     );
+}
+
+#[test]
+fn known_free_metered_model_keeps_score_and_suppresses_notice() {
+    let (_temp, _home, _cache) = super::tests::isolated();
+    crate::cost::clear_feed_for_tests();
+    let mut ranked = candidates("dispatchable");
+    let model = crate::routing::model_catalog::budget_model(&AgentKind::OpenCode)
+        .expect("free budget model");
+    let price =
+        crate::cost::resolve_pricing(Some(model), AgentKind::OpenCode).expect("known price");
+    assert_eq!((price.input_per_m, price.output_per_m), (0.0, 0.0));
+    ranked[1].report.model = Some(model.into());
+    metering::apply(&mut ranked);
+    assert_eq!(ranked[1].report.breakdown.metering, 0.0);
+    assert_eq!(ranked[1].report.score, 9.0);
+    assert!(ranked[1].report.metering_reason.is_none());
+    let declared = super::tests::declared(crate::types::TaskDifficulty::Simple, TaskBudget::Free);
+    let mut report = advise("rename a field", declared, None, None, None, 0, None);
+    report.candidates = ranked.into_iter().map(|item| item.report).collect();
+    assert!(report.metered_notice("opencode", Some(model)).is_none());
+    assert!(
+        report
+            .metered_notice("opencode", Some("opencode/glm-5.2"))
+            .is_some()
+    );
+    assert!(
+        report
+            .metered_notice("opencode", Some("unknown-test-model"))
+            .is_some()
+    );
+    assert!(report.metered_notice("opencode", None).is_some());
+}
+
+#[test]
+fn paid_and_unknown_models_stay_metered_including_own_key_routes() {
+    let (_temp, _home, _cache) = super::tests::isolated();
+    crate::cost::clear_feed_for_tests();
+    let agents = crate::support::paths::aid_dir().join("agents");
+    std::fs::create_dir_all(&agents).expect("agents directory");
+    std::fs::write(
+        agents.join("own-key.toml"),
+        "[agent]\nid='own-key'\ndisplay_name='Own key'\ncommand='synthetic-cli'\nmetering='none'\n",
+    )
+    .expect("own-key config");
+    for (name, model) in [
+        ("opencode", Some("opencode/glm-5.2")),
+        ("opencode", Some("unknown-test-model")),
+        ("opencode", None),
+        ("own-key", Some("unknown-test-model")),
+    ] {
+        let mut ranked = candidates("dispatchable");
+        ranked[1].report.agent = name.into();
+        ranked[1].report.model = model.map(str::to_string);
+        metering::apply(&mut ranked);
+        assert_eq!(
+            ranked[1].report.breakdown.metering, -20.0,
+            "{name}/{model:?}"
+        );
+    }
 }

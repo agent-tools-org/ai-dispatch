@@ -28,11 +28,25 @@ fn shape(name: &str) -> MeteringShape {
         .unwrap_or(MeteringShape::Unknown)
 }
 
-fn metered(name: &str) -> bool {
-    matches!(
+fn metered(name: &str, model: Option<&str>) -> bool {
+    let pay_per_use = matches!(
         shape(name),
         MeteringShape::SpendBudget | MeteringShape::None
-    )
+    );
+    let kind = AgentKind::parse_str(name).unwrap_or_else(|| {
+        if crate::config::api_route::find(name)
+            .ok()
+            .flatten()
+            .is_some()
+        {
+            AgentKind::Claude
+        } else {
+            AgentKind::Custom
+        }
+    });
+    pay_per_use
+        && !crate::cost::resolve_pricing(model, kind)
+            .is_some_and(|price| price.input_per_m == 0.0 && price.output_per_m == 0.0)
 }
 
 fn prepaid(candidate: &super::AdviceCandidate) -> bool {
@@ -59,7 +73,10 @@ pub(super) fn apply(ranked: &mut [RankedCandidate]) {
     if names.is_empty() {
         return;
     }
-    for item in ranked.iter_mut().filter(|item| metered(&item.report.agent)) {
+    for item in ranked
+        .iter_mut()
+        .filter(|item| metered(&item.report.agent, item.report.model.as_deref()))
+    {
         item.report.breakdown.metering = METERED_PENALTY;
         item.report.breakdown.total += METERED_PENALTY;
         item.report.score += METERED_PENALTY;
@@ -75,8 +92,8 @@ pub(super) fn apply(ranked: &mut [RankedCandidate]) {
 }
 
 impl AdviceReport {
-    pub(crate) fn metered_notice(&self, name: &str) -> Option<String> {
-        if !metered(name) {
+    pub(crate) fn metered_notice(&self, name: &str, model: Option<&str>) -> Option<String> {
+        if !metered(name, model) {
             return None;
         }
         let names: Vec<_> = self

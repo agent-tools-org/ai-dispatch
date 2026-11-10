@@ -286,6 +286,9 @@ non-excluded subscription, account-pool, or per-model-family candidate (includin
 agy’s Google One subscription pools) is usable. Native Claude
 with unknown quota also counts as prepaid. Degraded, limited, and held routes
 never trigger this term. With no usable prepaid candidate, the term is zero.
+A resolved model with known zero input and output prices is exempt from both
+this penalty and the explicit-run notice. Nonzero and unknown prices remain
+metered, including own-key (`none`) routes.
 `metering_reason` names the prepaid routes; text advice shows the term and reason.
 Explicit `aid run <metered-route>` remains allowed and prints one notice naming
 usable prepaid routes with their used percentages (or `usage unknown`).

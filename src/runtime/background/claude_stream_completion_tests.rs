@@ -1,9 +1,9 @@
-// Piped completion must refresh project state and retain the PTY summary event.
+// Piped completion records the PTY summary event and writes no .aid/state.toml.
 // Runs the production fixture in a child test process to isolate its current directory.
 use super::*;
 
 #[tokio::test]
-async fn piped_completion_refreshes_project_state_and_records_summary() {
+async fn piped_completion_records_summary_without_project_state() {
     if launch_isolated_child() {
         return;
     }
@@ -30,14 +30,7 @@ async fn piped_completion_refreshes_project_state_and_records_summary() {
     .await
     .unwrap()
     .unwrap();
-    let state: crate::store::state::ProjectState =
-        toml::from_str(&std::fs::read_to_string(cwd.join(".aid/state.toml")).unwrap()).unwrap();
-    assert_eq!(state.health.total_tasks, 1);
-    assert_eq!(
-        state.context.last_task_id.as_deref(),
-        Some(spec.task_id.as_str())
-    );
-    assert_eq!(state.performance.avg_task_cost_usd, Some(0.25));
+    assert!(!cwd.join(".aid/state.toml").exists());
     assert_summary(&store, &spec.task_id);
 }
 
@@ -49,7 +42,7 @@ fn launch_isolated_child() -> bool {
     let cwd = tempfile::tempdir().unwrap();
     std::fs::create_dir(cwd.path().join(".aid")).unwrap();
     let name = format!(
-        "{}::piped_completion_refreshes_project_state_and_records_summary",
+        "{}::piped_completion_records_summary_without_project_state",
         module_path!()
     );
     let (_, test) = name.split_once("::").unwrap();

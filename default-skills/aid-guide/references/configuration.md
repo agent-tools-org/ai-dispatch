@@ -7,7 +7,6 @@ aid setup
 aid config agents
 aid project init
 aid project show
-aid project state
 ```
 
 `aid setup` creates user configuration and installs bundled resources when the
@@ -107,8 +106,8 @@ for budget, pace and hold behavior.
 ## Project configuration
 
 Store project defaults in `.aid/project.toml`. Prefer `aid project init` over
-writing it from memory. Inspect the effective result with `aid project show`
-and `aid project state`. Use `aid project sync` to synchronize supported
+writing it from memory. Inspect the effective result with `aid project show`.
+Use `aid project sync` to synchronize supported
 project instructions and budgets.
 
 Configuration discovery uses the checkout's own `.aid/project.toml` first; if absent in a linked worktree, it uses the main working tree's `.aid/project.toml`.

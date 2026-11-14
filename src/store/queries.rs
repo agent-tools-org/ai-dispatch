@@ -8,7 +8,6 @@ mod billing_queries;
 mod agent_queries;
 mod message_queries;
 mod memory_queries;
-mod state_queries;
 mod task_metrics_queries;
 mod task_queries;
 mod workgroup_queries;
@@ -23,7 +22,6 @@ pub use message_queries::*;
 #[allow(unused_imports)]
 pub use memory_queries::*;
 #[allow(unused_imports)]
-pub use state_queries::*;
 #[allow(unused_imports)]
 pub use task_metrics_queries::*;
 #[allow(unused_imports)]

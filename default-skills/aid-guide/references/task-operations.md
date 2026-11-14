@@ -340,8 +340,7 @@ from totals rather than recorded as `$0.00`.
 
 ## Machine-facing completion data
 
-PTY and piped runs record a completion summary with duration, tokens and cost when available,
-and refresh project state after recording completion.
+PTY and piped runs record a completion summary with duration, tokens and cost when available.
 
 MCP task views, task hook payloads, and task webhooks add `outcome` and
 `verify_status` fields. Existing `status` fields retain their lifecycle meaning;

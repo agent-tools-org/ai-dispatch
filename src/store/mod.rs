@@ -103,7 +103,4 @@ impl Store {
 
 }
 
-pub(crate) mod state;
-#[cfg(test)]
-mod state_tests;
 pub(crate) mod workgroups;

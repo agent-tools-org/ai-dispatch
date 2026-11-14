@@ -7,8 +7,7 @@ use clap::{Args, Subcommand};
 #[derive(Args)]
 #[command(after_help = r#"Examples:
   aid project init
-  aid project show
-  aid project state"#)]
+  aid project show"#)]
 pub struct ProjectArgs {
     #[command(subcommand)]
     pub action: ProjectAction,
@@ -20,8 +19,6 @@ pub enum ProjectAction {
     Init,
     /// Show the detected project configuration
     Show,
-    /// Show the current computed project state
-    State,
     /// Sync project config to CLAUDE.md and global budget
     Sync,
 }

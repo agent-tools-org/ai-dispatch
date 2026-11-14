@@ -184,7 +184,6 @@ fn complete_agent(
     }, &event)? {
         return Ok(());
     }
-    crate::store::state::refresh_project_state(store.as_ref(), task_id);
     if let Some(event) = cost_event {
         let _ = store.insert_event(&event);
     }

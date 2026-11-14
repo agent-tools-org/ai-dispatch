@@ -88,7 +88,6 @@ fn fail_task_on_spawn_error(
         },
         &event,
     );
-    crate::store::state::refresh_project_state(store.as_ref(), task_id);
 }
 
 fn spawn_reader_thread(mut reader: Box<dyn Read + Send>) -> mpsc::Receiver<Vec<u8>> {
@@ -153,7 +152,6 @@ fn record_completion(
     )? {
         return Ok(());
     }
-    crate::store::state::refresh_project_state(store.as_ref(), task_id);
     print_completion(agent, task_id, store, duration_ms, info, cost_usd);
     Ok(())
 }

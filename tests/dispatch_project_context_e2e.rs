@@ -66,16 +66,17 @@ fn write_project(repo: &Path, id: &str) {
 }
 
 fn assert_project(prompt: &str, expected: &str, excluded: &str) {
-    for suffix in ["rule-marker", "methodology-marker", "knowledge-marker", "architecture-marker", "state-marker", "memory-marker"] {
+    for suffix in ["rule-marker", "methodology-marker", "knowledge-marker", "architecture-marker", "memory-marker"] {
         assert!(prompt.contains(&format!("{expected}-{suffix}")), "missing {expected}-{suffix}: {prompt}");
         assert!(!prompt.contains(&format!("{excluded}-{suffix}")), "leaked {excluded}-{suffix}");
     }
-    assert!(prompt.contains(&format!("[Project State: {expected}]")));
-    assert!(!prompt.contains(&format!("[Project State: {excluded}]")));
+    // A leftover .aid/state.toml from older releases is never read into the prompt.
+    assert!(!prompt.contains("[Project State:"), "project state injected: {prompt}");
+    assert!(!prompt.contains("state-marker"), "project state injected: {prompt}");
 }
 
 #[test]
-fn explicit_dir_uses_target_rules_skills_state_and_knowledge() {
+fn explicit_dir_uses_target_rules_skills_and_knowledge() {
     let fixture = Fixture::new();
     assert_project(&fixture.dispatch(Some(&fixture.target), &[]), "target", "caller");
 }

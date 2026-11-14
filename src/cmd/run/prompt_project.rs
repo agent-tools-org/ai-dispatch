@@ -21,12 +21,6 @@ pub(super) fn inject_project_context(
             let rules_block = crate::task::workgroup::bound_auxiliary(&rules_block, "Project Rules", omissions);
             effective_prompt = format!("<aid-project-rules>\n{rules_block}\n</aid-project-rules>\n\n{effective_prompt}");
         }
-        if let Some(state_block) = project_root.and_then(|root| prompt_context::inject_project_state(pc, root)) {
-            let state_block = sanitize_injected_text(&state_block);
-            let state_block = crate::task::workgroup::bound_auxiliary(&state_block, "Project State", omissions);
-            effective_prompt = format!("{state_block}\n\n{effective_prompt}");
-            aid_info!("[aid] Injected project state");
-        }
         let knowledge_entries = project_root
             .map(project::read_project_knowledge)
             .unwrap_or_default();

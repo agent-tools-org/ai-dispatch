@@ -183,8 +183,6 @@ mod tests {
             task.category = Some("testing".into());
             store.insert_task(&task)?;
         }
-        let rates = store.project_agent_success_rates("/repo/read-only")?;
-        assert_eq!(rates, vec![("codex".into(), 1.0, 5)]);
         assert_eq!(store.agent_success_rates()?, vec![(crate::types::AgentKind::Codex, 1.0, 5)]);
         let category_rates = store.agent_success_rates_by_category("testing")?;
         assert_eq!(category_rates, vec![(crate::types::AgentKind::Codex, 1.0, 5)]);

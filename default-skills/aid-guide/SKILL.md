@@ -63,7 +63,6 @@ already knows, which puts these responsibilities on the caller:
    - `aid --version`
    - `aid board`
    - `aid show <task>`
-   - `aid project state`
 4. Explain the next safe command and its expected state transition.
 5. Never equate agent completion, `Done`, or `Merged` with task success or
    principal acceptance. Read `TaskStatus` for lifecycle/integration and

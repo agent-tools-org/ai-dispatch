@@ -109,7 +109,7 @@ current arguments.
 | Tools | `aid tool list`, `aid tool show`, `aid tool add`, `aid tool remove`, `aid tool test` |
 | Providers | `aid byok apply`, `aid byok remove`, `aid byok probe`, `aid byok example`, `aid byok doc` |
 | Credentials | `aid credential list`, `aid credential add`, `aid credential remove` |
-| Projects | `aid project init`, `aid project show`, `aid project state`, `aid project sync` |
+| Projects | `aid project init`, `aid project show`, `aid project sync` |
 | Memory | `aid memory add`, `aid memory list`, `aid memory search`, `aid memory update`, `aid memory forget`, `aid memory history` |
 | Knowledge graph | `aid kg add`, `aid kg query`, `aid kg invalidate`, `aid kg timeline`, `aid kg search`, `aid kg stats` |
 | Experiments | `aid experiment run`, `aid experiment status` |

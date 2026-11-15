@@ -1,3 +1,7 @@
+## v11.14.1 (2026-11-15)
+- Removed the project `.aid/state.toml` scoring: task completion no longer writes whole-agent success rates and a "best agent", dispatched prompts no longer carry a `[Project State]` block, and `aid project state` is gone. A leftover `.aid/state.toml` in existing repositories is still never staged or committed.
+
+
 ## v11.14.0 (2026-11-10)
 - Foreground `aid run` and in-worker retries no longer wait forever on a settled task: a follower returns once no live worker holds the task's job spec, whatever its verify status, and a spec whose worker is dead ends the follower with an error. `aid run` and `aid wait` share this settlement check.
 - Read-only tasks record a skipped verify instead of leaving it pending, and derive `Delivered` rather than `Unverified` when a verify command is configured, so `aid wait` reports a successful read-only audit as success.

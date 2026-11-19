@@ -140,6 +140,9 @@ pub fn provider_for_cli(cli: AgentKind) -> (ProviderId, MeteringShape) {
         // aidbar GetGrokCreditsConfig: one billing-period pool, used_percent +
         // period_end. That is an account pool, not an unknown shape.
         AgentKind::Grok => ("xai", MeteringShape::AccountPool),
+        // GetUserStatus planStatus: one account's daily and weekly quota percents
+        // with reset times, then a prepaid extra-usage balance (aidbar `devin`).
+        AgentKind::Devin => ("cognition-devin", MeteringShape::AccountPool),
         // Rate-limited with a reset timestamp but no per-task metering.
         AgentKind::Cursor => ("cursor-subscription", MeteringShape::Subscription),
         AgentKind::Claude => ("anthropic", MeteringShape::Unknown),

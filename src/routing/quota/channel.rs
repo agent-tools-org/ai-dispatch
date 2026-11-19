@@ -120,7 +120,7 @@ impl Attributable {
 pub(crate) fn mark_stream_refusal(agent: AgentKind, custom_name: Option<&str>, raw: &str) {
     let Some(message) = crate::routing::rate_limit::refusal_on_channel(raw, agent, Channel::CliStream)
     else {
-        if agent == AgentKind::Grok { return; }
+        if matches!(agent, AgentKind::Grok | AgentKind::Devin) { return; }
         let kept = provider_attributable(raw, agent, Channel::CliStream);
         if let Some(message) = crate::agent::stream_completion::quota_line(&kept.all(), agent) {
             crate::routing::rate_limit::mark_untrusted_for_model(&agent, custom_name, None, &message);

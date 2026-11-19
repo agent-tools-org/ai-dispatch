@@ -115,7 +115,7 @@ aid unstick <task-id>
   to change direction on an exec fallback task.
 - `aid stop` asks an active Codex app-server turn to interrupt before the existing
   process termination path runs if it does not end promptly.
-- `steer` and `reply` are also refused for the one-shot print-mode `agy` and `grok` CLIs; they receive no idle nudges.
+- `steer` and `reply` are also refused for the one-shot print-mode `agy`, `grok` and `devin` CLIs; they receive no idle nudges.
 - `respond` is refused for Claude and those same one-shot CLIs before aid writes a
   response signal; aid says that no response signal was written.
 - For other PTY-capable adapters, `respond` writes input when the task awaits it;
@@ -147,9 +147,13 @@ output finalization in their durations. Later completions preserve the settled d
 A task that has produced zero progress since spawn is reaped on the shorter
 first-token budget (default 180s, `AID_FIRST_TOKEN_TIMEOUT_SECS`). For PTY
 agents this is the first-token dead-stream detector; for buffered background
-agents (grok, agy) the background reaper applies the same distinction — silence
+agents (grok, agy, devin) the background reaper applies the same distinction — silence
 since spawn versus silence after progress. Only the latter waits out the full
-idle margin.
+idle margin. Devin prints nothing until it exits, so aid launches it with a
+task-scoped `--config` copy of `~/.config/devin/config.json` whose added
+`PreToolUse`/`PostToolUse` hooks write one line per tool call to the agent log.
+A user config that cannot be read as JSON gets no hooks, and a long Devin turn
+without tool calls then falls under the first-token budget.
 
 `--idle-timeout SECS` stops a task whose stream goes quiet. Meaningful text
 output refreshes the liveness clock even when aid cannot parse it into an event

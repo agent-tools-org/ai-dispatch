@@ -32,6 +32,7 @@ pub fn can_sandbox(agent_kind: AgentKind) -> bool {
             | AgentKind::Oz
             | AgentKind::Claude
             | AgentKind::Grok
+            | AgentKind::Devin
             | AgentKind::Custom
     )
 }

@@ -23,6 +23,7 @@ pub enum AgentKind {
     Claude,
     Antigravity,
     Grok,
+    Devin,
     Custom,
 }
 
@@ -40,6 +41,7 @@ impl AgentKind {
         Self::Oz,
         Self::Antigravity,
         Self::Grok,
+        Self::Devin,
     ];
 
     pub const ALL: &'static [Self] = &[
@@ -55,6 +57,7 @@ impl AgentKind {
         Self::Oz,
         Self::Antigravity,
         Self::Grok,
+        Self::Devin,
         Self::Custom,
     ];
 
@@ -74,6 +77,7 @@ impl AgentKind {
             "agy" => Some(Self::Antigravity),
             "antigravity" => Some(Self::Antigravity),
             "grok" => Some(Self::Grok),
+            "devin" => Some(Self::Devin),
             _ => None,
         }
     }
@@ -93,6 +97,7 @@ impl AgentKind {
             Self::Claude => "claude",
             Self::Antigravity => "agy",
             Self::Grok => "grok",
+            Self::Devin => "devin",
             Self::Custom => "custom",
         }
     }
@@ -138,6 +143,7 @@ impl AgentKind {
             Self::Claude => Some(profile_claude()),
             Self::Antigravity => Some(profile_antigravity()),
             Self::Grok => Some(profile_grok()),
+            Self::Devin => Some(profile_devin()),
             Self::Custom => None,
         }
     }

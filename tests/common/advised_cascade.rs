@@ -48,6 +48,7 @@ impl Harness {
             "mimocode",
             "droid",
             "grok",
+            "devin",
         ] {
             config.push_str(&format!("[{agent}]\ndisabled = true\n"));
         }

@@ -172,7 +172,8 @@ aid advise "Add request validation and regression tests" \
 ```
 
 Supported built-in agents: `agy`, `qwen`, `codex`, `copilot`, `opencode`,
-`commandcode`, `cursor`, `kilo`, `mimocode`, `droid`, `oz`, `claude`, and `grok`.
+`commandcode`, `cursor`, `kilo`, `mimocode`, `droid`, `oz`, `claude`, `grok`,
+and `devin`.
 Availability depends on installed CLIs and their authentication. The
 [configuration guide](default-skills/aid-guide/references/configuration.md)
 also covers custom agents.

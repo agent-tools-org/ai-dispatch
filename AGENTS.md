@@ -1,7 +1,7 @@
 # Agent commands
 
 Built-in run agents: `agy`, `qwen`, `codex`, `copilot`, `opencode`, `commandcode`, `cursor`,
-`kilo`, `mimocode`, `droid`, `oz`, `claude`, and `grok`.
+`kilo`, `mimocode`, `droid`, `oz`, `claude`, `grok`, and `devin`.
 
 Use `aid run agy "Research the module" -o notes.md` for a research task.
 `aid ask`, `aid show --explain`, and bare `--judge` default to `agy`.

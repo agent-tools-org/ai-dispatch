@@ -106,6 +106,7 @@ pub(crate) fn built_in_binaries(agent_kind: AgentKind) -> &'static [&'static str
         AgentKind::Oz => &["oz"],
         AgentKind::Claude => &["claude"],
         AgentKind::Grok => &["grok"],
+        AgentKind::Devin => &["devin"],
         AgentKind::Custom => &[],
     }
 }

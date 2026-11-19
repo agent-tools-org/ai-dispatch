@@ -8,6 +8,7 @@ pub mod commandcode;
 pub mod codex;
 pub mod copilot;
 pub mod cursor;
+pub mod devin;
 pub mod droid;
 pub(crate) mod antigravity_response;
 mod stream_text;
@@ -201,6 +202,7 @@ pub fn get_agent(kind: AgentKind) -> Box<dyn Agent> {
         AgentKind::Oz => Box::new(oz::OzAgent),
         AgentKind::Claude => Box::new(claude::ClaudeAgent),
         AgentKind::Grok => Box::new(grok::GrokAgent),
+        AgentKind::Devin => Box::new(devin::DevinAgent),
         AgentKind::Custom => panic!("Custom agents must be resolved via resolve_agent()"),
     }
 }

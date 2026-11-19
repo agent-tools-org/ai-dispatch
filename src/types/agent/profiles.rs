@@ -131,3 +131,13 @@ pub(super) fn profile_grok() -> (&'static str, &'static str, &'static str, &'sta
         true,
     )
 }
+
+pub(super) fn profile_devin() -> (&'static str, &'static str, &'static str, &'static str, bool) {
+    (
+        "devin",
+        "General coding via Devin CLI (Cognition), multi-vendor models",
+        "Devin plan (daily/weekly quota)",
+        "implement, refactor, debug, explain, research",
+        false,
+    )
+}

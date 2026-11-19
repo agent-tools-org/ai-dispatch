@@ -126,6 +126,7 @@ mod tests {
             (AgentKind::Claude, true),
             (AgentKind::Antigravity, false),
             (AgentKind::Grok, false),
+            (AgentKind::Devin, false),
             (AgentKind::Custom, true),
         ];
 

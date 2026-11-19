@@ -50,7 +50,8 @@ class. Unsplit PTY/output text records at most a transient
 excerpt and cannot turn an exit-zero run into a failure. An already-failed run
 can use its own agent's quota signature in that excerpt to launch a quota
 continuation; the excerpt's hold stays transient. Grok reads only its
-`type:error` message; generic status tokens give a transient hold. Codex
+`type:error` message; generic status tokens give a transient hold. Devin's
+output is the model's plain-text answer, so its output stream gives no transient hold. Codex
 app-server uses typed error notifications and rate-limit snapshots instead of
 matching raw lines when typed evidence is available. Typed refusal messages
 retain their reset dates; a later shorter hold cannot replace a longer active
@@ -137,7 +138,7 @@ lists on the next lookup, including in a long-running `aid mcp` process.
 `aid agent list --json`, `aid config pricing`, and `aid advise` merge every
 model in the 24-hour served-model cache that has no catalog row into the
 catalog views, for each agent with a served-model probe: codex, grok, cursor,
-agy and opencode (so providers such as `opencode-go` appear beside the
+agy, opencode and devin (so providers such as `opencode-go` appear beside the
 built-in `opencode/*` rows). For Codex, a changed source-file stamp refreshes
 the cache from its local model list. Other agents read the cache only and never probe;
 an absent or expired cache adds nothing. Each `models.available` row carries

@@ -77,7 +77,7 @@ fn advise_succeeds_when_every_builtin_is_rate_limited() {
     for agent in [
         "qwen", "codex", "copilot", "opencode", "commandcode",
         "cursor", "kilo", "mimocode", "droid", "oz", "claude",
-        "agy", "grok", "droid--standard", "droid--core",
+        "agy", "grok", "devin", "droid--standard", "droid--core",
     ] {
         std::fs::write(
             aid_home.path().join(format!("rate-limit-{agent}")),

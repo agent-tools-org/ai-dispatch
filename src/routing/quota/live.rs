@@ -110,6 +110,7 @@ pub(crate) fn provider_name(agent: &AgentKind) -> Option<&'static str> {
         // from the refusal text — measured 4h early on the weekly window,
         // and 19h early when the guess came from the older marker.
         AgentKind::Droid => Some("droid"),
+        AgentKind::Devin => Some("devin"),
         _ => None,
     }
 }

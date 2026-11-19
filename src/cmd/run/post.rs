@@ -189,7 +189,7 @@ pub(super) fn record_failed_quota(task: &Task, agent: AgentKind) -> Option<Strin
         );
         return Some(message);
     }
-    if agent == AgentKind::Grok {
+    if matches!(agent, AgentKind::Grok | AgentKind::Devin) {
         return None;
     }
     let log = crate::routing::quota::channel::read_run_stream(task.id.as_str())?;

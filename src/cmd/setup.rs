@@ -143,6 +143,7 @@ fn detect_installed_agents() {
         ("droid", crate::types::AgentKind::Droid),
         ("oz", crate::types::AgentKind::Oz),
         ("claude", crate::types::AgentKind::Claude),
+        ("devin", crate::types::AgentKind::Devin),
     ];
     let detected = crate::agent::detect_agents();
     let mut installed = 0;

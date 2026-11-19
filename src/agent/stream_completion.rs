@@ -110,7 +110,7 @@ pub(crate) fn record_quota_exhaustion_with_delivery(
         rate_limit::mark_rate_limited_for_model(&agent, custom_name, model, &detail);
         return if delivered { QuotaOutcome::RecordedDelivered } else { QuotaOutcome::RecordedFailed };
     }
-    if agent == crate::types::AgentKind::Grok {
+    if matches!(agent, crate::types::AgentKind::Grok | crate::types::AgentKind::Devin) {
         return QuotaOutcome::None;
     }
     let Some(detail) = quota_line(&kept.all(), agent) else {

@@ -110,6 +110,7 @@ pub(super) fn validate_dispatch(args: &RunArgs, agent_kind: &AgentKind) -> Vec<S
             | AgentKind::Kilo
             | AgentKind::MiMoCode
             | AgentKind::Grok
+            | AgentKind::Devin
     ) && args.dir.is_none() && args.worktree.is_none() && !args.read_only
     {
         let profile = agent::classifier::classify(

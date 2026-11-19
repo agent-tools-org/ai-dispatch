@@ -15,6 +15,7 @@ pub(crate) const SERVED_PROBE_AGENTS: &[AgentKind] = &[
     AgentKind::Qwen,
     AgentKind::Antigravity,
     AgentKind::OpenCode,
+    AgentKind::Devin,
 ];
 
 /// Models the agent's CLI last reported serving that have no catalog row.

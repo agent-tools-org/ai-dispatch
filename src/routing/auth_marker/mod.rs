@@ -24,6 +24,10 @@ const AUTH_SIGNATURES: &[(AgentKind, &str)] = &[
     (AgentKind::Claude, "not logged in"),
     // "Error: Your credentials are invalid. Please log in again with `oz login`."
     (AgentKind::Oz, "credentials are invalid"),
+    // "Error: Authentication failed: that API key was rejected by the Windsurf API server"
+    (AgentKind::Devin, "error: authentication failed"),
+    // No stored key and no TTY to log in on: "Error: Login canceled"
+    (AgentKind::Devin, "error: login canceled"),
 ];
 
 /// Auth evidence for one route. `state` is `failed` or `unknown`; aid never

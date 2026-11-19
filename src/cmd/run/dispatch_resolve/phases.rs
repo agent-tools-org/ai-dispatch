@@ -43,6 +43,7 @@ pub(super) fn set_git_working_directory(args: &mut RunArgs, agent_kind: AgentKin
                 | AgentKind::MiMoCode
                 | AgentKind::Droid
                 | AgentKind::Grok
+                | AgentKind::Devin
                 | AgentKind::Custom
         )
         && std::path::Path::new(".git").exists()

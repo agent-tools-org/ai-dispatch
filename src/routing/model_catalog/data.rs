@@ -96,6 +96,13 @@ pub const AGENT_PROFILES: &[(AgentKind, &str, &str, &str, bool)] = &[
         "implement, explain, refactor, research",
         false,
     ),
+    (
+        AgentKind::Devin,
+        "General coding via Devin CLI (Cognition), multi-vendor models",
+        "Devin plan (daily/weekly quota)",
+        "implement, refactor, debug, explain, research",
+        false,
+    ),
 ];
 
 pub struct AgentModel {

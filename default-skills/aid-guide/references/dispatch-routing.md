@@ -48,9 +48,9 @@ declared-agent field: explicit `aid run claude` selects Claude for execution
 without changing the hint’s advice profile. Each candidate also carries `auth`: `state` is
 `failed` (with `observed_at` and `message`) when a run of that agent ended on a
 recognised not-signed-in refusal within the last hour (grok `Not signed in`,
-claude `Please run /login` / `Not logged in`, oz `credentials are invalid`),
-otherwise `unknown`. A successful run clears it; aid never reports `ok` and
-never marks auth failed from a run or probe that could not start.
+claude `Please run /login` / `Not logged in`, oz `credentials are invalid`,
+devin `Error: Authentication failed` / `Error: Login canceled`), otherwise
+`unknown`. A successful run clears it; aid never reports `ok` and never marks auth failed from a run or probe that could not start.
 
 Leaderboard evidence: `aid advise` (text and JSON) shows each candidate's
 `capability_evidence`: `canonical_id`, all raw `scores`, the `selected` score,

@@ -66,7 +66,11 @@ fn is_prompt_candidate(line: &str) -> bool {
 
 fn trim_partial_line(line: &mut String) {
     if line.len() > MAX_PARTIAL_LEN {
-        let start = line.len() - MAX_PARTIAL_LEN;
+        // Keep the tail, starting at the next character boundary: a multi-byte character may straddle the cut.
+        let mut start = line.len() - MAX_PARTIAL_LEN;
+        while !line.is_char_boundary(start) {
+            start += 1;
+        }
         *line = line[start..].to_string();
     }
 }
@@ -75,6 +79,15 @@ fn trim_partial_line(line: &mut String) {
 mod tests {
     use super::PromptDetector;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn trims_a_long_partial_line_inside_a_multibyte_character() {
+        let mut detector = PromptDetector::default();
+        let long = format!("{}{}", "a".repeat(super::MAX_PARTIAL_LEN - 1), "\u{2026}".repeat(4));
+        let _ = detector.push_chunk(&long, Instant::now());
+        let prompt = detector.push_chunk("Continue? ", Instant::now());
+        assert_eq!(prompt.as_deref().map(|text| text.ends_with("Continue?")), Some(true));
+    }
 
     #[test]
     fn detects_inline_question_prompts() {

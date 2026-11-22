@@ -23,7 +23,8 @@ pub(crate) fn family_is_spent(agent: AgentKind, custom: Option<&str>, family: &s
         .and_then(crate::routing::rate_limit::parse_recovery_datetime)
         .is_some_and(|at| at > Local::now().naive_local());
     // A reading taken after the refusal that shows this unit with headroom
-    // outranks the refusal's guessed recovery time.
+    // outranks the refusal's guessed recovery time. The probe cache and the
+    // marker are written on this host, so both timestamps share one clock.
     let written = std::fs::metadata(&path).and_then(|meta| meta.modified()).ok();
     in_force
         && !probe.is_some_and(|probe| {

@@ -78,6 +78,7 @@ pub enum ShowMode {
 }
 
 pub async fn run(store: Arc<Store>, args: ShowArgs) -> Result<()> {
+    crate::task::caller_wake::mark_seen(&store, &args.task_id);
     if args.start_commit {
         return patch::run_start_commit(&store, &args.task_id);
     }

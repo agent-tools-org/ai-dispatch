@@ -9,7 +9,7 @@ use std::io::{BufRead, BufReader, Write};
 use crate::support::paths;
 use crate::types::Task;
 
-pub fn notify_completion(task: &Task) {
+pub fn notify_completion(store: &crate::store::Store, task: &Task) {
     let path = paths::aid_dir().join("completions.jsonl");
     let event = serde_json::json!({
         "task_id": task.id.as_str(),
@@ -28,6 +28,7 @@ pub fn notify_completion(task: &Task) {
     if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
         let _ = writeln!(file, "{event}");
     }
+    super::caller_wake::on_terminal(store, task);
 }
 
 pub fn read_recent(limit: usize) -> Result<String> {
@@ -75,7 +76,8 @@ mod tests {
                 crate::types::TaskStatus::Done,
             )
         };
-        notify_completion(&task);
+        let store = crate::store::Store::open_memory().unwrap();
+        notify_completion(&store, &task);
         let path = crate::support::paths::aid_dir().join("completions.jsonl");
         let line = std::fs::read_to_string(path).unwrap();
         let event: serde_json::Value = serde_json::from_str(line.lines().next().unwrap()).unwrap();

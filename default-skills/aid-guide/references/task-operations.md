@@ -46,6 +46,16 @@ refresh requests are combined, and a refresh failure keeps the last snapshot
 visible with an error indicator. Task and tree views render only visible rows.
 The multipane view (`m`) loads event histories for its six visible panes.
 
+A task dispatched from a Claude Code session reports back to that session once it
+settles: the worker writes one fixed notice (task id, status, outcome, verification,
+agent, and `aid show <id>`) to the session's messaging socket, which starts a new
+turn when the session is idle. The notice never carries the prompt or agent output.
+AID removes the socket and token from its own environment at startup, so agents,
+verifiers and hooks never inherit them. A settled task stays unread until that
+session runs `aid show` or `aid wait` on it; `aid hook session-start` lists unread
+tasks, so a session that was closed sees them when it resumes. A failed push never
+changes the task's outcome.
+
 Use `watch` for a stream and `wait` for automation. `aid wait` continues while
 verification is pending and returns non-zero when any selected task does not
 have a successful outcome. Use `show` to inspect context, diff, output, result,

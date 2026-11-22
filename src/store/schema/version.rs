@@ -7,7 +7,10 @@ pub(in crate::store) const CURRENT_VERSION: i64 = 8;
 
 pub(in crate::store) fn ensure_current(conn: &Connection) -> Result<()> {
     let version = schema_version(conn)?;
-    if version == CURRENT_VERSION && has_private_launch_table(conn)? {
+    if version == CURRENT_VERSION
+        && has_private_launch_table(conn)?
+        && crate::store::caller_inbox::has_table(conn)?
+    {
         return Ok(());
     }
     if version > CURRENT_VERSION {
@@ -47,6 +50,10 @@ pub(in crate::store) fn ensure_current(conn: &Connection) -> Result<()> {
     }
     if !has_private_launch_table(&tx)? {
         crate::store::read_only_launch::create_table(&tx)?;
+    }
+    // Created without a version bump so older binaries keep opening the database.
+    if !crate::store::caller_inbox::has_table(&tx)? {
+        crate::store::caller_inbox::create_table(&tx)?;
     }
     if version < CURRENT_VERSION {
         tx.pragma_update(None, "user_version", CURRENT_VERSION)?;

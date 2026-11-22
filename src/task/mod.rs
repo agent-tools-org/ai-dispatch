@@ -10,6 +10,7 @@ pub(crate) mod failure_salvage;
 pub(crate) mod unstick;
 pub(crate) mod verify;
 pub(crate) mod notify;
+pub(crate) mod caller_wake;
 pub(crate) mod webhook;
 pub(crate) mod aic;
 pub(crate) mod workgroup;

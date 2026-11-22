@@ -56,6 +56,10 @@ pub async fn run(
         timeout_secs.map(Duration::from_secs),
     )
     .await?;
+    // Only settled tasks have an inbox row, so a timed-out wait acknowledges nothing early.
+    for id in &task_ids {
+        crate::task::caller_wake::mark_seen(store, id);
+    }
     report_wait_outcome(outcome, tracked_group, timeout_secs)
 }
 

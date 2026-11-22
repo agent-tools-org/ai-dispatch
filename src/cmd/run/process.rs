@@ -253,7 +253,7 @@ fn print_completion(
 
 pub(crate) fn notify_task_completion(store: &Store, task_id: &TaskId) -> Result<()> {
     if let Some(task) = store.get_task(task_id.as_str())? {
-        crate::task::notify::notify_completion(&task);
+        crate::task::notify::notify_completion(store, &task);
     }
     Ok(())
 }

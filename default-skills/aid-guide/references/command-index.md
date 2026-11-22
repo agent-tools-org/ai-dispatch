@@ -77,7 +77,7 @@ current arguments.
 | `aid credential` | Manage credential-pool entries. |
 | `aid byok` | Manage custom OpenAI-compatible providers through opencode. |
 | `aid container` | Container home mounts retain `.gemini` for agy authentication and mount `.qwen` for Qwen authentication. Build, list, or stop development containers. |
-| `aid hook` | Install or invoke supported AID hooks; task hook payloads expose additive `outcome` and `verify_status` fields. |
+| `aid hook` | Install or invoke supported AID hooks; task hook payloads expose additive `outcome` and `verify_status` fields. `session-start` also lists settled tasks the session dispatched and has not read with `aid show`/`aid wait`. |
 | `aid mcp` | Start AID's stdio MCP server; task payloads expose additive `outcome` and `verify_status` fields. The `classify` tool takes `state`, `state_json`, `questions`, and `model` and returns the same JSON as `aid classify`. |
 | `aid doctor` | Report repository/worktree hygiene, leaked operator symlinks, and NeedsHuman agent holds; `--apply` repairs only those symlinks without bypassing custody. |
 | `aid clean` | Trim historical output copies after `--older-than` days (default 7); `--dry-run` reports rows and bytes; `--vacuum` explicitly compacts an idle database with sufficient temporary free space. Remove disposable logs and caches while retaining custody evidence; reclaims a task's fallback cargo target only once the directory it was keyed from is gone, and reports how many it held back. |

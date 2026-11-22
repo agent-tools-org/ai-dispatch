@@ -40,6 +40,8 @@ use anyhow::Result;
 use std::sync::Arc;
 
 fn main() -> Result<()> {
+    // First, while single-threaded: keep the caller socket out of every child env.
+    task::caller_wake::capture_env();
     let result = run_cli(cli::diagnostics::parse());
     if let Err(error) = &result {
         if let Some(refusal) = error.downcast_ref::<execution::Refusal>() {

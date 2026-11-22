@@ -37,6 +37,7 @@ pub(crate) fn spawn_worker(task_id: &str) -> Result<impl FnOnce() -> Result<(Chi
     if detached {
         cmd.env("AID_DAEMONIZE_WORKER", "1");
     }
+    cmd.envs(crate::task::caller_wake::worker_env());
     Ok(move || spawn_prepared(&mut cmd, detached))
 }
 

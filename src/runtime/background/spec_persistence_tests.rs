@@ -44,7 +44,8 @@ fn completion_notifications_are_written_as_jsonl() {
     task.cost_usd = Some(0.25);
     task.prompt = "x".repeat(120);
 
-    crate::task::notify::notify_completion(&task);
+    let store = crate::store::Store::open_memory().unwrap();
+    crate::task::notify::notify_completion(&store, &task);
 
     let line = crate::task::notify::read_recent(20).unwrap();
     let value: serde_json::Value = serde_json::from_str(&line).unwrap();

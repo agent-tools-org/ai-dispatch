@@ -288,6 +288,6 @@ pub(crate) fn record_failure(store: &Store, task_id: &str, stderr_detail: &str, 
 }
 
 pub(super) fn notify_task_completion(store: &Store, task_id: &str) -> Result<()> {
-    if let Some(task) = store.get_task(task_id)? { notify::notify_completion(&task); }
+    if let Some(task) = store.get_task(task_id)? { notify::notify_completion(store, &task); }
     Ok(())
 }

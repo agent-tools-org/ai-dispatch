@@ -41,7 +41,8 @@ fn static_models(kind: AgentKind) -> Vec<String> {
 }
 
 /// Replacement order: models from the caller's vendor first, so a quota switch
-/// never silently trades a Gemini review for a Claude one. Stable within a vendor.
+/// never silently trades a Gemini review for a Claude one. Stable within a vendor;
+/// budget routing keeps its cheapest-first order instead.
 fn same_vendor_first(mut models: Vec<String>, current: Option<&str>) -> Vec<String> {
     if let Some(current) = current {
         let vendor = crate::types::model_family(current);
@@ -99,8 +100,10 @@ fn select_model(
     let mut models = candidates(kind);
     if budget {
         models.sort_by_key(|model| (strength(model).0, std::cmp::Reverse(strength(model).1)));
+    } else {
+        models = same_vendor_first(models, current);
     }
-    same_vendor_first(models, current).into_iter().find(|model| {
+    models.into_iter().find(|model| {
         !excluded.is_some_and(|failed| {
             model == failed || (exclude_pool && unit(kind, model) == unit(kind, failed))
         }) && strength(model).1 == effort
@@ -230,18 +233,17 @@ mod tests {
         );
     }
 
-    /// Served list as agy reported it on 2026-11-22, Argon pool marked spent.
-    fn argon_spent_with_served_gemini_4() -> super::super::model_validation::MockServedModelsGuard {
+    const SERVED: [&str; 8] = [
+        "claude-opus-5-5-high", "gpt-oss-120b-medium", "claude-sonnet-5-5-medium",
+        "gemini-4-argon-high", "gemini-4-argon-medium", "gemini-4-neon-high",
+        "gemini-4-neon-medium", "gemini-3.8-flash-medium",
+    ];
+
+    /// Served list with Claude ahead of Gemini, Argon pool marked spent.
+    fn argon_spent_with(served: &[&str]) -> super::super::model_validation::MockServedModelsGuard {
         let guard = super::super::model_validation::MockServedModelsGuard::set(
             AgentKind::Antigravity,
-            Some(
-                [
-                    "gemini-4-neon-high", "gemini-4-argon-high", "gemini-4-hydrogen-high",
-                    "gemini-3.8-flash-high", "claude-opus-5-5-high", "gpt-oss-120b-medium",
-                ]
-                .map(String::from)
-                .to_vec(),
-            ),
+            Some(served.iter().map(|model| model.to_string()).collect()),
         );
         crate::routing::rate_limit::mark_untrusted_for_model(
             &AgentKind::Antigravity,
@@ -256,7 +258,7 @@ mod tests {
     fn agy_spent_argon_pin_switches_to_gemini_4_neon_not_claude() {
         let home = crate::support::test_env::TestHome::new();
         let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
-        let _served = argon_spent_with_served_gemini_4();
+        let _served = argon_spent_with(&SERVED);
         for policy in [PinPolicy::WarnOnReplacement, PinPolicy::Continuation] {
             let excluded = (policy == PinPolicy::Continuation).then_some("gemini-4-argon-high");
             let result = resolve(
@@ -268,5 +270,18 @@ mod tests {
             continuation_model(AgentKind::Antigravity, None, Some("gemini-4-argon-high")),
             Some("gemini-4-neon-high".into())
         );
+    }
+
+    #[test]
+    fn agy_budget_replacement_keeps_cheapest_first_over_vendor() {
+        let home = crate::support::test_env::TestHome::new();
+        let _cache = crate::routing::quota::live::CacheDirGuard::set(home.path());
+        // Without Flash, budget order (Sonnet) and vendor order (Neon) disagree.
+        let _served = argon_spent_with(&SERVED[..7]);
+        let result = resolve(
+            AgentKind::Antigravity, None, Some("gemini-4-argon-medium"),
+            PinPolicy::WarnOnReplacement, true, None,
+        );
+        assert_eq!(result.expect("replacement"), Some("claude-sonnet-5-5-medium".into()));
     }
 }

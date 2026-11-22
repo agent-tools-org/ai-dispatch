@@ -109,7 +109,12 @@ static models are a fallback only when no served list exists. Agy quota units ar
 window applies only to Argon; general Gemini windows apply to both Gemini units.
 Held unit markers, live windows at 100% with a future reset, and untrusted refusals
 with a future `recovery_at` exclude a unit; undated untrusted markers do not.
+A live reading fetched after the untrusted refusal was recorded overrides it when
+the reading meters the unit itself (for Argon, an Argon window) and none of the
+unit's windows is full.
 Replacements retain the requested effort (medium by default), and budget routing prefers the cheapest available line.
+Outside budget routing, a replacement prefers models from the requested model's
+vendor, so a spent Argon unit moves to Gemini 4 Neon before any Claude or GPT model.
 Ordinary `--model` requests warn with both models before replacing a spent unit.
 Advised and caller-owned exact pins are refused instead. If every served unit is
 spent, explicit cascades walk to the next available agent; otherwise dispatch refuses.

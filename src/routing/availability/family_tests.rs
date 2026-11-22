@@ -62,3 +62,74 @@ fn agy_argon_window_does_not_exhaust_flash_but_general_window_exhausts_both() {
         );
     }
 }
+
+#[test]
+fn agy_fresh_argon_window_overrides_stale_untrusted_marker() {
+    let home = crate::support::test_env::TestHome::new();
+    let _cache = live_quota::CacheDirGuard::set(home.path());
+    let path = group_marker_path(&AgentKind::Antigravity, None, "gemini-4-argon");
+    std::fs::create_dir_all(path.parent().expect("parent")).expect("directory");
+    let at = Local::now().naive_local() + chrono::Duration::hours(60);
+    let marker = format!(
+        "source: untrusted\nrecovery_at: {}\n",
+        crate::routing::rate_limit::format_recovery(at)
+    );
+    std::fs::write(&path, marker).expect("marker");
+    // Without live evidence, or with only a general Gemini window, the marker decides.
+    assert!(family_is_spent(AgentKind::Antigravity, None, "gemini-4-argon"));
+    for (label, spent) in [("Gemini Models Weekly", true), ("Gemini 4 Argon Weekly Limit", false)] {
+        let now = chrono::Utc::now();
+        std::fs::write(
+            home.path().join("agy.json"),
+            serde_json::json!({
+                "ok": true, "snapshot": {"provider": "agy", "fetched_at": now.to_rfc3339(),
+                "windows": [{"label": label, "group": "gemini", "used_percent": 38.0,
+                "resets_at": (now + chrono::Duration::days(6)).to_rfc3339()}]}
+            })
+            .to_string(),
+        )
+        .expect("probe");
+        assert_eq!(
+            family_is_spent(AgentKind::Antigravity, None, "gemini-4-argon"),
+            spent,
+            "{label}"
+        );
+    }
+}
+
+#[test]
+fn agy_argon_marker_survives_older_or_full_reading() {
+    let home = crate::support::test_env::TestHome::new();
+    let _cache = live_quota::CacheDirGuard::set(home.path());
+    let path = group_marker_path(&AgentKind::Antigravity, None, "gemini-4-argon");
+    std::fs::create_dir_all(path.parent().expect("parent")).expect("directory");
+    let at = Local::now().naive_local() + chrono::Duration::hours(60);
+    let marker = format!(
+        "source: untrusted\nrecovery_at: {}\n",
+        crate::routing::rate_limit::format_recovery(at)
+    );
+    std::fs::write(&path, marker).expect("marker");
+    let now = chrono::Utc::now();
+    // A reading from before the refusal, and a full window without a reset time.
+    for (fetched, used, resets) in [
+        (now - chrono::Duration::seconds(5), 38.0, Some(now + chrono::Duration::days(6))),
+        (now + chrono::Duration::seconds(1), 100.0, None),
+    ] {
+        let mut window = serde_json::json!({
+            "label": "Gemini 4 Argon Weekly Limit", "group": "gemini", "used_percent": used,
+        });
+        if let Some(resets) = resets {
+            window["resets_at"] = serde_json::json!(resets.to_rfc3339());
+        }
+        std::fs::write(
+            home.path().join("agy.json"),
+            serde_json::json!({
+                "ok": true, "snapshot": {"provider": "agy",
+                "fetched_at": fetched.to_rfc3339(), "windows": [window]}
+            })
+            .to_string(),
+        )
+        .expect("probe");
+        assert!(family_is_spent(AgentKind::Antigravity, None, "gemini-4-argon"), "{used}");
+    }
+}

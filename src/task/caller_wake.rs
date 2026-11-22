@@ -33,9 +33,9 @@ pub(crate) fn capture_env() {
         std::env::remove_var(SOCKET_VAR);
         std::env::remove_var(TOKEN_VAR);
     }
-    let session = crate::runtime::session::current_caller()
-        .filter(|caller| caller.kind == "claude-code")
-        .map(|caller| caller.session_id);
+    // Claude Code sets this itself; AID_CALLER_SESSION can be overridden, so it
+    // never decides which socket a task's notice goes to.
+    let session = std::env::var("CLAUDE_CODE_SESSION_ID").ok().filter(|id| !id.is_empty());
     let channel = match (socket, token, session) {
         (Some(socket), Some(token), Some(session)) if !token.is_empty() => {
             Some(Channel { socket: PathBuf::from(socket), token, session })
@@ -93,6 +93,15 @@ pub(crate) fn deliver(store: &Store, task: &Task, channel: Option<&Channel>) -> 
     Ok(())
 }
 
+/// Records a stopped task as already read by whoever stopped it; a session that
+/// stops its own task does not need to be woken about it.
+pub(crate) fn on_stopped(store: &Store, task: &Task) {
+    if let Err(err) = deliver(store, task, None) {
+        aid_warn!("[aid] Caller record for {} not written: {err}", task.id);
+    }
+    mark_seen(store, task.id.as_str());
+}
+
 /// Fixed fields only: the agent's prompt and output never reach the caller this way.
 pub(crate) fn message(task: &Task) -> String {
     let verify = match task.verify_status.as_str() {
@@ -105,12 +114,35 @@ pub(crate) fn message(task: &Task) -> String {
         id = task.id,
         label = task.status.label(),
         outcome = task.outcome().as_str(),
-        agent = task.agent_display_name(),
+        agent = plain_name(&task.agent_display_name()),
     )
 }
 
+/// Custom agent names come from config files; keep them to a short plain token.
+fn plain_name(name: &str) -> String {
+    let plain: String = name
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        .take(40)
+        .collect();
+    if plain.is_empty() { "custom".into() } else { plain }
+}
+
+/// Bounds the whole push, connect included, so a stuck inbox never holds a task.
 #[cfg(unix)]
 fn send(channel: &Channel, text: &str) -> Result<()> {
+    let (channel, text) = (channel.clone(), text.to_string());
+    let (done, result) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = done.send(write_notice(&channel, &text));
+    });
+    result
+        .recv_timeout(std::time::Duration::from_secs(3))
+        .map_err(|_| anyhow::anyhow!("caller inbox did not accept the notice within 3s"))?
+}
+
+#[cfg(unix)]
+fn write_notice(channel: &Channel, text: &str) -> Result<()> {
     use std::io::Write;
     use std::os::unix::net::UnixStream;
     let mut stream = UnixStream::connect(&channel.socket)?;

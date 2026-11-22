@@ -88,7 +88,7 @@ pub(crate) async fn post_run_lifecycle(
         store.settle_task_status(task_id.as_str(), TaskStatus::Done, Some(&[TaskStatus::Done]), None, None)?;
     }
     // The completion notice above may have fired while verify still ran; settle is final.
-    if let Some(task) = store.get_task(task_id.as_str())? {
+    if let Ok(Some(task)) = store.get_task(task_id.as_str()) {
         crate::task::caller_wake::on_terminal(store.as_ref(), &task);
     }
     crate::workspace::backup::on_settled(store.as_ref(), task_id.as_str());

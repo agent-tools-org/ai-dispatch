@@ -1,6 +1,6 @@
 // Wakes the Claude Code session that dispatched a task once the task settles.
-// Captures the session's messaging socket at startup and removes it from the environment,
-// so agents never inherit it; pushes fixed aid fields only, never agent output.
+// Removes the session's messaging socket from aid's environment at startup; only the
+// worker running a task pushes, once, with fixed aid fields and never agent output.
 use anyhow::Result;
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -15,17 +15,27 @@ const PENDING_LIMIT: usize = 20;
 
 /// The dispatching session's inbox, as Claude Code exported it to this process.
 #[derive(Clone, Debug)]
-pub(crate) struct Channel {
+pub(crate) struct Inbox {
     pub socket: PathBuf,
     pub token: String,
-    pub session: String,
 }
 
-static CHANNEL: OnceLock<Option<Channel>> = OnceLock::new();
+/// Only the background worker pushes, and only for the task it runs: it got the
+/// socket straight from the process that dispatched that task, so no session
+/// matching is needed and no other process can send for someone else's task.
+#[derive(Clone, Debug)]
+pub(crate) struct Channel {
+    pub inbox: Inbox,
+    pub task_id: String,
+}
+
+static CAPTURED: OnceLock<Option<Inbox>> = OnceLock::new();
+static WORKER_TASK: OnceLock<Option<String>> = OnceLock::new();
 
 /// Takes the socket and token out of the environment. Must run first in `main`,
 /// before any thread exists, because it mutates the process environment.
-pub(crate) fn capture_env() {
+/// `worker_task` is set only in the background worker process.
+pub(crate) fn capture_env(worker_task: Option<String>) {
     let socket = std::env::var_os(SOCKET_VAR);
     let token = std::env::var(TOKEN_VAR).ok();
     // SAFETY: called at the top of main, before the runtime or any thread starts.
@@ -33,39 +43,39 @@ pub(crate) fn capture_env() {
         std::env::remove_var(SOCKET_VAR);
         std::env::remove_var(TOKEN_VAR);
     }
-    // Claude Code sets this itself; AID_CALLER_SESSION can be overridden, so it
-    // never decides which socket a task's notice goes to.
-    let session = std::env::var("CLAUDE_CODE_SESSION_ID").ok().filter(|id| !id.is_empty());
-    let channel = match (socket, token, session) {
-        (Some(socket), Some(token), Some(session)) if !token.is_empty() => {
-            Some(Channel { socket: PathBuf::from(socket), token, session })
+    let inbox = match (socket, token) {
+        (Some(socket), Some(token)) if !token.is_empty() => {
+            Some(Inbox { socket: PathBuf::from(socket), token })
         }
         _ => None,
     };
-    let _ = CHANNEL.set(channel);
+    let _ = CAPTURED.set(inbox);
+    let _ = WORKER_TASK.set(worker_task);
 }
 
-fn channel() -> Option<&'static Channel> {
-    CHANNEL.get().and_then(Option::as_ref)
+fn channel() -> Option<Channel> {
+    let inbox = CAPTURED.get()?.clone()?;
+    let task_id = WORKER_TASK.get()?.clone()?;
+    Some(Channel { inbox, task_id })
 }
 
 /// Variables the background worker needs to push for its caller. Only aid's own
 /// worker gets them; agents, verifiers and hooks it starts inherit nothing.
 #[cfg_attr(test, allow(dead_code))] // the worker spawner is compiled out of unit tests
 pub(crate) fn worker_env() -> Vec<(&'static str, OsString)> {
-    channel().map_or_else(Vec::new, |channel| {
+    CAPTURED.get().and_then(Option::as_ref).map_or_else(Vec::new, |inbox| {
         vec![
-            (SOCKET_VAR, channel.socket.clone().into_os_string()),
-            (TOKEN_VAR, OsString::from(&channel.token)),
+            (SOCKET_VAR, inbox.socket.clone().into_os_string()),
+            (TOKEN_VAR, OsString::from(&inbox.token)),
         ]
     })
 }
 
-/// Records a settled task for its caller and pushes once when this process can
-/// reach that caller. Never fails the task: errors are reported and the record
-/// stays pending for the caller's next session start.
+/// Records a settled task for its caller and, in the worker running it, pushes once.
+/// Never fails the task: errors are reported and the task stays unread, so the
+/// caller's next session start lists it.
 pub(crate) fn on_terminal(store: &Store, task: &Task) {
-    if let Err(err) = deliver(store, task, channel()) {
+    if let Err(err) = deliver(store, task, channel().as_ref()) {
         aid_warn!("[aid] Caller notification for {} not delivered: {err}", task.id);
     }
 }
@@ -80,15 +90,12 @@ pub(crate) fn deliver(store: &Store, task: &Task, channel: Option<&Channel>) -> 
     }
     let id = task.id.as_str();
     store.inbox_record(id, session)?;
-    let Some(channel) = channel.filter(|channel| channel.session == session) else {
+    let Some(channel) = channel.filter(|channel| channel.task_id == id) else {
         return Ok(());
     };
-    if !store.inbox_claim_push(id)? {
-        return Ok(());
-    }
-    if let Err(err) = send(channel, &message(task)) {
-        store.inbox_release_push(id)?;
-        return Err(err);
+    // A claim is an attempt, never released: a late write cannot be followed by a second.
+    if store.inbox_claim_push(id)? {
+        send(&channel.inbox, &message(task))?;
     }
     Ok(())
 }
@@ -130,24 +137,24 @@ fn plain_name(name: &str) -> String {
 
 /// Bounds the whole push, connect included, so a stuck inbox never holds a task.
 #[cfg(unix)]
-fn send(channel: &Channel, text: &str) -> Result<()> {
-    let (channel, text) = (channel.clone(), text.to_string());
+fn send(inbox: &Inbox, text: &str) -> Result<()> {
+    let (inbox, text) = (inbox.clone(), text.to_string());
     let (done, result) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = done.send(write_notice(&channel, &text));
-    });
+    std::thread::Builder::new().name("caller-wake".into()).spawn(move || {
+        let _ = done.send(write_notice(&inbox, &text));
+    })?;
     result
         .recv_timeout(std::time::Duration::from_secs(3))
         .map_err(|_| anyhow::anyhow!("caller inbox did not accept the notice within 3s"))?
 }
 
 #[cfg(unix)]
-fn write_notice(channel: &Channel, text: &str) -> Result<()> {
+fn write_notice(inbox: &Inbox, text: &str) -> Result<()> {
     use std::io::Write;
     use std::os::unix::net::UnixStream;
-    let mut stream = UnixStream::connect(&channel.socket)?;
+    let mut stream = UnixStream::connect(&inbox.socket)?;
     stream.set_write_timeout(Some(std::time::Duration::from_secs(2)))?;
-    let auth = serde_json::json!({ "type": "auth", "token": channel.token });
+    let auth = serde_json::json!({ "type": "auth", "token": inbox.token });
     let user = serde_json::json!({
         "type": "user",
         "message": { "role": "user", "content": text },
@@ -159,7 +166,7 @@ fn write_notice(channel: &Channel, text: &str) -> Result<()> {
 }
 
 #[cfg(not(unix))]
-fn send(_channel: &Channel, _text: &str) -> Result<()> {
+fn send(_inbox: &Inbox, _text: &str) -> Result<()> {
     anyhow::bail!("caller push is only implemented for Unix sockets")
 }
 

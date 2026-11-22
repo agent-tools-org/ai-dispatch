@@ -55,15 +55,6 @@ impl Store {
         Ok(rows == 1)
     }
 
-    /// Releases a claim whose push could not be written, so the record says so.
-    pub(crate) fn inbox_release_push(&self, task_id: &str) -> Result<()> {
-        self.db().execute(
-            "UPDATE caller_inbox SET pushed_at = NULL WHERE task_id = ?1",
-            params![task_id],
-        )?;
-        Ok(())
-    }
-
     /// Marks a task read by its caller session; other sessions do not acknowledge it.
     pub(crate) fn inbox_mark_seen(&self, task_id: &str, session: &str) -> Result<()> {
         self.db().execute(

@@ -14,15 +14,13 @@ fn store_with(ids: &[&str]) -> Store {
 }
 
 #[test]
-fn push_is_claimed_once_and_released_on_failure() {
+fn push_is_claimed_once() {
     let store = store_with(&["t-a"]);
     store.inbox_record("t-a", "s1").expect("record");
     store.inbox_record("t-a", "s1").expect("idempotent");
     assert!(store.inbox_claim_push("t-a").expect("claim"));
     assert!(!store.inbox_claim_push("t-a").expect("second claim"));
-    store.inbox_release_push("t-a").expect("release");
-    assert_eq!(store.inbox_pushed_at("t-a").expect("read"), None);
-    assert!(store.inbox_claim_push("t-a").expect("claim after release"));
+    assert!(store.inbox_pushed_at("t-a").expect("read").is_some());
 }
 
 #[test]

@@ -47,9 +47,11 @@ visible with an error indicator. Task and tree views render only visible rows.
 The multipane view (`m`) loads event histories for its six visible panes.
 
 A task dispatched from a Claude Code session reports back to that session once it
-settles: the worker writes one fixed notice (task id, status, outcome, verification,
-agent, and `aid show <id>`) to the session's messaging socket, which starts a new
-turn when the session is idle. The notice never carries the prompt or agent output.
+settles: the background worker running the task writes one fixed notice (task id,
+status, outcome, verification, agent, and `aid show <id>`) to the session's messaging
+socket, which starts a new turn when the session is idle. Only that worker pushes, and
+only once; a stop, a crashed worker found by the reaper, or a waiting timeout is
+recorded as unread instead. The notice never carries the prompt or agent output.
 AID removes the socket and token from its own environment at startup, so agents,
 verifiers and hooks never inherit them. A settled task stays unread until that
 session runs `aid show` or `aid wait` on it; `aid hook session-start` lists unread

@@ -21,7 +21,10 @@ fn setup(task: &Task) -> (Store, tempfile::TempDir, UnixListener, Channel) {
     let socket = dir.path().join("s.sock");
     let listener = UnixListener::bind(&socket).expect("bind");
     listener.set_nonblocking(true).expect("nonblocking");
-    let channel = Channel { socket, token: "tok".into(), session: "s1".into() };
+    let channel = Channel {
+        inbox: Inbox { socket, token: "tok".into() },
+        task_id: task.id.to_string(),
+    };
     (store, dir, listener, channel)
 }
 
@@ -52,27 +55,28 @@ fn settled_task_pushes_auth_then_fixed_fields_once() {
 }
 
 #[test]
-fn unsettled_or_foreign_tasks_do_not_push() {
+fn unsettled_tasks_and_other_tasks_do_not_push() {
     let verifying = Task { completed_at: None, ..settled("t-verifying", TaskStatus::Done) };
     let (store, _dir, listener, channel) = setup(&verifying);
     deliver(&store, &verifying, Some(&channel)).expect("deliver");
     assert!(store.inbox_pending("s1", 5).expect("pending").is_empty());
-    let foreign = Task { caller_session_id: Some("s2".into()), ..settled("t-foreign", TaskStatus::Done) };
-    store.insert_task(&foreign).expect("task");
-    deliver(&store, &foreign, Some(&channel)).expect("deliver");
+    // A worker only pushes for the task it runs; anything else is recorded unread.
+    let other = settled("t-other", TaskStatus::Done);
+    store.insert_task(&other).expect("task");
+    deliver(&store, &other, Some(&channel)).expect("deliver");
     assert!(received(&listener).is_none());
-    assert_eq!(store.inbox_pending("s2", 5).expect("pending").len(), 1);
-    assert_eq!(store.inbox_pushed_at("t-foreign").expect("read"), None);
+    assert_eq!(store.inbox_pushed_at("t-other").expect("read"), None);
+    assert_eq!(store.inbox_pending("s1", 5).expect("pending").len(), 1);
 }
 
 #[test]
-fn dead_socket_releases_the_claim_and_keeps_the_record() {
+fn dead_socket_is_reported_and_the_task_stays_unread_without_a_retry() {
     let task = settled("t-dead", TaskStatus::Done);
     let (store, dir, listener, mut channel) = setup(&task);
     drop(listener);
-    channel.socket = dir.path().join("gone.sock");
+    channel.inbox.socket = dir.path().join("gone.sock");
     assert!(deliver(&store, &task, Some(&channel)).is_err());
-    assert_eq!(store.inbox_pushed_at("t-dead").expect("read"), None);
+    assert!(deliver(&store, &task, Some(&channel)).is_ok(), "claimed attempts are not retried");
     let notice = pending_notice(&store, "s1").expect("notice");
     assert!(notice.contains("t-dead"), "{notice}");
 }

@@ -222,6 +222,8 @@ pub(crate) fn groups_for_agent(agent: AgentKind) -> &'static [(&'static str, &'s
                 "gemini-4-argon-high", "gemini-4-argon-medium", "gemini-4-argon-low",
             ]),
             ("gemini", &[
+                "gemini-4-neon-high", "gemini-4-neon-medium", "gemini-4-neon-low",
+                "gemini-4-hydrogen-high", "gemini-4-hydrogen-medium", "gemini-4-hydrogen-low",
                 "gemini-3.8-flash-high", "gemini-3.8-flash-medium", "gemini-3.8-flash-low",
             ]),
             ("claude-gpt", &[

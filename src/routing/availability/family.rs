@@ -1,15 +1,20 @@
 // Family quota evidence shared by dispatch, fallback selection and continuation.
-// Combines holds, dated live windows and dated untrusted recovery markers.
+// Combines holds, dated live windows and dated untrusted recovery markers;
+// a fresh window that meters the family overrides an untrusted marker.
 use super::*;
 
 pub(crate) fn family_is_spent(agent: AgentKind, custom: Option<&str>, family: &str) -> bool {
     if availability_for_group(&agent, custom, family).status == RouteStatus::Held {
         return true;
     }
-    if let Some(probe) = live_quota::snapshot(&agent)
-        && probe_is_spent(&probe, agent, family)
-    {
-        return true;
+    if let Some(probe) = live_quota::snapshot(&agent) {
+        if probe_is_spent(&probe, agent, family) {
+            return true;
+        }
+        // A fresh window that meters this family outranks a guessed marker.
+        if probe_covers(&probe, agent, family) {
+            return false;
+        }
     }
     let path = group_marker_path(&agent, custom, family);
     let Ok(text) = std::fs::read_to_string(&path) else {
@@ -32,6 +37,18 @@ fn probe_is_spent(probe: &ProbeEvidence, agent: AgentKind, family: &str) -> bool
             relevant.contains(window)
                 && window.used_percent >= 100.0
                 && window.resets_at.is_some_and(|at| at > chrono::Utc::now())
+        })
+}
+
+/// True when a fresh probe has a window that meters `family` itself. Argon also
+/// draws on general Gemini windows, so only an Argon-labelled window covers it.
+fn probe_covers(probe: &ProbeEvidence, agent: AgentKind, family: &str) -> bool {
+    probe.ok
+        && !probe.stale
+        && relevant_windows(probe, &agent, Some(family)).iter().any(|window| {
+            agent != AgentKind::Antigravity
+                || family != "gemini-4-argon"
+                || crate::agent::model_group::agy_unit(&window.label) == family
         })
 }
 

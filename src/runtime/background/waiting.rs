@@ -32,7 +32,7 @@ pub(crate) fn cleanup_stale_waiting_tasks(
         );
         if crate::task::lifecycle::fail_waiting_with_reason(store, task.id.as_str(), &detail)? {
             if let Some(task) = store.get_task(task.id.as_str())? {
-                crate::task::notify::notify_completion(&task);
+                crate::task::notify::notify_completion(store, &task);
             }
             cleaned.push(task.id.to_string());
         }

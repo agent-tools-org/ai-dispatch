@@ -96,6 +96,9 @@ fn terminate(
         aid_warn!("[aid] Warning: failed to release worktree lock for task {task_id}: {err}");
     }
     background::clear_spec(task_id)?;
+    if let Ok(Some(task)) = store.get_task(task_id) {
+        crate::task::caller_wake::on_stopped(store, &task);
+    }
     if let Some(print_label) = print_label {
         println!("{print_label} {task_id}");
     }

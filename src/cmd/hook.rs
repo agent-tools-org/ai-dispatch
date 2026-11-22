@@ -34,7 +34,9 @@ You are the dispatcher, and aid does not guess what you already know:
 Commands:
 - Dispatch: aid run <agent> \"<prompt>\" [--worktree <branch>]
 - Compare:  aid advise \"<task>\" --difficulty <d> --budget <b> --urgency <u> --rigor <r>
-- Monitor:  aid watch --tui (dashboard) | aid wait <id> (blocking)
+- Monitor:  aid watch --tui (dashboard) | aid wait <id> (blocking). A settled task
+  started from this session is pushed back into it, waking it when idle; reading the
+  task with aid show or aid wait clears it from the unread list shown here.
 - Review:   aid show <id> --diff | aid board
 - Batch:    aid batch <file> --parallel";
 
@@ -49,12 +51,23 @@ pub fn session_start() -> Result<()> {
         rendered.push('\n');
         rendered.push_str(&line);
     }
+    if let Some(line) = pending_completions_line() {
+        rendered.push('\n');
+        rendered.push_str(&line);
+    }
     if let Some(line) = crate::cmd::clean::session_start_hint()? {
         rendered.push('\n');
         rendered.push_str(&line);
     }
     println!("{rendered}");
     Ok(())
+}
+
+/// Settled tasks this session dispatched but never read, e.g. while it was closed.
+fn pending_completions_line() -> Option<String> {
+    let caller = crate::runtime::session::current_caller()?;
+    let store = crate::store::Store::open_read_only(&crate::support::paths::db_path()).ok()??;
+    crate::task::caller_wake::pending_notice(&store, &caller.session_id)
 }
 
 enum QuotaState {

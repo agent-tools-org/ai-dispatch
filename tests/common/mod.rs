@@ -47,6 +47,11 @@ pub(crate) fn aid_cmd_with_cwd(aid_home: &Path, cwd: &Path) -> Command {
         "AID_ITERATION",
         "AID_PARENT_TASK_ID",
         "AID_CASCADE",
+        // A test aid must never push into the developer's live Claude Code session.
+        "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_CODE_MESSAGING_TOKEN",
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDECODE_SESSION_ID",
     ] {
         cmd.env_remove(var);
     }

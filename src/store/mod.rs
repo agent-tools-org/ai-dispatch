@@ -3,6 +3,7 @@
 // Deps: rusqlite, anyhow.
 
 mod artifact_custody;
+pub(crate) mod caller_inbox;
 mod completion_mutations;
 mod memory_mutations;
 #[cfg(test)]

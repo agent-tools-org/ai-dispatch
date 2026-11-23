@@ -1,3 +1,10 @@
+## v11.15.0 (2026-11-23)
+- A task dispatched from a Claude Code session is pushed back into that session once it settles (after verify), so an idle session starts a new turn without a background `aid wait`. Only the worker running the task sends it, once, and the message carries the task id, outcome and agent, never the prompt or output. Tasks that settle another way (stop, reaper, waiting timeout) and tasks the session has not read are listed by `aid hook session-start` until `aid show` or `aid wait` reads them.
+- Dispatched agents, verify commands and hooks no longer inherit `CLAUDE_CODE_MESSAGING_SOCKET` or `CLAUDE_CODE_MESSAGING_TOKEN`; aid removes both at startup and passes them only to its own task worker.
+- agy: a live quota reading fetched after a refusal clears the refusal when it meters that model family itself and no window is full, so a stale "exhausted" marker no longer blocks a family with headroom. Outside budget routing, a replacement model prefers the requested model's vendor (a spent Gemini 4 Argon pin moves to Gemini 4 Neon before Claude Opus).
+- Prompt trimming cuts a long partial line at a character boundary instead of panicking on multi-byte text.
+
+
 ## v11.14.1 (2026-11-15)
 - Removed the project `.aid/state.toml` scoring: task completion no longer writes whole-agent success rates and a "best agent", dispatched prompts no longer carry a `[Project State]` block, and `aid project state` is gone. A leftover `.aid/state.toml` in existing repositories is still never staged or committed.
 

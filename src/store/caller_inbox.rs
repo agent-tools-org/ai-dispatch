@@ -1,7 +1,7 @@
 // Durable record of settled tasks owed to the session that dispatched them.
 // A row stays pending until that session reads the task; a push claim is separate.
 use anyhow::Result;
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, params};
 
 use super::Store;
 
@@ -81,6 +81,7 @@ impl Store {
 
     #[cfg(test)]
     pub(crate) fn inbox_pushed_at(&self, task_id: &str) -> Result<Option<String>> {
+        use rusqlite::OptionalExtension;
         Ok(self
             .db()
             .query_row(

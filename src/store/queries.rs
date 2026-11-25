@@ -22,7 +22,6 @@ pub use message_queries::*;
 #[allow(unused_imports)]
 pub use memory_queries::*;
 #[allow(unused_imports)]
-#[allow(unused_imports)]
 pub use task_metrics_queries::*;
 #[allow(unused_imports)]
 pub use task_queries::*;

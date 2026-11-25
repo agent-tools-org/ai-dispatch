@@ -100,7 +100,7 @@ fn history_bonus(matching: &[&crate::types::Task], kind: TaskCategory) -> f64 {
     } else {
         matching
     };
-    let bonus = if history.len() >= 5 {
+    if history.len() >= 5 {
         let successes = history
             .iter()
             .filter(|task| task.outcome().is_success())
@@ -110,6 +110,5 @@ fn history_bonus(matching: &[&crate::types::Task], kind: TaskCategory) -> f64 {
             .clamp(-5.0, 4.0)
     } else {
         0.0
-    };
-    bonus
+    }
 }

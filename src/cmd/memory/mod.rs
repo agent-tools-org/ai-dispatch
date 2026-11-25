@@ -246,14 +246,10 @@ fn looks_like_signature(text: &str) -> bool {
         return true;
     }
     let is_single_word = trimmed.split_whitespace().count() == 1;
-    if is_single_word
+    is_single_word
         && trimmed
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, ':' | '_' | '<' | '>' | '-' | '.' | ','))
-    {
-        return true;
-    }
-    false
 }
 
 #[cfg(test)]

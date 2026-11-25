@@ -284,9 +284,5 @@ fn accepts_cached_model(kind: AgentKind, model_clean: &str, served_list: &[Strin
         return true;
     }
 
-    if served_list.iter().any(|m| m.eq_ignore_ascii_case(model_clean)) {
-        return true;
-    }
-
-    false
+    served_list.iter().any(|m| m.eq_ignore_ascii_case(model_clean))
 }

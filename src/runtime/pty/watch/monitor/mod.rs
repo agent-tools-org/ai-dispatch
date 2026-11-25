@@ -209,8 +209,5 @@ fn stop_after_output(
         let _ = bridge.kill_group();
         return true;
     }
-    if cost_exceeded(state, store, task_id, bridge, max_task_cost) {
-        return true;
-    }
-    false
+    cost_exceeded(state, store, task_id, bridge, max_task_cost)
 }

@@ -121,7 +121,7 @@ pub(crate) fn message(task: &Task) -> String {
         id = task.id,
         label = task.status.label(),
         outcome = task.outcome().as_str(),
-        agent = plain_name(&task.agent_display_name()),
+        agent = plain_name(task.agent_display_name()),
     )
 }
 

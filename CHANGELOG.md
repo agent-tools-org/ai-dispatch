@@ -1,3 +1,8 @@
+## v11.16.0 (2026-11-25)
+- Audit reports rate every finding high, medium or low, with its trigger and the actor who reaches it. High means the change leaves the code worse than before it; a finding without a concrete trigger, whose actor already holds what it would gain, or that the code had before the change (including one the change reduces without removing) is low. Only a high finding that shows the audited version is worse than the one before it justifies FIX or BLOCK; medium and low findings are follow-ups.
+- The install instructions pin aic v0.4.0, which rates L3 findings by impact and adds `aic challenge` to challenge an audit report's high findings before acting on them.
+
+
 ## v11.15.0 (2026-11-23)
 - A task dispatched from a Claude Code session is pushed back into that session once it settles (after verify), so an idle session starts a new turn without a background `aid wait`. Only the worker running the task sends it, once, and the message carries the task id, outcome and agent, never the prompt or output. Tasks that settle another way (stop, reaper, waiting timeout) and tasks the session has not read are listed by `aid hook session-start` until `aid show` or `aid wait` reads them.
 - Dispatched agents, verify commands and hooks no longer inherit `CLAUDE_CODE_MESSAGING_SOCKET` or `CLAUDE_CODE_MESSAGING_TOKEN`; aid removes both at startup and passes them only to its own task worker.

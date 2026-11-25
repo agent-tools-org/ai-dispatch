@@ -159,13 +159,13 @@ pub(crate) fn instruction(
         "Write the final response as a Markdown audit report.\n\
 Start with `## Findings`.\n\
 Rate each finding by its impact on what this change does:\n\
-- high: a reachable path this change introduces that, in normal use or for an actor who crosses a real permission boundary, gives wrong results, loses or corrupts data, breaks a security boundary, crashes, or breaks something that worked before.\n\
+- high: this change leaves the code worse than before it: a reachable path it introduces or alters that, in normal use or for an actor who crosses a real permission boundary, gives wrong results, loses or corrupts data, breaks a security boundary, crashes, or breaks something that worked before.\n\
 - medium: a real defect on a reachable but uncommon path whose effect is visible and recoverable.\n\
-- low: everything else, including style, naming, docs, test coverage, an actor who already holds what the finding says they gain (the same user, the user's own configuration), environment faults such as clock skew or a full disk, code this change does not touch, and any finding without a concrete trigger.\n\
+- low: everything else, including style, naming, docs, test coverage, an actor who already holds what the finding says they gain (the same user, the user's own configuration), environment faults such as clock skew or a full disk, code this change does not touch, a defect the code had before this change (including one this change reduces but does not remove), and any finding without a concrete trigger.\n\
 For each finding state the impact, the trigger (the concrete input or sequence of states), the actor who reaches it, file references, and evidence. Order findings by impact.\n\
 If there are no findings, say `No findings.` under `## Findings`.\n\
 After findings, include `## Open Questions` only if needed.\n\
-If the report gives a verdict, only a high-impact finding justifies FIX or BLOCK; medium and low findings are follow-ups.\n\
+If the report gives a verdict, only a high-impact finding justifies FIX or BLOCK, and it must show this version is worse than the one before it; when the change is an improvement that leaves part of a problem, that part is a follow-up, as are medium and low findings.\n\
 Do not include planning notes, tool logs, or meta-commentary in the final report.",
     )
 }

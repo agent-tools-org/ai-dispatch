@@ -135,6 +135,8 @@ fn audit_instruction_gates_verdict_on_impact() {
     assert!(text.contains("the trigger (the concrete input or sequence of states), the actor"));
     assert!(text.contains("any finding without a concrete trigger"));
     assert!(text.contains("only a high-impact finding justifies FIX or BLOCK"));
+    assert!(text.contains("it must show this version is worse than the one before it"));
+    assert!(text.contains("including one this change reduces but does not remove"));
     assert!(!text.contains("ordered by severity"));
 }
 

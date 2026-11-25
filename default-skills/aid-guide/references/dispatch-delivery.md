@@ -9,6 +9,9 @@ modifiers such as `read-only comparative audit`, `read-only cross-audit`, or
 forbids modifying the repository under test. AID auto-selects a task-specific
 result file at `~/.aid/tasks/<id>/result.md` for host launches and omits implementation
 methodology and Git staging instructions. Explicit `--result-file` paths remain delivery destinations.
+The report instruction asks for an impact (high, medium or low), a trigger and an actor on every
+finding. A finding without a concrete trigger, or whose actor already holds what it would gain, is
+low. Only a high-impact finding justifies a FIX or BLOCK verdict; medium and low are follow-ups.
 For native Codex read-only host runs, the agent writes `agent-result.md` and `agent-output.txt`
 in a fresh, empty staging directory outside the repository and the trusted task directory.
 That staging directory is the run's only writable grant. Dispatch refuses destinations inside

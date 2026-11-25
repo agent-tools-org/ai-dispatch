@@ -126,6 +126,21 @@ fn adversarial_auditor_prompt_enables_report_instruction_only() {
 }
 
 #[test]
+fn audit_instruction_gates_verdict_on_impact() {
+    let prompt = "Read-only audit of commit abc123. Do not edit files.";
+    let text = instruction(prompt, true, TaskCategory::Research, None, None).expect("report mode");
+    for line in ["- high: ", "- medium: ", "- low: "] {
+        assert!(text.contains(line), "missing impact level {line}");
+    }
+    assert!(text.contains("the trigger (the concrete input or sequence of states), the actor"));
+    assert!(text.contains("any finding without a concrete trigger"));
+    assert!(text.contains("only a high-impact finding justifies FIX or BLOCK"));
+    assert!(text.contains("it must show this version is worse than the one before it"));
+    assert!(text.contains("including one this change reduces but does not remove"));
+    assert!(!text.contains("ordered by severity"));
+}
+
+#[test]
 fn counter_examples_stay_out_of_report_mode() {
     for prompt in [
         "add an audit log",

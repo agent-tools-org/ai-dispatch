@@ -121,14 +121,14 @@ fn adversarial_auditor_prompt_enables_report_instruction_only() {
         TaskCategory::Research,
         None,
     ));
-    assert!(instruction(prompt, false, TaskCategory::Research, None, None).is_some());
+    assert!(instruction(prompt, false, TaskCategory::Research, None, None, None).is_some());
     assert!(!skips_dirty_enforcement(prompt, false, TaskCategory::Research));
 }
 
 #[test]
 fn audit_instruction_gates_verdict_on_impact() {
     let prompt = "Read-only audit of commit abc123. Do not edit files.";
-    let text = instruction(prompt, true, TaskCategory::Research, None, None).expect("report mode");
+    let text = instruction(prompt, true, TaskCategory::Research, None, None, None).expect("report mode");
     for line in ["- high: ", "- medium: ", "- low: "] {
         assert!(text.contains(line), "missing impact level {line}");
     }
@@ -138,6 +138,40 @@ fn audit_instruction_gates_verdict_on_impact() {
     assert!(text.contains("it must show this version is worse than the one before it"));
     assert!(text.contains("including one this change reduces but does not remove"));
     assert!(!text.contains("ordered by severity"));
+}
+
+#[test]
+fn stable_or_unset_stage_keeps_the_full_audit_bar() {
+    let prompt = "Read-only audit of commit abc123. Do not edit files.";
+    let unset = instruction(prompt, true, TaskCategory::Research, None, None, None).expect("report");
+    let stable = instruction(prompt, true, TaskCategory::Research, None, None, Some(ProjectStage::Stable));
+    assert_eq!(stable.as_deref(), Some(unset.as_str()));
+    assert!(!unset.contains("Project stage:"));
+}
+
+#[test]
+fn early_stages_narrow_the_high_rating_after_the_full_text() {
+    let prompt = "Read-only audit of commit abc123. Do not edit files.";
+    let base = instruction(prompt, true, TaskCategory::Research, None, None, None).expect("report");
+    for (stage, marker, main_path) in [
+        (ProjectStage::Prototype, "Project stage: prototype", "unable to do what it was made for"),
+        (ProjectStage::Experimental, "Project stage: experimental", "breaks a main path that worked before"),
+    ] {
+        let text = instruction(prompt, true, TaskCategory::Research, None, None, Some(stage)).expect("report");
+        let calibration = text.strip_prefix(base.as_str()).expect("stage text follows the full bar");
+        assert!(calibration.contains(marker));
+        assert!(calibration.contains("loses or corrupts data"));
+        assert!(calibration.contains("breaks a security boundary"));
+        assert!(calibration.contains(main_path));
+        assert!(calibration.contains("it is SHIP unless such a high finding exists."));
+    }
+}
+
+#[test]
+fn stage_does_not_turn_a_write_task_into_a_report() {
+    let prompt = "Implement the parser.";
+    let text = instruction(prompt, false, TaskCategory::ComplexImpl, None, None, Some(ProjectStage::Prototype));
+    assert!(text.is_none());
 }
 
 #[test]

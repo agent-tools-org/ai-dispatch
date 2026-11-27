@@ -10,6 +10,9 @@ mod preservation;
 #[path = "prompt_round2_tests.rs"]
 mod round2_preservation;
 
+#[path = "prompt_stage_tests.rs"]
+mod stage;
+
 #[path = "prompt_auxiliary_tests.rs"]
 mod auxiliary_preservation;
 

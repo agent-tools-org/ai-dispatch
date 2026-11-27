@@ -234,6 +234,28 @@ Completed test exits retain their status and are identified by rbox's completion
 If the agent sandbox cannot reach Tailscale, stop at dry-run/fake-rbox checks; the
 operator runs the live release-test path. Never fall back to local compilation.
 
+### Project stage
+
+`stage` in `[project]` states how mature the project is and sets the audit bar.
+It is independent of `profile`, which sets budget, verify and rules.
+
+| `stage` | Meaning | Audit report high rating |
+|---|---|---|
+| `prototype` | idea or draft; bugs expected | data loss, a security break, or a change unable to do what it was made for |
+| `experimental` | development or experiment; bugs off the main path tolerated | data loss, a security break, or a broken main path that worked before |
+| `stable` | production or maintenance | the full bar |
+
+Unset audits exactly like `stable`. Any other value makes the whole `project.toml` invalid: aid warns
+`ignoring invalid <path>` with the parse message (never the offending line) and then runs as if the
+project had no config, so a check that needs a project default, such as `--rigor critical`, can reject it. Under `prototype` and
+`experimental`, audit-report tasks get the stage's narrower high rating appended to the report
+instruction, so FIX or BLOCK needs one of those findings and everything else is a follow-up.
+Every dispatched prompt for those stages also ends the project rules with one line on how much
+polish the stage expects. `aid project show` and `aid hook session-start` print the stage.
+The stage never relaxes an explicit `--audit`, `[audit] auto`, `--verify` or `--rigor critical`;
+a profile's appended rules (for example production's cross-review) still apply, so pick a
+profile that matches the stage. The external `aic` cross-auditor does not read the stage.
+
 ### Task profiles
 
 Set `require_task_profile = true` to reject `aid run` calls that omit any of

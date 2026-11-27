@@ -210,6 +210,9 @@ fn render_session_start(project: Option<&ProjectConfig>, team: Option<&TeamConfi
             "Project: {} (profile: {}, team: {})",
             config.id, profile, team_id
         ));
+        if let Some(stage) = config.stage {
+            lines.push(format!("Stage: {} ({})", stage.label(), stage.summary()));
+        }
         lines.push(format!("Rules: {rules} rule(s)"));
     } else {
         lines.push("Tip: run `aid project init` to configure this project for aid orchestration".to_string());

@@ -85,6 +85,10 @@ fn show() -> Result<()> {
     let git_root = current_git_root()?;
     println!("Project: {}", config.id);
     println!("  Profile:    {}", config.profile.as_deref().unwrap_or("-"));
+    match config.stage {
+        Some(stage) => println!("  Stage:      {} ({})", stage.label(), stage.summary()),
+        None => println!("  Stage:      - (audits like stable)"),
+    }
     println!("  Team:       {}", config.team.as_deref().unwrap_or("-"));
     println!("  Language:   {}", config.language.as_deref().unwrap_or("-"));
     println!("  Verify:     {}", config.verify.as_deref().unwrap_or("-"));

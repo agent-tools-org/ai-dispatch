@@ -43,6 +43,8 @@ fn generate_aid_section(config: &ProjectConfig) -> String {
     ];
     push_value(&mut lines, "Project", Some(config.id.as_str()));
     push_value(&mut lines, "Profile", config.profile.as_deref());
+    let stage = config.stage.map(|stage| format!("{} ({})", stage.label(), stage.summary()));
+    push_value(&mut lines, "Stage", stage.as_deref());
     push_value(&mut lines, "Language", config.language.as_deref());
     push_value(&mut lines, "Budget", config.budget.budget_shorthand().as_deref());
     push_value(&mut lines, "Verify", config.verify.as_deref());
@@ -146,5 +148,19 @@ mod tests {
         let body = fs::read_to_string(dir.path().join("CLAUDE.md")).unwrap();
         assert!(!body.contains("### Rules"));
         assert!(!body.contains("- **Team**:"));
+        assert!(!body.contains("- **Stage**:"));
+    }
+
+    #[test]
+    fn declared_stage_is_listed_with_its_audit_bar() {
+        let dir = TempDir::new().unwrap();
+        let cfg = ProjectConfig {
+            id: "alpha".to_string(),
+            stage: Some(crate::config::project::ProjectStage::Experimental),
+            ..Default::default()
+        };
+        sync_claude_md(dir.path(), &cfg).unwrap();
+        let body = fs::read_to_string(dir.path().join("CLAUDE.md")).unwrap();
+        assert!(body.contains("- **Stage**: experimental (audit bar lowered:"));
     }
 }

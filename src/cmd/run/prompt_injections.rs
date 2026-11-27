@@ -146,6 +146,7 @@ pub(super) fn inject_delivery_instructions(
     args: &RunArgs,
     agent_kind: &AgentKind,
     category: agent::classifier::TaskCategory,
+    stage: Option<project::ProjectStage>,
     mut effective_prompt: String,
     omissions: &mut Vec<String>,
 ) -> String {
@@ -167,6 +168,7 @@ pub(super) fn inject_delivery_instructions(
         category,
         result_file.as_deref(),
         args.kind,
+        stage,
     ) {
         effective_prompt = format!("{effective_prompt}\n\n{block}");
     }
@@ -241,11 +243,12 @@ pub(super) fn inject_delivery_context(
     args: &RunArgs,
     agent_kind: &AgentKind,
     category: agent::classifier::TaskCategory,
+    stage: Option<project::ProjectStage>,
     prompt: String,
     omissions: &mut Vec<String>,
 ) -> Result<String> {
     let prompt = inject_workspace(args, agent_kind, prompt, omissions)?;
     Ok(inject_delivery_instructions(
-        args, agent_kind, category, prompt, omissions,
+        args, agent_kind, category, stage, prompt, omissions,
     ))
 }

@@ -246,12 +246,12 @@ It is independent of `profile`, which sets budget, verify and rules.
 | `stable` | production or maintenance | the full bar |
 
 Unset audits exactly like `stable`. Any other value makes the whole `project.toml` invalid: aid warns
-`ignoring invalid <path>` with the parse message (never the offending line) and then runs as if the
+`ignoring invalid <path>` with the parse message (which can name a rejected value, never the whole line) and then runs as if the
 project had no config, so a check that needs a project default, such as `--rigor critical`, can reject it. Under `prototype` and
 `experimental`, audit-report tasks get the stage's narrower high rating appended to the report
 instruction, so FIX or BLOCK needs one of those findings and everything else is a follow-up.
 Every dispatched prompt for those stages also ends the project rules with one line on how much
-polish the stage expects. `aid project show` and `aid hook session-start` print the stage.
+polish the stage expects; it is added after the rules' size bound, so it never displaces a rule. `aid project show` and `aid hook session-start` print the stage.
 The stage never relaxes an explicit `--audit`, `[audit] auto`, `--verify` or `--rigor critical`;
 a profile's appended rules (for example production's cross-review) still apply, so pick a
 profile that matches the stage. The external `aic` cross-auditor does not read the stage.

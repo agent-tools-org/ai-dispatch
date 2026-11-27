@@ -15,7 +15,8 @@ pub(super) fn inject_project_context(
         let rules_count = pc.rules.len();
         let stage_hint = pc.stage.and_then(project::ProjectStage::work_hint);
         if !pc.rules.is_empty() || stage_hint.is_some() {
-            let rules_block = stage_hint.into_iter().chain(pc.rules.iter().map(String::as_str))
+            // The hint goes last so the rules bound truncates it before any rule.
+            let rules_block = pc.rules.iter().map(String::as_str).chain(stage_hint)
                 .map(|r| format!("- {r}"))
                 .collect::<Vec<_>>()
                 .join("\n");

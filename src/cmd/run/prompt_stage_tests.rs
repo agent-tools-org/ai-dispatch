@@ -32,7 +32,7 @@ fn prototype_audit_gets_the_lowered_bar_and_work_hint() {
     let prompt = resolved(AUDIT, true, Some(project::ProjectStage::Prototype));
     assert!(prompt.contains("Project stage: prototype (idea or draft)."));
     assert!(prompt.contains("only a high-impact finding justifies FIX or BLOCK"));
-    assert!(prompt.contains("<aid-project-rules>\n- Project stage: prototype. Favor reaching"));
+    assert!(prompt.contains("- Project stage: prototype. Favor reaching"));
 }
 
 #[test]

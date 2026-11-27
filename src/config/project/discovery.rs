@@ -24,6 +24,7 @@ fn load_checkout_project(root: &Path) -> Option<ProjectConfig> {
     if !path.is_file() {
         if !root.join(".git").is_file() { return None; }
         path = project_path_in_repo(&worktree::main_working_tree_of(root)?);
+        if !path.is_file() { return None; }
     }
     match load_project(&path) {
         Ok(config) => Some(config),
@@ -40,6 +41,14 @@ fn warn_invalid_once(path: &Path, err: &anyhow::Error) {
     static WARNED: Mutex<BTreeSet<PathBuf>> = Mutex::new(BTreeSet::new());
     let first = WARNED.lock().map_or(true, |mut warned| warned.insert(path.to_path_buf()));
     if first {
-        aid_warn!("[aid] Warning: ignoring invalid {}: {err:#}", path.display());
+        aid_warn!("[aid] Warning: ignoring invalid {}: {}", path.display(), invalid_reason(err));
+    }
+}
+
+/// The parse message without the TOML source snippet, which can echo a secret-bearing line.
+fn invalid_reason(err: &anyhow::Error) -> String {
+    match err.downcast_ref::<toml::de::Error>() {
+        Some(parse) => parse.message().to_string(),
+        None => err.to_string(),
     }
 }

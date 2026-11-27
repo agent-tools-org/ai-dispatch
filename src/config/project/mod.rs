@@ -26,7 +26,7 @@ pub use self::identity::{
     UNATTRIBUTED,
 };
 use self::profile::apply_profile;
-pub use self::audit::ProjectAuditConfig;
+pub use self::audit::{ProjectAuditConfig, ProjectStage};
 pub use self::project_team::{project_knowledge_dir, read_project_knowledge};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -35,6 +35,8 @@ pub use self::project_team::{project_knowledge_dir, read_project_knowledge};
 pub struct ProjectConfig {
     pub id: String,
     pub profile: Option<String>,
+    /// Maturity that sets the audit bar; unset audits like `stable`.
+    pub stage: Option<ProjectStage>,
     #[serde(default)]
     pub require_task_profile: bool,
     pub max_task_cost: Option<f64>,

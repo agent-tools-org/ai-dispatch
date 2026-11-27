@@ -144,6 +144,10 @@ fn official_guide_covers_generated_facts() {
     crate::config::project::ProjectBudget::deserialize(fields).expect("budget fields");
     check_coverage(&keys.borrow(), reference("references/configuration.md"), UNDOCUMENTED_CONFIG_KEYS);
 
+    let stages = crate::config::project::ProjectStage::ALL.iter()
+        .map(|stage| stage.label().to_owned()).collect();
+    check_coverage(&stages, reference("references/configuration.md"), &[]);
+
     let statuses = crate::types::TaskStatus::ALL.iter().map(|status| status.as_str())
         .chain(crate::types::VerifyStatus::ALL.iter().map(|status| status.as_str()))
         .map(str::to_owned).collect();

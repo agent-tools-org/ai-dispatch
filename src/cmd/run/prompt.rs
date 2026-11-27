@@ -80,8 +80,10 @@ pub(super) fn build_prompt_bundle(
         &mut omissions,
     )?;
 
-    effective_prompt =
-        inject_delivery_context(args, agent_kind, category, effective_prompt, &mut omissions)?;
+    let stage = detected_project.and_then(|project| project.stage);
+    effective_prompt = inject_delivery_context(
+        args, agent_kind, category, stage, effective_prompt, &mut omissions,
+    )?;
     record_prompt_omissions(store, current_task_id, &omissions)?;
     let prompt_tokens = templates::estimate_tokens(&effective_prompt) as i64;
     Ok(PromptBundle {

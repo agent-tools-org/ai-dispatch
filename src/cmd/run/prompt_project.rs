@@ -13,8 +13,9 @@ pub(super) fn inject_project_context(
     // Inject project rules + knowledge if a project was detected
     if let Some(pc) = project {
         let rules_count = pc.rules.len();
-        if !pc.rules.is_empty() {
-            let rules_block = pc.rules.iter()
+        let stage_hint = pc.stage.and_then(project::ProjectStage::work_hint);
+        if !pc.rules.is_empty() || stage_hint.is_some() {
+            let rules_block = stage_hint.into_iter().chain(pc.rules.iter().map(String::as_str))
                 .map(|r| format!("- {r}"))
                 .collect::<Vec<_>>()
                 .join("\n");

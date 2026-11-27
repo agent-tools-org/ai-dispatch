@@ -362,6 +362,10 @@ Per-repo configuration via `.aid/project.toml`. Profiles expand into defaults fo
 
 CLI: `aid project init`, `aid project show`, `aid project sync`. Project defaults are fallbacks — CLI flags always win.
 
+`stage = "prototype" | "experimental" | "stable"` in `[project]` sets the audit bar independently of
+the profile: early stages narrow what an audit report may rate high (data loss, a security break, a
+broken main path), so other bugs are follow-ups. Unset audits like `stable`.
+
 ## MCP & Hooks
 
 ```bash

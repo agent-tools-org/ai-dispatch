@@ -194,6 +194,18 @@ fn renders_project_and_combined_rule_count() {
 
     assert!(rendered.contains("Project: ai-dispatch (profile: standard, team: dev)"));
     assert!(rendered.contains("Rules: 3 rule(s)"));
+    assert!(!rendered.contains("Stage:"));
+}
+
+#[test]
+fn renders_declared_stage_and_its_audit_bar() {
+    let project = ProjectConfig {
+        id: "sketch".to_string(),
+        stage: Some(crate::config::project::ProjectStage::Prototype),
+        ..Default::default()
+    };
+    let rendered = render_session_start(Some(&project), None);
+    assert!(rendered.contains("Stage: prototype (audit bar lowered: FIX/BLOCK only for data loss"));
 }
 
 fn with_codex_probe(

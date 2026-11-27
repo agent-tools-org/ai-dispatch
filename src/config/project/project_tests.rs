@@ -25,6 +25,26 @@ id = "alpha"
 }
 
 #[test]
+fn stage_parses_every_label_and_defaults_to_unset() {
+    let dir = TempDir::new().unwrap();
+    let unset = load_project(&write_project(dir.path(), "[project]\nid = \"a\"\n")).unwrap();
+    assert_eq!(unset.stage, None);
+    for stage in ProjectStage::ALL {
+        let contents = format!("[project]\nid = \"a\"\nstage = \"{}\"\n", stage.label());
+        let config = load_project(&write_project(dir.path(), &contents)).unwrap();
+        assert_eq!(config.stage, Some(stage));
+    }
+}
+
+#[test]
+fn stage_rejects_unknown_value() {
+    let dir = TempDir::new().unwrap();
+    let contents = "[project]\nid = \"a\"\nstage = \"production\"\n";
+    let error = load_project(&write_project(dir.path(), contents)).unwrap_err();
+    assert!(format!("{error:#}").contains("unknown variant"), "{error:#}");
+}
+
+#[test]
 fn profile_expands_standard_defaults() {
     let dir = TempDir::new().unwrap();
     let contents = r#"[project]

@@ -41,10 +41,10 @@ fn declared_writable_kind_blocks_report_defaults() {
 #[test]
 fn retry_with_persisted_result_file_gets_no_report_instruction() {
     let result_file = Some("result-t-1.md");
-    let undeclared = instruction(AUDIT_WORDED_BRIEF, false, TaskCategory::ComplexImpl, result_file, None);
+    let undeclared = instruction(AUDIT_WORDED_BRIEF, false, TaskCategory::ComplexImpl, result_file, None, None);
     assert!(undeclared.is_some(), "control: a persisted result file re-triggers report mode");
     let declared = instruction(
-        AUDIT_WORDED_BRIEF, false, TaskCategory::ComplexImpl, result_file, Some(TaskCategory::ComplexImpl),
+        AUDIT_WORDED_BRIEF, false, TaskCategory::ComplexImpl, result_file, Some(TaskCategory::ComplexImpl), None,
     );
     assert!(declared.is_none());
 }

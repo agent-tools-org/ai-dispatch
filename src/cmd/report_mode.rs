@@ -3,6 +3,7 @@
 
 use crate::agent::classifier::{TaskCategory, contains_any, contains_any_word};
 use crate::cmd::run::RunArgs;
+use crate::config::project::ProjectStage;
 
 pub(crate) const DEFAULT_AUDIT_RESULT_FILE: &str = "result.md";
 
@@ -149,14 +150,20 @@ pub(crate) fn instruction(
     category: TaskCategory,
     result_file: Option<&str>,
     declared: Option<TaskCategory>,
-) -> Option<&'static str> {
+    stage: Option<ProjectStage>,
+) -> Option<String> {
     if declared_write_task(declared, read_only)
         || !is_audit_report_task(prompt, read_only, category, result_file)
     {
         return None;
     }
-    Some(
-        "Write the final response as a Markdown audit report.\n\
+    match stage.and_then(ProjectStage::audit_calibration) {
+        Some(calibration) => Some(format!("{REPORT_INSTRUCTION}\n{calibration}")),
+        None => Some(REPORT_INSTRUCTION.to_string()),
+    }
+}
+
+const REPORT_INSTRUCTION: &str = "Write the final response as a Markdown audit report.\n\
 Start with `## Findings`.\n\
 Rate each finding by its impact on what this change does:\n\
 - high: this change leaves the code worse than before it: a reachable path it introduces or alters that, in normal use or for an actor who crosses a real permission boundary, gives wrong results, loses or corrupts data, breaks a security boundary, crashes, or breaks something that worked before.\n\
@@ -166,9 +173,7 @@ For each finding state the impact, the trigger (the concrete input or sequence o
 If there are no findings, say `No findings.` under `## Findings`.\n\
 After findings, include `## Open Questions` only if needed.\n\
 If the report gives a verdict, only a high-impact finding justifies FIX or BLOCK, and it must show this version is worse than the one before it; when the change is an improvement that leaves part of a problem, that part is a follow-up, as are medium and low findings.\n\
-Do not include planning notes, tool logs, or meta-commentary in the final report.",
-    )
-}
+Do not include planning notes, tool logs, or meta-commentary in the final report.";
 
 fn prompt_matches_audit_terms(normalized_prompt: &str) -> bool {
     let stripped = strip_audit_noun_phrases(normalized_prompt);

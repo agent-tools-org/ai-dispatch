@@ -12,7 +12,8 @@ methodology and Git staging instructions. Explicit `--result-file` paths remain 
 The report instruction asks for an impact (high, medium or low), a trigger and an actor on every
 finding. A finding without a concrete trigger, or whose actor already holds what it would gain, is
 low. Only a high-impact finding justifies a FIX or BLOCK verdict, and it must show the audited version
-is worse than the one before it; what an improvement leaves unsolved is a follow-up, as are medium and low.
+is worse than the one before it; what an improvement leaves unsolved is a follow-up, as are medium and low. A project
+`stage` of `prototype` or `experimental` narrows high further (see configuration.md).
 For native Codex read-only host runs, the agent writes `agent-result.md` and `agent-output.txt`
 in a fresh, empty staging directory outside the repository and the trusted task directory.
 That staging directory is the run's only writable grant. Dispatch refuses destinations inside

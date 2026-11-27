@@ -37,6 +37,8 @@ pub enum ProjectStage {
 }
 
 impl ProjectStage {
+    /// Every stage, for tests that check generated facts against the guide.
+    #[cfg(test)]
     pub const ALL: [Self; 3] = [Self::Prototype, Self::Experimental, Self::Stable];
 
     pub fn label(self) -> &'static str {

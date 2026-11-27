@@ -1,3 +1,8 @@
+## v11.17.0 (2026-11-27)
+- `[project] stage = "prototype" | "experimental" | "stable"` sets how strict audit reports are. Under `prototype` and `experimental`, the audit report instruction rates high only data loss or corruption, exposed credentials or a broken security boundary, and a change unable to do what it was made for (`prototype`) or a broken main path that worked before (`experimental`); other defects are follow-ups. Dispatched prompts for those stages end the project rules with one line on how much polish the stage expects. Unset and `stable` leave every prompt unchanged. The stage never changes whether audits, verification or `--rigor critical` gates run. `aid project show`, `aid hook session-start` and the generated CLAUDE.md block show the stage.
+- A `.aid/project.toml` that fails to parse prints one warning naming the file and the parse message, without the offending line, instead of silently running without any project defaults. A linked worktree whose repository has no project config stays silent.
+
+
 ## v11.16.0 (2026-11-25)
 - Audit reports rate every finding high, medium or low, with its trigger and the actor who reaches it. High means the change leaves the code worse than before it; a finding without a concrete trigger, whose actor already holds what it would gain, or that the code had before the change (including one the change reduces without removing) is low. Only a high finding that shows the audited version is worse than the one before it justifies FIX or BLOCK; medium and low findings are follow-ups.
 - The install instructions pin aic v0.4.0, which rates L3 findings by impact and adds `aic challenge` to challenge an audit report's high findings before acting on them.

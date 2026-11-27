@@ -245,7 +245,8 @@ It is independent of `profile`, which sets budget, verify and rules.
 | `experimental` | development or experiment; bugs off the main path tolerated | data loss, a security break, or a broken main path that worked before |
 | `stable` | production or maintenance | the full bar |
 
-Unset audits exactly like `stable`; any other value is a parse error. Under `prototype` and
+Unset audits exactly like `stable`. Any other value makes the whole `project.toml` invalid: aid warns
+`ignoring invalid <path>` with the parse error and then runs without any project defaults. Under `prototype` and
 `experimental`, audit-report tasks get the stage's narrower high rating appended to the report
 instruction, so FIX or BLOCK needs one of those findings and everything else is a follow-up.
 Every dispatched prompt for those stages also opens the project rules with one line on how much

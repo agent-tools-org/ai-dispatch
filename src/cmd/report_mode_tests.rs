@@ -163,7 +163,7 @@ fn early_stages_narrow_the_high_rating_after_the_full_text() {
         assert!(calibration.contains("loses or corrupts data"));
         assert!(calibration.contains("breaks a security boundary"));
         assert!(calibration.contains(main_path));
-        assert!(calibration.contains("Without such a high finding the verdict is SHIP."));
+        assert!(calibration.contains("it is SHIP unless such a high finding exists."));
     }
 }
 
